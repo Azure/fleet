@@ -7,339 +7,561 @@ package clusteraffinity
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
-var (
-	cmpStatusOptions = cmp.Options{
-		cmpopts.IgnoreFields(framework.Status{}, "reasons", "err"),
-		cmp.AllowUnexported(framework.Status{}),
-	}
-	cmpPluginStateOptions = cmp.Options{
-		cmp.AllowUnexported(pluginState{}, affinityTerm{}, preferredAffinityTerm{}),
-	}
-	defaultPluginName = defaultPluginOptions.name
+const (
+	clusterName1 = "cluster-1"
+	clusterName2 = "cluster-2"
+
+	regionLabelName   = "region"
+	regionLabelValue1 = "eastus"
+	regionLabelValue2 = "westus"
+
+	envLabelName   = "env"
+	envLabelValue1 = "prod"
+
+	nodeCountPropertyName   = "kubernetes.azure.com/node-count"
+	nodeCountPropertyValue1 = "3"
+
+	availableCPUPropertyName   = "resources.kubernetes-fleet.io/available-cpu"
+	availableCPUPropertyValue1 = "10"
 )
 
+var (
+	p = New()
+
+	ignoreStatusErrorField = cmpopts.IgnoreFields(framework.Status{}, "err")
+)
+
+// TestPreFilter tests the PreFilter extension point of the plugin.
 func TestPreFilter(t *testing.T) {
-	tests := []struct {
-		name            string
-		policy          *placementv1beta1.PlacementPolicy
-		want            *framework.Status
-		wantPluginState *pluginState
+	testCases := []struct {
+		name       string
+		ps         *placementv1beta1.ClusterSchedulingPolicySnapshot
+		wantStatus *framework.Status
 	}{
 		{
-			name: "nil policy",
-			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
-		},
-		{
-			name:   "nil affinity",
-			policy: &placementv1beta1.PlacementPolicy{},
-			want:   framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
-		},
-		{
-			name: "nil cluster affinity",
-			policy: &placementv1beta1.PlacementPolicy{
-				Affinity: &placementv1beta1.Affinity{},
-			},
-			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
-		},
-		{
-			name: "no cluster affinity",
-			policy: &placementv1beta1.PlacementPolicy{
-				Affinity: &placementv1beta1.Affinity{
-					ClusterAffinity: &placementv1beta1.ClusterAffinity{},
+			name: "has no scheduling policy",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: nil,
 				},
 			},
-			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
-			wantPluginState: &pluginState{
-				requiredAffinityTerms:  []affinityTerm{},
-				preferredAffinityTerms: []preferredAffinityTerm{},
-			},
+			wantStatus: framework.NewNonErrorStatus(framework.Skip, p.Name(), "no required cluster affinity terms to enforce"),
 		},
 		{
-			name: "no required terms and empty preferred terms",
-			policy: &placementv1beta1.PlacementPolicy{
-				Affinity: &placementv1beta1.Affinity{
-					ClusterAffinity: &placementv1beta1.ClusterAffinity{
-						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{},
-						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
-							{
-								Weight: 0,
-								Preference: placementv1beta1.ClusterSelectorTerm{
-									LabelSelector: metav1.LabelSelector{
-										MatchLabels: map[string]string{
-											"region": "us-west",
+			name: "has no affinity",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: nil,
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.Skip, p.Name(), "no required cluster affinity terms to enforce"),
+		},
+		{
+			name: "has no cluster affinity",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: nil,
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.Skip, p.Name(), "no required cluster affinity terms to enforce"),
+		},
+		{
+			name: "has no required cluster affinity terms",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: nil,
+							},
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.Skip, p.Name(), "no required cluster affinity terms to enforce"),
+		},
+		{
+			name: "has no cluster selectors",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: nil,
+								},
+							},
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.Skip, p.Name(), "no required cluster affinity terms to enforce"),
+		},
+		{
+			name: "has required cluster selector term",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionLabelValue1,
+												},
+											},
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     nodeCountPropertyName,
+														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+														Values: []string{
+															nodeCountPropertyValue1,
+														},
+													},
+												},
+											},
 										},
 									},
 								},
 							},
-						},
-					},
-				},
-			},
-			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
-			wantPluginState: &pluginState{
-				requiredAffinityTerms:  []affinityTerm{},
-				preferredAffinityTerms: []preferredAffinityTerm{},
-			},
-		},
-		{
-			name: "no required terms and multiple preferred terms",
-			policy: &placementv1beta1.PlacementPolicy{
-				Affinity: &placementv1beta1.Affinity{
-					ClusterAffinity: &placementv1beta1.ClusterAffinity{
-						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{},
-						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
-							{
-								Weight: 5,
-								Preference: placementv1beta1.ClusterSelectorTerm{
-									LabelSelector: metav1.LabelSelector{
-										MatchLabels: map[string]string{
-											"region": "us-west",
-										},
-									},
-								},
-							},
-							{
-								Weight: 1,
-								Preference: placementv1beta1.ClusterSelectorTerm{
-									LabelSelector: metav1.LabelSelector{
-										MatchLabels: map[string]string{},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
-			wantPluginState: &pluginState{
-				requiredAffinityTerms: []affinityTerm{},
-				preferredAffinityTerms: []preferredAffinityTerm{
-					{
-						weight: 5,
-						affinityTerm: affinityTerm{
-							selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "empty required terms and no preferred terms",
-			policy: &placementv1beta1.PlacementPolicy{
-				Affinity: &placementv1beta1.Affinity{
-					ClusterAffinity: &placementv1beta1.ClusterAffinity{
-						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-								{
-									LabelSelector: metav1.LabelSelector{
-										MatchLabels: map[string]string{},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
-			wantPluginState: &pluginState{
-				requiredAffinityTerms:  []affinityTerm{},
-				preferredAffinityTerms: []preferredAffinityTerm{},
-			},
-		},
-		{
-			name: "multiple required terms and no preferred terms",
-			policy: &placementv1beta1.PlacementPolicy{
-				Affinity: &placementv1beta1.Affinity{
-					ClusterAffinity: &placementv1beta1.ClusterAffinity{
-						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-								{
-									LabelSelector: metav1.LabelSelector{
-										MatchLabels: map[string]string{"region": "us-west"},
-									},
-								},
-								{
-									LabelSelector: metav1.LabelSelector{},
-								},
-							},
-						},
-					},
-				},
-			},
-			want: nil, // not skip the filter stage
-			wantPluginState: &pluginState{
-				requiredAffinityTerms: []affinityTerm{
-					{
-						selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
-					},
-				},
-				preferredAffinityTerms: []preferredAffinityTerm{},
-			},
-		},
-		{
-			name: "multiple required terms and preferred terms",
-			policy: &placementv1beta1.PlacementPolicy{
-				Affinity: &placementv1beta1.Affinity{
-					ClusterAffinity: &placementv1beta1.ClusterAffinity{
-						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-								{
-									LabelSelector: metav1.LabelSelector{
-										MatchLabels: map[string]string{"region": "us-west"},
-									},
-								},
-							},
-						},
-						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
-							{
-								Weight: 5,
-								Preference: placementv1beta1.ClusterSelectorTerm{
-									LabelSelector: metav1.LabelSelector{
-										MatchLabels: map[string]string{
-											"region": "us-west",
-										},
-									},
-								},
-							},
-							{
-								Weight: 1,
-								Preference: placementv1beta1.ClusterSelectorTerm{
-									LabelSelector: metav1.LabelSelector{
-										MatchLabels: map[string]string{},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			want: nil, // not skip the filter stage
-			wantPluginState: &pluginState{
-				requiredAffinityTerms: []affinityTerm{
-					{
-						selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
-					},
-				},
-				preferredAffinityTerms: []preferredAffinityTerm{
-					{
-						weight: 5,
-						affinityTerm: affinityTerm{
-							selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
 						},
 					},
 				},
 			},
 		},
 	}
-	for _, tc := range tests {
+
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			state := framework.NewCycleState(nil, nil)
-			snapshot := &placementv1beta1.ClusterSchedulingPolicySnapshot{
-				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
-					Policy: tc.policy,
-				},
-			}
-			p := New()
-			got := p.PreFilter(context.Background(), state, snapshot)
-			if diff := cmp.Diff(tc.want, got, cmpStatusOptions); diff != "" {
-				t.Errorf("PreFilter() status mismatch (-want, +got):\n%s", diff)
-			}
-			if tc.wantPluginState == nil {
-				return
-			}
-			gotPluginState, err := p.readPluginState(state)
-			if err != nil {
-				t.Fatalf("readPluginState() got err %v, want not nil", err)
-			}
-			if diff := cmp.Diff(tc.wantPluginState, gotPluginState, cmpPluginStateOptions); diff != "" {
-				t.Errorf("readPluginState() pluginState mismatch (-want, +got):\n%s", diff)
+			ctx := context.Background()
+			state := framework.NewCycleState(nil, nil, nil)
+			status := p.PreFilter(ctx, state, tc.ps)
+
+			if diff := cmp.Diff(
+				status, tc.wantStatus,
+				cmp.AllowUnexported(framework.Status{}),
+				ignoreStatusErrorField,
+			); diff != "" {
+				t.Errorf("PreFilter() unexpected status (-got, +want):\n%s", diff)
 			}
 		})
 	}
 }
 
+// TestFilter tests the Filter extension point of the plugin.
 func TestFilter(t *testing.T) {
-	tests := []struct {
-		name              string
-		ps                *pluginState
-		notSetPluginState bool
-		cluster           *clusterv1beta1.MemberCluster
-		want              *framework.Status
+	testCases := []struct {
+		name       string
+		ps         *placementv1beta1.ClusterSchedulingPolicySnapshot
+		cluster    *clusterv1beta1.MemberCluster
+		wantStatus *framework.Status
 	}{
 		{
-			name:              "pluginState is not set",
-			notSetPluginState: true,
-			want:              framework.FromError(errors.New("invalid state"), defaultPluginName),
-		},
-		{
-			name: "nil pluginState",
-			want: framework.FromError(errors.New("invalid state"), defaultPluginName),
-		},
-		{
-			name: "matched cluster",
-			ps: &pluginState{
-				requiredAffinityTerms: []affinityTerm{
-					{
-						selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
+			name: "single cluster selector term, matched",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionLabelValue1,
+												},
+											},
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     nodeCountPropertyName,
+														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+														Values: []string{
+															nodeCountPropertyValue1,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 			},
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
+					Name: clusterName1,
 					Labels: map[string]string{
-						"region": "us-west",
-						"zone":   "zone2",
+						regionLabelName: regionLabelValue1,
+					},
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "4",
+						},
 					},
 				},
 			},
-			want: nil,
 		},
 		{
-			name: "not matched cluster",
-			ps: &pluginState{
-				requiredAffinityTerms: []affinityTerm{
-					{
-						selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
+			name: "multiple cluster selector terms, matched",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionLabelValue1,
+												},
+											},
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     nodeCountPropertyName,
+														Operator: placementv1beta1.PropertySelectorLessThan,
+														Values: []string{
+															nodeCountPropertyValue1,
+														},
+													},
+												},
+											},
+										},
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchExpressions: []metav1.LabelSelectorRequirement{
+													{
+														Key:      envLabelName,
+														Operator: metav1.LabelSelectorOpIn,
+														Values: []string{
+															envLabelValue1,
+														},
+													},
+												},
+											},
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     availableCPUPropertyName,
+														Operator: placementv1beta1.PropertySelectorGreaterThan,
+														Values: []string{
+															availableCPUPropertyValue1,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 			},
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
+					Name: clusterName1,
 					Labels: map[string]string{
-						"region": "us-east",
-						"zone":   "zone2",
+						regionLabelName: regionLabelValue2,
+						envLabelName:    envLabelValue1,
+					},
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "4",
+						},
+					},
+					ResourceUsage: clusterv1beta1.ResourceUsage{
+						Available: map[corev1.ResourceName]resource.Quantity{
+							corev1.ResourceCPU: resource.MustParse("15"),
+						},
 					},
 				},
 			},
-			want: framework.NewNonErrorStatus(framework.ClusterUnschedulable, defaultPluginName),
+		},
+		{
+			name: "single cluster selector term, not matched (neither)",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionLabelValue2,
+												},
+											},
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     nodeCountPropertyName,
+														Operator: placementv1beta1.PropertySelectorEqualTo,
+														Values: []string{
+															nodeCountPropertyValue1,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						regionLabelName: regionLabelValue1,
+					},
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "4",
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), "cluster does not match with any of the required cluster affinity terms"),
+		},
+		{
+			name: "single cluster selector term, not matched (label selector)",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionLabelValue2,
+												},
+											},
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     nodeCountPropertyName,
+														Operator: placementv1beta1.PropertySelectorEqualTo,
+														Values: []string{
+															nodeCountPropertyValue1,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						regionLabelName: regionLabelValue1,
+					},
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: nodeCountPropertyValue1,
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), "cluster does not match with any of the required cluster affinity terms"),
+		},
+		{
+			name: "single cluster selector term, not matched (property selector)",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionLabelValue2,
+												},
+											},
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     nodeCountPropertyName,
+														Operator: placementv1beta1.PropertySelectorEqualTo,
+														Values: []string{
+															nodeCountPropertyValue1,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						regionLabelName: regionLabelValue2,
+					},
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "4",
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), "cluster does not match with any of the required cluster affinity terms"),
+		},
+		{
+			name: "multiple cluster selector terms, not matched",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionLabelValue1,
+												},
+											},
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     nodeCountPropertyName,
+														Operator: placementv1beta1.PropertySelectorNotEqualTo,
+														Values: []string{
+															nodeCountPropertyValue1,
+														},
+													},
+												},
+											},
+										},
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchExpressions: []metav1.LabelSelectorRequirement{
+													{
+														Key:      envLabelName,
+														Operator: metav1.LabelSelectorOpIn,
+														Values: []string{
+															envLabelValue1,
+														},
+													},
+												},
+											},
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     availableCPUPropertyName,
+														Operator: placementv1beta1.PropertySelectorLessThanOrEqualTo,
+														Values: []string{
+															availableCPUPropertyValue1,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						regionLabelName: regionLabelValue2,
+						envLabelName:    envLabelValue1,
+					},
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "3",
+						},
+					},
+					ResourceUsage: clusterv1beta1.ResourceUsage{
+						Available: map[corev1.ResourceName]resource.Quantity{
+							corev1.ResourceCPU: resource.MustParse("15"),
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), "cluster does not match with any of the required cluster affinity terms"),
 		},
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			p := New()
-			state := framework.NewCycleState(nil, nil)
-			if !tc.notSetPluginState {
-				state.Write(framework.StateKey(p.Name()), tc.ps)
-			}
 
-			got := p.Filter(context.Background(), state, nil, tc.cluster)
-			if diff := cmp.Diff(tc.want, got, cmpStatusOptions); diff != "" {
-				t.Errorf("Filter() status mismatch (-want, +got):\n%s", diff)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			state := framework.NewCycleState(nil, nil, nil)
+			status := p.Filter(ctx, state, tc.ps, tc.cluster)
+
+			if diff := cmp.Diff(
+				status, tc.wantStatus,
+				cmp.AllowUnexported(framework.Status{}),
+				ignoreStatusErrorField,
+			); diff != "" {
+				t.Errorf("Filter() unexpected status (-got, +want):\n%s", diff)
 			}
 		})
 	}

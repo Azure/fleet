@@ -18,20 +18,21 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/pkg/utils/resource"
 )
 
 const (
 	member1Name = "member-1"
 	member2Name = "member-2"
 
-	eventuallyTimeout    = time.Minute * 2
-	consistentlyDuration = time.Second * 10
-	interval             = time.Millisecond * 250
+	eventuallyTimeout = time.Second * 10
+	interval          = time.Millisecond * 250
 )
 
 var (
@@ -65,8 +66,8 @@ var (
 		APIVersion:         fleetAPIVersion,
 		Kind:               "ClusterResourcePlacement",
 		Name:               testName,
-		Controller:         pointer.Bool(true),
-		BlockOwnerDeletion: pointer.Bool(true),
+		Controller:         ptr.To(true),
+		BlockOwnerDeletion: ptr.To(true),
 	}
 )
 
@@ -153,7 +154,7 @@ func retrieveAndValidateCRPDeletion(crp *placementv1beta1.ClusterResourcePlaceme
 	}, eventuallyTimeout, interval).Should(BeTrue(), "Get() clusterResourcePlacement, want not found")
 }
 
-func createClusterResourceBinding(cluster string, policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot, resourceSnapshot *placementv1beta1.ClusterResourceSnapshot) {
+func createOverriddenClusterResourceBinding(cluster string, policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot, resourceSnapshot *placementv1beta1.ClusterResourceSnapshot) *placementv1beta1.ClusterResourceBinding {
 	binding := &placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "binding-" + cluster,
@@ -169,36 +170,34 @@ func createClusterResourceBinding(cluster string, policySnapshot *placementv1bet
 		},
 	}
 	Expect(k8sClient.Create(ctx, binding)).Should(Succeed(), "Failed to create clusterResourceBinding")
-	condition := metav1.Condition{
+	cond := metav1.Condition{
 		Status:             metav1.ConditionTrue,
-		Type:               string(placementv1beta1.ResourceBindingBound),
-		Reason:             "resourceBindingTrue",
+		Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
+		Reason:             condition.RolloutStartedReason,
 		ObservedGeneration: binding.Generation,
 	}
-	meta.SetStatusCondition(&binding.Status.Conditions, condition)
+	meta.SetStatusCondition(&binding.Status.Conditions, cond)
+	cond = metav1.Condition{
+		Status:             metav1.ConditionTrue,
+		Type:               string(placementv1beta1.ResourceBindingOverridden),
+		Reason:             condition.OverriddenSucceededReason,
+		ObservedGeneration: binding.Generation,
+	}
+	meta.SetStatusCondition(&binding.Status.Conditions, cond)
 	Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "Failed to update the binding status")
+	return binding
 }
 
-func createApplySucceededWork(resourceSnapshot *placementv1beta1.ClusterResourceSnapshot, namespace string) {
-	work := &placementv1beta1.Work{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      "work-1",
-			Labels: map[string]string{
-				placementv1beta1.CRPTrackingLabel:                 resourceSnapshot.Labels[placementv1beta1.CRPTrackingLabel],
-				placementv1beta1.ParentResourceSnapshotIndexLabel: resourceSnapshot.Labels[placementv1beta1.ResourceIndexLabel],
-			},
-		},
-	}
-	Expect(k8sClient.Create(ctx, work)).Should(Succeed(), "Failed to create work")
-	condition := metav1.Condition{
-		Type:               placementv1beta1.WorkConditionTypeApplied,
+func createSynchronizedClusterResourceBinding(cluster string, policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot, resourceSnapshot *placementv1beta1.ClusterResourceSnapshot) {
+	binding := createOverriddenClusterResourceBinding(cluster, policySnapshot, resourceSnapshot)
+	cond := metav1.Condition{
 		Status:             metav1.ConditionTrue,
-		ObservedGeneration: work.Generation,
-		Reason:             "Success",
+		Type:               string(placementv1beta1.ResourceBindingWorkSynchronized),
+		Reason:             condition.WorkSynchronizedReason,
+		ObservedGeneration: binding.Generation,
 	}
-	meta.SetStatusCondition(&work.Status.Conditions, condition)
-	Expect(k8sClient.Status().Update(ctx, work)).Should(Succeed(), "Failed to update work status as applied")
+	meta.SetStatusCondition(&binding.Status.Conditions, cond)
+	Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "Failed to update the binding status")
 }
 
 var _ = Describe("Test ClusterResourcePlacement Controller", func() {
@@ -228,13 +227,13 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 							},
 						},
 					},
-					RevisionHistoryLimit: pointer.Int32(1),
+					RevisionHistoryLimit: ptr.To(int32(1)),
 				},
 			}
 			Expect(k8sClient.Create(ctx, crp)).Should(Succeed(), "Failed to create crp")
 
 			By("By checking clusterSchedulingPolicySnapshot")
-			policyHash, err := generatePolicyHash(crp.Spec.Policy)
+			policyHash, err := resource.HashOf(crp.Spec.Policy)
 			Expect(err).Should(Succeed(), "failed to create policy hash")
 
 			wantPolicySnapshot := placementv1beta1.ClusterSchedulingPolicySnapshot{
@@ -262,7 +261,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			emptyResources := &placementv1beta1.ResourceSnapshotSpec{
 				SelectedResources: []placementv1beta1.ResourceContent{},
 			}
-			jsonBytes, err := generateResourceHash(emptyResources)
+			jsonBytes, err := resource.HashOf(emptyResources)
 			Expect(err).Should(Succeed(), "Failed to create resource hash")
 
 			wantResourceSnapshot := &placementv1beta1.ClusterResourceSnapshot{
@@ -299,18 +298,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionUnknown,
-							Type:   string(placementv1beta1.ClusterResourcePlacementAppliedConditionType),
-							Reason: ApplyPendingReason,
-						},
-						{
-							Status: metav1.ConditionUnknown,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 							Reason: SchedulingUnknownReason,
-						},
-						{
-							Status: metav1.ConditionUnknown,
-							Type:   string(placementv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-							Reason: SynchronizePendingReason,
 						},
 					},
 				},
@@ -336,7 +325,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			gotPolicySnapshot.Status.ObservedCRPGeneration = gotCRP.Generation
 			Expect(k8sClient.Status().Update(ctx, gotPolicySnapshot)).Should(Succeed(), "Failed to update the policy snapshot status")
 
-			By("By validating the CRP status")
+			By("By validating the CRP status has only scheduling condition")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       testName,
@@ -348,18 +337,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionTrue,
-							Type:   string(placementv1beta1.ClusterResourcePlacementAppliedConditionType),
-							Reason: ApplySucceededReason,
-						},
-						{
-							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 							Reason: ResourceScheduleSucceededReason,
-						},
-						{
-							Status: metav1.ConditionTrue,
-							Type:   string(placementv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-							Reason: SynchronizeSucceededReason,
 						},
 					},
 				},
@@ -392,10 +371,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			Expect(k8sClient.Status().Update(ctx, gotPolicySnapshot)).Should(Succeed(), "Failed to update the policy snapshot status")
 
 			By("By creating clusterResourceBinding on member-1")
-			createClusterResourceBinding(member1Name, gotPolicySnapshot, gotResourceSnapshot)
-
-			By("By creating appliedSuccess works on member-1")
-			createApplySucceededWork(gotResourceSnapshot, member1Namespace)
+			createOverriddenClusterResourceBinding(member1Name, gotPolicySnapshot, gotResourceSnapshot)
 
 			By("By validating the CRP status")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
@@ -408,19 +384,14 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
-							Status: metav1.ConditionUnknown,
-							Type:   string(placementv1beta1.ClusterResourcePlacementAppliedConditionType),
-							Reason: ApplyPendingReason,
-						},
-						{
 							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 							Reason: ResourceScheduleSucceededReason,
 						},
 						{
-							Status: metav1.ConditionFalse,
-							Type:   string(placementv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-							Reason: SynchronizePendingReason,
+							Status: metav1.ConditionUnknown,
+							Type:   string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+							Reason: condition.RolloutStartedUnknownReason,
 						},
 					},
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
@@ -429,18 +400,23 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 							Conditions: []metav1.Condition{
 								{
 									Status: metav1.ConditionTrue,
-									Type:   string(placementv1beta1.ResourcesAppliedConditionType),
-									Reason: ResourceApplySucceededReason,
-								},
-								{
-									Status: metav1.ConditionTrue,
 									Type:   string(placementv1beta1.ResourceScheduledConditionType),
-									Reason: ResourceScheduleSucceededReason,
+									Reason: condition.ScheduleSucceededReason,
 								},
 								{
 									Status: metav1.ConditionTrue,
+									Type:   string(placementv1beta1.ResourceRolloutStartedConditionType),
+									Reason: condition.RolloutStartedReason,
+								},
+								{
+									Status: metav1.ConditionTrue,
+									Type:   string(placementv1beta1.ResourceOverriddenConditionType),
+									Reason: condition.OverriddenSucceededReason,
+								},
+								{
+									Status: metav1.ConditionUnknown,
 									Type:   string(placementv1beta1.ResourceWorkSynchronizedConditionType),
-									Reason: WorkSynchronizeSucceededReason,
+									Reason: condition.WorkSynchronizedUnknownReason,
 								},
 							},
 						},
@@ -448,19 +424,14 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 							ClusterName: member2Name,
 							Conditions: []metav1.Condition{
 								{
-									Status: metav1.ConditionUnknown,
-									Type:   string(placementv1beta1.ResourcesAppliedConditionType),
-									Reason: ResourceApplyPendingReason,
-								},
-								{
 									Status: metav1.ConditionTrue,
 									Type:   string(placementv1beta1.ResourceScheduledConditionType),
-									Reason: ResourceScheduleSucceededReason,
+									Reason: condition.ScheduleSucceededReason,
 								},
 								{
-									Status: metav1.ConditionFalse,
-									Type:   string(placementv1beta1.ResourceWorkSynchronizedConditionType),
-									Reason: WorkSynchronizePendingReason,
+									Status: metav1.ConditionUnknown,
+									Type:   string(placementv1beta1.ResourceRolloutStartedConditionType),
+									Reason: condition.RolloutStartedUnknownReason,
 								},
 							},
 						},
@@ -469,11 +440,9 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			}
 			retrieveAndValidateClusterResourcePlacement(testName, wantCRP)
 
-			By("By creating clusterResourceBinding on member-1")
-			createClusterResourceBinding(member2Name, gotPolicySnapshot, gotResourceSnapshot)
+			By("By creating a synchronized clusterResourceBinding on member-2")
+			createSynchronizedClusterResourceBinding(member2Name, gotPolicySnapshot, gotResourceSnapshot)
 
-			By("By creating appliedSuccess works on member-2")
-			createApplySucceededWork(gotResourceSnapshot, member2Namespace)
 			wantCRP = &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       testName,
@@ -485,38 +454,49 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionTrue,
-							Type:   string(placementv1beta1.ClusterResourcePlacementAppliedConditionType),
-							Reason: ApplySucceededReason,
-						},
-						{
-							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 							Reason: ResourceScheduleSucceededReason,
 						},
 						{
 							Status: metav1.ConditionTrue,
-							Type:   string(placementv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-							Reason: SynchronizeSucceededReason,
+							Type:   string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+							Reason: condition.RolloutStartedReason,
+						},
+						{
+							Status: metav1.ConditionTrue,
+							Type:   string(placementv1beta1.ClusterResourcePlacementOverriddenConditionType),
+							Reason: condition.OverrideNotSpecifiedReason,
+						},
+						{
+							Status: metav1.ConditionUnknown,
+							Type:   string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
+							Reason: condition.WorkSynchronizedUnknownReason,
 						},
 					},
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
+
 							ClusterName: member1Name,
 							Conditions: []metav1.Condition{
 								{
 									Status: metav1.ConditionTrue,
-									Type:   string(placementv1beta1.ResourcesAppliedConditionType),
-									Reason: ResourceApplySucceededReason,
-								},
-								{
-									Status: metav1.ConditionTrue,
 									Type:   string(placementv1beta1.ResourceScheduledConditionType),
-									Reason: ResourceScheduleSucceededReason,
+									Reason: condition.ScheduleSucceededReason,
 								},
 								{
 									Status: metav1.ConditionTrue,
+									Type:   string(placementv1beta1.ResourceRolloutStartedConditionType),
+									Reason: condition.RolloutStartedReason,
+								},
+								{
+									Status: metav1.ConditionTrue,
+									Type:   string(placementv1beta1.ResourceOverriddenConditionType),
+									Reason: condition.OverriddenSucceededReason,
+								},
+								{
+									Status: metav1.ConditionUnknown,
 									Type:   string(placementv1beta1.ResourceWorkSynchronizedConditionType),
-									Reason: WorkSynchronizeSucceededReason,
+									Reason: condition.WorkSynchronizedUnknownReason,
 								},
 							},
 						},
@@ -525,18 +505,28 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 							Conditions: []metav1.Condition{
 								{
 									Status: metav1.ConditionTrue,
-									Type:   string(placementv1beta1.ResourcesAppliedConditionType),
-									Reason: ResourceApplySucceededReason,
+									Type:   string(placementv1beta1.ResourceScheduledConditionType),
+									Reason: condition.ScheduleSucceededReason,
 								},
 								{
 									Status: metav1.ConditionTrue,
-									Type:   string(placementv1beta1.ResourceScheduledConditionType),
-									Reason: ResourceScheduleSucceededReason,
+									Type:   string(placementv1beta1.ResourceRolloutStartedConditionType),
+									Reason: condition.RolloutStartedReason,
+								},
+								{
+									Status: metav1.ConditionTrue,
+									Type:   string(placementv1beta1.ResourceOverriddenConditionType),
+									Reason: condition.OverriddenSucceededReason,
 								},
 								{
 									Status: metav1.ConditionTrue,
 									Type:   string(placementv1beta1.ResourceWorkSynchronizedConditionType),
-									Reason: WorkSynchronizeSucceededReason,
+									Reason: condition.WorkSynchronizedReason,
+								},
+								{
+									Status: metav1.ConditionUnknown,
+									Type:   string(placementv1beta1.ResourcesAppliedConditionType),
+									Reason: condition.ApplyPendingReason,
 								},
 							},
 						},

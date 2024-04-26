@@ -6,43 +6,77 @@ Licensed under the MIT license.
 package clusteraffinity
 
 import (
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"k8s.io/apimachinery/pkg/api/resource"
+
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
-type pluginState struct {
-	// requiredAffinityTerms is a list of processed version of required cluster affinity terms.
-	requiredAffinityTerms AffinityTerms
-
-	// preferredAffinityTerms is a list of processed version of preferred cluster affinity terms.
-	preferredAffinityTerms PreferredAffinityTerms
+type observedMinMaxValues struct {
+	min *resource.Quantity
+	max *resource.Quantity
 }
 
-// preparePluginState initializes the state for the plugin to use in the scheduling cycle.
-// TODO will call this func in the PreFilter stage.
-func preparePluginState(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (*pluginState, error) {
-	if policy.Spec.Policy == nil ||
-		policy.Spec.Policy.Affinity == nil ||
-		policy.Spec.Policy.Affinity.ClusterAffinity == nil {
-		return &pluginState{}, nil
-	} // added for the defensive programming as the caller has already checked.
+type pluginState struct {
+	minMaxValuesByProperty map[string]observedMinMaxValues
+}
 
-	clusterAffinity := policy.Spec.Policy.Affinity.ClusterAffinity
-	ps := &pluginState{requiredAffinityTerms: []affinityTerm{}, preferredAffinityTerms: []preferredAffinityTerm{}}
+// preparePluginState prepares a common state for easier queries of min. and max.
+// observed values of properties (if applicable).
+func preparePluginState(state framework.CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (*pluginState, error) {
+	ps := &pluginState{
+		minMaxValuesByProperty: make(map[string]observedMinMaxValues),
+	}
 
-	if clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil &&
-		len(clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms) > 0 {
-		requiredTerms, err := NewAffinityTerms(clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms)
-		if err != nil {
-			return nil, err
+	// Note that this function assumes that the scheduling policy must have at least one
+	// enforceable preferred cluster affinity term, as guaranteed by its caller.
+
+	var cs []clusterv1beta1.MemberCluster
+	for tidx := range policy.Spec.Policy.Affinity.ClusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
+		t := &policy.Spec.Policy.Affinity.ClusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution[tidx]
+		if t.Preference.PropertySorter != nil {
+			if cs == nil {
+				// Do a lazy retrieval of the cluster list; as the copy has some overhead.
+				cs = state.ListClusters()
+			}
+
+			n := t.Preference.PropertySorter.Name
+			// Use pointers so that zero values can also be compared.
+			var minQ, maxQ *resource.Quantity
+
+			for cidx := range cs {
+				c := &cs[cidx]
+				q, err := retrievePropertyValueFrom(c, n)
+				if err != nil {
+					// An error has occurred when retrieving the property value from the cluster.
+					//
+					// Note that not having a specific property (i.e., a resource type is not supported
+					// or a property is not available on a cluster) is not considered an error.
+					return nil, err
+				}
+				if q == nil {
+					// The property is not supported yet on the cluster.
+					continue
+				}
+
+				if minQ == nil || q.Cmp(*minQ) < 0 {
+					minQ = q
+				}
+				if maxQ == nil || q.Cmp(*maxQ) > 0 {
+					maxQ = q
+				}
+			}
+
+			ps.minMaxValuesByProperty[n] = observedMinMaxValues{
+				// Note that there exists a special case where both extremums are nil; this can occur
+				// when a property is specified in the preferred terms, yet none of the clusters supports
+				// it.
+				min: minQ,
+				max: maxQ,
+			}
 		}
-		ps.requiredAffinityTerms = requiredTerms
 	}
-	if len(clusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution) > 0 {
-		preferredTerms, err := NewPreferredAffinityTerms(clusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution)
-		if err != nil {
-			return nil, err
-		}
-		ps.preferredAffinityTerms = preferredTerms
-	}
+
 	return ps, nil
 }

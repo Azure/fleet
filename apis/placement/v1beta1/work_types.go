@@ -36,7 +36,8 @@ const (
 
 	// WorkConditionTypeApplied represents workload in Work is applied successfully on the spoke cluster.
 	WorkConditionTypeApplied = "Applied"
-	// WorkConditionTypeAvailable represents workload in Work exists on the spoke cluster.
+
+	// WorkConditionTypeAvailable represents workload in Work is available on the spoke cluster.
 	WorkConditionTypeAvailable = "Available"
 )
 
@@ -128,6 +129,7 @@ type ManifestCondition struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,categories={fleet,fleet-placement}
+// +kubebuilder:storageversion
 
 // Work is the Schema for the works API.
 type Work struct {

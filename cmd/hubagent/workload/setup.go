@@ -23,10 +23,12 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
+	"go.goms.io/fleet/pkg/controllers/clusterresourcebindingwatcher"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacementwatcher"
 	"go.goms.io/fleet/pkg/controllers/clusterschedulingpolicysnapshot"
 	"go.goms.io/fleet/pkg/controllers/memberclusterplacement"
+	"go.goms.io/fleet/pkg/controllers/overrider"
 	"go.goms.io/fleet/pkg/controllers/resourcechange"
 	"go.goms.io/fleet/pkg/controllers/rollout"
 	"go.goms.io/fleet/pkg/controllers/workgenerator"
@@ -52,6 +54,8 @@ const (
 
 	resourceChangeControllerName = "resource-change-controller"
 	mcPlacementControllerName    = "memberCluster-placement-controller"
+
+	schedulerQueueName = "scheduler-queue"
 )
 
 var (
@@ -132,6 +136,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 	// the manager for all the dynamically created informers
 	dynamicInformerManager := informer.NewInformerManager(dynamicClient, opts.ResyncPeriod.Duration, ctx.Done())
 	validator.ResourceInformer = dynamicInformerManager // webhook needs this to check resource scope
+	validator.RestMapper = mgr.GetRESTMapper()          // webhook needs this to validate GVK of resource selector
 
 	// Set up  a custom controller to reconcile cluster resource placement
 	crpc := &clusterresourceplacement.Reconciler{
@@ -191,12 +196,21 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			return err
 		}
 
-		klog.Info("Setting up clusterSchedulingPolicySnapshot controller")
+		klog.Info("Setting up clusterResourceBinding watcher")
+		if err := (&clusterresourcebindingwatcher.Reconciler{
+			PlacementController: clusterResourcePlacementControllerV1Beta1,
+			Client:              mgr.GetClient(),
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "Unable to set up the clusterResourceBinding watcher")
+			return err
+		}
+
+		klog.Info("Setting up clusterSchedulingPolicySnapshot watcher")
 		if err := (&clusterschedulingpolicysnapshot.Reconciler{
 			Client:              mgr.GetClient(),
 			PlacementController: clusterResourcePlacementControllerV1Beta1,
 		}).SetupWithManager(mgr); err != nil {
-			klog.ErrorS(err, "Unable to set up the clusterResourcePlacement watcher")
+			klog.ErrorS(err, "Unable to set up the clusterSchedulingPolicySnapshot watcher")
 			return err
 		}
 
@@ -205,7 +219,8 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		if err := (&rollout.Reconciler{
 			Client:                  mgr.GetClient(),
 			UncachedReader:          mgr.GetAPIReader(),
-			MaxConcurrentReconciles: int(math.Ceil(float64(opts.MaxFleetSizeSupported) / 34)), //3 rollout reconciler routine per 100 member clusters
+			MaxConcurrentReconciles: int(math.Ceil(float64(opts.MaxFleetSizeSupported)/30) * math.Ceil(float64(opts.MaxConcurrentClusterPlacement)/10)),
+			InformerManager:         dynamicInformerManager,
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up rollout controller")
 			return err
@@ -215,7 +230,8 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		klog.Info("Setting up work generator")
 		if err := (&workgenerator.Reconciler{
 			Client:                  mgr.GetClient(),
-			MaxConcurrentReconciles: int(math.Ceil(float64(opts.MaxFleetSizeSupported) / 10)), //one work generator reconciler routine per 10 member clusters,
+			MaxConcurrentReconciles: int(math.Ceil(float64(opts.MaxFleetSizeSupported)/10) * math.Ceil(float64(opts.MaxConcurrentClusterPlacement)/10)),
+			InformerManager:         dynamicInformerManager,
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up work generator")
 			return err
@@ -225,8 +241,12 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		klog.Info("Setting up scheduler")
 		defaultProfile := profile.NewDefaultProfile()
 		defaultFramework := framework.NewFramework(defaultProfile, mgr)
-		defaultSchedulingQueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue()
-		defaultScheduler := scheduler.NewScheduler("DefaultScheduler", defaultFramework, defaultSchedulingQueue, mgr)
+		defaultSchedulingQueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue(
+			queue.WithName(schedulerQueueName),
+		)
+		// we use one scheduler for every 10 concurrent placement
+		defaultScheduler := scheduler.NewScheduler("DefaultScheduler", defaultFramework, defaultSchedulingQueue, mgr,
+			int(math.Ceil(float64(opts.MaxFleetSizeSupported)/50)*math.Ceil(float64(opts.MaxConcurrentClusterPlacement)/10)))
 		klog.Info("Starting the scheduler")
 		// Scheduler must run in a separate goroutine as Run() is a blocking call.
 		wg.Add(1)
@@ -267,6 +287,27 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			klog.ErrorS(err, "Unable to set up memberCluster watcher for scheduler")
 			return err
 		}
+
+		// setup override related controllers
+		klog.Info("Setting up the clusterResourceOverride controller")
+		if err := (&overrider.ClusterResourceReconciler{
+			Reconciler: overrider.Reconciler{
+				Client: mgr.GetClient(),
+			},
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "Unable to set up clusterResourceOverride controller")
+			return err
+		}
+
+		klog.Info("Setting up the resourceOverride controller")
+		if err := (&overrider.ResourceReconciler{
+			Reconciler: overrider.Reconciler{
+				Client: mgr.GetClient(),
+			},
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "Unable to set up resourceOverride controller")
+			return err
+		}
 	}
 
 	// Set up a runner that starts all the custom controllers we created above
@@ -280,7 +321,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		InformerManager:                            dynamicInformerManager,
 		ResourceConfig:                             resourceConfig,
 		SkippedNamespaces:                          skippedNamespaces,
-		ConcurrentClusterPlacementWorker:           opts.ConcurrentClusterPlacementSyncs,
+		ConcurrentClusterPlacementWorker:           int(math.Ceil(float64(opts.MaxConcurrentClusterPlacement) / 10)),
 		ConcurrentResourceChangeWorker:             opts.ConcurrentResourceChangeSyncs,
 	}
 

@@ -338,6 +338,25 @@ Events:
   Normal  PlacementRolloutCompleted  3m28s (x7 over 3d22h)  cluster-resource-placement-controller  Resources have been applied to the selected clusters
 ```
 
+## Tolerations
+
+The `ClusterResourcePlacement` CR supports the specification of list of tolerations, which are applied to the `ClusterResourcePlacement`
+object. Each Toleration object comprises the following fields:
+- `key`: The key of the toleration.
+- `value`: The value of the toleration.
+- `effect`: The effect of the toleration, which can be `NoSchedule` for now.
+- `operator`: The operator of the toleration, which can be `Exists` or `Equal`.
+
+Each toleration is used to tolerate one or more specific taints applied on the `MemberCluster`. Once all taints on a `MemberCluster`
+are tolerated by tolerations on a `ClusterResourcePlacement`, resources can be propagated to the `MemberCluster` by the scheduler for that
+`ClusterResourcePlacement` resource.
+
+Tolerations cannot be updated or removed from a `ClusterResourcePlacement`. If there is a need to update toleration a better approach is to
+add another toleration. If we absolutely need to update or remove existing tolerations, the only option is to delete the existing `ClusterResourcePlacement`
+and create a new object with the updated tolerations.
+
+For detailed instructions, please refer to this [document](../../howtos/taint-toleration.md).
+
 ## Envelope Object
 
 The `ClusterResourcePlacement` leverages the fleet hub cluster as a staging environment for customer resources. These resources are then propagated to member clusters that are part of the fleet, based on the `ClusterResourcePlacement` spec.

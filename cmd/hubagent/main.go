@@ -18,14 +18,18 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	ctrlwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
@@ -62,10 +66,13 @@ func init() {
 	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 	utilruntime.Must(fleetnetworkingv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(placementv1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 	klog.InitFlags(nil)
 
-	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics, fleetmetrics.PlacementApplyFailedCount, fleetmetrics.PlacementApplySucceedCount)
+	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics,
+		fleetmetrics.PlacementApplyFailedCount, fleetmetrics.PlacementApplySucceedCount,
+		fleetmetrics.SchedulingCycleDurationMilliseconds, fleetmetrics.SchedulerActiveWorkers)
 }
 
 func main() {
@@ -89,16 +96,22 @@ func main() {
 	config.QPS, config.Burst = float32(opts.HubQPS), opts.HubBurst
 
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
-		Scheme:                     scheme,
-		SyncPeriod:                 &opts.ResyncPeriod.Duration,
+		Scheme: scheme,
+		Cache: cache.Options{
+			SyncPeriod: &opts.ResyncPeriod.Duration,
+		},
 		LeaderElection:             opts.LeaderElection.LeaderElect,
 		LeaderElectionID:           opts.LeaderElection.ResourceName,
 		LeaderElectionNamespace:    opts.LeaderElection.ResourceNamespace,
 		LeaderElectionResourceLock: opts.LeaderElection.ResourceLock,
 		HealthProbeBindAddress:     opts.HealthProbeAddress,
-		MetricsBindAddress:         opts.MetricsBindAddress,
-		Port:                       FleetWebhookPort,
-		CertDir:                    FleetWebhookCertDir,
+		Metrics: metricsserver.Options{
+			BindAddress: opts.MetricsBindAddress,
+		},
+		WebhookServer: ctrlwebhook.NewServer(ctrlwebhook.Options{
+			Port:    FleetWebhookPort,
+			CertDir: FleetWebhookCertDir,
+		}),
 	})
 	if err != nil {
 		klog.ErrorS(err, "unable to start controller manager.")

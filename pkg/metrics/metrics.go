@@ -50,3 +50,28 @@ var (
 		}).Inc()
 	}
 )
+
+// The scheduler related metrics.
+var (
+	// SchedulingCycleDurationMilliseconds is a Fleet scheduler metric that tracks how long it
+	// takes to complete a scheduling loop run.
+	SchedulingCycleDurationMilliseconds = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "scheduling_cycle_duration_milliseconds",
+			Help: "The duration of a scheduling cycle run in milliseconds",
+			Buckets: []float64{
+				10, 50, 100, 500, 1000, 5000, 10000, 50000,
+			},
+		},
+		[]string{
+			"is_failed",
+			"needs_requeue",
+		},
+	)
+
+	// SchedulerActiveWorkers is a prometheus metric which holds the number of active scheduler loop.
+	SchedulerActiveWorkers = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "scheduling_active_workers",
+		Help: "Number of currently running scheduling loop",
+	}, []string{})
+)

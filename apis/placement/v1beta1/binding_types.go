@@ -13,6 +13,7 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=rb
 // +kubebuilder:subresource:status
+// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Bound")].status`,name="WorkCreated",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Applied")].status`,name="ResourcesApplied",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
@@ -85,6 +86,13 @@ const (
 
 // ResourceBindingStatus represents the current status of a ClusterResourceBinding.
 type ResourceBindingStatus struct {
+	// +kubebuilder:validation:MaxItems=100
+
+	// FailedPlacements is a list of all the resources failed to be placed to the given cluster or the resource is unavailable.
+	// Note that we only include 100 failed resource placements even if there are more than 100.
+	// +optional
+	FailedPlacements []FailedResourcePlacement `json:"failedPlacements,omitempty"`
+
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map
@@ -116,20 +124,12 @@ const (
 	// - "Unknown" means it is unknown.
 	ResourceBindingOverridden ResourceBindingConditionType = "Overridden"
 
-	// ResourceBindingBound indicates the bound condition of the given resources.
+	// ResourceBindingWorkSynchronized indicates the work synchronized condition of the given resources.
 	// Its condition status can be one of the following:
-	// - "True" means the corresponding work CR is created in the target cluster's namespace.
-	// - "False" means the corresponding work CR is not created yet.
+	// - "True" means all corresponding works are created or updated in the target cluster's namespace.
+	// - "False" means not all corresponding works are created or updated in the target cluster's namespace yet.
 	// - "Unknown" means it is unknown.
-	// TODO, will be replaced by "WorkCreated"
-	ResourceBindingBound ResourceBindingConditionType = "Bound"
-
-	// ResourceBindingWorkCreated indicates the work created condition of the given resources.
-	// Its condition status can be one of the following:
-	// - "True" means all corresponding works are created in the target cluster's namespace.
-	// - "False" means not all corresponding works are created in the target cluster's namespace yet.
-	// - "Unknown" means it is unknown.
-	ResourceBindingWorkCreated ResourceBindingConditionType = "WorkCreated"
+	ResourceBindingWorkSynchronized ResourceBindingConditionType = "WorkSynchronized"
 
 	// ResourceBindingApplied indicates the applied condition of the given resources.
 	// Its condition status can be one of the following:
@@ -137,6 +137,13 @@ const (
 	// - "False" means not all the resources are created in the target cluster yet.
 	// - "Unknown" means it is unknown.
 	ResourceBindingApplied ResourceBindingConditionType = "Applied"
+
+	// ResourceBindingAvailable indicates the available condition of the given resources.
+	// Its condition status can be one of the following:
+	// - "True" means all the resources are available in the target cluster.
+	// - "False" means not all the resources are available in the target cluster yet.
+	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
+	ResourceBindingAvailable ResourceBindingConditionType = "Available"
 )
 
 // ClusterResourceBindingList is a collection of ClusterResourceBinding.

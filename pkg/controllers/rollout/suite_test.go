@@ -20,13 +20,15 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
@@ -74,15 +76,18 @@ var _ = BeforeSuite(func() {
 	Expect(fleetv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(workv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(kruisev1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
+	Expect(placementv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 
 	By("starting the controller manager")
 	klog.InitFlags(flag.CommandLine)
 	flag.Parse()
 
 	mgr, err = ctrl.NewManager(cfg, ctrl.Options{
-		Scheme:             scheme.Scheme,
-		MetricsBindAddress: "0",
-		Logger:             klogr.NewWithOptions(klogr.WithFormat(klogr.FormatKlog)),
+		Scheme: scheme.Scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: "0",
+		},
+		Logger: textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(4))),
 	})
 	Expect(err).Should(Succeed())
 

@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -55,26 +56,30 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	//
 	//     It may happen for 2 reasons:
 	//
-	//     a) the cluster setting, specifically its labels, has changed; and/or
+	//     a) the cluster's setup (e.g., its labels) or status (e.g., resource/non-resource properties),
+	//        has changed; and/or
 	//     b) an unexpected development which originally leads the scheduler to disregard the cluster
 	//     (e.g., agents not joining, network partition, etc.) has been resolved.
+	//     c) the cluster, has a taint removed from it and now is eligible for scheduling.
 	//
 	//  2. a cluster, originally eligible for resource placement, becomes ineligible for some reason.
 	//
 	//     Similarly, it may happen for 2 reasons:
 	//
-	//     a) the cluster setting, specifically its labels, has changed; and/or
+	//     a) the cluster's setup (e.g., its labels) or status (e.g., resource/non-resource properties),
+	//        has changed; and/or
 	//     b) an unexpected development (e.g., agents failing, network partition, etc.) has occurred.
 	//     c) the cluster, which may or may not have resources placed on it, has left the fleet (deleting).
 	//
 	// Among the cases,
 	//
-	// * 1a) and 1b) require attention on the scheduler's end, specifically:
+	// * 1a), 1b) and 1c) require attention on the scheduler's end, specifically:
 	//   - CRPs of the PickAll placement type may be able to select this cluster now;
 	//   - CRPs of the PickN placement type, which have not been fully scheduled yet, may be
 	//     able to select this cluster, and gets a step closer to being fully scheduled;
 	//   - CRPs of the PickFixed placement type, which have not been fully scheduled yet, may
-	//     be able to select this cluster, and gets a step closer to being fully scheduled;
+	//     be able to select this cluster, and gets a step closer to being fully scheduled, 1c)
+	//     doesn't apply to this scenario since taints are not honored for PickFixed CRPs.
 	//
 	// * 2a) and 2b) require no attention on the scheduler's end, specifically:
 	//   - CRPs which have already selected this cluster, regardless of its placement type, cannot
@@ -138,7 +143,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// Enqueue the CRPs.
 	//
 	// Note that all the CRPs in the system are enqueued; technically speaking, for situation
-	// 1a) and 1b), PickN CRPs that have been fully scheduled needs no further processing, however,
+	// 1a), 1b) and 1c), PickN CRPs that have been fully scheduled needs no further processing, however,
 	// for simplicity reasons, this controller will not distinguish between the cases.
 	for idx := range crps {
 		crp := &crps[idx]
@@ -190,17 +195,58 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return false
 			}
 
-			// Capture label changes.
-			//
 			clusterKObj := klog.KObj(newCluster)
 			// The cluster is being deleted.
 			if oldCluster.GetDeletionTimestamp().IsZero() && !newCluster.GetDeletionTimestamp().IsZero() {
 				klog.V(2).InfoS("A member cluster is leaving the fleet", "memberCluster", clusterKObj)
 				return true
 			}
+
+			// Capture label changes.
+			//
 			// Note that the controller runs only when label changes happen on joined clusters.
 			if !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
 				klog.V(2).InfoS("A member cluster label change has been detected", "memberCluster", clusterKObj)
+				return true
+			}
+
+			// Capture taint update/delete changes.
+			if isTaintsUpdatedOrDeleted(oldCluster.Spec.Taints, newCluster.Spec.Taints) {
+				klog.V(2).InfoS("A member cluster taint update/delete has been detected", "memberCluster", clusterKObj)
+				return true
+			}
+
+			// Capture non-resource property changes.
+			//
+			// Observation time refreshes is not considered as a change.
+			oldProperties := oldCluster.Status.Properties
+			newProperties := newCluster.Status.Properties
+			if len(oldProperties) != len(newProperties) {
+				return true
+			}
+			for oldK, oldV := range oldProperties {
+				newV, ok := newProperties[oldK]
+				if !ok || oldV.Value != newV.Value {
+					return true
+				}
+			}
+
+			// Capture resource usage changes.
+			oldCapacity := oldCluster.Status.ResourceUsage.Capacity
+			newCapacity := newCluster.Status.ResourceUsage.Capacity
+			if !equality.Semantic.DeepEqual(oldCapacity, newCapacity) {
+				return true
+			}
+
+			oldAllocatable := oldCluster.Status.ResourceUsage.Allocatable
+			newAllocatable := newCluster.Status.ResourceUsage.Allocatable
+			if !equality.Semantic.DeepEqual(oldAllocatable, newAllocatable) {
+				return true
+			}
+
+			oldAvailable := oldCluster.Status.ResourceUsage.Available
+			newAvailable := newCluster.Status.ResourceUsage.Available
+			if !equality.Semantic.DeepEqual(oldAvailable, newAvailable) {
 				return true
 			}
 
@@ -226,4 +272,17 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&clusterv1beta1.MemberCluster{}).
 		WithEventFilter(customPredicate).
 		Complete(r)
+}
+
+func isTaintsUpdatedOrDeleted(oldTaints []clusterv1beta1.Taint, newTaints []clusterv1beta1.Taint) bool {
+	newTaintsMap := make(map[clusterv1beta1.Taint]bool)
+	for _, newTaint := range newTaints {
+		newTaintsMap[newTaint] = true
+	}
+	for _, oldTaint := range oldTaints {
+		if !newTaintsMap[oldTaint] {
+			return true
+		}
+	}
+	return false
 }

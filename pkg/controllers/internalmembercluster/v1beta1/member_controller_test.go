@@ -17,14 +17,32 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/utils"
+)
+
+const (
+	exampleClusterPropertyName             = "example"
+	exampleClusterPropertyValue            = "2"
+	examplePropertyProviderCondition       = "ExampleConditionType"
+	examplePropertyProviderConditionStatus = metav1.ConditionTrue
+	examplePropertyProviderReason          = "ExampleReason"
+	examplePropertyProviderMessage         = "ExampleMessage"
+
+	imcName = "imc-1"
+)
+
+var (
+	ignoreLTTConditionField = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
 )
 
 func TestMarkInternalMemberClusterJoined(t *testing.T) {
@@ -339,6 +357,285 @@ func TestGetConditionWithType(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			actualCondition := testCase.internalMemberCluster.GetConditionWithType(clusterv1beta1.MemberAgent, testCase.conditionType)
 			assert.Equal(t, testCase.wantedCondition, actualCondition)
+		})
+	}
+}
+
+// noReturnProvider is a property provider that does not return any properties until the
+// hold channel is closed.
+type noReturnProvider struct {
+	hold <-chan struct{}
+}
+
+var _ propertyprovider.PropertyProvider = &noReturnProvider{}
+
+func (p *noReturnProvider) Start(_ context.Context, _ *rest.Config) error {
+	return nil
+}
+
+func (p *noReturnProvider) Collect(ctx context.Context) propertyprovider.PropertyCollectionResponse {
+	<-ctx.Done()
+	return propertyprovider.PropertyCollectionResponse{}
+}
+
+// TestReportClusterPropertiesWithPropertyProviderTooManyCalls tests
+// the reportClusterPropertiesWithPropertyProvider method, specifically when the property provider
+// receives too many calls.
+func TestReportClusterPropertiesWithPropertyProviderTooManyCalls(t *testing.T) {
+	h := make(chan struct{})
+	nrpp := &noReturnProvider{hold: h}
+
+	testCases := []struct {
+		name    string
+		imc     *clusterv1beta1.InternalMemberCluster
+		wantIMC *clusterv1beta1.InternalMemberCluster
+	}{
+		{
+			name: "too many calls",
+			imc: &clusterv1beta1.InternalMemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: imcName,
+				},
+			},
+			wantIMC: &clusterv1beta1.InternalMemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: imcName,
+				},
+				Status: clusterv1beta1.InternalMemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:    string(clusterv1beta1.ConditionTypeClusterPropertyCollectionSucceeded),
+							Status:  metav1.ConditionFalse,
+							Reason:  ClusterPropertyCollectionFailedTooManyCallsReason,
+							Message: ClusterPropertyCollectionFailedTooManyCallsMessage,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			r := &Reconciler{
+				propertyProviderCfg: &propertyProviderConfig{
+					propertyProvider: nrpp,
+				},
+				recorder: utils.NewFakeRecorder(maxQueuedPropertyCollectionCalls + 1),
+			}
+			for i := 0; i < maxQueuedPropertyCollectionCalls; i++ {
+				// Invoke the method with no expectations for returns.
+				go func() {
+					r.reportClusterPropertiesWithPropertyProvider(ctx, tc.imc.DeepCopy()) //nolint:all
+					// Linting is disabled for this line as we are discarding the returned error intentionally.
+				}()
+			}
+
+			for {
+				// Wait for the prev. calls to get queued.
+				if r.propertyProviderCfg.queuedPropertyCollectionCalls.Load() == int32(maxQueuedPropertyCollectionCalls) {
+					break
+				}
+			}
+
+			if err := r.reportClusterPropertiesWithPropertyProvider(ctx, tc.imc); err == nil {
+				t.Fatalf("reportClusterPropertiesWithPropertyProvider(), got no error, want error")
+			}
+
+			if diff := cmp.Diff(tc.wantIMC, tc.imc, ignoreLTTConditionField); diff != "" {
+				t.Fatalf("internalMemberCluster, (-got, +want):\n%s", diff)
+			}
+
+			// Unblock the stuck goroutines.
+			close(h)
+		})
+	}
+}
+
+// TestReportClusterPropertiesWithPropertyProviderTimedOut tests the
+// reportClusterPropertiesWithPropertyProvider method, specifically when the property provider
+// times out.
+func TestReportClusterPropertiesWithPropertyProviderTimedOut(t *testing.T) {
+	h := make(chan struct{})
+	nrpp := &noReturnProvider{hold: h}
+
+	testCases := []struct {
+		name    string
+		imc     *clusterv1beta1.InternalMemberCluster
+		wantIMC *clusterv1beta1.InternalMemberCluster
+	}{
+		{
+			name: "timed out",
+			imc: &clusterv1beta1.InternalMemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: imcName,
+				},
+			},
+			wantIMC: &clusterv1beta1.InternalMemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: imcName,
+				},
+				Status: clusterv1beta1.InternalMemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:    string(clusterv1beta1.ConditionTypeClusterPropertyCollectionSucceeded),
+							Status:  metav1.ConditionFalse,
+							Reason:  ClusterPropertyCollectionTimedOutReason,
+							Message: ClusterPropertyCollectionTimedOutMessage,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			r := &Reconciler{
+				propertyProviderCfg: &propertyProviderConfig{
+					propertyProvider: nrpp,
+				},
+				recorder: utils.NewFakeRecorder(1),
+			}
+
+			if err := r.reportClusterPropertiesWithPropertyProvider(ctx, tc.imc); err == nil {
+				t.Fatalf("reportClusterPropertiesWithPropertyProvider(), got no error, want error")
+			}
+
+			if diff := cmp.Diff(tc.wantIMC, tc.imc, ignoreLTTConditionField); diff != "" {
+				t.Fatalf("internalMemberCluster, (-got, +want):\n%s", diff)
+			}
+
+			// Unblock the stuck property provider.
+			close(h)
+		})
+	}
+}
+
+// dummyProvider is a property provider that returns some static properties for testing
+// purposes.
+type dummyProvider struct{}
+
+var _ propertyprovider.PropertyProvider = &dummyProvider{}
+
+func (p *dummyProvider) Start(_ context.Context, _ *rest.Config) error {
+	return nil
+}
+
+func (p *dummyProvider) Collect(_ context.Context) propertyprovider.PropertyCollectionResponse {
+	return propertyprovider.PropertyCollectionResponse{
+		Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+			exampleClusterPropertyName: {
+				Value: exampleClusterPropertyValue,
+			},
+		},
+		Resources: clusterv1beta1.ResourceUsage{
+			Capacity: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10"),
+				corev1.ResourceMemory: resource.MustParse("10Gi"),
+			},
+			Allocatable: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("5"),
+				corev1.ResourceMemory: resource.MustParse("5Gi"),
+			},
+			Available: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("5"),
+				corev1.ResourceMemory: resource.MustParse("5Gi"),
+			},
+		},
+		Conditions: []metav1.Condition{
+			{
+				Type:    examplePropertyProviderCondition,
+				Status:  examplePropertyProviderConditionStatus,
+				Reason:  examplePropertyProviderReason,
+				Message: examplePropertyProviderMessage,
+			},
+		},
+	}
+}
+
+// TestReportClusterPropertiesWithPropertyProvider tests the reportClusterPropertiesWithPropertyProvider method.
+func TestReportClusterPropertiesWithPropertyProvider(t *testing.T) {
+	imcGeneration := 10
+
+	testCases := []struct {
+		name    string
+		imc     *clusterv1beta1.InternalMemberCluster
+		wantIMC *clusterv1beta1.InternalMemberCluster
+	}{
+		{
+			name: "property collection successful",
+			imc: &clusterv1beta1.InternalMemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       imcName,
+					Generation: int64(imcGeneration),
+				},
+			},
+			wantIMC: &clusterv1beta1.InternalMemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       imcName,
+					Generation: int64(imcGeneration),
+				},
+				Status: clusterv1beta1.InternalMemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(clusterv1beta1.ConditionTypeClusterPropertyCollectionSucceeded),
+							Status:             metav1.ConditionTrue,
+							Reason:             ClusterPropertyCollectionSucceededReason,
+							Message:            ClusterPropertyCollectionSucceededMessage,
+							ObservedGeneration: int64(imcGeneration),
+						},
+						{
+							Type:               examplePropertyProviderCondition,
+							Status:             examplePropertyProviderConditionStatus,
+							Reason:             examplePropertyProviderReason,
+							Message:            examplePropertyProviderMessage,
+							ObservedGeneration: int64(imcGeneration),
+						},
+					},
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						exampleClusterPropertyName: {
+							Value: exampleClusterPropertyValue,
+						},
+					},
+					ResourceUsage: clusterv1beta1.ResourceUsage{
+						Capacity: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("10"),
+							corev1.ResourceMemory: resource.MustParse("10Gi"),
+						},
+						Allocatable: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("5"),
+							corev1.ResourceMemory: resource.MustParse("5Gi"),
+						},
+						Available: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("5"),
+							corev1.ResourceMemory: resource.MustParse("5Gi"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			r := &Reconciler{
+				propertyProviderCfg: &propertyProviderConfig{
+					propertyProvider: &dummyProvider{},
+				},
+				recorder: utils.NewFakeRecorder(1),
+			}
+
+			if err := r.reportClusterPropertiesWithPropertyProvider(ctx, tc.imc); err != nil {
+				t.Fatalf("reportClusterPropertiesWithPropertyProvider(), got error %v, want no error", err)
+			}
+
+			if diff := cmp.Diff(tc.imc, tc.wantIMC, ignoreLTTConditionField); diff != "" {
+				t.Fatalf("internalMemberCluster, (-got, +want):\n%s", diff)
+			}
 		})
 	}
 }

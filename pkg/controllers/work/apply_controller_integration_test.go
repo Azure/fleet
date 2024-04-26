@@ -38,39 +38,20 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/test/utils/controller"
 )
 
 const timeout = time.Second * 10
 const interval = time.Millisecond * 250
 
 var _ = Describe("Work Controller", func() {
-	var workNamespace string
-	var ns corev1.Namespace
 	var cm *corev1.ConfigMap
 	var work *fleetv1beta1.Work
 	const defaultNS = "default"
-
-	BeforeEach(func() {
-		workNamespace = "work-" + utilrand.String(5)
-		// Create namespace
-		ns = corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: workNamespace,
-			},
-		}
-		err := k8sClient.Create(context.Background(), &ns)
-		Expect(err).ToNot(HaveOccurred())
-	})
-
-	AfterEach(func() {
-		// Add any teardown steps that needs to be executed after each test
-		err := k8sClient.Delete(context.Background(), &ns)
-		Expect(err).ToNot(HaveOccurred())
-	})
 
 	Context("Test single work propagation", func() {
 		It("Should have a configmap deployed correctly", func() {
@@ -91,14 +72,12 @@ var _ = Describe("Work Controller", func() {
 			}
 
 			By("create the work")
-			work = createWorkWithManifest(workNamespace, cm)
+			work = createWorkWithManifest(testWorkNamespace, cm)
 			err := k8sClient.Create(context.Background(), work)
 			Expect(err).ToNot(HaveOccurred())
 
-			resultWork := waitForWorkToApply(work.GetName(), work.GetNamespace())
+			resultWork := waitForWorkToBeAvailable(work.GetName(), work.GetNamespace())
 			Expect(len(resultWork.Status.ManifestConditions)).Should(Equal(1))
-			Expect(meta.IsStatusConditionTrue(resultWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)).Should(BeTrue())
-			Expect(meta.IsStatusConditionTrue(resultWork.Status.ManifestConditions[0].Conditions, fleetv1beta1.WorkConditionTypeApplied)).Should(BeTrue())
 			expectedResourceID := fleetv1beta1.WorkResourceIdentifier{
 				Ordinal:   0,
 				Group:     "",
@@ -109,6 +88,32 @@ var _ = Describe("Work Controller", func() {
 				Name:      cm.Name,
 			}
 			Expect(cmp.Diff(resultWork.Status.ManifestConditions[0].Identifier, expectedResourceID)).Should(BeEmpty())
+			expected := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: ManifestAlreadyUpToDateReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionTrue,
+					Reason: string(manifestNotTrackableAction),
+				},
+			}
+			Expect(controller.CompareConditions(expected, resultWork.Status.ManifestConditions[0].Conditions)).Should(BeEmpty())
+			expected = []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: workAppliedCompletedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionTrue,
+					Reason: WorkNotTrackableReason,
+				},
+			}
+			Expect(controller.CompareConditions(expected, resultWork.Status.Conditions)).Should(BeEmpty())
 
 			By("Check applied config map")
 			var configMap corev1.ConfigMap
@@ -116,6 +121,7 @@ var _ = Describe("Work Controller", func() {
 			Expect(cmp.Diff(configMap.Labels, cm.Labels)).Should(BeEmpty())
 			Expect(cmp.Diff(configMap.Data, cm.Data)).Should(BeEmpty())
 
+			Expect(k8sClient.Delete(ctx, work)).Should(Succeed(), "Failed to deleted the work")
 		})
 
 		It("Should apply the same manifest in two work properly", func() {
@@ -135,9 +141,9 @@ var _ = Describe("Work Controller", func() {
 				},
 			}
 
-			work1 := createWorkWithManifest(workNamespace, cm)
+			work1 := createWorkWithManifest(testWorkNamespace, cm)
 			work2 := work1.DeepCopy()
-			work2.Name = "test-work-2"
+			work2.Name = "work-" + utilrand.String(5)
 
 			By("create the first work")
 			err := k8sClient.Create(context.Background(), work1)
@@ -147,8 +153,8 @@ var _ = Describe("Work Controller", func() {
 			err = k8sClient.Create(context.Background(), work2)
 			Expect(err).ToNot(HaveOccurred())
 
-			waitForWorkToApply(work1.GetName(), workNamespace)
-			waitForWorkToApply(work2.GetName(), workNamespace)
+			waitForWorkToApply(work1.GetName(), testWorkNamespace)
+			waitForWorkToApply(work2.GetName(), testWorkNamespace)
 
 			By("Check applied config map")
 			var configMap corev1.ConfigMap
@@ -205,11 +211,11 @@ var _ = Describe("Work Controller", func() {
 			}
 
 			By("create the work")
-			work = createWorkWithManifest(workNamespace, cm)
+			work = createWorkWithManifest(testWorkNamespace, cm)
 			Expect(k8sClient.Create(context.Background(), work)).ToNot(HaveOccurred())
 
-			By("wait for the work to be applied")
-			waitForWorkToApply(work.GetName(), work.GetNamespace())
+			By("wait for the work to be available")
+			waitForWorkToBeAvailable(work.GetName(), work.GetNamespace())
 
 			By("Check applied config map")
 			verifyAppliedConfigMap(cm)
@@ -240,6 +246,8 @@ var _ = Describe("Work Controller", func() {
 
 			By("verify that applied configMap took all the changes")
 			verifyAppliedConfigMap(cm)
+
+			Expect(k8sClient.Delete(ctx, work)).Should(Succeed(), "Failed to deleted the work")
 		})
 
 		It("Should merge the third party change correctly", func() {
@@ -265,7 +273,7 @@ var _ = Describe("Work Controller", func() {
 			}
 
 			By("create the work")
-			work = createWorkWithManifest(workNamespace, cm)
+			work = createWorkWithManifest(testWorkNamespace, cm)
 			err := k8sClient.Create(context.Background(), work)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -334,6 +342,8 @@ var _ = Describe("Work Controller", func() {
 				"labelKey3": "added-back-by-manifest",
 			}
 			Expect(cmp.Diff(appliedCM.Labels, expectedLabel)).Should(BeEmpty())
+
+			Expect(k8sClient.Delete(ctx, work)).Should(Succeed(), "Failed to deleted the work")
 		})
 
 		It("Should pick up the crd change correctly", func() {
@@ -366,12 +376,12 @@ var _ = Describe("Work Controller", func() {
 			}
 
 			By("create the work")
-			work = createWorkWithManifest(workNamespace, cloneSet)
+			work = createWorkWithManifest(testWorkNamespace, cloneSet)
 			err := k8sClient.Create(context.Background(), work)
 			Expect(err).ToNot(HaveOccurred())
 
 			By("wait for the work to be applied")
-			waitForWorkToApply(work.GetName(), work.GetNamespace())
+			waitForWorkToBeAvailable(work.GetName(), work.GetNamespace())
 
 			By("Check applied CloneSet")
 			var appliedCloneSet kruisev1alpha1.CloneSet
@@ -410,7 +420,7 @@ var _ = Describe("Work Controller", func() {
 					Values:   []string{"us", "asia", "eu"},
 				},
 			}
-			cloneSet.Spec.Replicas = pointer.Int32(10)
+			cloneSet.Spec.Replicas = ptr.To(int32(10))
 			cloneSet.Spec.MinReadySeconds = 1
 			maxuavail := intstr.FromInt(10)
 			cloneSet.Spec.ScaleStrategy.MaxUnavailable = &maxuavail
@@ -432,8 +442,10 @@ var _ = Describe("Work Controller", func() {
 			}
 			Expect(cmp.Diff(appliedCloneSet.Spec.ScaleStrategy, expectStrategy)).Should(BeEmpty())
 			Expect(cmp.Diff(appliedCloneSet.Spec.Selector, cloneSet.Spec.Selector)).Should(BeEmpty())
-			Expect(cmp.Diff(appliedCloneSet.Spec.Replicas, pointer.Int32(10))).Should(BeEmpty())
+			Expect(cmp.Diff(appliedCloneSet.Spec.Replicas, ptr.To(int32(10)))).Should(BeEmpty())
 			Expect(cmp.Diff(appliedCloneSet.Spec.MinReadySeconds, int32(1))).Should(BeEmpty())
+
+			Expect(k8sClient.Delete(ctx, work)).Should(Succeed(), "Failed to deleted the work")
 		})
 
 		It("Check that owner references is merged instead of override", func() {
@@ -454,11 +466,11 @@ var _ = Describe("Work Controller", func() {
 			}
 
 			By("create the work")
-			work = createWorkWithManifest(workNamespace, cm)
+			work = createWorkWithManifest(testWorkNamespace, cm)
 			Expect(k8sClient.Create(context.Background(), work)).ToNot(HaveOccurred())
 
 			By("create another work that includes the configMap")
-			work2 := createWorkWithManifest(workNamespace, cm)
+			work2 := createWorkWithManifest(testWorkNamespace, cm)
 			Expect(k8sClient.Create(context.Background(), work2)).ToNot(HaveOccurred())
 
 			By("wait for the change of the work1 to be applied")
@@ -477,6 +489,9 @@ var _ = Describe("Work Controller", func() {
 			Expect(appliedCM.OwnerReferences[0].Name).Should(SatisfyAny(Equal(work.GetName()), Equal(work2.GetName())))
 			Expect(appliedCM.OwnerReferences[1].APIVersion).Should(Equal(fleetv1beta1.GroupVersion.String()))
 			Expect(appliedCM.OwnerReferences[1].Name).Should(SatisfyAny(Equal(work.GetName()), Equal(work2.GetName())))
+
+			Expect(k8sClient.Delete(ctx, work)).Should(Succeed(), "Failed to deleted the work")
+			Expect(k8sClient.Delete(ctx, work2)).Should(Succeed(), "Failed to deleted the work2")
 		})
 
 		It("Check that the apply still works if the last applied annotation does not exist", func() {
@@ -503,7 +518,7 @@ var _ = Describe("Work Controller", func() {
 			}
 
 			By("create the work")
-			work = createWorkWithManifest(workNamespace, cm)
+			work = createWorkWithManifest(testWorkNamespace, cm)
 			err := k8sClient.Create(ctx, work)
 			Expect(err).Should(Succeed())
 
@@ -543,6 +558,8 @@ var _ = Describe("Work Controller", func() {
 			By("Check applied configMap is modified even without the last applied annotation")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cmName, Namespace: cmNamespace}, appliedCM)).Should(Succeed())
 			verifyAppliedConfigMap(cm)
+
+			Expect(k8sClient.Delete(ctx, work)).Should(Succeed(), "Failed to deleted the work")
 		})
 
 		It("Check that failed to apply manifest has the proper identification", func() {
@@ -561,7 +578,7 @@ var _ = Describe("Work Controller", func() {
 					Paused: true,
 				},
 			}
-			work = createWorkWithManifest(workNamespace, broadcastJob)
+			work = createWorkWithManifest(testWorkNamespace, broadcastJob)
 			err := k8sClient.Create(context.Background(), work)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -631,7 +648,7 @@ var _ = Describe("Work Controller", func() {
 				}
 				// make sure we can call join as many as possible
 				Expect(workController.Join(ctx)).Should(Succeed())
-				work = createWorkWithManifest(workNamespace, cm)
+				work = createWorkWithManifest(testWorkNamespace, cm)
 				err := k8sClient.Create(ctx, work)
 				Expect(err).ToNot(HaveOccurred())
 				By(fmt.Sprintf("created the work = %s", work.GetName()))
@@ -658,7 +675,7 @@ var _ = Describe("Work Controller", func() {
 			}
 			for i := 0; i < numWork; i++ {
 				var resultWork fleetv1beta1.Work
-				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: works[i].GetName(), Namespace: workNamespace}, &resultWork)).Should(Succeed())
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: works[i].GetName(), Namespace: testWorkNamespace}, &resultWork)).Should(Succeed())
 				Expect(controllerutil.ContainsFinalizer(&resultWork, fleetv1beta1.WorkFinalizer)).Should(BeFalse())
 				// make sure that leave can be called as many times as possible
 				Expect(workController.Leave(ctx)).Should(Succeed())
@@ -685,7 +702,7 @@ var _ = Describe("Work Controller", func() {
 				for i := 0; i < numWork; i++ {
 					By(fmt.Sprintf("updated the work = %s", works[i].GetName()))
 					var resultWork fleetv1beta1.Work
-					err := k8sClient.Get(context.Background(), types.NamespacedName{Name: works[i].GetName(), Namespace: workNamespace}, &resultWork)
+					err := k8sClient.Get(context.Background(), types.NamespacedName{Name: works[i].GetName(), Namespace: testWorkNamespace}, &resultWork)
 					Expect(err).Should(Succeed())
 					Expect(controllerutil.ContainsFinalizer(&resultWork, fleetv1beta1.WorkFinalizer)).Should(BeFalse())
 					applyCond := meta.FindStatusCondition(resultWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)

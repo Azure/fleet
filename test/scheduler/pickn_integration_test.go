@@ -12,13 +12,23 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+)
+
+var (
+	pickNCmpOpts = []cmp.Option{
+		ignoreClusterDecisionReasonField,
+		cmpopts.SortSlices(lessFuncClusterDecision),
+		cmpopts.EquateEmpty(),
+	}
 )
 
 var _ = Describe("scheduling CRPs of the PickN placement type", func() {
@@ -53,7 +63,11 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, nil, policySnapshotName)
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+			}
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -74,7 +88,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, zeroScoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -114,7 +128,11 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, nil, policySnapshotName)
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+			}
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -135,7 +153,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -158,7 +176,11 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, nil, policySnapshotName)
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+			}
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -173,7 +195,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), []string{}, []string{}, []string{}, zeroScoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), []string{}, []string{}, []string{}, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -210,21 +232,25 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-							{
-								LabelSelector: metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "east",
-									},
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      envLabel,
-											Operator: metav1.LabelSelectorOpIn,
-											Values: []string{
-												"prod",
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "east",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      envLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values: []string{
+													"prod",
+												},
 											},
 										},
 									},
@@ -234,7 +260,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, nil, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -255,7 +281,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -293,37 +319,41 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-							{
-								LabelSelector: metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "east",
-									},
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      envLabel,
-											Operator: metav1.LabelSelectorOpIn,
-											Values: []string{
-												"prod",
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "east",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      envLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values: []string{
+													"prod",
+												},
 											},
 										},
 									},
 								},
-							},
-							{
-								LabelSelector: metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "west",
-									},
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      envLabel,
-											Operator: metav1.LabelSelectorOpNotIn,
-											Values: []string{
-												"prod",
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "west",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      envLabel,
+												Operator: metav1.LabelSelectorOpNotIn,
+												Values: []string{
+													"prod",
+												},
 											},
 										},
 									},
@@ -333,7 +363,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, nil, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -354,7 +384,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -392,12 +422,12 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			memberCluster2EastProd:   &zeroScore,
 			memberCluster3EastCanary: &zeroScore,
 			memberCluster4CentralProd: {
-				AffinityScore:       pointer.Int32(10),
-				TopologySpreadScore: pointer.Int32(0),
+				AffinityScore:       ptr.To(int32(10)),
+				TopologySpreadScore: ptr.To(int32(0)),
 			},
 			memberCluster5CentralProd: {
-				AffinityScore:       pointer.Int32(10),
-				TopologySpreadScore: pointer.Int32(0),
+				AffinityScore:       ptr.To(int32(10)),
+				TopologySpreadScore: ptr.To(int32(0)),
 			},
 			memberCluster6WestProd:   &zeroScore,
 			memberCluster7WestCanary: &zeroScore,
@@ -409,22 +439,26 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
-						{
-							Weight: 10,
-							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "central",
-									},
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      envLabel,
-											Operator: metav1.LabelSelectorOpIn,
-											Values: []string{
-												"prod",
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+							{
+								Weight: 10,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "central",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      envLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values: []string{
+													"prod",
+												},
 											},
 										},
 									},
@@ -434,7 +468,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, nil, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -455,7 +489,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -492,16 +526,16 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			memberCluster1EastProd: &zeroScore,
 			memberCluster2EastProd: &zeroScore,
 			memberCluster3EastCanary: {
-				AffinityScore:       pointer.Int32(20),
-				TopologySpreadScore: pointer.Int32(0),
+				AffinityScore:       ptr.To(int32(20)),
+				TopologySpreadScore: ptr.To(int32(0)),
 			},
 			memberCluster4CentralProd: {
-				AffinityScore:       pointer.Int32(10),
-				TopologySpreadScore: pointer.Int32(0),
+				AffinityScore:       ptr.To(int32(10)),
+				TopologySpreadScore: ptr.To(int32(0)),
 			},
 			memberCluster5CentralProd: {
-				AffinityScore:       pointer.Int32(10),
-				TopologySpreadScore: pointer.Int32(0),
+				AffinityScore:       ptr.To(int32(10)),
+				TopologySpreadScore: ptr.To(int32(0)),
 			},
 			memberCluster6WestProd:   &zeroScore,
 			memberCluster7WestCanary: &zeroScore,
@@ -513,41 +547,45 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
-						{
-							Weight: 10,
-							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "central",
-									},
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      envLabel,
-											Operator: metav1.LabelSelectorOpIn,
-											Values: []string{
-												"prod",
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+							{
+								Weight: 10,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "central",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      envLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values: []string{
+													"prod",
+												},
 											},
 										},
 									},
 								},
 							},
-						},
-						{
-							Weight: 20,
-							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "east",
-									},
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      envLabel,
-											Operator: metav1.LabelSelectorOpIn,
-											Values: []string{
-												"canary",
+							{
+								Weight: 20,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "east",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      envLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values: []string{
+													"canary",
+												},
 											},
 										},
 									},
@@ -557,7 +595,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, nil, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -578,7 +616,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -620,8 +658,8 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			// not violate any topology spread constraints + does not increase the skew. It
 			// is assigned a topology spread score of 0 as the skew is unchanged.
 			memberCluster5CentralProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(0),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(0)),
 			},
 			// Cluster 6 is considered to be unschedulable in the second iteration as placing
 			// resources on it would violate the topology spread constraint (skew becomes 2,
@@ -632,8 +670,8 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			// clusters), and its name is the largest in alphanumeric order. It is assigned
 			// a topology spread score of -1 as placing resources on it increases the skew.
 			memberCluster7WestCanary: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-1)),
 			},
 		}
 
@@ -643,14 +681,18 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			topologySpreadConstraints := []placementv1beta1.TopologySpreadConstraint{
-				{
-					MaxSkew:           pointer.Int32(1),
-					TopologyKey:       regionLabel,
-					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       regionLabel,
+						WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -671,7 +713,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -710,16 +752,16 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			// and decrease the skew for the environment-based topology spread constraint by 1;
 			// consequently it receives a topology spread score of 1.
 			memberCluster1EastProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(1)),
 			},
 			// Cluster 2 is not picked in the second iteration, but placing resources on it
 			// would leave the skew for the region-based topology spread constraint unchanged,
 			// and decrease the skew for the environment-based topology spread constraint by 1;
 			// consequently it receives a topology spread score of 1.
 			memberCluster2EastProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(1)),
 			},
 			// Cluster 3 is considered to be unschedulable in the second iteration as placing
 			// resources on it would violate the environment-based topology spread constraint
@@ -730,16 +772,16 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			// and decrease the skew for the environment-based topology spread constraint by 1;
 			// consequently it receives a topology spread score of 1.
 			memberCluster4CentralProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(1)),
 			},
 			// Cluster 5 is picked in the second iteration, as placing resources on it does
 			// not violate any topology spread constraints + does not increase the skew. It
 			// is assigned a topology spread score of 0 as the skew is unchanged for both
 			// topology spread constraints.
 			memberCluster5CentralProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(1)),
 			},
 			// Cluster 6 is considered to be unschedulable in the second iteration as placing
 			// resources on it would violate the region-based topology spread constraint
@@ -751,8 +793,8 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			// in alphanumeric order. It is assigned a topology spread score of -2 as placing
 			// resources on it increases the skew in both topology spread constraints..
 			memberCluster7WestCanary: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-2),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-2)),
 			},
 		}
 
@@ -762,19 +804,23 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			topologySpreadConstraints := []placementv1beta1.TopologySpreadConstraint{
-				{
-					MaxSkew:           pointer.Int32(1),
-					TopologyKey:       regionLabel,
-					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
-				},
-				{
-					MaxSkew:           pointer.Int32(1),
-					TopologyKey:       envLabel,
-					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       regionLabel,
+						WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+					},
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       envLabel,
+						WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -795,7 +841,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -837,23 +883,23 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			// not violate any topology spread constraints + does not increase the skew. It
 			// is assigned a topology spread score of 0 as the skew is unchanged.
 			memberCluster5CentralProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(0),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(0)),
 			},
 			// Cluster 6 is not picked in the second iteration, and placing
 			// resources on it would violate the topology spread constraint (skew becomes 2,
 			// the limit is 1); the violation leads to a topology spread score of -1000.
 			memberCluster6WestProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-1000),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-1000)),
 			},
 			// Cluster 7 is picked in the first iteration, as placing resources on it does not
 			// violate any topology spread constraints + increases the skew only by one (so do other
 			// clusters), and its name is the largest in alphanumeric order. It is assigned
 			// a topology spread score of -1 as placing resources on it increases the skew.
 			memberCluster7WestCanary: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-1)),
 			},
 		}
 
@@ -863,14 +909,18 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			topologySpreadConstraints := []placementv1beta1.TopologySpreadConstraint{
-				{
-					MaxSkew:           pointer.Int32(1),
-					TopologyKey:       regionLabel,
-					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       regionLabel,
+						WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -891,7 +941,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -930,40 +980,40 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			// and decrease the skew for the environment-based topology spread constraint by 1;
 			// consequently it receives a topology spread score of 1.
 			memberCluster1EastProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(1)),
 			},
 			// Cluster 2 is not picked in the second iteration, but placing resources on it
 			// would leave the skew for the region-based topology spread constraint unchanged,
 			// and decrease the skew for the environment-based topology spread constraint by 1;
 			// consequently it receives a topology spread score of 1.
 			memberCluster2EastProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(1)),
 			},
 			// Cluster 3 is not picked in the second iteration as placing
 			// resources on it would violate the region-based topology spread constraint
 			// (skew becomes 2, the limit is 1); the violation leads to a topology spread score
 			// of -1000.
 			memberCluster3EastCanary: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-1000),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-1000)),
 			},
 			// Cluster 4 is not picked in the second iteration, but placing resources on it
 			// would leave the skew for the region-based topology spread constraint unchanged,
 			// and decrease the skew for the environment-based topology spread constraint by 1;
 			// consequently it receives a topology spread score of 1.
 			memberCluster4CentralProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(1)),
 			},
 			// Cluster 5 is picked in the second iteration, as placing resources on it does
 			// not violate any topology spread constraints + does not increase the skew. It
 			// is assigned a topology spread score of 0 as the skew is unchanged for both
 			// topology spread constraints.
 			memberCluster5CentralProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(1)),
 			},
 			// Cluster 6 is not picked in the second iteration as placing
 			// resources on it would violate the region-based topology spread constraint
@@ -971,8 +1021,8 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			// environment based topology spread constraint by 1, so it receives a topology
 			// spread score of -999 (-1000 for the violation, +1 for the skew decrease).
 			memberCluster6WestProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-999),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-999)),
 			},
 			// Cluster 7 is picked in the first iteration, as placing resources on it does not
 			// violate any topology spread constraints + increases the skew only by one in both
@@ -980,8 +1030,8 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			// in alphanumeric order. It is assigned a topology spread score of -2 as placing
 			// resources on it increases the skew in both topology spread constraints..
 			memberCluster7WestCanary: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-2),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-2)),
 			},
 		}
 
@@ -991,19 +1041,23 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			topologySpreadConstraints := []placementv1beta1.TopologySpreadConstraint{
-				{
-					MaxSkew:           pointer.Int32(1),
-					TopologyKey:       regionLabel,
-					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
-				},
-				{
-					MaxSkew:           pointer.Int32(1),
-					TopologyKey:       envLabel,
-					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       regionLabel,
+						WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+					},
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       envLabel,
+						WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -1024,7 +1078,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -1075,8 +1129,8 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			// not violate any topology spread constraints; but it increases the skew by 1, hence
 			// the -1 topology spread score.
 			memberCluster5CentralProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-1)),
 			},
 			// Cluster 6 is filtered out (does not match with required affinity term).
 			memberCluster6WestProd: nil,
@@ -1090,18 +1144,22 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-							{
-								LabelSelector: metav1.LabelSelector{
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      regionLabel,
-											Operator: metav1.LabelSelectorOpNotIn,
-											Values: []string{
-												"west",
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      regionLabel,
+												Operator: metav1.LabelSelectorOpNotIn,
+												Values: []string{
+													"west",
+												},
 											},
 										},
 									},
@@ -1110,15 +1168,15 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 						},
 					},
 				},
-			}
-			topologySpreadConstraints := []placementv1beta1.TopologySpreadConstraint{
-				{
-					MaxSkew:           pointer.Int32(1),
-					TopologyKey:       regionLabel,
-					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       regionLabel,
+						WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -1139,7 +1197,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -1178,50 +1236,50 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			// configuration (with a weight of 30); but it increases the skew by 1, hence
 			// the -1 topology spread score.
 			memberCluster1EastProd: {
-				AffinityScore:       pointer.Int32(30),
-				TopologySpreadScore: pointer.Int32(-1),
+				AffinityScore:       ptr.To(int32(30)),
+				TopologySpreadScore: ptr.To(int32(-1)),
 			},
 			// Cluster 2 is picked in the second iteration, as placing resources on it reduces
 			// the skew by 1, hence the topology spread score of 1, and it is preferred
 			// per affinity configuration (with a weight of 30).
 			memberCluster2EastProd: {
-				AffinityScore:       pointer.Int32(30),
-				TopologySpreadScore: pointer.Int32(1),
+				AffinityScore:       ptr.To(int32(30)),
+				TopologySpreadScore: ptr.To(int32(1)),
 			},
 			// Cluster 3 is picked in the first iteration, as placing resources on it does
 			// not violate any topology spread constraints and it is preferred per affinity
 			// configuration (with a weight of 30); but it increases the skew by 1, hence
 			// the -1 topology spread score.
 			memberCluster3EastCanary: {
-				AffinityScore:       pointer.Int32(30),
-				TopologySpreadScore: pointer.Int32(-1),
+				AffinityScore:       ptr.To(int32(30)),
+				TopologySpreadScore: ptr.To(int32(-1)),
 			},
 			// Cluster 4 is not picked in the 6th iteration; placing resources on it violates
 			// the topology spread constraint, hence the topology spread score of -1000.
 			memberCluster4CentralProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-1000),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-1000)),
 			},
 			// Cluster 5 is picked in the 6th iteration; placing resources on it violates the
 			// topology spread constraint, hence the topology spread score of -1000. It ranks
 			// higher by name in alphanumeric order than cluster 4.
 			memberCluster5CentralProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-1000),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-1000)),
 			},
 			// Cluster 6 is picked in the 5th iteration, as placing resources on it does
 			// not violate any topology spread constraints + the cluster is ranked higher by name
 			// in alphanumeric order; but it increases the skew by 1, hence
 			// the -1 topology spread score.
 			memberCluster6WestProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-1)),
 			},
 			// Cluster 7 is picked in the 4th iteration, as placing resources on it reduces
 			// the skew by 1, hence the topology spread score of 1.
 			memberCluster7WestCanary: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(1)),
 			},
 		}
 
@@ -1231,30 +1289,34 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
-						{
-							Weight: 30,
-							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "east",
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+							{
+								Weight: 30,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "east",
+										},
 									},
 								},
 							},
 						},
 					},
 				},
-			}
-			topologySpreadConstraints := []placementv1beta1.TopologySpreadConstraint{
-				{
-					MaxSkew:           pointer.Int32(1),
-					TopologyKey:       envLabel,
-					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       envLabel,
+						WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -1275,7 +1337,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -1320,15 +1382,15 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			// * it is preferred per affinity configuration (with a weight of 40);
 			// * it is ranked higher by name in alphanumeric order.
 			memberCluster2EastProd: {
-				AffinityScore:       pointer.Int32(40),
-				TopologySpreadScore: pointer.Int32(-2),
+				AffinityScore:       ptr.To(int32(40)),
+				TopologySpreadScore: ptr.To(int32(-2)),
 			},
 			// Cluster 3 is filtered out as it does not meet the affinity requirements.
 			memberCluster3EastCanary: nil,
 			// Cluster 4 is not picked as it ranks lower by name in alphanumeric order.
 			memberCluster4CentralProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-999),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-999)),
 			},
 			// Cluster 5 is picked in the 3rd iteration, as
 			// * placing resources on it does not violate the DoNotSchedule topology spread
@@ -1336,16 +1398,16 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			//   topology spread constraint (skew becomes 3, limit is 2); and
 			// * it is ranked higher by name in alphanumeric order.
 			memberCluster5CentralProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-999),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-999)),
 			},
 			// Cluster 6 is picked in the second iteration, as
 			// * placing resources on it does not violate any topology spread constraints (it
 			//   increase the skew by 1 for environment-based topology spread constraint); and
 			// * it is ranked higher by name in alphanumeric order.
 			memberCluster6WestProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-1)),
 			},
 			// Cluster 7 is not picked as it does not meet the affinity requirements.
 			memberCluster7WestCanary: nil,
@@ -1357,46 +1419,50 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
-						{
-							Weight: 40,
-							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "east",
-									},
-								},
-							},
-						},
-					},
-					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
 							{
-								LabelSelector: metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										envLabel: "prod",
+								Weight: 40,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "east",
+										},
+									},
+								},
+							},
+						},
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											envLabel: "prod",
+										},
 									},
 								},
 							},
 						},
 					},
 				},
-			}
-			topologySpreadConstraints := []placementv1beta1.TopologySpreadConstraint{
-				{
-					MaxSkew:           pointer.Int32(2),
-					TopologyKey:       envLabel,
-					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						MaxSkew:           ptr.To(int32(2)),
+						TopologyKey:       envLabel,
+						WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+					},
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       regionLabel,
+						WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+					},
 				},
-				{
-					MaxSkew:           pointer.Int32(1),
-					TopologyKey:       regionLabel,
-					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
-				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -1417,7 +1483,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -1464,7 +1530,11 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClustersBefore, nil, nil, policySnapshotName)
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClustersBefore,
+			}
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 
 			// Verify that scheduling has been completed.
 			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, int(numOfClustersBefore))
@@ -1510,7 +1580,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClustersAfter), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, zeroScoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClustersAfter), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -1551,7 +1621,11 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClustersBefore, nil, nil, policySnapshotName)
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClustersBefore,
+			}
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 
 			// Verify that scheduling has been completed.
 			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, int(numOfClustersBefore))
@@ -1597,7 +1671,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClustersAfter), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, zeroScoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClustersAfter), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -1648,15 +1722,15 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			// * it is preferred per affinity configuration (with a weight of 40);
 			// * it is ranked higher by name in alphanumeric order.
 			memberCluster2EastProd: {
-				AffinityScore:       pointer.Int32(40),
-				TopologySpreadScore: pointer.Int32(-2),
+				AffinityScore:       ptr.To(int32(40)),
+				TopologySpreadScore: ptr.To(int32(-2)),
 			},
 			// Cluster 3 is filtered out as it does not meet the affinity requirements.
 			memberCluster3EastCanary: nil,
 			// Cluster 4 is not picked as it ranks lower by name in alphanumeric order.
 			memberCluster4CentralProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-999),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-999)),
 			},
 			// Cluster 5 is picked in the 3rd iteration, as
 			// * placing resources on it does not violate the DoNotSchedule topology spread
@@ -1664,16 +1738,16 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			//   topology spread constraint (skew becomes 3, limit is 2); and
 			// * it is ranked higher by name in alphanumeric order.
 			memberCluster5CentralProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-999),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-999)),
 			},
 			// Cluster 6 is picked in the second iteration, as
 			// * placing resources on it does not violate any topology spread constraints (it
 			//   increase the skew by 1 for environment-based topology spread constraint); and
 			// * it is ranked higher by name in alphanumeric order.
 			memberCluster6WestProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-1)),
 			},
 			// Cluster 7 is not picked as it does not meet the affinity requirements.
 			memberCluster7WestCanary: nil,
@@ -1682,46 +1756,46 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		scoreByClusterAfter := map[string]*placementv1beta1.ClusterScore{
 			// Cluster 1 is not picked as it is not preferred per affinity configuration.
 			memberCluster1EastProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-1)),
 			},
 			// Cluster 2 is not picked as it is not preferred per affinity configuration.
 			memberCluster2EastProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-1)),
 			},
 			// Cluster 3 is not picked as it is not preferred per affinity configuration.
 			memberCluster3EastCanary: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-1)),
 			},
 			// Cluster 4 is picked in the 3rd iteration, as
 			// * placing resources on it increases the skew by 1 (so does other clusters); and
 			// * it is preferred per affinity configuration (with a weight of 50);
 			// * it is ranked higher by name in alphanumeric order.
 			memberCluster4CentralProd: {
-				AffinityScore:       pointer.Int32(50),
-				TopologySpreadScore: pointer.Int32(-1),
+				AffinityScore:       ptr.To(int32(50)),
+				TopologySpreadScore: ptr.To(int32(-1)),
 			},
 			// Cluster 5 is picked in the first iteration, as
 			// * placing resources on it increases the skew by 1 (so does other clusters); and
 			// * it is preferred per affinity configuration (with a weight of 50);
 			// * it is ranked higher by name in alphanumeric order.
 			memberCluster5CentralProd: {
-				AffinityScore:       pointer.Int32(50),
-				TopologySpreadScore: pointer.Int32(-1),
+				AffinityScore:       ptr.To(int32(50)),
+				TopologySpreadScore: ptr.To(int32(-1)),
 			},
 			// Cluster 6 is not picked as it is not preferred per affinity configuration.
 			memberCluster6WestProd: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(-1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(-1)),
 			},
 			// Cluster 7 is picked in the second iteration, as
 			// * placing resources on it decreases the skew by 1; and
 			// * it is ranked higher by name in alphanumeric order.
 			memberCluster7WestCanary: {
-				AffinityScore:       pointer.Int32(0),
-				TopologySpreadScore: pointer.Int32(1),
+				AffinityScore:       ptr.To(int32(0)),
+				TopologySpreadScore: ptr.To(int32(1)),
 			},
 		}
 
@@ -1731,46 +1805,50 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			affinityBefore := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
-						{
-							Weight: 40,
-							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "east",
-									},
-								},
-							},
-						},
-					},
-					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
 							{
-								LabelSelector: metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										envLabel: "prod",
+								Weight: 40,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "east",
+										},
+									},
+								},
+							},
+						},
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											envLabel: "prod",
+										},
 									},
 								},
 							},
 						},
 					},
 				},
-			}
-			topologySpreadConstraintsBefore := []placementv1beta1.TopologySpreadConstraint{
-				{
-					MaxSkew:           pointer.Int32(2),
-					TopologyKey:       envLabel,
-					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						MaxSkew:           ptr.To(int32(2)),
+						TopologyKey:       envLabel,
+						WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+					},
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       regionLabel,
+						WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+					},
 				},
-				{
-					MaxSkew:           pointer.Int32(1),
-					TopologyKey:       regionLabel,
-					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
-				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinityBefore, topologySpreadConstraintsBefore, policySnapshotNameBefore)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotNameBefore, policy)
 
 			// Verify that scheduling has been completed.
 			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClustersBefore))
@@ -1788,7 +1866,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 						{
 							Weight: 50,
 							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										regionLabel: "central",
 									},
@@ -1800,7 +1878,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			}
 			topologySpreadConstraintsAfter := []placementv1beta1.TopologySpreadConstraint{
 				{
-					MaxSkew:           pointer.Int32(2),
+					MaxSkew:           ptr.To(int32(2)),
 					TopologyKey:       envLabel,
 					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 				},
@@ -1826,7 +1904,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, scoreByClusterAfter, policySnapshotNameAfter)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, scoreByClusterAfter, policySnapshotNameAfter, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})

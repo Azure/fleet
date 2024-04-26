@@ -14,9 +14,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
+	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
@@ -25,6 +26,9 @@ const (
 	appConfigMapNameTemplate          = "app-config-%d"
 	appSecretNameTemplate             = "app-secret-%d" // #nosec G101
 	crpNameTemplate                   = "crp-%d"
+	crpNameWithSubIndexTemplate       = "crp-%d-%d"
+	croNameTemplate                   = "cro-%d"
+	roNameTemplate                    = "ro-%d"
 	mcNameTemplate                    = "mc-%d"
 	internalServiceExportNameTemplate = "ise-%d"
 	internalServiceImportNameTemplate = "isi-%d"
@@ -45,6 +49,17 @@ func workResourceSelector() []placementv1beta1.ClusterResourceSelector {
 	}
 }
 
+func configMapSelector() []placementv1alpha1.ResourceSelector {
+	return []placementv1alpha1.ResourceSelector{
+		{
+			Group:   "",
+			Kind:    "ConfigMap",
+			Version: "v1",
+			Name:    fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess()),
+		},
+	}
+}
+
 func invalidWorkResourceSelector() []placementv1beta1.ClusterResourceSelector {
 	return []placementv1beta1.ClusterResourceSelector{
 		{
@@ -59,7 +74,7 @@ func invalidWorkResourceSelector() []placementv1beta1.ClusterResourceSelector {
 	}
 }
 
-func workNamespace() corev1.Namespace {
+func appNamespace() corev1.Namespace {
 	return corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
@@ -142,9 +157,9 @@ func endpointSliceExport(name, namespace string) fleetnetworkingv1alpha1.Endpoin
 			},
 			Ports: []discoveryv1.EndpointPort{
 				{
-					Name:     pointer.String("http"),
+					Name:     ptr.To("http"),
 					Protocol: &protocol,
-					Port:     pointer.Int32(80),
+					Port:     ptr.To(int32(80)),
 				},
 			},
 			EndpointSliceReference: fleetnetworkingv1alpha1.ExportedObjectReference{

@@ -20,7 +20,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	runtime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -436,7 +436,7 @@ func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *clusterv
 
 func toOwnerReference(memberCluster *clusterv1beta1.MemberCluster) *metav1.OwnerReference {
 	return &metav1.OwnerReference{APIVersion: clusterv1beta1.GroupVersion.String(), Kind: clusterv1beta1.MemberClusterKind,
-		Name: memberCluster.Name, UID: memberCluster.UID, Controller: pointer.Bool(true)}
+		Name: memberCluster.Name, UID: memberCluster.UID, Controller: ptr.To(true)}
 }
 
 // syncInternalMemberClusterStatus is used to sync status from InternalMemberCluster to MemberCluster & aggregate join conditions from all agents.
@@ -452,6 +452,14 @@ func (r *Reconciler) syncInternalMemberClusterStatus(imc *clusterv1beta1.Interna
 	r.aggregateJoinedCondition(mc)
 	// Copy resource usages.
 	mc.Status.ResourceUsage = imc.Status.ResourceUsage
+	// Copy additional conditions.
+	for idx := range imc.Status.Conditions {
+		cond := imc.Status.Conditions[idx]
+		cond.ObservedGeneration = mc.GetGeneration()
+		meta.SetStatusCondition(&mc.Status.Conditions, cond)
+	}
+	// Copy the cluster properties.
+	mc.Status.Properties = imc.Status.Properties
 }
 
 // updateMemberClusterStatus is used to update member cluster status.

@@ -15,7 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	workapiv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis/v1alpha1"
@@ -102,7 +102,7 @@ var _ = Describe("workload orchestration testing", func() {
 			ownerReferences := []metav1.OwnerReference{
 				{
 					APIVersion:         workapiv1alpha1.GroupVersion.String(),
-					BlockOwnerDeletion: pointer.Bool(false),
+					BlockOwnerDeletion: ptr.To(false),
 					Kind:               "AppliedWork",
 					Name:               crp.Name,
 				},
@@ -242,6 +242,11 @@ var _ = Describe("workload orchestration testing", func() {
 				},
 				SelectedResources: []v1alpha1.ResourceIdentifier{
 					{
+						Version: "v1",
+						Kind:    "Namespace",
+						Name:    namespace1.Name,
+					},
+					{
 						Group:     "rbac.authorization.k8s.io",
 						Version:   "v1",
 						Kind:      "RoleBinding",
@@ -255,11 +260,6 @@ var _ = Describe("workload orchestration testing", func() {
 						Name:      role.Name,
 						Namespace: role.Namespace,
 					},
-					{
-						Version: "v1",
-						Kind:    "Namespace",
-						Name:    namespace1.Name,
-					},
 				},
 				TargetClusters: []string{"kind-member-testing"},
 			}
@@ -269,7 +269,7 @@ var _ = Describe("workload orchestration testing", func() {
 			ownerReferences := []metav1.OwnerReference{
 				{
 					APIVersion:         workapiv1alpha1.GroupVersion.String(),
-					BlockOwnerDeletion: pointer.Bool(false),
+					BlockOwnerDeletion: ptr.To(false),
 					Kind:               "AppliedWork",
 					Name:               crp.Name,
 				},
@@ -373,15 +373,15 @@ var _ = Describe("workload orchestration testing", func() {
 				},
 				SelectedResources: []v1alpha1.ResourceIdentifier{
 					{
+						Version: "v1",
+						Kind:    "Namespace",
+						Name:    namespace.Name,
+					},
+					{
 						Version:   "v1",
 						Kind:      "Secret",
 						Name:      testSmallSecret.Name,
 						Namespace: testSmallSecret.Namespace,
-					},
-					{
-						Version: "v1",
-						Kind:    "Namespace",
-						Name:    namespace.Name,
 					},
 				},
 				TargetClusters: []string{"kind-member-testing"},
@@ -392,7 +392,7 @@ var _ = Describe("workload orchestration testing", func() {
 			ownerReferences := []metav1.OwnerReference{
 				{
 					APIVersion:         workapiv1alpha1.GroupVersion.String(),
-					BlockOwnerDeletion: pointer.Bool(false),
+					BlockOwnerDeletion: ptr.To(false),
 					Kind:               "AppliedWork",
 					Name:               crp.Name,
 				},

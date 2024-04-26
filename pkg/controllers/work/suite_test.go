@@ -32,11 +32,14 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -82,7 +85,12 @@ func createControllers(ctx context.Context, hubCfg, spokeCfg *rest.Config, setup
 		return nil, nil, err
 	}
 
-	restMapper, err := apiutil.NewDynamicRESTMapper(spokeCfg, apiutil.WithLazyDiscovery)
+	httpClient, err := rest.HTTPClientFor(spokeCfg)
+	if err != nil {
+		klog.ErrorS(err, "unable to create spoke HTTP client")
+		return nil, nil, err
+	}
+	restMapper, err := apiutil.NewDynamicRESTMapper(spokeCfg, httpClient)
 	if err != nil {
 		setupLog.Error(err, "unable to create spoke rest mapper")
 		return nil, nil, err
@@ -96,6 +104,17 @@ func createControllers(ctx context.Context, hubCfg, spokeCfg *rest.Config, setup
 		return nil, nil, err
 	}
 
+	// In a recent refresh, the cache in use by the controller runtime has been upgraded to
+	// support multiple default namespaces (originally the number of default namespaces is
+	// limited to 1); however, the Fleet controllers still assume that only one default
+	// namespace is used, and for compatibility reasons, here we simply retrieve the first
+	// default namespace set (there should only be one set up anyway) and pass it to the
+	// Fleet controllers.
+	var targetNS string
+	for ns := range opts.Cache.DefaultNamespaces {
+		targetNS = ns
+		break
+	}
 	workController := NewApplyWorkReconciler(
 		hubMgr.GetClient(),
 		spokeDynamicClient,
@@ -103,7 +122,7 @@ func createControllers(ctx context.Context, hubCfg, spokeCfg *rest.Config, setup
 		restMapper,
 		hubMgr.GetEventRecorderFor("work_controller"),
 		maxWorkConcurrency,
-		opts.Namespace,
+		targetNS,
 	)
 
 	if err = workController.SetupWithManager(hubMgr); err != nil {
@@ -144,11 +163,25 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	opts := ctrl.Options{
 		Scheme: scheme.Scheme,
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				testWorkNamespace: {},
+			},
+		},
 	}
 	k8sClient, err = client.New(cfg, client.Options{
 		Scheme: scheme.Scheme,
 	})
 	Expect(err).NotTo(HaveOccurred())
+
+	// Create namespace
+	workNamespace := corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: testWorkNamespace,
+		},
+	}
+	err = k8sClient.Create(context.Background(), &workNamespace)
+	Expect(err).ToNot(HaveOccurred())
 
 	By("start controllers")
 	var hubMgr manager.Manager

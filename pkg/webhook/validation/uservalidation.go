@@ -8,19 +8,14 @@ import (
 	"reflect"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
-	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/strings/slices"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 )
@@ -42,20 +37,7 @@ const (
 )
 
 var (
-	fleetCRDGroups           = []string{"networking.fleet.azure.com", "fleet.azure.com", "multicluster.x-k8s.io", "cluster.kubernetes-fleet.io", "placement.kubernetes-fleet.io"}
-	CRDGVK                   = metav1.GroupVersionKind{Group: apiextensionsv1.SchemeGroupVersion.Group, Version: apiextensionsv1.SchemeGroupVersion.Version, Kind: "CustomResourceDefinition"}
-	V1Alpha1MCGVK            = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "MemberCluster"}
-	V1Alpha1IMCGVK           = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
-	V1Alpha1WorkGVK          = metav1.GroupVersionKind{Group: workv1alpha1.GroupVersion.Group, Version: workv1alpha1.GroupVersion.Version, Kind: "Work"}
-	MCGVK                    = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "MemberCluster"}
-	IMCGVK                   = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "InternalMemberCluster"}
-	WorkGVK                  = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "Work"}
-	NamespaceGVK             = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
-	EventGVK                 = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Event"}
-	EndpointSliceExportGVK   = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "EndpointSliceExport"}
-	EndpointSliceImportGVK   = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "EndpointSliceImport"}
-	InternalServiceExportGVK = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "InternalServiceExport"}
-	InternalServiceImportGVK = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "InternalServiceImport"}
+	fleetCRDGroups = []string{"networking.fleet.azure.com", "fleet.azure.com", "multicluster.x-k8s.io", "cluster.kubernetes-fleet.io", "placement.kubernetes-fleet.io"}
 )
 
 // ValidateUserForFleetCRD checks to see if user is not allowed to modify fleet CRDs.
@@ -82,19 +64,45 @@ func ValidateUserForResource(req admission.Request, whiteListedUsers []string) a
 	return admission.Denied(fmt.Sprintf(ResourceDeniedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
 }
 
-// ValidateMemberClusterUpdate checks to see if user had updated the member cluster resource and allows/denies the request.
-func ValidateMemberClusterUpdate(currentObj, oldObj client.Object, req admission.Request, whiteListedUsers []string) admission.Response {
-	namespacedName := types.NamespacedName{Name: currentObj.GetName()}
+// ValidateV1Alpha1MemberClusterUpdate checks to see if user had updated the member cluster resource and allows/denies the request.
+func ValidateV1Alpha1MemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCluster, req admission.Request, whiteListedUsers []string) admission.Response {
+	namespacedName := types.NamespacedName{Name: currentMC.GetName()}
 	userInfo := req.UserInfo
 	response := admission.Allowed(fmt.Sprintf("user %s in groups %v most likely %s read-only field/fields of member cluster resource %+v/%s, so no field/fields will be updated", userInfo.Username, userInfo.Groups, req.Operation, req.RequestKind, req.SubResource))
-	isLabelUpdated := isMapFieldUpdated(currentObj.GetLabels(), oldObj.GetLabels())
-	isAnnotationUpdated := isMapFieldUpdated(currentObj.GetAnnotations(), oldObj.GetAnnotations())
-	isObjUpdated, err := isMemberClusterUpdated(currentObj, oldObj)
+	isLabelUpdated := isMapFieldUpdated(currentMC.GetLabels(), oldMC.GetLabels())
+	isAnnotationUpdated := isMapFieldUpdated(currentMC.GetAnnotations(), oldMC.GetAnnotations())
+	isObjUpdated, err := isMemberClusterUpdated(&currentMC, &oldMC)
 	if err != nil {
 		return admission.Denied(err.Error())
 	}
 	if (isLabelUpdated || isAnnotationUpdated) && !isObjUpdated {
-		// we allow any user to modify MemberCluster/Namespace labels/annotations.
+		// we allow any user to modify v1alpha1 MemberCluster labels & annotations.
+		klog.V(3).InfoS("user in groups is allowed to modify member cluster labels/annotations", "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
+		response = admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
+	}
+	if isObjUpdated {
+		response = ValidateUserForResource(req, whiteListedUsers)
+	}
+	return response
+}
+
+// ValidateMemberClusterUpdate checks to see if user had updated the member cluster resource and allows/denies the request.
+func ValidateMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberCluster, req admission.Request, whiteListedUsers []string) admission.Response {
+	namespacedName := types.NamespacedName{Name: currentMC.GetName()}
+	userInfo := req.UserInfo
+	response := admission.Allowed(fmt.Sprintf("user %s in groups %v most likely %s read-only field/fields of member cluster resource %+v/%s, so no field/fields will be updated", userInfo.Username, userInfo.Groups, req.Operation, req.RequestKind, req.SubResource))
+	isLabelUpdated := isMapFieldUpdated(currentMC.GetLabels(), oldMC.GetLabels())
+	isAnnotationUpdated := isMapFieldUpdated(currentMC.GetAnnotations(), oldMC.GetAnnotations())
+	isTaintsUpdated := isTaintsFieldUpdated(currentMC.Spec.Taints, oldMC.Spec.Taints)
+	// set taints field to nil.
+	currentMC.Spec.Taints = nil
+	oldMC.Spec.Taints = nil
+	isObjUpdated, err := isMemberClusterUpdated(&currentMC, &oldMC)
+	if err != nil {
+		return admission.Denied(err.Error())
+	}
+	if (isLabelUpdated || isAnnotationUpdated || isTaintsUpdated) && !isObjUpdated {
+		// we allow any user to modify MemberCluster/Namespace labels, annotations & taints.
 		klog.V(3).InfoS("user in groups is allowed to modify member cluster labels/annotations", "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		response = admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
 	}
@@ -132,8 +140,13 @@ func isNodeGroupUser(userInfo authenticationv1.UserInfo) bool {
 }
 
 // isMemberClusterMapFieldUpdated return true if member cluster label is updated.
-func isMapFieldUpdated(currentMCLabels, oldMCLabels map[string]string) bool {
-	return !reflect.DeepEqual(currentMCLabels, oldMCLabels)
+func isMapFieldUpdated(currentMap, oldMap map[string]string) bool {
+	return !reflect.DeepEqual(currentMap, oldMap)
+}
+
+// isTaintsFieldUpdated return true if member cluster taints is updated.
+func isTaintsFieldUpdated(currentTaints, oldTaints []clusterv1beta1.Taint) bool {
+	return !reflect.DeepEqual(currentTaints, oldTaints)
 }
 
 // isMemberClusterUpdated returns true is member cluster spec or status is updated.

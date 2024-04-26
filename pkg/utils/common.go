@@ -12,10 +12,14 @@ import (
 	"strings"
 	"time"
 
+	appv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -24,7 +28,10 @@ import (
 	"k8s.io/klog/v2"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
+
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -38,6 +45,7 @@ const (
 	NamespaceNameFormat    = fleetPrefix + "member-%s"
 	RoleNameFormat         = fleetPrefix + "role-%s"
 	RoleBindingNameFormat  = fleetPrefix + "rolebinding-%s"
+	ValidationPathFmt      = "/validate-%s-%s-%s"
 	lessGroupsStringFormat = "groups: %v"
 	moreGroupsStringFormat = "groups: [%s, %s, %s,......]"
 )
@@ -48,8 +56,9 @@ const (
 )
 
 const (
-	PlacementFieldManagerName    = "cluster-placement-controller"
-	MCControllerFieldManagerName = "member-cluster-controller"
+	PlacementFieldManagerName          = "cluster-placement-controller"
+	MCControllerFieldManagerName       = "member-cluster-controller"
+	OverrideControllerFieldManagerName = "override-controller"
 )
 
 // TODO(ryanzhang): move this to the api directory
@@ -101,6 +110,12 @@ var (
 
 // Those are the GVR/GVK of the fleet related resources.
 var (
+	ClusterResourcePlacementV1Alpha1GVK = schema.GroupVersionKind{
+		Group:   fleetv1alpha1.GroupVersion.Group,
+		Version: fleetv1alpha1.GroupVersion.Version,
+		Kind:    "ClusterResourcePlacement",
+	}
+
 	ClusterResourcePlacementV1Alpha1GVR = schema.GroupVersionResource{
 		Group:    fleetv1alpha1.GroupVersion.Group,
 		Version:  fleetv1alpha1.GroupVersion.Version,
@@ -113,10 +128,88 @@ var (
 		Resource: placementv1beta1.ClusterResourcePlacementResource,
 	}
 
-	ClusterResourcePlacementV1Alpha1GVK = schema.GroupVersionKind{
+	ConfigMapGVK = schema.GroupVersionKind{
+		Group:   corev1.GroupName,
+		Version: corev1.SchemeGroupVersion.Version,
+		Kind:    "ConfigMap",
+	}
+
+	CRDMetaGVK = metav1.GroupVersionKind{
+		Group:   apiextensionsv1.SchemeGroupVersion.Group,
+		Version: apiextensionsv1.SchemeGroupVersion.Version,
+		Kind:    "CustomResourceDefinition",
+	}
+
+	EndpointSliceExportMetaGVK = metav1.GroupVersionKind{
+		Group:   fleetnetworkingv1alpha1.GroupVersion.Group,
+		Version: fleetnetworkingv1alpha1.GroupVersion.Version,
+		Kind:    "EndpointSliceExport",
+	}
+
+	EndpointSliceImportMetaGVK = metav1.GroupVersionKind{
+		Group:   fleetnetworkingv1alpha1.GroupVersion.Group,
+		Version: fleetnetworkingv1alpha1.GroupVersion.Version,
+		Kind:    "EndpointSliceImport",
+	}
+
+	EventMetaGVK = metav1.GroupVersionKind{
+		Group:   corev1.SchemeGroupVersion.Group,
+		Version: corev1.SchemeGroupVersion.Version,
+		Kind:    "Event",
+	}
+
+	IMCV1Alpha1MetaGVK = metav1.GroupVersionKind{
 		Group:   fleetv1alpha1.GroupVersion.Group,
 		Version: fleetv1alpha1.GroupVersion.Version,
-		Kind:    "ClusterResourcePlacement",
+		Kind:    "InternalMemberCluster",
+	}
+
+	InternalServiceExportMetaGVK = metav1.GroupVersionKind{
+		Group:   fleetnetworkingv1alpha1.GroupVersion.Group,
+		Version: fleetnetworkingv1alpha1.GroupVersion.Version,
+		Kind:    "InternalServiceExport",
+	}
+
+	InternalServiceImportMetaGVK = metav1.GroupVersionKind{
+		Group:   fleetnetworkingv1alpha1.GroupVersion.Group,
+		Version: fleetnetworkingv1alpha1.GroupVersion.Version,
+		Kind:    "InternalServiceImport",
+	}
+
+	IMCMetaGVK = metav1.GroupVersionKind{
+		Group:   clusterv1beta1.GroupVersion.Group,
+		Version: clusterv1beta1.GroupVersion.Version,
+		Kind:    "InternalMemberCluster",
+	}
+
+	MCV1Alpha1MetaGVK = metav1.GroupVersionKind{
+		Group:   fleetv1alpha1.GroupVersion.Group,
+		Version: fleetv1alpha1.GroupVersion.Version,
+		Kind:    "MemberCluster",
+	}
+
+	MCV1Alpha1GVK = schema.GroupVersionKind{
+		Group:   fleetv1alpha1.GroupVersion.Group,
+		Version: fleetv1alpha1.GroupVersion.Version,
+		Kind:    fleetv1alpha1.MemberClusterKind,
+	}
+
+	MCV1Alpha1GVR = schema.GroupVersionResource{
+		Group:    fleetv1alpha1.GroupVersion.Group,
+		Version:  fleetv1alpha1.GroupVersion.Version,
+		Resource: fleetv1alpha1.MemberClusterResource,
+	}
+
+	MCMetaGVK = metav1.GroupVersionKind{
+		Group:   clusterv1beta1.GroupVersion.Group,
+		Version: clusterv1beta1.GroupVersion.Version,
+		Kind:    "MemberCluster",
+	}
+
+	NamespaceMetaGVK = metav1.GroupVersionKind{
+		Group:   corev1.GroupName,
+		Version: corev1.SchemeGroupVersion.Version,
+		Kind:    "Namespace",
 	}
 
 	NamespaceGVK = schema.GroupVersionKind{
@@ -131,28 +224,22 @@ var (
 		Resource: "namespaces",
 	}
 
-	MemberClusterGVR = schema.GroupVersionResource{
-		Group:    fleetv1alpha1.GroupVersion.Group,
-		Version:  fleetv1alpha1.GroupVersion.Version,
-		Resource: fleetv1alpha1.MemberClusterResource,
+	PodMetaGVK = metav1.GroupVersionKind{
+		Group:   corev1.SchemeGroupVersion.Group,
+		Version: corev1.SchemeGroupVersion.Version,
+		Kind:    "Pod",
 	}
 
-	MemberClusterGVK = schema.GroupVersionKind{
-		Group:   fleetv1alpha1.GroupVersion.Group,
-		Version: fleetv1alpha1.GroupVersion.Version,
-		Kind:    fleetv1alpha1.MemberClusterKind,
+	RoleMetaGVK = metav1.GroupVersionKind{
+		Group:   rbacv1.SchemeGroupVersion.Group,
+		Version: rbacv1.SchemeGroupVersion.Version,
+		Kind:    "Role",
 	}
 
-	WorkGVK = schema.GroupVersionKind{
-		Group:   workv1alpha1.GroupVersion.Group,
-		Version: workv1alpha1.GroupVersion.Version,
-		Kind:    workv1alpha1.WorkKind,
-	}
-
-	WorkGVR = schema.GroupVersionResource{
-		Group:    workv1alpha1.GroupVersion.Group,
-		Version:  workv1alpha1.GroupVersion.Version,
-		Resource: workv1alpha1.WorkResource,
+	RoleBindingMetaGVK = metav1.GroupVersionKind{
+		Group:   rbacv1.SchemeGroupVersion.Group,
+		Version: rbacv1.SchemeGroupVersion.Version,
+		Kind:    "RoleBinding",
 	}
 
 	ServiceGVR = schema.GroupVersionResource{
@@ -161,10 +248,70 @@ var (
 		Resource: "services",
 	}
 
-	ConfigMapGVK = schema.GroupVersionKind{
-		Group:   corev1.GroupName,
-		Version: corev1.SchemeGroupVersion.Version,
-		Kind:    "ConfigMap",
+	WorkV1Alpha1MetaGVK = metav1.GroupVersionKind{
+		Group:   workv1alpha1.GroupVersion.Group,
+		Version: workv1alpha1.GroupVersion.Version,
+		Kind:    "Work",
+	}
+
+	WorkV1Alpha1GVK = schema.GroupVersionKind{
+		Group:   workv1alpha1.GroupVersion.Group,
+		Version: workv1alpha1.GroupVersion.Version,
+		Kind:    workv1alpha1.WorkKind,
+	}
+
+	WorkV1Alpha1GVR = schema.GroupVersionResource{
+		Group:    workv1alpha1.GroupVersion.Group,
+		Version:  workv1alpha1.GroupVersion.Version,
+		Resource: workv1alpha1.WorkResource,
+	}
+
+	WorkMetaGVK = metav1.GroupVersionKind{
+		Group:   placementv1beta1.GroupVersion.Group,
+		Version: placementv1beta1.GroupVersion.Version,
+		Kind:    "Work",
+	}
+
+	ClusterResourceOverrideSnapshotKind = schema.GroupVersionKind{
+		Group:   placementv1alpha1.GroupVersion.Group,
+		Version: placementv1alpha1.GroupVersion.Version,
+		Kind:    placementv1alpha1.ClusterResourceOverrideSnapshotKind,
+	}
+
+	ResourceOverrideSnapshotKind = schema.GroupVersionKind{
+		Group:   placementv1alpha1.GroupVersion.Group,
+		Version: placementv1alpha1.GroupVersion.Version,
+		Kind:    placementv1alpha1.ResourceOverrideSnapshotKind,
+	}
+
+	DeploymentGVR = schema.GroupVersionResource{
+		Group:    appv1.GroupName,
+		Version:  appv1.SchemeGroupVersion.Version,
+		Resource: "deployments",
+	}
+
+	DeploymentGVK = schema.GroupVersionKind{
+		Group:   appv1.GroupName,
+		Version: appv1.SchemeGroupVersion.Version,
+		Kind:    "Deployment",
+	}
+
+	DaemonSettGVR = schema.GroupVersionResource{
+		Group:    appv1.GroupName,
+		Version:  appv1.SchemeGroupVersion.Version,
+		Resource: "daemonsets",
+	}
+
+	StatefulSettGVR = schema.GroupVersionResource{
+		Group:    appv1.GroupName,
+		Version:  appv1.SchemeGroupVersion.Version,
+		Resource: "statefulsets",
+	}
+
+	JobGVR = schema.GroupVersionResource{
+		Group:    batchv1.GroupName,
+		Version:  batchv1.SchemeGroupVersion.Version,
+		Resource: "jobs",
 	}
 )
 

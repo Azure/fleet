@@ -7,180 +7,638 @@ package clusteraffinity
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/utils/ptr"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
+// TestPreScore tests the PreScore extension point of this plugin.
 func TestPreScore(t *testing.T) {
-	tests := []struct {
-		name              string
-		policy            *placementv1beta1.PlacementPolicy
-		ps                *pluginState
-		notSetPluginState bool
-		want              *framework.Status
+	testCases := []struct {
+		name       string
+		clusters   []clusterv1beta1.MemberCluster
+		policy     *placementv1beta1.ClusterSchedulingPolicySnapshot
+		wantStatus *framework.Status
+		wantPS     *pluginState
 	}{
 		{
-			name: "nil policy",
-			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
-		},
-		{
-			name:   "nil affinity",
-			policy: &placementv1beta1.PlacementPolicy{},
-			want:   framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
-		},
-		{
-			name: "nil cluster affinity",
-			policy: &placementv1beta1.PlacementPolicy{
-				Affinity: &placementv1beta1.Affinity{},
-			},
-			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
-		},
-		{
-			name: "pluginState is not set",
-			policy: &placementv1beta1.PlacementPolicy{
-				Affinity: &placementv1beta1.Affinity{
-					ClusterAffinity: &placementv1beta1.ClusterAffinity{},
+			name: "no scheduling policy",
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: nil,
 				},
 			},
-			notSetPluginState: true,
-			want:              framework.FromError(errors.New("invalid state"), defaultPluginName),
+			wantStatus: framework.NewNonErrorStatus(framework.Skip, p.Name(), "no preferred cluster affinity terms specified"),
 		},
 		{
-			name: "nil pluginState",
-			policy: &placementv1beta1.PlacementPolicy{
-				Affinity: &placementv1beta1.Affinity{
-					ClusterAffinity: &placementv1beta1.ClusterAffinity{},
+			name: "no affinity terms",
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: nil,
+					},
 				},
 			},
-			want: framework.FromError(errors.New("invalid state"), defaultPluginName),
+			wantStatus: framework.NewNonErrorStatus(framework.Skip, p.Name(), "no preferred cluster affinity terms specified"),
 		},
 		{
-			name: "no preferred affinity terms",
-			policy: &placementv1beta1.PlacementPolicy{
-				Affinity: &placementv1beta1.Affinity{
-					ClusterAffinity: &placementv1beta1.ClusterAffinity{},
-				},
-			},
-			ps:   &pluginState{},
-			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
-		},
-		{
-			name: "have preferred affinity terms",
-			policy: &placementv1beta1.PlacementPolicy{
-				Affinity: &placementv1beta1.Affinity{
-					ClusterAffinity: &placementv1beta1.ClusterAffinity{},
-				},
-			},
-			ps: &pluginState{
-				preferredAffinityTerms: []preferredAffinityTerm{
-					{
-						weight: 5,
-						affinityTerm: affinityTerm{
-							selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
+			name: "no cluster affinity terms",
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: nil,
 						},
 					},
 				},
 			},
-			want: nil,
+			wantStatus: framework.NewNonErrorStatus(framework.Skip, p.Name(), "no preferred cluster affinity terms specified"),
+		},
+		{
+			name: "no preferred cluster affinity terms",
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								PreferredDuringSchedulingIgnoredDuringExecution: nil,
+							},
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.Skip, p.Name(), "no preferred cluster affinity terms specified"),
+		},
+		{
+			name: "single preferred term which does not require sorting",
+			clusters: []clusterv1beta1.MemberCluster{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: clusterName1,
+					},
+				},
+			},
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+									{
+										Weight: 100,
+										Preference: placementv1beta1.ClusterSelectorTerm{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionLabelValue1,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantPS: &pluginState{
+				minMaxValuesByProperty: map[string]observedMinMaxValues{},
+			},
+		},
+		{
+			name: "single preferred term which requires sorting",
+			clusters: []clusterv1beta1.MemberCluster{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: clusterName1,
+					},
+					Spec: clusterv1beta1.MemberClusterSpec{},
+					Status: clusterv1beta1.MemberClusterStatus{
+						Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+							nodeCountPropertyName: {
+								Value: "10",
+							},
+						},
+					},
+				},
+			},
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+									{
+										Weight: 100,
+										Preference: placementv1beta1.ClusterSelectorTerm{
+											PropertySorter: &placementv1beta1.PropertySorter{
+												Name: nodeCountPropertyName,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantPS: &pluginState{
+				minMaxValuesByProperty: map[string]observedMinMaxValues{
+					nodeCountPropertyName: {
+						min: ptr.To(resource.MustParse("10")),
+						max: ptr.To(resource.MustParse("10")),
+					},
+				},
+			},
+		},
+		{
+			name: "multiple preferred terms which require sorting",
+			clusters: []clusterv1beta1.MemberCluster{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: clusterName1,
+					},
+					Spec: clusterv1beta1.MemberClusterSpec{},
+					Status: clusterv1beta1.MemberClusterStatus{
+						Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+							nodeCountPropertyName: {
+								Value: "10",
+							},
+						},
+						ResourceUsage: clusterv1beta1.ResourceUsage{
+							Available: corev1.ResourceList{
+								corev1.ResourceCPU: resource.MustParse("10"),
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: clusterName2,
+					},
+					Spec: clusterv1beta1.MemberClusterSpec{},
+					Status: clusterv1beta1.MemberClusterStatus{
+						Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+							nodeCountPropertyName: {
+								Value: "20",
+							},
+						},
+						ResourceUsage: clusterv1beta1.ResourceUsage{
+							Available: corev1.ResourceList{
+								corev1.ResourceCPU: resource.MustParse("12"),
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: clusterName2,
+					},
+					Spec: clusterv1beta1.MemberClusterSpec{},
+					Status: clusterv1beta1.MemberClusterStatus{
+						Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+							nodeCountPropertyName: {
+								Value: "15",
+							},
+						},
+						ResourceUsage: clusterv1beta1.ResourceUsage{
+							Available: corev1.ResourceList{
+								corev1.ResourceCPU: resource.MustParse("7"),
+							},
+						},
+					},
+				},
+			},
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+									{
+										Weight: 100,
+										Preference: placementv1beta1.ClusterSelectorTerm{
+											PropertySorter: &placementv1beta1.PropertySorter{
+												Name: nodeCountPropertyName,
+											},
+										},
+									},
+									{
+										Weight: 100,
+										Preference: placementv1beta1.ClusterSelectorTerm{
+											PropertySorter: &placementv1beta1.PropertySorter{
+												Name: availableCPUPropertyName,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantPS: &pluginState{
+				minMaxValuesByProperty: map[string]observedMinMaxValues{
+					nodeCountPropertyName: {
+						min: ptr.To(resource.MustParse("10")),
+						max: ptr.To(resource.MustParse("20")),
+					},
+					availableCPUPropertyName: {
+						min: ptr.To(resource.MustParse("7")),
+						max: ptr.To(resource.MustParse("12")),
+					},
+				},
+			},
 		},
 	}
-	for _, tc := range tests {
+
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			p := New()
-			state := framework.NewCycleState(nil, nil)
-			if !tc.notSetPluginState {
-				state.Write(framework.StateKey(p.Name()), tc.ps)
+			ctx := context.Background()
+			state := framework.NewCycleState(tc.clusters, nil, nil)
+			status := p.PreScore(ctx, state, tc.policy)
+
+			if diff := cmp.Diff(
+				status, tc.wantStatus,
+				cmp.AllowUnexported(framework.Status{}),
+				ignoreStatusErrorField,
+			); diff != "" {
+				t.Errorf("PreScore() unexpected status (-got, +want):\n%s", diff)
 			}
-			snapshot := &placementv1beta1.ClusterSchedulingPolicySnapshot{
-				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
-					Policy: tc.policy,
-				},
-			}
-			got := p.PreScore(context.Background(), state, snapshot)
-			if diff := cmp.Diff(tc.want, got, cmpStatusOptions); diff != "" {
-				t.Errorf("PreScore() status mismatch (-want, +got):\n%s", diff)
+
+			if tc.wantPS != nil {
+				ps, err := p.readPluginState(state)
+				if err != nil {
+					t.Fatalf("failed to read plugin state: %v", err)
+				}
+
+				if diff := cmp.Diff(
+					ps, tc.wantPS,
+					cmp.AllowUnexported(pluginState{}, observedMinMaxValues{}),
+				); diff != "" {
+					t.Errorf("PreScore() unexpected plugin state (-got, +want):\n%s", diff)
+				}
 			}
 		})
 	}
 }
 
+// TestPluginScore tests the Score extension point of this plugin.
 func TestPluginScore(t *testing.T) {
-	tests := []struct {
-		name              string
-		ps                *pluginState
-		notSetPluginState bool
-		cluster           *clusterv1beta1.MemberCluster
-		wantScore         *framework.ClusterScore
-		wantStatus        *framework.Status
+	testCases := []struct {
+		name       string
+		ps         *pluginState
+		policy     *placementv1beta1.ClusterSchedulingPolicySnapshot
+		cluster    *clusterv1beta1.MemberCluster
+		wantStatus *framework.Status
+		wantScore  *framework.ClusterScore
 	}{
 		{
-			name:              "pluginState is not set",
-			notSetPluginState: true,
-			wantStatus:        framework.FromError(errors.New("invalid state"), defaultPluginName),
-		},
-		{
-			name:       "nil pluginState",
-			wantStatus: framework.FromError(errors.New("invalid state"), defaultPluginName),
-		},
-		{
-			name: "no preferred affinity terms",
-			ps: &pluginState{
-				preferredAffinityTerms: []preferredAffinityTerm{},
-			},
-			wantScore: &framework.ClusterScore{AffinityScore: 0},
-		},
-		{
-			name: "have preferred affinity terms",
-			ps: &pluginState{
-				preferredAffinityTerms: []preferredAffinityTerm{
-					{
-						affinityTerm: affinityTerm{
-							selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
+			name: "single preferred term which features only label selector, matched",
+			ps:   &pluginState{},
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+									{
+										Weight: 50,
+										Preference: placementv1beta1.ClusterSelectorTerm{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionLabelValue1,
+												},
+											},
+										},
+									},
+								},
+							},
 						},
-						weight: 5,
-					},
-					{
-						affinityTerm: affinityTerm{
-							selector: labels.SelectorFromSet(map[string]string{}),
-						},
-						weight: -8,
 					},
 				},
 			},
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
+					Name: clusterName1,
 					Labels: map[string]string{
-						"region": "us-west",
-						"zone":   "zone2",
+						regionLabelName: regionLabelValue1,
 					},
 				},
 			},
-			wantScore: &framework.ClusterScore{AffinityScore: -3},
+			wantScore: &framework.ClusterScore{
+				AffinityScore: 50,
+			},
+		},
+		{
+			name: "single preferred term which features only label selector, not matched",
+			ps:   &pluginState{},
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+									{
+										Weight: 50,
+										Preference: placementv1beta1.ClusterSelectorTerm{
+											LabelSelector: &metav1.LabelSelector{
+												MatchExpressions: []metav1.LabelSelectorRequirement{
+													{
+														Key:      regionLabelName,
+														Operator: metav1.LabelSelectorOpNotIn,
+														Values: []string{
+															regionLabelValue2,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						regionLabelName: regionLabelValue2,
+					},
+				},
+			},
+			wantScore: &framework.ClusterScore{},
+		},
+		{
+			name: "single preferred term which requires sorting",
+			ps: &pluginState{
+				minMaxValuesByProperty: map[string]observedMinMaxValues{
+					nodeCountPropertyName: {
+						min: ptr.To(resource.MustParse("10")),
+						max: ptr.To(resource.MustParse("20")),
+					},
+				},
+			},
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+									{
+										Weight: 50,
+										Preference: placementv1beta1.ClusterSelectorTerm{
+											PropertySorter: &placementv1beta1.PropertySorter{
+												Name:      nodeCountPropertyName,
+												SortOrder: placementv1beta1.Ascending,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "15",
+						},
+					},
+				},
+			},
+			wantScore: &framework.ClusterScore{
+				AffinityScore: 25,
+			},
+		},
+		{
+			name: "single preferred term which features label selector and requires sorting",
+			ps: &pluginState{
+				minMaxValuesByProperty: map[string]observedMinMaxValues{
+					nodeCountPropertyName: {
+						min: ptr.To(resource.MustParse("10")),
+						max: ptr.To(resource.MustParse("20")),
+					},
+				},
+			},
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+									{
+										Weight: 50,
+										Preference: placementv1beta1.ClusterSelectorTerm{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionLabelValue2,
+												},
+											},
+											PropertySorter: &placementv1beta1.PropertySorter{
+												Name:      nodeCountPropertyName,
+												SortOrder: placementv1beta1.Descending,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						regionLabelName: regionLabelValue2,
+					},
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "12",
+						},
+					},
+				},
+			},
+			wantScore: &framework.ClusterScore{
+				AffinityScore: 10,
+			},
+		},
+		{
+			name: "single preferred term which features label selector and requires sorting (cannot be sorted, no data available)",
+			ps: &pluginState{
+				minMaxValuesByProperty: map[string]observedMinMaxValues{
+					nodeCountPropertyName: {
+						min: ptr.To(resource.MustParse("10")),
+						max: ptr.To(resource.MustParse("20")),
+					},
+				},
+			},
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+									{
+										Weight: 50,
+										Preference: placementv1beta1.ClusterSelectorTerm{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionLabelValue2,
+												},
+											},
+											PropertySorter: &placementv1beta1.PropertySorter{
+												Name:      nodeCountPropertyName,
+												SortOrder: placementv1beta1.Descending,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						regionLabelName: regionLabelValue2,
+					},
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{},
+				},
+			},
+			wantScore: &framework.ClusterScore{
+				AffinityScore: 0,
+			},
+		},
+		{
+			name: "multiple preferred terms",
+			ps: &pluginState{
+				minMaxValuesByProperty: map[string]observedMinMaxValues{
+					nodeCountPropertyName: {
+						min: ptr.To(resource.MustParse("10")),
+						max: ptr.To(resource.MustParse("20")),
+					},
+					availableCPUPropertyName: {
+						min: ptr.To(resource.MustParse("7")),
+						max: ptr.To(resource.MustParse("25")),
+					},
+				},
+			},
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+									{
+										Weight: 50,
+										Preference: placementv1beta1.ClusterSelectorTerm{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionLabelValue2,
+												},
+											},
+											PropertySorter: &placementv1beta1.PropertySorter{
+												Name:      nodeCountPropertyName,
+												SortOrder: placementv1beta1.Descending,
+											},
+										},
+									},
+									{
+										Weight: 20,
+										Preference: placementv1beta1.ClusterSelectorTerm{
+											LabelSelector: &metav1.LabelSelector{
+												MatchExpressions: []metav1.LabelSelectorRequirement{
+													{
+														Key:      envLabelName,
+														Operator: metav1.LabelSelectorOpIn,
+														Values: []string{
+															envLabelValue1,
+														},
+													},
+												},
+											},
+											PropertySorter: &placementv1beta1.PropertySorter{
+												Name:      availableCPUPropertyName,
+												SortOrder: placementv1beta1.Ascending,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						regionLabelName: regionLabelValue2,
+						envLabelName:    envLabelValue1,
+					},
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "12",
+						},
+					},
+					ResourceUsage: clusterv1beta1.ResourceUsage{
+						Available: corev1.ResourceList{
+							corev1.ResourceCPU: resource.MustParse("10"),
+						},
+					},
+				},
+			},
+			wantScore: &framework.ClusterScore{
+				AffinityScore: 27,
+			},
 		},
 	}
-	for _, tc := range tests {
+
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			p := New()
-			state := framework.NewCycleState(nil, nil)
-			if !tc.notSetPluginState {
-				state.Write(framework.StateKey(p.Name()), tc.ps)
-			}
-			got, gotStatus := p.Score(context.Background(), state, nil, tc.cluster)
-			if diff := cmp.Diff(tc.wantStatus, gotStatus, cmpStatusOptions); diff != "" {
-				t.Fatalf("Score() status mismatch (-want, +got):\n%s", diff)
+			ctx := context.Background()
+			state := framework.NewCycleState(nil, nil, nil)
+			state.Write(framework.StateKey(p.Name()), tc.ps)
+
+			score, status := p.Score(ctx, state, tc.policy, tc.cluster)
+			if diff := cmp.Diff(
+				status, tc.wantStatus,
+				cmp.AllowUnexported(framework.Status{}),
+				ignoreStatusErrorField,
+			); diff != "" {
+				t.Fatalf("Score() unexpected status (-got, +want):\n%s", diff)
 			}
 
-			if gotStatus == nil && !cmp.Equal(got, tc.wantScore) {
-				t.Errorf("Score()=%v, want score %v", got, tc.wantScore)
+			if diff := cmp.Diff(score, tc.wantScore); diff != "" {
+				t.Fatalf("Score() unexpected score (-got, +want):\n%s", diff)
 			}
 		})
 	}

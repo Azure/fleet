@@ -24,6 +24,28 @@ export OUTPUT_TYPE="${OUTPUT_TYPE:-type=docker}"
 export HUB_AGENT_IMAGE="${HUB_AGENT_IMAGE:-hub-agent}"
 export MEMBER_AGENT_IMAGE="${MEMBER_AGENT_IMAGE:-member-agent}"
 export REFRESH_TOKEN_IMAGE="${REFRESH_TOKEN_IMAGE:-refresh-token}"
+export PROPERTY_PROVIDER="${PROPERTY_PROVIDER:-azure}"
+export USE_PREDEFINED_REGIONS="${USE_PREDEFINED_REGIONS:-false}"
+# The pre-defined regions; if the AKS property provider is used.
+#
+# Note that for a specific cluster, if a predefined region is not set, the node region must
+# be set, so that the AKS property provider can auto-discover the region.
+REGIONS=("" "" "eastasia")
+# The regions that should be set on each node of the respective clusters; if the AKS property
+# provider is used.
+#
+# Note that for a specific cluster, if a predefined region is set, the node region should use
+# the same value.
+AKS_NODE_REGIONS=("westus" "northeurope" "eastasia")
+# The SKUs that should be set on each node of the respective clusters; if the AKS property
+# provider is used. See the AKS documentation for specifics.
+# 
+# Note that this is for information only; kind nodes always use the same fixed setup
+# (total/allocatable capacity = host capacity).
+AKS_NODE_SKUS=("Standard_A4_v2" "Standard_B4ms" "Standard_D8s_v5" "Standard_E16_v5" "Standard_M16ms")
+AKS_SKU_COUNT=${#AKS_NODE_SKUS[@]}
+# The number of clusters that has pre-defined configuration for testing purposes. 
+RESERVED_CLUSTER_COUNT=3
 
 # Create the kind clusters
 echo "Creating the kind clusters..."
@@ -32,10 +54,41 @@ echo "Creating the kind clusters..."
 kind create cluster --name $HUB_CLUSTER --image=$KIND_IMAGE --kubeconfig=$KUBECONFIG
 
 # Create the member clusters
-for i in "${MEMBER_CLUSTERS[@]}"
+for (( i=0; i<${MEMBER_CLUSTER_COUNT}; i++ ));
 do
-  kind create cluster --name  "$i" --image=$KIND_IMAGE --kubeconfig=$KUBECONFIG
+    if [ "$i" -lt $RESERVED_CLUSTER_COUNT ]; then
+        kind create cluster --name  "${MEMBER_CLUSTERS[$i]}" --image=$KIND_IMAGE --kubeconfig=$KUBECONFIG --config ./kindconfigs/${MEMBER_CLUSTERS[$i]}.yaml
+    else
+        kind create cluster --name  "${MEMBER_CLUSTERS[$i]}" --image=$KIND_IMAGE --kubeconfig=$KUBECONFIG
+    fi
 done
+
+# Set up the nodes in the member clusters, if the AKS property provider is used.
+if [ "$PROPERTY_PROVIDER" = "azure" ]
+then
+    echo "Setting up nodes in each member cluster..."
+
+    for (( i=0; i<$RESERVED_CLUSTER_COUNT; i++ ));
+    do
+        kind export kubeconfig --name "${MEMBER_CLUSTERS[$i]}"
+        NODE_NAMES=$(kubectl get nodes -o 'jsonpath={.items[*].metadata.name}')
+        # Use an if to avoid non-zero exit code.
+        if read -ra NODES -d '' <<<"$NODE_NAMES"; then :; fi
+
+        NODE_COUNT=${#NODES[@]}
+        for (( j=0; j<${NODE_COUNT}; j++ ));
+        do
+            # Use the eastus region if the index overflows.
+            kubectl label node "${NODES[$j]}" topology.kubernetes.io/region=${AKS_NODE_REGIONS[$i]:-eastus}
+
+            # Set up a SKU in random.
+            #
+            # This is an expedient solution, but good enough for the E2E scenarios.
+            k=$(( RANDOM % AKS_SKU_COUNT ))
+            kubectl label node "${NODES[$j]}" beta.kubernetes.io/instance-type=${AKS_NODE_SKUS[$k]}
+        done
+    done 
+fi
 
 # Build the Fleet agent images
 echo "Building and the Fleet agent images..."
@@ -64,12 +117,11 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set image.pullPolicy=Never \
     --set image.repository=$REGISTRY/$HUB_AGENT_IMAGE \
     --set image.tag=$TAG \
-    --set logVerbosity=2 \
     --set namespace=fleet-system \
+    --set logVerbosity=5 \
     --set enableWebhook=true \
     --set webhookClientConnectionType=service \
-    --set enableV1Alpha1APIs=false \
-    --set enableV1Beta1APIs=true
+    --set logFileMaxSize=1000000
 
 # Download CRDs from Fleet networking repo
 export ENDPOINT_SLICE_EXPORT_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.2.7/config/crd/bases/networking.fleet.azure.com_endpointsliceexports.yaml
@@ -114,21 +166,40 @@ kind export kubeconfig --name $HUB_CLUSTER
 HUB_SERVER_URL="https://$(docker inspect $HUB_CLUSTER-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443"
 
 # Install the member agents and related components
-for i in "${MEMBER_CLUSTERS[@]}"
+for (( i=0; i<${MEMBER_CLUSTER_COUNT}; i++ ));
 do
-    kind export kubeconfig --name "$i"
-    helm install member-agent ../../charts/member-agent/ \
-        --set config.hubURL=$HUB_SERVER_URL \
-        --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
-        --set image.tag=$TAG \
-        --set refreshtoken.repository=$REGISTRY/$REFRESH_TOKEN_IMAGE \
-        --set refreshtoken.tag=$TAG \
-        --set image.pullPolicy=Never \
-        --set refreshtoken.pullPolicy=Never \
-        --set config.memberClusterName="kind-$i" \
-        --set logVerbosity=5 \
-        --set namespace=fleet-system \
-        --set enableV1Alpha1APIs=false \
-        --set enableV1Beta1APIs=true
+    kind export kubeconfig --name "${MEMBER_CLUSTERS[$i]}"
+    if [ "$i" -lt $RESERVED_CLUSTER_COUNT ]; then
+        helm install member-agent ../../charts/member-agent/ \
+            --set config.hubURL=$HUB_SERVER_URL \
+            --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
+            --set image.tag=$TAG \
+            --set refreshtoken.repository=$REGISTRY/$REFRESH_TOKEN_IMAGE \
+            --set refreshtoken.tag=$TAG \
+            --set image.pullPolicy=Never \
+            --set refreshtoken.pullPolicy=Never \
+            --set config.memberClusterName="kind-${MEMBER_CLUSTERS[$i]}" \
+            --set logVerbosity=5 \
+            --set namespace=fleet-system \
+            --set enableV1Alpha1APIs=false \
+            --set enableV1Beta1APIs=true \
+            --set propertyProvider=$PROPERTY_PROVIDER \
+            --set region=${REGIONS[$i]}
+    else
+        helm install member-agent ../../charts/member-agent/ \
+            --set config.hubURL=$HUB_SERVER_URL \
+            --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
+            --set image.tag=$TAG \
+            --set refreshtoken.repository=$REGISTRY/$REFRESH_TOKEN_IMAGE \
+            --set refreshtoken.tag=$TAG \
+            --set image.pullPolicy=Never \
+            --set refreshtoken.pullPolicy=Never \
+            --set config.memberClusterName="kind-${MEMBER_CLUSTERS[$i]}" \
+            --set logVerbosity=5 \
+            --set namespace=fleet-system \
+            --set enableV1Alpha1APIs=false \
+            --set enableV1Beta1APIs=true \
+            --set propertyProvider=$PROPERTY_PROVIDER
+    fi
 done
 

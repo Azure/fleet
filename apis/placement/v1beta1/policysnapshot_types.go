@@ -26,6 +26,7 @@ const (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope="Cluster",shortName=pss,categories={fleet,fleet-placement}
 // +kubebuilder:subresource:status
+// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:JSONPath=`.metadata.generation`,name="Gen",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -146,6 +147,14 @@ type ClusterSchedulingPolicySnapshotList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ClusterSchedulingPolicySnapshot `json:"items"`
+}
+
+// Tolerations returns tolerations for ClusterSchedulingPolicySnapshot.
+func (m *ClusterSchedulingPolicySnapshot) Tolerations() []Toleration {
+	if m.Spec.Policy != nil {
+		return m.Spec.Policy.Tolerations
+	}
+	return nil
 }
 
 // SetConditions sets the given conditions on the ClusterSchedulingPolicySnapshot.

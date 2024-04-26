@@ -24,7 +24,7 @@ import (
 
 const (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating custom resource definition resources.
-	ValidationPath             = "/validate-v1-fleetresourcehandler"
+	ValidationPath             = "/validate-fleetresourcehandler"
 	groupMatch                 = `^[^.]*\.(.*)`
 	fleetMemberNamespacePrefix = "fleet-member"
 	fleetNamespacePrefix       = "fleet"
@@ -34,7 +34,13 @@ const (
 // Add registers the webhook for K8s built-in object types.
 func Add(mgr manager.Manager, whiteListedUsers []string, isFleetV1Beta1API bool) error {
 	hookServer := mgr.GetWebhookServer()
-	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &fleetResourceValidator{client: mgr.GetClient(), whiteListedUsers: whiteListedUsers, isFleetV1Beta1API: isFleetV1Beta1API}})
+	handler := &fleetResourceValidator{
+		client:            mgr.GetClient(),
+		whiteListedUsers:  whiteListedUsers,
+		isFleetV1Beta1API: isFleetV1Beta1API,
+		decoder:           admission.NewDecoder(mgr.GetScheme()),
+	}
+	hookServer.Register(ValidationPath, &webhook.Admission{Handler: handler})
 	return nil
 }
 
@@ -55,22 +61,22 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 	var response admission.Response
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
 		switch {
-		case req.Kind == validation.CRDGVK:
+		case req.Kind == utils.CRDMetaGVK:
 			klog.V(2).InfoS("handling CRD resource", "name", req.Name, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleCRD(req)
-		case req.Kind == validation.V1Alpha1MCGVK:
+		case req.Kind == utils.MCV1Alpha1MetaGVK:
 			klog.V(2).InfoS("handling v1alpha1 member cluster resource", "name", req.Name, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleV1Alpha1MemberCluster(req)
-		case req.Kind == validation.MCGVK:
+		case req.Kind == utils.MCMetaGVK:
 			klog.V(2).InfoS("handling member cluster resource", "name", req.Name, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleMemberCluster(req)
-		case req.Kind == validation.NamespaceGVK:
+		case req.Kind == utils.NamespaceMetaGVK:
 			klog.V(2).InfoS("handling namespace resource", "name", req.Name, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleNamespace(req)
-		case req.Kind == validation.V1Alpha1IMCGVK || req.Kind == validation.V1Alpha1WorkGVK || req.Kind == validation.IMCGVK || req.Kind == validation.WorkGVK || req.Kind == validation.EndpointSliceExportGVK || req.Kind == validation.EndpointSliceImportGVK || req.Kind == validation.InternalServiceExportGVK || req.Kind == validation.InternalServiceImportGVK:
+		case req.Kind == utils.IMCV1Alpha1MetaGVK || req.Kind == utils.WorkV1Alpha1MetaGVK || req.Kind == utils.IMCMetaGVK || req.Kind == utils.WorkMetaGVK || req.Kind == utils.EndpointSliceExportMetaGVK || req.Kind == utils.EndpointSliceImportMetaGVK || req.Kind == utils.InternalServiceExportMetaGVK || req.Kind == utils.InternalServiceImportMetaGVK:
 			klog.V(2).InfoS("handling fleet owned namespaced resource in fleet reserved namespaces", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleFleetReservedNamespacedResource(ctx, req)
-		case req.Kind == validation.EventGVK:
+		case req.Kind == utils.EventMetaGVK:
 			klog.V(3).InfoS("handling event resource", "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleEvent(ctx, req)
 		case req.Namespace != "":
@@ -106,7 +112,7 @@ func (v *fleetResourceValidator) handleV1Alpha1MemberCluster(req admission.Reque
 		if err := v.decoder.DecodeRaw(req.OldObject, &oldMC); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
-		return validation.ValidateMemberClusterUpdate(&currentMC, &oldMC, req, v.whiteListedUsers)
+		return validation.ValidateV1Alpha1MemberClusterUpdate(currentMC, oldMC, req, v.whiteListedUsers)
 	}
 	return validation.ValidateUserForResource(req, v.whiteListedUsers)
 }
@@ -122,7 +128,7 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 		if err := v.decoder.DecodeRaw(req.OldObject, &oldMC); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
-		return validation.ValidateMemberClusterUpdate(&currentMC, &oldMC, req, v.whiteListedUsers)
+		return validation.ValidateMemberClusterUpdate(currentMC, oldMC, req, v.whiteListedUsers)
 	}
 	return validation.ValidateUserForResource(req, v.whiteListedUsers)
 }
@@ -179,12 +185,6 @@ func (v *fleetResourceValidator) decodeRequestObject(req admission.Request, obj 
 			return err
 		}
 	}
-	return nil
-}
-
-// InjectDecoder injects the decoder into fleetResourceValidator.
-func (v *fleetResourceValidator) InjectDecoder(d *admission.Decoder) error {
-	v.decoder = d
 	return nil
 }
 

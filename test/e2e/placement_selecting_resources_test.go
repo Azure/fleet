@@ -17,13 +17,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/controllers/work"
-	scheduler "go.goms.io/fleet/pkg/scheduler/framework"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
 )
@@ -66,7 +65,7 @@ var _ = Describe("creating CRP and selecting resources by name", Ordered, func()
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -85,7 +84,7 @@ var _ = Describe("creating CRP and selecting resources by name", Ordered, func()
 	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -133,7 +132,7 @@ var _ = Describe("creating CRP and selecting resources by label", Ordered, func(
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -152,7 +151,7 @@ var _ = Describe("creating CRP and selecting resources by label", Ordered, func(
 	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -187,7 +186,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become selected a
 				},
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -205,7 +204,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become selected a
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual([]placementv1beta1.ResourceIdentifier{}, allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual([]placementv1beta1.ResourceIdentifier{}, allMemberClusterNames, nil, "0", true)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -222,7 +221,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become selected a
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -241,7 +240,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become selected a
 	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -276,7 +275,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 				},
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -294,7 +293,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -313,7 +312,8 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 	It("should remove the selected resources on member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual([]placementv1beta1.ResourceIdentifier{}, allMemberClusterNames, nil, "1")
+		// If there are no resources selected, the available condition reason will become "AllWorkAreAvailable".
+		crpStatusUpdatedActual := crpStatusUpdatedActual([]placementv1beta1.ResourceIdentifier{}, allMemberClusterNames, nil, "1", true)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -328,7 +328,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 	})
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -352,7 +352,7 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 				ResourceSelectors: workResourceSelector(),
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -370,7 +370,7 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -387,7 +387,7 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 	It("should update the selected resources on member clusters", checkIfPlacedNamespaceResourceOnAllMemberClusters)
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -406,7 +406,7 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 	It("should update the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "2")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "2", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -421,7 +421,7 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 	})
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -430,8 +430,8 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
-		By("creating namespace")
-		ns := workNamespace()
+		ns := appNamespace()
+		By(fmt.Sprintf("creating namespace %s", ns.Name))
 		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		// Create the CRP.
@@ -446,7 +446,7 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 				ResourceSelectors: workResourceSelector(),
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -471,7 +471,7 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 				Version: "v1",
 			},
 		}
-		crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResourceIdentifiers, allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResourceIdentifiers, allMemberClusterNames, nil, "0", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -493,7 +493,7 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -510,7 +510,7 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 	})
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -534,7 +534,7 @@ var _ = Describe("validating CRP when deleting resources in a matching namespace
 				ResourceSelectors: workResourceSelector(),
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -552,7 +552,7 @@ var _ = Describe("validating CRP when deleting resources in a matching namespace
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -571,7 +571,7 @@ var _ = Describe("validating CRP when deleting resources in a matching namespace
 				Version: "v1",
 			},
 		}
-		crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResourceIdentifiers, allMemberClusterNames, nil, "1")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResourceIdentifiers, allMemberClusterNames, nil, "1", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -604,81 +604,7 @@ var _ = Describe("validating CRP when deleting resources in a matching namespace
 	})
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
-		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
-	})
-})
-
-// TODO should be blocked by the validation webhook
-var _ = Describe("validating CRP when resource selector is not valid", Ordered, func() {
-	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-
-	BeforeAll(func() {
-		// Create the CRP.
-		crp := &placementv1beta1.ClusterResourcePlacement{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-				// Add a custom finalizer; this would allow us to better observe
-				// the behavior of the controllers.
-				Finalizers: []string{customDeletionBlockerFinalizer},
-			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
-				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
-					{
-						Group:   "",
-						Kind:    "InvalidNamespace",
-						Version: "v1",
-						Name:    "invalid",
-					},
-				},
-			},
-		}
-		By(fmt.Sprintf("creating placement %s", crpName))
-		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
-	})
-
-	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s", crpName))
-		cleanupCRP(crpName)
-	})
-
-	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := func() error {
-			crp := &placementv1beta1.ClusterResourcePlacement{}
-			if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
-				return err
-			}
-
-			wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
-				Conditions: []metav1.Condition{
-					{
-						Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-						Status:             metav1.ConditionFalse,
-						Reason:             clusterresourceplacement.InvalidResourceSelectorsReason,
-						ObservedGeneration: crp.Generation,
-					},
-				},
-			}
-			if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
-				return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
-			}
-			return nil
-		}
-		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
-	})
-
-	It("can delete the CRP", func() {
-		// Delete the CRP.
-		crp := &placementv1beta1.ClusterResourcePlacement{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-			},
-		}
-		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", crpName)
-	})
-
-	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -707,7 +633,7 @@ var _ = Describe("validating CRP when selecting a reserved resource", Ordered, f
 				},
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -757,7 +683,7 @@ var _ = Describe("validating CRP when selecting a reserved resource", Ordered, f
 	})
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -769,9 +695,8 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 		By("creating work resources on hub cluster")
 		createWorkResources()
 
-		By("creating work namespace on member cluster")
-		ns := workNamespace()
-
+		ns := appNamespace()
+		By(fmt.Sprintf("creating namespace %s on member cluster", ns.Name))
 		Expect(memberCluster1EastProdClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		// Create the CRP.
@@ -811,26 +736,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 			workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 			appConfigMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
 			wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
-				Conditions: []metav1.Condition{
-					{
-						Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-						Status:             metav1.ConditionTrue,
-						Reason:             scheduler.FullyScheduledReason,
-						ObservedGeneration: crp.Generation,
-					},
-					{
-						Type:               string(placementv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-						Status:             metav1.ConditionTrue,
-						Reason:             clusterresourceplacement.SynchronizeSucceededReason,
-						ObservedGeneration: crp.Generation,
-					},
-					{
-						Type:               string(placementv1beta1.ClusterResourcePlacementAppliedConditionType),
-						Status:             metav1.ConditionFalse,
-						Reason:             clusterresourceplacement.ApplyFailedReason,
-						ObservedGeneration: crp.Generation,
-					},
-				},
+				Conditions: crpAppliedFailedConditions(crp.Generation),
 				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 					{
 						ClusterName: memberCluster1EastProdName,
@@ -844,39 +750,20 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 								Condition: metav1.Condition{
 									Type:               placementv1beta1.WorkConditionTypeApplied,
 									Status:             metav1.ConditionFalse,
-									Reason:             work.AppliedManifestFailedReason,
+									Reason:             work.ManifestsAlreadyOwnedByOthersReason,
 									ObservedGeneration: 0,
 								},
 							},
 						},
-						Conditions: []metav1.Condition{
-							{
-								Type:               string(placementv1beta1.ResourceScheduledConditionType),
-								Status:             metav1.ConditionTrue,
-								Reason:             clusterresourceplacement.ResourceScheduleSucceededReason,
-								ObservedGeneration: crp.Generation,
-							},
-							{
-								Type:               string(placementv1beta1.ResourceWorkSynchronizedConditionType),
-								Status:             metav1.ConditionTrue,
-								Reason:             clusterresourceplacement.WorkSynchronizeSucceededReason,
-								ObservedGeneration: crp.Generation,
-							},
-							{
-								Type:               string(placementv1beta1.ResourcesAppliedConditionType),
-								Status:             metav1.ConditionFalse,
-								Reason:             clusterresourceplacement.ResourceApplyFailedReason,
-								ObservedGeneration: crp.Generation,
-							},
-						},
+						Conditions: resourcePlacementApplyFailedConditions(crp.Generation),
 					},
 					{
 						ClusterName: memberCluster2EastCanaryName,
-						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation),
+						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation, false, false),
 					},
 					{
 						ClusterName: memberCluster3WestProdName,
-						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation),
+						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation, false, false),
 					},
 				},
 				SelectedResources: []placementv1beta1.ResourceIdentifier{
@@ -915,7 +802,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 	})
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 
@@ -988,7 +875,7 @@ var _ = Describe("validating CRP when placing cluster scope resource (other than
 				Name:    clusterRoleName,
 			},
 		}
-		crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResourceIdentifiers, allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResourceIdentifiers, allMemberClusterNames, nil, "0", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -1039,7 +926,7 @@ var _ = Describe("validating CRP when placing cluster scope resource (other than
 	})
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -1070,10 +957,10 @@ var _ = Describe("validating CRP revision history allowing single revision when 
 				},
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
-				RevisionHistoryLimit: pointer.Int32(1),
+				RevisionHistoryLimit: ptr.To(int32(1)),
 			},
 		}
 		By(fmt.Sprintf("creating placement %s", crpName))
@@ -1089,7 +976,7 @@ var _ = Describe("validating CRP revision history allowing single revision when 
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(nil, allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(nil, allMemberClusterNames, nil, "0", true)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -1113,7 +1000,7 @@ var _ = Describe("validating CRP revision history allowing single revision when 
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -1136,7 +1023,7 @@ var _ = Describe("validating CRP revision history allowing single revision when 
 	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -1167,7 +1054,7 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 				},
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -1185,7 +1072,7 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(nil, allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(nil, allMemberClusterNames, nil, "0", true)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -1209,7 +1096,7 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -1232,7 +1119,7 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -1284,7 +1171,7 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(resourceIdentifiersForMultipleResourcesSnapshots(), []string{memberCluster1EastProdName, memberCluster2EastCanaryName}, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(resourceIdentifiersForMultipleResourcesSnapshots(), []string{memberCluster1EastProdName, memberCluster2EastCanaryName}, nil, "0", false)
 		Eventually(crpStatusUpdatedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -1310,7 +1197,7 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 	})
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -1321,7 +1208,7 @@ func createResourcesForMultipleResourceSnapshots() {
 	for i := 0; i < 3; i++ {
 		var secret corev1.Secret
 		Expect(utils.GetObjectFromManifest("../integration/manifests/resources/test-large-secret.yaml", &secret)).Should(Succeed(), "Failed to read large secret from file")
-		secret.Namespace = workNamespace().Name
+		secret.Namespace = appNamespace().Name
 		secret.Name = fmt.Sprintf(appSecretNameTemplate, i)
 		Expect(hubClient.Create(ctx, &secret)).To(Succeed(), "Failed to create secret %s/%s", secret.Name, secret.Namespace)
 	}
@@ -1421,7 +1308,7 @@ func checkIfPlacedLargeSecretResourcesOnTargetMemberClusters(targetMemberCluster
 		memberCluster := targetMemberClusters[idx]
 
 		secretsPlacedActual := secretsPlacedOnClusterActual(memberCluster)
-		Eventually(secretsPlacedActual(), largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place large secrets on member cluster %s", memberCluster.ClusterName)
+		Eventually(secretsPlacedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place large secrets on member cluster %s", memberCluster.ClusterName)
 	}
 }
 

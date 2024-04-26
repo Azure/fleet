@@ -30,6 +30,12 @@ spec:
             - -add_dir_header
             - --enable-v1alpha1-apis={{ .Values.enableV1Alpha1APIs }}
             - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
+            - --max-concurrent-cluster-placement={{ .Values.MaxConcurrentClusterPlacement }}
+            - --concurrent-resource-change-syncs={{ .Values.ConcurrentResourceChangeSyncs }}
+            - --log_file_max_size={{ .Values.logFileMaxSize }}
+            - --max-fleet-size={{ .Values.MaxFleetSizeSupported }}
+            - --hub-api-qps={{ .Values.hubAPIQPS }}
+            - --hub-api-burst={{ .Values.hubAPIBurst }}
           ports:
             - name: metrics
               containerPort: 8080

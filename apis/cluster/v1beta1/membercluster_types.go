@@ -15,6 +15,7 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-cluster},shortName=cluster
 // +kubebuilder:subresource:status
+// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Joined")].status`,name="Joined",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 
@@ -50,9 +51,30 @@ type MemberClusterSpec struct {
 	HeartbeatPeriodSeconds int32 `json:"heartbeatPeriodSeconds,omitempty"`
 
 	// If specified, the MemberCluster's taints.
+	//
+	// This field is beta-level and is for the taints and tolerations feature.
 	// +kubebuilder:validation:MaxItems=100
 	// +optional
 	Taints []Taint `json:"taints,omitempty"`
+}
+
+// PropertyName is the name of a cluster property; it should be a Kubernetes label name.
+type PropertyName string
+
+// PropertyValue is the value of a cluster property.
+type PropertyValue struct {
+	// Value is the value of the cluster property.
+	//
+	// Currently, it should be a valid Kubernetes quantity.
+	// For more information, see
+	// https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
+	//
+	// +required
+	Value string `json:"value"`
+
+	// ObservationTime is when the cluster property is observed.
+	// +required
+	ObservationTime metav1.Time `json:"observationTime"`
 }
 
 // MemberClusterStatus defines the observed status of MemberCluster.
@@ -65,6 +87,13 @@ type MemberClusterStatus struct {
 	// Conditions is an array of current observed conditions for the member cluster.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions"`
+
+	// Properties is an array of properties observed for the member cluster.
+	//
+	// This field is beta-level; it is for the property-based scheduling feature and is only
+	// populated when a property provider is enabled in the deployment.
+	// +optional
+	Properties map[PropertyName]PropertyValue `json:"properties,omitempty"`
 
 	// The current observed resource usage of the member cluster. It is copied from the corresponding InternalMemberCluster object.
 	// +optional
@@ -118,6 +147,23 @@ const (
 	// - "Unknown" means the member cluster has an unknown health status.
 	// NOTE: This condition type is currently unused.
 	ConditionTypeMemberClusterHealthy MemberClusterConditionType = "Healthy"
+
+	// ConditionTypeClusterPropertyProviderStarted indicates the startup condition of the configured
+	// cluster property provider (if any).
+	// Its condition status can be one of the following:
+	// - "True" means the cluster property provider has started.
+	// - "False" means the cluster property provider has failed to start.
+	// - "Unknown" means it is unknown whether the cluster property provider has started or not.
+	ConditionTypeClusterPropertyProviderStarted MemberClusterConditionType = "ClusterPropertyProviderStarted"
+
+	// ConditionTypeClusterPropertyCollectionSucceeded indicates the
+	// condition of the latest attempt to collect cluster properties from the configured
+	// cluster property provider (if any).
+	// Its condition status can be one of the following:
+	// - "True" means the cluster property collection has succeeded.
+	// - "False" means the cluster property collection has failed.
+	// - "Unknown" means it is unknown whether the cluster property collection has succeeded or not.
+	ConditionTypeClusterPropertyCollectionSucceeded MemberClusterConditionType = "ClusterPropertyCollectionSucceeded"
 )
 
 //+kubebuilder:object:root=true

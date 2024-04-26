@@ -292,7 +292,7 @@ func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline
 }
 
 func PrintTestMetrics() {
-	klog.Infof("CRP count", crpCount.Load())
+	klog.Infof("CRP count %d", crpCount.Load())
 	klog.InfoS("Placement apply result", "total applySuccessCount", applySuccessCount.Load(), "applyFailCount", applyFailCount.Load(), "applyTimeoutCount", applyTimeoutCount.Load())
 
 	klog.InfoS("Placement delete result", "total deleteSuccessCount", deleteSuccessCount.Load(), "deleteFailcount", deleteFailCount.Load(), "deleteTimeoutCount", deleteTimeoutCount.Load())
