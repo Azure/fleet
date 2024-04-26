@@ -11,10 +11,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.goms.io/fleet/pkg/controllers/work"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	"go.goms.io/fleet/pkg/controllers/work"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
