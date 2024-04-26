@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -20,6 +22,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -92,6 +96,17 @@ func main() {
 		klog.ErrorS(errs.ToAggregate(), "invalid parameter")
 		exitWithErrorFunc()
 	}
+
+	// Experimental change.
+	leveler := zap.LevelEnablerFunc(func(level zapcore.Level) bool {
+		return level >= zapcore.WarnLevel
+	})
+	logger := ctrlzap.New(
+		ctrlzap.Level(leveler),
+		ctrlzap.UseDevMode(false),
+		ctrlzap.WriteTo(os.Stdout))
+	log.SetLogger(logger)
+
 	config := ctrl.GetConfigOrDie()
 	config.QPS, config.Burst = float32(opts.HubQPS), opts.HubBurst
 

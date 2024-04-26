@@ -171,6 +171,8 @@ func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int, 
 
 func (w *Config) Start(ctx context.Context) error {
 	klog.V(2).InfoS("setting up webhooks in apiserver from the leader")
+	klog.V(2).Info(fmt.Sprintf("longer webhook timeout: %d", *longWebhookTimeout))
+	klog.V(2).Info(fmt.Sprintf("shorter webhook timeout: %d", *shortWebhookTimeout))
 	if err := w.createFleetWebhookConfiguration(ctx); err != nil {
 		klog.ErrorS(err, "unable to setup webhook configurations in apiserver")
 		return err
