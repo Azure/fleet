@@ -354,6 +354,73 @@ func TestFilter(t *testing.T) {
 			wantStatus: framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), "cluster does not match with any of the required cluster affinity terms"),
 		},
 		{
+			name: "multiple cluster cost based term, less than not matched, but one cluster selector term matched",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionLabelValue1,
+												},
+											},
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     aks.PerGBMemoryCostProperty,
+														Operator: placementv1beta1.PropertySelectorLessThan,
+														Values: []string{
+															"0.12",
+														},
+													},
+												},
+											},
+										},
+										{
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     aks.PerCPUCoreCostProperty,
+														Operator: placementv1beta1.PropertySelectorEqualTo,
+														Values: []string{
+															"0.06",
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						regionLabelName: regionLabelValue1,
+					},
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						aks.PerGBMemoryCostProperty: {
+							Value: "0.16",
+						},
+						aks.PerCPUCoreCostProperty: {
+							Value: "0.06",
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "multiple cluster selector terms, matched",
 			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
