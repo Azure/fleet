@@ -112,8 +112,8 @@ var (
 	namespacedScope     = admv1.NamespacedScope
 	clusterScope        = admv1.ClusterScope
 	// Experimental change.
-	shortWebhookTimeout = ptr.To(int32(10))
-	longWebhookTimeout  = ptr.To(int32(10))
+	shortWebhookTimeout = ptr.To(int32(25))
+	longWebhookTimeout  = ptr.To(int32(25))
 )
 
 var AddToManagerFuncs []func(manager.Manager) error
