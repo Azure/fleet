@@ -23,6 +23,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
+	"go.goms.io/fleet/pkg/controllers/clusterresourcebindingwatcher"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacementwatcher"
 	"go.goms.io/fleet/pkg/controllers/clusterschedulingpolicysnapshot"
@@ -194,12 +195,21 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			return err
 		}
 
-		klog.Info("Setting up clusterSchedulingPolicySnapshot controller")
+		klog.Info("Setting up clusterResourceBinding watcher")
+		if err := (&clusterresourcebindingwatcher.Reconciler{
+			PlacementController: clusterResourcePlacementControllerV1Beta1,
+			Client:              mgr.GetClient(),
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "Unable to set up the clusterResourceBinding watcher")
+			return err
+		}
+
+		klog.Info("Setting up clusterSchedulingPolicySnapshot watcher")
 		if err := (&clusterschedulingpolicysnapshot.Reconciler{
 			Client:              mgr.GetClient(),
 			PlacementController: clusterResourcePlacementControllerV1Beta1,
 		}).SetupWithManager(mgr); err != nil {
-			klog.ErrorS(err, "Unable to set up the clusterResourcePlacement watcher")
+			klog.ErrorS(err, "Unable to set up the clusterSchedulingPolicySnapshot watcher")
 			return err
 		}
 

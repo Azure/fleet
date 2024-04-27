@@ -23,7 +23,6 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/controllers/work"
-	scheduler "go.goms.io/fleet/pkg/scheduler/framework"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
 )
@@ -66,7 +65,7 @@ var _ = Describe("creating CRP and selecting resources by name", Ordered, func()
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -133,7 +132,7 @@ var _ = Describe("creating CRP and selecting resources by label", Ordered, func(
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -205,7 +204,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become selected a
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual([]placementv1beta1.ResourceIdentifier{}, allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual([]placementv1beta1.ResourceIdentifier{}, allMemberClusterNames, nil, "0", true)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -222,7 +221,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become selected a
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -294,7 +293,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -313,7 +312,8 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 	It("should remove the selected resources on member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual([]placementv1beta1.ResourceIdentifier{}, allMemberClusterNames, nil, "1")
+		// If there are no resources selected, the available condition reason will become "AllWorkAreAvailable".
+		crpStatusUpdatedActual := crpStatusUpdatedActual([]placementv1beta1.ResourceIdentifier{}, allMemberClusterNames, nil, "1", true)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -370,7 +370,7 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -387,7 +387,7 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 	It("should update the selected resources on member clusters", checkIfPlacedNamespaceResourceOnAllMemberClusters)
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -406,7 +406,7 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 	It("should update the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "2")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "2", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -471,7 +471,7 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 				Version: "v1",
 			},
 		}
-		crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResourceIdentifiers, allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResourceIdentifiers, allMemberClusterNames, nil, "0", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -493,7 +493,7 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -552,7 +552,7 @@ var _ = Describe("validating CRP when deleting resources in a matching namespace
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -571,7 +571,7 @@ var _ = Describe("validating CRP when deleting resources in a matching namespace
 				Version: "v1",
 			},
 		}
-		crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResourceIdentifiers, allMemberClusterNames, nil, "1")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResourceIdentifiers, allMemberClusterNames, nil, "1", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -736,26 +736,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 			workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 			appConfigMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
 			wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
-				Conditions: []metav1.Condition{
-					{
-						Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-						Status:             metav1.ConditionTrue,
-						Reason:             scheduler.FullyScheduledReason,
-						ObservedGeneration: crp.Generation,
-					},
-					{
-						Type:               string(placementv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-						Status:             metav1.ConditionTrue,
-						Reason:             clusterresourceplacement.SynchronizeSucceededReason,
-						ObservedGeneration: crp.Generation,
-					},
-					{
-						Type:               string(placementv1beta1.ClusterResourcePlacementAppliedConditionType),
-						Status:             metav1.ConditionFalse,
-						Reason:             clusterresourceplacement.ApplyFailedReason,
-						ObservedGeneration: crp.Generation,
-					},
-				},
+				Conditions: crpAppliedFailedConditions(crp.Generation),
 				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 					{
 						ClusterName: memberCluster1EastProdName,
@@ -774,34 +755,15 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 								},
 							},
 						},
-						Conditions: []metav1.Condition{
-							{
-								Type:               string(placementv1beta1.ResourceScheduledConditionType),
-								Status:             metav1.ConditionTrue,
-								Reason:             clusterresourceplacement.ResourceScheduleSucceededReason,
-								ObservedGeneration: crp.Generation,
-							},
-							{
-								Type:               string(placementv1beta1.ResourceWorkSynchronizedConditionType),
-								Status:             metav1.ConditionTrue,
-								Reason:             clusterresourceplacement.WorkSynchronizeSucceededReason,
-								ObservedGeneration: crp.Generation,
-							},
-							{
-								Type:               string(placementv1beta1.ResourcesAppliedConditionType),
-								Status:             metav1.ConditionFalse,
-								Reason:             clusterresourceplacement.ResourceApplyFailedReason,
-								ObservedGeneration: crp.Generation,
-							},
-						},
+						Conditions: resourcePlacementApplyFailedConditions(crp.Generation),
 					},
 					{
 						ClusterName: memberCluster2EastCanaryName,
-						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation),
+						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation, false),
 					},
 					{
 						ClusterName: memberCluster3WestProdName,
-						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation),
+						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation, false),
 					},
 				},
 				SelectedResources: []placementv1beta1.ResourceIdentifier{
@@ -913,7 +875,7 @@ var _ = Describe("validating CRP when placing cluster scope resource (other than
 				Name:    clusterRoleName,
 			},
 		}
-		crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResourceIdentifiers, allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResourceIdentifiers, allMemberClusterNames, nil, "0", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -1014,7 +976,7 @@ var _ = Describe("validating CRP revision history allowing single revision when 
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(nil, allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(nil, allMemberClusterNames, nil, "0", true)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -1038,7 +1000,7 @@ var _ = Describe("validating CRP revision history allowing single revision when 
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -1110,7 +1072,7 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(nil, allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(nil, allMemberClusterNames, nil, "0", true)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -1134,7 +1096,7 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -1209,7 +1171,7 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(resourceIdentifiersForMultipleResourcesSnapshots(), []string{memberCluster1EastProdName, memberCluster2EastCanaryName}, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(resourceIdentifiersForMultipleResourcesSnapshots(), []string{memberCluster1EastProdName, memberCluster2EastCanaryName}, nil, "0", false)
 		Eventually(crpStatusUpdatedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
