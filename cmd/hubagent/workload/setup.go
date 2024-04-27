@@ -7,6 +7,7 @@ package workload
 
 import (
 	"context"
+	"go.goms.io/fleet/pkg/controllers/clusterresourcebindingwatcher"
 	"math"
 	"strings"
 	"sync"
@@ -191,6 +192,15 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			PlacementController: clusterResourcePlacementControllerV1Beta1,
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up the clusterResourcePlacement watcher")
+			return err
+		}
+
+		klog.Info("Setting up clusterResourceBinding watcher")
+		if err := (&clusterresourcebindingwatcher.Reconciler{
+			PlacementController: clusterResourcePlacementControllerV1Beta1,
+			Client:              mgr.GetClient(),
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "Unable to set up the clusterResourceBinding watcher")
 			return err
 		}
 
