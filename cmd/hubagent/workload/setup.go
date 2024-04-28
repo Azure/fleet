@@ -286,30 +286,6 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			klog.ErrorS(err, "Unable to set up memberCluster watcher for scheduler")
 			return err
 		}
-
-		// setup override related controllers
-		// Temporarily disabled override controllers for debugging purposes.
-		/**
-		klog.Info("Setting up the clusterResourceOverride controller")
-		if err := (&overrider.ClusterResourceReconciler{
-			Reconciler: overrider.Reconciler{
-				Client: mgr.GetClient(),
-			},
-		}).SetupWithManager(mgr); err != nil {
-			klog.ErrorS(err, "Unable to set up clusterResourceOverride controller")
-			return err
-		}
-
-		klog.Info("Setting up the resourceOverride controller")
-		if err := (&overrider.ResourceReconciler{
-			Reconciler: overrider.Reconciler{
-				Client: mgr.GetClient(),
-			},
-		}).SetupWithManager(mgr); err != nil {
-			klog.ErrorS(err, "Unable to set up resourceOverride controller")
-			return err
-		}
-		**/
 	}
 
 	// Set up a runner that starts all the custom controllers we created above
