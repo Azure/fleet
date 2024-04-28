@@ -24,8 +24,6 @@ var _ = Describe("creating resourceOverride (selecting all clusters) to override
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
-		Skip("RO controller is not enabled yet")
-
 		By("creating work resources")
 		createWorkResources()
 
