@@ -22,6 +22,8 @@ var _ = Describe("creating clusterResourceOverride (selecting all clusters) to o
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
+		Skip("CRO controller is not enabled yet")
+
 		By("creating work resources")
 		createWorkResources()
 

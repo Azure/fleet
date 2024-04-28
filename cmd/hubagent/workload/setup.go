@@ -28,7 +28,6 @@ import (
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacementwatcher"
 	"go.goms.io/fleet/pkg/controllers/clusterschedulingpolicysnapshot"
 	"go.goms.io/fleet/pkg/controllers/memberclusterplacement"
-	"go.goms.io/fleet/pkg/controllers/overrider"
 	"go.goms.io/fleet/pkg/controllers/resourcechange"
 	"go.goms.io/fleet/pkg/controllers/rollout"
 	"go.goms.io/fleet/pkg/controllers/workgenerator"
@@ -285,27 +284,6 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			ClusterEligibilityChecker: clustereligibilitychecker.New(),
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up memberCluster watcher for scheduler")
-			return err
-		}
-
-		// setup override related controllers
-		klog.Info("Setting up the clusterResourceOverride controller")
-		if err := (&overrider.ClusterResourceReconciler{
-			Reconciler: overrider.Reconciler{
-				Client: mgr.GetClient(),
-			},
-		}).SetupWithManager(mgr); err != nil {
-			klog.ErrorS(err, "Unable to set up clusterResourceOverride controller")
-			return err
-		}
-
-		klog.Info("Setting up the resourceOverride controller")
-		if err := (&overrider.ResourceReconciler{
-			Reconciler: overrider.Reconciler{
-				Client: mgr.GetClient(),
-			},
-		}).SetupWithManager(mgr); err != nil {
-			klog.ErrorS(err, "Unable to set up resourceOverride controller")
 			return err
 		}
 	}
