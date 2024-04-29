@@ -29,11 +29,11 @@ spec:
     - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementScheduled")].observedGeneration
       name: ScheduledGen
       type: string
-    - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementApplied")].status
-      name: Applied
+    - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementAvailable")].status
+      name: Available
       type: string
-    - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementApplied")].observedGeneration
-      name: AppliedGen
+    - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementAvailable")].observedGeneration
+      name: AvailableGen
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
@@ -1135,11 +1135,11 @@ spec:
     - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementScheduled")].observedGeneration
       name: ScheduledGen
       type: string
-    - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementApplied")].status
-      name: Applied
+    - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementAvailable")].status
+      name: Available
       type: string
-    - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementApplied")].observedGeneration
-      name: AppliedGen
+    - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementAvailable")].observedGeneration
+      name: AvailableGen
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
