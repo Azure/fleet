@@ -18,7 +18,7 @@ spec:
             - propertySelector:
                 matchExpressions:
                   - name: kubernetes.azure.com/per-gb-memory-cost
-                    operator: Eq
+                    operator: Lt
                     values:
                       - "0.019"
             - propertySelector:
