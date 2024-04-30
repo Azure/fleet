@@ -1,14 +1,19 @@
-# Use property-based scheduling with Fleet on AKS clusters: Preview
+ms.topic: article
+ms.custom: azure-kubernetes-service, devx-track-azurecli
+ms.date: 04/19/2024
+author: michaelawyu
+
+# Apply Fleet property-based scheduling (preview) on your Azure Kubernetes Service (AKS) cluster
 
 This document explains how to try out the latest Fleet feature, property-based scheduling, using AKS clusters.
 
-The new property-based scheduling experience adds great flexibility to Fleet's existing resource propagation capabilities, granting users the ability to pick clusters based on their resource usage, costs, node counts, and potentially many more features. This can be very helpful in many common multi-cluster administration scenarios, including:
+Fleet property-based scheduling (preview) adds more flexibility to Fleet's existing resource propagation capabilities, granting users the ability to pick clusters based on resource availability, usage, costs, node count, and more in the future. This can be very helpful in many common multi-cluster administration scenarios, including:
 
 * eliminating hotspots in a multi-cluster environment; and
 * balancing resource usage (CPU, memory, etc.) across clusters; and
-* making full use of the cost benefits that platforms such as Azure Kubernetes Service provide.
+* making full use of the cost benefits that AKS provides.
 
-This new experience will be publicly available soon; if you would like an early preview of the experience using AKS clusters of your own, follow the instructions below.
+[!INCLUDE [preview features callout](./includes/preview/preview-callout.md)]
 
 ## Before you begin
 
@@ -230,7 +235,7 @@ You can verify the membership status using the command below; after a few moment
 kubectl get membercluster
 ```
 
-## Experience the new property-based scheduling features
+## Try out Fleet property-based scheduling (preview)
 
 The new property-based scheduling experience features an AKS property provider, which exposes many cluster properties about each joined AKS cluster; the properties include:
 
@@ -423,6 +428,9 @@ All the AKS clusters in the resource group will be removed.
 
 ## What's next
 
-Congratulations! You have completed the tutorial; we hope that you will appreciate the property-based scheduling capabilities we have added to Fleet. If you have any questions, feedback, or concerns, please raise [a GitHub issue](https://github.com/Azure/fleet/issues).
+Congrats! We hope that property-based scheduling (preview) has improved your overall Fleet experience. If you have any questions, feedback, or concerns, please raise [a GitHub issue](https://github.com/Azure/fleet/issues).
 
-To learn more about Fleet, see the [Fleet GitHub repository](https://github.com/Azure/fleet) and the [Fleet documentation](https://github.com/Azure/fleet/tree/main/docs).
+Aside from property-based scheduling, Fleet offers many other scheduling features that are useful in a
+multi-cluster environment; check out the [How-to Guide: Using the Fleet `ClusterResourcePlacement` API](https://github.com/Azure/fleet/tree/main/docs/howtos/crp.md) for more information.
+
+You can also review Fleet's [source code](https://github.com/Azure/fleet) or review its [documentation](https://github.com/Azure/fleet/tree/main/docs) on GitHub.
