@@ -87,7 +87,7 @@ the selected resources on the target clusters.
 4. Creating or updating works:  work generator creates the work on the corresponding member cluster namespace. Each work
 contains the (overridden) manifest workload to be deployed on the member clusters.
 5. Applying resources on target clusters: apply work controller applies the manifest workload on the member clusters.
-6. Checking resource availability: apply work controller checks the resource availability on the target clusters
+6. Checking resource availability: apply work controller checks the resource availability on the target clusters.
 
 ## Resource Selection
 
