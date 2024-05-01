@@ -166,6 +166,8 @@ func NewSimpleClusterResourcePlacementSchedulingQueue(opts ...Option) ClusterRes
 	}
 
 	return &simpleClusterResourcePlacementSchedulingQueue{
-		active: workqueue.NewNamedRateLimitingQueue(options.rateLimiter, options.name),
+		active: workqueue.NewRateLimitingQueueWithConfig(options.rateLimiter, workqueue.RateLimitingQueueConfig{
+			Name: options.name,
+		}),
 	}
 }

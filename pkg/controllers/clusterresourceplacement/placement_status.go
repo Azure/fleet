@@ -33,13 +33,6 @@ const (
 	// SchedulingUnknownReason is the reason string of placement condition when the schedule status is unknown.
 	SchedulingUnknownReason = "SchedulePending"
 
-	// SynchronizePendingReason is the reason string of placement condition when the selected resources have not synchronized
-	// under the per-cluster namespaces (i.e., fleet-member-<member-name>) on the hub cluster yet.
-	SynchronizePendingReason = "SynchronizePending"
-	// SynchronizeSucceededReason is the reason string of placement condition when the selected resources are
-	// successfully synchronized under the per-cluster namespaces (i.e., fleet-member-<member-name>) on the hub cluster.
-	SynchronizeSucceededReason = "SynchronizeSucceeded"
-
 	// ApplyFailedReason is the reason string of placement condition when the selected resources fail to apply.
 	ApplyFailedReason = "ApplyFailed"
 	// ApplyPendingReason is the reason string of placement condition when the selected resources are pending to apply.
@@ -50,20 +43,6 @@ const (
 
 // ResourcePlacementStatus condition reasons and message formats
 const (
-	// ResourceApplyFailedReason is the reason string of placement condition when the selected resources fail to apply.
-	ResourceApplyFailedReason = "ApplyFailed"
-	// ResourceApplyPendingReason is the reason string of placement condition when the selected resources are pending to apply.
-	ResourceApplyPendingReason = "ApplyPending"
-	// ResourceApplySucceededReason is the reason string of placement condition when the selected resources are applied successfully.
-	ResourceApplySucceededReason = "ApplySucceeded"
-
-	// WorkSynchronizePendingReason is the reason string of placement condition when the work(s) are pending to synchronize.
-	WorkSynchronizePendingReason = "WorkSynchronizePending"
-	// WorkSynchronizeFailedReason is the reason string of placement condition when the work(s) failed to synchronize.
-	WorkSynchronizeFailedReason = "WorkSynchronizeFailed"
-	// WorkSynchronizeSucceededReason is the reason string of placement condition when the work(s) are synchronized successfully.
-	WorkSynchronizeSucceededReason = "WorkSynchronizeSucceeded"
-
 	// ResourceScheduleSucceededReason is the reason string of placement condition when the selected resources are scheduled.
 	ResourceScheduleSucceededReason = "ScheduleSucceeded"
 	// ResourceScheduleFailedReason is the reason string of placement condition when the scheduler failed to schedule the selected resources.

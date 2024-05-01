@@ -151,7 +151,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			"Enqueueing CRP for scheduler processing",
 			"memberCluster", memberClusterRef,
 			"clusterResourcePlacement", klog.KObj(crp))
-		r.SchedulerWorkQueue.AddRateLimited(queue.ClusterResourcePlacementKey(crp.Name))
+		r.SchedulerWorkQueue.Add(queue.ClusterResourcePlacementKey(crp.Name))
 	}
 
 	// The reconciliation loop completes.
@@ -170,13 +170,13 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			// CRPs anyway, which will account for any missing updates on the cluster side
 			// during the downtime; in other words, notifications from this controller is not
 			// necessary.
-			klog.V(2).InfoS("Ignoring create events for member cluster objects", "eventObject", klog.KObj(e.Object))
+			klog.V(3).InfoS("Ignoring create events for member cluster objects", "eventObject", klog.KObj(e.Object))
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
 			// Ignore deletion events; the removal of a cluster is first signaled by adding a deleteTimeStamp,
 			// which is an update event
-			klog.V(2).InfoS("Ignoring delete events for member cluster objects", "eventObject", klog.KObj(e.Object))
+			klog.V(3).InfoS("Ignoring delete events for member cluster objects", "eventObject", klog.KObj(e.Object))
 			return false
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
@@ -263,7 +263,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			}
 
 			// All the other changes are ignored.
-			klog.V(2).InfoS("Ignoring update events that are irrelevant to the scheduler", "memberCluster", clusterKObj)
+			klog.V(3).InfoS("Ignoring update events that are irrelevant to the scheduler", "memberCluster", clusterKObj)
 			return false
 		},
 	}
