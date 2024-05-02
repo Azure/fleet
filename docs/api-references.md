@@ -394,7 +394,7 @@ _Appears in:_
 | `numberOfClusters` _integer_ | NumberOfClusters of placement. Only valid if the placement type is "PickN". |
 | `affinity` _[Affinity](#affinity)_ | Affinity contains cluster affinity scheduling rules. Defines which member clusters to place the selected resources. Only valid if the placement type is "PickAll" or "PickN". |
 | `topologySpreadConstraints` _[TopologySpreadConstraint](#topologyspreadconstraint) array_ | TopologySpreadConstraints describes how a group of resources ought to spread across multiple topology domains. Scheduler will schedule resources in a way which abides by the constraints. All topologySpreadConstraints are ANDed. Only valid if the placement type is "PickN". |
-| `tolerations` [Toleration](#toleration) array | Tolerations is a array of tolerations where each toleration is used to tolerate one or more taints on the MemberCluster based on key, value, effect and operator. |
+| `tolerations` [Toleration](#toleration) array | An array of tolerations where each toleration is used to tolerate one or more taints on the MemberCluster based on key, value, effect and operator. |
 
 #### PlacementType
 
