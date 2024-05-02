@@ -73,7 +73,7 @@ _Appears in:_
 | --- | --- |
 | `identity` _[Subject](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.26/#subject-v1-rbac) | The identity used by the member cluster to access the hub cluster. The hub agents deployed on the hub cluster will automatically grant the minimal required permissions to this identity for the member agents deployed on the member cluster to access the hub cluster. |
 | `heartbeatPeriodSeconds` _integer | How often (in seconds) for the member cluster to send a heartbeat to the hub cluster. Default: 60 seconds. Min: 1 second. Max: 10 minutes. |
-| `taints` array [Taint](#taint) | Taints is a array of taints where each taint attached to the MemberCluster has that "effect" on any ClusterResourcePlacement that does not tolerate the taint. |
+| `taints` array [Taint](#taint) | An array of taints where each taint attached to the MemberCluster has that "effect" on any ClusterResourcePlacement that does not tolerate the taint. |
 
 
 #### MemberClusterStatus
