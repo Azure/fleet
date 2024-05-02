@@ -10,7 +10,7 @@ or custom resource definitions. These modifications may include updates to permi
 parameters, ensuring consistent management and enforcement of configurations across your Fleet-managed Kubernetes clusters.
 
 ## API Components
-The ResourceOverride API consists of the following components:
+The ClusterResourceOverride API consists of the following components:
 - **Cluster Resource Selectors**: These specify the set of cluster resources selected for overriding.
 - **Policy**: This specifies the policy to be applied to the selected resources.
 
@@ -42,7 +42,17 @@ spec:
       name: secret-reader
 ```
 
-The example above will pick a `ClusterRole` named `secret-reader` to be overridden.
+The example above will pick the `ClusterRole` named `secret-reader`, as shown below, to be overridden.
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: secret-reader
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "watch", "list"]
+```
 
 
 ## Policy
@@ -54,7 +64,6 @@ Each `OverrideRule` supports the following fields:
 - **JSON Patch Override**: This specifies the changes to be applied to the selected resources.
 
 To add an override rule, edit the `policy` field in the `ClusterResourceOverride` spec:
-
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1alpha1
 kind: ClusterResourceOverride
@@ -80,6 +89,17 @@ spec:
 The `ClusterResourceOverride` object above will remove the verb "list" in the `ClusterRole` named `secret-reader` on 
 clusters with the label `env: prod`.
 
+> The ClusterResourceOverride mentioned above utilizes the cluster role displayed below:
+> ```
+> Name:         secret-reader
+> Labels:       <none>
+> Annotations:  <none>
+> PolicyRule:
+> Resources  Non-Resource URLs  Resource Names  Verbs
+> ---------  -----------------  --------------  -----
+> secrets    []                 []              [get watch list]
+>```
+
 ### Cluster Selector
 To specify the clusters to which the override applies, you can use the `clusterSelector` field in the `OverrideRule` spec.
 The `clusterSelector` field supports the following fields:
@@ -87,8 +107,12 @@ The `clusterSelector` field supports the following fields:
     * Each term in the list is used to select clusters based on the label selector.
 
 ### JSON Patch Override
-To specify the changes to be applied to the selected resources, you can use the `jsonPatchOverrides` field in the `OverrideRule` spec.
-The `jsonPatchOverrides` field supports the following fields:
+To specify the changes to be applied to the selected resources, you can use the jsonPatchOverrides field in the OverrideRule spec. 
+The jsonPatchOverrides field supports the following fields:
+
+>JSONPatchOverride applies a JSON patch on the selected resources following [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902). 
+> All the fields defined follow this RFC.
+
 - `op`: The operation to be performed. The supported operations are `add`, `remove`, and `replace`.
     * `add`: Adds a new value to the specified path.
     * `remove`: Removes the value at the specified path.
@@ -120,7 +144,7 @@ You may add multiple `JSONPatchOverride` to an `OverrideRule` to apply multiple 
 apiVersion: placement.kubernetes-fleet.io/v1alpha1
 kind: ClusterResourceOverride
 metadata:
-  name: cro-1
+  name: example-cro
 spec:
   clusterResourceSelectors:
     - group: rbac.authorization.k8s.io
@@ -143,6 +167,26 @@ spec:
 The `ClusterResourceOverride` object above will remove the verbs "list" and "watch" in the `ClusterRole` named 
 `secret-reader` on clusters with the label `env: prod`.
 
+#### Breaking down the paths:
+- First `JSONPatchOverride`:
+  - `/rules/0`: This denotes the first rule in the rules array of the ClusterRole. In the provided ClusterRole definition,
+  there's only one rule defined ("secrets"), so this corresponds to the first (and only) rule.
+  - `/verbs/2`: Within this rule, the third element of the verbs array is targeted ("list").
+- Second `JSONPatchOverride`:
+  - `/rules/0`: This denotes the first rule in the rules array of the ClusterRole. In the provided ClusterRole definition,
+  there's only one rule defined ("secrets"), so this corresponds to the first (and only) rule.
+  - `/verbs/1`: Within this rule, the second element of the verbs array is targeted ("watch").
+
+>The ClusterResourceOverride mentioned above utilizes the cluster role displayed below:
+> ```yaml
+> Name:         secret-reader
+> Labels:       <none>
+> Annotations:  <none>
+> PolicyRule:
+> Resources  Non-Resource URLs  Resource Names  Verbs
+> ---------  -----------------  --------------  -----
+> secrets    []                 []              [get watch list]
+
 ## Applying the ClusterResourceOverride
 Create a ClusterResourcePlacement resource to specify the placement rules for distributing the cluster resource overrides across
 the cluster infrastructure. Ensure that you select the appropriate resource.
@@ -150,7 +194,7 @@ the cluster infrastructure. Ensure that you select the appropriate resource.
 apiVersion: placement.kubernetes-fleet.io/v1beta1
 kind: ClusterResourcePlacement
 metadata:
-  name: crp
+  name: crp-example
 spec:
   resourceSelectors:
     - group: rbac.authorization.k8s.io
@@ -171,7 +215,9 @@ The `ClusterResourcePlacement` configuration outlined above will disperse resour
 As the changes are implemented, the corresponding `ClusterResourceOverride` configurations will be applied to the 
 designated clusters, triggered by the selection of matching cluster role resource `secret-reader`.
 
-To ensure that the `ClusterResourceOverride` object is applied to the selected resources, verify the `ClusterResourcePlacement`
+
+## Verifying the Cluster Resource is Overridden
+To ensure that the `ClusterResourceOverride` object is applied to the selected clusters, verify the `ClusterResourcePlacement`
 status:
 ```
 Status:
@@ -198,11 +244,33 @@ Status:
       Type:                  Overridden
      ...
 ```
+Each cluster maintains its own `Applicable Cluster Resource Overrides` which contain the cluster resource override snapshot
+if relevant. Additionally, individual status messages for each cluster indicates whether the override rules have been
+effectively applied.
+
 The `ClusterResourcePlacementOverridden` condition indicates whether the resource override has been successfully applied
 to the selected resources in the selected clusters.
 
-Each cluster maintains its own `Applicable Cluster Resource Overrides` which contain the cluster resource override snapshot
-if relevant. Additionally, individual status messages for each cluster indicates whether the override rules have been 
-effectively applied.
 
+To verify that the `ClusterResourceOverride` object has been successfully applied to the selected resources, 
+check resources in the selected clusters:
+1. Get cluster credentials:
+   `az aks get-credentials --resource-group <resource-group> --name <cluster-name>`
+2. Get the `ClusterRole` object in the selected cluster:
+   `kubectl --context=<member-cluster-context>  get clusterrole secret-reader -o yaml`
 
+Upon inspecting the described ClusterRole object, it becomes apparent that the verbs "watch" and "list" have been 
+removed from the permissions list within the ClusterRole named "secret-reader" on the selected cluster.
+   ```
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+     ...
+    rules:
+    - apiGroups:
+      - ""
+      resources:
+      - secrets
+      verbs:
+      - get
+```

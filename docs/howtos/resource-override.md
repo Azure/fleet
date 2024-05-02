@@ -32,19 +32,62 @@ To add a resource selector, edit the `resourceSelectors` field in the `ResourceO
 apiVersion: placement.kubernetes-fleet.io/v1alpha1
 kind: ResourceOverride
 metadata:
-  name: example-resource-override
+  name: example-ro
   namespace: test-namespace
 spec:
   resourceSelectors:
     -  group: apps
        kind: Deployment
        version: v1
-       name: test-nginx
+       name: my-deployment
 ```
 > Note: The ResourceOverride needs to be in the same namespace as the resources it is overriding.
 
-The example above will pick a `Deployment` named `my-deployment` from the namespace `test-namespace` to be overridden.
-
+The example above will pick a `Deployment` named `my-deployment` from the namespace `test-namespace`, as shown below, to be overridden.
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  ...
+  name: my-deployment
+  namespace: test-namespace
+  ...
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 2
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: test-nginx
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: test-nginx
+    spec:
+      containers:
+      - image: nginx:1.14.2
+        imagePullPolicy: IfNotPresent
+        name: nginx
+        ports:
+        - containerPort: 80
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+status:
+  ...
+```
 
 ## Policy
 The `Policy` is made up of a set of rules (`OverrideRules`) that specify the changes to be applied to the selected 
@@ -60,14 +103,14 @@ To add an override rule, edit the `policy` field in the `ResourceOverride` spec:
 apiVersion: placement.kubernetes-fleet.io/v1alpha1
 kind: ResourceOverride
 metadata:
-  name: example-resource-override
+  name: example-ro
   namespace: test-namespace
 spec:
   resourceSelectors:
     -  group: apps
        kind: Deployment
        version: v1
-       name: test-nginx
+       name: my-deployment
   policy:
     overrideRules:
       - clusterSelector:
@@ -82,6 +125,29 @@ spec:
 ```
 The `ResourceOverride` object above will replace the image of the container in the `Deployment` named `my-deployment` 
 with the image `nginx:1.20.0` on all clusters with the label `env: prod`.
+> The ResourceOverride mentioned above utilizes the deployment displayed below:
+> ```
+> apiVersion: apps/v1
+> kind: Deployment
+> metadata:
+>   ...
+>   name: my-deployment
+>   namespace: test-namespace
+>   ...
+> spec:
+>   ...
+>   template:
+>     ...
+>     spec:
+>       containers:
+>       - image: nginx:1.14.2
+>         imagePullPolicy: IfNotPresent
+>         name: nginx
+>         ports:
+>        ...
+>       ...
+>   ...
+>```
 
 ### Cluster Selector
 To specify the clusters to which the override applies, you can use the `clusterSelector` field in the `OverrideRule` spec.
@@ -90,7 +156,12 @@ The `clusterSelector` field supports the following fields:
     * Each term in the list is used to select clusters based on the label selector.
 
 ### JSON Patch Override
-To specify the changes to be applied to the selected resources, you can use the `jsonPatchOverrides` field in the `OverrideRule` spec.
+To specify the changes to be applied to the selected resources, you can use the jsonPatchOverrides field in the OverrideRule spec.
+The jsonPatchOverrides field supports the following fields:
+
+>JSONPatchOverride applies a JSON patch on the selected resources following [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
+> All the fields defined follow this RFC.
+
 The `jsonPatchOverrides` field supports the following fields:
 - `op`: The operation to be performed. The supported operations are `add`, `remove`, and `replace`.
    * `add`: Adds a new value to the specified path.
@@ -123,14 +194,14 @@ You may add multiple `OverrideRules` to a `Policy` to apply multiple changes to 
 apiVersion: placement.kubernetes-fleet.io/v1alpha1
 kind: ResourceOverride
 metadata:
-  name: ro-1
-  namespace: test
+  name: example-ro
+  namespace: test-namespace
 spec:
   resourceSelectors:
     -  group: apps
        kind: Deployment
        version: v1
-       name: test-nginx
+       name: my-deployment
   policy:
     overrideRules:
       - clusterSelector:
@@ -152,8 +223,32 @@ spec:
             path: /spec/template/spec/containers/0/image
             value: "nginx:latest"
 ```
-The `ResourceOverride` object above will replace the image of the container in the `Deployment` named `test-nginx`
+The `ResourceOverride` object above will replace the image of the container in the `Deployment` named `my-deployment`
 with the image `nginx:1.20.0` on all clusters with the label `env: prod` and the image `nginx:latest` on all clusters with the label `env: test`.
+
+> The ResourceOverride mentioned above utilizes the deployment displayed below:
+> ```
+> apiVersion: apps/v1
+> kind: Deployment
+> metadata:
+>   ...
+>   name: my-deployment
+>   namespace: test-namespace
+>   ...
+> spec:
+>   ...
+>   template:
+>     ...
+>     spec:
+>       containers:
+>       - image: nginx:1.14.2
+>         imagePullPolicy: IfNotPresent
+>         name: nginx
+>         ports:
+>        ...
+>       ...
+>   ...
+>```
 
 ## Applying the ResourceOverride
 Create a ClusterResourcePlacement resource to specify the placement rules for distributing the resource overrides across 
@@ -187,6 +282,7 @@ clusters labeled with `env: prod` and `env: test`. As the changes are implemente
 configurations will be applied to the designated clusters, triggered by the selection of matching deployment resource 
 `my-deployment`.
 
+## Verifying the Cluster Resource is Overridden
 To ensure that the `ResourceOverride` object is applied to the selected resources, verify the `ClusterResourcePlacement`
 status:
 ```
@@ -202,7 +298,7 @@ Status:
   Observed Resource Index:  0
   Placement Statuses:
     Applicable Resource Overrides:
-      Name:        ro-1-0
+      Name:        example-ro-0
       Namespace:   test-namespace
     Cluster Name:  member-50
     Conditions:
@@ -215,21 +311,42 @@ Status:
       Type:                  Overridden
      ...
 ```
-The `ClusterResourcePlacementOverridden` condition indicates whether the resource override has been successfully applied
-to the selected resources in the selected clusters.
-```
-Selected Resources:
-    Kind:       Namespace
-    Name:       test-namespace
-    Version:    v1
-    Group:      apps
-    Kind:       Deployment
-    Name:       test-nginx
-    Namespace:  test-namespace
-    Version:    v1
-```
 Each cluster maintains its own `Applicable Resource Overrides` which contain the resource override snapshot and
 the resource override namespace if relevant. Additionally, individual status messages for each cluster indicates
 whether the override rules have been effectively applied.
 
+The `ClusterResourcePlacementOverridden` condition indicates whether the resource override has been successfully applied
+to the selected resources in the selected clusters.
 
+To verify that the `ResourceOverride` object has been successfully applied to the selected resources,
+check resources in the selected clusters:
+1. Get cluster credentials:
+   `az aks get-credentials --resource-group <resource-group> --name <cluster-name>`
+2. Get the `Deployment` object in the selected cluster:
+   `kubectl --context=<member-cluster-context>  get deployment my-deployment -n test-namespace -o yaml`
+
+Upon inspecting the member cluster, it was found that the selected cluster had the label env: prod. 
+Consequently, the image on deployment `my-deployment` was modified to be `nginx:1.20.0` on selected cluster.
+   ```
+   apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      ...
+      name: my-deployment
+      namespace: test-namespace
+      ...
+    spec:
+      ...
+      template:
+        ...
+        spec:
+          containers:
+          - image: nginx:1.20.0
+            imagePullPolicy: IfNotPresent
+            name: nginx
+            ports:
+           ...
+          ...
+    status:
+        ...
+```
