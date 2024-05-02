@@ -141,7 +141,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	if !needRoll {
 		klog.V(2).InfoS("No bindings are out of date, stop rolling", "clusterResourcePlacement", crpName)
-		return runtime.Result{}, nil
+		// There is a corner case that rollout controller succeeds to update the binding spec to the latest one,
+		// but fails to update the binding conditions when it reconciled it last time.
+		// Here it will correct the binding status just in case this happens last time.
+		return runtime.Result{}, r.checkAndUpdateStaleBindingsStatus(ctx, allBindings)
 	}
 	klog.V(2).InfoS("Picked the bindings to be updated", "clusterResourcePlacement", crpName, "numberOfBindings", len(toBeUpdatedBindings), "numberOfStaleBindings", len(staleBoundBindings))
 
@@ -160,6 +163,29 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	// TODO: only wait the time we need to wait for the first applied but not ready binding to be ready
 	return runtime.Result{RequeueAfter: time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second / 5},
 		r.updateBindings(ctx, toBeUpdatedBindings)
+}
+
+func (r *Reconciler) checkAndUpdateStaleBindingsStatus(ctx context.Context, bindings []*fleetv1beta1.ClusterResourceBinding) error {
+	if len(bindings) == 0 {
+		return nil
+	}
+	// issue all the update requests in parallel
+	errs, cctx := errgroup.WithContext(ctx)
+	for i := 0; i < len(bindings); i++ {
+		binding := bindings[i]
+		if binding.Spec.State != fleetv1beta1.BindingStateScheduled && binding.Spec.State != fleetv1beta1.BindingStateBound {
+			continue
+		}
+		rolloutStartedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted))
+		if condition.IsConditionStatusTrue(rolloutStartedCondition, binding.Generation) {
+			continue
+		}
+		klog.V(2).InfoS("Found a stale binding status and set rolloutStartedCondition to true", "binding", klog.KObj(binding))
+		errs.Go(func() error {
+			return r.updateBindingStatus(cctx, binding, true)
+		})
+	}
+	return errs.Wait()
 }
 
 // fetchLatestResourceSnapshot lists all the latest clusterResourceSnapshots associated with a CRP and returns the master clusterResourceSnapshot.
@@ -308,6 +334,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 
 	// classify the bindings into different categories
 	// TODO: calculate the time we need to wait for the first applied but not ready binding to be ready.
+	// return wait time longer if the rollout is stuck on failed apply/available bindings
 	crpKObj := klog.KObj(crp)
 	for idx := range allBindings {
 		binding := allBindings[idx]
@@ -315,8 +342,9 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 		switch binding.Spec.State {
 		case fleetv1beta1.BindingStateUnscheduled:
 			appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
-			if condition.IsConditionStatusFalse(appliedCondition, binding.Generation) {
-				klog.V(3).InfoS("Found an failed to apply unscheduled binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
+			availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
+			if condition.IsConditionStatusFalse(appliedCondition, binding.Generation) || condition.IsConditionStatusFalse(availableCondition, binding.Generation) {
+				klog.V(3).InfoS("Found a failed to be ready unscheduled binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 			} else {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
 			}
@@ -338,7 +366,6 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 		case fleetv1beta1.BindingStateScheduled:
 			// the scheduler has picked a cluster for this binding
 			schedulerTargetedBinds = append(schedulerTargetedBinds, binding)
-
 			// this binding has not been bound yet, so it is an update candidate
 			// pickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
 			cro, ro, err := r.pickFromResourceMatchedOverridesForTargetCluster(ctx, binding, matchedCROs, matchedROs)
@@ -354,14 +381,15 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 				klog.V(3).InfoS("Found a ready bound binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 				readyBindings = append(readyBindings, binding)
 			}
+			// check if the binding is failed or still on going
 			appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
-			if condition.IsConditionStatusFalse(appliedCondition, binding.Generation) {
-				klog.V(3).InfoS("Found a failed to apply bound binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
+			availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
+			if condition.IsConditionStatusFalse(appliedCondition, binding.Generation) || condition.IsConditionStatusFalse(availableCondition, binding.Generation) {
+				klog.V(3).InfoS("Found a failed to be ready bound binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 				bindingFailed = true
 			} else {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
 			}
-
 			// pickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
 			cro, ro, err := r.pickFromResourceMatchedOverridesForTargetCluster(ctx, binding, matchedCROs, matchedROs)
 			if err != nil {
@@ -381,26 +409,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 		}
 	}
 
-	// calculate the target number of bindings
-	targetNumber := 0
-
-	// note that if the policy will be overwritten if it is nil in this controller.
-	switch {
-	case crp.Spec.Policy.PlacementType == fleetv1beta1.PickAllPlacementType:
-		// we use the scheduler picked bindings as the target number since there is no target in the CRP
-		targetNumber = len(schedulerTargetedBinds)
-	case crp.Spec.Policy.PlacementType == fleetv1beta1.PickFixedPlacementType:
-		// we use the length of the given cluster names are targets
-		targetNumber = len(crp.Spec.Policy.ClusterNames)
-	case crp.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType:
-		// we use the given number as the target
-		targetNumber = int(*crp.Spec.Policy.NumberOfClusters)
-	default:
-		// should never happen
-		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("unknown placement type")),
-			"Encountered an invalid placementType", "clusterResourcePlacement", crpKObj)
-		targetNumber = 0
-	}
+	targetNumber := r.calculateRealTarget(crp, schedulerTargetedBinds)
 	klog.V(2).InfoS("Calculated the targetNumber", "clusterResourcePlacement", crpKObj,
 		"targetNumber", targetNumber, "readyBindingNumber", len(readyBindings), "canBeUnavailableBindingNumber", len(canBeUnavailableBindings),
 		"canBeReadyBindingNumber", len(canBeReadyBindings), "boundingCandidateNumber", len(boundingCandidates),
@@ -471,6 +480,31 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 	}
 
 	return toBeUpdatedBindingList, staleUnselectedBinding, true, nil
+}
+
+func (r *Reconciler) calculateRealTarget(crp *fleetv1beta1.ClusterResourcePlacement, schedulerTargetedBinds []*fleetv1beta1.ClusterResourceBinding) int {
+	crpKObj := klog.KObj(crp)
+	// calculate the target number of bindings
+	targetNumber := 0
+
+	// note that if the policy will be overwritten if it is nil in this controller.
+	switch {
+	case crp.Spec.Policy.PlacementType == fleetv1beta1.PickAllPlacementType:
+		// we use the scheduler picked bindings as the target number since there is no target in the CRP
+		targetNumber = len(schedulerTargetedBinds)
+	case crp.Spec.Policy.PlacementType == fleetv1beta1.PickFixedPlacementType:
+		// we use the length of the given cluster names are targets
+		targetNumber = len(crp.Spec.Policy.ClusterNames)
+	case crp.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType:
+		// we use the given number as the target
+		targetNumber = int(*crp.Spec.Policy.NumberOfClusters)
+	default:
+		// should never happen
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("unknown placement type")),
+			"Encountered an invalid placementType", "clusterResourcePlacement", crpKObj)
+		targetNumber = 0
+	}
+	return targetNumber
 }
 
 // isBindingReady checks if a binding is considered ready.

@@ -1,0 +1,27 @@
+apiVersion: placement.kubernetes-fleet.io/v1alpha1
+kind: ResourceOverride
+metadata:
+  name: ro-1
+  namespace: test-namespace
+spec:
+  resourceSelectors:
+    -  group: ""
+       kind: ConfigMap
+       version: v1
+       name: test-configmap
+    - group: ""
+      kind: Namespace
+      name: test-namespace
+      version: v1
+  policy:
+    overrideRules:
+      - clusterSelector:
+          clusterSelectorTerms:
+            - labelSelector:
+                matchLabels:
+                  test-key: test-value2
+        jsonPatchOverrides:
+          - op: add
+            path: /metadata/labels
+            value:
+              new-label: new-value

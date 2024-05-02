@@ -17,7 +17,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,12 +27,22 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/propertyprovider/aks"
 	"go.goms.io/fleet/pkg/propertyprovider/aks/trackers"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/test/e2e/framework"
+)
+
+var (
+	croTestAnnotationKey   = "cro-test-annotation"
+	croTestAnnotationValue = "cro-test-annotation-val"
+	roTestAnnotationKey    = "ro-test-annotation"
+	roTestAnnotationValue  = "ro-test-annotation-val"
 )
 
 // createMemberCluster creates a MemberCluster object.
@@ -454,7 +464,7 @@ func cleanupInvalidClusters() {
 		Expect(hubClient.Delete(ctx, mcObj)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete member cluster object")
 		Eventually(func() error {
 			mcObj := &clusterv1beta1.MemberCluster{}
-			if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj); !apierrors.IsNotFound(err) {
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj); !errors.IsNotFound(err) {
 				return fmt.Errorf("member cluster still exists or an unexpected error occurred: %w", err)
 			}
 			return nil
@@ -527,7 +537,7 @@ func cleanupMemberCluster(memberClusterName string) {
 	Eventually(func() error {
 		mcObj := &clusterv1beta1.MemberCluster{}
 		err := hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName}, mcObj)
-		if apierrors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			return nil
 		}
 		if err != nil {
@@ -541,7 +551,7 @@ func cleanupMemberCluster(memberClusterName string) {
 	// Wait until the member cluster is fully removed.
 	Eventually(func() error {
 		mcObj := &clusterv1beta1.MemberCluster{}
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName}, mcObj); !apierrors.IsNotFound(err) {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName}, mcObj); !errors.IsNotFound(err) {
 			return fmt.Errorf("member cluster still exists or an unexpected error occurred: %w", err)
 		}
 		return nil
@@ -564,7 +574,7 @@ func ensureMemberClusterAndRelatedResourcesDeletion(memberClusterName string) {
 	reservedNSName := fmt.Sprintf(utils.NamespaceNameFormat, memberClusterName)
 	Eventually(func() error {
 		ns := corev1.Namespace{}
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: reservedNSName}, &ns); !apierrors.IsNotFound(err) {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: reservedNSName}, &ns); !errors.IsNotFound(err) {
 			return fmt.Errorf("namespace still exists or an unexpected error occurred: %w", err)
 		}
 		return nil
@@ -665,7 +675,7 @@ func checkIfAllMemberClustersHaveLeft() {
 
 		Eventually(func() error {
 			mcObj := &clusterv1beta1.MemberCluster{}
-			if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster.ClusterName}, mcObj); !apierrors.IsNotFound(err) {
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster.ClusterName}, mcObj); !errors.IsNotFound(err) {
 				return fmt.Errorf("member cluster still exists or an unexpected error occurred: %w", err)
 			}
 
@@ -707,7 +717,7 @@ func cleanupCRP(name string) {
 	Eventually(func() error {
 		crp := &placementv1beta1.ClusterResourcePlacement{}
 		err := hubClient.Get(ctx, types.NamespacedName{Name: name}, crp)
-		if apierrors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			return nil
 		}
 		if err != nil {
@@ -726,8 +736,113 @@ func cleanupCRP(name string) {
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete CRP %s", name)
 
 	// Wait until the CRP is removed.
-	removedActual := crpRemovedActual()
+	removedActual := crpRemovedActual(name)
 	Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove CRP %s", name)
+}
+
+// createResourceOverrides creates a number of resource overrides.
+func createResourceOverrides(namespace string, number int) {
+	for i := 0; i < number; i++ {
+		ro := &placementv1alpha1.ResourceOverride{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf(roNameTemplate, i),
+				Namespace: namespace,
+			},
+			Spec: placementv1alpha1.ResourceOverrideSpec{
+				ResourceSelectors: []placementv1alpha1.ResourceSelector{
+					{
+						Group:   "apps",
+						Kind:    "Deployment",
+						Version: "v1",
+						Name:    fmt.Sprintf("test-deployment-%d", i),
+					},
+				},
+				Policy: &placementv1alpha1.OverridePolicy{
+					OverrideRules: []placementv1alpha1.OverrideRule{
+						{
+							ClusterSelector: &placementv1beta1.ClusterSelector{
+								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+									{
+										LabelSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"key": "value",
+											},
+										},
+									},
+									{
+										LabelSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"key1": "value1",
+											},
+										},
+									},
+								},
+							},
+							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+								{
+									Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+									Path:     "/meta/labels/test-key",
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, ro)).Should(Succeed(), "Failed to create ResourceOverride %s", ro.Name)
+	}
+}
+
+// createClusterResourceOverrides creates a number of cluster resource overrides.
+func createClusterResourceOverrides(number int) {
+	for i := 0; i < number; i++ {
+		cro := &placementv1alpha1.ClusterResourceOverride{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf(croNameTemplate, i),
+			},
+			Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+				ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					{
+						Group:   "rbac.authorization.k8s.io/v1",
+						Kind:    "ClusterRole",
+						Version: "v1",
+						Name:    fmt.Sprintf("test-cluster-role-%d", i),
+					},
+				},
+				Policy: &placementv1alpha1.OverridePolicy{
+					OverrideRules: []placementv1alpha1.OverrideRule{
+						{
+							ClusterSelector: &placementv1beta1.ClusterSelector{
+								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+									{
+										LabelSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"key": "value",
+											},
+										},
+									},
+									{
+										LabelSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"key1": "value1",
+											},
+										},
+									},
+								},
+							},
+							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+								{
+									Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+									Path:     "/meta/labels/test-key",
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, cro)).Should(Succeed(), "Failed to create ClusterResourceOverride %s", cro.Name)
+	}
 }
 
 func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*framework.Cluster) {
@@ -748,7 +863,7 @@ func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*fram
 	}
 
 	// Verify that related finalizers have been removed from the CRP.
-	finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+	finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 	Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP")
 
 	// Remove the custom deletion blocker finalizer from the CRP.
@@ -758,14 +873,14 @@ func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*fram
 	cleanupWorkResources()
 }
 
-// verifyWorkPropagationAndMarkAsApplied verifies that works derived from a specific CPR have been created
+// verifyWorkPropagationAndMarkAsAvailable verifies that works derived from a specific CPR have been created
 // for a specific cluster, and marks these works in the specific member cluster's
-// reserved namespace as applied.
+// reserved namespace as applied and available.
 //
 // This is mostly used for simulating member agents for virtual clusters.
 //
 // Note that this utility function currently assumes that there is only one work object.
-func verifyWorkPropagationAndMarkAsApplied(memberClusterName, crpName string, resourceIdentifiers []placementv1beta1.ResourceIdentifier) {
+func verifyWorkPropagationAndMarkAsAvailable(memberClusterName, crpName string, resourceIdentifiers []placementv1beta1.ResourceIdentifier) {
 	memberClusterReservedNS := fmt.Sprintf(utils.NamespaceNameFormat, memberClusterName)
 	// Wait until the works are created.
 	workList := placementv1beta1.WorkList{}
@@ -784,23 +899,32 @@ func verifyWorkPropagationAndMarkAsApplied(memberClusterName, crpName string, re
 		return nil
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to list works")
 
-	for _, work := range workList.Items {
-		workName := work.Name
+	for _, item := range workList.Items {
+		workName := item.Name
 		// To be on the safer set, update the status with retries.
 		Eventually(func() error {
-			work := placementv1beta1.Work{}
-			if err := hubClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: memberClusterReservedNS}, &work); err != nil {
+			w := placementv1beta1.Work{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: memberClusterReservedNS}, &w); err != nil {
 				return err
 			}
 
-			// Set the resource applied condition to the work object.
-			meta.SetStatusCondition(&work.Status.Conditions, metav1.Condition{
+			// Set the resource applied condition to the item object.
+			meta.SetStatusCondition(&w.Status.Conditions, metav1.Condition{
 				Type:               placementv1beta1.WorkConditionTypeApplied,
 				Status:             metav1.ConditionTrue,
 				LastTransitionTime: metav1.Now(),
-				Reason:             "WorkApplied",
+				Reason:             condition.AllWorkAvailableReason,
 				Message:            "Set to be applied",
-				ObservedGeneration: work.Generation,
+				ObservedGeneration: w.Generation,
+			})
+
+			meta.SetStatusCondition(&w.Status.Conditions, metav1.Condition{
+				Type:               placementv1beta1.WorkConditionTypeAvailable,
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: metav1.Now(),
+				Reason:             work.WorkNotTrackableReason,
+				Message:            "Set to be available",
+				ObservedGeneration: w.Generation,
 			})
 
 			// Set the manifest conditions.
@@ -810,7 +934,7 @@ func verifyWorkPropagationAndMarkAsApplied(memberClusterName, crpName string, re
 			// just in case the CRP controller changes its behavior in the future.
 			for idx := range resourceIdentifiers {
 				resourceIdentifier := resourceIdentifiers[idx]
-				work.Status.ManifestConditions = append(work.Status.ManifestConditions, placementv1beta1.ManifestCondition{
+				w.Status.ManifestConditions = append(w.Status.ManifestConditions, placementv1beta1.ManifestCondition{
 					Identifier: placementv1beta1.WorkResourceIdentifier{
 						Group:     resourceIdentifier.Group,
 						Kind:      resourceIdentifier.Kind,
@@ -830,11 +954,22 @@ func verifyWorkPropagationAndMarkAsApplied(memberClusterName, crpName string, re
 							Reason:             "ManifestApplied",
 							Message:            "Set to be applied",
 						},
+						{
+							Type:               placementv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.Now(),
+							// Typically, this field is set to be the generation number of the
+							// applied object; here a dummy value is used as there is no object
+							// actually being applied in the case.
+							ObservedGeneration: 0,
+							Reason:             "ManifestAvailable",
+							Message:            "Set to be available",
+						},
 					},
 				})
 			}
 
-			return hubClient.Status().Update(ctx, &work)
+			return hubClient.Status().Update(ctx, &w)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	}
 }
@@ -909,4 +1044,45 @@ func updateCRPWithTolerations(tolerations []placementv1beta1.Toleration) {
 		}
 		return hubClient.Update(ctx, &crp)
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement with tolerations %s", crpName)
+}
+
+func cleanupClusterResourceOverride(name string) {
+	cro := &placementv1alpha1.ClusterResourceOverride{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, cro))).To(Succeed(), "Failed to delete clusterResourceOverride %s", name)
+	Eventually(func() error {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &placementv1alpha1.ClusterResourceOverride{}); !errors.IsNotFound(err) {
+			return fmt.Errorf("clusterResourceOverride %s still exists or an unexpected error occurred: %w", name, err)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove clusterResourceOverride %s from hub cluster", name)
+}
+
+func cleanupResourceOverride(name string, namespace string) {
+	ro := &placementv1alpha1.ResourceOverride{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, ro))).To(Succeed(), "Failed to delete resourceOverride %s", name)
+	Eventually(func() error {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, &placementv1alpha1.ResourceOverride{}); !errors.IsNotFound(err) {
+			return fmt.Errorf("resourceOverride %s still exists or an unexpected error occurred: %w", name, err)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove resourceOverride %s from hub cluster", name)
+}
+
+func checkIfOverrideAnnotationsOnAllMemberClusters(includeNamespace bool, wantAnnotations map[string]string) {
+	for idx := range allMemberClusters {
+		memberCluster := allMemberClusters[idx]
+		if includeNamespace {
+			Expect(validateAnnotationOfWorkNamespaceOnCluster(memberCluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of work namespace on %s", memberCluster.ClusterName)
+		}
+		Expect(validateOverrideAnnotationOfConfigMapOnCluster(memberCluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of config map on %s", memberCluster.ClusterName)
+	}
 }

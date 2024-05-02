@@ -13,6 +13,7 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Namespaced,categories={fleet,fleet-cluster},shortName=imc
 // +kubebuilder:subresource:status
+// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 
 // InternalMemberCluster is used by hub agent to notify the member agents about the member cluster state changes, and is used by the member agents to report their status.
@@ -53,6 +54,9 @@ type InternalMemberClusterStatus struct {
 	Conditions []metav1.Condition `json:"conditions"`
 
 	// Properties is an array of properties observed for the member cluster.
+	//
+	// This field is beta-level; it is for the property-based scheduling feature and is only
+	// populated when a property provider is enabled in the deployment.
 	// +optional
 	Properties map[PropertyName]PropertyValue `json:"properties,omitempty"`
 

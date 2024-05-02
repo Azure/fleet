@@ -20,13 +20,16 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
+	"go.goms.io/fleet/pkg/controllers/clusterresourcebindingwatcher"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacementwatcher"
 	"go.goms.io/fleet/pkg/controllers/clusterschedulingpolicysnapshot"
 	"go.goms.io/fleet/pkg/controllers/memberclusterplacement"
+	"go.goms.io/fleet/pkg/controllers/overrider"
 	"go.goms.io/fleet/pkg/controllers/resourcechange"
 	"go.goms.io/fleet/pkg/controllers/rollout"
 	"go.goms.io/fleet/pkg/controllers/workgenerator"
@@ -72,6 +75,10 @@ var (
 		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ClusterResourceSnapshotKind),
 		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ClusterSchedulingPolicySnapshotKind),
 		placementv1beta1.GroupVersion.WithKind(placementv1beta1.WorkKind),
+		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ClusterResourceOverrideKind),
+		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ClusterResourceOverrideSnapshotKind),
+		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ResourceOverrideKind),
+		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ResourceOverrideSnapshotKind),
 	}
 )
 
@@ -84,11 +91,6 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 	}
 
 	discoverClient := discovery.NewDiscoveryClientForConfigOrDie(config)
-	if err != nil {
-		klog.ErrorS(err, "unable to create the discover client")
-		return err
-	}
-
 	// Verify CRD installation status.
 	if opts.EnableV1Alpha1APIs {
 		for _, gvk := range v1Alpha1RequiredGVKs {
@@ -194,12 +196,21 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			return err
 		}
 
-		klog.Info("Setting up clusterSchedulingPolicySnapshot controller")
+		klog.Info("Setting up clusterResourceBinding watcher")
+		if err := (&clusterresourcebindingwatcher.Reconciler{
+			PlacementController: clusterResourcePlacementControllerV1Beta1,
+			Client:              mgr.GetClient(),
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "Unable to set up the clusterResourceBinding watcher")
+			return err
+		}
+
+		klog.Info("Setting up clusterSchedulingPolicySnapshot watcher")
 		if err := (&clusterschedulingpolicysnapshot.Reconciler{
 			Client:              mgr.GetClient(),
 			PlacementController: clusterResourcePlacementControllerV1Beta1,
 		}).SetupWithManager(mgr); err != nil {
-			klog.ErrorS(err, "Unable to set up the clusterResourcePlacement watcher")
+			klog.ErrorS(err, "Unable to set up the clusterSchedulingPolicySnapshot watcher")
 			return err
 		}
 
@@ -274,6 +285,27 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			ClusterEligibilityChecker: clustereligibilitychecker.New(),
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up memberCluster watcher for scheduler")
+			return err
+		}
+
+		// Set up the controllers for overriding resources.
+		klog.Info("Setting up the clusterResourceOverride controller")
+		if err := (&overrider.ClusterResourceReconciler{
+			Reconciler: overrider.Reconciler{
+				Client: mgr.GetClient(),
+			},
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "Unable to set up clusterResourceOverride controller")
+			return err
+		}
+
+		klog.Info("Setting up the resourceOverride controller")
+		if err := (&overrider.ResourceReconciler{
+			Reconciler: overrider.Reconciler{
+				Client: mgr.GetClient(),
+			},
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "Unable to set up resourceOverride controller")
 			return err
 		}
 	}

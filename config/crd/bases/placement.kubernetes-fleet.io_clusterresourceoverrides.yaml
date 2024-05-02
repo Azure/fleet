@@ -210,7 +210,10 @@ spec:
                                       label and property selectors in the same term,
                                       the results are AND'd. \n At this moment, PropertySelector
                                       can only be used with `RequiredDuringSchedulingIgnoredDuringExecution`
-                                      affinity terms."
+                                      affinity terms. \n This field is beta-level;
+                                      it is for the property-based scheduling feature
+                                      and is only functional when a property provider
+                                      is enabled in the deployment."
                                     properties:
                                       matchExpressions:
                                         description: MatchExpressions is an array
@@ -266,7 +269,10 @@ spec:
                                       different weights to each cluster based on their
                                       observed property values. \n At this moment,
                                       PropertySorter can only be used with `PreferredDuringSchedulingIgnoredDuringExecution`
-                                      affinity terms."
+                                      affinity terms. \n This field is beta-level;
+                                      it is for the property-based scheduling feature
+                                      and is only functional when a property provider
+                                      is enabled in the deployment."
                                     properties:
                                       name:
                                         description: Name is the name of the property

@@ -41,6 +41,9 @@ type ResourceUsage struct {
 	//
 	// A node's available capacity is the amount of resource that has not been used yet, i.e.,
 	// available capacity = allocatable capacity - capacity that has been requested by workloads.
+	//
+	// This field is beta-level; it is for the property-based scheduling feature and is only
+	// populated when a property provider is enabled in the deployment.
 	// +optional
 	Available corev1.ResourceList `json:"available,omitempty"`
 

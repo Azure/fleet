@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
@@ -48,16 +49,6 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
 	"go.goms.io/fleet/pkg/utils/labels"
-)
-
-const (
-	allWorkSyncedReason    = "AllWorkSynced"
-	syncWorkFailedReason   = "SyncWorkFailed"
-	workNeedSyncedReason   = "StillNeedToSyncWork"
-	workNotAppliedReason   = "NotAllWorkHaveBeenApplied"
-	allWorkAppliedReason   = "AllWorkHaveBeenApplied"
-	workNotAvailableReason = "NotAllWorkAreAvailable"
-	allWorkAvailableReason = "AllWorkAreAvailable"
 )
 
 var (
@@ -135,15 +126,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 
 	if overrideSucceeded {
 		overrideReason := condition.OverriddenSucceededReason
+		overrideMessage := "Successfully applied the override rules on the resources"
 		if len(resourceBinding.Spec.ClusterResourceOverrideSnapshots) == 0 &&
 			len(resourceBinding.Spec.ResourceOverrideSnapshots) == 0 {
 			overrideReason = condition.OverrideNotSpecifiedReason
+			overrideMessage = "No override rules are configured for the selected resources"
 		}
 		resourceBinding.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingOverridden),
 			Reason:             overrideReason,
-			Message:            "Successfully applied the override rules on the resources",
+			Message:            overrideMessage,
 			ObservedGeneration: resourceBinding.Generation,
 		})
 	}
@@ -166,34 +159,19 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 				ObservedGeneration: resourceBinding.Generation,
 			})
 		} else {
-			// TODO: remove the deprecated "resourceBound" condition when we switch to the new condition model
-			resourceBinding.SetConditions(metav1.Condition{
-				Status:             metav1.ConditionFalse,
-				Type:               string(fleetv1beta1.ResourceBindingBound),
-				Reason:             syncWorkFailedReason,
-				Message:            errorMessage,
-				ObservedGeneration: resourceBinding.Generation,
-			})
 			resourceBinding.SetConditions(metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
-				Reason:             syncWorkFailedReason,
+				Reason:             condition.SyncWorkFailedReason,
 				Message:            fmt.Sprintf("Failed to sychronize the work to the latest: %s", errorMessage),
 				ObservedGeneration: resourceBinding.Generation,
 			})
 		}
 	} else {
-		// TODO: remove the deprecated "resourceBound" condition when we switch to the new condition model
-		resourceBinding.SetConditions(metav1.Condition{
-			Status:             metav1.ConditionTrue,
-			Type:               string(fleetv1beta1.ResourceBindingBound),
-			Reason:             allWorkSyncedReason,
-			ObservedGeneration: resourceBinding.Generation,
-		})
 		resourceBinding.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
-			Reason:             allWorkSyncedReason,
+			Reason:             condition.AllWorkSyncedReason,
 			ObservedGeneration: resourceBinding.Generation,
 			Message:            "All of the works are synchronized to the latest",
 		})
@@ -202,7 +180,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 			resourceBinding.SetConditions(metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
-				Reason:             workNeedSyncedReason,
+				Reason:             condition.WorkNeedSyncedReason,
 				Message:            "In the processing of synchronizing the work to the member cluster",
 				ObservedGeneration: resourceBinding.Generation,
 			})
@@ -284,10 +262,28 @@ func (r *Reconciler) ensureFinalizer(ctx context.Context, resourceBinding client
 	if controllerutil.ContainsFinalizer(resourceBinding, fleetv1beta1.WorkFinalizer) {
 		return nil
 	}
-	controllerutil.AddFinalizer(resourceBinding, fleetv1beta1.WorkFinalizer)
-	if err := r.Client.Update(ctx, resourceBinding); err != nil {
-		klog.ErrorS(err, "Failed to add the work finalizer to resourceBinding", "resourceBinding", klog.KObj(resourceBinding))
-		return controller.NewUpdateIgnoreConflictError(err)
+
+	// Add retries to the update behavior as the binding object can become a point of heavy
+	// contention under heavy workload; simply requeueing when a write conflict occurs, though
+	// functionally correct, might trigger the work queue rate limiter and eventually lead to
+	// substantial delays in processing.
+	//
+	// Also note that here default backoff strategy (exponetial backoff) rather than the Kubernetes'
+	// recommended on-write-conflict backoff strategy is used, as experimentation suggests that
+	// this backoff strategy yields better performance, especially for the long-tail latencies.
+	//
+	// TO-DO (chenyu1): evaluate if a custom backoff strategy can get an even better result.
+	errAfterRetries := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		if err := r.Client.Get(ctx, client.ObjectKeyFromObject(resourceBinding), resourceBinding); err != nil {
+			return err
+		}
+
+		controllerutil.AddFinalizer(resourceBinding, fleetv1beta1.WorkFinalizer)
+		return r.Client.Update(ctx, resourceBinding)
+	})
+	if errAfterRetries != nil {
+		klog.ErrorS(errAfterRetries, "Failed to add the work finalizer after retries", "resourceBinding", klog.KObj(resourceBinding))
+		return controller.NewUpdateIgnoreConflictError(errAfterRetries)
 	}
 	klog.V(2).InfoS("Successfully add the work finalizer", "resourceBinding", klog.KObj(resourceBinding))
 	return nil
@@ -449,7 +445,6 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 
 // getConfigMapEnvelopWorkObj first try to locate a work object for the corresponding envelopObj of type configMap.
 // we create a new one if the work object doesn't exist. We do this to avoid repeatedly delete and create the same work object.
-// TODO: take into consider the override policy in the future
 func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePrefix string, resourceBinding *fleetv1beta1.ClusterResourceBinding,
 	resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, envelopeObj *unstructured.Unstructured) (*fleetv1beta1.Work, error) {
 	// we group all the resources in one configMap to one work
@@ -505,6 +500,7 @@ func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePre
 				Workload: fleetv1beta1.WorkloadTemplate{
 					Manifests: manifest,
 				},
+				ApplyStrategy: resourceBinding.Spec.ApplyStrategy,
 			},
 		}, nil
 	}
@@ -517,13 +513,13 @@ func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePre
 	work := workList.Items[0]
 	work.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel] = resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel]
 	work.Spec.Workload.Manifests = manifest
+	work.Spec.ApplyStrategy = resourceBinding.Spec.ApplyStrategy
 	return &work, nil
 }
 
 // generateSnapshotWorkObj generates the work object for the corresponding snapshot
-// TODO: take into consider the override policy in the future
 func generateSnapshotWorkObj(workName string, resourceBinding *fleetv1beta1.ClusterResourceBinding, resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, manifest []fleetv1beta1.Manifest) *fleetv1beta1.Work {
-	work := &fleetv1beta1.Work{
+	return &fleetv1beta1.Work{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workName,
 			Namespace: fmt.Sprintf(utils.NamespaceNameFormat, resourceBinding.Spec.TargetCluster),
@@ -542,9 +538,13 @@ func generateSnapshotWorkObj(workName string, resourceBinding *fleetv1beta1.Clus
 				},
 			},
 		},
+		Spec: fleetv1beta1.WorkSpec{
+			Workload: fleetv1beta1.WorkloadTemplate{
+				Manifests: manifest,
+			},
+			ApplyStrategy: resourceBinding.Spec.ApplyStrategy,
+		},
 	}
-	work.Spec.Workload.Manifests = append(work.Spec.Workload.Manifests, manifest...)
-	return work
 }
 
 // upsertWork creates or updates the new work for the corresponding resource snapshot.
@@ -623,7 +623,7 @@ func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *
 		return metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingApplied),
-			Reason:             allWorkAppliedReason,
+			Reason:             condition.AllWorkAppliedReason,
 			Message:            "All corresponding work objects are applied",
 			ObservedGeneration: binding.GetGeneration(),
 		}
@@ -631,7 +631,7 @@ func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *
 	return metav1.Condition{
 		Status:             metav1.ConditionFalse,
 		Type:               string(fleetv1beta1.ResourceBindingApplied),
-		Reason:             workNotAppliedReason,
+		Reason:             condition.WorkNotAppliedReason,
 		Message:            fmt.Sprintf("Work object %s is not applied", notAppliedWork),
 		ObservedGeneration: binding.GetGeneration(),
 	}
@@ -654,7 +654,7 @@ func buildAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding
 	}
 	if allAvailable {
 		klog.V(2).InfoS("All works associated with the binding are available", "binding", klog.KObj(binding))
-		reason := allWorkAvailableReason
+		reason := condition.AllWorkAvailableReason
 		message := "All corresponding work objects are available"
 		if len(notTrackableWork) > 0 {
 			reason = work.WorkNotTrackableReason
@@ -672,7 +672,7 @@ func buildAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding
 	return metav1.Condition{
 		Status:             metav1.ConditionFalse,
 		Type:               string(fleetv1beta1.ResourceBindingAvailable),
-		Reason:             workNotAvailableReason,
+		Reason:             condition.WorkNotAvailableReason,
 		Message:            fmt.Sprintf("Work object %s is not available", notAvailableWork),
 		ObservedGeneration: binding.GetGeneration(),
 	}

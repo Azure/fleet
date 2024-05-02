@@ -7,6 +7,7 @@ package trackers
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ const (
 	nodeName1 = "node-1"
 	nodeName2 = "node-2"
 	nodeName3 = "node-3"
+	nodeName4 = "node-4"
 
 	namespaceName1 = "namespace-1"
 	namespaceName2 = "namespace-2"
@@ -37,6 +39,7 @@ const (
 	nodeSKU1 = "Standard_1"
 	nodeSKU2 = "Standard_2"
 	nodeSKU3 = "Standard_3"
+	nodeSKU4 = "Standard_4"
 )
 
 var (
@@ -133,6 +136,1030 @@ var (
 		},
 	}
 )
+
+// TestCalculateCosts tests the calculateCosts function.
+func TestCalculateCosts(t *testing.T) {
+	now := time.Now()
+
+	testCases := []struct {
+		name                 string
+		nt                   *NodeTracker
+		wantPerCPUCoreCost   float64
+		wantPerGBMemoryCost  float64
+		wantCostErrStrPrefix string
+	}{
+		{
+			name: "one SKU only",
+			nt: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("5"),
+					corev1.ResourceMemory: resource.MustParse("5Gi"),
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+					},
+				},
+				pricingProvider: &dummyPricingProvider{},
+				costs:           &costInfo{},
+			},
+			wantPerCPUCoreCost:  0.2,
+			wantPerGBMemoryCost: 0.2,
+		},
+		{
+			name: "multiple SKUs",
+			nt: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("12"),
+					corev1.ResourceMemory: resource.MustParse("24Gi"),
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+						nodeName2: true,
+					},
+					nodeSKU2: {
+						nodeName3: true,
+					},
+					nodeSKU3: {
+						nodeName4: true,
+					},
+				},
+				pricingProvider: &dummyPricingProvider{},
+				costs:           &costInfo{},
+			},
+			wantPerCPUCoreCost:  1.416,
+			wantPerGBMemoryCost: 0.708,
+		},
+		{
+			name: "unsupported SKU",
+			nt: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("12"),
+					corev1.ResourceMemory: resource.MustParse("24Gi"),
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+						nodeName2: true,
+					},
+					nodeSKU2: {
+						nodeName3: true,
+					},
+					nodeSKU4: {
+						nodeName4: true,
+					},
+				},
+				pricingProvider: &dummyPricingProvider{},
+				costs:           &costInfo{},
+			},
+			wantPerCPUCoreCost:  0.583,
+			wantPerGBMemoryCost: 0.292,
+		},
+		{
+			name: "invalid CPU capacity (zero)",
+			nt: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceMemory: resource.MustParse("24Gi"),
+				},
+				pricingProvider: &dummyPricingProvider{},
+				costs:           &costInfo{},
+			},
+			wantCostErrStrPrefix: "failed to calculate costs",
+		},
+		{
+			name: "invalid memory capacity (zero)",
+			nt: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU: resource.MustParse("12"),
+				},
+				pricingProvider: &dummyPricingProvider{},
+				costs:           &costInfo{},
+			},
+			wantCostErrStrPrefix: "failed to calculate costs",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.nt.mu.Lock()
+			defer tc.nt.mu.Unlock()
+
+			tc.nt.calculateCosts()
+
+			if tc.wantCostErrStrPrefix != "" {
+				if tc.nt.costs.err == nil {
+					t.Errorf("calculateCosts() costErr = nil, want error with prefix %s", tc.wantCostErrStrPrefix)
+				}
+				if !strings.HasPrefix(tc.nt.costs.err.Error(), tc.wantCostErrStrPrefix) {
+					t.Errorf("calculateCosts() costErr = %s, want error with prefix %s", tc.nt.costs.err.Error(), tc.wantCostErrStrPrefix)
+				}
+				return
+			}
+
+			if tc.nt.costs.err != nil {
+				t.Errorf("calculateCosts() costErr = %s, want no error", tc.nt.costs.err.Error())
+			}
+
+			// Account for possible decision issues in float calculations.
+			if !cmp.Equal(tc.nt.costs.perCPUCoreHourlyCost, tc.wantPerCPUCoreCost, cmpopts.EquateApprox(0.0, 0.01)) {
+				t.Errorf("calculateCosts() perCPUCoreHourlyCost = %f, want %f", tc.nt.costs.perCPUCoreHourlyCost, tc.wantPerCPUCoreCost)
+			}
+			if !cmp.Equal(tc.nt.costs.perGBMemoryHourlyCost, tc.wantPerGBMemoryCost, cmpopts.EquateApprox(0.0, 0.01)) {
+				t.Errorf("calculateCosts() perGBMemoryHourlyCost = %f, want %f", tc.nt.costs.perGBMemoryHourlyCost, tc.wantPerGBMemoryCost)
+			}
+
+			if !now.Before(tc.nt.costs.lastUpdated) {
+				t.Errorf("calculateCosts() costLastUpdated = %s, want time before", tc.nt.costs.lastUpdated)
+			}
+		})
+	}
+}
+
+// TestNodeTrackerTrackSKU tests the trackSKU method of the NodeTracker.
+func TestNodeTrackerTrackSKU(t *testing.T) {
+	testCases := []struct {
+		name             string
+		node             *corev1.Node
+		nt               *NodeTracker
+		wantNT           *NodeTracker
+		wantSKUByNode    map[string]string
+		wantNodeSetBySKU map[string]NodeSet
+		wantRecalcNeeded bool
+	}{
+		{
+			name: "new node with new SKU",
+			nt: &NodeTracker{
+				skuByNode:    map[string]string{},
+				nodeSetBySKU: map[string]NodeSet{},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName1,
+					Labels: map[string]string{
+						AKSClusterNodeSKULabelName: nodeSKU1,
+					},
+				},
+			},
+			wantNT: &NodeTracker{
+				skuByNode: map[string]string{
+					nodeName1: nodeSKU1,
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+					},
+				},
+			},
+			wantRecalcNeeded: true,
+		},
+		{
+			name: "new node with known SKU",
+			nt: &NodeTracker{
+				skuByNode: map[string]string{
+					nodeName1: nodeSKU1,
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName2,
+					Labels: map[string]string{
+						AKSClusterNodeSKULabelName: nodeSKU1,
+					},
+				},
+			},
+			wantNT: &NodeTracker{
+				skuByNode: map[string]string{
+					nodeName1: nodeSKU1,
+					nodeName2: nodeSKU1,
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+						nodeName2: true,
+					},
+				},
+			},
+			wantRecalcNeeded: true,
+		},
+		{
+			name: "SKU change",
+			nt: &NodeTracker{
+				skuByNode: map[string]string{
+					nodeName1: nodeSKU1,
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName1,
+					Labels: map[string]string{
+						AKSClusterNodeSKULabelName: nodeSKU2,
+					},
+				},
+			},
+			wantNT: &NodeTracker{
+				skuByNode: map[string]string{
+					nodeName1: nodeSKU2,
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU2: {
+						nodeName1: true,
+					},
+				},
+			},
+			wantRecalcNeeded: true,
+		},
+		{
+			name: "no SKU change",
+			nt: &NodeTracker{
+				skuByNode: map[string]string{
+					nodeName1: nodeSKU1,
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName1,
+					Labels: map[string]string{
+						AKSClusterNodeSKULabelName: nodeSKU1,
+					},
+				},
+			},
+			wantNT: &NodeTracker{
+				skuByNode: map[string]string{
+					nodeName1: nodeSKU1,
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.nt.mu.Lock()
+			defer tc.nt.mu.Unlock()
+
+			recalcNeeded := tc.nt.trackSKU(tc.node)
+			if recalcNeeded != tc.wantRecalcNeeded {
+				t.Errorf("trackSKU() = %v, want %v", recalcNeeded, tc.wantRecalcNeeded)
+			}
+
+			if diff := cmp.Diff(
+				tc.nt, tc.wantNT,
+				ignoreNodeTrackerFields,
+				cmp.AllowUnexported(NodeTracker{}),
+			); diff != "" {
+				t.Errorf("node tracker diff (-got, +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestNodeTrackerTrackAllocatableCapacity tests the trackAllocatableCapacity method of the NodeTracker.
+func TestNodeTrackerTrackAllocatableCapacity(t *testing.T) {
+	testCases := []struct {
+		name   string
+		node   *corev1.Node
+		nt     *NodeTracker
+		wantNT *NodeTracker
+	}{
+		{
+			name: "new node with allocatable capacity for known resource types",
+			nt: &NodeTracker{
+				totalAllocatable:  make(corev1.ResourceList),
+				allocatableByNode: make(map[string]corev1.ResourceList),
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName1,
+				},
+				Spec: corev1.NodeSpec{},
+				Status: corev1.NodeStatus{
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+				},
+			},
+			wantNT: &NodeTracker{
+				totalAllocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("16Gi"),
+				},
+				allocatableByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+				},
+			},
+		},
+		{
+			// Normally this will never occur.
+			name: "new node with total capacity for unsupported resource types",
+			nt: &NodeTracker{
+				totalAllocatable:  make(corev1.ResourceList),
+				allocatableByNode: make(map[string]corev1.ResourceList),
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName1,
+				},
+				Spec: corev1.NodeSpec{},
+				Status: corev1.NodeStatus{
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse("30Gi"),
+					},
+				},
+			},
+			wantNT: &NodeTracker{
+				totalAllocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.Quantity{},
+					corev1.ResourceMemory: resource.Quantity{},
+				},
+				allocatableByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.Quantity{},
+						corev1.ResourceMemory: resource.Quantity{},
+					},
+				},
+			},
+		},
+		{
+			name: "node updated with no total capacity change",
+			nt: &NodeTracker{
+				totalAllocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("16Gi"),
+				},
+				allocatableByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName1,
+				},
+				Spec: corev1.NodeSpec{},
+				Status: corev1.NodeStatus{
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+				},
+			},
+			wantNT: &NodeTracker{
+				totalAllocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("16Gi"),
+				},
+				allocatableByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+				},
+			},
+		},
+		{
+			name: "node updated with total capacity change",
+			nt: &NodeTracker{
+				totalAllocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("16Gi"),
+				},
+				allocatableByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName1,
+				},
+				Spec: corev1.NodeSpec{},
+				Status: corev1.NodeStatus{
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("2"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+				},
+			},
+			wantNT: &NodeTracker{
+				totalAllocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2"),
+					corev1.ResourceMemory: resource.MustParse("8Gi"),
+				},
+				allocatableByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("2"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+				},
+			},
+		},
+		{
+			name: "additional node",
+			nt: &NodeTracker{
+				totalAllocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("16Gi"),
+				},
+				allocatableByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName2,
+				},
+				Spec: corev1.NodeSpec{},
+				Status: corev1.NodeStatus{
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("2"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+				},
+			},
+			wantNT: &NodeTracker{
+				totalAllocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("6"),
+					corev1.ResourceMemory: resource.MustParse("24Gi"),
+				},
+				allocatableByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+					nodeName2: {
+						corev1.ResourceCPU:    resource.MustParse("2"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.nt.mu.Lock()
+			defer tc.nt.mu.Unlock()
+
+			tc.nt.trackAllocatableCapacity(tc.node)
+
+			if diff := cmp.Diff(
+				tc.nt, tc.wantNT,
+				ignoreNodeTrackerFields,
+				cmp.AllowUnexported(NodeTracker{}),
+			); diff != "" {
+				t.Errorf("node tracker diff (-got, +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestNodeTrackerTrackTotalCapacity tests the trackTotalCapacity method of the NodeTracker.
+func TestNodeTrackerTrackTotalCapacity(t *testing.T) {
+	testCases := []struct {
+		name   string
+		nt     *NodeTracker
+		wantNT *NodeTracker
+		node   *corev1.Node
+	}{
+		{
+			name: "new node with total capacity for known resource types",
+			nt: &NodeTracker{
+				totalCapacity:  corev1.ResourceList{},
+				capacityByNode: map[string]corev1.ResourceList{},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName1,
+				},
+				Spec: corev1.NodeSpec{},
+				Status: corev1.NodeStatus{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+				},
+			},
+			wantNT: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("16Gi"),
+				},
+				capacityByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+				},
+			},
+		},
+		{
+			// Normally this will never occur.
+			name: "new node with total capacity for unsupported resource types",
+			nt: &NodeTracker{
+				totalCapacity:  corev1.ResourceList{},
+				capacityByNode: map[string]corev1.ResourceList{},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName1,
+				},
+				Spec: corev1.NodeSpec{},
+				Status: corev1.NodeStatus{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse("200Gi"),
+					},
+				},
+			},
+			wantNT: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.Quantity{},
+					corev1.ResourceMemory: resource.Quantity{},
+				},
+				capacityByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.Quantity{},
+						corev1.ResourceMemory: resource.Quantity{},
+					},
+				},
+			},
+		},
+		{
+			name: "node updated with total capacity change",
+			nt: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("16Gi"),
+				},
+				capacityByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName1,
+				},
+				Spec: corev1.NodeSpec{},
+				Status: corev1.NodeStatus{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("2"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+				},
+			},
+			wantNT: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2"),
+					corev1.ResourceMemory: resource.MustParse("8Gi"),
+				},
+				capacityByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("2"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+				},
+			},
+		},
+		{
+			name: "node updated with total capacity change",
+			nt: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("16Gi"),
+				},
+				capacityByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName1,
+				},
+				Spec: corev1.NodeSpec{},
+				Status: corev1.NodeStatus{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+				},
+			},
+			wantNT: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("16Gi"),
+				},
+				capacityByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+				},
+			},
+		},
+		{
+			name: "additional node",
+			nt: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("16Gi"),
+				},
+				capacityByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+				},
+			},
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName2,
+				},
+				Spec: corev1.NodeSpec{},
+				Status: corev1.NodeStatus{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("2"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+				},
+			},
+			wantNT: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("6"),
+					corev1.ResourceMemory: resource.MustParse("24Gi"),
+				},
+				capacityByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+					nodeName2: {
+						corev1.ResourceCPU:    resource.MustParse("2"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.nt.mu.Lock()
+			defer tc.nt.mu.Unlock()
+
+			tc.nt.trackTotalCapacity(tc.node)
+
+			if diff := cmp.Diff(
+				tc.nt, tc.wantNT,
+				ignoreNodeTrackerFields,
+				cmp.AllowUnexported(NodeTracker{}),
+			); diff != "" {
+				t.Errorf("node tracker diff (-got, +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestNodeTrackerUntrackSKU tests the UntrackSKU method of the NodeTracker.
+func TestNodeTrackerUntrackSKU(t *testing.T) {
+	testCases := []struct {
+		name     string
+		nt       *NodeTracker
+		nodeName string
+		wantNT   *NodeTracker
+	}{
+		{
+			name: "untrack a known node and its SKU",
+			nt: &NodeTracker{
+				skuByNode: map[string]string{
+					nodeName1: nodeSKU1,
+					nodeName2: nodeSKU1,
+					nodeName3: nodeSKU3,
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+						nodeName2: true,
+					},
+					nodeSKU3: {
+						nodeName3: true,
+					},
+				},
+			},
+			nodeName: nodeName1,
+			wantNT: &NodeTracker{
+				skuByNode: map[string]string{
+					nodeName2: nodeSKU1,
+					nodeName3: nodeSKU3,
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName2: true,
+					},
+					nodeSKU3: {
+						nodeName3: true,
+					},
+				},
+			},
+		},
+		{
+			name: "untrack a known node and its SKU (last one with such SKU)",
+			nt: &NodeTracker{
+				skuByNode: map[string]string{
+					nodeName1: nodeSKU1,
+					nodeName3: nodeSKU3,
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+					},
+					nodeSKU3: {
+						nodeName3: true,
+					},
+				},
+			},
+			nodeName: nodeName1,
+			wantNT: &NodeTracker{
+				skuByNode: map[string]string{
+					nodeName3: nodeSKU3,
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU3: {
+						nodeName3: true,
+					},
+				},
+			},
+		},
+		{
+			name: "untrack an unknown node",
+			nt: &NodeTracker{
+				skuByNode: map[string]string{
+					nodeName1: nodeSKU1,
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+					},
+				},
+			},
+			nodeName: nodeName4,
+			wantNT: &NodeTracker{
+				skuByNode: map[string]string{
+					nodeName1: nodeSKU1,
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.nt.mu.Lock()
+			defer tc.nt.mu.Unlock()
+
+			tc.nt.untrackSKU(tc.nodeName)
+
+			if diff := cmp.Diff(
+				tc.nt, tc.wantNT,
+				ignoreNodeTrackerFields,
+				cmp.AllowUnexported(NodeTracker{}),
+			); diff != "" {
+				t.Errorf("node tracker diff (-got, +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestNodeTrackerUntrackAllocatableCapacity tests the UntrackAllocatableCapacity method of the NodeTracker.
+func TestNodeTrackerUntrackAllocatableCapacity(t *testing.T) {
+	testCases := []struct {
+		name     string
+		nt       *NodeTracker
+		nodeName string
+		wantNT   *NodeTracker
+	}{
+		{
+			name: "untrack a known node",
+			nt: &NodeTracker{
+				totalAllocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("8"),
+					corev1.ResourceMemory: resource.MustParse("24Gi"),
+				},
+				allocatableByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+					nodeName2: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+				},
+			},
+			nodeName: nodeName1,
+			wantNT: &NodeTracker{
+				totalAllocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("8Gi"),
+				},
+				allocatableByNode: map[string]corev1.ResourceList{
+					nodeName2: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+				},
+			},
+		},
+		{
+			name: "untrack an unknown node",
+			nt: &NodeTracker{
+				totalAllocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("8"),
+					corev1.ResourceMemory: resource.MustParse("24Gi"),
+				},
+				allocatableByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+					nodeName2: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+				},
+			},
+			nodeName: nodeName3,
+			wantNT: &NodeTracker{
+				totalAllocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("8"),
+					corev1.ResourceMemory: resource.MustParse("24Gi"),
+				},
+				allocatableByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+					nodeName2: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.nt.mu.Lock()
+			defer tc.nt.mu.Unlock()
+
+			tc.nt.untrackAllocatableCapacity(tc.nodeName)
+
+			if diff := cmp.Diff(
+				tc.nt, tc.wantNT,
+				ignoreNodeTrackerFields,
+				cmp.AllowUnexported(NodeTracker{}),
+			); diff != "" {
+				t.Errorf("node tracker diff (-got, +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestNodeTrackerUntrackTotalCapacity tests the UntrackTotalCapacity method of the NodeTracker.
+func TestNodeTrackerUntrackTotalCapacity(t *testing.T) {
+	testCases := []struct {
+		name     string
+		nt       *NodeTracker
+		nodeName string
+		wantNT   *NodeTracker
+	}{
+		{
+			name: "untrack a known node",
+			nt: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("8"),
+					corev1.ResourceMemory: resource.MustParse("24Gi"),
+				},
+				capacityByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+					nodeName2: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+				},
+			},
+			nodeName: nodeName1,
+			wantNT: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("8Gi"),
+				},
+				capacityByNode: map[string]corev1.ResourceList{
+					nodeName2: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+				},
+			},
+		},
+		{
+			name: "untrack an unknown node",
+			nt: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("8"),
+					corev1.ResourceMemory: resource.MustParse("24Gi"),
+				},
+				capacityByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+					nodeName2: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+				},
+			},
+			nodeName: nodeName3,
+			wantNT: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("8"),
+					corev1.ResourceMemory: resource.MustParse("24Gi"),
+				},
+				capacityByNode: map[string]corev1.ResourceList{
+					nodeName1: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+					nodeName2: {
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.nt.mu.Lock()
+			defer tc.nt.mu.Unlock()
+
+			tc.nt.untrackTotalCapacity(tc.nodeName)
+
+			if diff := cmp.Diff(
+				tc.nt, tc.wantNT,
+				ignoreNodeTrackerFields,
+				cmp.AllowUnexported(NodeTracker{}),
+			); diff != "" {
+				t.Errorf("node tracker diff (-got, +want):\n%s", diff)
+			}
+		})
+	}
+}
 
 // TestNodeTrackerAddOrUpdateNode tests the AddOrUpdateNode method of the NodeTracker.
 func TestNodeTrackerAddOrUpdateNode(t *testing.T) {
@@ -630,7 +1657,6 @@ func TestNodeTrackerRemoveNode(t *testing.T) {
 						nodeName1: true,
 						nodeName3: true,
 					},
-					nodeSKU2: {},
 				},
 				skuByNode: map[string]string{
 					nodeName1: nodeSKU1,
@@ -716,12 +1742,8 @@ func TestNodeTrackerRemoveNode(t *testing.T) {
 				},
 				capacityByNode:    map[string]corev1.ResourceList{},
 				allocatableByNode: map[string]corev1.ResourceList{},
-				nodeSetBySKU: map[string]NodeSet{
-					nodeSKU1: {},
-					nodeSKU2: {},
-					nodeSKU3: {},
-				},
-				skuByNode: map[string]string{},
+				nodeSetBySKU:      map[string]NodeSet{},
+				skuByNode:         map[string]string{},
 				costs: &costInfo{
 					err: cmpopts.AnyError,
 				},

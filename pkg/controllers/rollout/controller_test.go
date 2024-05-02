@@ -1715,3 +1715,193 @@ func TestUpdateStaleBindingsStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckAndUpdateStaleBindingsStatus(t *testing.T) {
+	generation := int64(15)
+	latestBindings := []*fleetv1beta1.ClusterResourceBinding{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "binding-1",
+				Generation: generation,
+			},
+			Spec: fleetv1beta1.ResourceBindingSpec{
+				State: fleetv1beta1.BindingStateBound,
+			},
+			Status: fleetv1beta1.ResourceBindingStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: generation,
+						Reason:             condition.RolloutStartedReason,
+					},
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "binding-2",
+				Generation: generation,
+			},
+			Spec: fleetv1beta1.ResourceBindingSpec{
+				State: fleetv1beta1.BindingStateScheduled,
+			},
+			Status: fleetv1beta1.ResourceBindingStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: generation,
+						Reason:             condition.RolloutStartedReason,
+					},
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "binding-3",
+				Generation: generation,
+			},
+			Spec: fleetv1beta1.ResourceBindingSpec{
+				State: fleetv1beta1.BindingStateUnscheduled,
+			},
+		},
+	}
+
+	tests := map[string]struct {
+		bindings     []*fleetv1beta1.ClusterResourceBinding
+		wantBindings []fleetv1beta1.ClusterResourceBinding
+	}{
+		"update bindings with nil": {
+			bindings:     nil,
+			wantBindings: nil,
+		},
+		"update bindings with empty": {
+			bindings:     []*fleetv1beta1.ClusterResourceBinding{},
+			wantBindings: nil,
+		},
+		"bindings with rollout started condition": {
+			bindings: latestBindings,
+			wantBindings: []fleetv1beta1.ClusterResourceBinding{
+				*latestBindings[0],
+				*latestBindings[1],
+				*latestBindings[2],
+			},
+		},
+		"update stale bounded binding": {
+			bindings: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "binding-1",
+						Generation: generation,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateBound,
+					},
+				},
+			},
+			wantBindings: []fleetv1beta1.ClusterResourceBinding{
+				*latestBindings[0],
+			},
+		},
+		"update stale scheduled bindings": {
+			bindings: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "binding-2",
+						Generation: generation,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateScheduled,
+					},
+					Status: fleetv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+								Status:             metav1.ConditionFalse,
+								ObservedGeneration: generation,
+							},
+						},
+					},
+				},
+			},
+			wantBindings: []fleetv1beta1.ClusterResourceBinding{
+				*latestBindings[1],
+			},
+		},
+		"update multiple stale bindings": {
+			bindings: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "binding-1",
+						Generation: generation,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateBound,
+					},
+					Status: fleetv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: generation - 1,
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "binding-2",
+						Generation: generation,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateScheduled,
+					},
+					Status: fleetv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+								Status:             metav1.ConditionFalse,
+								ObservedGeneration: generation,
+							},
+						},
+					},
+				},
+				latestBindings[2],
+			},
+			wantBindings: []fleetv1beta1.ClusterResourceBinding{
+				*latestBindings[0],
+				*latestBindings[1],
+				*latestBindings[2],
+			},
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			var objects []client.Object
+			for i := range tt.bindings {
+				objects = append(objects, tt.bindings[i])
+			}
+			scheme := serviceScheme(t)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(objects...).
+				WithStatusSubresource(objects...).
+				Build()
+			r := Reconciler{
+				Client: fakeClient,
+			}
+			ctx := context.Background()
+			if err := r.checkAndUpdateStaleBindingsStatus(ctx, tt.bindings); err != nil {
+				t.Fatalf("checkAndUpdateStaleBindingsStatus() got error %v, want no err", err)
+			}
+			bindingList := &fleetv1beta1.ClusterResourceBindingList{}
+			if err := fakeClient.List(ctx, bindingList); err != nil {
+				t.Fatalf("checkAndUpdateStaleBindingsStatus List() got error %v, want no err", err)
+			}
+			if diff := cmp.Diff(tt.wantBindings, bindingList.Items, cmpOptions...); diff != "" {
+				t.Errorf("checkAndUpdateStaleBindingsStatus List() mismatch (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}

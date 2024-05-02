@@ -43,6 +43,7 @@ import (
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
@@ -52,6 +53,7 @@ import (
 	"go.goms.io/fleet/pkg/webhook/membercluster"
 	"go.goms.io/fleet/pkg/webhook/pod"
 	"go.goms.io/fleet/pkg/webhook/replicaset"
+	"go.goms.io/fleet/pkg/webhook/resourceoverride"
 )
 
 const (
@@ -98,6 +100,7 @@ const (
 	replicaSetResourceName               = "replicasets"
 	podResourceName                      = "pods"
 	clusterResourceOverrideName          = "clusterresourceoverrides"
+	resourceOverrideName                 = "resourceoverrides"
 )
 
 var (
@@ -319,8 +322,26 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 				{
 					Operations: []admv1.OperationType{
 						admv1.Create,
-						admv1.Update},
-					Rule: createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{clusterResourceOverrideName}, &clusterScope),
+						admv1.Update,
+					},
+					Rule: createRule([]string{placementv1alpha1.GroupVersion.Group}, []string{placementv1alpha1.GroupVersion.Version}, []string{clusterResourceOverrideName}, &clusterScope),
+				},
+			},
+			TimeoutSeconds: longWebhookTimeout,
+		},
+		{
+			Name:                    "fleet.resourceoverride.validating",
+			ClientConfig:            w.createClientConfig(resourceoverride.ValidationPath),
+			FailurePolicy:           &failFailurePolicy,
+			SideEffects:             &sideEffortsNone,
+			AdmissionReviewVersions: admissionReviewVersions,
+			Rules: []admv1.RuleWithOperations{
+				{
+					Operations: []admv1.OperationType{
+						admv1.Create,
+						admv1.Update,
+					},
+					Rule: createRule([]string{placementv1alpha1.GroupVersion.Group}, []string{placementv1alpha1.GroupVersion.Version}, []string{resourceOverrideName}, &namespacedScope),
 				},
 			},
 			TimeoutSeconds: longWebhookTimeout,

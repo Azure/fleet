@@ -89,7 +89,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
+			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0", false)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -116,7 +116,9 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status with failed to apply resourceQuota", func() {
-			crpStatusUpdatedActual := checkForOneClusterFailedToApplyStatus(wantSelectedResources)
+			// rolloutStarted is false, but other conditions are true.
+			// "The rollout is being blocked by the rollout strategy in 2 cluster(s)",
+			crpStatusUpdatedActual := checkForRolloutStuckOnOneFailedClusterStatus(wantSelectedResources)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -131,7 +133,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status as success again", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "2")
+			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "2", false)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -155,7 +157,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 		It("should remove controller finalizers from CRP", func() {
-			finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+			finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 			Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP")
 		})
 	})
@@ -221,10 +223,10 @@ func checkEnvelopQuotaAndMutationWebhookPlacement(memberCluster *framework.Clust
 	}
 }
 
-func checkForOneClusterFailedToApplyStatus(wantSelectedResources []placementv1beta1.ResourceIdentifier) func() error {
+func checkForRolloutStuckOnOneFailedClusterStatus(wantSelectedResources []placementv1beta1.ResourceIdentifier) func() error {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-	failedResourcePlacement := []placementv1beta1.FailedResourcePlacement{
+	wantFailedResourcePlacement := []placementv1beta1.FailedResourcePlacement{
 		{
 			ResourceIdentifier: placementv1beta1.ResourceIdentifier{
 				Kind:      "ResourceQuota",
@@ -250,7 +252,7 @@ func checkForOneClusterFailedToApplyStatus(wantSelectedResources []placementv1be
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
 			return err
 		}
-		wantCRPConditions := crpSyncFailedConditions(crp.Generation)
+		wantCRPConditions := crpRolloutStuckConditions(crp.Generation)
 		if diff := cmp.Diff(crp.Status.Conditions, wantCRPConditions, crpStatusCmpOptions...); diff != "" {
 			return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 		}
@@ -271,7 +273,7 @@ func checkForOneClusterFailedToApplyStatus(wantSelectedResources []placementv1be
 		for _, placementStatus := range crp.Status.PlacementStatuses {
 			// this is the cluster that got the new enveloped resource that was malformed
 			if len(placementStatus.FailedPlacements) != 0 {
-				if diff := cmp.Diff(placementStatus.FailedPlacements, failedResourcePlacement, crpStatusCmpOptions...); diff != "" {
+				if diff := cmp.Diff(placementStatus.FailedPlacements, wantFailedResourcePlacement, crpStatusCmpOptions...); diff != "" {
 					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 				}
 				// check that the applied error message is correct

@@ -227,7 +227,7 @@ reviewable: fmt vet lint staticcheck
 ## --------------------------------------
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:crdVersions=v1"
+CRD_OPTIONS ?= "crd"
 
 # Generate manifests e.g. CRD, RBAC etc.
 .PHONY: manifests

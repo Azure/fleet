@@ -129,6 +129,7 @@ type ManifestCondition struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,categories={fleet,fleet-placement}
+// +kubebuilder:storageversion
 
 // Work is the Schema for the works API.
 type Work struct {

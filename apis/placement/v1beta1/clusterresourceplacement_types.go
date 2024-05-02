@@ -27,11 +27,12 @@ const (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope="Cluster",shortName=crp,categories={fleet,fleet-placement}
 // +kubebuilder:subresource:status
+// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:JSONPath=`.metadata.generation`,name="Gen",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementScheduled")].status`,name="Scheduled",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementScheduled")].observedGeneration`,name="ScheduledGen",type=string
-// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementApplied")].status`,name="Applied",type=string
-// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementApplied")].observedGeneration`,name="AppliedGen",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementAvailable")].status`,name="Available",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementAvailable")].observedGeneration`,name="AvailableGen",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -160,6 +161,8 @@ type PlacementPolicy struct {
 
 	// If specified, the ClusterResourcePlacement's Tolerations.
 	// Tolerations cannot be updated or deleted.
+	//
+	// This field is beta-level and is for the taints and tolerations feature.
 	// +kubebuilder:validation:MaxItems=100
 	// +optional
 	Tolerations []Toleration `json:"tolerations,omitempty"`
@@ -338,6 +341,9 @@ type ClusterSelectorTerm struct {
 	//
 	// At this moment, PropertySelector can only be used with
 	// `RequiredDuringSchedulingIgnoredDuringExecution` affinity terms.
+	//
+	// This field is beta-level; it is for the property-based scheduling feature and is only
+	// functional when a property provider is enabled in the deployment.
 	// +optional
 	PropertySelector *PropertySelector `json:"propertySelector,omitempty"`
 
@@ -346,6 +352,9 @@ type ClusterSelectorTerm struct {
 	//
 	// At this moment, PropertySorter can only be used with
 	// `PreferredDuringSchedulingIgnoredDuringExecution` affinity terms.
+	//
+	// This field is beta-level; it is for the property-based scheduling feature and is only
+	// functional when a property provider is enabled in the deployment.
 	// +optional
 	PropertySorter *PropertySorter `json:"propertySorter,omitempty"`
 }
@@ -618,11 +627,15 @@ type ResourcePlacementStatus struct {
 
 	// ApplicableResourceOverrides contains a list of applicable ResourceOverride snapshots associated with the selected
 	// resources.
+	//
+	// This field is alpha-level and is for the override policy feature.
 	// +optional
 	ApplicableResourceOverrides []NamespacedName `json:"applicableResourceOverrides,omitempty"`
 
 	// ApplicableClusterResourceOverrides contains a list of applicable ClusterResourceOverride snapshots associated with
 	// the selected resources.
+	//
+	// This field is alpha-level and is for the override policy feature.
 	// +optional
 	ApplicableClusterResourceOverrides []string `json:"applicableClusterResourceOverrides,omitempty"`
 

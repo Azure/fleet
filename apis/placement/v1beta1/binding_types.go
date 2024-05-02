@@ -13,6 +13,7 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=rb
 // +kubebuilder:subresource:status
+// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Bound")].status`,name="WorkCreated",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Applied")].status`,name="ResourcesApplied",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
@@ -122,14 +123,6 @@ const (
 	// - "False" means the resources fail to be overridden before applying to the target cluster.
 	// - "Unknown" means it is unknown.
 	ResourceBindingOverridden ResourceBindingConditionType = "Overridden"
-
-	// ResourceBindingBound indicates the bound condition of the given resources.
-	// Its condition status can be one of the following:
-	// - "True" means the corresponding work CR is created in the target cluster's namespace.
-	// - "False" means the corresponding work CR is not created yet.
-	// - "Unknown" means it is unknown.
-	// TODO, will be replaced by "WorkSynchronized"
-	ResourceBindingBound ResourceBindingConditionType = "Bound"
 
 	// ResourceBindingWorkSynchronized indicates the work synchronized condition of the given resources.
 	// Its condition status can be one of the following:

@@ -1,0 +1,21 @@
+apiVersion: placement.kubernetes-fleet.io/v1alpha1
+kind: ClusterResourceOverride
+metadata:
+  name: cro-1
+spec:
+  clusterResourceSelectors:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      name: clonesets.apps.kruise.io
+      version: v1
+  policy:
+    overrideRules:
+      - clusterSelector:
+          clusterSelectorTerms:
+            - labelSelector:
+                matchLabels:
+                  env: canary
+        jsonPatchOverrides:
+          - op: add
+            path: /metadata/labels/new-label
+            value: "new-value"

@@ -14,6 +14,7 @@ import (
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -165,7 +166,7 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 			want: metav1.Condition{
 				Status:             metav1.ConditionTrue,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
-				Reason:             allWorkAppliedReason,
+				Reason:             condition.AllWorkAppliedReason,
 				ObservedGeneration: 1,
 			},
 		},
@@ -206,7 +207,7 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 			want: metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
-				Reason:             workNotAppliedReason,
+				Reason:             condition.WorkNotAppliedReason,
 				ObservedGeneration: 1,
 			},
 		},
@@ -238,7 +239,7 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 			want: metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
-				Reason:             workNotAppliedReason,
+				Reason:             condition.WorkNotAppliedReason,
 				ObservedGeneration: 1,
 			},
 		},
@@ -279,7 +280,7 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 			want: metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
-				Reason:             workNotAppliedReason,
+				Reason:             condition.WorkNotAppliedReason,
 				ObservedGeneration: 1,
 			},
 		},
@@ -345,7 +346,7 @@ func TestBuildAllWorkAvailableCondition(t *testing.T) {
 			want: metav1.Condition{
 				Status:             metav1.ConditionTrue,
 				Type:               string(fleetv1beta1.ResourceBindingAvailable),
-				Reason:             allWorkAvailableReason,
+				Reason:             condition.AllWorkAvailableReason,
 				ObservedGeneration: 1,
 			},
 		},
@@ -423,7 +424,7 @@ func TestBuildAllWorkAvailableCondition(t *testing.T) {
 			want: metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingAvailable),
-				Reason:             workNotAvailableReason,
+				Reason:             condition.WorkNotAvailableReason,
 				Message:            "work object work2 is not available",
 				ObservedGeneration: 1,
 			},
@@ -459,7 +460,7 @@ func TestBuildAllWorkAvailableCondition(t *testing.T) {
 			want: metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingAvailable),
-				Reason:             workNotAvailableReason,
+				Reason:             condition.WorkNotAvailableReason,
 				Message:            "work object work2 is not available",
 				ObservedGeneration: 1,
 			},
