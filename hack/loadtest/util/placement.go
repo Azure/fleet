@@ -129,7 +129,7 @@ func MeasureOnePlacement(ctx context.Context, hubClient client.Client, deadline,
 
 		// wait for the status of the CRP and make sure all conditions are all true
 		klog.Infof("verify cluster resource placement `%s` is updated", crpName)
-		waitForCrpToComplete(ctx, hubClient, deadline, interval, deletionStartTime, crpName, currency, fleetSize)
+		waitForCrpToCompleteUpdate(ctx, hubClient, deadline, interval, deletionStartTime, crpName, currency, fleetSize)
 	}
 	return hubClient.Delete(ctx, crp)
 }
@@ -231,7 +231,7 @@ func resourcesDeletedCheck(ctx context.Context, hubClient client.Client, deadlin
 }
 
 // check crp updated/completed before deletion
-func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline, pollInterval time.Duration, deletionStartTime time.Time, crpName string, currency string, fleetSize string) {
+func waitForCrpToCompleteUpdate(ctx context.Context, hubClient client.Client, deadline, pollInterval time.Duration, deletionStartTime time.Time, crpName string, currency string, fleetSize string) {
 	var crp v1beta1.ClusterResourcePlacement
 	var err error
 	timer := time.NewTimer(deadline)
@@ -267,7 +267,6 @@ func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline
 				UpdateLatencyCountMetric.WithLabelValues(currency, fleetSize, strconv.FormatFloat(endTime, 'f', 3, 64)).Inc()
 				LoadTestUpdateCountMetric.WithLabelValues(currency, fleetSize, "succeed").Inc()
 				updateSuccessCount.Inc()
-
 				return
 			} else if condition.IsConditionStatusFalse(appliedCond, crp.Generation) {
 				// failed
