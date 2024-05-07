@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -194,7 +193,7 @@ func getFleetSize(crp v1beta1.ClusterResourcePlacement, clusterNames ClusterName
 	}
 	return strconv.Itoa(len(clusterNames)), clusterNames, nil
 }
-func createCRP(crp *v1beta1.ClusterResourcePlacement, crpFile string, crpName string, nsName string) error {
+func createCRP(crp *v1beta1.ClusterResourcePlacement, crpFile string, crpName string, nsName string, useTestResources bool) error {
 	obj, err := readObjFromFile(fmt.Sprintf("hack/loadtest/%s", crpFile), nsName)
 	if err != nil {
 		klog.ErrorS(err, "Failed to read object from file.")
@@ -207,21 +206,15 @@ func createCRP(crp *v1beta1.ClusterResourcePlacement, crpFile string, crpName st
 	}
 
 	crp.Name = crpName
-	crp.Spec.ResourceSelectors = []v1beta1.ClusterResourceSelector{
-		{
+	if useTestResources {
+		crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, v1beta1.ClusterResourceSelector{
 			Group:   "",
 			Version: "v1",
 			Kind:    "Namespace",
 			LabelSelector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{labelKey: nsName},
 			},
-		},
-		{
-			Group:   apiextensionsv1.GroupName,
-			Version: "v1",
-			Kind:    "CustomResourceDefinition",
-			Name:    "clonesets.apps.kruise.io",
-		},
+		})
 	}
 	return nil
 }

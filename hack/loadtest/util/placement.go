@@ -10,8 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"go.goms.io/fleet/pkg/utils/condition"
-
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/atomic"
@@ -23,6 +21,7 @@ import (
 
 	"go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
 )
 
 const (
@@ -42,27 +41,18 @@ var (
 	LoadTestApplyCountMetric = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "workload_apply_total",
 		Help: "Total number of placement",
-	}, []string{"concurrency", "fleetSize", "result"})
+	}, []string{"concurrency", "numTargetCluster", "result"})
 
-	LoadTestApplyLatencyMetric = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "workload_apply_latency",
-		Help:    "Length of time from placement change to it is applied to the member cluster",
-		Buckets: []float64{0.1, 0.5, 1.0, 2.0, 3, 4, 6, 8, 10, 13, 16, 20, 23, 26, 30, 37, 45, 60, 90, 120, 150, 180, 300, 600, 1200, 1500, 3000},
-	}, []string{"concurrency", "fleetSize"})
+	applyQuantile = promauto.NewSummary(prometheus.SummaryOpts{
+		Name:       "quantile_apply_crp_latency",
+		Help:       "quantiles for apply latency",
+		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+	})
 
-	deleteSuccessCount        atomic.Int32
-	deleteFailCount           atomic.Int32
-	deleteTimeoutCount        atomic.Int32
-	LoadTestDeleteCountMetric = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "workload_delete_total",
-		Help: "Total number of placement delete",
-	}, []string{"concurrency", "fleetSize", "result"})
-
-	LoadTestDeleteLatencyMetric = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "workload_delete_latency",
-		Help:    "Length of time from resource deletion to it is deleted from the member cluster",
-		Buckets: []float64{0.1, 0.5, 1.0, 1.25, 1.5, 1.75, 2.0, 3, 4, 6, 8, 10, 13, 16, 20, 23, 26, 30, 37, 45, 60, 90, 120, 150, 180, 300, 600, 1200, 1500, 3000},
-	}, []string{"concurrency", "fleetSize"})
+	ApplyLatencyCountMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "apply_crp_latency_count",
+		Help: "latency of placement",
+	}, []string{"concurrency", "numTargetCluster", "latency"})
 
 	updateSuccessCount        atomic.Int32
 	updateFailCount           atomic.Int32
@@ -70,33 +60,44 @@ var (
 	LoadTestUpdateCountMetric = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "workload_update_total",
 		Help: "Total number of placement updates",
-	}, []string{"concurrency", "fleetSize", "result"})
+	}, []string{"concurrency", "numTargetCluster", "result"})
 
-	LoadTestUpdateLatencyMetric = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "workload_update_latency",
-		Help:    "Length of time from placement change to it is applied to the member cluster",
-		Buckets: []float64{0.1, 0.5, 1.0, 2.0, 3, 4, 6, 8, 10, 13, 16, 20, 23, 26, 30, 37, 45, 60, 90, 120, 150, 180, 300, 600, 1200, 1500, 3000},
-	}, []string{"concurrency", "fleetSize"})
+	updateQuantile = promauto.NewSummary(prometheus.SummaryOpts{
+		Name:       "quantile_update_latency",
+		Help:       "quantiles for update latency",
+		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+	})
+
+	UpdateLatencyCountMetric = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "update_crp_latency_count",
+		Help: "update of placement",
+	}, []string{"concurrency", "numTargetCluster", "latency"})
 )
 
-func MeasureOnePlacement(ctx context.Context, hubClient client.Client, deadline, interval time.Duration, maxCurrentPlacement int, clusterNames ClusterNames, crpFile string) error {
+func MeasureOnePlacement(ctx context.Context, hubClient client.Client, deadline, interval time.Duration, maxCurrentPlacement int, clusterNames ClusterNames, crpFile string, useTestResources *bool) error {
 	crpName := crpPrefix + utilrand.String(10)
 	nsName := nsPrefix + utilrand.String(10)
 	currency := strconv.Itoa(maxCurrentPlacement)
 	fleetSize := "0"
 
 	defer klog.Flush()
-	defer deleteNamespace(context.Background(), hubClient, nsName) //nolint
 
-	klog.Infof("create the resources in namespace `%s` in the hub cluster", nsName)
-	if err := applyTestManifests(ctx, hubClient, nsName); err != nil {
-		klog.ErrorS(err, "failed to apply namespaced resources", "namespace", nsName)
-		return err
+	if *useTestResources {
+		defer func() {
+			if err := deleteNamespace(context.Background(), hubClient, nsName); err != nil {
+				klog.ErrorS(err, "failed to delete namespace", "namespace", nsName)
+			}
+		}()
+		klog.Infof("create the resources in namespace `%s` in the hub cluster", nsName)
+		if err := applyTestManifests(ctx, hubClient, nsName); err != nil {
+			klog.ErrorS(err, "failed to apply namespaced resources", "namespace", nsName)
+			return err
+		}
 	}
 
 	klog.Infof("create the cluster resource placement `%s` in the hub cluster", crpName)
 	crp := &v1beta1.ClusterResourcePlacement{}
-	if err := createCRP(crp, crpFile, crpName, nsName); err != nil {
+	if err := createCRP(crp, crpFile, crpName, nsName, *useTestResources); err != nil {
 		klog.ErrorS(err, "failed to create crp", "namespace", nsName, "crp", crpName)
 		return err
 	}
@@ -115,21 +116,22 @@ func MeasureOnePlacement(ctx context.Context, hubClient client.Client, deadline,
 	if fleetSize == "0" {
 		return nil
 	}
-	klog.Infof("remove the namespaced resources applied by the placement `%s`", crpName)
-	deletionStartTime := time.Now()
-	if err := deleteTestManifests(ctx, hubClient, nsName); err != nil {
-		klog.V(3).Infof("the cluster resource placement `%s` failed", crpName)
-		LoadTestDeleteCountMetric.WithLabelValues(currency, fleetSize, "failed").Inc()
-		deleteFailCount.Inc()
-		LoadTestUpdateCountMetric.WithLabelValues(currency, fleetSize, "failed").Inc()
-		updateFailCount.Inc()
-		return err
-	}
-	collectDeleteMetrics(ctx, hubClient, deadline, interval, crpName, clusterNames, currency, fleetSize)
 
-	// wait for the status of the CRP and make sure all conditions are all true
-	klog.Infof("verify cluster resource placement `%s` is updated", crpName)
-	waitForCrpToComplete(ctx, hubClient, deadline, interval, deletionStartTime, crpName, currency, fleetSize)
+	deletionStartTime := time.Now()
+	if *useTestResources {
+		klog.Infof("remove the namespaced resources applied by the placement `%s`", crpName)
+		if err := deleteTestManifests(ctx, hubClient, nsName); err != nil {
+			klog.V(3).Infof("the cluster resource placement `%s` failed", crpName)
+			LoadTestUpdateCountMetric.WithLabelValues(currency, fleetSize, "failed").Inc()
+			updateFailCount.Inc()
+			return err
+		}
+		resourcesDeletedCheck(ctx, hubClient, deadline, interval, crpName, clusterNames)
+
+		// wait for the status of the CRP and make sure all conditions are all true
+		klog.Infof("verify cluster resource placement `%s` is updated", crpName)
+		waitForCrpToComplete(ctx, hubClient, deadline, interval, deletionStartTime, crpName, currency, fleetSize)
+	}
 	return hubClient.Delete(ctx, crp)
 }
 
@@ -173,9 +175,10 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 					klog.ErrorS(err, "Failed to get fleet size.")
 					return fleetSize, nil
 				}
+				applyQuantile.Observe(endTime.Seconds())
+				ApplyLatencyCountMetric.WithLabelValues(currency, fleetSize, strconv.FormatFloat(endTime.Seconds(), 'f', 3, 64)).Inc()
 				LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "succeed").Inc()
 				applySuccessCount.Inc()
-				LoadTestApplyLatencyMetric.WithLabelValues(currency, fleetSize).Observe(endTime.Seconds())
 				return fleetSize, clusterNames
 			} else if cond == nil || cond.Status == metav1.ConditionUnknown {
 				klog.V(2).Infof("the cluster resource placement `%s` is pending", crpName)
@@ -188,9 +191,8 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 }
 
 // collect metrics for deleting resources
-func collectDeleteMetrics(ctx context.Context, hubClient client.Client, deadline, pollInterval time.Duration, crpName string, clusterNames ClusterNames, currency string, fleetSize string) {
+func resourcesDeletedCheck(ctx context.Context, hubClient client.Client, deadline, pollInterval time.Duration, crpName string, clusterNames ClusterNames) {
 	var crp v1beta1.ClusterResourcePlacement
-	startTime := time.Now()
 	klog.Infof("verify that the applied resources on cluster resource placement `%s` are deleted", crpName)
 
 	// Create a timer and a ticker
@@ -205,8 +207,6 @@ func collectDeleteMetrics(ctx context.Context, hubClient client.Client, deadline
 			// Deadline has been reached
 			// timeout
 			klog.V(3).Infof("the cluster resource placement `%s` delete timeout", crpName)
-			LoadTestDeleteCountMetric.WithLabelValues(currency, fleetSize, "timeout").Inc()
-			deleteTimeoutCount.Inc()
 			return
 		case <-ticker.C:
 			// Interval for CRP status check
@@ -232,9 +232,6 @@ func collectDeleteMetrics(ctx context.Context, hubClient client.Client, deadline
 			if allRemoved {
 				// succeeded
 				klog.V(3).Infof("the applied resources on cluster resource placement `%s` delete succeeded", crpName)
-				LoadTestDeleteCountMetric.WithLabelValues(currency, fleetSize, "succeed").Inc()
-				deleteSuccessCount.Inc()
-				LoadTestDeleteLatencyMetric.WithLabelValues(currency, fleetSize).Observe(time.Since(startTime).Seconds())
 				return
 			}
 		}
@@ -277,9 +274,12 @@ func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline
 			if condition.IsConditionStatusTrue(appliedCond, 1) && condition.IsConditionStatusTrue(synchronizedCond, 1) && condition.IsConditionStatusTrue(scheduledCond, 1) {
 				// succeeded
 				klog.V(3).Infof("the cluster resource placement `%s` succeeded", crpName)
+				var endTime = time.Since(deletionStartTime).Seconds()
+				updateQuantile.Observe(endTime)
+				UpdateLatencyCountMetric.WithLabelValues(currency, fleetSize, strconv.FormatFloat(endTime, 'f', 3, 64)).Inc()
 				LoadTestUpdateCountMetric.WithLabelValues(currency, fleetSize, "succeed").Inc()
 				updateSuccessCount.Inc()
-				LoadTestUpdateLatencyMetric.WithLabelValues(currency, fleetSize).Observe(time.Since(deletionStartTime).Seconds())
+
 				return
 			} else if appliedCond == nil || appliedCond.Status == metav1.ConditionUnknown || synchronizedCond == nil || synchronizedCond.Status == metav1.ConditionUnknown || scheduledCond == nil || scheduledCond.Status == metav1.ConditionUnknown {
 				klog.V(3).Infof("the cluster resource placement `%s` is pending", crpName)
@@ -294,8 +294,6 @@ func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline
 func PrintTestMetrics() {
 	klog.Infof("CRP count %d", crpCount.Load())
 	klog.InfoS("Placement apply result", "total applySuccessCount", applySuccessCount.Load(), "applyFailCount", applyFailCount.Load(), "applyTimeoutCount", applyTimeoutCount.Load())
-
-	klog.InfoS("Placement delete result", "total deleteSuccessCount", deleteSuccessCount.Load(), "deleteFailcount", deleteFailCount.Load(), "deleteTimeoutCount", deleteTimeoutCount.Load())
 
 	klog.InfoS("Placement update result", "total updateSuccessCount", updateSuccessCount.Load(), "updateFailCount", updateFailCount.Load(), "updateTimeoutCount", updateTimeoutCount.Load())
 }
