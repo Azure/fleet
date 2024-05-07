@@ -56,19 +56,23 @@ func main() {
 	defer klog.Flush()
 
 	klog.InfoS("start to run placement load test", "crpFile", crpFile, "pollInterval", *pollInterval, "placementDeadline", *placementDeadline, "maxCurrentPlacement", *maxCurrentPlacement, "useTestResources", useTestResources)
+	klog.InfoS("Get the config")
 	config := config.GetConfigOrDie()
 	config.QPS, config.Burst = float32(100), 500 //queries per second, max # of queries queued at once
+	klog.InfoS("Create hubclient")
 	hubClient, err := client.New(config, client.Options{
 		Scheme: scheme,
 	})
 	if err != nil {
 		panic(err)
 	}
+	klog.InfoS("Setup signal handler")
 	ctx := ctrl.SetupSignalHandler()
-
+	klog.InfoS("Apply cluster scope manifests")
 	if err = util.ApplyClusterScopeManifests(ctx, hubClient); err != nil {
 		panic(err)
 	}
+	klog.InfoS("Get context with deadline")
 	loadTestCtx, canFunc := context.WithDeadline(ctx, time.Now().Add(time.Minute*time.Duration(*loadTestLength)))
 	defer canFunc()
 	// run the loadtest in the background
