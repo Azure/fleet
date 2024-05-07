@@ -65,6 +65,7 @@ func main() {
 		panic(err)
 	}
 	ctx := ctrl.SetupSignalHandler()
+
 	if err = util.ApplyClusterScopeManifests(ctx, hubClient); err != nil {
 		panic(err)
 	}
@@ -73,6 +74,7 @@ func main() {
 	// run the loadtest in the background
 	go runLoadTest(loadTestCtx, config)
 	// setup prometheus server
+	klog.InfoS("Start prometheus")
 	http.Handle("/metrics", promhttp.Handler())
 	/* #nosec */
 	if err = http.ListenAndServe(":4848", nil); err != nil {
@@ -81,6 +83,7 @@ func main() {
 }
 
 func runLoadTest(ctx context.Context, config *rest.Config) {
+	klog.InfoS("Placement load test started.")
 	var wg sync.WaitGroup
 	wg.Add(*maxCurrentPlacement)
 	for i := 0; i < *maxCurrentPlacement; i++ {
