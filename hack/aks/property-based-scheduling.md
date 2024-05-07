@@ -13,8 +13,6 @@ Fleet property-based scheduling (preview) adds more flexibility to Fleet's exist
 * balancing resource usage (CPU, memory, etc.) across clusters; and
 * making full use of the cost benefits that AKS provides.
 
-[!INCLUDE [preview features callout](./includes/preview/preview-callout.md)]
-
 ## Before you begin
 
 To complete this tutorial, you will need:
@@ -64,7 +62,7 @@ az aks create -n $HUB_CLUSTER \
 
 It may take a few moments before the commands complete.
 
-Next, create the three member clusters using the commands below:
+Next, create the following three member clusters using the commands below:
 
 ```sh
 export MEMBER_CLUSTER_1=bravelion
