@@ -35,7 +35,7 @@ type PropertyProvider interface {
 
 For the details, see the [Fleet source code](../../../pkg/propertyprovider/interface.go).
 
-A property provider should be shipped as a part of the Fleet member agent and runs alongside it.
+A property provider should be shipped as a part of the Fleet member agent and run alongside it.
 Refer to the [Fleet source code](../../../cmd/memberagent/main.go)
 for specifics on how to set it up with the Fleet member agent.
 At this moment, only one property provider can be set up with the Fleet member agent at a time.
@@ -57,7 +57,7 @@ the host member cluster.
 
 A cluster property is an attribute of a member cluster. There are two types of properties:
 
-* A resource property describes the usage information of a resource in a member cluster; the
+* Resource property: the usage information of a resource in a member cluster; the
 name of the resource should be in the format of
 [a Kubernetes label key](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set),
 such as `cpu` and `memory`, and the usage information should consist of:
@@ -72,7 +72,7 @@ such as `cpu` and `memory`, and the usage information should consist of:
 
     Note that you may report a virtual resource via the property provider, if applicable.
 
-* A non-resource property is essentially a metric about a member cluster, in the form of a key/value
+* Non-resource property: a metric about a member cluster, in the form of a key/value
 pair; the key should be in the format of
 [a Kubernetes label key](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set),
 such as `kubernetes.azure.com/node-count`, and the value at this moment should be a sortable
