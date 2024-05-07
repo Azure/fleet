@@ -25,7 +25,7 @@ constraint that **a cluster must satisfy** before it can be picked. Each term ma
 * a label selector, which specifies a set of labels that a cluster must have or not have before 
 it can be picked;
 * a property selector, which specifies a cluster property requirement that a cluster must satisfy
-beofre it can be picked;
+before it can be picked;
 * a combination of both.
 
 For the specifics about property selectors, see the

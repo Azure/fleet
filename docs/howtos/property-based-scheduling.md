@@ -24,7 +24,7 @@ property sorters to prefer clusters with a property that ranks higher or lower.
 
 # Property selectors in `requiredDuringSchedulingIgnoredDuringExecution` affinity terms
 
-A property selector is essentially an array of expression matchers against cluster properties.
+A property selector is an array of expression matchers against cluster properties.
 In each matcher you will specify:
 
 * A name, which is the name of the property.
@@ -104,7 +104,7 @@ spec:
                     - name: "kubernetes.azure.com/node-count"
                       operator: Ge
                       values:
-                      - 5
+                      - "5"
 ```
 
 You may use both label selector and property selector in a
@@ -133,7 +133,7 @@ spec:
                     - name: "kubernetes.azure.com/node-count"
                       operator: Ge
                       values:
-                      - 5
+                      - "5"
 ```
 
 In the example above, Fleet will only consider a cluster for resource placement if it has the
