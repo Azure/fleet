@@ -179,9 +179,8 @@ func validatePolicyForPickFixedPlacementType(policy *placementv1beta1.PlacementP
 		if _, ok := uniqueClusterNames[name]; ok {
 			allErr = append(allErr, fmt.Errorf("cluster names must be unique for policy type %s", placementv1beta1.PickFixedPlacementType))
 			break
-		} else {
-			uniqueClusterNames[name] = true
 		}
+		uniqueClusterNames[name] = true
 	}
 	if policy.NumberOfClusters != nil {
 		allErr = append(allErr, fmt.Errorf("number of clusters must be nil for policy type %s, only valid for PickN placement policy type", placementv1beta1.PickFixedPlacementType))
