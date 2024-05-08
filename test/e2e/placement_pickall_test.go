@@ -905,8 +905,13 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on matching clusters")
 		})
 
+		It("should remove resources on previously matched clusters", func() {
+			resourceRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster2EastCanary)
+			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove resources on previously matched clusters")
+		})
+
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster3WestProd})
+			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd})
 		})
 	})
 
