@@ -27,11 +27,11 @@ CLUSTER_CONFIG := $(abspath test/e2e/v1alpha1/kind-config.yaml)
 # Binaries
 # Note: Need to use abspath so we can invoke these from subdirectories
 
-CONTROLLER_GEN_VER := v0.11.4
+CONTROLLER_GEN_VER := v0.15.0
 CONTROLLER_GEN_BIN := controller-gen
 CONTROLLER_GEN := $(abspath $(TOOLS_BIN_DIR)/$(CONTROLLER_GEN_BIN)-$(CONTROLLER_GEN_VER))
 
-STATICCHECK_VER := 2023.1.2
+STATICCHECK_VER := 2023.1.7
 STATICCHECK_BIN := staticcheck
 STATICCHECK := $(abspath $(TOOLS_BIN_DIR)/$(STATICCHECK_BIN)-$(STATICCHECK_VER))
 
