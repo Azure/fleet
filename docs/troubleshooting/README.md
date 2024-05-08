@@ -3,6 +3,12 @@
 ## Overview:
 
 This TSG is meant to help you troubleshoot issues with the Fleet APIs.
+  - [How can I debug when my CRP status is ClusterResourcePlacementScheduled condition status is set to false?](#how-can-i-debug-when-my-crp-status-is-clusterresourceplacementscheduled-condition-status-is-set-to-false)
+  - [How can I debug when my CRP status is ClusterResourcePlacementWorkSynchronized condition status is set to false?](#how-can-i-debug-when-my-crp-status-is-clusterresourceplacementworksynchronized-condition-status-is-set-to-false)
+  - [How can I debug when my CRP status is ClusterResourcePlacementOverridden condition status is set to false?](#how-can-i-debug-when-my-crp-status-is-clusterresourceplacementoverridden-condition-status-is-set-to-false)
+  - [How can I debug when my CRP status is ClusterResourcePlacementRolloutStarted condition status is set to false?](#how-can-i-debug-when-my-crp-status-is-clusterresourceplacementrolloutstarted-condition-status-is-set-to-false)
+  - [How can I debug when my CRP ClusterResourcePlacementApplied condition is set to false?](#how-can-i-debug-when-my-crp-clusterresourceplacementapplied-condition-is-set-to-false)
+  - [How can I debug when my CRP status is ClusterResourcePlacementAvailable condition is set to false?](#how-can-i-debug-when-my-crp-status-is-clusterresourceplacementavailable-condition-is-set-to-false)
 
 ## Cluster Resource Placement:
 
@@ -22,6 +28,7 @@ Instances where this condition may arise:
 
 - When the placement policy is set to `PickFixed`, but the specified cluster names do not match any joined member cluster name in the fleet, or the specified cluster is no longer connected to the fleet.
 - When the placement policy is set to `PickN`, and N clusters are specified, but there are fewer than N clusters that have joined the fleet or satisfy the placement policy.
+- When the CRP resource selector selects a reserved namespace.
 
 >>Note: When the placement policy is set to `PickAll`, the `ClusterResourcePlacementScheduled` condition is always set to `true`.
 
@@ -211,6 +218,267 @@ status:
 ### Resolution:
 The solution here is to add the `env:prod` label to the member cluster resource for `kind-cluster-2` as well, so that the scheduler can select the cluster to propagate resources.
 
+## How can I debug when my CRP status is ClusterResourcePlacementWorkSynchronized condition status is set to false?
+The `ClusterResourcePlacementWorkSynchronized` condition is false when the CRP has been recently updated but the associated work objects have not yet been synchronized with the changes.
+
+### Example Scenario:
+The CRP is attempting to propagate a resource to a selected cluster, but the work object has not been updated to reflect the latest changes.
+
+### CRP Spec:
+```
+spec:
+  resourceSelectors:
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: secret-reader
+      version: v1
+  policy:
+    placementType: PickN
+    numberOfClusters: 1
+  strategy:
+    type: RollingUpdate
+ ```
+
+### CRP Status:
+```
+spec:
+  policy:
+    numberOfClusters: 1
+    placementType: PickN
+  resourceSelectors:
+  - group: ""
+    kind: Namespace
+    name: test-ns
+    version: v1
+  revisionHistoryLimit: 10
+  strategy:
+    type: RollingUpdate
+status:
+  conditions:
+  - lastTransitionTime: "2024-05-14T18:05:04Z"
+    message: found all cluster needed as specified by the scheduling policy, found
+      1 cluster(s)
+    observedGeneration: 1
+    reason: SchedulingPolicyFulfilled
+    status: "True"
+    type: ClusterResourcePlacementScheduled
+  - lastTransitionTime: "2024-05-14T18:05:05Z"
+    message: All 1 cluster(s) start rolling out the latest resource
+    observedGeneration: 1
+    reason: RolloutStarted
+    status: "True"
+    type: ClusterResourcePlacementRolloutStarted
+  - lastTransitionTime: "2024-05-14T18:05:05Z"
+    message: No override rules are configured for the selected resources
+    observedGeneration: 1
+    reason: NoOverrideSpecified
+    status: "True"
+    type: ClusterResourcePlacementOverridden
+  - lastTransitionTime: "2024-05-14T18:05:05Z"
+    message: There are 1 cluster(s) which have not finished creating or updating work(s)
+      yet
+    observedGeneration: 1
+    reason: WorkNotSynchronizedYet
+    status: "False"
+    type: ClusterResourcePlacementWorkSynchronized
+  observedResourceIndex: "0"
+  placementStatuses:
+  - clusterName: kind-cluster-1
+    conditions:
+    - lastTransitionTime: "2024-05-14T18:05:04Z"
+      message: 'Successfully scheduled resources for placement in kind-cluster-1 (affinity
+        score: 0, topology spread score: 0): picked by scheduling policy'
+      observedGeneration: 1
+      reason: Scheduled
+      status: "True"
+      type: Scheduled
+    - lastTransitionTime: "2024-05-14T18:05:05Z"
+      message: Detected the new changes on the resources and started the rollout process
+      observedGeneration: 1
+      reason: RolloutStarted
+      status: "True"
+      type: RolloutStarted
+    - lastTransitionTime: "2024-05-14T18:05:05Z"
+      message: No override rules are configured for the selected resources
+      observedGeneration: 1
+      reason: NoOverrideSpecified
+      status: "True"
+      type: Overridden
+    - lastTransitionTime: "2024-05-14T18:05:05Z"
+      message: 'Failed to sychronize the work to the latest: works.placement.kubernetes-fleet.io
+        "crp1-work" is forbidden: unable to create new content in namespace fleet-member-kind-cluster-1
+        because it is being terminated'
+      observedGeneration: 1
+      reason: SyncWorkFailed
+      status: "False"
+      type: WorkSynchronized
+  selectedResources:
+  - kind: Namespace
+    name: test-ns
+    version: v1
+```
+The `ClusterResourcePlacementWorkSynchronized` condition in the CRP status is flagged as false. It is clear from the message 
+that the work object `crp1-work` is prohibited from generating new content within the namespace `fleet-member-kind-cluster-1` 
+as it's currently undergoing termination. 
+
+### Resolution:
+- To address this specific issue, recreate the Custom Resource Placement (CRP) with a newly selected cluster.
+- Alternatively, delete the CRP and any work on the namespace, then wait for the namespace to regenerate
+
+In other scenarios, you might opt to wait for the work to finish propagating. If the issue persists, consider deleting the CRP and recreating it.
+
+## How can I debug when my CRP status is ClusterResourcePlacementOverridden condition status is set to false?
+
+The status of the `ClusterResourcePlacementOverridden` condition is set to `false` when there is an Override API related issue.
+
+### Example Scenario:
+In the following example, an attempt is made to override the cluster role `secret-reader` that is being propagated by the `ClusterResourcePlacement` to the selected clusters.
+However, the `ClusterResourceOverride` is created with an invalid path for the resource.
+
+### ClusterRole:
+```
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+annotations:
+kubectl.kubernetes.io/last-applied-configuration: |
+{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"ClusterRole","metadata":{"annotations":{},"name":"secret-reader"},"rules":[{"apiGroups":[""],"resources":["secrets"],"verbs":["get","watch","list"]}]}
+creationTimestamp: "2024-05-14T15:36:48Z"
+name: secret-reader
+resourceVersion: "81334"
+uid: 108e6312-3416-49be-aa3d-a665c5df58b4
+rules:
+- apiGroups:
+  - ""
+    resources:
+  - secrets
+    verbs:
+  - get
+  - watch
+  - list
+```
+The `ClusterRole` `secret-reader` that is being propagated to the member clusters by the `ClusterResourcePlacement`.
+
+### ClusterResourceOverride spec:
+```
+spec:
+  clusterResourceSelectors:
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: secret-reader
+    version: v1
+  policy:
+    overrideRules:
+    - clusterSelector:
+        clusterSelectorTerms:
+        - labelSelector:
+            matchLabels:
+              env: canary
+      jsonPatchOverrides:
+      - op: add
+        path: /metadata/labels/new-label
+        value: new-value
+```
+The `ClusterResourceOverride` is created to override the `ClusterRole` `secret-reader` by adding a new label `new-label` 
+and value `new-value` for the clusters with the label `env: canary`.
+
+### CRP Spec:
+```
+spec:
+  resourceSelectors:
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: secret-reader
+      version: v1
+  policy:
+    placementType: PickN
+    numberOfClusters: 1
+    affinity:
+      clusterAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          clusterSelectorTerms:
+            - labelSelector:
+                matchLabels:
+                  env: canary
+  strategy:
+    type: RollingUpdate
+    applyStrategy:
+      allowCoOwnership: true
+```
+
+### CRP Status:
+```
+status:
+  conditions:
+  - lastTransitionTime: "2024-05-14T16:16:18Z"
+    message: found all cluster needed as specified by the scheduling policy, found
+      1 cluster(s)
+    observedGeneration: 1
+    reason: SchedulingPolicyFulfilled
+    status: "True"
+    type: ClusterResourcePlacementScheduled
+  - lastTransitionTime: "2024-05-14T16:16:18Z"
+    message: All 1 cluster(s) start rolling out the latest resource
+    observedGeneration: 1
+    reason: RolloutStarted
+    status: "True"
+    type: ClusterResourcePlacementRolloutStarted
+  - lastTransitionTime: "2024-05-14T16:16:18Z"
+    message: Failed to override resources in 1 cluster(s)
+    observedGeneration: 1
+    reason: OverriddenFailed
+    status: "False"
+    type: ClusterResourcePlacementOverridden
+  observedResourceIndex: "0"
+  placementStatuses:
+  - applicableClusterResourceOverrides:
+    - cro-1-0
+    clusterName: kind-cluster-1
+    conditions:
+    - lastTransitionTime: "2024-05-14T16:16:18Z"
+      message: 'Successfully scheduled resources for placement in kind-cluster-1 (affinity
+        score: 0, topology spread score: 0): picked by scheduling policy'
+      observedGeneration: 1
+      reason: Scheduled
+      status: "True"
+      type: Scheduled
+    - lastTransitionTime: "2024-05-14T16:16:18Z"
+      message: Detected the new changes on the resources and started the rollout process
+      observedGeneration: 1
+      reason: RolloutStarted
+      status: "True"
+      type: RolloutStarted
+    - lastTransitionTime: "2024-05-14T16:16:18Z"
+      message: 'Failed to apply the override rules on the resources: add operation
+        does not apply: doc is missing path: "/metadata/labels/new-label": missing
+        value'
+      observedGeneration: 1
+      reason: OverriddenFailed
+      status: "False"
+      type: Overridden
+  selectedResources:
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: secret-reader
+    version: v1
+```
+The CRP attempted to override a propagated resource utilizing an applicable `ClusterResourceOverrideSnapshot`. 
+However, as the `ClusterResourcePlacementOverridden` condition remains false, looking at the placement status for the cluster 
+where the condition `Overriden` failed will offer insights into the exact cause of the failure. 
+The accompanying message highlights that the override failed due to the absence of the path `/metadata/labels/new-label` and its corresponding value. 
+Based on the previous example of the cluster role `secret-reader`, it's evident that no labels were initially present. 
+Therefore, the specified path for adding a new label is incorrect.
+
+### Resolution:
+The solution here is to correct the path and value in the `ClusterResourceOverride` to successfully override the `ClusterRole` `secret-reader` as shown below:
+```
+jsonPatchOverrides:
+  - op: add
+    path: /metadata/labels
+    value: 
+      newlabel: new-value
+```
+
 ## How can I debug when my CRP status is ClusterResourcePlacementRolloutStarted condition status is set to false?
 
 The `ClusterResourcePlacementRolloutStarted` condition status is set to `false` under the following circumstances: the selected resources have not been rolled out in all scheduled clusters yet.
@@ -285,10 +553,10 @@ status:
     type: ClusterResourcePlacementAvailable
   observedResourceIndex: "0"
   placementStatuses:
-  - clusterName: cluster-2
+  - clusterName: kind-cluster-2
     conditions:
     - lastTransitionTime: "2024-05-07T23:08:53Z"
-      message: 'Successfully scheduled resources for placement in cluster-2 (affinity
+      message: 'Successfully scheduled resources for placement in kind-cluster-2 (affinity
         score: 0, topology spread score: 0): picked by scheduling policy'
       observedGeneration: 1
       reason: Scheduled
@@ -324,10 +592,10 @@ status:
       reason: AllWorkAreAvailable
       status: "True"
       type: Available
-  - clusterName: cluster-1
+  - clusterName: kind-cluster-1
     conditions:
     - lastTransitionTime: "2024-05-07T23:08:53Z"
-      message: 'Successfully scheduled resources for placement in cluster-1 (affinity
+      message: 'Successfully scheduled resources for placement in kind-cluster-1 (affinity
         score: 0, topology spread score: 0): picked by scheduling policy'
       observedGeneration: 1
       reason: Scheduled
@@ -394,10 +662,10 @@ status:
     type: ClusterResourcePlacementRolloutStarted
   observedResourceIndex: "1"
   placementStatuses:
-  - clusterName: cluster-2
+  - clusterName: kind-cluster-2
     conditions:
     - lastTransitionTime: "2024-05-07T23:08:53Z"
-      message: 'Successfully scheduled resources for placement in cluster-2 (affinity
+      message: 'Successfully scheduled resources for placement in kind-cluster-2 (affinity
         score: 0, topology spread score: 0): picked by scheduling policy'
       observedGeneration: 1
       reason: Scheduled
@@ -409,10 +677,10 @@ status:
       reason: RolloutNotStartedYet
       status: "False"
       type: RolloutStarted
-  - clusterName: cluster-1
+  - clusterName: kind-cluster-1
     conditions:
     - lastTransitionTime: "2024-05-07T23:08:53Z"
-      message: 'Successfully scheduled resources for placement in cluster-1 (affinity
+      message: 'Successfully scheduled resources for placement in kind-cluster-1 (affinity
         score: 0, topology spread score: 0): picked by scheduling policy'
       observedGeneration: 1
       reason: Scheduled
@@ -559,6 +827,10 @@ If, during the update, even one of the bindings failed to apply, it would violat
 - Alternatively, you can also join a third member cluster.
 
 ## How can I debug when my CRP ClusterResourcePlacementApplied condition is set to false?
+
+### Common scenarios:
+ - When the CRP is unable to propagate resources to a selected cluster due to the resource already existing on the cluster and not being managed by the fleet controller.
+ - When the CRP is unable to propagate resource to selected due to another CRP already managing the resource for selected cluster with a different apply strategy.
 
 ### Investigation steps:
 
@@ -720,7 +992,11 @@ status:
     version: v1
 ```
 
-In the `ClusterResourcePlacement` status, `placementStatuses` for `kind-cluster-1` in the `failedPlacements` section, we get a clear message as to why the resource failed to apply on the member cluster.
+
+In the `ClusterResourcePlacement` status, within the `failedPlacements` section for `kind-cluster-1`, we get a clear message 
+as to why the resource failed to apply on the member cluster. Immediately preceding this in the conditions section, 
+the `Applied` condition for `kind-cluster-1` is flagged as false, citing the `NotAllWorkHaveBeenApplied` reason. 
+This signifies that the Work object intended for the member cluster `kind-cluster-1` has not been applied.
 
 To gain more insights also take a look at the `work` object, please check this [section](#how-and-where-to-find-the-correct-work-resource) for more details,
 
@@ -789,6 +1065,212 @@ From looking at the `Work` status and specifically the `manifestConditions` sect
 ### Resolution:
 In this scenario, a potential solution is to delete the existing namespace on the member cluster. However, it's essential to note that this decision rests with the user, as the namespace might already contain resources.
 
+## How can I debug when my CRP ClusterResourcePlacementAvailable condition is set to false?
+The ClusterResourcePlacementAvailable condition is false when the cluster lacks the necessary resources or capabilities to accommodate new deployments or allocations.
+
+### Common scenarios:
+- When the CRP is unable to propagate resources to a selected cluster due the member cluster not having enough resources.
+- When the CRP is unable to propagate resource to a selected cluster due the deployment having a bad image name.
+
+### Investigation steps:
+
+### Example Scenario:
+The example output below demonstrates a scenario where the CRP is unable to propagate a deployment to a member cluster due to the deployment having a bad image name.
+
+#### CRP spec:
+```
+spec:
+  resourceSelectors:
+    - group: ""
+      kind: Namespace
+      name: test-ns
+      version: v1
+  policy:
+    placementType: PickN
+    numberOfClusters: 1
+  strategy:
+    type: RollingUpdate
+```
+
+#### CRP status:
+```
+status:
+  conditions:
+  - lastTransitionTime: "2024-05-14T18:52:30Z"
+    message: found all cluster needed as specified by the scheduling policy, found
+      1 cluster(s)
+    observedGeneration: 1
+    reason: SchedulingPolicyFulfilled
+    status: "True"
+    type: ClusterResourcePlacementScheduled
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: All 1 cluster(s) start rolling out the latest resource
+    observedGeneration: 1
+    reason: RolloutStarted
+    status: "True"
+    type: ClusterResourcePlacementRolloutStarted
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: No override rules are configured for the selected resources
+    observedGeneration: 1
+    reason: NoOverrideSpecified
+    status: "True"
+    type: ClusterResourcePlacementOverridden
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: Works(s) are succcesfully created or updated in 1 target cluster(s)'
+      namespaces
+    observedGeneration: 1
+    reason: WorkSynchronized
+    status: "True"
+    type: ClusterResourcePlacementWorkSynchronized
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: The selected resources are successfully applied to 1 cluster(s)
+    observedGeneration: 1
+    reason: ApplySucceeded
+    status: "True"
+    type: ClusterResourcePlacementApplied
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: The selected resources in 1 cluster(s) are still not available yet
+    observedGeneration: 1
+    reason: ResourceNotAvailableYet
+    status: "False"
+    type: ClusterResourcePlacementAvailable
+  observedResourceIndex: "0"
+  placementStatuses:
+  - clusterName: kind-cluster-1
+    conditions:
+    - lastTransitionTime: "2024-05-14T18:52:30Z"
+      message: 'Successfully scheduled resources for placement in kind-cluster-1 (affinity
+        score: 0, topology spread score: 0): picked by scheduling policy'
+      observedGeneration: 1
+      reason: Scheduled
+      status: "True"
+      type: Scheduled
+    - lastTransitionTime: "2024-05-14T18:52:31Z"
+      message: Detected the new changes on the resources and started the rollout process
+      observedGeneration: 1
+      reason: RolloutStarted
+      status: "True"
+      type: RolloutStarted
+    - lastTransitionTime: "2024-05-14T18:52:31Z"
+      message: No override rules are configured for the selected resources
+      observedGeneration: 1
+      reason: NoOverrideSpecified
+      status: "True"
+      type: Overridden
+    - lastTransitionTime: "2024-05-14T18:52:31Z"
+      message: All of the works are synchronized to the latest
+      observedGeneration: 1
+      reason: AllWorkSynced
+      status: "True"
+      type: WorkSynchronized
+    - lastTransitionTime: "2024-05-14T18:52:31Z"
+      message: All corresponding work objects are applied
+      observedGeneration: 1
+      reason: AllWorkHaveBeenApplied
+      status: "True"
+      type: Applied
+    - lastTransitionTime: "2024-05-14T18:52:31Z"
+      message: Work object crp1-work is not available
+      observedGeneration: 1
+      reason: NotAllWorkAreAvailable
+      status: "False"
+      type: Available
+    failedPlacements:
+    - condition:
+        lastTransitionTime: "2024-05-14T18:52:31Z"
+        message: Manifest is trackable but not available yet
+        observedGeneration: 1
+        reason: ManifestNotAvailableYet
+        status: "False"
+        type: Available
+      group: apps
+      kind: Deployment
+      name: my-deployment
+      namespace: test-ns
+      version: v1
+  selectedResources:
+  - kind: Namespace
+    name: test-ns
+    version: v1
+  - group: apps
+    kind: Deployment
+    name: my-deployment
+    namespace: test-ns
+    version: v1
+ ```
+In the `ClusterResourcePlacement` status, within the `failedPlacements` section for `kind-cluster-1`, we get a clear message
+as to why the resource failed to apply on the member cluster. Immediately preceding this in the conditions section,
+the `Available` condition for `kind-cluster-1` is flagged as false, citing the `NotAllWorkAreAvailable` reason.
+This signifies that the Work object intended for the member cluster `kind-cluster-1` is not yet available.
+
+To gain more insights also take a look at the `work` object, please check this [section](#how-and-where-to-find-the-correct-work-resource) for more details,
+
+### Work status of kind-cluster-1:
+```
+status:
+conditions:
+- lastTransitionTime: "2024-05-14T18:52:31Z"
+  message: Work is applied successfully
+  observedGeneration: 1
+  reason: WorkAppliedCompleted
+  status: "True"
+  type: Applied
+- lastTransitionTime: "2024-05-14T18:52:31Z"
+  message: Manifest {Ordinal:1 Group:apps Version:v1 Kind:Deployment Resource:deployments
+  Namespace:test-ns Name:my-deployment} is not available yet
+  observedGeneration: 1
+  reason: WorkNotAvailableYet
+  status: "False"
+  type: Available
+  manifestConditions:
+- conditions:
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: Manifest is already up to date
+    reason: ManifestAlreadyUpToDate
+    status: "True"
+    type: Applied
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: Manifest is trackable and available now
+    reason: ManifestAvailable
+    status: "True"
+    type: Available
+    identifier:
+    kind: Namespace
+    name: test-ns
+    ordinal: 0
+    resource: namespaces
+    version: v1
+- conditions:
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: Manifest is already up to date
+    observedGeneration: 1
+    reason: ManifestAlreadyUpToDate
+    status: "True"
+    type: Applied
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: Manifest is trackable but not available yet
+    observedGeneration: 1
+    reason: ManifestNotAvailableYet
+    status: "False"
+    type: Available
+    identifier:
+    group: apps
+    kind: Deployment
+    name: my-deployment
+    namespace: test-ns
+    ordinal: 1
+    resource: deployments
+    version: v1
+```
+Looking at the status `Available` condition for `kind-cluster-1`, we see that the deployment `my-deployment` is not available yet on the member cluster.
+Therefore, there might be something wrong with the deployment manifest.
+
+#### Resolution:
+In this scenario, a viable solution is to rectify the deployment manifest by verifying that all fields are accurately specified.
+After fixing the resource manifest and updating it, it's essential to delete the CRP and then reapply or recreate it. This step ensures that the changes made to the resource manifest are properly reflected in the CRP configuration.
+
+For all other scenarios, it's crucial to confirm that the propagated resource is configured correctly.
+Additionally, ensure that the selected cluster possesses sufficient available capacity to accommodate the new resources.
 ## How can I debug when some clusters are not selected as expected?
 
 Check the status of the `ClusterSchedulingPolicySnapshot` to determine which clusters were selected along with the reason.
