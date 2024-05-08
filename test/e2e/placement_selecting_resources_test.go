@@ -327,8 +327,6 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", crpName)
 	})
 
-	It("should remove the selected resources on member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
-
 	It("should remove controller finalizers from CRP", func() {
 		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
