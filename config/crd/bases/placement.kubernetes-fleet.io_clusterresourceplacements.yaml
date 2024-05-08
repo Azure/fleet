@@ -23,17 +23,29 @@ spec:
     - jsonPath: .metadata.generation
       name: Gen
       type: string
+    - jsonPath: .spec.policy.placementType
+      name: Type
+      priority: 1
+      type: string
     - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementScheduled")].status
       name: Scheduled
       type: string
     - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementScheduled")].observedGeneration
-      name: ScheduledGen
+      name: Scheduled-Gen
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementWorkSynchronized")].status
+      name: Work-Synchronized
+      priority: 1
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementWorkSynchronized")].observedGeneration
+      name: Work-Synchronized-Gen
+      priority: 1
       type: string
     - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementAvailable")].status
       name: Available
       type: string
     - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementAvailable")].observedGeneration
-      name: AvailableGen
+      name: Available-Gen
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
@@ -1129,17 +1141,29 @@ spec:
     - jsonPath: .metadata.generation
       name: Gen
       type: string
+    - jsonPath: .spec.policy.placementType
+      name: Type
+      priority: 1
+      type: string
     - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementScheduled")].status
       name: Scheduled
       type: string
     - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementScheduled")].observedGeneration
-      name: ScheduledGen
+      name: Scheduled-Gen
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementWorkSynchronized")].status
+      name: Work-Synchronized
+      priority: 1
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementWorkSynchronized")].observedGeneration
+      name: Work-Synchronized-Gen
+      priority: 1
       type: string
     - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementAvailable")].status
       name: Available
       type: string
     - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementAvailable")].observedGeneration
-      name: AvailableGen
+      name: Available-Gen
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
