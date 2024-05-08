@@ -46,6 +46,13 @@ matches the <group, version, kind> and name.
 
 > **Note:** Label selector of `ClusterResourceSelector` is not supported.
 
+`ResourceSelector` of `ResourceOverride` selects which namespace-scoped resources need to be overridden before applying to
+the selected clusters.
+
+It supports the following forms of resource selection:
+- Select resources by specifying the <group, version, kind> and name. This selection propagates only one resource that
+matches the <group, version, kind> and name under the `ResourceOverride` namespace.
+
 ## Override Policy
 Override policy defines how to override the selected resources on the target clusters.
 
