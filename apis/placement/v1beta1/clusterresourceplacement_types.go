@@ -500,7 +500,7 @@ type RollingUpdateConfig struct {
 	// Absolute number is calculated from percentage by rounding up.
 	// We consider a resource unavailable when we either remove it from a cluster or in-place
 	// upgrade the resources content on the same cluster.
-	// This can not be 0 if MaxSurge is 0.
+	// The minimum of MaxUnavailable is 1 to avoid rolling out stuck during in-place resource update.
 	// Defaults to 25%.
 	// +kubebuilder:default="25%"
 	// +kubebuilder:validation:XIntOrString
@@ -513,7 +513,7 @@ type RollingUpdateConfig struct {
 	// The desired number equals to the number of clusters scheduler selected when the placement type is `PickAll`.
 	// Value can be an absolute number (ex: 5) or a percentage of desire (ex: 10%).
 	// Absolute number is calculated from percentage by rounding up.
-	// This does not apply to the case that we do in-place upgrade of resources on the same cluster.
+	// This does not apply to the case that we do in-place update of resources on the same cluster.
 	// This can not be 0 if MaxUnavailable is 0.
 	// Defaults to 25%.
 	// +kubebuilder:default="25%"

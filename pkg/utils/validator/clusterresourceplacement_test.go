@@ -426,7 +426,20 @@ func TestValidateClusterResourcePlacement_RolloutStrategy(t *testing.T) {
 				},
 			},
 			wantErr:    true,
-			wantErrMsg: "maxUnavailable must be greater than or equal to 0, got `-10`",
+			wantErrMsg: "maxUnavailable must be greater than or equal to 1, got `-10`",
+		},
+		"invalid rollout strategy - zero MaxUnavailable": {
+			strategy: placementv1beta1.RolloutStrategy{
+				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+					MaxUnavailable: &intstr.IntOrString{
+						Type:   0,
+						IntVal: 0,
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "maxUnavailable must be greater than or equal to 1, got `0`",
 		},
 		"invalid rollout strategy - % error MaxSurge": {
 			strategy: placementv1beta1.RolloutStrategy{

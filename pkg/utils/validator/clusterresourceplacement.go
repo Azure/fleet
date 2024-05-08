@@ -365,8 +365,8 @@ func validateRolloutStrategy(rolloutStrategy placementv1beta1.RolloutStrategy) e
 			if err != nil {
 				allErr = append(allErr, fmt.Errorf("maxUnavailable `%+v` is invalid: %w", rolloutStrategy.RollingUpdate.MaxUnavailable, err))
 			}
-			if value < 0 {
-				allErr = append(allErr, fmt.Errorf("maxUnavailable must be greater than or equal to 0, got `%+v`", rolloutStrategy.RollingUpdate.MaxUnavailable))
+			if value < 1 {
+				allErr = append(allErr, fmt.Errorf("maxUnavailable must be greater than or equal to 1, got `%+v`", rolloutStrategy.RollingUpdate.MaxUnavailable))
 			}
 		}
 		if rolloutStrategy.RollingUpdate.MaxSurge != nil {
