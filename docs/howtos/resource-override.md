@@ -284,7 +284,7 @@ configurations will be applied to the designated clusters, triggered by the sele
 
 ## Verifying the Cluster Resource is Overridden
 To ensure that the `ResourceOverride` object is applied to the selected resources, verify the `ClusterResourcePlacement`
-status:
+status by running `kubectl describe crp crp-example` command:
 ```
 Status:
   Conditions:

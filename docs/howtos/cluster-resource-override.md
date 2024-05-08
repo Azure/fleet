@@ -218,7 +218,7 @@ designated clusters, triggered by the selection of matching cluster role resourc
 
 ## Verifying the Cluster Resource is Overridden
 To ensure that the `ClusterResourceOverride` object is applied to the selected clusters, verify the `ClusterResourcePlacement`
-status:
+status by running `kubectl describe crp crp-example` command:
 ```
 Status:
   Conditions:
