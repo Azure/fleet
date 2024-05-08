@@ -922,7 +922,7 @@ func verifyWorkPropagationAndMarkAsAvailable(memberClusterName, crpName string, 
 				Type:               placementv1beta1.WorkConditionTypeAvailable,
 				Status:             metav1.ConditionTrue,
 				LastTransitionTime: metav1.Now(),
-				Reason:             work.WorkNotTrackableReason,
+				Reason:             work.WorkAvailableReason,
 				Message:            "Set to be available",
 				ObservedGeneration: w.Generation,
 			})

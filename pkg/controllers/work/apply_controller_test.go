@@ -814,7 +814,7 @@ func TestGenerateWorkCondition(t *testing.T) {
 				{
 					Type:   fleetv1beta1.WorkConditionTypeAvailable,
 					Status: metav1.ConditionTrue,
-					Reason: workAvailableReason,
+					Reason: WorkAvailableReason,
 				},
 			},
 		},
@@ -824,6 +824,75 @@ func TestGenerateWorkCondition(t *testing.T) {
 			conditions := buildWorkCondition(tt.manifestConditions, 1)
 			diff := testcontroller.CompareConditions(tt.expected, conditions)
 			assert.Empty(t, diff, "buildWorkCondition() test %v failed, (-want +got):\n%s", name, diff)
+		})
+	}
+}
+
+func TestIsDataResource(t *testing.T) {
+	tests := map[string]struct {
+		gvr  schema.GroupVersionResource
+		want bool
+	}{
+		"Namespace resource": {
+			gvr: schema.GroupVersionResource{
+				Group:    "",
+				Version:  "v1",
+				Resource: "namespaces",
+			},
+			want: true,
+		},
+		"Secret resource": {
+			gvr: schema.GroupVersionResource{
+				Group:    "",
+				Version:  "v1",
+				Resource: "secrets",
+			},
+			want: true,
+		},
+		"ConfigMap resource": {
+			gvr: schema.GroupVersionResource{
+				Group:    "",
+				Version:  "v1",
+				Resource: "configmaps",
+			},
+			want: true,
+		},
+		"Role resource": {
+			gvr:  utils.RoleGVR,
+			want: true,
+		},
+		"RoleBinding resource": {
+			gvr:  utils.RoleBindingGVR,
+			want: true,
+		},
+		"ClusterRole resource": {
+			gvr:  utils.ClusterRoleGVR,
+			want: true,
+		},
+		"ClusterRoleBinding resource": {
+			gvr:  utils.ClusterRoleBindingGVR,
+			want: true,
+		},
+		"Non-data resource (Pod)": {
+			gvr: schema.GroupVersionResource{
+				Group:    "",
+				Version:  "v1",
+				Resource: "pods",
+			},
+			want: false,
+		},
+		"Non-data resource (Service)": {
+			gvr:  utils.ServiceGVR,
+			want: false,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := isDataResource(tt.gvr)
+			if got != tt.want {
+				t.Errorf("isDataResource() = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }
@@ -1124,6 +1193,57 @@ func TestTrackResourceAvailability(t *testing.T) {
 			expected: manifestNotTrackableAction,
 			err:      nil,
 		},
+		"Test configMap is considered ready after it is applied": {
+			gvr: utils.ConfigMapGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+					"metadata": map[string]interface{}{
+						"name":      "test-configmap",
+						"namespace": "default",
+					},
+					"data": map[string]interface{}{
+						"key": "value",
+					},
+				},
+			},
+			expected: manifestAvailableAction,
+			err:      nil,
+		},
+		"Test secret is considered ready after it is applied": {
+			gvr: utils.ConfigMapGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"name":      "test-configmap",
+						"namespace": "default",
+					},
+					"data": map[string]interface{}{
+						"key": "value",
+					},
+				},
+			},
+			expected: manifestAvailableAction,
+			err:      nil,
+		},
+		"Test namespace is considered ready after it is applied": {
+			gvr: utils.ConfigMapGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "NameSpace",
+					"metadata": map[string]interface{}{
+						"name":      "test-namespae",
+						"namespace": "default",
+					},
+				},
+			},
+			expected: manifestAvailableAction,
+			err:      nil,
+		},
 		"Test UnknownResource": {
 			gvr: schema.GroupVersionResource{
 				Group:    "unknown",
@@ -1141,6 +1261,134 @@ func TestTrackResourceAvailability(t *testing.T) {
 			action, err := trackResourceAvailability(tt.gvr, tt.obj)
 			assert.Equal(t, tt.expected, action, "action not matching in test %s", name)
 			assert.Equal(t, errors.Is(err, tt.err), true, "applyErr not matching in test %s", name)
+		})
+	}
+}
+
+func TestTrackServiceAvailability(t *testing.T) {
+	tests := map[string]struct {
+		service  *v1.Service
+		expected ApplyAction
+	}{
+		"externalName service type not trackable": {
+			service: &v1.Service{
+				Spec: v1.ServiceSpec{
+					Type:       v1.ServiceTypeExternalName,
+					ClusterIPs: []string{"192.168.1.1"},
+				},
+			},
+			expected: manifestNotTrackableAction,
+		},
+		"Empty service type with IP": {
+			service: &v1.Service{
+				Spec: v1.ServiceSpec{
+					Type:       "",
+					ClusterIPs: []string{"192.168.1.1"},
+				},
+			},
+			expected: manifestAvailableAction,
+		},
+		"ClusterIP service with IP": {
+			service: &v1.Service{
+				Spec: v1.ServiceSpec{
+					Type:       v1.ServiceTypeClusterIP,
+					ClusterIP:  "192.168.1.1",
+					ClusterIPs: []string{"192.168.1.1"},
+				},
+			},
+			expected: manifestAvailableAction,
+		},
+		"Headless clusterIP service": {
+			service: &v1.Service{
+				Spec: v1.ServiceSpec{
+					Type:       v1.ServiceTypeClusterIP,
+					ClusterIPs: []string{"None"},
+				},
+			},
+			expected: manifestAvailableAction,
+		},
+		"Nodeport service with IP": {
+			service: &v1.Service{
+				Spec: v1.ServiceSpec{
+					Type:       v1.ServiceTypeNodePort,
+					ClusterIP:  "13.6.2.2",
+					ClusterIPs: []string{"192.168.1.1"},
+				},
+			},
+			expected: manifestAvailableAction,
+		},
+		"ClusterIP service without IP": {
+			service: &v1.Service{
+				Spec: v1.ServiceSpec{
+					Type:      v1.ServiceTypeClusterIP,
+					ClusterIP: "13.6.2.2",
+				},
+			},
+			expected: manifestNotAvailableYetAction,
+		},
+		"LoadBalancer service with IP": {
+			service: &v1.Service{
+				Spec: v1.ServiceSpec{
+					Type: v1.ServiceTypeLoadBalancer,
+				},
+				Status: v1.ServiceStatus{
+					LoadBalancer: v1.LoadBalancerStatus{
+						Ingress: []v1.LoadBalancerIngress{
+							{
+								IP: "10.1.2.4",
+							},
+						},
+					},
+				},
+			},
+			expected: manifestAvailableAction,
+		},
+		"LoadBalancer service with hostname": {
+			service: &v1.Service{
+				Spec: v1.ServiceSpec{
+					Type: v1.ServiceTypeLoadBalancer,
+				},
+				Status: v1.ServiceStatus{
+					LoadBalancer: v1.LoadBalancerStatus{
+						Ingress: []v1.LoadBalancerIngress{
+							{
+								Hostname: "one.microsoft.com",
+							},
+						},
+					},
+				},
+			},
+			expected: manifestAvailableAction,
+		},
+		"LoadBalancer service with empty load balancer ingress not ready": {
+			service: &v1.Service{
+				Spec: v1.ServiceSpec{
+					Type: v1.ServiceTypeLoadBalancer,
+				},
+				Status: v1.ServiceStatus{
+					LoadBalancer: v1.LoadBalancerStatus{
+						Ingress: []v1.LoadBalancerIngress{},
+					},
+				},
+			},
+			expected: manifestNotAvailableYetAction,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			rawService, _ := json.Marshal(tt.service)
+			serviceObj := &unstructured.Unstructured{}
+			_ = serviceObj.UnmarshalJSON(rawService)
+
+			action, err := trackServiceAvailability(serviceObj)
+
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+			if action != tt.expected {
+				t.Errorf("Expected action to be %v, but got %v", tt.expected, action)
+			}
 		})
 	}
 }

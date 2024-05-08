@@ -313,6 +313,42 @@ var (
 		Version:  batchv1.SchemeGroupVersion.Version,
 		Resource: "jobs",
 	}
+
+	ConfigMapGVR = schema.GroupVersionResource{
+		Group:    corev1.GroupName,
+		Version:  corev1.SchemeGroupVersion.Version,
+		Resource: string(corev1.ResourceConfigMaps),
+	}
+
+	SecretGVR = schema.GroupVersionResource{
+		Group:    corev1.GroupName,
+		Version:  corev1.SchemeGroupVersion.Version,
+		Resource: string(corev1.ResourceSecrets),
+	}
+
+	RoleGVR = schema.GroupVersionResource{
+		Group:    rbacv1.GroupName,
+		Version:  rbacv1.SchemeGroupVersion.Version,
+		Resource: "roles",
+	}
+
+	ClusterRoleGVR = schema.GroupVersionResource{
+		Group:    rbacv1.GroupName,
+		Version:  rbacv1.SchemeGroupVersion.Version,
+		Resource: "clusterroles",
+	}
+
+	RoleBindingGVR = schema.GroupVersionResource{
+		Group:    rbacv1.GroupName,
+		Version:  rbacv1.SchemeGroupVersion.Version,
+		Resource: "rolebindings",
+	}
+
+	ClusterRoleBindingGVR = schema.GroupVersionResource{
+		Group:    rbacv1.GroupName,
+		Version:  rbacv1.SchemeGroupVersion.Version,
+		Resource: "clusterrolebindings",
+	}
 )
 
 // RandSecureInt returns a uniform random value in [1, max] or panic.

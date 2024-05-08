@@ -29,6 +29,7 @@ import (
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
+
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"

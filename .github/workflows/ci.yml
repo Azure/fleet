@@ -102,7 +102,7 @@ jobs:
       
       - name: Install Ginkgo CLI
         run: |
-          go install github.com/onsi/ginkgo/v2/ginkgo@v2.9.5
+          go install github.com/onsi/ginkgo/v2/ginkgo@v2.13.0
       
       - name: Install Kind
         # Before updating the kind version to use, verify that the current kind image

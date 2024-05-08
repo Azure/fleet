@@ -501,7 +501,7 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations", 
 			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("resource selector %+v already exists, and must be unique", selector)))
 			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("resource name is required for resource selection %+v", invalidSelector1)))
 			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, consistentlyDuration, consistentlyInterval).Should(Succeed())
 	})
 })
 
@@ -571,7 +571,7 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operation lim
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("clusterResourceOverride limit has been reached: at most 100 cluster resources can be created"))
 			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, consistentlyDuration, consistentlyInterval).Should(Succeed())
 	})
 })
 
@@ -697,7 +697,7 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations re
 			Expect(statusErr.Status().Message).Should(MatchRegexp("cannot override typeMeta fields"))
 			Expect(statusErr.Status().Message).Should(MatchRegexp("path cannot contain empty string"))
 			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, consistentlyDuration, consistentlyInterval).Should(Succeed())
 	})
 })
 
@@ -930,7 +930,7 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operations", func() 
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create RO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("resource selector %+v already exists, and must be unique", selector)))
 			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, consistentlyDuration, consistentlyInterval).Should(Succeed())
 	})
 })
 
@@ -1008,7 +1008,7 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operation limitation
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create RO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("resourceOverride limit has been reached: at most 100 resources can be created"))
 			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, consistentlyDuration, consistentlyInterval).Should(Succeed())
 	})
 })
 
@@ -1126,7 +1126,7 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operations resource 
 			Expect(statusErr.Status().Message).Should(MatchRegexp("cannot override typeMeta fields"))
 			Expect(statusErr.Status().Message).Should(MatchRegexp("path cannot contain empty string"))
 			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, consistentlyDuration, consistentlyInterval).Should(Succeed())
 	})
 })
 

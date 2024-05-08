@@ -8,7 +8,6 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -81,7 +80,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
 			// For the development, at least it will take 4 minutes to be ready.
 			Eventually(crpStatusUpdatedActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -105,56 +104,31 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 					if err := hubClient.List(ctx, &works, listOpts...); err != nil {
 						return err.Error()
 					}
-					workAvailable := false
 					for i := range works.Items {
 						work := works.Items[i]
-						if strings.Contains(work.Name, "configmap") {
-							// this is the wrapped work
-							wantConditions := []metav1.Condition{
-								{
-									Type:               placementv1beta1.WorkConditionTypeApplied,
-									Status:             metav1.ConditionTrue,
-									Reason:             "WorkAppliedCompleted",
-									ObservedGeneration: 1,
-								},
-								{
-									Type:               placementv1beta1.WorkConditionTypeAvailable,
-									Status:             metav1.ConditionTrue,
-									Reason:             "WorkAvailable",
-									ObservedGeneration: 1,
-								},
-							}
-							diff := controller.CompareConditions(wantConditions, work.Status.Conditions)
-							if len(diff) != 0 {
-								return diff
-							}
-							workAvailable = true
-						} else {
-							// this is the plain work which contains only the namespace which is not trackable
-							wantConditions := []metav1.Condition{
-								{
-									Type:               placementv1beta1.WorkConditionTypeApplied,
-									Status:             metav1.ConditionTrue,
-									Reason:             "WorkAppliedCompleted",
-									ObservedGeneration: 1,
-								},
-								{
-									Type:               placementv1beta1.WorkConditionTypeAvailable,
-									Status:             metav1.ConditionTrue,
-									Reason:             "WorkNotTrackable",
-									ObservedGeneration: 1,
-								},
-							}
-							diff := controller.CompareConditions(wantConditions, work.Status.Conditions)
-							if len(diff) != 0 {
-								return diff
-							}
+						wantConditions := []metav1.Condition{
+							{
+								Type:               placementv1beta1.WorkConditionTypeApplied,
+								Status:             metav1.ConditionTrue,
+								Reason:             "WorkAppliedCompleted",
+								ObservedGeneration: 1,
+							},
+							{
+								Type:               placementv1beta1.WorkConditionTypeAvailable,
+								Status:             metav1.ConditionTrue,
+								Reason:             "WorkAvailable",
+								ObservedGeneration: 1,
+							},
+						}
+						diff := controller.CompareConditions(wantConditions, work.Status.Conditions)
+						if len(diff) != 0 {
+							return diff
 						}
 					}
-					if workAvailable {
-						return ""
+					if len(works.Items) == 0 {
+						return "no available work found"
 					}
-					return "no available work found"
+					return ""
 				}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(),
 					"work condition mismatch for work %s (-want, +got):", memberCluster.ClusterName)
 			}

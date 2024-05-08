@@ -76,7 +76,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		It("should place resources on all member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 		It("should pick only healthy clusters in the system", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -95,7 +95,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		It("should pick the new cluster along with other healthy clusters", func() {
 			targetClusterNames := allMemberClusterNames
 			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests)
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -158,7 +158,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should not pick any cluster", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, nil, "0")
 			Eventually(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should not select any cluster")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should not select any cluster")
 		})
@@ -183,7 +183,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 		It("should pick the new cluster", func() {
 			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -233,7 +233,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		It("should place resources on all member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 		It("should pick only healthy clusters in the system", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -249,7 +249,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		It("should pick the cluster, along with other healthy clusters", func() {
 			targetClusterNames := allMemberClusterNames
 			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests)
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -320,7 +320,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 		It("should pick the cluster", func() {
 			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -339,7 +339,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 		It("should keep the cluster in the scheduling decision (ignored during execution semantics)", func() {
 			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -395,7 +395,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		It("should pick the new cluster, along with other healthy clusters", func() {
 			targetClusterNames := allMemberClusterNames
 			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests)
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -407,7 +407,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		It("should keep the cluster in the scheduling decision", func() {
 			targetClusterNames := allMemberClusterNames
 			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests)
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -460,7 +460,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		It("should pick the new cluster, along with other healthy clusters", func() {
 			targetClusterNames := allMemberClusterNames
 			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests)
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -470,7 +470,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should remove the cluster from the scheduling decision", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -514,7 +514,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should report in CRP status that the cluster is not available", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{fakeClusterName1ForWatcherTests}, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{fakeClusterName1ForWatcherTests}, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -532,7 +532,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 		It("should pick the new cluster", func() {
 			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -581,7 +581,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should report in CRP status that the cluster is not available", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{fakeClusterName1ForWatcherTests}, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{fakeClusterName1ForWatcherTests}, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -596,7 +596,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 		It("should pick the new cluster", func() {
 			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -650,7 +650,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 		It("should pick the new cluster", func() {
 			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -661,7 +661,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 		It("should report in CRP status that the cluster becomes not available", func() {
 			// resource are still applied in the cluster, crp available condition is true though the scheduled condition is false.
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{fakeClusterName1ForWatcherTests}, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{fakeClusterName1ForWatcherTests}, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -715,7 +715,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 		It("should pick the new cluster", func() {
 			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -726,7 +726,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 		It("should keep the cluster as picked", func() {
 			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should keep the cluster as picked")
 		})
 
@@ -771,7 +771,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		It("should place resources on all member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 		It("should pick only healthy clusters in the system", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests}, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests}, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -791,7 +791,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			var targetClusterNames []string
 			targetClusterNames = append(targetClusterNames, allMemberClusterNames...)
 			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests)
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -855,7 +855,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should not pick any cluster", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{fakeClusterName1ForWatcherTests}, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{fakeClusterName1ForWatcherTests}, "0")
 			Eventually(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should not select any cluster")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should not select any cluster")
 		})
@@ -880,7 +880,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 		It("should pick the new cluster", func() {
 			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -944,7 +944,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should not pick any cluster", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{fakeClusterName1ForWatcherTests}, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{fakeClusterName1ForWatcherTests}, "0")
 			Eventually(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should not select any cluster")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should not select any cluster")
 		})
@@ -959,7 +959,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 		It("should pick the new cluster", func() {
 			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -1012,7 +1012,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		It("should place resources on all member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 		It("should pick only healthy clusters in the system", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests, fakeClusterName2ForWatcherTests}, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests, fakeClusterName2ForWatcherTests}, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -1023,7 +1023,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should not pick the member cluster", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests, fakeClusterName2ForWatcherTests}, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests, fakeClusterName2ForWatcherTests}, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -1042,7 +1042,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			var targetClusterNames []string
 			targetClusterNames = append(targetClusterNames, allMemberClusterNames...)
 			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests, fakeClusterName2ForWatcherTests)
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -1096,7 +1096,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		It("should place resources on all member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 		It("should pick only healthy clusters in the system", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests}, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests}, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -1107,7 +1107,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should not pick the member cluster", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests}, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests}, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -1162,7 +1162,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		It("should pick the new cluster, along with other healthy clusters", func() {
 			targetClusterNames := allMemberClusterNames
 			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests)
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -1172,7 +1172,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should remove the cluster from the scheduling decision", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests}, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests}, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -1241,7 +1241,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 		It("should pick the new cluster", func() {
 			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -1260,7 +1260,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 		It("should keep the cluster as picked", func() {
 			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should keep the cluster as picked")
 		})
 
@@ -1328,7 +1328,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 		It("should pick the new cluster", func() {
 			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -1339,7 +1339,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 		It("should keep the cluster as picked", func() {
 			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should keep the cluster as picked")
 		})
 
@@ -1406,7 +1406,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			var targetClusterNames []string
 			targetClusterNames = append(targetClusterNames, allMemberClusterNames...)
 			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests, fakeClusterName2ForWatcherTests)
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -1427,7 +1427,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			var targetClusterNames []string
 			targetClusterNames = append(targetClusterNames, allMemberClusterNames...)
 			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests, fakeClusterName2ForWatcherTests)
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 

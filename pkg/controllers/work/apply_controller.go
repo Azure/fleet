@@ -68,7 +68,8 @@ const (
 	workAppliedCompletedReason    = "WorkAppliedCompleted"
 	workNotAvailableYetReason     = "WorkNotAvailableYet"
 	workAvailabilityUnknownReason = "WorkAvailabilityUnknown"
-	workAvailableReason           = "WorkAvailable"
+	// WorkAvailableReason is the reason string of condition when the manifest is available.
+	WorkAvailableReason = "WorkAvailable"
 	// WorkNotTrackableReason is the reason string of condition when the manifest is already up to date but we don't have
 	// a way to track its availabilities.
 	WorkNotTrackableReason = "WorkNotTrackable"
@@ -446,7 +447,14 @@ func trackResourceAvailability(gvr schema.GroupVersionResource, curObj *unstruct
 	case utils.JobGVR:
 		return trackJobAvailability(curObj)
 
+	case utils.ServiceGVR:
+		return trackServiceAvailability(curObj)
+
 	default:
+		if isDataResource(gvr) {
+			klog.V(2).InfoS("Data resources are available immediately", "gvr", gvr, "resource", klog.KObj(curObj))
+			return manifestAvailableAction, nil
+		}
 		klog.V(2).InfoS("We don't know how to track the availability of the resource", "gvr", gvr, "resource", klog.KObj(curObj))
 		return manifestNotTrackableAction, nil
 	}
@@ -534,6 +542,62 @@ func trackJobAvailability(curObj *unstructured.Unstructured) (ApplyAction, error
 	// this field only exists in k8s 1.24+ by default, so we can't track the availability of the job without it
 	klog.V(2).InfoS("Job does not have ready status, we can't track its availability", "job", klog.KObj(curObj))
 	return manifestNotTrackableAction, nil
+}
+
+func trackServiceAvailability(curObj *unstructured.Unstructured) (ApplyAction, error) {
+	var service v1.Service
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &service); err != nil {
+		return errorApplyAction, controller.NewUnexpectedBehaviorError(err)
+	}
+	switch service.Spec.Type {
+	case "":
+		fallthrough //default service type is ClusterIP
+	case v1.ServiceTypeClusterIP:
+		fallthrough
+	case v1.ServiceTypeNodePort:
+		// we regard a ClusterIP or NodePort service as available if it has at least one IP
+		if len(service.Spec.ClusterIPs) > 0 && len(service.Spec.ClusterIPs[0]) > 0 {
+			klog.V(2).InfoS("Service is available", "service", klog.KObj(curObj), "serviceType", service.Spec.Type)
+			return manifestAvailableAction, nil
+		}
+		klog.V(2).InfoS("Still need to wait for a service to be available", "service", klog.KObj(curObj), "serviceType", service.Spec.Type)
+		return manifestNotAvailableYetAction, nil
+
+	case v1.ServiceTypeLoadBalancer:
+		// we regard a loadBalancer service as available if it has at least one IP or hostname
+		if len(service.Status.LoadBalancer.Ingress) > 0 &&
+			(len(service.Status.LoadBalancer.Ingress[0].IP) > 0 || len(service.Status.LoadBalancer.Ingress[0].Hostname) > 0) {
+			klog.V(2).InfoS("LoadBalancer service is available", "service", klog.KObj(curObj))
+			return manifestAvailableAction, nil
+		}
+		klog.V(2).InfoS("Still need to wait for loadBalancer service to be available", "service", klog.KObj(curObj))
+		return manifestNotAvailableYetAction, nil
+	}
+
+	// we don't know how to track the availability of when the service type is externalName
+	klog.V(2).InfoS("Checking the availability of service is not supported", "service", klog.KObj(curObj), "type", service.Spec.Type)
+	return manifestNotTrackableAction, nil
+}
+
+// isDataResource checks if the resource is a data resource which means it is available immediately after creation.
+func isDataResource(gvr schema.GroupVersionResource) bool {
+	switch gvr {
+	case utils.NamespaceGVR:
+		return true
+	case utils.SecretGVR:
+		return true
+	case utils.ConfigMapGVR:
+		return true
+	case utils.RoleGVR:
+		return true
+	case utils.ClusterRoleGVR:
+		return true
+	case utils.RoleBindingGVR:
+		return true
+	case utils.ClusterRoleBindingGVR:
+		return true
+	}
+	return false
 }
 
 // constructWorkCondition constructs the work condition based on the apply result
@@ -878,7 +942,7 @@ func buildWorkCondition(manifestConditions []fleetv1beta1.ManifestCondition, obs
 	}
 	availableCondition.Status = metav1.ConditionTrue
 	if trackable {
-		availableCondition.Reason = workAvailableReason
+		availableCondition.Reason = WorkAvailableReason
 		availableCondition.Message = "Work is available now"
 	} else {
 		availableCondition.Reason = WorkNotTrackableReason
