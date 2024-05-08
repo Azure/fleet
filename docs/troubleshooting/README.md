@@ -53,56 +53,93 @@ spec:
 ```
 status:
   conditions:
-  - lastTransitionTime: "2023-11-27T20:25:19Z"
+  - lastTransitionTime: "2024-05-07T22:36:33Z"
     message: could not find all the clusters needed as specified by the scheduling
       policy
-    observedGeneration: 2
+    observedGeneration: 1
     reason: SchedulingPolicyUnfulfilled
     status: "False"
     type: ClusterResourcePlacementScheduled
-  - lastTransitionTime: "2023-11-27T20:25:24Z"
-    message: All 1 cluster(s) are synchronized to the latest resources on the hub
-      cluster
-    observedGeneration: 2
-    reason: SynchronizeSucceeded
+  - lastTransitionTime: "2024-05-07T22:36:33Z"
+    message: All 1 cluster(s) start rolling out the latest resource
+    observedGeneration: 1
+    reason: RolloutStarted
     status: "True"
-    type: ClusterResourcePlacementSynchronized
-  - lastTransitionTime: "2023-11-27T20:25:24Z"
-    message: Successfully applied resources to 1 member clusters
-    observedGeneration: 2
+    type: ClusterResourcePlacementRolloutStarted
+  - lastTransitionTime: "2024-05-07T22:36:33Z"
+    message: No override rules are configured for the selected resources
+    observedGeneration: 1
+    reason: NoOverrideSpecified
+    status: "True"
+    type: ClusterResourcePlacementOverridden
+  - lastTransitionTime: "2024-05-07T22:36:33Z"
+    message: Works(s) are succcesfully created or updated in the 1 target clusters'
+      namespaces
+    observedGeneration: 1
+    reason: WorkSynchronized
+    status: "True"
+    type: ClusterResourcePlacementWorkSynchronized
+  - lastTransitionTime: "2024-05-07T22:36:33Z"
+    message: The selected resources are successfully applied to 1 clusters
+    observedGeneration: 1
     reason: ApplySucceeded
     status: "True"
     type: ClusterResourcePlacementApplied
+  - lastTransitionTime: "2024-05-07T22:36:33Z"
+    message: The selected resources in 1 cluster are available now
+    observedGeneration: 1
+    reason: ResourceAvailable
+    status: "True"
+    type: ClusterResourcePlacementAvailable
+  observedResourceIndex: "0"
   placementStatuses:
   - clusterName: kind-cluster-1
     conditions:
-    - lastTransitionTime: "2023-11-27T20:25:19Z"
+    - lastTransitionTime: "2024-05-07T22:36:33Z"
       message: 'Successfully scheduled resources for placement in kind-cluster-1 (affinity
         score: 0, topology spread score: 0): picked by scheduling policy'
-      observedGeneration: 2
-      reason: ScheduleSucceeded
+      observedGeneration: 1
+      reason: Scheduled
       status: "True"
-      type: ResourceScheduled
-    - lastTransitionTime: "2023-11-27T20:25:24Z"
-      message: Successfully Synchronized work(s) for placement
-      observedGeneration: 2
-      reason: WorkSynchronizeSucceeded
+      type: Scheduled
+    - lastTransitionTime: "2024-05-07T22:36:33Z"
+      message: Detected the new changes on the resources and started the rollout process
+      observedGeneration: 1
+      reason: RolloutStarted
+      status: "True"
+      type: RolloutStarted
+    - lastTransitionTime: "2024-05-07T22:36:33Z"
+      message: No override rules are configured for the selected resources
+      observedGeneration: 1
+      reason: NoOverrideSpecified
+      status: "True"
+      type: Overridden
+    - lastTransitionTime: "2024-05-07T22:36:33Z"
+      message: All of the works are synchronized to the latest
+      observedGeneration: 1
+      reason: AllWorkSynced
       status: "True"
       type: WorkSynchronized
-    - lastTransitionTime: "2023-11-27T20:25:24Z"
-      message: Successfully applied resources
-      observedGeneration: 2
-      reason: ApplySucceeded
+    - lastTransitionTime: "2024-05-07T22:36:33Z"
+      message: All corresponding work objects are applied
+      observedGeneration: 1
+      reason: AllWorkHaveBeenApplied
       status: "True"
-      type: ResourceApplied
+      type: Applied
+    - lastTransitionTime: "2024-05-07T22:36:33Z"
+      message: All corresponding work objects are available
+      observedGeneration: 1
+      reason: AllWorkAreAvailable
+      status: "True"
+      type: Available
   - conditions:
-    - lastTransitionTime: "2023-11-27T20:25:40Z"
-      message: 'kind-cluster-2 is not selected: ClusterUnschedulable, none of the
-        nonempty required cluster affinity term (total number: 1) is matched'
-      observedGeneration: 2
+    - lastTransitionTime: "2024-05-07T22:36:33Z"
+      message: 'kind-cluster-2 is not selected: ClusterUnschedulable, cluster does not
+        match with any of the required cluster affinity terms'
+      observedGeneration: 1
       reason: ScheduleFailed
       status: "False"
-      type: ResourceScheduled
+      type: Scheduled
   selectedResources:
   ...
 ```
@@ -115,28 +152,28 @@ The corresponding `ClusterSchedulingPolicySnapshot` spec and status gives us eve
 
 ### Latest ClusterSchedulingPolicySnapshot:
 ```
-apiVersion: placement.kubernetes-fleet.io/v1beta1
+apiVersion: placement.kubernetes-fleet.io/v1
 kind: ClusterSchedulingPolicySnapshot
 metadata:
   annotations:
-    kubernetes-fleet.io/CRP-generation: "2"
+    kubernetes-fleet.io/CRP-generation: "1"
     kubernetes-fleet.io/number-of-clusters: "2"
-  creationTimestamp: "2023-11-27T21:33:01Z"
+  creationTimestamp: "2024-05-07T22:36:33Z"
   generation: 1
   labels:
     kubernetes-fleet.io/is-latest-snapshot: "true"
-    kubernetes-fleet.io/parent-CRP: crp-4
+    kubernetes-fleet.io/parent-CRP: crp-2
     kubernetes-fleet.io/policy-index: "0"
-  name: ...
+  name: crp-2-0
   ownerReferences:
   - apiVersion: placement.kubernetes-fleet.io/v1beta1
     blockOwnerDeletion: true
     controller: true
     kind: ClusterResourcePlacement
-    name: ...
-    uid: 37e83327-26e0-4c48-8276-e62cc6aa067f
-  resourceVersion: "10085"
-  uid: f2a3d0ea-c9fa-455d-be09-51b5d090e5d6
+    name: crp-2
+    uid: 48bc1e92-a8b9-4450-a2d5-c6905df2cbf0
+  resourceVersion: "10090"
+  uid: 2137887e-45fd-4f52-bbb7-b96f39854625
 spec:
   policy:
     affinity:
@@ -150,14 +187,14 @@ spec:
   policyHash: ZjE0Yjk4YjYyMTVjY2U3NzQ1MTZkNWRhZjRiNjQ1NzQ4NjllNTUyMzZkODBkYzkyYmRkMGU3OTI3MWEwOTkyNQ==
 status:
   conditions:
-  - lastTransitionTime: "2023-11-27T21:33:01Z"
+  - lastTransitionTime: "2024-05-07T22:36:33Z"
     message: could not find all the clusters needed as specified by the scheduling
       policy
     observedGeneration: 1
     reason: SchedulingPolicyUnfulfilled
     status: "False"
     type: Scheduled
-  observedCRPGeneration: 2
+  observedCRPGeneration: 1
   targetClusters:
   - clusterName: kind-cluster-1
     clusterScore:
@@ -166,21 +203,21 @@ status:
     reason: picked by scheduling policy
     selected: true
   - clusterName: kind-cluster-2
-    reason: 'ClusterUnschedulable, none of the nonempty required cluster affinity
-      term (total number: 1) is matched'
+    reason: ClusterUnschedulable, cluster does not match with any of the required
+      cluster affinity terms
     selected: false
 ```
 
 ### Resolution:
 The solution here is to add the `env:prod` label to the member cluster resource for `kind-cluster-2` as well, so that the scheduler can select the cluster to propagate resources.
 
-## How can I debug when my CRP status is ClusterResourcePlacementSynchronized condition status is set to false?
+## How can I debug when my CRP status is ClusterResourcePlacementRolloutStarted condition status is set to false?
 
-The `ClusterResourcePlacementSynchronized` condition status is set to `false` under the following circumstances: when the `Work` is not created or updated for a new `ClusterResourceSnapshot`.
+The `ClusterResourcePlacementRolloutStarted` condition status is set to `false` under the following circumstances: the selected resources have not been rolled out in all scheduled clusters yet.
 
 ### Investigation Steps:
 
-- In the `ClusterResourcePlacement` status section, examine the `placementStatuses` to identify clusters with the `WorkSynchronized` status set to `false`.
+- In the `ClusterResourcePlacement` status section, examine the `placementStatuses` to identify clusters with the `RolloutStarted` status set to `false`.
 - Locate the corresponding `ClusterResourceBinding` for the identified cluster. Please check this [section](#how-to-find-the-latest-clusterresourcebinding-resource) to learn how to get the latest `ClusterResourceBinding`. This resource should indicate the status of the `Work` whether it was created or updated.
 - A common scenario leading to this issue is the user input for the `rollingUpdate` configuration being too strict. Verify the values for `maxUnavailable` and `maxSurge` to ensure they align with your expectations.
 
@@ -208,75 +245,133 @@ spec:
 ```
 status:
   conditions:
-  - lastTransitionTime: "2023-11-29T21:36:49Z"
+  - lastTransitionTime: "2024-05-07T23:08:53Z"
     message: could not find all the clusters needed as specified by the scheduling
       policy
-    observedGeneration: 2
+    observedGeneration: 1
     reason: SchedulingPolicyUnfulfilled
     status: "False"
     type: ClusterResourcePlacementScheduled
-  - lastTransitionTime: "2023-11-29T21:36:54Z"
-    message: All 2 cluster(s) are synchronized to the latest resources on the hub
-      cluster
-    observedGeneration: 2
-    reason: SynchronizeSucceeded
+  - lastTransitionTime: "2024-05-07T23:08:53Z"
+    message: All 2 cluster(s) start rolling out the latest resource
+    observedGeneration: 1
+    reason: RolloutStarted
     status: "True"
-    type: ClusterResourcePlacementSynchronized
-  - lastTransitionTime: "2023-11-29T21:36:54Z"
-    message: Successfully applied resources to 2 member clusters
-    observedGeneration: 2
+    type: ClusterResourcePlacementRolloutStarted
+  - lastTransitionTime: "2024-05-07T23:08:53Z"
+    message: No override rules are configured for the selected resources
+    observedGeneration: 1
+    reason: NoOverrideSpecified
+    status: "True"
+    type: ClusterResourcePlacementOverridden
+  - lastTransitionTime: "2024-05-07T23:08:53Z"
+    message: Works(s) are succcesfully created or updated in the 2 target clusters'
+      namespaces
+    observedGeneration: 1
+    reason: WorkSynchronized
+    status: "True"
+    type: ClusterResourcePlacementWorkSynchronized
+  - lastTransitionTime: "2024-05-07T23:08:53Z"
+    message: The selected resources are successfully applied to 2 clusters
+    observedGeneration: 1
     reason: ApplySucceeded
     status: "True"
     type: ClusterResourcePlacementApplied
+  - lastTransitionTime: "2024-05-07T23:08:53Z"
+    message: The selected resources in 2 cluster are available now
+    observedGeneration: 1
+    reason: ResourceAvailable
+    status: "True"
+    type: ClusterResourcePlacementAvailable
+  observedResourceIndex: "0"
   placementStatuses:
-  - clusterName: kind-cluster-2
+  - clusterName: cluster-2
     conditions:
-    - lastTransitionTime: "2023-11-29T21:36:49Z"
-      message: 'Successfully scheduled resources for placement in kind-cluster-2 (affinity
+    - lastTransitionTime: "2024-05-07T23:08:53Z"
+      message: 'Successfully scheduled resources for placement in cluster-2 (affinity
         score: 0, topology spread score: 0): picked by scheduling policy'
-      observedGeneration: 2
-      reason: ScheduleSucceeded
+      observedGeneration: 1
+      reason: Scheduled
       status: "True"
-      type: ResourceScheduled
-    - lastTransitionTime: "2023-11-29T21:36:49Z"
-      message: Successfully Synchronized work(s) for placement
-      observedGeneration: 2
-      reason: WorkSynchronizeSucceeded
+      type: Scheduled
+    - lastTransitionTime: "2024-05-07T23:08:53Z"
+      message: Detected the new changes on the resources and started the rollout process
+      observedGeneration: 1
+      reason: RolloutStarted
+      status: "True"
+      type: RolloutStarted
+    - lastTransitionTime: "2024-05-07T23:08:53Z"
+      message: No override rules are configured for the selected resources
+      observedGeneration: 1
+      reason: NoOverrideSpecified
+      status: "True"
+      type: Overridden
+    - lastTransitionTime: "2024-05-07T23:08:53Z"
+      message: All of the works are synchronized to the latest
+      observedGeneration: 1
+      reason: AllWorkSynced
       status: "True"
       type: WorkSynchronized
-    - lastTransitionTime: "2023-11-29T21:36:54Z"
-      message: Successfully applied resources
-      observedGeneration: 2
-      reason: ApplySucceeded
+    - lastTransitionTime: "2024-05-07T23:08:53Z"
+      message: All corresponding work objects are applied
+      observedGeneration: 1
+      reason: AllWorkHaveBeenApplied
       status: "True"
-      type: ResourceApplied
-  - clusterName: kind-cluster-1
+      type: Applied
+    - lastTransitionTime: "2024-05-07T23:08:53Z"
+      message: All corresponding work objects are available
+      observedGeneration: 1
+      reason: AllWorkAreAvailable
+      status: "True"
+      type: Available
+  - clusterName: cluster-1
     conditions:
-    - lastTransitionTime: "2023-11-29T21:36:49Z"
-      message: 'Successfully scheduled resources for placement in kind-cluster-1 (affinity
+    - lastTransitionTime: "2024-05-07T23:08:53Z"
+      message: 'Successfully scheduled resources for placement in cluster-1 (affinity
         score: 0, topology spread score: 0): picked by scheduling policy'
-      observedGeneration: 2
-      reason: ScheduleSucceeded
+      observedGeneration: 1
+      reason: Scheduled
       status: "True"
-      type: ResourceScheduled
-    - lastTransitionTime: "2023-11-29T21:36:54Z"
-      message: Successfully Synchronized work(s) for placement
-      observedGeneration: 2
-      reason: WorkSynchronizeSucceeded
+      type: Scheduled
+    - lastTransitionTime: "2024-05-07T23:08:53Z"
+      message: Detected the new changes on the resources and started the rollout process
+      observedGeneration: 1
+      reason: RolloutStarted
+      status: "True"
+      type: RolloutStarted
+    - lastTransitionTime: "2024-05-07T23:08:53Z"
+      message: No override rules are configured for the selected resources
+      observedGeneration: 1
+      reason: NoOverrideSpecified
+      status: "True"
+      type: Overridden
+    - lastTransitionTime: "2024-05-07T23:08:53Z"
+      message: All of the works are synchronized to the latest
+      observedGeneration: 1
+      reason: AllWorkSynced
       status: "True"
       type: WorkSynchronized
-    - lastTransitionTime: "2023-11-29T21:36:54Z"
-      message: Successfully applied resources
-      observedGeneration: 2
-      reason: ApplySucceeded
+    - lastTransitionTime: "2024-05-07T23:08:53Z"
+      message: All corresponding work objects are applied
+      observedGeneration: 1
+      reason: AllWorkHaveBeenApplied
       status: "True"
-      type: ResourceApplied
+      type: Applied
+    - lastTransitionTime: "2024-05-07T23:08:53Z"
+      message: All corresponding work objects are available
+      observedGeneration: 1
+      reason: AllWorkAreAvailable
+      status: "True"
+      type: Available
 ```
 
 Given that the resource `test-ns` namespace never existed on the hub cluster, the `ClusterResourcePlacement` status reflects the following:
 - `ClusterResourcePlacementScheduled` is set to `false`, as the specified policy aims to pick three clusters, but the scheduler can only accommodate placement in two currently available and joined clusters.
-- `ClusterResourcePlacementSynchronized` is set to `true`.
+- `ClusterResourcePlacementRolloutStarted` is set to `true`, as the rollout process has commenced with 2 clusters being selected.
+- `ClusterResourcePlacementOverridden` is set to `true`, as no override rules are configured for the selected resources.
+- `ClusterResourcePlacementWorkSynchronized` is set to `true`.
 - `ClusterResourcePlacementApplied` is set to `true`.
+- `ClusterResourcePlacementAvailable` is set to `true`.
 
 Subsequently, we proceed to create the `test-ns` namespace on the hub cluster. We anticipate the seamless propagation of the namespace across the relevant clusters.
 
@@ -284,106 +379,87 @@ Subsequently, we proceed to create the `test-ns` namespace on the hub cluster. W
 ```
 status:
   conditions:
-  - lastTransitionTime: "2023-11-29T21:36:49Z"
+  - lastTransitionTime: "2024-05-07T23:08:53Z"
     message: could not find all the clusters needed as specified by the scheduling
       policy
-    observedGeneration: 2
+    observedGeneration: 1
     reason: SchedulingPolicyUnfulfilled
     status: "False"
     type: ClusterResourcePlacementScheduled
-  - lastTransitionTime: "2023-11-29T21:49:43Z"
-    message: There are still 2 cluster(s) pending to be sychronized on the hub cluster
-    observedGeneration: 2
-    reason: SynchronizePending
+  - lastTransitionTime: "2024-05-07T23:13:51Z"
+    message: The rollout is being blocked by the rollout strategy in 2 cluster(s)
+    observedGeneration: 1
+    reason: RolloutNotStartedYet
     status: "False"
-    type: ClusterResourcePlacementSynchronized
-  - lastTransitionTime: "2023-11-29T21:49:43Z"
-    message: 'Works need to be synchronized on the hub cluster or there are still
-      manifests pending to be processed by the 2 member clusters '
-    observedGeneration: 2
-    reason: ApplyPending
-    status: Unknown
-    type: ClusterResourcePlacementApplied
+    type: ClusterResourcePlacementRolloutStarted
+  observedResourceIndex: "1"
   placementStatuses:
-  - clusterName: kind-cluster-2
+  - clusterName: cluster-2
     conditions:
-    - lastTransitionTime: "2023-11-29T21:36:49Z"
-      message: 'Successfully scheduled resources for placement in kind-cluster-2 (affinity
+    - lastTransitionTime: "2024-05-07T23:08:53Z"
+      message: 'Successfully scheduled resources for placement in cluster-2 (affinity
         score: 0, topology spread score: 0): picked by scheduling policy'
-      observedGeneration: 2
-      reason: ScheduleSucceeded
+      observedGeneration: 1
+      reason: Scheduled
       status: "True"
-      type: ResourceScheduled
-    - lastTransitionTime: "2023-11-29T21:49:43Z"
-      message: 'In the process of synchronizing or operation is blocked by the rollout
-        strategy '
-      observedGeneration: 2
-      reason: WorkSynchronizePending
+      type: Scheduled
+    - lastTransitionTime: "2024-05-07T23:13:51Z"
+      message: The rollout is being blocked by the rollout strategy
+      observedGeneration: 1
+      reason: RolloutNotStartedYet
       status: "False"
-      type: WorkSynchronized
-    - lastTransitionTime: "2023-11-29T21:49:43Z"
-      message: Works need to be synchronized on the hub cluster or there are still
-        manifests pending to be processed by the member cluster
-      observedGeneration: 2
-      reason: ApplyPending
-      status: Unknown
-      type: ResourceApplied
-  - clusterName: kind-cluster-1
+      type: RolloutStarted
+  - clusterName: cluster-1
     conditions:
-    - lastTransitionTime: "2023-11-29T21:36:49Z"
-      message: 'Successfully scheduled resources for placement in kind-cluster-1 (affinity
+    - lastTransitionTime: "2024-05-07T23:08:53Z"
+      message: 'Successfully scheduled resources for placement in cluster-1 (affinity
         score: 0, topology spread score: 0): picked by scheduling policy'
-      observedGeneration: 2
-      reason: ScheduleSucceeded
+      observedGeneration: 1
+      reason: Scheduled
       status: "True"
-      type: ResourceScheduled
-    - lastTransitionTime: "2023-11-29T21:49:43Z"
-      message: 'In the process of synchronizing or operation is blocked by the rollout
-        strategy '
-      observedGeneration: 2
-      reason: WorkSynchronizePending
+      type: Scheduled
+    - lastTransitionTime: "2024-05-07T23:13:51Z"
+      message: The rollout is being blocked by the rollout strategy
+      observedGeneration: 1
+      reason: RolloutNotStartedYet
       status: "False"
-      type: WorkSynchronized
-    - lastTransitionTime: "2023-11-29T21:49:43Z"
-      message: Works need to be synchronized on the hub cluster or there are still
-        manifests pending to be processed by the member cluster
-      observedGeneration: 2
-      reason: ApplyPending
-      status: Unknown
-      type: ResourceApplied
+      type: RolloutStarted
   selectedResources:
   - kind: Namespace
     name: test-ns
     version: v1
 ```
 
-Upon examination, the `ClusterResourcePlacementSynchronized` status is found to be `false`, and in the `placementStatus` section for `WorkSynchronized` condition we see a message indicating that `Works need to be synchronized on the hub cluster, or there are still manifests pending to be processed by the 2 member clusters`
+Upon examination, the `ClusterResourcePlacementScheduled` status is found to be `false`, and for the 
+`ClusterResourcePlacementRolloutStarted` status condition we see a message indicating that `The rollout is being blocked by the rollout strategy in 2 cluster(s)`
 
 Let's check the latest `ClusterResourceSnapshot`. Please refer to this [section](#how-to-find-the-latest-clusterresourcesnapshot-resource) to learn how to get the latest `ClusterResourceSnapshot`.
 
 ### Latest ClusterResourceSnapshot:
 ```
+apiVersion: placement.kubernetes-fleet.io/v1
+kind: ClusterResourceSnapshot
 metadata:
   annotations:
     kubernetes-fleet.io/number-of-enveloped-object: "0"
     kubernetes-fleet.io/number-of-resource-snapshots: "1"
     kubernetes-fleet.io/resource-hash: 72344be6e268bc7af29d75b7f0aad588d341c228801aab50d6f9f5fc33dd9c7c
-  creationTimestamp: "2023-12-05T04:36:24Z"
+  creationTimestamp: "2024-05-07T23:13:51Z"
   generation: 1
   labels:
     kubernetes-fleet.io/is-latest-snapshot: "true"
-    kubernetes-fleet.io/parent-CRP: test-crp
+    kubernetes-fleet.io/parent-CRP: crp-3
     kubernetes-fleet.io/resource-index: "1"
-  name: test-crp-1-snapshot
+  name: crp-3-1-snapshot
   ownerReferences:
   - apiVersion: placement.kubernetes-fleet.io/v1beta1
     blockOwnerDeletion: true
     controller: true
     kind: ClusterResourcePlacement
-    name: test-crp
-    uid: 1c474983-cda0-49cb-bf60-3d2a42f122ba
-  resourceVersion: "4489"
-  uid: a520f775-14cc-4bf5-b8cd-c4efc0e2be34
+    name: crp-3
+    uid: b4f31b9a-971a-480d-93ac-93f093ee661f
+  resourceVersion: "14434"
+  uid: 85ee0e81-92c9-4362-932b-b0bf57d78e3f
 spec:
   selectedResources:
   - apiVersion: v1
@@ -403,19 +479,21 @@ Let's check the `ClusterResourceBinding` for `kind-cluster-1` to see if it got u
 
 ### ClusterResourceBinding for kind-cluster-1:
 ```
-apiVersion: placement.kubernetes-fleet.io/v1beta1
+apiVersion: placement.kubernetes-fleet.io/v1
 kind: ClusterResourceBinding
 metadata:
-  creationTimestamp: "2023-12-05T04:17:49Z"
+  creationTimestamp: "2024-05-07T23:08:53Z"
   finalizers:
   - kubernetes-fleet.io/work-cleanup
   generation: 2
   labels:
-    kubernetes-fleet.io/parent-CRP: test-crp
-  name: test-crp-kind-cluster-1-4e5c873b
-  resourceVersion: "2572"
-  uid: 8ae9741d-e95c-44f8-b36a-29d73f6b833c
+    kubernetes-fleet.io/parent-CRP: crp-3
+  name: crp-3-kind-cluster-1-7114c253
+  resourceVersion: "14438"
+  uid: 0db4e480-8599-4b40-a1cc-f33bcb24b1a7
 spec:
+  applyStrategy:
+    type: ClientSideApply
   clusterDecision:
     clusterName: kind-cluster-1
     clusterScore:
@@ -423,24 +501,43 @@ spec:
       priorityScore: 0
     reason: picked by scheduling policy
     selected: true
-  resourceSnapshotName: test-crp-0-snapshot
-  schedulingPolicySnapshotName: test-crp-0
+  resourceSnapshotName: crp-3-0-snapshot
+  schedulingPolicySnapshotName: crp-3-0
   state: Bound
   targetCluster: kind-cluster-1
 status:
   conditions:
-  - lastTransitionTime: "2023-12-05T04:17:50Z"
-    message: ""
+  - lastTransitionTime: "2024-05-07T23:13:51Z"
+    message: The resources cannot be updated to the latest because of the rollout
+      strategy
+    observedGeneration: 2
+    reason: RolloutNotStartedYet
+    status: "False"
+    type: RolloutStarted
+  - lastTransitionTime: "2024-05-07T23:08:53Z"
+    message: No override rules are configured for the selected resources
+    observedGeneration: 2
+    reason: NoOverrideSpecified
+    status: "True"
+    type: Overridden
+  - lastTransitionTime: "2024-05-07T23:08:53Z"
+    message: All of the works are synchronized to the latest
     observedGeneration: 2
     reason: AllWorkSynced
     status: "True"
-    type: Bound
-  - lastTransitionTime: "2023-12-05T04:17:50Z"
-    message: ""
+    type: WorkSynchronized
+  - lastTransitionTime: "2024-05-07T23:08:53Z"
+    message: All corresponding work objects are applied
     observedGeneration: 2
-    reason: AllWorkHasBeenApplied
+    reason: AllWorkHaveBeenApplied
     status: "True"
     type: Applied
+  - lastTransitionTime: "2024-05-07T23:08:53Z"
+    message: All corresponding work objects are available
+    observedGeneration: 2
+    reason: AllWorkAreAvailable
+    status: "True"
+    type: Available
 ```
 
 Upon inspection, it is observed that the `ClusterResourceBinding` remains unchanged. Notably, in the spec, the `resourceSnapshotName` still references the old `ClusterResourceSnapshot` name.
@@ -451,8 +548,11 @@ This scenario arises due to the absence of explicit `rollingUpdate` input from t
 - `maxSurge` is configured to `25% * 3 (desired number), rounded to 1`
 
 ### Summary of Events:
-1. Initially, when the CRP was created, two `ClusterResourceBindings` were generated. However, since the `test-ns` namespace did not exist on the hub cluster, the `Work` object was created with an empty list of manifests, and `ClusterResourcePlacementSynchronized` was set to `true`.
-2. Upon creating the `test-ns` namespace on the hub, the rollout controller attempted to update the two existing `ClusterResourceBindings`. However, the `rollingUpdate` configuration was too strict: `maxUnavailable` was set to 1, which was already the case due to a missing member cluster. If, during the update, even one of the bindings failed to apply, it would violate the `rollingUpdate` configuration since `maxUnavailable` was set to 1.
+1. Initially, when the CRP was created, two `ClusterResourceBindings` were generated. However, since the `test-ns` 
+namespace did not exist on the hub cluster, rollout could be started on the selected clusters, and `ClusterResourcePlacementRolloutStarted` was set to `true`.
+2. Upon creating the `test-ns` namespace on the hub, the rollout controller attempted to update the two existing `ClusterResourceBindings`. 
+However, the `rollingUpdate` configuration was too strict: `maxUnavailable` was set to 1, which was already the case due to a missing member cluster. 
+If, during the update, even one of the bindings failed to apply, it would violate the `rollingUpdate` configuration since `maxUnavailable` was set to 1.
 
 ### Resolution:
 - To address this specific issue, consider manually setting `maxUnavailable` to a value greater than 2 to relax the `rollingUpdate` configuration.
@@ -488,89 +588,135 @@ In this example, the `ClusterResourcePlacement` is attempting to propagate a nam
 
 ### CRP status:
 ```
- conditions:
-  - lastTransitionTime: "2023-11-28T20:56:15Z"
-    message: found all the clusters needed as specified by the scheduling policy
-    observedGeneration: 2
-    reason: SchedulingPolicyFulfilled
-    status: "True"
+status:
+  conditions:
+  - lastTransitionTime: "2024-05-07T23:32:40Z"
+    message: could not find all the clusters needed as specified by the scheduling
+      policy
+    observedGeneration: 1
+    reason: SchedulingPolicyUnfulfilled
+    status: "False"
     type: ClusterResourcePlacementScheduled
-  - lastTransitionTime: "2023-11-28T20:56:21Z"
-    message: All 2 cluster(s) are synchronized to the latest resources on the hub
-      cluster
-    observedGeneration: 2
-    reason: SynchronizeSucceeded
+  - lastTransitionTime: "2024-05-07T23:32:40Z"
+    message: All 2 cluster(s) start rolling out the latest resource
+    observedGeneration: 1
+    reason: RolloutStarted
     status: "True"
-    type: ClusterResourcePlacementSynchronized
-  - lastTransitionTime: "2023-11-28T20:56:21Z"
-    message: Failed to apply manifests to 1 clusters, please check the `failedResourcePlacements`
+    type: ClusterResourcePlacementRolloutStarted
+  - lastTransitionTime: "2024-05-07T23:32:40Z"
+    message: No override rules are configured for the selected resources
+    observedGeneration: 1
+    reason: NoOverrideSpecified
+    status: "True"
+    type: ClusterResourcePlacementOverridden
+  - lastTransitionTime: "2024-05-07T23:32:40Z"
+    message: Works(s) are succcesfully created or updated in the 2 target clusters'
+      namespaces
+    observedGeneration: 1
+    reason: WorkSynchronized
+    status: "True"
+    type: ClusterResourcePlacementWorkSynchronized
+  - lastTransitionTime: "2024-05-07T23:32:40Z"
+    message: Failed to apply resources to 1 clusters, please check the `failedPlacements`
       status
-    observedGeneration: 2
+    observedGeneration: 1
     reason: ApplyFailed
     status: "False"
     type: ClusterResourcePlacementApplied
+  observedResourceIndex: "0"
   placementStatuses:
-  - clusterName: kind-cluster-1
+  - clusterName: kind-cluster-2
     conditions:
-    - lastTransitionTime: "2023-11-28T20:56:15Z"
-      message: 'Successfully scheduled resources for placement in kind-cluster-1:
-        picked by scheduling policy'
-      observedGeneration: 2
-      reason: ScheduleSucceeded
+    - lastTransitionTime: "2024-05-07T23:32:40Z"
+      message: 'Successfully scheduled resources for placement in kind-cluster-2 (affinity
+        score: 0, topology spread score: 0): picked by scheduling policy'
+      observedGeneration: 1
+      reason: Scheduled
       status: "True"
-      type: ResourceScheduled
-    - lastTransitionTime: "2023-11-28T20:56:21Z"
-      message: Successfully Synchronized work(s) for placement
-      observedGeneration: 2
-      reason: WorkSynchronizeSucceeded
+      type: Scheduled
+    - lastTransitionTime: "2024-05-07T23:32:40Z"
+      message: Detected the new changes on the resources and started the rollout process
+      observedGeneration: 1
+      reason: RolloutStarted
+      status: "True"
+      type: RolloutStarted
+    - lastTransitionTime: "2024-05-07T23:32:40Z"
+      message: No override rules are configured for the selected resources
+      observedGeneration: 1
+      reason: NoOverrideSpecified
+      status: "True"
+      type: Overridden
+    - lastTransitionTime: "2024-05-07T23:32:40Z"
+      message: All of the works are synchronized to the latest
+      observedGeneration: 1
+      reason: AllWorkSynced
       status: "True"
       type: WorkSynchronized
-    - lastTransitionTime: "2023-11-28T20:56:21Z"
-      message: Failed to apply manifests, please check the `failedResourcePlacements`
-        status
-      observedGeneration: 2
-      reason: ApplyFailed
+    - lastTransitionTime: "2024-05-07T23:32:40Z"
+      message: All corresponding work objects are applied
+      observedGeneration: 1
+      reason: AllWorkHaveBeenApplied
+      status: "True"
+      type: Applied
+    - lastTransitionTime: "2024-05-07T23:32:49Z"
+      message: The availability of work object crp-4-work is not trackable
+      observedGeneration: 1
+      reason: WorkNotTrackable
+      status: "True"
+      type: Available
+  - clusterName: kind-cluster-1
+    conditions:
+    - lastTransitionTime: "2024-05-07T23:32:40Z"
+      message: 'Successfully scheduled resources for placement in kind-cluster-1 (affinity
+        score: 0, topology spread score: 0): picked by scheduling policy'
+      observedGeneration: 1
+      reason: Scheduled
+      status: "True"
+      type: Scheduled
+    - lastTransitionTime: "2024-05-07T23:32:40Z"
+      message: Detected the new changes on the resources and started the rollout process
+      observedGeneration: 1
+      reason: RolloutStarted
+      status: "True"
+      type: RolloutStarted
+    - lastTransitionTime: "2024-05-07T23:32:40Z"
+      message: No override rules are configured for the selected resources
+      observedGeneration: 1
+      reason: NoOverrideSpecified
+      status: "True"
+      type: Overridden
+    - lastTransitionTime: "2024-05-07T23:32:40Z"
+      message: All of the works are synchronized to the latest
+      observedGeneration: 1
+      reason: AllWorkSynced
+      status: "True"
+      type: WorkSynchronized
+    - lastTransitionTime: "2024-05-07T23:32:40Z"
+      message: Work object crp-4-work is not applied
+      observedGeneration: 1
+      reason: NotAllWorkHaveBeenApplied
       status: "False"
-      type: ResourceApplied
+      type: Applied
     failedPlacements:
     - condition:
-        lastTransitionTime: "2023-11-28T20:56:16Z"
-        message: 'Failed to apply manifest: resource is not managed by the work controller'
-        reason: AppliedManifestFailedReason
+        lastTransitionTime: "2024-05-07T23:32:40Z"
+        message: 'Failed to apply manifest: failed to process the request due to a
+          client error: resource exists and is not managed by the fleet controller
+          and co-ownernship is disallowed'
+        reason: ManifestsAlreadyOwnedByOthers
         status: "False"
         type: Applied
       kind: Namespace
       name: test-ns
       version: v1
-  - clusterName: kind-cluster-2
-    conditions:
-    - lastTransitionTime: "2023-11-28T20:56:15Z"
-      message: 'Successfully scheduled resources for placement in kind-cluster-2:
-        picked by scheduling policy'
-      observedGeneration: 2
-      reason: ScheduleSucceeded
-      status: "True"
-      type: ResourceScheduled
-    - lastTransitionTime: "2023-11-28T20:56:15Z"
-      message: Successfully Synchronized work(s) for placement
-      observedGeneration: 2
-      reason: WorkSynchronizeSucceeded
-      status: "True"
-      type: WorkSynchronized
-    - lastTransitionTime: "2023-11-28T20:56:21Z"
-      message: Successfully applied resources
-      observedGeneration: 2
-      reason: ApplySucceeded
-      status: "True"
-      type: ResourceApplied
   selectedResources:
+  - kind: Namespace
+    name: test-ns
+    version: v1
   - group: apps
     kind: Deployment
     name: test-nginx
     namespace: test-ns
-    version: v1
-  - kind: Namespace
-    name: test-ns
     version: v1
 ```
 
@@ -578,44 +724,64 @@ In the `ClusterResourcePlacement` status, `placementStatuses` for `kind-cluster-
 
 To gain more insights also take a look at the `work` object, please check this [section](#how-and-where-to-find-the-correct-work-resource) for more details,
 
-### Work status:
+### Work status of kind-cluster-1:
 ```
  status:
-    conditions:
-    - lastTransitionTime: "2023-11-28T21:07:15Z"
-      message: Failed to apply work
-      observedGeneration: 1
-      reason: AppliedWorkFailed
+  conditions:
+  - lastTransitionTime: "2024-05-07T23:32:40Z"
+    message: 'Apply manifest {Ordinal:0 Group: Version:v1 Kind:Namespace Resource:namespaces
+      Namespace: Name:test-ns} failed'
+    observedGeneration: 1
+    reason: WorkAppliedFailed
+    status: "False"
+    type: Applied
+  - lastTransitionTime: "2024-05-07T23:32:40Z"
+    message: ""
+    observedGeneration: 1
+    reason: WorkAppliedFailed
+    status: Unknown
+    type: Available
+  manifestConditions:
+  - conditions:
+    - lastTransitionTime: "2024-05-07T23:32:40Z"
+      message: 'Failed to apply manifest: failed to process the request due to a client
+        error: resource exists and is not managed by the fleet controller and co-ownernship
+        is disallowed'
+      reason: ManifestsAlreadyOwnedByOthers
       status: "False"
       type: Applied
-    manifestConditions:
-    - conditions:
-      - lastTransitionTime: "2023-11-28T20:56:16Z"
-        message: ManifestNoChange
-        observedGeneration: 1
-        reason: ManifestNoChange
-        status: "True"
-        type: Applied
-      identifier:
-        group: apps
-        kind: Deployment
-        name: test-nginx
-        namespace: test-ns
-        ordinal: 0
-        resource: deployments
-        version: v1
-    - conditions:
-      - lastTransitionTime: "2023-11-28T20:56:16Z"
-        message: 'Failed to apply manifest: resource is not managed by the work controller'
-        reason: AppliedManifestFailedReason
-        status: "False"
-        type: Applied
-      identifier:
-        kind: Namespace
-        name: test-ns
-        ordinal: 1
-        resource: namespaces
-        version: v1
+    - lastTransitionTime: "2024-05-07T23:32:40Z"
+      message: Manifest is not applied yet
+      reason: ManifestApplyFailed
+      status: Unknown
+      type: Available
+    identifier:
+      kind: Namespace
+      name: test-ns
+      ordinal: 0
+      resource: namespaces
+      version: v1
+  - conditions:
+    - lastTransitionTime: "2024-05-07T23:32:40Z"
+      message: Manifest is already up to date
+      observedGeneration: 1
+      reason: ManifestAlreadyUpToDate
+      status: "True"
+      type: Applied
+    - lastTransitionTime: "2024-05-07T23:32:51Z"
+      message: Manifest is trackable and available now
+      observedGeneration: 1
+      reason: ManifestAvailable
+      status: "True"
+      type: Available
+    identifier:
+      group: apps
+      kind: Deployment
+      name: test-nginx
+      namespace: test-ns
+      ordinal: 1
+      resource: deployments
+      version: v1
 ```
 
 From looking at the `Work` status and specifically the `manifestConditions` section, we could see that the namespace could not be applied but the deployment within the namespace got propagated from hub to the member cluster.
@@ -630,8 +796,8 @@ Check the status of the `ClusterSchedulingPolicySnapshot` to determine which clu
 ## How can I debug when a selected cluster does not have the expected resources on it or if CRP doesn't pick up the latest changes?
 
 Please check the following cases,
-- Check to see if `ClusterResourcePlacementSynchronized` condition in CRP status is set to `true` or `false`.
-- If it's set to `false` check this [question](#how-can-i-debug-when-my-crp-status-is-clusterresourceplacementsynchronized-condition-status-is-set-to-false).
+- Check to see if `ClusterResourcePlacementRolloutStarted` condition in CRP status is set to `true` or `false`.
+- If it's set to `false` check this [question](#how-can-i-debug-when-my-crp-status-is-clusterresourceplacementrolloutstarted-condition-status-is-set-to-false).
 - If it's set to `true`,
   - Check to see if `ClusterResourcePlacementApplied` condition is set to `unknown`, `false` or `true`.
   - If it's set to `unknown`, please wait as the resources are still being applied to the member cluster (if it's stuck in unknown state for a while, please raise a github issue as it's an unexpected behavior).
