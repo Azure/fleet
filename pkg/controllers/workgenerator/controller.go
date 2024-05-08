@@ -173,12 +173,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 			Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
 			Reason:             condition.AllWorkSyncedReason,
 			ObservedGeneration: resourceBinding.Generation,
-			Message:            "All of the works are synchronized to the latest",
+			Message:            "All of the works are synchronized to the latest resource snapshot",
 		})
 		if workUpdated {
 			// revert the applied condition if we made any changes to the work
 			resourceBinding.SetConditions(metav1.Condition{
-				Status:             metav1.ConditionFalse,
+				Status:             metav1.ConditionUnknown,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
 				Reason:             condition.WorkNeedSyncedReason,
 				Message:            "In the processing of synchronizing the work to the member cluster",
@@ -200,6 +200,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		klog.ErrorS(updateErr, "Failed to update the resourceBinding status", "resourceBinding", bindingRef)
 		return controllerruntime.Result{}, controller.NewUpdateIgnoreConflictError(updateErr)
 	}
+	klog.V(2).InfoS("Updated the status of a binding", "clusterResourceBinding", klog.KObj(&resourceBinding), "conditions", resourceBinding.Status.Conditions)
+
 	if errors.Is(syncErr, controller.ErrUserError) {
 		// Stop retry when the error is caused by user error
 		// For example, user provides an invalid overrides or cannot extract the resources from config map.
@@ -610,12 +612,16 @@ func getWorkNamePrefixFromSnapshotName(resourceSnapshot *fleetv1beta1.ClusterRes
 
 func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) metav1.Condition {
 	allApplied := true
+	oneFailedToApply := false
 	var notAppliedWork string
 	for _, work := range works {
 		if !condition.IsConditionStatusTrue(meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied), work.GetGeneration()) {
 			allApplied = false
 			notAppliedWork = work.Name
-			break
+			if condition.IsConditionStatusFalse(meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied), work.GetGeneration()) {
+				oneFailedToApply = true
+				break
+			}
 		}
 	}
 	if allApplied {
@@ -628,8 +634,17 @@ func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *
 			ObservedGeneration: binding.GetGeneration(),
 		}
 	}
+	if oneFailedToApply {
+		return metav1.Condition{
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1beta1.ResourceBindingApplied),
+			Reason:             condition.WorkNotAppliedReason,
+			Message:            fmt.Sprintf("Work object %s is not applied", notAppliedWork),
+			ObservedGeneration: binding.GetGeneration(),
+		}
+	}
 	return metav1.Condition{
-		Status:             metav1.ConditionFalse,
+		Status:             metav1.ConditionUnknown,
 		Type:               string(fleetv1beta1.ResourceBindingApplied),
 		Reason:             condition.WorkNotAppliedReason,
 		Message:            fmt.Sprintf("Work object %s is not applied", notAppliedWork),
@@ -653,14 +668,13 @@ func buildAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding
 		}
 	}
 	if allAvailable {
-		klog.V(2).InfoS("All works associated with the binding are available", "binding", klog.KObj(binding))
 		reason := condition.AllWorkAvailableReason
 		message := "All corresponding work objects are available"
 		if len(notTrackableWork) > 0 {
 			reason = work.WorkNotTrackableReason
 			message = fmt.Sprintf("The availability of work object %s is not trackable", notTrackableWork)
 		}
-
+		klog.V(2).InfoS("All works associated with the binding are available", "binding", klog.KObj(binding), "reason", reason)
 		return metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingAvailable),

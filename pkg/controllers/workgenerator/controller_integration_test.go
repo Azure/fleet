@@ -145,7 +145,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 			By(fmt.Sprintf("work %s is created in %s", work.Name, work.Namespace))
 			// check the binding status
-			verifyBindingStatusSyncedNotApplied(binding, false, true)
+			verifyBindingStatusSyncedNotApplied(binding, false, true, false)
 		})
 
 		It("Should only creat work after all the resource snapshots are created", func() {
@@ -223,7 +223,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName), Namespace: memberClusterNamespaceName}, &work)
 			}, duration, interval).Should(Succeed(), "controller should create work in hub cluster")
 			// check the binding status
-			verifyBindingStatusSyncedNotApplied(binding, false, true)
+			verifyBindingStatusSyncedNotApplied(binding, false, true, false)
 			// delete the binding
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, binding)).Should(Succeed())
@@ -313,9 +313,10 @@ var _ = Describe("Test Work Generator Controller", func() {
 				}
 				diff := cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
+				markWorkApplyFailed(&work)
 				// check the binding status that it should be marked as work not applied eventually
-				verifyBindingStatusSyncedNotApplied(binding, false, true)
-				// mark the work applied
+				verifyBindingStatusSyncedNotApplied(binding, false, false, true)
+				// mark the work applied true
 				markWorkApplied(&work)
 				// check the binding status that it should be marked as applied true eventually
 				verifyBindStatusAppliedNotAvailable(binding, false)
@@ -349,7 +350,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				diff := cmp.Diff(expectedManifest, work.Spec.Workload.Manifests)
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work manifest(%s) mismatch (-want +got):\n%s", work.Name, diff))
 				// check the binding status
-				verifyBindingStatusSyncedNotApplied(binding, false, false)
+				verifyBindingStatusSyncedNotApplied(binding, false, false, false)
 			})
 		})
 
@@ -710,12 +711,12 @@ var _ = Describe("Test Work Generator Controller", func() {
 				}
 				diff = cmp.Diff(wantWork, secondWork, ignoreWorkOption, ignoreTypeMeta)
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
-				// check the binding status that it should be marked as applied false
-				verifyBindingStatusSyncedNotApplied(binding, false, true)
-				// mark both the work applied
+				// check the binding status that it should be marked as applied unknown
+				verifyBindingStatusSyncedNotApplied(binding, false, true, false)
+				// mark only one work applied
 				markWorkApplied(&work)
 				// only one work applied is still just sync
-				verifyBindingStatusSyncedNotApplied(binding, false, false)
+				verifyBindingStatusSyncedNotApplied(binding, false, false, false)
 				markWorkApplied(&secondWork)
 				// check the binding status that it should be marked as applied true eventually
 				verifyBindStatusAppliedNotAvailable(binding, false)
@@ -1004,7 +1005,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				diff := cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
 				// check the binding status that it should be marked as work not applied eventually
-				verifyBindingStatusSyncedNotApplied(binding, true, true)
+				verifyBindingStatusSyncedNotApplied(binding, true, true, false)
 				// mark the work applied
 				markWorkApplied(&work)
 				// check the binding status that it should be marked as applied true eventually
@@ -1039,7 +1040,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				diff := cmp.Diff(expectedManifest, work.Spec.Workload.Manifests)
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work manifest(%s) mismatch (-want +got):\n%s", work.Name, diff))
 				// check the binding status
-				verifyBindingStatusSyncedNotApplied(binding, true, false)
+				verifyBindingStatusSyncedNotApplied(binding, true, false, false)
 			})
 		})
 
@@ -1189,18 +1190,21 @@ var _ = Describe("Test Work Generator Controller", func() {
 	// TODO: add a test for the apply strategy
 })
 
-func verifyBindingStatusSyncedNotApplied(binding *placementv1beta1.ClusterResourceBinding, hasOverride, workSync bool) {
+func verifyBindingStatusSyncedNotApplied(binding *placementv1beta1.ClusterResourceBinding, hasOverride, workNeedSync, applyFailed bool) {
 	Eventually(func() string {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 		appliedReason := condition.WorkNotAppliedReason
-		if workSync {
+		if workNeedSync {
 			appliedReason = condition.WorkNeedSyncedReason
 		}
 		overrideReason := condition.OverrideNotSpecifiedReason
 		if hasOverride {
 			overrideReason = condition.OverriddenSucceededReason
 		}
-
+		applyStatus := metav1.ConditionUnknown
+		if applyFailed {
+			applyStatus = metav1.ConditionFalse
+		}
 		wantStatus := placementv1beta1.ResourceBindingStatus{
 			Conditions: []metav1.Condition{
 				{
@@ -1216,7 +1220,7 @@ func verifyBindingStatusSyncedNotApplied(binding *placementv1beta1.ClusterResour
 					ObservedGeneration: binding.GetGeneration(),
 				},
 				{
-					Status:             metav1.ConditionFalse,
+					Status:             applyStatus,
 					Type:               string(placementv1beta1.ResourceBindingApplied),
 					Reason:             appliedReason,
 					ObservedGeneration: binding.Generation,
@@ -1364,6 +1368,19 @@ func generateResourceSnapshot(resourceIndex, numberResource, subIndex int, rawCo
 		})
 	}
 	return clusterResourceSnapshot
+}
+
+func markWorkApplyFailed(work *placementv1beta1.Work) {
+	meta.SetStatusCondition(&work.Status.Conditions, metav1.Condition{
+		Status:             metav1.ConditionFalse,
+		Type:               placementv1beta1.WorkConditionTypeApplied,
+		Reason:             "appliedManifest",
+		Message:            "fake apply manifest",
+		ObservedGeneration: work.Generation,
+		LastTransitionTime: metav1.Now(),
+	})
+	Expect(k8sClient.Status().Update(ctx, work)).Should(Succeed())
+	By(fmt.Sprintf("resource work `%s` is marked as applied", work.Name))
 }
 
 func markWorkApplied(work *placementv1beta1.Work) {

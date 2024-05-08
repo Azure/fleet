@@ -170,7 +170,7 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 				ObservedGeneration: 1,
 			},
 		},
-		"applied should be false if not all work applied to the latest generation": {
+		"applied should be known if not all work applied to the latest generation": {
 			works: map[string]*fleetv1beta1.Work{
 				"notAppliedWork1": {
 					ObjectMeta: metav1.ObjectMeta{
@@ -205,13 +205,38 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 			},
 			generation: 1,
 			want: metav1.Condition{
-				Status:             metav1.ConditionFalse,
+				Status:             metav1.ConditionUnknown,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
 				Reason:             condition.WorkNotAppliedReason,
 				ObservedGeneration: 1,
 			},
 		},
-		"applied should be false if not all work has applied": {
+		"applied should be unknown if all work has no applied condition": {
+			works: map[string]*fleetv1beta1.Work{
+				"notappliedWork1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work1",
+						Generation: 123,
+					},
+					Status: fleetv1beta1.WorkStatus{},
+				},
+				"notAppliedWork2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work2",
+						Generation: 12,
+					},
+					Status: fleetv1beta1.WorkStatus{},
+				},
+			},
+			generation: 1,
+			want: metav1.Condition{
+				Status:             metav1.ConditionUnknown,
+				Type:               string(fleetv1beta1.ResourceBindingApplied),
+				Reason:             condition.WorkNotAppliedReason,
+				ObservedGeneration: 1,
+			},
+		},
+		"applied should be unknown if not all work has applied": {
 			works: map[string]*fleetv1beta1.Work{
 				"appliedWork1": {
 					ObjectMeta: metav1.ObjectMeta{
@@ -237,13 +262,45 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 			},
 			generation: 1,
 			want: metav1.Condition{
+				Status:             metav1.ConditionUnknown,
+				Type:               string(fleetv1beta1.ResourceBindingApplied),
+				Reason:             condition.WorkNotAppliedReason,
+				ObservedGeneration: 1,
+			},
+		},
+		"applied should be false if there is one work has failed applied": {
+			works: map[string]*fleetv1beta1.Work{
+				"appliedWork1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work1",
+						Generation: 123,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeApplied,
+								Status:             metav1.ConditionFalse,
+								ObservedGeneration: 123,
+							},
+						},
+					},
+				},
+				"notAppliedWork2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work2",
+						Generation: 12,
+					},
+				},
+			},
+			generation: 1,
+			want: metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
 				Reason:             condition.WorkNotAppliedReason,
 				ObservedGeneration: 1,
 			},
 		},
-		"applied should be false if some work applied condition is unknown": {
+		"applied should be unknown if some work applied condition is unknown": {
 			works: map[string]*fleetv1beta1.Work{
 				"appliedWork1": {
 					ObjectMeta: metav1.ObjectMeta{
@@ -255,6 +312,47 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 							{
 								Type:               fleetv1beta1.WorkConditionTypeApplied,
 								Status:             metav1.ConditionUnknown,
+								ObservedGeneration: 123,
+							},
+						},
+					},
+				},
+				"appliedWork2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work2",
+						Generation: 12,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeApplied,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 12,
+							},
+						},
+					},
+				},
+			},
+			generation: 1,
+			want: metav1.Condition{
+				Status:             metav1.ConditionUnknown,
+				Type:               string(fleetv1beta1.ResourceBindingApplied),
+				Reason:             condition.WorkNotAppliedReason,
+				ObservedGeneration: 1,
+			},
+		},
+		"applied should be false if some work applied condition is false": {
+			works: map[string]*fleetv1beta1.Work{
+				"appliedWork1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work1",
+						Generation: 123,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeApplied,
+								Status:             metav1.ConditionFalse,
 								ObservedGeneration: 123,
 							},
 						},
