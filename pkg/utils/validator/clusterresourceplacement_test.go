@@ -502,6 +502,14 @@ func TestValidateClusterResourcePlacement_PickFixedPlacementPolicy(t *testing.T)
 			wantErr:    true,
 			wantErrMsg: "cluster names cannot be empty for policy type PickFixed",
 		},
+		"invalid placement policy - PickFixed with non-unique cluster names": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickFixedPlacementType,
+				ClusterNames:  []string{"test-cluster1", "test-cluster1", "test-cluster2", "test-cluster2"},
+			},
+			wantErr:    true,
+			wantErrMsg: "cluster names must be unique for policy type PickFixed",
+		},
 		"invalid placement policy - PickFixed with non nil number of clusters": {
 			policy: &placementv1beta1.PlacementPolicy{
 				PlacementType:    placementv1beta1.PickFixedPlacementType,
