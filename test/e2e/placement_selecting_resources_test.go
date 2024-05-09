@@ -703,7 +703,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 
 		ns := appNamespace()
 		By(fmt.Sprintf("creating namespace %s on member cluster", ns.Name))
-		Expect(memberCluster1EastProdClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
+		Expect(allMemberClusters[0].KubeClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
@@ -807,6 +807,10 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", crpName)
 	})
 
+	It("should remove placed resources from member clusters excluding the first one", func() {
+		checkIfRemovedWorkResourcesFromMemberClusters(allMemberClusters[1:])
+	})
+
 	It("should remove controller finalizers from CRP", func() {
 		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
@@ -816,7 +820,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 		Consistently(func() error {
 			workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 			ns := &corev1.Namespace{}
-			return memberCluster1EastProdClient.Get(ctx, types.NamespacedName{Name: workNamespaceName}, ns)
+			return allMemberClusters[0].KubeClient.Get(ctx, types.NamespacedName{Name: workNamespaceName}, ns)
 		}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Namespace which is not owned by the CRP should not be deleted")
 	})
 })
@@ -1199,7 +1203,7 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 
 	It("should remove placed resources from all member clusters", func() {
 		targetMemberClusters := []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary}
-		checkIfRemovedWorkResourcesFromTargetMemberClusters(targetMemberClusters)
+		checkIfRemovedWorkResourcesFromMemberClusters(targetMemberClusters)
 	})
 
 	It("should remove controller finalizers from CRP", func() {
@@ -1315,15 +1319,6 @@ func checkIfPlacedLargeSecretResourcesOnTargetMemberClusters(targetMemberCluster
 
 		secretsPlacedActual := secretsPlacedOnClusterActual(memberCluster)
 		Eventually(secretsPlacedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place large secrets on member cluster %s", memberCluster.ClusterName)
-	}
-}
-
-func checkIfRemovedWorkResourcesFromTargetMemberClusters(targetMemberClusters []*framework.Cluster) {
-	for idx := range targetMemberClusters {
-		memberCluster := targetMemberClusters[idx]
-
-		workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
-		Eventually(workResourcesRemovedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
 	}
 }
 
