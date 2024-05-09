@@ -20,8 +20,16 @@ Guide.
 ## `requiredDuringSchedulingIgnoredDuringExecution` affinity terms
 
 The `requiredDuringSchedulingIgnoredDuringExecution` type of affinity terms serves as a hard
-constraint that **a cluster must satisfy** before it can be picked. Each term features a label
-selector, which describes the set of labels a cluster must have or not have.
+constraint that **a cluster must satisfy** before it can be picked. Each term may feature:
+
+* a label selector, which specifies a set of labels that a cluster must have or not have before 
+it can be picked;
+* a property selector, which specifies a cluster property requirement that a cluster must satisfy
+before it can be picked;
+* a combination of both.
+
+For the specifics about property selectors, see the
+[How-To Guide: Using Property-Based Scheduling](./property-based-scheduling.md).
 
 ### `matchLabels`
 
@@ -178,13 +186,16 @@ Each term features:
 
 * a weight, between -100 and 100, which is the affinity score that Fleet would assign to a
 cluster if it satisfies this term; and
-* a label selector.
+* a label selector, or a property sorter.
 
 Both are required for this type of affinity terms to function.
 
 The label selector is of the same struct as the one used in
 `requiredDuringSchedulingIgnoredDuringExecution` type of affinity terms; see
 [the documentation above](#requiredduringschedulingignoredduringexecution-affinity-terms) for usage.
+
+For the specifics about property sorters, see the
+[How-To Guide: Using Property-Based Scheduling](./property-based-scheduling.md).
 
 Below is an example with a `preferredDuringSchedulingIgnoredDuringExecution` affinity term:
 
