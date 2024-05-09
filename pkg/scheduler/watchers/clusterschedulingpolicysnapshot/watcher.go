@@ -98,7 +98,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Enqueue the CRP name for scheduler processing.
-	r.SchedulerWorkQueue.AddRateLimited(queue.ClusterResourcePlacementKey(crpName))
+	r.SchedulerWorkQueue.Add(queue.ClusterResourcePlacementKey(crpName))
 
 	// The reconciliation loop ends.
 	return ctrl.Result{}, nil

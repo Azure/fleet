@@ -88,7 +88,7 @@ func NewScheduler(
 
 // ScheduleOnce performs scheduling for one single item pulled from the work queue.
 // it returns true if the context is not canceled, false otherwise.
-func (s *Scheduler) scheduleOnce(ctx context.Context) {
+func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 	// Retrieve the next item (name of a CRP) from the work queue.
 	//
 	// Note that this will block if no item is available.
@@ -113,13 +113,13 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) {
 
 	startTime := time.Now()
 	crpRef := klog.KRef("", string(crpName))
-	klog.V(2).InfoS("Schedule once", "clusterResourcePlacement", crpRef)
+	klog.V(2).InfoS("Schedule once started", "clusterResourcePlacement", crpRef, "worker", worker)
 	defer func() {
 		// Note that the time spent on pulling keys from the work queue (and the time spent on waiting
 		// for a key to arrive) is not counted here, as we cannot reliably distinguish between
 		// system processing latencies and actual duration of cluster resource placement absence.
 		latency := time.Since(startTime).Milliseconds()
-		klog.V(2).InfoS("Schedule once completed", "clusterResourcePlacement", crpRef, "latency", latency)
+		klog.V(2).InfoS("Schedule once completed", "clusterResourcePlacement", crpRef, "latency", latency, "worker", worker)
 	}()
 
 	// Retrieve the CRP.
@@ -216,8 +216,11 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) {
 		// any delay to the requeues.
 		s.queue.Add(crpName)
 		observeSchedulingCycleMetrics(cycleStartTime, false, true)
+	} else {
+		// no more failure, the following queue don't need to be rate limited
+		s.queue.Forget(crpName)
+		observeSchedulingCycleMetrics(cycleStartTime, false, false)
 	}
-	observeSchedulingCycleMetrics(cycleStartTime, false, false)
 }
 
 // Run starts the scheduler.
@@ -235,7 +238,7 @@ func (s *Scheduler) Run(ctx context.Context) {
 	wg := &sync.WaitGroup{}
 	wg.Add(s.workerNumber)
 	for i := 0; i < s.workerNumber; i++ {
-		go func() {
+		go func(index int) {
 			defer wg.Done()
 			defer utilruntime.HandleCrash()
 			// Run scheduleOnce forever until context is cancelled
@@ -244,10 +247,10 @@ func (s *Scheduler) Run(ctx context.Context) {
 				case <-ctx.Done():
 					return
 				default:
-					s.scheduleOnce(ctx)
+					s.scheduleOnce(ctx, index)
 				}
 			}
-		}()
+		}(i)
 	}
 
 	// Wait for the context to be canceled.
