@@ -106,12 +106,25 @@ more information.
 
 You can add labels to a `MemberCluster` object in the same as with any other Kubernetes object.
 These labels can then be used for targeting specific clusters in resource placement. To add a label,
-run the command below:
+run the commands below:
 
 ```sh
-# Replace the values of MEMBER_CLUSTER, LABEL_KEY, and LABEL_VALUE with those of your own.
-export MEMBER_CLUSTER=YOUR-MEMBER-CLUSTER
-export LABEL_KEY=YOUR-LABEL-KEY
-export LABEL_VALUE=YOUR-LABEL-VALUE
+# Replace the values of <MEMBER_CLUSTER>, <LABEL_KEY>, and <LABEL_VALUE> with those of your own.
+export MEMBER_CLUSTER=<YOUR-MEMBER-CLUSTER<
+export LABEL_KEY=YOUR-<LABEL-KEY>
+export LABEL_VALUE=<YOUR-LABEL-VALUE>
 kubectl label membercluster $MEMBER_CLUSTER $LABEL_KEY=$LABEL_VALUE
+```
+
+Or, you can add the same label to multiple clusters at once by running the following script:
+```
+# Replace the value <number-of-member-cluster> to the desired number of member clusters you want to label.
+chmod +x hack/Azure/setup/labelMC.sh
+./hack/Azure/setup/labelMC.sh $LABEL_KEY=$LABEL_VALUE <number-of-member-clusters>
+```
+>**NOTE:** The script will label the number of member clusters at random.
+
+To view the labels your current member clusters have been assigned, run the following command:
+```
+kubectl get membercluster --show-labels
 ```
