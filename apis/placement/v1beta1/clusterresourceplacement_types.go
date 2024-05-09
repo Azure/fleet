@@ -29,10 +29,13 @@ const (
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
 // +kubebuilder:printcolumn:JSONPath=`.metadata.generation`,name="Gen",type=string
+// +kubebuilder:printcolumn:JSONPath=`.spec.policy.placementType`,name="Type",priority=1,type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementScheduled")].status`,name="Scheduled",type=string
-// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementScheduled")].observedGeneration`,name="ScheduledGen",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementScheduled")].observedGeneration`,name="Scheduled-Gen",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementWorkSynchronized")].status`,name="Work-Synchronized",priority=1,type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementWorkSynchronized")].observedGeneration`,name="Work-Synchronized-Gen",priority=1,type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementAvailable")].status`,name="Available",type=string
-// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementAvailable")].observedGeneration`,name="AvailableGen",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementAvailable")].observedGeneration`,name="Available-Gen",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -704,17 +707,6 @@ const (
 	// - "False" means we didn't fully satisfy the placement requirement. We will fill the Reason field.
 	// - "Unknown" means we don't have a scheduling decision yet.
 	ClusterResourcePlacementScheduledConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementScheduled"
-
-	// ClusterResourcePlacementSynchronizedConditionType indicates whether the selected resources are synchronized under
-	// the per-cluster namespaces (i.e., fleet-member-<member-name>) on the hub cluster.
-	// Its condition status can be one of the following:
-	// - "True" means all the selected resources are successfully synchronized under the per-cluster namespaces
-	// (i.e., fleet-member-<member-name>) on the hub cluster.
-	// - "False" means all the selected resources have not been synchronized under the per-cluster namespaces
-	// (i.e., fleet-member-<member-name>) on the hub cluster yet.
-	// To be deprecated, it will be replaced by ClusterResourcePlacementRolloutStarted and ClusterResourcePlacementWorkSynchronized
-	// conditions.
-	ClusterResourcePlacementSynchronizedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementSynchronized"
 
 	// ClusterResourcePlacementRolloutStartedConditionType indicates whether the selected resources start rolling out or
 	// not.

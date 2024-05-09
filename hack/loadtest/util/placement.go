@@ -253,7 +253,7 @@ func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline
 			klog.ErrorS(err, "failed to get crp", "crp", crpName)
 		}
 		appliedCond := crp.GetCondition(string(v1beta1.ClusterResourcePlacementAppliedConditionType))
-		synchronizedCond := crp.GetCondition(string(v1beta1.ClusterResourcePlacementSynchronizedConditionType))
+		synchronizedCond := crp.GetCondition(string(v1beta1.ClusterResourcePlacementWorkSynchronizedConditionType))
 		scheduledCond := crp.GetCondition(string(v1beta1.ClusterResourcePlacementScheduledConditionType))
 		select {
 		case <-timer.C:
