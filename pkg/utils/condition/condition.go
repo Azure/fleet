@@ -349,7 +349,7 @@ func (c ResourceCondition) TrueClusterResourcePlacementCondition(generation int6
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
 			Reason:             WorkSynchronizedReason,
-			Message:            fmt.Sprintf("Works(s) are succcesfully created or updated in %d target clusters' namespaces", clusterCount),
+			Message:            fmt.Sprintf("Works(s) are succcesfully created or updated in %d target cluster(s)' namespaces", clusterCount),
 			ObservedGeneration: generation,
 		},
 		{
