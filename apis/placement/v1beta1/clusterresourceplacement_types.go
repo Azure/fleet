@@ -544,7 +544,7 @@ type ClusterResourcePlacementStatus struct {
 	// To get clusterResourceSnapshot of a given resource index, use the following command:
 	// `kubectl get ClusterResourceSnapshot --selector=kubernetes-fleet.io/resource-index=$ObservedResourceIndex `
 	// ObservedResourceIndex is the resource index that the conditions in the ClusterResourcePlacementStatus observe.
-	// For example, a condition of `ClusterResourcePlacementSynchronized` type
+	// For example, a condition of `ClusterResourcePlacementWorkSynchronized` type
 	// is observing the synchronization status of the resource snapshot with the resource index $ObservedResourceIndex.
 	// +optional
 	ObservedResourceIndex string `json:"observedResourceIndex,omitempty"`
