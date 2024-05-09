@@ -87,6 +87,9 @@ const (
 	// WorkNotAppliedReason is the reason string of placement condition if some works are not applied.
 	WorkNotAppliedReason = "NotAllWorkHaveBeenApplied"
 
+	// WorkFailedToApplyReason is the reason string of placement condition if some works failed to apply.
+	WorkFailedToApplyReason = "SomeWorkFailedToApply"
+
 	// AllWorkAppliedReason is the reason string of placement condition if all works are applied.
 	AllWorkAppliedReason = "AllWorkHaveBeenApplied"
 

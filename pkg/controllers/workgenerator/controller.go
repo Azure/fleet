@@ -638,7 +638,7 @@ func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *
 		return metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ResourceBindingApplied),
-			Reason:             condition.WorkNotAppliedReason,
+			Reason:             condition.WorkFailedToApplyReason,
 			Message:            fmt.Sprintf("Work object %s is not applied", notAppliedWork),
 			ObservedGeneration: binding.GetGeneration(),
 		}

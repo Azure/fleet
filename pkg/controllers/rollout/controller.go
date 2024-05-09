@@ -343,8 +343,9 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 		case fleetv1beta1.BindingStateUnscheduled:
 			appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
 			availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
-			if condition.IsConditionStatusFalse(appliedCondition, binding.Generation) || condition.IsConditionStatusFalse(availableCondition, binding.Generation) {
-				klog.V(3).InfoS("Found a failed to be ready unscheduled binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
+			if !condition.IsConditionStatusTrue(appliedCondition, binding.Generation) || !condition.IsConditionStatusTrue(availableCondition, binding.Generation) {
+				klog.V(3).InfoS("Found a failed to be ready unscheduled binding", "clusterResourcePlacement", crpKObj,
+					"binding", bindingKObj, "appliedCondition", appliedCondition, "availableCondition", availableCondition)
 			} else {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
 			}
@@ -384,7 +385,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			// check if the binding is failed or still on going
 			appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
 			availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
-			if condition.IsConditionStatusFalse(appliedCondition, binding.Generation) || condition.IsConditionStatusFalse(availableCondition, binding.Generation) {
+			if !condition.IsConditionStatusTrue(appliedCondition, binding.Generation) || !condition.IsConditionStatusTrue(availableCondition, binding.Generation) {
 				klog.V(3).InfoS("Found a failed to be ready bound binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 				bindingFailed = true
 			} else {
