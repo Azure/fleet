@@ -26,15 +26,6 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    - jsonPath: .status.properties.kubernetes-fleet\.io/node-count.value
-      name: NodeCount
-      type: string
-    - jsonPath: .status.resourceUsage.allocatable.cpu
-      name: AllocatableCPU
-      type: string
-    - jsonPath: .status.resourceUsage.allocatable.memory
-      name: AllocatableMemory
-      type: string
     name: v1
     schema:
       openAPIV3Schema:
@@ -408,15 +399,6 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    - jsonPath: .status.properties.kubernetes-fleet\.io/node-count.value
-      name: NodeCount
-      type: string
-    - jsonPath: .status.resourceUsage.allocatable.cpu
-      name: AllocatableCPU
-      type: string
-    - jsonPath: .status.resourceUsage.allocatable.memory
-      name: AllocatableMemory
-      type: string
     name: v1beta1
     schema:
       openAPIV3Schema:
