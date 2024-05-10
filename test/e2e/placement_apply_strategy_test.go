@@ -67,7 +67,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 		})
 
@@ -137,7 +137,7 @@ var _ = Describe("validating two CRP selecting the same resources", Ordered, fun
 		It("should update CRP status as expected", func() {
 			for i := 0; i < 2; i++ {
 				crpName := fmt.Sprintf(crpNameWithSubIndexTemplate, GinkgoParallelProcess(), i)
-				crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
+				crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, workResourceIdentifiers(), allMemberClusterNames, nil, "0", true)
 				Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 			}
 		})
@@ -185,7 +185,7 @@ var _ = Describe("validating two CRP selecting the same resources", Ordered, fun
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 		})
 
