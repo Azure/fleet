@@ -32,7 +32,7 @@ const (
 	// A list of properties that the AKS property provider collects.
 
 	// NodeCountProperty is a property that describes the number of nodes in the cluster.
-	NodeCountProperty = "kubernetes.azure.com/node-count"
+	NodeCountProperty = "kubernetes-fleet.io/node-count"
 	// PerCPUCoreCostProperty is a property that describes the average hourly cost of a CPU core in
 	// a Kubernetes cluster.
 	PerCPUCoreCostProperty = "kubernetes.azure.com/per-cpu-core-cost"

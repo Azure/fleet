@@ -75,7 +75,7 @@ such as `cpu` and `memory`, and the usage information should consist of:
 * Non-resource property: a metric about a member cluster, in the form of a key/value
 pair; the key should be in the format of
 [a Kubernetes label key](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set),
-such as `kubernetes.azure.com/node-count`, and the value at this moment should be a sortable
+such as `kubernetes-fleet.io/node-count`, and the value at this moment should be a sortable
 numeric that can be parsed as
 [a Kubernetes quantity](https://kubernetes.io/docs/reference/kubernetes-api/common-definitions/quantity/).
 
@@ -92,7 +92,7 @@ status:
   agentStatus: ...
   conditions: ...
   properties:
-    kubernetes.azure.com/node-count:
+    kubernetes-fleet.io/node-count:
       observationTime: "2024-04-30T14:54:24Z"
       value: "2"
     ...
@@ -110,4 +110,3 @@ status:
 
 Note that conditions reported by the property provider (if any), would be available in the
 `.status.conditions` array as well.
-

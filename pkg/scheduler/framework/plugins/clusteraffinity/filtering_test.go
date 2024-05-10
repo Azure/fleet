@@ -32,7 +32,7 @@ const (
 	envLabelName   = "env"
 	envLabelValue1 = "prod"
 
-	nodeCountPropertyName   = "kubernetes.azure.com/node-count"
+	nodeCountPropertyName   = "kubernetes-fleet.io/node-count"
 	nodeCountPropertyValue1 = "3"
 
 	availableCPUPropertyName   = "resources.kubernetes-fleet.io/available-cpu"
