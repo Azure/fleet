@@ -346,6 +346,10 @@ func validatePreferredClusterSelectors(preferredClusterSelectors []placementv1be
 		if preferredClusterSelector.Preference.PropertySelector != nil {
 			allErr = append(allErr, fmt.Errorf("PropertySelector is not allowed for PreferredDuringSchedulingIgnoredDuringExecution affinity"))
 		}
+
+		if preferredClusterSelector.Preference.PropertySorter != nil {
+			allErr = append(allErr, validatePropertySorter(preferredClusterSelector.Preference.PropertySorter))
+		}
 	}
 	return apiErrors.NewAggregate(allErr)
 }
@@ -417,10 +421,18 @@ func validatePropertySelectorRequirements(propertySelectorRequirements []placeme
 		}
 		// TODO: Check for logical contradictions
 	}
-	if len(allErr) > 0 {
-		return apiErrors.NewAggregate(allErr)
+	return apiErrors.NewAggregate(allErr)
+}
+
+func validatePropertySorter(propertySorter *placementv1beta1.PropertySorter) error {
+	var allErr []error
+	if err := validateName(propertySorter.Name); err != nil {
+		allErr = append(allErr, err)
 	}
-	return nil
+	if propertySorter.SortOrder != placementv1beta1.Descending && propertySorter.SortOrder != placementv1beta1.Ascending {
+		allErr = append(allErr, fmt.Errorf("invalid property sort order %s", propertySorter.SortOrder))
+	}
+	return apiErrors.NewAggregate(allErr)
 }
 
 func validateName(name string) error {

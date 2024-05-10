@@ -1008,6 +1008,31 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 			wantErr:    true,
 			wantErrMsg: "PropertySelector is not allowed for PreferredDuringSchedulingIgnoredDuringExecution affinity",
 		},
+		"invalid placement policy - PickN with invalid property sorter in PreferredDuringSchedulingIgnoredDuringExecution affinity": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+							{
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySorter: &placementv1beta1.PropertySorter{
+										Name:      "resources.kubernetes-fleet.io/total-cpu",
+										SortOrder: "random-order",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "invalid property sort order random-order",
+		},
 		"invalid placement policy - PickN with invalid topology constraint with unknown unsatisfiable type": {
 			policy: &placementv1beta1.PlacementPolicy{
 				PlacementType:    placementv1beta1.PickNPlacementType,
