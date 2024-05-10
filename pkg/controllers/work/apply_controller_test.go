@@ -939,14 +939,33 @@ func TestTrackResourceAvailability(t *testing.T) {
 						"generation": 1,
 						"name":       "test-deployment",
 					},
+					"spec": map[string]interface{}{
+						"replicas": 3,
+					},
 					"status": map[string]interface{}{
 						"observedGeneration": 1,
-						"conditions": []interface{}{
-							map[string]interface{}{
-								"type":   "Available",
-								"status": "True",
-							},
-						},
+						"availableReplicas":  3,
+						"updatedReplicas":    3,
+					},
+				},
+			},
+			expected: manifestAvailableAction,
+			err:      nil,
+		},
+		"Test Deployment available with default replica": {
+			gvr: utils.DeploymentGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "Deployment",
+					"metadata": map[string]interface{}{
+						"generation": 1,
+						"name":       "test-deployment",
+					},
+					"status": map[string]interface{}{
+						"observedGeneration": 1,
+						"availableReplicas":  1,
+						"updatedReplicas":    1,
 					},
 				},
 			},
@@ -963,38 +982,59 @@ func TestTrackResourceAvailability(t *testing.T) {
 						"generation": 2,
 						"name":       "test-deployment",
 					},
+					"spec": map[string]interface{}{
+						"replicas": 3,
+					},
 					"status": map[string]interface{}{
 						"observedGeneration": 1,
-						"conditions": []interface{}{
-							map[string]interface{}{
-								"type":   "Available",
-								"status": "True",
-							},
-						},
+						"availableReplicas":  3,
+						"updatedReplicas":    3,
 					},
 				},
 			},
 			expected: manifestNotAvailableYetAction,
 			err:      nil,
 		},
-		"Test Deployment not available": {
+		"Test Deployment not available as not enough available": {
 			gvr: utils.DeploymentGVR,
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "apps/v1",
 					"kind":       "Deployment",
 					"metadata": map[string]interface{}{
-						"generation": 1,
+						"generation": 2,
 						"name":       "test-deployment",
 					},
+					"spec": map[string]interface{}{
+						"replicas": 3,
+					},
 					"status": map[string]interface{}{
-						"observedGeneration": 1,
-						"conditions": []interface{}{
-							map[string]interface{}{
-								"type":   "Available",
-								"status": "False",
-							},
-						},
+						"observedGeneration": 2,
+						"availableReplicas":  2,
+						"updatedReplicas":    3,
+					},
+				},
+			},
+			expected: manifestNotAvailableYetAction,
+			err:      nil,
+		},
+		"Test Deployment not available as not enough updated": {
+			gvr: utils.DeploymentGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "Deployment",
+					"metadata": map[string]interface{}{
+						"generation": 2,
+						"name":       "test-deployment",
+					},
+					"spec": map[string]interface{}{
+						"replicas": 3,
+					},
+					"status": map[string]interface{}{
+						"observedGeneration": 2,
+						"availableReplicas":  3,
+						"updatedReplicas":    2,
 					},
 				},
 			},

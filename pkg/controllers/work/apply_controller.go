@@ -465,16 +465,13 @@ func trackDeploymentAvailability(curObj *unstructured.Unstructured) (ApplyAction
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &deployment); err != nil {
 		return errorApplyAction, controller.NewUnexpectedBehaviorError(err)
 	}
-	// see if the DeploymentAvailable condition is true
-	var depCond *appv1.DeploymentCondition
-	for i := range deployment.Status.Conditions {
-		if deployment.Status.Conditions[i].Type == appv1.DeploymentAvailable {
-			depCond = &deployment.Status.Conditions[i]
-			break
-		}
+	requiredReplicas := int32(1)
+	if deployment.Spec.Replicas != nil {
+		requiredReplicas = *deployment.Spec.Replicas
 	}
-	// a deployment is available if the observedGeneration is equal to the generation and the Available condition is true
-	if deployment.Status.ObservedGeneration == deployment.Generation && depCond != nil && depCond.Status == v1.ConditionTrue {
+	if deployment.Status.ObservedGeneration == deployment.Generation &&
+		requiredReplicas == deployment.Status.AvailableReplicas &&
+		requiredReplicas == deployment.Status.UpdatedReplicas {
 		klog.V(2).InfoS("Deployment is available", "deployment", klog.KObj(curObj))
 		return manifestAvailableAction, nil
 	}
