@@ -447,10 +447,15 @@ func validateName(name string) error {
 	if err := validation.IsQualifiedName(name); err != nil {
 		return fmt.Errorf("name is not a valid Kubernetes label name: %v", err)
 	}
+	// we expect the resource property names to be in this format `[PREFIX]/[CAPACITY_TYPE]-[RESOURCE_NAME]`.
 	if strings.HasPrefix(name, resourcePropertyNamePrefix) {
 		resourcePropertyName, _ := strings.CutPrefix(name, resourcePropertyNamePrefix)
-		if !isValidResourcePropertyName(resourcePropertyName) {
-			return fmt.Errorf("invalid resource property name %s, supported values are %+v", name, supportedResourceCapacityTypes)
+		segments := strings.Split(resourcePropertyName, "-")
+		if len(segments) != 2 || len(segments[0]) == 0 || len(segments[1]) == 0 {
+			return fmt.Errorf("invalid resource property name: %s, expected format [PREFIX]/[CAPACITY_TYPE]-[RESOURCE_NAME]", name)
+		}
+		if !isValidCapacityType(segments[0]) {
+			return fmt.Errorf("invalid capacity type in resource property name %s, supported values are %+v", name, supportedResourceCapacityTypes)
 		}
 	}
 	return nil
@@ -481,9 +486,9 @@ func validateValues(values []string) error {
 	return nil
 }
 
-func isValidResourcePropertyName(resourcePropertyName string) bool {
+func isValidCapacityType(ct string) bool {
 	for _, resourceCapacityType := range supportedResourceCapacityTypes {
-		if resourcePropertyName == resourceCapacityType {
+		if ct == resourceCapacityType {
 			return true
 		}
 	}

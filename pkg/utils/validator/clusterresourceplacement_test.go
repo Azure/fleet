@@ -820,7 +820,7 @@ func TestValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
 				},
 			},
 			wantErr:    true,
-			wantErrMsg: "invalid resource property name resources.kubernetes-fleet.io/node-count, supported values are [total allocatable available]",
+			wantErrMsg: "invalid capacity type in resource property name resources.kubernetes-fleet.io/node-count, supported values are [total allocatable available]",
 		},
 	}
 	for testName, testCase := range tests {
@@ -1133,7 +1133,7 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 			wantErr:    true,
 			wantErrMsg: "toleration key cannot be empty, when operator is Equal",
 		},
-		"invalid placement policy - PickAll with invalid property selector name": {
+		"invalid placement policy - PickN with invalid property selector name": {
 			policy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickNPlacementType,
 				Affinity: &placementv1beta1.Affinity{
@@ -1147,7 +1147,7 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 									PropertySelector: &placementv1beta1.PropertySelector{
 										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 											{
-												Name:     "resources.kubernetes-fleet.io/node-count",
+												Name:     "resources.kubernetes-fleet.io/total-allocatable-cpu",
 												Operator: placementv1beta1.PropertySelectorEqualTo,
 												Values:   []string{"2"},
 											},
@@ -1160,7 +1160,7 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 				},
 			},
 			wantErr:    true,
-			wantErrMsg: "invalid resource property name resources.kubernetes-fleet.io/node-count, supported values are [total allocatable available]",
+			wantErrMsg: "invalid resource property name: resources.kubernetes-fleet.io/total-allocatable-cpu, expected format [PREFIX]/[CAPACITY_TYPE]-[RESOURCE_NAME]",
 		},
 	}
 
