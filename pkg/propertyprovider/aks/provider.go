@@ -29,10 +29,9 @@ import (
 )
 
 const (
-	// A list of properties that the AKS property provider collects.
+	// A list of properties that the AKS property provider collects in addition to the
+	// Fleet required ones.
 
-	// NodeCountProperty is a property that describes the number of nodes in the cluster.
-	NodeCountProperty = "kubernetes-fleet.io/node-count"
 	// PerCPUCoreCostProperty is a property that describes the average hourly cost of a CPU core in
 	// a Kubernetes cluster.
 	PerCPUCoreCostProperty = "kubernetes.azure.com/per-cpu-core-cost"
@@ -41,13 +40,9 @@ const (
 	PerGBMemoryCostProperty = "kubernetes.azure.com/per-gb-memory-cost"
 
 	// The resource properties.
-	TotalCPUCapacityProperty       = "resources.kubernetes-fleet.io/total-cpu"
-	AllocatableCPUCapacityProperty = "resources.kubernetes-fleet.io/allocatable-cpu"
-	AvailableCPUCapacityProperty   = "resources.kubernetes-fleet.io/available-cpu"
-
-	TotalMemoryCapacityProperty       = "resources.kubernetes-fleet.io/total-memory"
-	AllocatableMemoryCapacityProperty = "resources.kubernetes-fleet.io/allocatable-memory"
-	AvailableMemoryCapacityProperty   = "resources.kubernetes-fleet.io/available-memory"
+	// Available CPU and memory resource properties.
+	AvailableCPUCapacityProperty    = "resources.kubernetes-fleet.io/available-cpu"
+	AvailableMemoryCapacityProperty = "resources.kubernetes-fleet.io/available-memory"
 
 	CostPrecisionTemplate = "%.3f"
 )
@@ -197,7 +192,7 @@ func (p *PropertyProvider) Collect(_ context.Context) propertyprovider.PropertyC
 
 	// Collect the non-resource properties.
 	properties := make(map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue)
-	properties[NodeCountProperty] = clusterv1beta1.PropertyValue{
+	properties[clusterv1beta1.NodeCountProperty] = clusterv1beta1.PropertyValue{
 		Value:           fmt.Sprintf("%d", p.nodeTracker.NodeCount()),
 		ObservationTime: metav1.Now(),
 	}

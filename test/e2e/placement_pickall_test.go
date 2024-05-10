@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/propertyprovider/aks"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -388,7 +389,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     aks.NodeCountProperty,
+														Name:     clusterv1beta1.NodeCountProperty,
 														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
 														Values: []string{
 															"3",
@@ -462,14 +463,14 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     aks.NodeCountProperty,
+														Name:     clusterv1beta1.NodeCountProperty,
 														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
 														Values: []string{
 															"3",
 														},
 													},
 													{
-														Name:     aks.TotalCPUCapacityProperty,
+														Name:     clusterv1beta1.TotalCPUCapacityProperty,
 														Operator: placementv1beta1.PropertySelectorLessThan,
 														Values: []string{
 															"10000",
@@ -522,14 +523,14 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 									PropertySelector: &placementv1beta1.PropertySelector{
 										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 											{
-												Name:     aks.NodeCountProperty,
+												Name:     clusterv1beta1.NodeCountProperty,
 												Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
 												Values: []string{
 													"3",
 												},
 											},
 											{
-												Name:     aks.TotalCPUCapacityProperty,
+												Name:     clusterv1beta1.TotalCPUCapacityProperty,
 												Operator: placementv1beta1.PropertySelectorLessThan,
 												Values: []string{
 													"10000",
@@ -542,7 +543,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 									PropertySelector: &placementv1beta1.PropertySelector{
 										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 											{
-												Name:     aks.NodeCountProperty,
+												Name:     clusterv1beta1.NodeCountProperty,
 												Operator: placementv1beta1.PropertySelectorEqualTo,
 												Values: []string{
 													"4",
@@ -622,7 +623,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 														},
 													},
 													{
-														Name:     aks.AllocatableCPUCapacityProperty,
+														Name:     clusterv1beta1.AllocatableCPUCapacityProperty,
 														Operator: placementv1beta1.PropertySelectorGreaterThan,
 														Values: []string{
 															"10000",
@@ -695,7 +696,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     aks.NodeCountProperty,
+														Name:     clusterv1beta1.NodeCountProperty,
 														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
 														Values: []string{
 															"3",
@@ -771,7 +772,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     aks.AllocatableCPUCapacityProperty,
+														Name:     clusterv1beta1.AllocatableCPUCapacityProperty,
 														Operator: placementv1beta1.PropertySelectorLessThanOrEqualTo,
 														Values: []string{
 															"10000",
@@ -840,7 +841,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 									PropertySelector: &placementv1beta1.PropertySelector{
 										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 											{
-												Name:     aks.AllocatableMemoryCapacityProperty,
+												Name:     clusterv1beta1.AllocatableMemoryCapacityProperty,
 												Operator: placementv1beta1.PropertySelectorLessThan,
 												Values: []string{
 													"1Ki",
@@ -871,14 +872,14 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 									PropertySelector: &placementv1beta1.PropertySelector{
 										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 											{
-												Name:     aks.NodeCountProperty,
+												Name:     clusterv1beta1.NodeCountProperty,
 												Operator: placementv1beta1.PropertySelectorEqualTo,
 												Values: []string{
 													"2",
 												},
 											},
 											{
-												Name:     aks.TotalMemoryCapacityProperty,
+												Name:     clusterv1beta1.TotalMemoryCapacityProperty,
 												Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
 												Values: []string{
 													"1Ki",

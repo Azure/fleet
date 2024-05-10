@@ -165,7 +165,7 @@ func TestCollect(t *testing.T) {
 			},
 			wantMetricCollectionResponse: propertyprovider.PropertyCollectionResponse{
 				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-					NodeCountProperty: {
+					clusterv1beta1.NodeCountProperty: {
 						Value: "2",
 					},
 					PerCPUCoreCostProperty: {
@@ -294,7 +294,7 @@ func TestCollect(t *testing.T) {
 			},
 			wantMetricCollectionResponse: propertyprovider.PropertyCollectionResponse{
 				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-					NodeCountProperty: {
+					clusterv1beta1.NodeCountProperty: {
 						Value: "2",
 					},
 					PerCPUCoreCostProperty: {

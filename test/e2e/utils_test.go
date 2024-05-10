@@ -346,7 +346,7 @@ func summarizeAKSClusterProperties(memberCluster *framework.Cluster, mcObj *clus
 
 	status := clusterv1beta1.MemberClusterStatus{
 		Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-			aks.NodeCountProperty: {
+			clusterv1beta1.NodeCountProperty: {
 				Value: fmt.Sprintf("%d", nodeCount),
 			},
 			aks.PerCPUCoreCostProperty: {

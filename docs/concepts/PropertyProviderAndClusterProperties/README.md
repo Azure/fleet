@@ -50,8 +50,8 @@ in the form of Kubernetes conditions.
 
 The Fleet member agent can run with or without a property provider. If a provider is not set up, or
 the given provider fails to start properly, the agent will collect limited properties about
-the cluster on its own, specifically the total and allocatable CPU and memory capacities of
-the host member cluster. 
+the cluster on its own, specifically the node count, plus the total/allocatable
+CPU and memory capacities of the host member cluster. 
 
 ## Cluster properties
 
@@ -110,3 +110,10 @@ status:
 
 Note that conditions reported by the property provider (if any), would be available in the
 `.status.conditions` array as well.
+
+All property providers should support the following set of properties:
+
+* Non-resource properties:
+    * `kubernetes-fleet.io/node-count`: the number of nodes in the cluster
+* Resource properties
+    * The total and allocatable capacities of CPU (`cpu`) and memory (`memory`) resources in the cluster.

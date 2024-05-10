@@ -463,6 +463,12 @@ func (r *Reconciler) updateResourceStats(ctx context.Context, imc *clusterv1beta
 		allocatableMemory.Add(*(node.Status.Allocatable.Memory()))
 	}
 
+	imc.Status.Properties = map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+		clusterv1beta1.NodeCountProperty: {
+			Value:           fmt.Sprintf("%d", len(nodes.Items)),
+			ObservationTime: metav1.Now(),
+		},
+	}
 	imc.Status.ResourceUsage.Capacity = corev1.ResourceList{
 		corev1.ResourceCPU:    capacityCPU,
 		corev1.ResourceMemory: capacityMemory,
