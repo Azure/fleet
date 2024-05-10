@@ -45,3 +45,15 @@ domains:
   This how-to guide explains in depth the concept, usage and examples of enveloped objects with 
  `ClusterResourcePlacement` API objects, which you can leverage to propagate resources without 
   unintended side effects on the hub cluster.
+
+* [Using the Fleet `ClusterResourceOverride` API](cluster-resource-override.md)
+
+    This how-to guide explains the specifics of the Fleet `ClusterResourceOverride` API, including
+    its resource selectors, policy, and more. `ClusterResourceOverride` is a Fleet feature that
+    allows you to modify or override specific attributes across cluster-scoped resources.
+
+* [Using the Fleet `ResourceOverride` API](resource-override.md)
+    
+    This how-to guide explains the specifics of the Fleet `ResourceOverride` API, including its
+    resource selectors, policy, and more. `ResourceOverride` is a Fleet API that allows you to
+    modify or override specific attributes across namespaced resources.

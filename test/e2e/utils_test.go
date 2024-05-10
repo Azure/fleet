@@ -703,8 +703,12 @@ func checkIfPlacedNamespaceResourceOnAllMemberClusters() {
 }
 
 func checkIfRemovedWorkResourcesFromAllMemberClusters() {
-	for idx := range allMemberClusters {
-		memberCluster := allMemberClusters[idx]
+	checkIfRemovedWorkResourcesFromMemberClusters(allMemberClusters)
+}
+
+func checkIfRemovedWorkResourcesFromMemberClusters(clusters []*framework.Cluster) {
+	for idx := range clusters {
+		memberCluster := clusters[idx]
 
 		workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
 		Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
@@ -922,7 +926,7 @@ func verifyWorkPropagationAndMarkAsAvailable(memberClusterName, crpName string, 
 				Type:               placementv1beta1.WorkConditionTypeAvailable,
 				Status:             metav1.ConditionTrue,
 				LastTransitionTime: metav1.Now(),
-				Reason:             work.WorkNotTrackableReason,
+				Reason:             work.WorkAvailableReason,
 				Message:            "Set to be available",
 				ObservedGeneration: w.Generation,
 			})

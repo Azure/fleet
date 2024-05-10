@@ -54,7 +54,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				annotationKey: annotationValue,
 			}
 			By(fmt.Sprintf("creating namespace %s on member cluster", ns.Name))
-			Expect(memberCluster1EastProdClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
+			Expect(allMemberClusters[0].KubeClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
 
 			// Create the CRP.
 			strategy := &placementv1beta1.ApplyStrategy{AllowCoOwnership: true}
@@ -67,7 +67,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 		})
 
@@ -89,6 +89,10 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 			Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", crpName)
 		})
 
+		It("should remove placed resources from member clusters excluding the first one", func() {
+			checkIfRemovedWorkResourcesFromMemberClusters(allMemberClusters[1:])
+		})
+
 		It("should remove controller finalizers from CRP", func() {
 			finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 			Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
@@ -97,7 +101,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 		It("namespace should be kept on member cluster", func() {
 			Consistently(func() error {
 				ns := &corev1.Namespace{}
-				return memberCluster1EastProdClient.Get(ctx, types.NamespacedName{Name: workNamespaceName}, ns)
+				return allMemberClusters[0].KubeClient.Get(ctx, types.NamespacedName{Name: workNamespaceName}, ns)
 			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Namespace which is not owned by the CRP should not be deleted")
 		})
 	})
@@ -133,7 +137,7 @@ var _ = Describe("validating two CRP selecting the same resources", Ordered, fun
 		It("should update CRP status as expected", func() {
 			for i := 0; i < 2; i++ {
 				crpName := fmt.Sprintf(crpNameWithSubIndexTemplate, GinkgoParallelProcess(), i)
-				crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
+				crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, workResourceIdentifiers(), allMemberClusterNames, nil, "0", true)
 				Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 			}
 		})
@@ -181,7 +185,7 @@ var _ = Describe("validating two CRP selecting the same resources", Ordered, fun
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 		})
 

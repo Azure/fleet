@@ -423,7 +423,7 @@ func crpStatusWithOverrideUpdatedActual(
 		for _, name := range wantSelectedClusters {
 			wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.ResourcePlacementStatus{
 				ClusterName:                        name,
-				Conditions:                         resourcePlacementRolloutCompletedConditions(crp.Generation, false, true),
+				Conditions:                         resourcePlacementRolloutCompletedConditions(crp.Generation, true, true),
 				ApplicableResourceOverrides:        wantResourceOverrides,
 				ApplicableClusterResourceOverrides: wantClusterResourceOverrides,
 			})
@@ -442,14 +442,9 @@ func crpStatusWithOverrideUpdatedActual(
 	}
 }
 
-func crpStatusUpdatedActual(
-	wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier,
-	wantSelectedClusters, wantUnselectedClusters []string,
-	wantObservedResourceIndex string,
-	resourceIsTrackable bool,
-) func() error {
+func crpStatusUpdatedActual(wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier, wantSelectedClusters, wantUnselectedClusters []string, wantObservedResourceIndex string) func() error {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-	return customizedCRPStatusUpdatedActual(crpName, wantSelectedResourceIdentifiers, wantSelectedClusters, wantUnselectedClusters, wantObservedResourceIndex, resourceIsTrackable)
+	return customizedCRPStatusUpdatedActual(crpName, wantSelectedResourceIdentifiers, wantSelectedClusters, wantUnselectedClusters, wantObservedResourceIndex, true)
 }
 
 func customizedCRPStatusUpdatedActual(crpName string,

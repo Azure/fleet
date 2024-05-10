@@ -97,7 +97,7 @@ var _ = Describe("Work Controller", func() {
 				{
 					Type:   fleetv1beta1.WorkConditionTypeAvailable,
 					Status: metav1.ConditionTrue,
-					Reason: string(manifestNotTrackableAction),
+					Reason: string(manifestAvailableAction),
 				},
 			}
 			Expect(controller.CompareConditions(expected, resultWork.Status.ManifestConditions[0].Conditions)).Should(BeEmpty())
@@ -110,7 +110,7 @@ var _ = Describe("Work Controller", func() {
 				{
 					Type:   fleetv1beta1.WorkConditionTypeAvailable,
 					Status: metav1.ConditionTrue,
-					Reason: WorkNotTrackableReason,
+					Reason: WorkAvailableReason,
 				},
 			}
 			Expect(controller.CompareConditions(expected, resultWork.Status.Conditions)).Should(BeEmpty())
