@@ -117,3 +117,9 @@ All property providers should support the following set of properties:
     * `kubernetes-fleet.io/node-count`: the number of nodes in the cluster
 * Resource properties
     * The total and allocatable capacities of CPU (`cpu`) and memory (`memory`) resources in the cluster.
+
+### Reserved domain for property names
+
+Fleet reserves the domain, `kubernetes-fleet.io`, for property names. Except for the properties
+explicitly listed above, which should be supported by all property providers, any custom property added
+by a property provider should not use the reserved domain.
