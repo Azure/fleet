@@ -2177,7 +2177,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 	}
 	policyWithOldStatus.Status.ObservedCRPGeneration = crpGeneration1
 	policyWithOldStatus.Status.Conditions = []metav1.Condition{
-		newScheduledCondition(policyWithOldStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+		newScheduledCondition(policyWithOldStatus, metav1.ConditionTrue, FullyScheduledReason, fmt.Sprintf(fullyScheduledMessage, 2)),
 	}
 	policyWithOldStatus.Status.ClusterDecisions = []placementv1beta1.ClusterDecision{
 		{
@@ -2272,7 +2272,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					Reason: pickedByPolicyReason,
 				},
 			},
-			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fmt.Sprintf(fullyScheduledMessage, 2)),
 		},
 		{
 			name:                              "with filtered clusters and existing bindings",
@@ -2350,7 +2350,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					Reason:      filteredStatus.String(),
 				},
 			},
-			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fmt.Sprintf(fullyScheduledMessage, 2)),
 		},
 		{
 			name:                              "with not picked clusters and existing bindings",
@@ -2435,7 +2435,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					},
 				},
 			},
-			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fmt.Sprintf(fullyScheduledMessage, 2)),
 		},
 		{
 			name:                              "with both filtered/not picked clusters and existing bindings",
@@ -2510,14 +2510,14 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					Reason:      filteredStatus.String(),
 				},
 			},
-			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fmt.Sprintf(fullyScheduledMessage, 1)),
 		},
 		{
 			name:                              "none",
 			policy:                            policyWithNoStatus,
 			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
 			wantObservedCRPGeneration:         crpGeneration1,
-			wantCondition:                     newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantCondition:                     newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fmt.Sprintf(fullyScheduledMessage, 0)),
 		},
 		{
 			name:                              "too many filtered",
@@ -2578,7 +2578,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					Reason:      filteredStatus.String(),
 				},
 			},
-			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fmt.Sprintf(fullyScheduledMessage, 1)),
 		},
 		{
 			name:                              "too many not picked",
@@ -2649,7 +2649,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					},
 				},
 			},
-			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fmt.Sprintf(fullyScheduledMessage, 1)),
 		},
 		{
 			name:                              "observed a new CRP generation only",
@@ -2712,7 +2712,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					Reason: pickedByPolicyReason,
 				},
 			},
-			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fmt.Sprintf(fullyScheduledMessage, 2)),
 		},
 	}
 
@@ -6088,7 +6088,7 @@ func TestUpdatePolicySnapshotStatusForPickFixedPlacementType(t *testing.T) {
 					Reason:      pickedByPolicyReason,
 				},
 			},
-			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fmt.Sprintf(fullyScheduledMessage, 2)),
 		},
 		{
 			name:   "with invalid clusters",
@@ -6124,7 +6124,7 @@ func TestUpdatePolicySnapshotStatusForPickFixedPlacementType(t *testing.T) {
 					Reason:      fmt.Sprintf(pickFixedInvalidClusterReasonTemplate, invalidClusterDummyReason),
 				},
 			},
-			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionFalse, NotFullyScheduledReason, notFullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionFalse, NotFullyScheduledReason, fmt.Sprintf(notFullyScheduledMessage, 0)),
 		},
 		{
 			name:   "with not found clusters",
@@ -6146,7 +6146,7 @@ func TestUpdatePolicySnapshotStatusForPickFixedPlacementType(t *testing.T) {
 					Reason:      pickFixedNotFoundClusterReason,
 				},
 			},
-			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionFalse, NotFullyScheduledReason, notFullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionFalse, NotFullyScheduledReason, fmt.Sprintf(notFullyScheduledMessage, 0)),
 		},
 		{
 			name:   "mixed",
@@ -6189,13 +6189,13 @@ func TestUpdatePolicySnapshotStatusForPickFixedPlacementType(t *testing.T) {
 					Reason:      pickFixedNotFoundClusterReason,
 				},
 			},
-			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionFalse, NotFullyScheduledReason, notFullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionFalse, NotFullyScheduledReason, fmt.Sprintf(notFullyScheduledMessage, 1)),
 		},
 		{
 			name:                      "none",
 			policy:                    policyWithNoStatus,
 			wantObservedCRPGeneration: crpGeneration1,
-			wantCondition:             newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantCondition:             newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fmt.Sprintf(fullyScheduledMessage, 0)),
 		},
 		{
 			name:   "observed a new CRP generation only",
@@ -6225,7 +6225,7 @@ func TestUpdatePolicySnapshotStatusForPickFixedPlacementType(t *testing.T) {
 					Reason:      pickedByPolicyReason,
 				},
 			},
-			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fmt.Sprintf(fullyScheduledMessage, 2)),
 		},
 	}
 

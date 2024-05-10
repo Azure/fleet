@@ -49,7 +49,7 @@ const (
 	// NotFullyScheduledReason is the reason string of placement condition when the placement policy cannot be fully satisfied.
 	NotFullyScheduledReason = "SchedulingPolicyUnfulfilled"
 
-	fullyScheduledMessage    = "found all (%d) cluster(s)  needed as specified by the scheduling policy"
+	fullyScheduledMessage    = "found all cluster needed as specified by the scheduling policy, found %d cluster(s)"
 	notFullyScheduledMessage = "could not find all clusters needed as specified by the scheduling policy, found %d cluster(s) instead"
 
 	// The array length limit of the cluster decision array in the scheduling policy snapshot
