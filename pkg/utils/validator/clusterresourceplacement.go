@@ -413,10 +413,7 @@ func validatePropertySelectorRequirements(propertySelectorRequirements []placeme
 		}
 		// TODO: Check for logical contradictions
 	}
-	if len(allErr) > 0 {
-		return apiErrors.NewAggregate(allErr)
-	}
-	return nil
+	return apiErrors.NewAggregate(allErr)
 }
 
 func validatePropertySorter(propertySorter *placementv1beta1.PropertySorter) error {
@@ -427,7 +424,7 @@ func validatePropertySorter(propertySorter *placementv1beta1.PropertySorter) err
 	if propertySorter.SortOrder != placementv1beta1.Descending && propertySorter.SortOrder != placementv1beta1.Ascending {
 		allErr = append(allErr, fmt.Errorf("invalid property sort order %s", propertySorter.SortOrder))
 	}
-	return nil
+	return apiErrors.NewAggregate(allErr)
 }
 
 func validateName(name string) error {
