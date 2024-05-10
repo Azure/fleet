@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.15.0
   name: clusterresourceoverridesnapshots.placement.kubernetes-fleet.io
 spec:
   group: placement.kubernetes-fleet.io
@@ -20,23 +20,30 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: 'ClusterResourceOverrideSnapshot is used to store a snapshot
-          of ClusterResourceOverride. Its spec is immutable. We assign an ever-increasing
-          index for snapshots. The naming convention of a ClusterResourceOverrideSnapshot
-          is {ClusterResourceOverride}-{resourceIndex}. resourceIndex will begin with
-          0. Each snapshot MUST have the following labels: - `OverrideTrackingLabel`
-          which points to its owner ClusterResourceOverride. - `IsLatestSnapshotLabel`
-          which indicates whether the snapshot is the latest one.'
+        description: |-
+          ClusterResourceOverrideSnapshot is used to store a snapshot of ClusterResourceOverride.
+          Its spec is immutable.
+          We assign an ever-increasing index for snapshots.
+          The naming convention of a ClusterResourceOverrideSnapshot is {ClusterResourceOverride}-{resourceIndex}.
+          resourceIndex will begin with 0.
+          Each snapshot MUST have the following labels:
+            - `OverrideTrackingLabel` which points to its owner ClusterResourceOverride.
+            - `IsLatestSnapshotLabel` which indicates whether the snapshot is the latest one.
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -52,40 +59,39 @@ spec:
                 description: OverrideSpec stores the spec of ClusterResourceOverride.
                 properties:
                   clusterResourceSelectors:
-                    description: ClusterResourceSelectors is an array of selectors
-                      used to select cluster scoped resources. The selectors are `ORed`.
-                      If a namespace is selected, ALL the resources under the namespace
-                      are selected automatically. LabelSelector is not supported.
-                      You can have 1-20 selectors. We only support Name selector for
-                      now.
+                    description: |-
+                      ClusterResourceSelectors is an array of selectors used to select cluster scoped resources. The selectors are `ORed`.
+                      If a namespace is selected, ALL the resources under the namespace are selected automatically.
+                      LabelSelector is not supported.
+                      You can have 1-20 selectors.
+                      We only support Name selector for now.
                     items:
-                      description: ClusterResourceSelector is used to select cluster
-                        scoped resources as the target resources to be placed. If
-                        a namespace is selected, ALL the resources under the namespace
-                        are selected automatically. All the fields are `ANDed`. In
-                        other words, a resource must match all the fields to be selected.
+                      description: |-
+                        ClusterResourceSelector is used to select cluster scoped resources as the target resources to be placed.
+                        If a namespace is selected, ALL the resources under the namespace are selected automatically.
+                        All the fields are `ANDed`. In other words, a resource must match all the fields to be selected.
                       properties:
                         group:
-                          description: Group name of the cluster-scoped resource.
-                            Use an empty string to select resources under the core
-                            API group (e.g., namespaces).
+                          description: |-
+                            Group name of the cluster-scoped resource.
+                            Use an empty string to select resources under the core API group (e.g., namespaces).
                           type: string
                         kind:
-                          description: 'Kind of the cluster-scoped resource. Note:
-                            When `Kind` is `namespace`, ALL the resources under the
-                            selected namespaces are selected.'
+                          description: |-
+                            Kind of the cluster-scoped resource.
+                            Note: When `Kind` is `namespace`, ALL the resources under the selected namespaces are selected.
                           type: string
                         labelSelector:
-                          description: A label query over all the cluster-scoped resources.
-                            Resources matching the query are selected. Note that namespace-scoped
-                            resources can't be selected even if they match the query.
+                          description: |-
+                            A label query over all the cluster-scoped resources. Resources matching the query are selected.
+                            Note that namespace-scoped resources can't be selected even if they match the query.
                           properties:
                             matchExpressions:
                               description: matchExpressions is a list of label selector
                                 requirements. The requirements are ANDed.
                               items:
-                                description: A label selector requirement is a selector
-                                  that contains values, a key, and an operator that
+                                description: |-
+                                  A label selector requirement is a selector that contains values, a key, and an operator that
                                   relates the key and values.
                                 properties:
                                   key:
@@ -93,17 +99,16 @@ spec:
                                       applies to.
                                     type: string
                                   operator:
-                                    description: operator represents a key's relationship
-                                      to a set of values. Valid operators are In,
-                                      NotIn, Exists and DoesNotExist.
+                                    description: |-
+                                      operator represents a key's relationship to a set of values.
+                                      Valid operators are In, NotIn, Exists and DoesNotExist.
                                     type: string
                                   values:
-                                    description: values is an array of string values.
-                                      If the operator is In or NotIn, the values array
-                                      must be non-empty. If the operator is Exists
-                                      or DoesNotExist, the values array must be empty.
-                                      This array is replaced during a strategic merge
-                                      patch.
+                                    description: |-
+                                      values is an array of string values. If the operator is In or NotIn,
+                                      the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                      the values array must be empty. This array is replaced during a strategic
+                                      merge patch.
                                     items:
                                       type: string
                                     type: array
@@ -115,11 +120,10 @@ spec:
                             matchLabels:
                               additionalProperties:
                                 type: string
-                              description: matchLabels is a map of {key,value} pairs.
-                                A single {key,value} in the matchLabels map is equivalent
-                                to an element of matchExpressions, whose key field
-                                is "key", the operator is "In", and the values array
-                                contains only "value". The requirements are ANDed.
+                              description: |-
+                                matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                operator is "In", and the values array contains only "value". The requirements are ANDed.
                               type: object
                           type: object
                           x-kubernetes-map-type: atomic
@@ -142,22 +146,22 @@ spec:
                       on the target clusters.
                     properties:
                       overrideRules:
-                        description: OverrideRules defines an array of override rules
-                          to be applied on the selected resources. The order of the
-                          rules determines the override order. When there are two
-                          rules selecting the same fields on the target cluster, the
-                          last one will win. You can have 1-20 rules.
+                        description: |-
+                          OverrideRules defines an array of override rules to be applied on the selected resources.
+                          The order of the rules determines the override order.
+                          When there are two rules selecting the same fields on the target cluster, the last one will win.
+                          You can have 1-20 rules.
                         items:
                           description: OverrideRule defines how to override the selected
                             resources on the target clusters.
                           properties:
                             clusterSelector:
-                              description: ClusterSelectors selects the target clusters.
-                                The resources will be overridden before applying to
-                                the matching clusters. An empty clusterSelector selects
-                                ALL the member clusters. A nil clusterSelector selects
-                                NO member clusters. For now, only labelSelector is
-                                supported.
+                              description: |-
+                                ClusterSelectors selects the target clusters.
+                                The resources will be overridden before applying to the matching clusters.
+                                An empty clusterSelector selects ALL the member clusters.
+                                A nil clusterSelector selects NO member clusters.
+                                For now, only labelSelector is supported.
                               properties:
                                 clusterSelectorTerms:
                                   description: ClusterSelectorTerms is a list of cluster
@@ -165,40 +169,36 @@ spec:
                                   items:
                                     properties:
                                       labelSelector:
-                                        description: "LabelSelector is a label query
-                                          over all the joined member clusters. Clusters
-                                          matching the query are selected. \n If you
-                                          specify both label and property selectors
-                                          in the same term, the results are AND'd."
+                                        description: |-
+                                          LabelSelector is a label query over all the joined member clusters. Clusters matching
+                                          the query are selected.
+
+
+                                          If you specify both label and property selectors in the same term, the results are AND'd.
                                         properties:
                                           matchExpressions:
                                             description: matchExpressions is a list
                                               of label selector requirements. The
                                               requirements are ANDed.
                                             items:
-                                              description: A label selector requirement
-                                                is a selector that contains values,
-                                                a key, and an operator that relates
-                                                the key and values.
+                                              description: |-
+                                                A label selector requirement is a selector that contains values, a key, and an operator that
+                                                relates the key and values.
                                               properties:
                                                 key:
                                                   description: key is the label key
                                                     that the selector applies to.
                                                   type: string
                                                 operator:
-                                                  description: operator represents
-                                                    a key's relationship to a set
-                                                    of values. Valid operators are
-                                                    In, NotIn, Exists and DoesNotExist.
+                                                  description: |-
+                                                    operator represents a key's relationship to a set of values.
+                                                    Valid operators are In, NotIn, Exists and DoesNotExist.
                                                   type: string
                                                 values:
-                                                  description: values is an array
-                                                    of string values. If the operator
-                                                    is In or NotIn, the values array
-                                                    must be non-empty. If the operator
-                                                    is Exists or DoesNotExist, the
-                                                    values array must be empty. This
-                                                    array is replaced during a strategic
+                                                  description: |-
+                                                    values is an array of string values. If the operator is In or NotIn,
+                                                    the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                    the values array must be empty. This array is replaced during a strategic
                                                     merge patch.
                                                   items:
                                                     type: string
@@ -211,37 +211,37 @@ spec:
                                           matchLabels:
                                             additionalProperties:
                                               type: string
-                                            description: matchLabels is a map of {key,value}
-                                              pairs. A single {key,value} in the matchLabels
-                                              map is equivalent to an element of matchExpressions,
-                                              whose key field is "key", the operator
-                                              is "In", and the values array contains
-                                              only "value". The requirements are ANDed.
+                                            description: |-
+                                              matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                              map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                              operator is "In", and the values array contains only "value". The requirements are ANDed.
                                             type: object
                                         type: object
                                         x-kubernetes-map-type: atomic
                                       propertySelector:
-                                        description: "PropertySelector is a property
-                                          query over all joined member clusters. Clusters
-                                          matching the query are selected. \n If you
-                                          specify both label and property selectors
-                                          in the same term, the results are AND'd.
-                                          \n At this moment, PropertySelector can
-                                          only be used with `RequiredDuringSchedulingIgnoredDuringExecution`
-                                          affinity terms. \n This field is beta-level;
-                                          it is for the property-based scheduling
-                                          feature and is only functional when a property
-                                          provider is enabled in the deployment."
+                                        description: |-
+                                          PropertySelector is a property query over all joined member clusters. Clusters matching
+                                          the query are selected.
+
+
+                                          If you specify both label and property selectors in the same term, the results are AND'd.
+
+
+                                          At this moment, PropertySelector can only be used with
+                                          `RequiredDuringSchedulingIgnoredDuringExecution` affinity terms.
+
+
+                                          This field is beta-level; it is for the property-based scheduling feature and is only
+                                          functional when a property provider is enabled in the deployment.
                                         properties:
                                           matchExpressions:
                                             description: MatchExpressions is an array
                                               of PropertySelectorRequirements. The
                                               requirements are AND'd.
                                             items:
-                                              description: PropertySelectorRequirement
-                                                is a specific property requirement
-                                                when picking clusters for resource
-                                                placement.
+                                              description: |-
+                                                PropertySelectorRequirement is a specific property requirement when picking clusters for
+                                                resource placement.
                                               properties:
                                                 name:
                                                   description: Name is the name of
@@ -249,28 +249,24 @@ spec:
                                                     label name.
                                                   type: string
                                                 operator:
-                                                  description: Operator specifies
-                                                    the relationship between a cluster's
-                                                    observed value of the specified
-                                                    property and the values given
-                                                    in the requirement.
+                                                  description: |-
+                                                    Operator specifies the relationship between a cluster's observed value of the specified
+                                                    property and the values given in the requirement.
                                                   type: string
                                                 values:
-                                                  description: "Values are a list
-                                                    of values of the specified property
-                                                    which Fleet will compare against
-                                                    the observed values of individual
-                                                    member clusters in accordance
-                                                    with the given operator. \n At
-                                                    this moment, each value should
-                                                    be a Kubernetes quantity. For
-                                                    more information, see https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
-                                                    \n If the operator is Gt (greater
-                                                    than), Ge (greater than or equal
-                                                    to), Lt (less than), or `Le` (less
-                                                    than or equal to), Eq (equal to),
-                                                    or Ne (ne), exactly one value
-                                                    must be specified in the list."
+                                                  description: |-
+                                                    Values are a list of values of the specified property which Fleet will compare against
+                                                    the observed values of individual member clusters in accordance with the given
+                                                    operator.
+
+
+                                                    At this moment, each value should be a Kubernetes quantity. For more information, see
+                                                    https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
+
+
+                                                    If the operator is Gt (greater than), Ge (greater than or equal to), Lt (less than),
+                                                    or `Le` (less than or equal to), Eq (equal to), or Ne (ne), exactly one value must be
+                                                    specified in the list.
                                                   items:
                                                     type: string
                                                   maxItems: 1
@@ -285,26 +281,26 @@ spec:
                                         - matchExpressions
                                         type: object
                                       propertySorter:
-                                        description: "PropertySorter sorts all matching
-                                          clusters by a specific property and assigns
-                                          different weights to each cluster based
-                                          on their observed property values. \n At
-                                          this moment, PropertySorter can only be
-                                          used with `PreferredDuringSchedulingIgnoredDuringExecution`
-                                          affinity terms. \n This field is beta-level;
-                                          it is for the property-based scheduling
-                                          feature and is only functional when a property
-                                          provider is enabled in the deployment."
+                                        description: |-
+                                          PropertySorter sorts all matching clusters by a specific property and assigns different weights
+                                          to each cluster based on their observed property values.
+
+
+                                          At this moment, PropertySorter can only be used with
+                                          `PreferredDuringSchedulingIgnoredDuringExecution` affinity terms.
+
+
+                                          This field is beta-level; it is for the property-based scheduling feature and is only
+                                          functional when a property provider is enabled in the deployment.
                                         properties:
                                           name:
                                             description: Name is the name of the property
                                               which Fleet sorts clusters by.
                                             type: string
                                           sortOrder:
-                                            description: SortOrder explains how Fleet
-                                              should perform the sort; specifically,
-                                              whether Fleet should sort in ascending
-                                              or descending order.
+                                            description: |-
+                                              SortOrder explains how Fleet should perform the sort; specifically, whether Fleet should
+                                              sort in ascending or descending order.
                                             type: string
                                         required:
                                         - name
@@ -332,14 +328,14 @@ spec:
                                     - replace
                                     type: string
                                   path:
-                                    description: 'Path defines the target location.
-                                      Note: override will fail if the resource path
-                                      does not exist.'
+                                    description: |-
+                                      Path defines the target location.
+                                      Note: override will fail if the resource path does not exist.
                                     type: string
                                   value:
-                                    description: Value defines the content to be applied
-                                      on the target location. Value should be empty
-                                      when operator is `remove`.
+                                    description: |-
+                                      Value defines the content to be applied on the target location.
+                                      Value should be empty when operator is `remove`.
                                     x-kubernetes-preserve-unknown-fields: true
                                 required:
                                 - op

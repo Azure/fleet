@@ -17,6 +17,9 @@ import (
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Joined")].status`,name="Joined",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
+// +kubebuilder:printcolumn:JSONPath=`.status.properties.kubernetes-fleet\.io/node-count.value`,name="NodeCount",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.resourceUsage.allocatable.cpu`,name="AllocatableCPU",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.resourceUsage.allocatable.memory`,name="AllocatableMemory",type=string
 
 // MemberCluster is a resource created in the hub cluster to represent a member cluster within a fleet.
 type MemberCluster struct {

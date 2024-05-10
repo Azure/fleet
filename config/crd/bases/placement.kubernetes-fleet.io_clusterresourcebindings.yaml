@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.15.0
   name: clusterresourcebindings.placement.kubernetes-fleet.io
 spec:
   group: placement.kubernetes-fleet.io
@@ -32,19 +32,24 @@ spec:
     name: v1
     schema:
       openAPIV3Schema:
-        description: ClusterResourceBinding represents a scheduling decision that
-          binds a group of resources to a cluster. It MUST have a label named `CRPTrackingLabel`
-          that points to the cluster resource policy that creates it.
+        description: |-
+          ClusterResourceBinding represents a scheduling decision that binds a group of resources to a cluster.
+          It MUST have a label named `CRPTrackingLabel` that points to the cluster resource policy that creates it.
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -52,39 +57,40 @@ spec:
             description: The desired state of ClusterResourceBinding.
             properties:
               applyStrategy:
-                description: ApplyStrategy describes how to resolve the conflict if
-                  the resource to be placed already exists in the target cluster and
-                  is owned by other appliers. This field is a beta-level feature.
+                description: |-
+                  ApplyStrategy describes how to resolve the conflict if the resource to be placed already exists in the target cluster
+                  and is owned by other appliers.
+                  This field is a beta-level feature.
                 properties:
                   allowCoOwnership:
-                    description: AllowCoOwnership defines whether to apply the resource
-                      if it already exists in the target cluster and is not solely
-                      owned by fleet (i.e., metadata.ownerReferences contains only
-                      fleet custom resources). If true, apply the resource and add
-                      fleet as a co-owner. If false, leave the resource unchanged
-                      and fail the apply.
+                    description: |-
+                      AllowCoOwnership defines whether to apply the resource if it already exists in the target cluster and is not
+                      solely owned by fleet (i.e., metadata.ownerReferences contains only fleet custom resources).
+                      If true, apply the resource and add fleet as a co-owner.
+                      If false, leave the resource unchanged and fail the apply.
                     type: boolean
                   serverSideApplyConfig:
                     description: ServerSideApplyConfig defines the configuration for
                       server side apply. It is honored only when type is ServerSideApply.
                     properties:
                       force:
-                        description: "Force represents to force apply to succeed when
-                          resolving the conflicts For any conflicting fields, - If
-                          true, use the values from the resource to be applied to
-                          overwrite the values of the existing resource in the target
-                          cluster, as well as take over ownership of such fields.
+                        description: |-
+                          Force represents to force apply to succeed when resolving the conflicts
+                          For any conflicting fields,
+                          - If true, use the values from the resource to be applied to overwrite the values of the existing resource in the
+                          target cluster, as well as take over ownership of such fields.
                           - If false, apply will fail with the reason ApplyConflictWithOtherApplier.
-                          \n For non-conflicting fields, values stay unchanged and
-                          ownership are shared between appliers."
+
+
+                          For non-conflicting fields, values stay unchanged and ownership are shared between appliers.
                         type: boolean
                     type: object
                   type:
                     default: ClientSideApply
-                    description: 'Type defines the type of strategy to use. Default
-                      to ClientSideApply. Server-side apply is a safer choice. Read
-                      more about the differences between server-side apply and client-side
-                      apply: https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply.'
+                    description: |-
+                      Type defines the type of strategy to use. Default to ClientSideApply.
+                      Server-side apply is a safer choice. Read more about the differences between server-side apply and client-side
+                      apply: https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply.
                     enum:
                     - ClientSideApply
                     - ServerSideApply
@@ -95,27 +101,26 @@ spec:
                   cluster.
                 properties:
                   clusterName:
-                    description: ClusterName is the name of the ManagedCluster. If
-                      it is not empty, its value should be unique cross all placement
-                      decisions for the Placement.
+                    description: |-
+                      ClusterName is the name of the ManagedCluster. If it is not empty, its value should be unique cross all
+                      placement decisions for the Placement.
                     type: string
                   clusterScore:
                     description: ClusterScore represents the score of the cluster
                       calculated by the scheduler.
                     properties:
                       affinityScore:
-                        description: AffinityScore represents the affinity score of
-                          the cluster calculated by the last scheduling decision based
-                          on the preferred affinity selector. An affinity score may
-                          not present if the cluster does not meet the required affinity.
+                        description: |-
+                          AffinityScore represents the affinity score of the cluster calculated by the last
+                          scheduling decision based on the preferred affinity selector.
+                          An affinity score may not present if the cluster does not meet the required affinity.
                         format: int32
                         type: integer
                       priorityScore:
-                        description: TopologySpreadScore represents the priority score
-                          of the cluster calculated by the last scheduling decision
-                          based on the topology spread applied to the cluster. A priority
-                          score may not present if the cluster does not meet the topology
-                          spread.
+                        description: |-
+                          TopologySpreadScore represents the priority score of the cluster calculated by the last
+                          scheduling decision based on the topology spread applied to the cluster.
+                          A priority score may not present if the cluster does not meet the topology spread.
                         format: int32
                         type: integer
                     type: object
@@ -133,9 +138,9 @@ spec:
                 - selected
                 type: object
               clusterResourceOverrideSnapshots:
-                description: ClusterResourceOverrides contains a list of applicable
-                  ClusterResourceOverride snapshot names associated with the selected
-                  resources.
+                description: |-
+                  ClusterResourceOverrides contains a list of applicable ClusterResourceOverride snapshot names associated with the
+                  selected resources.
                 items:
                   type: string
                 type: array
@@ -159,16 +164,16 @@ spec:
                   type: object
                 type: array
               resourceSnapshotName:
-                description: ResourceSnapshotName is the name of the resource snapshot
-                  that this resource binding points to. If the resources are divided
-                  into multiple snapshots because of the resource size limit, it points
-                  to the name of the leading snapshot of the index group.
+                description: |-
+                  ResourceSnapshotName is the name of the resource snapshot that this resource binding points to.
+                  If the resources are divided into multiple snapshots because of the resource size limit,
+                  it points to the name of the leading snapshot of the index group.
                 type: string
               schedulingPolicySnapshotName:
-                description: SchedulingPolicySnapshotName is the name of the scheduling
-                  policy snapshot that this resource binding points to; more specifically,
-                  the scheduler creates this bindings in accordance with this scheduling
-                  policy snapshot.
+                description: |-
+                  SchedulingPolicySnapshotName is the name of the scheduling policy snapshot that this resource binding
+                  points to; more specifically, the scheduler creates this bindings in accordance with this
+                  scheduling policy snapshot.
                 type: string
               state:
                 description: 'The desired state of the binding. Possible values: Scheduled,
@@ -193,42 +198,42 @@ spec:
                   for ClusterResourceBinding.
                 items:
                   description: "Condition contains details for one aspect of the current
-                    state of this API Resource. --- This struct is intended for direct
-                    use as an array at the field path .status.conditions.  For example,
-                    \n type FooStatus struct{ // Represents the observations of a
-                    foo's current state. // Known .status.conditions.type are: \"Available\",
-                    \"Progressing\", and \"Degraded\" // +patchMergeKey=type // +patchStrategy=merge
-                    // +listType=map // +listMapKey=type Conditions []metav1.Condition
-                    `json:\"conditions,omitempty\" patchStrategy:\"merge\" patchMergeKey:\"type\"
-                    protobuf:\"bytes,1,rep,name=conditions\"` \n // other fields }"
+                    state of this API Resource.\n---\nThis struct is intended for
+                    direct use as an array at the field path .status.conditions.  For
+                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
+                    observations of a foo's current state.\n\t    // Known .status.conditions.type
+                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
+                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
+                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
+                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
+                    \   // other fields\n\t}"
                   properties:
                     lastTransitionTime:
-                      description: lastTransitionTime is the last time the condition
-                        transitioned from one status to another. This should be when
-                        the underlying condition changed.  If that is not known, then
-                        using the time when the API field changed is acceptable.
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
                       format: date-time
                       type: string
                     message:
-                      description: message is a human readable message indicating
-                        details about the transition. This may be an empty string.
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
                       maxLength: 32768
                       type: string
                     observedGeneration:
-                      description: observedGeneration represents the .metadata.generation
-                        that the condition was set based upon. For instance, if .metadata.generation
-                        is currently 12, but the .status.conditions[x].observedGeneration
-                        is 9, the condition is out of date with respect to the current
-                        state of the instance.
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
                       format: int64
                       minimum: 0
                       type: integer
                     reason:
-                      description: reason contains a programmatic identifier indicating
-                        the reason for the condition's last transition. Producers
-                        of specific condition types may define expected values and
-                        meanings for this field, and whether the values are considered
-                        a guaranteed API. The value should be a CamelCase string.
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
                         This field may not be empty.
                       maxLength: 1024
                       minLength: 1
@@ -242,11 +247,12 @@ spec:
                       - Unknown
                       type: string
                     type:
-                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
-                        --- Many .condition.type values are consistent across resources
-                        like Available, but because arbitrary conditions can be useful
-                        (see .node.status.conditions), the ability to deconflict is
-                        important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      description: |-
+                        type of condition in CamelCase or in foo.example.com/CamelCase.
+                        ---
+                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
+                        useful (see .node.status.conditions), the ability to deconflict is important.
+                        The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
                       maxLength: 316
                       pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                       type: string
@@ -262,10 +268,9 @@ spec:
                 - type
                 x-kubernetes-list-type: map
               failedPlacements:
-                description: FailedPlacements is a list of all the resources failed
-                  to be placed to the given cluster or the resource is unavailable.
-                  Note that we only include 100 failed resource placements even if
-                  there are more than 100.
+                description: |-
+                  FailedPlacements is a list of all the resources failed to be placed to the given cluster or the resource is unavailable.
+                  Note that we only include 100 failed resource placements even if there are more than 100.
                 items:
                   description: FailedResourcePlacement contains the failure details
                     of a failed resource placement.
@@ -274,34 +279,32 @@ spec:
                       description: The failed condition status.
                       properties:
                         lastTransitionTime:
-                          description: lastTransitionTime is the last time the condition
-                            transitioned from one status to another. This should be
-                            when the underlying condition changed.  If that is not
-                            known, then using the time when the API field changed
-                            is acceptable.
+                          description: |-
+                            lastTransitionTime is the last time the condition transitioned from one status to another.
+                            This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
                           format: date-time
                           type: string
                         message:
-                          description: message is a human readable message indicating
-                            details about the transition. This may be an empty string.
+                          description: |-
+                            message is a human readable message indicating details about the transition.
+                            This may be an empty string.
                           maxLength: 32768
                           type: string
                         observedGeneration:
-                          description: observedGeneration represents the .metadata.generation
-                            that the condition was set based upon. For instance, if
-                            .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration
-                            is 9, the condition is out of date with respect to the
-                            current state of the instance.
+                          description: |-
+                            observedGeneration represents the .metadata.generation that the condition was set based upon.
+                            For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                            with respect to the current state of the instance.
                           format: int64
                           minimum: 0
                           type: integer
                         reason:
-                          description: reason contains a programmatic identifier indicating
-                            the reason for the condition's last transition. Producers
-                            of specific condition types may define expected values
-                            and meanings for this field, and whether the values are
-                            considered a guaranteed API. The value should be a CamelCase
-                            string. This field may not be empty.
+                          description: |-
+                            reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                            Producers of specific condition types may define expected values and meanings for this field,
+                            and whether the values are considered a guaranteed API.
+                            The value should be a CamelCase string.
+                            This field may not be empty.
                           maxLength: 1024
                           minLength: 1
                           pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
@@ -315,11 +318,12 @@ spec:
                           - Unknown
                           type: string
                         type:
-                          description: type of condition in CamelCase or in foo.example.com/CamelCase.
-                            --- Many .condition.type values are consistent across
-                            resources like Available, but because arbitrary conditions
-                            can be useful (see .node.status.conditions), the ability
-                            to deconflict is important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                          description: |-
+                            type of condition in CamelCase or in foo.example.com/CamelCase.
+                            ---
+                            Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
+                            useful (see .node.status.conditions), the ability to deconflict is important.
+                            The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
                           maxLength: 316
                           pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                           type: string
@@ -395,19 +399,24 @@ spec:
     name: v1beta1
     schema:
       openAPIV3Schema:
-        description: ClusterResourceBinding represents a scheduling decision that
-          binds a group of resources to a cluster. It MUST have a label named `CRPTrackingLabel`
-          that points to the cluster resource policy that creates it.
+        description: |-
+          ClusterResourceBinding represents a scheduling decision that binds a group of resources to a cluster.
+          It MUST have a label named `CRPTrackingLabel` that points to the cluster resource policy that creates it.
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -415,39 +424,39 @@ spec:
             description: The desired state of ClusterResourceBinding.
             properties:
               applyStrategy:
-                description: ApplyStrategy describes how to resolve the conflict if
-                  the resource to be placed already exists in the target cluster and
-                  is owned by other appliers.
+                description: |-
+                  ApplyStrategy describes how to resolve the conflict if the resource to be placed already exists in the target cluster
+                  and is owned by other appliers.
                 properties:
                   allowCoOwnership:
-                    description: AllowCoOwnership defines whether to apply the resource
-                      if it already exists in the target cluster and is not solely
-                      owned by fleet (i.e., metadata.ownerReferences contains only
-                      fleet custom resources). If true, apply the resource and add
-                      fleet as a co-owner. If false, leave the resource unchanged
-                      and fail the apply.
+                    description: |-
+                      AllowCoOwnership defines whether to apply the resource if it already exists in the target cluster and is not
+                      solely owned by fleet (i.e., metadata.ownerReferences contains only fleet custom resources).
+                      If true, apply the resource and add fleet as a co-owner.
+                      If false, leave the resource unchanged and fail the apply.
                     type: boolean
                   serverSideApplyConfig:
                     description: ServerSideApplyConfig defines the configuration for
                       server side apply. It is honored only when type is ServerSideApply.
                     properties:
                       force:
-                        description: "Force represents to force apply to succeed when
-                          resolving the conflicts For any conflicting fields, - If
-                          true, use the values from the resource to be applied to
-                          overwrite the values of the existing resource in the target
-                          cluster, as well as take over ownership of such fields.
+                        description: |-
+                          Force represents to force apply to succeed when resolving the conflicts
+                          For any conflicting fields,
+                          - If true, use the values from the resource to be applied to overwrite the values of the existing resource in the
+                          target cluster, as well as take over ownership of such fields.
                           - If false, apply will fail with the reason ApplyConflictWithOtherApplier.
-                          \n For non-conflicting fields, values stay unchanged and
-                          ownership are shared between appliers."
+
+
+                          For non-conflicting fields, values stay unchanged and ownership are shared between appliers.
                         type: boolean
                     type: object
                   type:
                     default: ClientSideApply
-                    description: 'Type defines the type of strategy to use. Default
-                      to ClientSideApply. Server-side apply is a safer choice. Read
-                      more about the differences between server-side apply and client-side
-                      apply: https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply.'
+                    description: |-
+                      Type defines the type of strategy to use. Default to ClientSideApply.
+                      Server-side apply is a safer choice. Read more about the differences between server-side apply and client-side
+                      apply: https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply.
                     enum:
                     - ClientSideApply
                     - ServerSideApply
@@ -458,27 +467,26 @@ spec:
                   cluster.
                 properties:
                   clusterName:
-                    description: ClusterName is the name of the ManagedCluster. If
-                      it is not empty, its value should be unique cross all placement
-                      decisions for the Placement.
+                    description: |-
+                      ClusterName is the name of the ManagedCluster. If it is not empty, its value should be unique cross all
+                      placement decisions for the Placement.
                     type: string
                   clusterScore:
                     description: ClusterScore represents the score of the cluster
                       calculated by the scheduler.
                     properties:
                       affinityScore:
-                        description: AffinityScore represents the affinity score of
-                          the cluster calculated by the last scheduling decision based
-                          on the preferred affinity selector. An affinity score may
-                          not present if the cluster does not meet the required affinity.
+                        description: |-
+                          AffinityScore represents the affinity score of the cluster calculated by the last
+                          scheduling decision based on the preferred affinity selector.
+                          An affinity score may not present if the cluster does not meet the required affinity.
                         format: int32
                         type: integer
                       priorityScore:
-                        description: TopologySpreadScore represents the priority score
-                          of the cluster calculated by the last scheduling decision
-                          based on the topology spread applied to the cluster. A priority
-                          score may not present if the cluster does not meet the topology
-                          spread.
+                        description: |-
+                          TopologySpreadScore represents the priority score of the cluster calculated by the last
+                          scheduling decision based on the topology spread applied to the cluster.
+                          A priority score may not present if the cluster does not meet the topology spread.
                         format: int32
                         type: integer
                     type: object
@@ -496,9 +504,9 @@ spec:
                 - selected
                 type: object
               clusterResourceOverrideSnapshots:
-                description: ClusterResourceOverrides contains a list of applicable
-                  ClusterResourceOverride snapshot names associated with the selected
-                  resources.
+                description: |-
+                  ClusterResourceOverrides contains a list of applicable ClusterResourceOverride snapshot names associated with the
+                  selected resources.
                 items:
                   type: string
                 type: array
@@ -522,16 +530,16 @@ spec:
                   type: object
                 type: array
               resourceSnapshotName:
-                description: ResourceSnapshotName is the name of the resource snapshot
-                  that this resource binding points to. If the resources are divided
-                  into multiple snapshots because of the resource size limit, it points
-                  to the name of the leading snapshot of the index group.
+                description: |-
+                  ResourceSnapshotName is the name of the resource snapshot that this resource binding points to.
+                  If the resources are divided into multiple snapshots because of the resource size limit,
+                  it points to the name of the leading snapshot of the index group.
                 type: string
               schedulingPolicySnapshotName:
-                description: SchedulingPolicySnapshotName is the name of the scheduling
-                  policy snapshot that this resource binding points to; more specifically,
-                  the scheduler creates this bindings in accordance with this scheduling
-                  policy snapshot.
+                description: |-
+                  SchedulingPolicySnapshotName is the name of the scheduling policy snapshot that this resource binding
+                  points to; more specifically, the scheduler creates this bindings in accordance with this
+                  scheduling policy snapshot.
                 type: string
               state:
                 description: 'The desired state of the binding. Possible values: Scheduled,
@@ -556,42 +564,42 @@ spec:
                   for ClusterResourceBinding.
                 items:
                   description: "Condition contains details for one aspect of the current
-                    state of this API Resource. --- This struct is intended for direct
-                    use as an array at the field path .status.conditions.  For example,
-                    \n type FooStatus struct{ // Represents the observations of a
-                    foo's current state. // Known .status.conditions.type are: \"Available\",
-                    \"Progressing\", and \"Degraded\" // +patchMergeKey=type // +patchStrategy=merge
-                    // +listType=map // +listMapKey=type Conditions []metav1.Condition
-                    `json:\"conditions,omitempty\" patchStrategy:\"merge\" patchMergeKey:\"type\"
-                    protobuf:\"bytes,1,rep,name=conditions\"` \n // other fields }"
+                    state of this API Resource.\n---\nThis struct is intended for
+                    direct use as an array at the field path .status.conditions.  For
+                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
+                    observations of a foo's current state.\n\t    // Known .status.conditions.type
+                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
+                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
+                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
+                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
+                    \   // other fields\n\t}"
                   properties:
                     lastTransitionTime:
-                      description: lastTransitionTime is the last time the condition
-                        transitioned from one status to another. This should be when
-                        the underlying condition changed.  If that is not known, then
-                        using the time when the API field changed is acceptable.
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
                       format: date-time
                       type: string
                     message:
-                      description: message is a human readable message indicating
-                        details about the transition. This may be an empty string.
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
                       maxLength: 32768
                       type: string
                     observedGeneration:
-                      description: observedGeneration represents the .metadata.generation
-                        that the condition was set based upon. For instance, if .metadata.generation
-                        is currently 12, but the .status.conditions[x].observedGeneration
-                        is 9, the condition is out of date with respect to the current
-                        state of the instance.
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
                       format: int64
                       minimum: 0
                       type: integer
                     reason:
-                      description: reason contains a programmatic identifier indicating
-                        the reason for the condition's last transition. Producers
-                        of specific condition types may define expected values and
-                        meanings for this field, and whether the values are considered
-                        a guaranteed API. The value should be a CamelCase string.
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
                         This field may not be empty.
                       maxLength: 1024
                       minLength: 1
@@ -605,11 +613,12 @@ spec:
                       - Unknown
                       type: string
                     type:
-                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
-                        --- Many .condition.type values are consistent across resources
-                        like Available, but because arbitrary conditions can be useful
-                        (see .node.status.conditions), the ability to deconflict is
-                        important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      description: |-
+                        type of condition in CamelCase or in foo.example.com/CamelCase.
+                        ---
+                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
+                        useful (see .node.status.conditions), the ability to deconflict is important.
+                        The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
                       maxLength: 316
                       pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                       type: string
@@ -625,10 +634,9 @@ spec:
                 - type
                 x-kubernetes-list-type: map
               failedPlacements:
-                description: FailedPlacements is a list of all the resources failed
-                  to be placed to the given cluster or the resource is unavailable.
-                  Note that we only include 100 failed resource placements even if
-                  there are more than 100.
+                description: |-
+                  FailedPlacements is a list of all the resources failed to be placed to the given cluster or the resource is unavailable.
+                  Note that we only include 100 failed resource placements even if there are more than 100.
                 items:
                   description: FailedResourcePlacement contains the failure details
                     of a failed resource placement.
@@ -637,34 +645,32 @@ spec:
                       description: The failed condition status.
                       properties:
                         lastTransitionTime:
-                          description: lastTransitionTime is the last time the condition
-                            transitioned from one status to another. This should be
-                            when the underlying condition changed.  If that is not
-                            known, then using the time when the API field changed
-                            is acceptable.
+                          description: |-
+                            lastTransitionTime is the last time the condition transitioned from one status to another.
+                            This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
                           format: date-time
                           type: string
                         message:
-                          description: message is a human readable message indicating
-                            details about the transition. This may be an empty string.
+                          description: |-
+                            message is a human readable message indicating details about the transition.
+                            This may be an empty string.
                           maxLength: 32768
                           type: string
                         observedGeneration:
-                          description: observedGeneration represents the .metadata.generation
-                            that the condition was set based upon. For instance, if
-                            .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration
-                            is 9, the condition is out of date with respect to the
-                            current state of the instance.
+                          description: |-
+                            observedGeneration represents the .metadata.generation that the condition was set based upon.
+                            For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                            with respect to the current state of the instance.
                           format: int64
                           minimum: 0
                           type: integer
                         reason:
-                          description: reason contains a programmatic identifier indicating
-                            the reason for the condition's last transition. Producers
-                            of specific condition types may define expected values
-                            and meanings for this field, and whether the values are
-                            considered a guaranteed API. The value should be a CamelCase
-                            string. This field may not be empty.
+                          description: |-
+                            reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                            Producers of specific condition types may define expected values and meanings for this field,
+                            and whether the values are considered a guaranteed API.
+                            The value should be a CamelCase string.
+                            This field may not be empty.
                           maxLength: 1024
                           minLength: 1
                           pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
@@ -678,11 +684,12 @@ spec:
                           - Unknown
                           type: string
                         type:
-                          description: type of condition in CamelCase or in foo.example.com/CamelCase.
-                            --- Many .condition.type values are consistent across
-                            resources like Available, but because arbitrary conditions
-                            can be useful (see .node.status.conditions), the ability
-                            to deconflict is important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                          description: |-
+                            type of condition in CamelCase or in foo.example.com/CamelCase.
+                            ---
+                            Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
+                            useful (see .node.status.conditions), the ability to deconflict is important.
+                            The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
                           maxLength: 316
                           pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                           type: string
