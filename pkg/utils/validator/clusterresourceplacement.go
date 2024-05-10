@@ -9,6 +9,7 @@ package validator
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -34,6 +35,13 @@ var (
 	invalidTolerationKeyErrFmt   = "invalid toleration key %+v: %s"
 	invalidTolerationValueErrFmt = "invalid toleration value %+v: %s"
 	uniqueTolerationErrFmt       = "toleration %+v already exists, tolerations must be unique"
+
+	// resourcePropertyNamePrefix is the prefix (also known as the subdomain) of the label name
+	// associated with all resource properties.
+	resourcePropertyNamePrefix = "resources.kubernetes-fleet.io/"
+
+	// Below are a list of supported capacity types.
+	supportedResourceCapacityTypes = []string{"total", "allocatable", "available"}
 )
 
 // ValidateClusterResourcePlacementAlpha validates a ClusterResourcePlacement v1alpha1 object.
@@ -439,6 +447,12 @@ func validateName(name string) error {
 	if err := validation.IsQualifiedName(name); err != nil {
 		return fmt.Errorf("name is not a valid Kubernetes label name: %v", err)
 	}
+	if strings.HasPrefix(name, resourcePropertyNamePrefix) {
+		resourcePropertyName, _ := strings.CutPrefix(name, resourcePropertyNamePrefix)
+		if !isValidResourcePropertyName(resourcePropertyName) {
+			return fmt.Errorf("invalid resource property name %s, supported values are %+v", name, supportedResourceCapacityTypes)
+		}
+	}
 	return nil
 }
 
@@ -465,4 +479,13 @@ func validateValues(values []string) error {
 		}
 	}
 	return nil
+}
+
+func isValidResourcePropertyName(resourcePropertyName string) bool {
+	for _, resourceCapacityType := range supportedResourceCapacityTypes {
+		if resourcePropertyName == resourceCapacityType {
+			return true
+		}
+	}
+	return false
 }
