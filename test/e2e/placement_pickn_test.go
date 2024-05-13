@@ -14,8 +14,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/propertyprovider/aks"
 	"go.goms.io/fleet/test/e2e/framework"
 )
@@ -590,7 +590,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 										Weight: 20,
 										Preference: placementv1beta1.ClusterSelectorTerm{
 											PropertySorter: &placementv1beta1.PropertySorter{
-												Name:      clusterv1beta1.NodeCountProperty,
+												Name:      propertyprovider.NodeCountProperty,
 												SortOrder: placementv1beta1.Ascending,
 											},
 										},
@@ -665,7 +665,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 										Weight: 20,
 										Preference: placementv1beta1.ClusterSelectorTerm{
 											PropertySorter: &placementv1beta1.PropertySorter{
-												Name:      clusterv1beta1.NodeCountProperty,
+												Name:      propertyprovider.NodeCountProperty,
 												SortOrder: placementv1beta1.Ascending,
 											},
 										},
@@ -674,7 +674,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 										Weight: 20,
 										Preference: placementv1beta1.ClusterSelectorTerm{
 											PropertySorter: &placementv1beta1.PropertySorter{
-												Name:      aks.AvailableMemoryCapacityProperty,
+												Name:      propertyprovider.AvailableMemoryCapacityProperty,
 												SortOrder: placementv1beta1.Descending,
 											},
 										},
@@ -754,7 +754,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 												},
 											},
 											PropertySorter: &placementv1beta1.PropertySorter{
-												Name:      clusterv1beta1.NodeCountProperty,
+												Name:      propertyprovider.NodeCountProperty,
 												SortOrder: placementv1beta1.Ascending,
 											},
 										},
@@ -768,7 +768,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 												},
 											},
 											PropertySorter: &placementv1beta1.PropertySorter{
-												Name:      aks.AvailableMemoryCapacityProperty,
+												Name:      propertyprovider.AvailableMemoryCapacityProperty,
 												SortOrder: placementv1beta1.Descending,
 											},
 										},
@@ -856,7 +856,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 														},
 													},
 													{
-														Name:     clusterv1beta1.NodeCountProperty,
+														Name:     propertyprovider.NodeCountProperty,
 														Operator: placementv1beta1.PropertySelectorNotEqualTo,
 														Values: []string{
 															"3",
@@ -872,7 +872,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 										Weight: 30,
 										Preference: placementv1beta1.ClusterSelectorTerm{
 											PropertySorter: &placementv1beta1.PropertySorter{
-												Name:      clusterv1beta1.NodeCountProperty,
+												Name:      propertyprovider.NodeCountProperty,
 												SortOrder: placementv1beta1.Ascending,
 											},
 										},
@@ -881,7 +881,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 										Weight: 40,
 										Preference: placementv1beta1.ClusterSelectorTerm{
 											PropertySorter: &placementv1beta1.PropertySorter{
-												Name:      aks.AvailableMemoryCapacityProperty,
+												Name:      propertyprovider.AvailableMemoryCapacityProperty,
 												SortOrder: placementv1beta1.Descending,
 											},
 										},

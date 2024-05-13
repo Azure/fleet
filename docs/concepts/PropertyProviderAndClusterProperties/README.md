@@ -111,15 +111,14 @@ status:
 Note that conditions reported by the property provider (if any), would be available in the
 `.status.conditions` array as well.
 
-All property providers should support the following set of properties:
+### Core properties
 
-* Non-resource properties:
-    * `kubernetes-fleet.io/node-count`: the number of nodes in the cluster
-* Resource properties
-    * The total and allocatable capacities of CPU (`cpu`) and memory (`memory`) resources in the cluster.
+The following properties are considered core properties in Fleet, which should be supported
+in all property provider implementations. Fleet agents will collect them even when no
+property provider has been set up.
 
-### Reserved domain for property names
-
-Fleet reserves the domain, `kubernetes-fleet.io`, for property names. Except for the properties
-explicitly listed above, which should be supported by all property providers, any custom property added
-by a property provider should not use the reserved domain.
+| Property Type | Name | Description |
+| ------------- | ---- | ----------- |
+| Non-resource property | `kubernetes-fleet.io/node-count` | The number of nodes in a cluster. |
+| Resource property | `cpu` | The usage information (total, allocatable, and available capacity) of CPU resource in a cluster. |
+| Resource property | `memory` | The usage information (total, allocatable, and available capacity) of memory resource in a cluster. |

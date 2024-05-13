@@ -464,7 +464,7 @@ func (r *Reconciler) updateResourceStats(ctx context.Context, imc *clusterv1beta
 	}
 
 	imc.Status.Properties = map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-		clusterv1beta1.NodeCountProperty: {
+		propertyprovider.NodeCountProperty: {
 			Value:           fmt.Sprintf("%d", len(nodes.Items)),
 			ObservationTime: metav1.Now(),
 		},

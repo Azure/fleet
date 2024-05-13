@@ -17,6 +17,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
@@ -122,7 +123,7 @@ func TestPreScore(t *testing.T) {
 					Spec: clusterv1beta1.MemberClusterSpec{},
 					Status: clusterv1beta1.MemberClusterStatus{
 						Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-							nodeCountPropertyName: {
+							propertyprovider.NodeCountProperty: {
 								Value: "10",
 							},
 						},
@@ -139,7 +140,7 @@ func TestPreScore(t *testing.T) {
 										Weight: 100,
 										Preference: placementv1beta1.ClusterSelectorTerm{
 											PropertySorter: &placementv1beta1.PropertySorter{
-												Name: nodeCountPropertyName,
+												Name: propertyprovider.NodeCountProperty,
 											},
 										},
 									},
@@ -151,7 +152,7 @@ func TestPreScore(t *testing.T) {
 			},
 			wantPS: &pluginState{
 				minMaxValuesByProperty: map[string]observedMinMaxValues{
-					nodeCountPropertyName: {
+					propertyprovider.NodeCountProperty: {
 						min: ptr.To(resource.MustParse("10")),
 						max: ptr.To(resource.MustParse("10")),
 					},
@@ -168,7 +169,7 @@ func TestPreScore(t *testing.T) {
 					Spec: clusterv1beta1.MemberClusterSpec{},
 					Status: clusterv1beta1.MemberClusterStatus{
 						Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-							nodeCountPropertyName: {
+							propertyprovider.NodeCountProperty: {
 								Value: "10",
 							},
 						},
@@ -186,7 +187,7 @@ func TestPreScore(t *testing.T) {
 					Spec: clusterv1beta1.MemberClusterSpec{},
 					Status: clusterv1beta1.MemberClusterStatus{
 						Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-							nodeCountPropertyName: {
+							propertyprovider.NodeCountProperty: {
 								Value: "20",
 							},
 						},
@@ -204,7 +205,7 @@ func TestPreScore(t *testing.T) {
 					Spec: clusterv1beta1.MemberClusterSpec{},
 					Status: clusterv1beta1.MemberClusterStatus{
 						Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-							nodeCountPropertyName: {
+							propertyprovider.NodeCountProperty: {
 								Value: "15",
 							},
 						},
@@ -226,7 +227,7 @@ func TestPreScore(t *testing.T) {
 										Weight: 100,
 										Preference: placementv1beta1.ClusterSelectorTerm{
 											PropertySorter: &placementv1beta1.PropertySorter{
-												Name: nodeCountPropertyName,
+												Name: propertyprovider.NodeCountProperty,
 											},
 										},
 									},
@@ -234,7 +235,7 @@ func TestPreScore(t *testing.T) {
 										Weight: 100,
 										Preference: placementv1beta1.ClusterSelectorTerm{
 											PropertySorter: &placementv1beta1.PropertySorter{
-												Name: availableCPUPropertyName,
+												Name: propertyprovider.AvailableCPUCapacityProperty,
 											},
 										},
 									},
@@ -246,11 +247,11 @@ func TestPreScore(t *testing.T) {
 			},
 			wantPS: &pluginState{
 				minMaxValuesByProperty: map[string]observedMinMaxValues{
-					nodeCountPropertyName: {
+					propertyprovider.NodeCountProperty: {
 						min: ptr.To(resource.MustParse("10")),
 						max: ptr.To(resource.MustParse("20")),
 					},
-					availableCPUPropertyName: {
+					propertyprovider.AvailableCPUCapacityProperty: {
 						min: ptr.To(resource.MustParse("7")),
 						max: ptr.To(resource.MustParse("12")),
 					},
@@ -382,7 +383,7 @@ func TestPluginScore(t *testing.T) {
 			name: "single preferred term which requires sorting",
 			ps: &pluginState{
 				minMaxValuesByProperty: map[string]observedMinMaxValues{
-					nodeCountPropertyName: {
+					propertyprovider.NodeCountProperty: {
 						min: ptr.To(resource.MustParse("10")),
 						max: ptr.To(resource.MustParse("20")),
 					},
@@ -398,7 +399,7 @@ func TestPluginScore(t *testing.T) {
 										Weight: 50,
 										Preference: placementv1beta1.ClusterSelectorTerm{
 											PropertySorter: &placementv1beta1.PropertySorter{
-												Name:      nodeCountPropertyName,
+												Name:      propertyprovider.NodeCountProperty,
 												SortOrder: placementv1beta1.Ascending,
 											},
 										},
@@ -416,7 +417,7 @@ func TestPluginScore(t *testing.T) {
 				Spec: clusterv1beta1.MemberClusterSpec{},
 				Status: clusterv1beta1.MemberClusterStatus{
 					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-						nodeCountPropertyName: {
+						propertyprovider.NodeCountProperty: {
 							Value: "15",
 						},
 					},
@@ -430,7 +431,7 @@ func TestPluginScore(t *testing.T) {
 			name: "single preferred term which features label selector and requires sorting",
 			ps: &pluginState{
 				minMaxValuesByProperty: map[string]observedMinMaxValues{
-					nodeCountPropertyName: {
+					propertyprovider.NodeCountProperty: {
 						min: ptr.To(resource.MustParse("10")),
 						max: ptr.To(resource.MustParse("20")),
 					},
@@ -451,7 +452,7 @@ func TestPluginScore(t *testing.T) {
 												},
 											},
 											PropertySorter: &placementv1beta1.PropertySorter{
-												Name:      nodeCountPropertyName,
+												Name:      propertyprovider.NodeCountProperty,
 												SortOrder: placementv1beta1.Descending,
 											},
 										},
@@ -472,7 +473,7 @@ func TestPluginScore(t *testing.T) {
 				Spec: clusterv1beta1.MemberClusterSpec{},
 				Status: clusterv1beta1.MemberClusterStatus{
 					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-						nodeCountPropertyName: {
+						propertyprovider.NodeCountProperty: {
 							Value: "12",
 						},
 					},
@@ -486,7 +487,7 @@ func TestPluginScore(t *testing.T) {
 			name: "single preferred term which features label selector and requires sorting (cannot be sorted, no data available)",
 			ps: &pluginState{
 				minMaxValuesByProperty: map[string]observedMinMaxValues{
-					nodeCountPropertyName: {
+					propertyprovider.NodeCountProperty: {
 						min: ptr.To(resource.MustParse("10")),
 						max: ptr.To(resource.MustParse("20")),
 					},
@@ -507,7 +508,7 @@ func TestPluginScore(t *testing.T) {
 												},
 											},
 											PropertySorter: &placementv1beta1.PropertySorter{
-												Name:      nodeCountPropertyName,
+												Name:      propertyprovider.NodeCountProperty,
 												SortOrder: placementv1beta1.Descending,
 											},
 										},
@@ -538,11 +539,11 @@ func TestPluginScore(t *testing.T) {
 			name: "multiple preferred terms",
 			ps: &pluginState{
 				minMaxValuesByProperty: map[string]observedMinMaxValues{
-					nodeCountPropertyName: {
+					propertyprovider.NodeCountProperty: {
 						min: ptr.To(resource.MustParse("10")),
 						max: ptr.To(resource.MustParse("20")),
 					},
-					availableCPUPropertyName: {
+					propertyprovider.AvailableCPUCapacityProperty: {
 						min: ptr.To(resource.MustParse("7")),
 						max: ptr.To(resource.MustParse("25")),
 					},
@@ -563,7 +564,7 @@ func TestPluginScore(t *testing.T) {
 												},
 											},
 											PropertySorter: &placementv1beta1.PropertySorter{
-												Name:      nodeCountPropertyName,
+												Name:      propertyprovider.NodeCountProperty,
 												SortOrder: placementv1beta1.Descending,
 											},
 										},
@@ -583,7 +584,7 @@ func TestPluginScore(t *testing.T) {
 												},
 											},
 											PropertySorter: &placementv1beta1.PropertySorter{
-												Name:      availableCPUPropertyName,
+												Name:      propertyprovider.AvailableCPUCapacityProperty,
 												SortOrder: placementv1beta1.Ascending,
 											},
 										},
@@ -605,7 +606,7 @@ func TestPluginScore(t *testing.T) {
 				Spec: clusterv1beta1.MemberClusterSpec{},
 				Status: clusterv1beta1.MemberClusterStatus{
 					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-						nodeCountPropertyName: {
+						propertyprovider.NodeCountProperty: {
 							Value: "12",
 						},
 					},

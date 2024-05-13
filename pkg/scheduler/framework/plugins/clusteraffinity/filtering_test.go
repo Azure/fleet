@@ -17,6 +17,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/propertyprovider/aks"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 )
@@ -32,10 +33,8 @@ const (
 	envLabelName   = "env"
 	envLabelValue1 = "prod"
 
-	nodeCountPropertyName   = "kubernetes-fleet.io/node-count"
 	nodeCountPropertyValue1 = "3"
 
-	availableCPUPropertyName   = "resources.kubernetes-fleet.io/available-cpu"
 	availableCPUPropertyValue1 = "10"
 )
 
@@ -135,7 +134,7 @@ func TestPreFilter(t *testing.T) {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     nodeCountPropertyName,
+														Name:     propertyprovider.NodeCountProperty,
 														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
 														Values: []string{
 															nodeCountPropertyValue1,
@@ -197,7 +196,7 @@ func TestFilter(t *testing.T) {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     nodeCountPropertyName,
+														Name:     propertyprovider.NodeCountProperty,
 														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
 														Values: []string{
 															nodeCountPropertyValue1,
@@ -223,7 +222,7 @@ func TestFilter(t *testing.T) {
 				Spec: clusterv1beta1.MemberClusterSpec{},
 				Status: clusterv1beta1.MemberClusterStatus{
 					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-						nodeCountPropertyName: {
+						propertyprovider.NodeCountProperty: {
 							Value: "4",
 						},
 					},
@@ -438,7 +437,7 @@ func TestFilter(t *testing.T) {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     nodeCountPropertyName,
+														Name:     propertyprovider.NodeCountProperty,
 														Operator: placementv1beta1.PropertySelectorLessThan,
 														Values: []string{
 															nodeCountPropertyValue1,
@@ -462,7 +461,7 @@ func TestFilter(t *testing.T) {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     availableCPUPropertyName,
+														Name:     propertyprovider.AvailableCPUCapacityProperty,
 														Operator: placementv1beta1.PropertySelectorGreaterThan,
 														Values: []string{
 															availableCPUPropertyValue1,
@@ -489,7 +488,7 @@ func TestFilter(t *testing.T) {
 				Spec: clusterv1beta1.MemberClusterSpec{},
 				Status: clusterv1beta1.MemberClusterStatus{
 					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-						nodeCountPropertyName: {
+						propertyprovider.NodeCountProperty: {
 							Value: "4",
 						},
 					},
@@ -519,7 +518,7 @@ func TestFilter(t *testing.T) {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     nodeCountPropertyName,
+														Name:     propertyprovider.NodeCountProperty,
 														Operator: placementv1beta1.PropertySelectorEqualTo,
 														Values: []string{
 															nodeCountPropertyValue1,
@@ -545,7 +544,7 @@ func TestFilter(t *testing.T) {
 				Spec: clusterv1beta1.MemberClusterSpec{},
 				Status: clusterv1beta1.MemberClusterStatus{
 					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-						nodeCountPropertyName: {
+						propertyprovider.NodeCountProperty: {
 							Value: "4",
 						},
 					},
@@ -571,7 +570,7 @@ func TestFilter(t *testing.T) {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     nodeCountPropertyName,
+														Name:     propertyprovider.NodeCountProperty,
 														Operator: placementv1beta1.PropertySelectorEqualTo,
 														Values: []string{
 															nodeCountPropertyValue1,
@@ -597,7 +596,7 @@ func TestFilter(t *testing.T) {
 				Spec: clusterv1beta1.MemberClusterSpec{},
 				Status: clusterv1beta1.MemberClusterStatus{
 					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-						nodeCountPropertyName: {
+						propertyprovider.NodeCountProperty: {
 							Value: nodeCountPropertyValue1,
 						},
 					},
@@ -623,7 +622,7 @@ func TestFilter(t *testing.T) {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     nodeCountPropertyName,
+														Name:     propertyprovider.NodeCountProperty,
 														Operator: placementv1beta1.PropertySelectorEqualTo,
 														Values: []string{
 															nodeCountPropertyValue1,
@@ -649,7 +648,7 @@ func TestFilter(t *testing.T) {
 				Spec: clusterv1beta1.MemberClusterSpec{},
 				Status: clusterv1beta1.MemberClusterStatus{
 					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-						nodeCountPropertyName: {
+						propertyprovider.NodeCountProperty: {
 							Value: "4",
 						},
 					},
@@ -675,7 +674,7 @@ func TestFilter(t *testing.T) {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     nodeCountPropertyName,
+														Name:     propertyprovider.NodeCountProperty,
 														Operator: placementv1beta1.PropertySelectorNotEqualTo,
 														Values: []string{
 															nodeCountPropertyValue1,
@@ -699,7 +698,7 @@ func TestFilter(t *testing.T) {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     availableCPUPropertyName,
+														Name:     propertyprovider.AvailableCPUCapacityProperty,
 														Operator: placementv1beta1.PropertySelectorLessThanOrEqualTo,
 														Values: []string{
 															availableCPUPropertyValue1,
@@ -726,7 +725,7 @@ func TestFilter(t *testing.T) {
 				Spec: clusterv1beta1.MemberClusterSpec{},
 				Status: clusterv1beta1.MemberClusterStatus{
 					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-						nodeCountPropertyName: {
+						propertyprovider.NodeCountProperty: {
 							Value: "3",
 						},
 					},

@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	// A list of properties that the AKS property provider collects in addition to the
+	// A list of properties that the Azure property provider collects in addition to the
 	// Fleet required ones.
 
 	// PerCPUCoreCostProperty is a property that describes the average hourly cost of a CPU core in
@@ -38,11 +38,6 @@ const (
 	// PerGBMemoryCostProperty is a property that describes the average cost of one GB of memory in
 	// a Kubernetes cluster.
 	PerGBMemoryCostProperty = "kubernetes.azure.com/per-gb-memory-cost"
-
-	// The resource properties.
-	// Available CPU and memory resource properties.
-	AvailableCPUCapacityProperty    = "resources.kubernetes-fleet.io/available-cpu"
-	AvailableMemoryCapacityProperty = "resources.kubernetes-fleet.io/available-memory"
 
 	CostPrecisionTemplate = "%.3f"
 )
@@ -192,7 +187,7 @@ func (p *PropertyProvider) Collect(_ context.Context) propertyprovider.PropertyC
 
 	// Collect the non-resource properties.
 	properties := make(map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue)
-	properties[clusterv1beta1.NodeCountProperty] = clusterv1beta1.PropertyValue{
+	properties[propertyprovider.NodeCountProperty] = clusterv1beta1.PropertyValue{
 		Value:           fmt.Sprintf("%d", p.nodeTracker.NodeCount()),
 		ObservationTime: metav1.Now(),
 	}

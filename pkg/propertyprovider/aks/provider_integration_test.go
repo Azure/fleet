@@ -174,7 +174,7 @@ var (
 
 				expectedRes := propertyprovider.PropertyCollectionResponse{
 					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-						clusterv1beta1.NodeCountProperty: {
+						propertyprovider.NodeCountProperty: {
 							Value: fmt.Sprintf("%d", len(nodes)),
 						},
 						PerCPUCoreCostProperty: {

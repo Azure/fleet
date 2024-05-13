@@ -31,6 +31,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/propertyprovider/aks"
 	"go.goms.io/fleet/pkg/propertyprovider/aks/trackers"
 	"go.goms.io/fleet/pkg/utils"
@@ -346,7 +347,7 @@ func summarizeAKSClusterProperties(memberCluster *framework.Cluster, mcObj *clus
 
 	status := clusterv1beta1.MemberClusterStatus{
 		Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-			clusterv1beta1.NodeCountProperty: {
+			propertyprovider.NodeCountProperty: {
 				Value: fmt.Sprintf("%d", nodeCount),
 			},
 			aks.PerCPUCoreCostProperty: {
