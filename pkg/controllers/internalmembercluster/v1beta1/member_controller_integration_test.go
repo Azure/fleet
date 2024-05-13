@@ -138,6 +138,7 @@ var _ = Describe("Test Internal Member Cluster Controller", Serial, func() {
 			By("checking updated member cluster usage")
 			Expect(imc.Status.ResourceUsage.Allocatable).ShouldNot(BeNil())
 			Expect(imc.Status.ResourceUsage.Capacity).ShouldNot(BeNil())
+			Expect(imc.Status.ResourceUsage.Available).ShouldNot(BeNil())
 			Expect(imc.Status.ResourceUsage.ObservationTime).ToNot(Equal(metav1.Now()))
 		})
 

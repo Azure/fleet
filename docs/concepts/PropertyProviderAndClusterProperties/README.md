@@ -111,3 +111,15 @@ status:
 Note that conditions reported by the property provider (if any), would be available in the
 `.status.conditions` array as well.
 
+### Core properties
+
+The following properties are considered core properties in Fleet, which should be supported
+in all property provider implementations. Fleet agents will collect them even when no
+property provider has been set up.
+
+| Property Type | Name | Description |
+| ------------- | ---- | ----------- |
+| Non-resource property | `kubernetes-fleet.io/node-count` | The number of nodes in a cluster. |
+| Resource property | `cpu` | The usage information (total, allocatable, and available capacity) of CPU resource in a cluster. |
+| Resource property | `memory` | The usage information (total, allocatable, and available capacity) of memory resource in a cluster. |
+
