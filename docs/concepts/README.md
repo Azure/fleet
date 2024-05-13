@@ -25,5 +25,6 @@ Lower-level multi-cluster scheduling system design.
 ## [Override](Override/README.md)
 Allow slightly different manifests depends on the cluster it lands.
 
-## [PropertyProvider](docs/concepts/PropertyProviderAndClusterProperties/README.md)
+## [PropertyProvider](PropertyProviderAndClusterProperties/README.md)
+
 More ways to select the clusters based on its property.
