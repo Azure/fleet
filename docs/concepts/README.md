@@ -21,3 +21,10 @@ Understand how multi-cluster scheduling works.
 ## [Scheduling Framework](Scheduling-Framework/README.md)
 
 Lower-level multi-cluster scheduling system design.
+
+## [Override](Override/README.md)
+Allow slightly different manifests depends on the cluster it lands.
+
+## [PropertyProvider](PropertyProviderAndClusterProperties/README.md)
+
+More ways to select the clusters based on its property.
