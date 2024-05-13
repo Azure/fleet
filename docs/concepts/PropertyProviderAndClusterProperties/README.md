@@ -1,9 +1,4 @@
 # Property Provider and Cluster Properties
-
-> Note
->
-> Property Provider and Cluster Properties are Fleet preview features.
-
 This document explains the concepts of property provider and cluster properties in Fleet.
 
 Fleet allows developers to implement a property provider to expose arbitrary properties about
