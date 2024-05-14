@@ -150,6 +150,7 @@ var _ = Describe("advanced rollout based on availability", Ordered, func() {
 
 	BeforeAll(func() {
 		// Create the test resources.
+		readRolloutTestManifests()
 		wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 			{
 				Kind:    "Namespace",
@@ -194,7 +195,7 @@ var _ = Describe("advanced rollout based on availability", Ordered, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
 			// For deployment, at the least it will take 4 minutes to be ready.
 			Eventually(crpStatusUpdatedActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -219,11 +220,11 @@ var _ = Describe("advanced rollout based on availability", Ordered, func() {
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to change the image name in deployment")
 		})
 
-		//It("should update CRP status as expected", func() {
-		//	crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0", false)
-		//	// For deployment, at the least it will take 4 minutes to be ready.
-		//	Eventually(crpStatusUpdatedActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
-		//})
+		It("should update CRP status as expected", func() {
+			crpStatusActual := safeDeploymentCRPStatusUpdatedActual(wantSelectedResources, testDeployment.Name, testDeployment.Namespace, crpName, allMemberClusterNames, "1")
+			// For deployment, at the least it will take 4 minutes to be ready.
+			Eventually(crpStatusActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
 	})
 })
 

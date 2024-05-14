@@ -186,6 +186,16 @@ var (
 		ignoreConditionLTTAndMessageFields,
 		cmpopts.EquateEmpty(),
 	}
+
+	newCRPStatusCmpOptions = cmp.Options{
+		cmpopts.SortSlices(lessFuncCondition),
+		cmpopts.SortSlices(lessFuncPlacementStatus),
+		cmpopts.SortSlices(lessFuncResourceIdentifier),
+		cmpopts.SortSlices(lessFuncFailedResourcePlacements),
+		ignoreConditionLTTAndMessageFields,
+		cmpopts.IgnoreFields(placementv1beta1.ResourcePlacementStatus{}, "ClusterName"),
+		cmpopts.EquateEmpty(),
+	}
 )
 
 // TestMain sets up the E2E test environment.
