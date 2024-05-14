@@ -13,9 +13,9 @@ import (
 	"github.com/Azure/karpenter/pkg/providers/pricing/client"
 )
 
-// PricingProvider is an interface that the AKS property provider uses to sync pricing information.
+// PricingProvider is an interface that the Azure property provider uses to sync pricing information.
 //
-// It helps decouple the AKS property provider from the actual pricing provider implementation; even
+// It helps decouple the Azure property provider from the actual pricing provider implementation; even
 // though at this moment the property provider leverages the AKS Karpenter pricing client only.
 type PricingProvider interface {
 	OnDemandPrice(instanceType string) (float64, bool)
@@ -43,7 +43,7 @@ func (k *AKSKarpenterPricingClient) LastUpdated() time.Time {
 // NewAKSKarpenterPricingClient returns a new AKS Karpenter pricing client, which implements
 // the PricingProvider interface.
 func NewAKSKarpenterPricingClient(ctx context.Context, region string) *AKSKarpenterPricingClient {
-	// In the case of AKS property provider, there is no need to wait for leader election
+	// In the case of Azure property provider, there is no need to wait for leader election
 	// successes; close the channel immediately to allow immediate boot-up of the pricing
 	// client.
 	ch := make(chan struct{})

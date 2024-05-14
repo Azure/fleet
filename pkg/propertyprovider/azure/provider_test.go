@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package aks
+package azure
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	"go.goms.io/fleet/pkg/propertyprovider"
-	"go.goms.io/fleet/pkg/propertyprovider/aks/trackers"
+	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 )
 
 const (
@@ -165,7 +165,7 @@ func TestCollect(t *testing.T) {
 			},
 			wantMetricCollectionResponse: propertyprovider.PropertyCollectionResponse{
 				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-					NodeCountProperty: {
+					propertyprovider.NodeCountProperty: {
 						Value: "2",
 					},
 					PerCPUCoreCostProperty: {
@@ -294,7 +294,7 @@ func TestCollect(t *testing.T) {
 			},
 			wantMetricCollectionResponse: propertyprovider.PropertyCollectionResponse{
 				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-					NodeCountProperty: {
+					propertyprovider.NodeCountProperty: {
 						Value: "2",
 					},
 					PerCPUCoreCostProperty: {

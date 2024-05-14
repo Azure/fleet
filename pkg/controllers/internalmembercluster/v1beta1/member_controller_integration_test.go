@@ -18,6 +18,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -136,6 +137,7 @@ var _ = Describe("Test Internal Member Cluster Controller", Serial, func() {
 			Expect(updatedHealthCond.Reason).To(Equal(EventReasonInternalMemberClusterHealthy))
 
 			By("checking updated member cluster usage")
+			Expect(imc.Status.Properties[propertyprovider.NodeCountProperty].Value).ShouldNot(BeEmpty())
 			Expect(imc.Status.ResourceUsage.Allocatable).ShouldNot(BeNil())
 			Expect(imc.Status.ResourceUsage.Capacity).ShouldNot(BeNil())
 			Expect(imc.Status.ResourceUsage.Available).ShouldNot(BeNil())

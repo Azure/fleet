@@ -4,7 +4,7 @@ Licensed under the MIT license.
 */
 
 // Package controllers feature a number of controllers that are in use
-// by the AKS property provider.
+// by the Azure property provider.
 package controllers
 
 import (
@@ -17,7 +17,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"go.goms.io/fleet/pkg/propertyprovider/aks/trackers"
+	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 )
 
 // TO-DO (chenyu1): this is a relatively expensive watcher, due to how frequent pods can change
@@ -35,10 +35,10 @@ type PodReconciler struct {
 func (p *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	podRef := klog.KRef(req.Namespace, req.Name)
 	startTime := time.Now()
-	klog.V(2).InfoS("Reconciliation starts for pod objects in the AKS property provider", "pod", podRef)
+	klog.V(2).InfoS("Reconciliation starts for pod objects in the Azure property provider", "pod", podRef)
 	defer func() {
 		latency := time.Since(startTime).Milliseconds()
-		klog.V(2).InfoS("Reconciliation ends for pod objects in the AKS property provider", "pod", podRef, "latency", latency)
+		klog.V(2).InfoS("Reconciliation ends for pod objects in the Azure property provider", "pod", podRef, "latency", latency)
 	}()
 
 	// Retrieve the pod object.

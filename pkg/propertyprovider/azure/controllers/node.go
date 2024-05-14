@@ -4,7 +4,7 @@ Licensed under the MIT license.
 */
 
 // Package controllers feature a number of controllers that are in use
-// by the AKS property provider.
+// by the Azure property provider.
 package controllers
 
 import (
@@ -17,7 +17,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"go.goms.io/fleet/pkg/propertyprovider/aks/trackers"
+	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 )
 
 // NodeReconciler reconciles Node objects.
@@ -30,10 +30,10 @@ type NodeReconciler struct {
 func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	nodeRef := klog.KRef(req.Namespace, req.Name)
 	startTime := time.Now()
-	klog.V(2).InfoS("Reconciliation starts for node objects in the AKS property provider", "node", nodeRef)
+	klog.V(2).InfoS("Reconciliation starts for node objects in the Azure property provider", "node", nodeRef)
 	defer func() {
 		latency := time.Since(startTime).Milliseconds()
-		klog.V(2).InfoS("Reconciliation ends for node objects in the AKS property provider", "node", nodeRef, "latency", latency)
+		klog.V(2).InfoS("Reconciliation ends for node objects in the Azure property provider", "node", nodeRef, "latency", latency)
 	}()
 
 	// Retrieve the node object.

@@ -1,9 +1,4 @@
 # Property Provider and Cluster Properties
-
-> Note
->
-> Property Provider and Cluster Properties are Fleet preview features.
-
 This document explains the concepts of property provider and cluster properties in Fleet.
 
 Fleet allows developers to implement a property provider to expose arbitrary properties about
@@ -50,8 +45,8 @@ in the form of Kubernetes conditions.
 
 The Fleet member agent can run with or without a property provider. If a provider is not set up, or
 the given provider fails to start properly, the agent will collect limited properties about
-the cluster on its own, specifically the total and allocatable CPU and memory capacities of
-the host member cluster. 
+the cluster on its own, specifically the node count, plus the total/allocatable
+CPU and memory capacities of the host member cluster. 
 
 ## Cluster properties
 
@@ -75,7 +70,7 @@ such as `cpu` and `memory`, and the usage information should consist of:
 * Non-resource property: a metric about a member cluster, in the form of a key/value
 pair; the key should be in the format of
 [a Kubernetes label key](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set),
-such as `kubernetes.azure.com/node-count`, and the value at this moment should be a sortable
+such as `kubernetes-fleet.io/node-count`, and the value at this moment should be a sortable
 numeric that can be parsed as
 [a Kubernetes quantity](https://kubernetes.io/docs/reference/kubernetes-api/common-definitions/quantity/).
 
@@ -92,7 +87,7 @@ status:
   agentStatus: ...
   conditions: ...
   properties:
-    kubernetes.azure.com/node-count:
+    kubernetes-fleet.io/node-count:
       observationTime: "2024-04-30T14:54:24Z"
       value: "2"
     ...
@@ -110,3 +105,15 @@ status:
 
 Note that conditions reported by the property provider (if any), would be available in the
 `.status.conditions` array as well.
+
+### Core properties
+
+The following properties are considered core properties in Fleet, which should be supported
+in all property provider implementations. Fleet agents will collect them even when no
+property provider has been set up.
+
+| Property Type | Name | Description |
+| ------------- | ---- | ----------- |
+| Non-resource property | `kubernetes-fleet.io/node-count` | The number of nodes in a cluster. |
+| Resource property | `cpu` | The usage information (total, allocatable, and available capacity) of CPU resource in a cluster. |
+| Resource property | `memory` | The usage information (total, allocatable, and available capacity) of memory resource in a cluster. |
