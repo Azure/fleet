@@ -702,6 +702,14 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 		createWorkResources()
 
 		ns := appNamespace()
+		ns.SetOwnerReferences([]metav1.OwnerReference{
+			{
+				APIVersion: "another-api-version",
+				Kind:       "another-kind",
+				Name:       "another-owner",
+				UID:        "another-uid",
+			},
+		})
 		By(fmt.Sprintf("creating namespace %s on member cluster", ns.Name))
 		Expect(allMemberClusters[0].KubeClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
 

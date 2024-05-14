@@ -83,6 +83,13 @@ func findConflictedWork(ctx context.Context, hubClient client.Client, namespace 
 }
 
 func validateOwnerReference(ctx context.Context, hubClient client.Client, namespace string, strategy *fleetv1beta1.ApplyStrategy, ownerRefs []metav1.OwnerReference) (ApplyAction, error) {
+	// If no owner reference is found, the resource could be managed by the work.
+	// There is a corner case that the resource is already managed by the work but the owner reference could be removed
+	// by other controllers later.
+	if len(ownerRefs) == 0 {
+		return "", nil
+	}
+
 	conflictedWork, err := findConflictedWork(ctx, hubClient, namespace, strategy, ownerRefs)
 	if err != nil {
 		return errorApplyAction, err
