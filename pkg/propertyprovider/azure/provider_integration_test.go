@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package aks
+package azure
 
 import (
 	"fmt"
@@ -20,7 +20,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	"go.goms.io/fleet/pkg/propertyprovider"
-	"go.goms.io/fleet/pkg/propertyprovider/aks/trackers"
+	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 )
 
 var (
@@ -413,7 +413,7 @@ var (
 
 // All the test cases in this block are serial + ordered, as manipulation of nodes/pods
 // in one test case will disrupt another.
-var _ = Describe("aks property provider", func() {
+var _ = Describe("azure property provider", func() {
 	Context("add a new node", Serial, Ordered, func() {
 		BeforeAll(shouldCreateNodes(nodes[0]))
 

@@ -3,8 +3,8 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-// Package aks features the AKS property provider for Fleet.
-package aks
+// Package azure features the Azure property provider for Fleet.
+package azure
 
 import (
 	"context"
@@ -24,8 +24,8 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	"go.goms.io/fleet/pkg/propertyprovider"
-	"go.goms.io/fleet/pkg/propertyprovider/aks/controllers"
-	"go.goms.io/fleet/pkg/propertyprovider/aks/trackers"
+	"go.goms.io/fleet/pkg/propertyprovider/azure/controllers"
+	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 )
 
 const (
@@ -43,7 +43,7 @@ const (
 )
 
 const (
-	// The condition related values in use by the AKS property provider.
+	// The condition related values in use by the Azure property provider.
 
 	// PropertyCollectionSucceededConditionType is a condition type that indicates whether a
 	// property collection attempt has succeeded.
@@ -54,33 +54,33 @@ const (
 	PropertyCollectionFailedCostErrorMessageTemplate = "An error has occurred when collecting cost properties: %v"
 )
 
-// PropertyProvider is the AKS property provider for Fleet.
+// PropertyProvider is the Azure property provider for Fleet.
 type PropertyProvider struct {
 	// The trackers.
 	podTracker  *trackers.PodTracker
 	nodeTracker *trackers.NodeTracker
 
-	// The region where the AKS property provider resides.
+	// The region where the Azure property provider resides.
 	//
 	// This is necessary as the pricing client requires that a region to be specified; it can
 	// be either specified by the user or auto-discovered from the AKS cluster.
 	region *string
 
-	// The controller manager in use by the AKS property provider; this field is mostly reserved for
+	// The controller manager in use by the Azure property provider; this field is mostly reserved for
 	// testing purposes.
 	mgr ctrl.Manager
 }
 
-// Verify that the AKS property provider implements the MetricProvider interface at compile time.
+// Verify that the Azure property provider implements the MetricProvider interface at compile time.
 var _ propertyprovider.PropertyProvider = &PropertyProvider{}
 
-// Start starts the AKS property provider.
+// Start starts the Azure property provider.
 func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error {
-	klog.V(2).Info("Starting AKS property provider")
+	klog.V(2).Info("Starting Azure property provider")
 
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme: scheme.Scheme,
-		// Disable metric serving for the AKS property provider controller manager.
+		// Disable metric serving for the Azure property provider controller manager.
 		//
 		// Note that this will not stop the metrics from being collected and exported; as they
 		// are registered via a top-level variable as a part of the controller runtime package,
@@ -88,23 +88,23 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 		Metrics: metricsserver.Options{
 			BindAddress: "0",
 		},
-		// Disable health probe serving for the AKS property provider controller manager.
+		// Disable health probe serving for the Azure property provider controller manager.
 		HealthProbeBindAddress: "0",
-		// Disable leader election for the AKS property provider.
+		// Disable leader election for the Azure property provider.
 		//
 		// Note that for optimal performance, only the running instance of the Fleet member agent
-		// (if there are multiple ones) should have the AKS property provider enabled; this can
-		// be achieved by starting the AKS property provider only when an instance of the Fleet
-		// member agent wins the leader election. It should be noted that running the AKS property
+		// (if there are multiple ones) should have the Azure property provider enabled; this can
+		// be achieved by starting the Azure property provider only when an instance of the Fleet
+		// member agent wins the leader election. It should be noted that running the Azure property
 		// provider for multiple times will not incur any side effect other than some minor
-		// performance costs, as at this moment the AKS property provider observes data individually
+		// performance costs, as at this moment the Azure property provider observes data individually
 		// in a passive manner with no need for any centralized state.
 		LeaderElection: false,
 	})
 	p.mgr = mgr
 
 	if err != nil {
-		klog.ErrorS(err, "Failed to start AKS property provider")
+		klog.ErrorS(err, "Failed to start Azure property provider")
 		return err
 	}
 
@@ -122,7 +122,7 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 			// once, the performance impact is negligible.
 			discoveredRegion, err := p.autoDiscoverRegionAndSetupTrackers(ctx, mgr.GetAPIReader())
 			if err != nil {
-				klog.ErrorS(err, "Failed to auto-discover region for the AKS property provider")
+				klog.ErrorS(err, "Failed to auto-discover region for the Azure property provider")
 				return err
 			}
 			p.region = discoveredRegion
@@ -142,7 +142,7 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 		Client: mgr.GetClient(),
 	}
 	if err := nodeReconciler.SetupWithManager(mgr); err != nil {
-		klog.ErrorS(err, "Failed to start the node reconciler in the AKS property provider")
+		klog.ErrorS(err, "Failed to start the node reconciler in the Azure property provider")
 		return err
 	}
 
@@ -152,7 +152,7 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 		Client: mgr.GetClient(),
 	}
 	if err := podReconciler.SetupWithManager(mgr); err != nil {
-		klog.ErrorS(err, "Failed to start the pod reconciler in the AKS property provider")
+		klog.ErrorS(err, "Failed to start the pod reconciler in the Azure property provider")
 		return err
 	}
 
@@ -163,7 +163,7 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 	go func() {
 		// This call will block until the context exits.
 		if err := mgr.Start(ctx); err != nil {
-			klog.ErrorS(err, "Failed to start the AKS property provider controller manager")
+			klog.ErrorS(err, "Failed to start the Azure property provider controller manager")
 		}
 	}()
 
@@ -261,7 +261,7 @@ func (p *PropertyProvider) Collect(_ context.Context) propertyprovider.PropertyC
 
 // autoDiscoverRegionAndSetupTrackers auto-discovers the region of the AKS cluster.
 func (p *PropertyProvider) autoDiscoverRegionAndSetupTrackers(ctx context.Context, c client.Reader) (*string, error) {
-	klog.V(2).Info("Auto-discover region for the AKS property provider")
+	klog.V(2).Info("Auto-discover region for the Azure property provider")
 	// Auto-discover the region by listing the nodes.
 	nodeList := &corev1.NodeList{}
 	// List only one node to reduce performance impact (if supported).
@@ -301,12 +301,12 @@ func (p *PropertyProvider) autoDiscoverRegionAndSetupTrackers(ctx context.Contex
 		klog.Error(err)
 		return nil, err
 	}
-	klog.V(2).InfoS("Auto-discovered region for the AKS property provider", "region", nodeRegion)
+	klog.V(2).InfoS("Auto-discovered region for the Azure property provider", "region", nodeRegion)
 
 	return &nodeRegion, nil
 }
 
-// New returns a new AKS property provider using the default pricing provider, which is,
+// New returns a new Azure property provider using the default pricing provider, which is,
 // at this moment, an AKS Karpenter pricing client.
 //
 // If the region is unspecified at the time when this function is called, the provider
@@ -318,7 +318,7 @@ func New(region *string) propertyprovider.PropertyProvider {
 	}
 }
 
-// NewWithPricingProvider returns a new AKS property provider with the given
+// NewWithPricingProvider returns a new Azure property provider with the given
 // pricing provider.
 //
 // This is mostly used for allow plugging in of alternate pricing providers (one that

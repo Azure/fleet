@@ -32,8 +32,8 @@ import (
 	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/propertyprovider"
-	"go.goms.io/fleet/pkg/propertyprovider/aks"
-	"go.goms.io/fleet/pkg/propertyprovider/aks/trackers"
+	"go.goms.io/fleet/pkg/propertyprovider/azure"
+	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -215,15 +215,15 @@ func checkIfAllMemberClustersHaveJoined() {
 	}
 }
 
-// checkIfAKSPropertyProviderIsWorking verifies if all member clusters have the AKS property
+// checkIfAzurePropertyProviderIsWorking verifies if all member clusters have the Azure property
 // provider set up as expected along with the Fleet member agent. This setup uses it
 // to verify the behavior of property-based scheduling.
 //
-// Note that this check applies only to the test environment that features the AKS property
+// Note that this check applies only to the test environment that features the Azure property
 // provider, as indicated by the PROPERTY_PROVIDER environment variable; for setup that
 // does not use it, the check will always pass.
-func checkIfAKSPropertyProviderIsWorking() {
-	if !isAKSPropertyProviderEnabled {
+func checkIfAzurePropertyProviderIsWorking() {
+	if !isAzurePropertyProviderEnabled {
 		return
 	}
 
@@ -270,14 +270,14 @@ func checkIfAKSPropertyProviderIsWorking() {
 				return fmt.Errorf("member cluster status conditions diff (-got, +want):\n%s", diff)
 			}
 			return nil
-		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to confirm that AKS property provider is up and running")
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to confirm that Azure property provider is up and running")
 	}
 }
 
 // summarizeAKSClusterProperties returns the current cluster state, specifically its node count,
 // total/allocatable/available capacity, and the average per CPU and per GB of memory costs, in
 // the form of the a member cluster status object; the E2E test suite uses this information
-// to verify if the AKS property provider is working correctly.
+// to verify if the Azure property provider is working correctly.
 func summarizeAKSClusterProperties(memberCluster *framework.Cluster, mcObj *clusterv1beta1.MemberCluster) (*clusterv1beta1.MemberClusterStatus, error) {
 	c := memberCluster.KubeClient
 	nodeList := &corev1.NodeList{}
@@ -350,11 +350,11 @@ func summarizeAKSClusterProperties(memberCluster *framework.Cluster, mcObj *clus
 			propertyprovider.NodeCountProperty: {
 				Value: fmt.Sprintf("%d", nodeCount),
 			},
-			aks.PerCPUCoreCostProperty: {
-				Value: fmt.Sprintf(aks.CostPrecisionTemplate, perCPUCoreCost),
+			azure.PerCPUCoreCostProperty: {
+				Value: fmt.Sprintf(azure.CostPrecisionTemplate, perCPUCoreCost),
 			},
-			aks.PerGBMemoryCostProperty: {
-				Value: fmt.Sprintf(aks.CostPrecisionTemplate, perGBMemoryCost),
+			azure.PerGBMemoryCostProperty: {
+				Value: fmt.Sprintf(azure.CostPrecisionTemplate, perGBMemoryCost),
 			},
 		},
 		ResourceUsage: clusterv1beta1.ResourceUsage{
@@ -378,7 +378,7 @@ func summarizeAKSClusterProperties(memberCluster *framework.Cluster, mcObj *clus
 				ObservedGeneration: mcObj.Generation,
 			},
 			{
-				Type:               aks.PropertyCollectionSucceededConditionType,
+				Type:               azure.PropertyCollectionSucceededConditionType,
 				Status:             metav1.ConditionTrue,
 				ObservedGeneration: mcObj.Generation,
 			},

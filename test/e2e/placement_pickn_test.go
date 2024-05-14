@@ -16,7 +16,7 @@ import (
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/propertyprovider"
-	"go.goms.io/fleet/pkg/propertyprovider/aks"
+	"go.goms.io/fleet/pkg/propertyprovider/azure"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
@@ -557,8 +557,8 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 		BeforeAll(func() {
-			if !isAKSPropertyProviderEnabled {
-				Skip("Skipping this test spec as AKS property provider is not enabled in the test environment")
+			if !isAzurePropertyProviderEnabled {
+				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
 			}
 
 			// Create the resources.
@@ -632,8 +632,8 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 		BeforeAll(func() {
-			if !isAKSPropertyProviderEnabled {
-				Skip("Skipping this test spec as AKS property provider is not enabled in the test environment")
+			if !isAzurePropertyProviderEnabled {
+				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
 			}
 
 			// Create the resources.
@@ -716,8 +716,8 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 		BeforeAll(func() {
-			if !isAKSPropertyProviderEnabled {
-				Skip("Skipping this test spec as AKS property provider is not enabled in the test environment")
+			if !isAzurePropertyProviderEnabled {
+				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
 			}
 
 			// Create the resources.
@@ -810,8 +810,8 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 		BeforeAll(func() {
-			if !isAKSPropertyProviderEnabled {
-				Skip("Skipping this test spec as AKS property provider is not enabled in the test environment")
+			if !isAzurePropertyProviderEnabled {
+				Skip("Skipping this test spec as Azure property provider is not enabled in the test environment")
 			}
 
 			// Create the resources.
@@ -849,7 +849,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     aks.PerCPUCoreCostProperty,
+														Name:     azure.PerCPUCoreCostProperty,
 														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
 														Values: []string{
 															"0",

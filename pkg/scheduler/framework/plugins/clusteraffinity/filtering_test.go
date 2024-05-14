@@ -18,7 +18,7 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/propertyprovider"
-	"go.goms.io/fleet/pkg/propertyprovider/aks"
+	"go.goms.io/fleet/pkg/propertyprovider/azure"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
@@ -247,14 +247,14 @@ func TestFilter(t *testing.T) {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     aks.PerGBMemoryCostProperty,
+														Name:     azure.PerGBMemoryCostProperty,
 														Operator: placementv1beta1.PropertySelectorLessThan,
 														Values: []string{
 															"0.2",
 														},
 													},
 													{
-														Name:     aks.PerCPUCoreCostProperty,
+														Name:     azure.PerCPUCoreCostProperty,
 														Operator: placementv1beta1.PropertySelectorEqualTo,
 														Values: []string{
 															"0.06",
@@ -280,10 +280,10 @@ func TestFilter(t *testing.T) {
 				Spec: clusterv1beta1.MemberClusterSpec{},
 				Status: clusterv1beta1.MemberClusterStatus{
 					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-						aks.PerGBMemoryCostProperty: {
+						azure.PerGBMemoryCostProperty: {
 							Value: "0.16",
 						},
-						aks.PerCPUCoreCostProperty: {
+						azure.PerCPUCoreCostProperty: {
 							Value: "0.06",
 						},
 					},
@@ -308,14 +308,14 @@ func TestFilter(t *testing.T) {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     aks.PerGBMemoryCostProperty,
+														Name:     azure.PerGBMemoryCostProperty,
 														Operator: placementv1beta1.PropertySelectorLessThan,
 														Values: []string{
 															"0.12",
 														},
 													},
 													{
-														Name:     aks.PerCPUCoreCostProperty,
+														Name:     azure.PerCPUCoreCostProperty,
 														Operator: placementv1beta1.PropertySelectorEqualTo,
 														Values: []string{
 															"0.06",
@@ -341,10 +341,10 @@ func TestFilter(t *testing.T) {
 				Spec: clusterv1beta1.MemberClusterSpec{},
 				Status: clusterv1beta1.MemberClusterStatus{
 					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-						aks.PerGBMemoryCostProperty: {
+						azure.PerGBMemoryCostProperty: {
 							Value: "0.16",
 						},
-						aks.PerCPUCoreCostProperty: {
+						azure.PerCPUCoreCostProperty: {
 							Value: "0.06",
 						},
 					},
@@ -370,7 +370,7 @@ func TestFilter(t *testing.T) {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     aks.PerGBMemoryCostProperty,
+														Name:     azure.PerGBMemoryCostProperty,
 														Operator: placementv1beta1.PropertySelectorLessThan,
 														Values: []string{
 															"0.12",
@@ -383,7 +383,7 @@ func TestFilter(t *testing.T) {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     aks.PerCPUCoreCostProperty,
+														Name:     azure.PerCPUCoreCostProperty,
 														Operator: placementv1beta1.PropertySelectorEqualTo,
 														Values: []string{
 															"0.06",
@@ -409,10 +409,10 @@ func TestFilter(t *testing.T) {
 				Spec: clusterv1beta1.MemberClusterSpec{},
 				Status: clusterv1beta1.MemberClusterStatus{
 					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-						aks.PerGBMemoryCostProperty: {
+						azure.PerGBMemoryCostProperty: {
 							Value: "0.16",
 						},
-						aks.PerCPUCoreCostProperty: {
+						azure.PerCPUCoreCostProperty: {
 							Value: "0.06",
 						},
 					},

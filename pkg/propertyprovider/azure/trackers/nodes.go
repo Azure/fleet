@@ -4,7 +4,7 @@ Licensed under the MIT license.
 */
 
 // Package trackers feature implementations that help track specific stats about
-// Kubernetes resources, e.g., nodes and pods in the AKS property provider.
+// Kubernetes resources, e.g., nodes and pods in the Azure property provider.
 package trackers
 
 import (
@@ -24,7 +24,7 @@ const (
 	AKSClusterNodeSKULabelName = "beta.kubernetes.io/instance-type"
 )
 
-// supportedResourceNames is a list of resource names that the AKS property provider supports.
+// supportedResourceNames is a list of resource names that the Azure property provider supports.
 //
 // Currently the supported resources are CPU and memory.
 var supportedResourceNames []corev1.ResourceName = []corev1.ResourceName{
@@ -101,7 +101,7 @@ func NewNodeTracker(pp PricingProvider) *NodeTracker {
 // calculateCosts calculates the per CPU core and per GB memory cost in the cluster. This method
 // is called every time a capacity or SKU change has been detected.
 //
-// At this moment the AKS property provider calculates costs using a simplified logic (average costs);
+// At this moment the Azure property provider calculates costs using a simplified logic (average costs);
 // it runs under the assumption that:
 //
 // a) all the nodes in the cluster are AKS on-demand nodes; discounts from spot instances,
