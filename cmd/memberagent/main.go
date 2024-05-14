@@ -46,7 +46,7 @@ import (
 	workv1alpha1controller "go.goms.io/fleet/pkg/controllers/workv1alpha1"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/propertyprovider"
-	"go.goms.io/fleet/pkg/propertyprovider/aks"
+	"go.goms.io/fleet/pkg/propertyprovider/azure"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/httpclient"
 	//+kubebuilder:scaffold:imports
@@ -54,7 +54,7 @@ import (
 
 const (
 	// The list of available property provider names.
-	aksPropertyProvider = "azure"
+	azurePropertyProvider = "azure"
 )
 
 var (
@@ -351,11 +351,11 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		// Set up a provider provider (if applicable).
 		var pp propertyprovider.PropertyProvider
 		switch {
-		case propertyProvider != nil && *propertyProvider == aksPropertyProvider:
-			klog.V(2).Info("setting up the AKS property provider")
+		case propertyProvider != nil && *propertyProvider == azurePropertyProvider:
+			klog.V(2).Info("setting up the Azure property provider")
 			// Note that the property provider, though initialized here, is not started until
 			// the specific instance wins the leader election.
-			pp = aks.New(region)
+			pp = azure.New(region)
 		default:
 			// Fall back to not using any property provider if the provided type is none or
 			// not recognizable.

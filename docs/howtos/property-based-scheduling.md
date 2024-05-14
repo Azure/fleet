@@ -101,7 +101,7 @@ spec:
                 clusterSelectorTerms:
                 - propertySelector:
                     matchExpressions:
-                    - name: "kubernetes.azure.com/node-count"
+                    - name: "kubernetes-fleet.io/node-count"
                       operator: Ge
                       values:
                       - "5"
@@ -130,7 +130,7 @@ spec:
                       region: east
                   propertySelector:
                     matchExpressions:
-                    - name: "kubernetes.azure.com/node-count"
+                    - name: "kubernetes-fleet.io/node-count"
                       operator: Ge
                       values:
                       - "5"
@@ -225,7 +225,7 @@ spec:
             - weight: 20
               preference:
                 metricSorter:
-                  name: kubernetes.azure.com/node-count
+                  name: kubernetes-fleet.io/node-count
                   sortOrder: Descending
 ```
 

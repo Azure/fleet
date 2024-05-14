@@ -18,7 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
-	"go.goms.io/fleet/pkg/propertyprovider/aks/trackers"
+	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 )
 
 var (

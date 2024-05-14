@@ -34,7 +34,7 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/propertyprovider/aks/trackers"
+	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
@@ -60,9 +60,9 @@ const (
 	hubClusterSAName = "fleet-hub-agent"
 	fleetSystemNS    = "fleet-system"
 
-	kubeConfigPathEnvVarName       = "KUBECONFIG"
-	propertyProviderEnvVarName     = "PROPERTY_PROVIDER"
-	aksPropertyProviderEnvVarValue = "azure"
+	kubeConfigPathEnvVarName         = "KUBECONFIG"
+	propertyProviderEnvVarName       = "PROPERTY_PROVIDER"
+	azurePropertyProviderEnvVarValue = "azure"
 )
 
 const (
@@ -130,9 +130,9 @@ var (
 )
 
 var (
-	isAKSPropertyProviderEnabled = (os.Getenv(propertyProviderEnvVarName) == aksPropertyProviderEnvVarValue)
+	isAzurePropertyProviderEnabled = (os.Getenv(propertyProviderEnvVarName) == azurePropertyProviderEnvVarValue)
 
-	// Note that the region information below is used only for the AKS property provider to
+	// Note that the region information below is used only for the Azure property provider to
 	// calculate costs (if applicable), which is different from the region label set above.
 	//
 	// The information should match with the AKS regions specified in the setup script.
@@ -247,7 +247,7 @@ func beforeSuiteForAllProcesses() {
 	Expect(impersonateHubClient).NotTo(BeNil(), "Failed to initialize impersonate client for accessing Kubernetes cluster")
 
 	var pricingProvider1 trackers.PricingProvider
-	if isAKSPropertyProviderEnabled {
+	if isAzurePropertyProviderEnabled {
 		pricingProvider1 = trackers.NewAKSKarpenterPricingClient(ctx, memberCluster1AKSRegion)
 	}
 	memberCluster1EastProd = framework.NewCluster(memberCluster1EastProdName, memberCluster1EastProdSAName, scheme, pricingProvider1)
@@ -257,7 +257,7 @@ func beforeSuiteForAllProcesses() {
 	Expect(memberCluster1EastProdClient).NotTo(BeNil(), "Failed to initialize client for accessing Kubernetes cluster")
 
 	var pricingProvider2 trackers.PricingProvider
-	if isAKSPropertyProviderEnabled {
+	if isAzurePropertyProviderEnabled {
 		pricingProvider2 = trackers.NewAKSKarpenterPricingClient(ctx, memberCluster2AKSRegion)
 	}
 	memberCluster2EastCanary = framework.NewCluster(memberCluster2EastCanaryName, memberCluster2EastCanarySAName, scheme, pricingProvider2)
@@ -267,7 +267,7 @@ func beforeSuiteForAllProcesses() {
 	Expect(memberCluster2EastCanaryClient).NotTo(BeNil(), "Failed to initialize client for accessing Kubernetes cluster")
 
 	var pricingProvider3 trackers.PricingProvider
-	if isAKSPropertyProviderEnabled {
+	if isAzurePropertyProviderEnabled {
 		pricingProvider3 = trackers.NewAKSKarpenterPricingClient(ctx, memberCluster3AKSRegion)
 	}
 	memberCluster3WestProd = framework.NewCluster(memberCluster3WestProdName, memberCluster3WestProdSAName, scheme, pricingProvider3)
@@ -291,7 +291,7 @@ func beforeSuiteForProcess1() {
 
 	setAllMemberClustersToJoin()
 	checkIfAllMemberClustersHaveJoined()
-	checkIfAKSPropertyProviderIsWorking()
+	checkIfAzurePropertyProviderIsWorking()
 
 	// Simulate that member cluster 4 become unhealthy, and member cluster 5 has left the fleet.
 	//

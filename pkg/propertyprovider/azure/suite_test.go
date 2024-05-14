@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package aks
+package azure
 
 import (
 	"context"
@@ -22,7 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"go.goms.io/fleet/pkg/propertyprovider"
-	"go.goms.io/fleet/pkg/propertyprovider/aks/trackers"
+	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 )
 
 const (
@@ -65,7 +65,7 @@ func setUpResources() {
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "AKS Fleet Metric Provider Suite")
+	RunSpecs(t, "Azure Property Provider for Fleet Suite")
 }
 
 var _ = BeforeSuite(func() {
@@ -92,7 +92,7 @@ var _ = BeforeSuite(func() {
 	// Set up resources.
 	setUpResources()
 
-	// Start the AKS property provider.
+	// Start the Azure property provider.
 	pp = trackers.NewAKSKarpenterPricingClient(ctx, region)
 	p = NewWithPricingProvider(pp)
 	Expect(p.Start(ctx, memberCfg)).To(Succeed())
