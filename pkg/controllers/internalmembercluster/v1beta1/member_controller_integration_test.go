@@ -140,6 +140,7 @@ var _ = Describe("Test Internal Member Cluster Controller", Serial, func() {
 			Expect(imc.Status.Properties[propertyprovider.NodeCountProperty].Value).ShouldNot(BeEmpty())
 			Expect(imc.Status.ResourceUsage.Allocatable).ShouldNot(BeNil())
 			Expect(imc.Status.ResourceUsage.Capacity).ShouldNot(BeNil())
+			Expect(imc.Status.ResourceUsage.Available).ShouldNot(BeNil())
 			Expect(imc.Status.ResourceUsage.ObservationTime).ToNot(Equal(metav1.Now()))
 		})
 

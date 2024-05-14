@@ -153,6 +153,11 @@ const (
 	// The `/healthz` endpoint has been deprecated since Kubernetes v1.16; here Fleet will
 	// probe the readiness check endpoint instead.
 	healthProbePath = "/readyz"
+
+	// podListLimit is the limit of the number of pods to list in the member cluster. This is
+	// in effect when no property provider is set up with the Fleet member agent and it is
+	// up to the agent itself to collect the available capacity information.
+	podListLimit = 100
 )
 
 // NewReconciler creates a new reconciler for the internalMemberCluster CR
@@ -449,11 +454,13 @@ func (r *Reconciler) reportClusterPropertiesWithPropertyProvider(ctx context.Con
 // updateResourceStats collects and updates resource usage stats of the member cluster.
 func (r *Reconciler) updateResourceStats(ctx context.Context, imc *clusterv1beta1.InternalMemberCluster) error {
 	klog.V(2).InfoS("Updating resource usage status", "InternalMemberCluster", klog.KObj(imc))
+	// List all the nodes.
 	var nodes corev1.NodeList
 	if err := r.memberClient.List(ctx, &nodes); err != nil {
 		return fmt.Errorf("failed to list nodes for member cluster %s: %w", klog.KObj(imc), err)
 	}
 
+	// Prepare the total and allocatable capacities.
 	var capacityCPU, capacityMemory, allocatableCPU, allocatableMemory resource.Quantity
 
 	for _, node := range nodes.Items {
@@ -476,6 +483,56 @@ func (r *Reconciler) updateResourceStats(ctx context.Context, imc *clusterv1beta
 	imc.Status.ResourceUsage.Allocatable = corev1.ResourceList{
 		corev1.ResourceCPU:    allocatableCPU,
 		corev1.ResourceMemory: allocatableMemory,
+	}
+
+	// List all the pods.
+	//
+	// Note: this can be a very heavy operation, especially in large clusters. For such clusters,
+	// it is recommended that a property provider is set up to summarize the available capacity
+	// information in a more efficient manner.
+	var pods corev1.PodList
+	listLimitOpt := client.Limit(podListLimit)
+	if err := r.memberClient.List(ctx, &pods, listLimitOpt); err != nil {
+		return fmt.Errorf("failed to list pods for member cluster: %w", err)
+	}
+	if len(pods.Items) == podListLimit {
+		klog.Warningf("The number of pods in the member cluster has reached or exceeded the limit %d; the available capacity reported might be inaccurate, consider setting up a property provider instead", podListLimit)
+	}
+
+	// Prepare the available capacities.
+	availableCPU := allocatableCPU.DeepCopy()
+	availableMemory := allocatableMemory.DeepCopy()
+	for pidx := range pods.Items {
+		p := pods.Items[pidx]
+
+		if len(p.Spec.NodeName) == 0 || p.Status.Phase == corev1.PodSucceeded || p.Status.Phase != corev1.PodFailed {
+			// Skip pods that are not yet scheduled to a node, or have already completed/failed.
+			continue
+		}
+
+		requestedCPUCapacity := resource.Quantity{}
+		requestedMemoryCapacity := resource.Quantity{}
+		for cidx := range p.Spec.Containers {
+			c := p.Spec.Containers[cidx]
+			requestedCPUCapacity.Add(c.Resources.Requests[corev1.ResourceCPU])
+			requestedMemoryCapacity.Add(c.Resources.Requests[corev1.ResourceMemory])
+		}
+
+		availableCPU.Sub(requestedCPUCapacity)
+		availableMemory.Sub(requestedMemoryCapacity)
+	}
+
+	// Do a sanity check to avoid inconsistencies.
+	if availableCPU.Cmp(resource.Quantity{}) < 0 {
+		availableCPU = resource.Quantity{}
+	}
+	if availableMemory.Cmp(resource.Quantity{}) < 0 {
+		availableMemory = resource.Quantity{}
+	}
+
+	imc.Status.ResourceUsage.Available = corev1.ResourceList{
+		corev1.ResourceCPU:    availableCPU,
+		corev1.ResourceMemory: availableMemory,
 	}
 	imc.Status.ResourceUsage.ObservationTime = metav1.Now()
 
