@@ -8,10 +8,9 @@ package e2e
 import (
 	"fmt"
 
+	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -34,12 +33,9 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 	AfterAll(func() {
 		By("deleting created work resources on hub cluster")
 		cleanupWorkResources()
-
-		By("deleting created work resources on member cluster")
-		cleanWorkResourcesOnCluster(allMemberClusters[0])
 	})
 
-	Context("Test a CRP place objects successfully (client-side-apply)", Ordered, func() {
+	Context("Test a CRP place objects successfully (client-side-apply and allow co-own)", Ordered, func() {
 		BeforeAll(func() {
 			ns := appNamespace()
 			ns.SetOwnerReferences([]metav1.OwnerReference{
@@ -64,6 +60,9 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 		AfterAll(func() {
 			By(fmt.Sprintf("deleting placement %s", crpName))
 			cleanupCRP(crpName)
+
+			By("deleting created work resources on member cluster")
+			cleanWorkResourcesOnCluster(allMemberClusters[0])
 		})
 
 		It("should update CRP status as expected", func() {
@@ -103,6 +102,56 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				ns := &corev1.Namespace{}
 				return allMemberClusters[0].KubeClient.Get(ctx, types.NamespacedName{Name: workNamespaceName}, ns)
 			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Namespace which is not owned by the CRP should not be deleted")
+		})
+	})
+
+	Context("Test a CRP place objects successfully (client-side-apply and disallow co-own) and existing resource has no owner reference", Ordered, func() {
+		BeforeAll(func() {
+			ns := appNamespace()
+			ns.Annotations = map[string]string{
+				annotationKey: annotationValue,
+			}
+			By(fmt.Sprintf("creating namespace %s on member cluster", ns.Name))
+			Expect(allMemberClusters[0].KubeClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
+
+			// Create the CRP.
+			strategy := &placementv1beta1.ApplyStrategy{AllowCoOwnership: false}
+			createCRP(crpName, strategy)
+		})
+
+		AfterAll(func() {
+			By(fmt.Sprintf("deleting placement %s", crpName))
+			cleanupCRP(crpName)
+		})
+
+		It("should update CRP status as expected", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+		})
+
+		// This check will ignore the annotation of resources.
+		It("should place the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
+		It("should have annotations on the namespace", func() {
+			want := map[string]string{annotationKey: annotationValue}
+			Expect(validateAnnotationOfWorkNamespaceOnCluster(memberCluster1EastProd, want)).Should(Succeed(), "Failed to override the annotation of work namespace on %s", memberCluster1EastProdName)
+		})
+
+		It("can delete the CRP", func() {
+			// Delete the CRP.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+			}
+			Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", crpName)
+		})
+
+		It("should remove the selected resources on member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
+
+		It("should remove controller finalizers from CRP", func() {
+			finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
+			Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 		})
 	})
 })

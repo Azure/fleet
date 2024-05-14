@@ -392,6 +392,16 @@ func TestValidateOwnerReference(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:      "empty owner reference which is removed by other controllers",
+			ownerRefs: []metav1.OwnerReference{},
+			want:      "",
+		},
+		{
+			name:      "nil owner reference which is removed by other controllers",
+			ownerRefs: nil,
+			want:      "",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
