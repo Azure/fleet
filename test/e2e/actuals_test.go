@@ -618,7 +618,7 @@ func safeDeploymentCRPStatusUpdatedActual(wantSelectedResourceIdentifiers []plac
 			SelectedResources:     wantSelectedResourceIdentifiers,
 			ObservedResourceIndex: wantObservedResourceIndex,
 		}
-		if diff := cmp.Diff(crp.Status, wantStatus, newCRPStatusCmpOptions...); diff != "" {
+		if diff := cmp.Diff(crp.Status, wantStatus, safeDeploymentCRPStatusCmpOptions...); diff != "" {
 			return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 		}
 		return nil

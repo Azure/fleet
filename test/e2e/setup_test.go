@@ -187,7 +187,7 @@ var (
 		cmpopts.EquateEmpty(),
 	}
 
-	newCRPStatusCmpOptions = cmp.Options{
+	safeDeploymentCRPStatusCmpOptions = cmp.Options{
 		cmpopts.SortSlices(lessFuncCondition),
 		cmpopts.SortSlices(lessFuncPlacementStatus),
 		cmpopts.SortSlices(lessFuncResourceIdentifier),
