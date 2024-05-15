@@ -512,14 +512,16 @@ func customizedCRPStatusUpdatedActual(crpName string,
 	}
 }
 
-func safeDeploymentCRPStatusUpdatedActual(wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier, failedDeploymentName, failedDeploymentNamespace, crpName string, wantSelectedClusters []string, wantObservedResourceIndex string) func() error {
+func safeDeploymentCRPStatusUpdatedActual(wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier, failedDeploymentResourceIdentifier placementv1beta1.ResourceIdentifier, wantSelectedClusters []string, wantObservedResourceIndex string) func() error {
 	return func() error {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		crp := &placementv1beta1.ClusterResourcePlacement{}
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
 			return err
 		}
 
 		var wantPlacementStatus []placementv1beta1.ResourcePlacementStatus
+		// We only expect the deployment to not be available on one cluster.
 		unavailableResourcePlacementStatus := placementv1beta1.ResourcePlacementStatus{
 			Conditions: []metav1.Condition{
 				{
@@ -561,24 +563,19 @@ func safeDeploymentCRPStatusUpdatedActual(wantSelectedResourceIdentifiers []plac
 			},
 			FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 				{
-					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
-						Group:     "apps",
-						Version:   "v1",
-						Kind:      "Deployment",
-						Name:      failedDeploymentName,
-						Namespace: failedDeploymentNamespace,
-					},
+					ResourceIdentifier: failedDeploymentResourceIdentifier,
 					Condition: metav1.Condition{
 						Type:               string(placementv1beta1.ResourcesAvailableConditionType),
 						Status:             metav1.ConditionFalse,
 						Reason:             "ManifestNotAvailableYet",
-						ObservedGeneration: 2,
+						ObservedGeneration: crp.Generation + 1,
 					},
 				},
 			},
 		}
 		wantPlacementStatus = append(wantPlacementStatus, unavailableResourcePlacementStatus)
 
+		// For all the other connected member clusters rollout will be blocked.
 		rolloutBlockedPlacementStatus := placementv1beta1.ResourcePlacementStatus{
 			Conditions: []metav1.Condition{
 				{

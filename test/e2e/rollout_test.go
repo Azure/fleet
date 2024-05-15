@@ -143,7 +143,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 })
 
 // Note that this container will run in parallel with other containers.
-var _ = Describe("advanced rollout based on availability", Ordered, func() {
+var _ = Describe("advanced rollout based on availability for deployment", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	workNamespaceName := appNamespace().Name
 	var wantSelectedResources []placementv1beta1.ResourceIdentifier
@@ -168,9 +168,9 @@ var _ = Describe("advanced rollout based on availability", Ordered, func() {
 	})
 
 	Context("Test a CRP place workload objects successfully, block rollout based on availability", Ordered, func() {
-		It("Create the deployment resource in the namespace", createResourcesForRollout)
+		It("create the deployment resource in the namespace", createDeploymentForRollout)
 
-		It("Create the CRP that select the name space", func() {
+		It("create the CRP that select the name space", func() {
 			crp := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
@@ -221,7 +221,14 @@ var _ = Describe("advanced rollout based on availability", Ordered, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusActual := safeDeploymentCRPStatusUpdatedActual(wantSelectedResources, testDeployment.Name, testDeployment.Namespace, crpName, allMemberClusterNames, "1")
+			failedDeploymentResourceIdentifier := placementv1beta1.ResourceIdentifier{
+				Group:     appv1.SchemeGroupVersion.Group,
+				Version:   appv1.SchemeGroupVersion.Version,
+				Kind:      "Deployment",
+				Name:      testDeployment.Name,
+				Namespace: testDeployment.Namespace,
+			}
+			crpStatusActual := safeDeploymentCRPStatusUpdatedActual(wantSelectedResources, failedDeploymentResourceIdentifier, allMemberClusterNames, "1")
 			// For deployment, at the least it will take 4 minutes to be ready.
 			Eventually(crpStatusActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -243,7 +250,7 @@ func readRolloutTestManifests() {
 	Expect(err).Should(Succeed())
 }
 
-func createResourcesForRollout() {
+func createDeploymentForRollout() {
 	ns := appNamespace()
 	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
 	testDeployment.Namespace = ns.Name
