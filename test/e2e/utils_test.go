@@ -40,10 +40,14 @@ import (
 )
 
 var (
-	croTestAnnotationKey   = "cro-test-annotation"
-	croTestAnnotationValue = "cro-test-annotation-val"
-	roTestAnnotationKey    = "ro-test-annotation"
-	roTestAnnotationValue  = "ro-test-annotation-val"
+	croTestAnnotationKey    = "cro-test-annotation"
+	croTestAnnotationValue  = "cro-test-annotation-val"
+	croTestAnnotationKey1   = "cro-test-annotation1"
+	croTestAnnotationValue1 = "cro-test-annotation-val1"
+	roTestAnnotationKey     = "ro-test-annotation"
+	roTestAnnotationValue   = "ro-test-annotation-val"
+	roTestAnnotationKey1    = "ro-test-annotation1"
+	roTestAnnotationValue1  = "ro-test-annotation-val1"
 )
 
 // createMemberCluster creates a MemberCluster object.
