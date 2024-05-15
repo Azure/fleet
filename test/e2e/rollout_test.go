@@ -226,6 +226,11 @@ var _ = Describe("advanced rollout based on availability", Ordered, func() {
 			Eventually(crpStatusActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 	})
+
+	AfterAll(func() {
+		// Remove the custom deletion blocker finalizer from the CRP.
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+	})
 })
 
 func readRolloutTestManifests() {
