@@ -37,18 +37,20 @@ unavailable. Minimum value for `MaxUnavailable` is set to 1 to avoid stuck rollo
 `MaxSurge` specifies the maximum number of clusters that can be scheduled with resources above the `target number of 
 clusters` specified in `ClusterResourcePlacement` policy.
 
-`MaxSurge` only applies to rollouts to a different set of clusters triggered by policy changes, and doesn't apply to 
-rollouts of workload triggered by changes in selected resources. For updates to selected resources, we always try to do
-the updates in place with no surge.
+`MaxSurge` only applies to rollouts to newly scheduled clusters, and doesn't apply to rollouts of workload triggered by 
+changes in selected resources. For updates to selected resources, we always try to do the updates in place with no surge.
 
 `target number of clusters` changes based on the `ClusterResourcePlacement` policy.
 
-- For pickAll, it's the number of clusters picked by the scheduler.
-- For pickN, it's the number of clusters specified in the `ClusterResourcePlacement` policy.
-- For pickFixed, it's the length of the list of cluster names specified in the `ClusterResourcePlacement` policy.
+- For PickAll, it's the number of clusters picked by the scheduler.
+- For PickN, it's the number of clusters specified in the `ClusterResourcePlacement` policy.
+- For PickFixed, it's the length of the list of cluster names specified in the `ClusterResourcePlacement` policy.
 
 ### UnavailablePeriodSeconds
 
+`UnavailablePeriodSeconds` is used to configure the waiting time between rollout phases when we cannot determine if the 
+resources have rolled out successfully or not. This field is used only if the availability of resources we propagate 
+are not trackable.
 
 ## Availability based Rollout
 We have built-in mechanisms to determine the availability of some common Kubernetes native resources. We only mark them 
@@ -65,10 +67,26 @@ We only mark a `Deployment` as available when all its pods are running, ready an
 We only mark a `DaemonSet` as available when all its pods are running, ready and updated according to the latest spec.
 
 #### StatefulSet
-We only mark a `StatefulSet` as available when all its pods are running, ready and updated according to the latest spec.
+We only mark a `StatefulSet` as available when all its pods are running, ready and updated according to the latest revision.
 
 #### Job
+We only mark a `Job` as available when it has at least one succeeded pod or one ready pod.
 
 #### Service
+For `Service` based on the service type the availability is determined as follows:
+
+- For `ClusterIP` & `NodePort` service, we mark it as available when a cluster IP is assigned.
+- For `LoadBalancer` service, we mark it as available when a `LoadBalancerIngress` has been assigned along with an IP or Hostname.
+- For `ExternalName` service, we don't know how to determine the availability.
 
 #### Data only objects
+
+For the objects described below since they are a data resource we mark them as available immediately after creation,
+
+- Namespace
+- Secret
+- ConfigMap
+- Role
+- ClusterRole
+- RoleBinding
+- ClusterRoleBinding
