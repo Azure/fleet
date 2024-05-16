@@ -19,11 +19,13 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	"go.goms.io/fleet/pkg/propertyprovider"
@@ -39,10 +41,22 @@ const (
 	examplePropertyProviderMessage         = "ExampleMessage"
 
 	imcName = "imc-1"
+
+	nodeName1 = "node-1"
+	nodeName2 = "node-2"
+	nodeName3 = "node-3"
+
+	podName1 = "pod-1"
+	podName2 = "pod-2"
+	podName3 = "pod-3"
+
+	containerName1 = "container-1"
+	containerName2 = "container-2"
 )
 
 var (
 	ignoreLTTConditionField = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
+	ignoreAllTimeFields     = cmpopts.IgnoreTypes(time.Time{}, metav1.Time{})
 )
 
 func TestMarkInternalMemberClusterJoined(t *testing.T) {
@@ -635,6 +649,531 @@ func TestReportClusterPropertiesWithPropertyProvider(t *testing.T) {
 
 			if diff := cmp.Diff(tc.imc, tc.wantIMC, ignoreLTTConditionField); diff != "" {
 				t.Fatalf("internalMemberCluster, (-got, +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestUpdateResourceStats tests the updateResourceStats method.
+func TestUpdateResourceStats(t *testing.T) {
+	timeStarted := time.Now()
+	imcTemplate := &clusterv1beta1.InternalMemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: imcName,
+		},
+		Spec: clusterv1beta1.InternalMemberClusterSpec{},
+	}
+
+	nodes := []*corev1.Node{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName1,
+			},
+			Spec: corev1.NodeSpec{},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("10"),
+					corev1.ResourceMemory: resource.MustParse("10Gi"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("8"),
+					corev1.ResourceMemory: resource.MustParse("8Gi"),
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName2,
+			},
+			Spec: corev1.NodeSpec{},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("15"),
+					corev1.ResourceMemory: resource.MustParse("10Gi"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("12"),
+					corev1.ResourceMemory: resource.MustParse("8Gi"),
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName3,
+			},
+			Spec: corev1.NodeSpec{},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("6"),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("5"),
+					corev1.ResourceMemory: resource.MustParse("3Gi"),
+				},
+			},
+		},
+	}
+
+	testCases := []struct {
+		name          string
+		nodes         []*corev1.Node
+		pods          []*corev1.Pod
+		wantIMCStatus clusterv1beta1.InternalMemberClusterStatus
+	}{
+		{
+			name:  "multiple nodes, no pods",
+			nodes: nodes,
+			pods:  []*corev1.Pod{},
+			wantIMCStatus: clusterv1beta1.InternalMemberClusterStatus{
+				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+					propertyprovider.NodeCountProperty: {
+						Value: "3",
+					},
+				},
+				ResourceUsage: clusterv1beta1.ResourceUsage{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("31"),
+						corev1.ResourceMemory: resource.MustParse("24Gi"),
+					},
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("25"),
+						corev1.ResourceMemory: resource.MustParse("19Gi"),
+					},
+					Available: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("25"),
+						corev1.ResourceMemory: resource.MustParse("19Gi"),
+					},
+				},
+			},
+		},
+		{
+			name:  "multiple nodes, multiple pods",
+			nodes: nodes,
+			pods: []*corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: podName1,
+					},
+					Spec: corev1.PodSpec{
+						NodeName: nodeName1,
+						Containers: []corev1.Container{
+							{
+								Name: containerName1,
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("2"),
+										corev1.ResourceMemory: resource.MustParse("1Gi"),
+									},
+								},
+							},
+							{
+								Name: containerName2,
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("1"),
+										corev1.ResourceMemory: resource.MustParse("2Gi"),
+									},
+								},
+							},
+						},
+					},
+					Status: corev1.PodStatus{
+						Phase: corev1.PodRunning,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: podName2,
+					},
+					Spec: corev1.PodSpec{
+						NodeName: nodeName2,
+						Containers: []corev1.Container{
+							{
+								Name: containerName1,
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("1.5"),
+										corev1.ResourceMemory: resource.MustParse("3Gi"),
+									},
+								},
+							},
+							{
+								Name: containerName2,
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("3"),
+										corev1.ResourceMemory: resource.MustParse("3Gi"),
+									},
+								},
+							},
+						},
+					},
+					Status: corev1.PodStatus{
+						Phase: corev1.PodRunning,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: podName3,
+					},
+					Spec: corev1.PodSpec{
+						NodeName: nodeName3,
+						Containers: []corev1.Container{
+							{
+								Name: containerName1,
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("1"),
+										corev1.ResourceMemory: resource.MustParse("1Gi"),
+									},
+								},
+							},
+						},
+					},
+					Status: corev1.PodStatus{
+						Phase: corev1.PodRunning,
+					},
+				},
+			},
+			wantIMCStatus: clusterv1beta1.InternalMemberClusterStatus{
+				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+					propertyprovider.NodeCountProperty: {
+						Value: "3",
+					},
+				},
+				ResourceUsage: clusterv1beta1.ResourceUsage{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("31"),
+						corev1.ResourceMemory: resource.MustParse("24Gi"),
+					},
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("25"),
+						corev1.ResourceMemory: resource.MustParse("19Gi"),
+					},
+					Available: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("16.5"),
+						corev1.ResourceMemory: resource.MustParse("9Gi"),
+					},
+				},
+			},
+		},
+		{
+			name:  "with pod not yet scheduled",
+			nodes: nodes,
+			pods: []*corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: podName1,
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name: containerName1,
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("2"),
+										corev1.ResourceMemory: resource.MustParse("1Gi"),
+									},
+								},
+							},
+							{
+								Name: containerName2,
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("1"),
+										corev1.ResourceMemory: resource.MustParse("2Gi"),
+									},
+								},
+							},
+						},
+					},
+					Status: corev1.PodStatus{
+						Phase: corev1.PodRunning,
+					},
+				},
+			},
+			wantIMCStatus: clusterv1beta1.InternalMemberClusterStatus{
+				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+					propertyprovider.NodeCountProperty: {
+						Value: "3",
+					},
+				},
+				ResourceUsage: clusterv1beta1.ResourceUsage{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("31"),
+						corev1.ResourceMemory: resource.MustParse("24Gi"),
+					},
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("25"),
+						corev1.ResourceMemory: resource.MustParse("19Gi"),
+					},
+					Available: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("25"),
+						corev1.ResourceMemory: resource.MustParse("19Gi"),
+					},
+				},
+			},
+		},
+		{
+			name:  "with pod succeeded",
+			nodes: nodes,
+			pods: []*corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: podName1,
+					},
+					Spec: corev1.PodSpec{
+						NodeName: nodeName1,
+						Containers: []corev1.Container{
+							{
+								Name: containerName1,
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("2"),
+										corev1.ResourceMemory: resource.MustParse("1Gi"),
+									},
+								},
+							},
+							{
+								Name: containerName2,
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("1"),
+										corev1.ResourceMemory: resource.MustParse("2Gi"),
+									},
+								},
+							},
+						},
+					},
+					Status: corev1.PodStatus{
+						Phase: corev1.PodSucceeded,
+					},
+				},
+			},
+			wantIMCStatus: clusterv1beta1.InternalMemberClusterStatus{
+				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+					propertyprovider.NodeCountProperty: {
+						Value: "3",
+					},
+				},
+				ResourceUsage: clusterv1beta1.ResourceUsage{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("31"),
+						corev1.ResourceMemory: resource.MustParse("24Gi"),
+					},
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("25"),
+						corev1.ResourceMemory: resource.MustParse("19Gi"),
+					},
+					Available: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("25"),
+						corev1.ResourceMemory: resource.MustParse("19Gi"),
+					},
+				},
+			},
+		},
+		{
+			name:  "with pod failed",
+			nodes: nodes,
+			pods: []*corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: podName1,
+					},
+					Spec: corev1.PodSpec{
+						NodeName: nodeName1,
+						Containers: []corev1.Container{
+							{
+								Name: containerName1,
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("2"),
+										corev1.ResourceMemory: resource.MustParse("1Gi"),
+									},
+								},
+							},
+							{
+								Name: containerName2,
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("1"),
+										corev1.ResourceMemory: resource.MustParse("2Gi"),
+									},
+								},
+							},
+						},
+					},
+					Status: corev1.PodStatus{
+						Phase: corev1.PodFailed,
+					},
+				},
+			},
+			wantIMCStatus: clusterv1beta1.InternalMemberClusterStatus{
+				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+					propertyprovider.NodeCountProperty: {
+						Value: "3",
+					},
+				},
+				ResourceUsage: clusterv1beta1.ResourceUsage{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("31"),
+						corev1.ResourceMemory: resource.MustParse("24Gi"),
+					},
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("25"),
+						corev1.ResourceMemory: resource.MustParse("19Gi"),
+					},
+					Available: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("25"),
+						corev1.ResourceMemory: resource.MustParse("19Gi"),
+					},
+				},
+			},
+		},
+		{
+			name:  "inconsistency, overallocated cpu",
+			nodes: nodes,
+			pods: []*corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: podName1,
+					},
+					Spec: corev1.PodSpec{
+						NodeName: nodeName1,
+						Containers: []corev1.Container{
+							{
+								Name: containerName1,
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("200"),
+										corev1.ResourceMemory: resource.MustParse("10Gi"),
+									},
+								},
+							},
+						},
+					},
+					Status: corev1.PodStatus{
+						Phase: corev1.PodRunning,
+					},
+				},
+			},
+			wantIMCStatus: clusterv1beta1.InternalMemberClusterStatus{
+				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+					propertyprovider.NodeCountProperty: {
+						Value: "3",
+					},
+				},
+				ResourceUsage: clusterv1beta1.ResourceUsage{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("31"),
+						corev1.ResourceMemory: resource.MustParse("24Gi"),
+					},
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("25"),
+						corev1.ResourceMemory: resource.MustParse("19Gi"),
+					},
+					Available: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.Quantity{},
+						corev1.ResourceMemory: resource.MustParse("9Gi"),
+					},
+				},
+			},
+		},
+		{
+			name:  "inconsistency, overallocated memory",
+			nodes: nodes,
+			pods: []*corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: podName1,
+					},
+					Spec: corev1.PodSpec{
+						NodeName: nodeName1,
+						Containers: []corev1.Container{
+							{
+								Name: containerName1,
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("2"),
+										corev1.ResourceMemory: resource.MustParse("100Gi"),
+									},
+								},
+							},
+						},
+					},
+					Status: corev1.PodStatus{
+						Phase: corev1.PodRunning,
+					},
+				},
+			},
+			wantIMCStatus: clusterv1beta1.InternalMemberClusterStatus{
+				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+					propertyprovider.NodeCountProperty: {
+						Value: "3",
+					},
+				},
+				ResourceUsage: clusterv1beta1.ResourceUsage{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("31"),
+						corev1.ResourceMemory: resource.MustParse("24Gi"),
+					},
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("25"),
+						corev1.ResourceMemory: resource.MustParse("19Gi"),
+					},
+					Available: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("23"),
+						corev1.ResourceMemory: resource.Quantity{},
+					},
+				},
+			},
+		},
+	}
+
+	ctx := context.Background()
+
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add scheme (corev1): %v", err)
+	}
+	if err := clusterv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add scheme (clusterv1beta1): %v", err)
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeClientBuilder := fake.NewClientBuilder().WithScheme(scheme)
+			for _, obj := range tc.nodes {
+				fakeClientBuilder.WithObjects(obj)
+			}
+			for _, obj := range tc.pods {
+				fakeClientBuilder.WithObjects(obj)
+				fakeClientBuilder.WithStatusSubresource(obj)
+			}
+			fakeClient := fakeClientBuilder.Build()
+
+			r := &Reconciler{
+				memberClient: fakeClient,
+			}
+
+			imc := imcTemplate.DeepCopy()
+			if err := r.updateResourceStats(ctx, imc); err != nil {
+				t.Fatalf("updateResourceStats(), got error %v, want no error", err)
+			}
+
+			if diff := cmp.Diff(imc.Status, tc.wantIMCStatus, ignoreAllTimeFields); diff != "" {
+				t.Fatalf("InternalMemberCluster status (-got, +want):\n%s", diff)
+			}
+
+			// Verify if the observation time has been set.
+			for pn, pv := range imc.Status.Properties {
+				if pv.ObservationTime.Before(&metav1.Time{Time: timeStarted}) {
+					t.Fatalf("observation time for property %s is before the start time", pn)
+				}
+			}
+			if imc.Status.ResourceUsage.ObservationTime.Before(&metav1.Time{Time: timeStarted}) {
+				t.Fatalf("observation time for resource usage is before the start time")
 			}
 		})
 	}

@@ -505,7 +505,7 @@ func (r *Reconciler) updateResourceStats(ctx context.Context, imc *clusterv1beta
 	for pidx := range pods.Items {
 		p := pods.Items[pidx]
 
-		if len(p.Spec.NodeName) == 0 || p.Status.Phase == corev1.PodSucceeded || p.Status.Phase != corev1.PodFailed {
+		if len(p.Spec.NodeName) == 0 || p.Status.Phase == corev1.PodSucceeded || p.Status.Phase == corev1.PodFailed {
 			// Skip pods that are not yet scheduled to a node, or have already completed/failed.
 			continue
 		}
