@@ -64,7 +64,8 @@ of the following resources to determine if they are available or not. Here are t
 We only mark a `Deployment` as available when all its pods are running, ready and updated according to the latest spec. 
 
 #### DaemonSet 
-We only mark a `DaemonSet` as available when all its pods are running, ready and updated according to the latest spec.
+We only mark a `DaemonSet` as available when all its pods are available and updated according to the latest spec on all 
+desired scheduled nodes.
 
 #### StatefulSet
 We only mark a `StatefulSet` as available when all its pods are running, ready and updated according to the latest revision.
