@@ -1,19 +1,23 @@
 # Safe Rollout
+
 One of the most important features of Fleet is the ability to safely rollout changes across multiple clusters. We do
 this by rolling out the changes in a controlled manner, ensuring that we only continue to propagate the changes to the
 next target clusters if the resources are successfully applied to the previous target clusters.
 
 ## Overview
+
 We automatically propagate any resource changes that are selected by a `ClusterResourcePlacement` from the hub cluster 
 to the target clusters based on the placement policy defined in the `ClusterResourcePlacement`. In order to reduce the
 blast radius of such operation, we provide users a way to safely rollout the new changes so that a bad release 
 won't affect all the running instances all at once.
 
 ## Rollout Strategy
+
 We currently only support the `RollingUpdate` rollout strategy. It updates the resources in the selected target clusters
 gradually based on the 'maxUnavailable' and 'maxSurge' settings.
 
 ## In place update policy
+
 We always try to do in-place update if there is no change in the selected clusters. This is to avoid unnecessary
 interrupts to the running workloads when there is only resource changes. For example, if you only change the tag of the
 deployment in the namespace you want to place, we will do an in-place update on the deployments already placed on the 
@@ -22,7 +26,26 @@ current clusters are not the best to match the current placement policy.
 
 ## How To Use RollingUpdateConfig
 
+RolloutUpdateConfig is used to control behavior of the rolling update strategy.
+
 ### MaxUnavailable and MaxSurge
+
+`MaxUnavailable` specifies the maximum number of connected clusters to the fleet compared to `target number of clusters` 
+specified in `ClusterResourcePlacement` policy in which resources propagated by the `ClusterResourcePlacement` can be 
+unavailable. Minimum value for `MaxUnavailable` is set to 1 to avoid stuck rollout during in-place resource update.
+
+`MaxSurge` specifies the maximum number of clusters that can be scheduled with resources above the `target number of 
+clusters` specified in `ClusterResourcePlacement` policy.
+
+`MaxSurge` only applies to rollouts to a different set of clusters triggered by policy changes, and doesn't apply to 
+rollouts of workload triggered by changes in selected resources. For updates to selected resources, we always try to do
+the updates in place with no surge.
+
+`target number of clusters` changes based on the `ClusterResourcePlacement` policy.
+
+- For pickAll, it's the number of clusters picked by the scheduler.
+- For pickN, it's the number of clusters specified in the `ClusterResourcePlacement` policy.
+- For pickFixed, it's the length of the list of cluster names specified in the `ClusterResourcePlacement` policy.
 
 ### UnavailablePeriodSeconds
 
