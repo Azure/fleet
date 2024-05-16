@@ -27,37 +27,36 @@ import (
 	"go.goms.io/fleet/test/utils/controller"
 )
 
-var (
-	// pre loaded test manifests
-	testDeployment        appv1.Deployment
-	testEnvelopDeployment corev1.ConfigMap
-)
-
 // Note that this container will run in parallel with other containers.
 var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
-	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-	workNamespaceName := appNamespace().Name
-	var wantSelectedResources []placementv1beta1.ResourceIdentifier
-	BeforeAll(func() {
-		// Create the test resources.
-		readRolloutTestManifests()
-		wantSelectedResources = []placementv1beta1.ResourceIdentifier{
-			{
-				Kind:    "Namespace",
-				Name:    workNamespaceName,
-				Version: "v1",
-			},
-			{
-				Kind:      "ConfigMap",
-				Name:      testEnvelopDeployment.Name,
-				Version:   "v1",
-				Namespace: workNamespaceName,
-			},
-		}
-	})
-
 	Context("Test a CRP place enveloped objects successfully", Ordered, func() {
-		It("Create the wrapped deployment resources in the namespace", createWrappedResourcesForRollout)
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		workNamespaceName := appNamespace().Name
+		var wantSelectedResources []placementv1beta1.ResourceIdentifier
+		var testEnvelopDeployment corev1.ConfigMap
+		var testDeployment appv1.Deployment
+
+		BeforeAll(func() {
+			readDeploymentTestManifest(&testDeployment)
+			readEnvelopConfigMapTestManifest(&testEnvelopDeployment)
+			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
+				{
+					Kind:    "Namespace",
+					Name:    workNamespaceName,
+					Version: "v1",
+				},
+				{
+					Kind:      "ConfigMap",
+					Name:      testEnvelopDeployment.Name,
+					Version:   "v1",
+					Namespace: workNamespaceName,
+				},
+			}
+		})
+
+		It("Create the wrapped deployment resources in the namespace", func() {
+			createWrappedResourcesForRollout(&testEnvelopDeployment, &testDeployment)
+		})
 
 		It("Create the CRP that select the name space", func() {
 			crp := &placementv1beta1.ClusterResourcePlacement{
@@ -89,7 +88,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		It("should place the resources on all member clusters", func() {
 			for idx := range allMemberClusters {
 				memberCluster := allMemberClusters[idx]
-				workResourcesPlacedActual := waitForDeploymentPlacementToReady(memberCluster)
+				workResourcesPlacedActual := waitForDeploymentPlacementToReady(memberCluster, &testDeployment)
 				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
 			}
 		})
@@ -134,41 +133,41 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 					"work condition mismatch for work %s (-want, +got):", memberCluster.ClusterName)
 			}
 		})
-	})
 
-	AfterAll(func() {
-		// Remove the custom deletion blocker finalizer from the CRP.
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
-	})
-})
-
-// Note that this container will run in parallel with other containers.
-var _ = Describe("advanced rollout based on availability for deployment", Ordered, func() {
-	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-	workNamespaceName := appNamespace().Name
-	var wantSelectedResources []placementv1beta1.ResourceIdentifier
-
-	BeforeAll(func() {
-		// Create the test resources.
-		readRolloutTestManifests()
-		wantSelectedResources = []placementv1beta1.ResourceIdentifier{
-			{
-				Kind:    "Namespace",
-				Name:    workNamespaceName,
-				Version: "v1",
-			},
-			{
-				Group:     "apps",
-				Version:   "v1",
-				Kind:      "Deployment",
-				Name:      testDeployment.Name,
-				Namespace: workNamespaceName,
-			},
-		}
+		AfterAll(func() {
+			// Remove the custom deletion blocker finalizer from the CRP.
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		})
 	})
 
 	Context("Test a CRP place workload objects successfully, block rollout based on availability", Ordered, func() {
-		It("create the deployment resource in the namespace", createDeploymentForRollout)
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		workNamespaceName := appNamespace().Name
+		var wantSelectedResources []placementv1beta1.ResourceIdentifier
+		var testDeployment appv1.Deployment
+
+		BeforeAll(func() {
+			// Create the test resources.
+			readDeploymentTestManifest(&testDeployment)
+			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
+				{
+					Kind:    "Namespace",
+					Name:    workNamespaceName,
+					Version: "v1",
+				},
+				{
+					Group:     "apps",
+					Version:   "v1",
+					Kind:      "Deployment",
+					Name:      testDeployment.Name,
+					Namespace: workNamespaceName,
+				},
+			}
+		})
+
+		It("create the deployment resource in the namespace", func() {
+			createDeploymentForRollout(&testDeployment)
+		})
 
 		It("create the CRP that select the name space", func() {
 			crp := &placementv1beta1.ClusterResourcePlacement{
@@ -203,7 +202,7 @@ var _ = Describe("advanced rollout based on availability for deployment", Ordere
 		It("should place the resources on all member clusters", func() {
 			for idx := range allMemberClusters {
 				memberCluster := allMemberClusters[idx]
-				workResourcesPlacedActual := waitForDeploymentPlacementToReady(memberCluster)
+				workResourcesPlacedActual := waitForDeploymentPlacementToReady(memberCluster, &testDeployment)
 				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
 			}
 		})
@@ -232,33 +231,35 @@ var _ = Describe("advanced rollout based on availability for deployment", Ordere
 			// For deployment, at the least it will take 4 minutes to be ready.
 			Eventually(crpStatusActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
-	})
 
-	AfterAll(func() {
-		// Remove the custom deletion blocker finalizer from the CRP.
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		AfterAll(func() {
+			// Remove the custom deletion blocker finalizer from the CRP.
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		})
 	})
 })
 
-func readRolloutTestManifests() {
-	By("Read the testConfigMap resources")
-	err := utils.GetObjectFromManifest("resources/test-deployment.yaml", &testDeployment)
-	Expect(err).Should(Succeed())
-
-	By("Read testEnvelopConfigMap resource")
-	err = utils.GetObjectFromManifest("resources/test-envelop-deployment.yaml", &testEnvelopDeployment)
+func readDeploymentTestManifest(testDeployment *appv1.Deployment) {
+	By("Read the deployment resources")
+	err := utils.GetObjectFromManifest("resources/test-deployment.yaml", testDeployment)
 	Expect(err).Should(Succeed())
 }
 
-func createDeploymentForRollout() {
+func readEnvelopConfigMapTestManifest(testEnvelopDeployment *corev1.ConfigMap) {
+	By("Read testEnvelopConfigMap resource")
+	err := utils.GetObjectFromManifest("resources/test-envelop-deployment.yaml", testEnvelopDeployment)
+	Expect(err).Should(Succeed())
+}
+
+func createDeploymentForRollout(testDeployment *appv1.Deployment) {
 	ns := appNamespace()
 	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
 	testDeployment.Namespace = ns.Name
-	Expect(hubClient.Create(ctx, &testDeployment)).To(Succeed(), "Failed to create test deployment %s", testDeployment.Name)
+	Expect(hubClient.Create(ctx, testDeployment)).To(Succeed(), "Failed to create test deployment %s", testDeployment.Name)
 }
 
 // createWrappedResourcesForRollout creates some enveloped resources on the hub cluster with a deployment for testing purposes.
-func createWrappedResourcesForRollout() {
+func createWrappedResourcesForRollout(testEnvelopDeployment *corev1.ConfigMap, testDeployment *appv1.Deployment) {
 	ns := appNamespace()
 	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
 	// modify the enveloped configMap according to the namespace
@@ -269,10 +270,10 @@ func createWrappedResourcesForRollout() {
 	resourceDeploymentByte, err := json.Marshal(testDeployment)
 	Expect(err).Should(Succeed())
 	testEnvelopDeployment.Data["deployment.yaml"] = string(resourceDeploymentByte)
-	Expect(hubClient.Create(ctx, &testEnvelopDeployment)).To(Succeed(), "Failed to create testEnvelop deployment %s", testEnvelopDeployment.Name)
+	Expect(hubClient.Create(ctx, testEnvelopDeployment)).To(Succeed(), "Failed to create testEnvelop deployment %s", testEnvelopDeployment.Name)
 }
 
-func waitForDeploymentPlacementToReady(memberCluster *framework.Cluster) func() error {
+func waitForDeploymentPlacementToReady(memberCluster *framework.Cluster, testDeployment *appv1.Deployment) func() error {
 	workNamespaceName := appNamespace().Name
 	return func() error {
 		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: workNamespaceName}); err != nil {
