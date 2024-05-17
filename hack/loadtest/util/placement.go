@@ -288,9 +288,7 @@ func PrintTestMetrics(useTestResources bool) {
 
 	// Write metrics to console
 	for _, mf := range metricFamilies {
-		if mf.GetName() == "quantile_apply_crp_latency" {
-			printMetricFamily(mf)
-		} else if mf.GetName() == "quantile_update_latency" && useTestResources {
+		if mf.GetName() == "quantile_apply_crp_latency" || (mf.GetName() == "quantile_update_latency" && useTestResources) {
 			printMetricFamily(mf)
 		}
 	}
