@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	io_prometheus_client "github.com/prometheus/client_model/go"
+	prometheusClient "github.com/prometheus/client_model/go"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,7 +31,7 @@ func (i *ClusterNames) Set(value string) error {
 	return nil
 }
 
-func printMetricFamily(mf *io_prometheus_client.MetricFamily) {
+func printMetricFamily(mf *prometheusClient.MetricFamily) {
 	results := mf.GetName() + " (sec): "
 	for _, m := range mf.GetMetric() {
 		for _, q := range m.GetSummary().GetQuantile() {
