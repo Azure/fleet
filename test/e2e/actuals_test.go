@@ -568,7 +568,7 @@ func safeDeploymentCRPStatusUpdatedActual(wantSelectedResourceIdentifiers []plac
 						Type:               string(placementv1beta1.ResourcesAvailableConditionType),
 						Status:             metav1.ConditionFalse,
 						Reason:             "ManifestNotAvailableYet",
-						ObservedGeneration: crp.Generation + 1,
+						ObservedGeneration: 2,
 					},
 				},
 			},

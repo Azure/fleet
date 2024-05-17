@@ -189,7 +189,6 @@ var (
 
 	safeDeploymentCRPStatusCmpOptions = cmp.Options{
 		cmpopts.SortSlices(lessFuncCondition),
-		cmpopts.SortSlices(lessFuncPlacementStatus),
 		cmpopts.SortSlices(lessFuncResourceIdentifier),
 		cmpopts.SortSlices(lessFuncFailedResourcePlacements),
 		ignoreConditionLTTAndMessageFields,
