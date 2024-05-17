@@ -1,0 +1,205 @@
+# How can I debug when my CRP ClusterResourcePlacementAvailable condition is set to false?
+The ClusterResourcePlacementAvailable condition is false when the cluster lacks the necessary resources or capabilities to accommodate new deployments or allocations.
+> Note: In addition, it may be helpful to look into the logs for the apply work controller to get more information on why the resources are not available
+>
+### Common scenarios:
+- When the CRP is unable to propagate resources to a selected cluster due the member cluster not having enough resource availability.
+- When the CRP is unable to propagate resource to a selected cluster due the deployment having a bad image name.
+
+### Example Scenario:
+The example output below demonstrates a scenario where the CRP is unable to propagate a deployment to a member cluster due to the deployment having a bad image name.
+
+#### CRP spec:
+```
+spec:
+  resourceSelectors:
+    - group: ""
+      kind: Namespace
+      name: test-ns
+      version: v1
+  policy:
+    placementType: PickN
+    numberOfClusters: 1
+  strategy:
+    type: RollingUpdate
+```
+
+#### CRP status:
+```
+status:
+  conditions:
+  - lastTransitionTime: "2024-05-14T18:52:30Z"
+    message: found all cluster needed as specified by the scheduling policy, found
+      1 cluster(s)
+    observedGeneration: 1
+    reason: SchedulingPolicyFulfilled
+    status: "True"
+    type: ClusterResourcePlacementScheduled
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: All 1 cluster(s) start rolling out the latest resource
+    observedGeneration: 1
+    reason: RolloutStarted
+    status: "True"
+    type: ClusterResourcePlacementRolloutStarted
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: No override rules are configured for the selected resources
+    observedGeneration: 1
+    reason: NoOverrideSpecified
+    status: "True"
+    type: ClusterResourcePlacementOverridden
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: Works(s) are succcesfully created or updated in 1 target cluster(s)'
+      namespaces
+    observedGeneration: 1
+    reason: WorkSynchronized
+    status: "True"
+    type: ClusterResourcePlacementWorkSynchronized
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: The selected resources are successfully applied to 1 cluster(s)
+    observedGeneration: 1
+    reason: ApplySucceeded
+    status: "True"
+    type: ClusterResourcePlacementApplied
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: The selected resources in 1 cluster(s) are still not available yet
+    observedGeneration: 1
+    reason: ResourceNotAvailableYet
+    status: "False"
+    type: ClusterResourcePlacementAvailable
+  observedResourceIndex: "0"
+  placementStatuses:
+  - clusterName: kind-cluster-1
+    conditions:
+    - lastTransitionTime: "2024-05-14T18:52:30Z"
+      message: 'Successfully scheduled resources for placement in kind-cluster-1 (affinity
+        score: 0, topology spread score: 0): picked by scheduling policy'
+      observedGeneration: 1
+      reason: Scheduled
+      status: "True"
+      type: Scheduled
+    - lastTransitionTime: "2024-05-14T18:52:31Z"
+      message: Detected the new changes on the resources and started the rollout process
+      observedGeneration: 1
+      reason: RolloutStarted
+      status: "True"
+      type: RolloutStarted
+    - lastTransitionTime: "2024-05-14T18:52:31Z"
+      message: No override rules are configured for the selected resources
+      observedGeneration: 1
+      reason: NoOverrideSpecified
+      status: "True"
+      type: Overridden
+    - lastTransitionTime: "2024-05-14T18:52:31Z"
+      message: All of the works are synchronized to the latest
+      observedGeneration: 1
+      reason: AllWorkSynced
+      status: "True"
+      type: WorkSynchronized
+    - lastTransitionTime: "2024-05-14T18:52:31Z"
+      message: All corresponding work objects are applied
+      observedGeneration: 1
+      reason: AllWorkHaveBeenApplied
+      status: "True"
+      type: Applied
+    - lastTransitionTime: "2024-05-14T18:52:31Z"
+      message: Work object crp1-work is not available
+      observedGeneration: 1
+      reason: NotAllWorkAreAvailable
+      status: "False"
+      type: Available
+    failedPlacements:
+    - condition:
+        lastTransitionTime: "2024-05-14T18:52:31Z"
+        message: Manifest is trackable but not available yet
+        observedGeneration: 1
+        reason: ManifestNotAvailableYet
+        status: "False"
+        type: Available
+      group: apps
+      kind: Deployment
+      name: my-deployment
+      namespace: test-ns
+      version: v1
+  selectedResources:
+  - kind: Namespace
+    name: test-ns
+    version: v1
+  - group: apps
+    kind: Deployment
+    name: my-deployment
+    namespace: test-ns
+    version: v1
+ ```
+In the `ClusterResourcePlacement` status, within the `failedPlacements` section for `kind-cluster-1`, we get a clear message
+as to why the resource failed to apply on the member cluster. Immediately preceding this in the conditions section,
+the `Available` condition for `kind-cluster-1` is flagged as false, citing the `NotAllWorkAreAvailable` reason.
+This signifies that the Work object intended for the member cluster `kind-cluster-1` is not yet available.
+
+To gain more insights also take a look at the `work` object, please check this [section](#how-and-where-to-find-the-correct-work-resource) for more details,
+
+### Work status of kind-cluster-1:
+```
+status:
+conditions:
+- lastTransitionTime: "2024-05-14T18:52:31Z"
+  message: Work is applied successfully
+  observedGeneration: 1
+  reason: WorkAppliedCompleted
+  status: "True"
+  type: Applied
+- lastTransitionTime: "2024-05-14T18:52:31Z"
+  message: Manifest {Ordinal:1 Group:apps Version:v1 Kind:Deployment Resource:deployments
+  Namespace:test-ns Name:my-deployment} is not available yet
+  observedGeneration: 1
+  reason: WorkNotAvailableYet
+  status: "False"
+  type: Available
+  manifestConditions:
+- conditions:
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: Manifest is already up to date
+    reason: ManifestAlreadyUpToDate
+    status: "True"
+    type: Applied
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: Manifest is trackable and available now
+    reason: ManifestAvailable
+    status: "True"
+    type: Available
+    identifier:
+    kind: Namespace
+    name: test-ns
+    ordinal: 0
+    resource: namespaces
+    version: v1
+- conditions:
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: Manifest is already up to date
+    observedGeneration: 1
+    reason: ManifestAlreadyUpToDate
+    status: "True"
+    type: Applied
+  - lastTransitionTime: "2024-05-14T18:52:31Z"
+    message: Manifest is trackable but not available yet
+    observedGeneration: 1
+    reason: ManifestNotAvailableYet
+    status: "False"
+    type: Available
+    identifier:
+    group: apps
+    kind: Deployment
+    name: my-deployment
+    namespace: test-ns
+    ordinal: 1
+    resource: deployments
+    version: v1
+```
+Looking at the status `Available` condition for `kind-cluster-1`, we see that the deployment `my-deployment` is not available yet on the member cluster.
+Therefore, there might be something wrong with the deployment manifest.
+
+#### Resolution:
+In this scenario, a viable solution is to rectify the deployment manifest by verifying that all fields are accurately specified.
+After fixing the resource manifest and updating it, it's essential to delete the CRP and then reapply or recreate it. This step ensures that the changes made to the resource manifest are properly reflected in the CRP configuration.
+
+For all other scenarios, it's crucial to confirm that the propagated resource is configured correctly.
+Additionally, ensure that the selected cluster possesses sufficient available capacity to accommodate the new resources.
