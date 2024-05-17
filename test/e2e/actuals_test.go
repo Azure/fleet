@@ -512,6 +512,119 @@ func customizedCRPStatusUpdatedActual(crpName string,
 	}
 }
 
+func safeDeploymentCRPStatusUpdatedActual(wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier, failedDeploymentResourceIdentifier placementv1beta1.ResourceIdentifier, wantSelectedClusters []string, wantObservedResourceIndex string) func() error {
+	return func() error {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crp := &placementv1beta1.ClusterResourcePlacement{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+			return err
+		}
+
+		var wantPlacementStatus []placementv1beta1.ResourcePlacementStatus
+		// We only expect the deployment to not be available on one cluster.
+		unavailableResourcePlacementStatus := placementv1beta1.ResourcePlacementStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(placementv1beta1.ResourceScheduledConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.ScheduleSucceededReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourceRolloutStartedConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.RolloutStartedReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourceOverriddenConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.OverrideNotSpecifiedReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourceWorkSynchronizedConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.AllWorkSyncedReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.AllWorkAppliedReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourcesAvailableConditionType),
+					Status:             metav1.ConditionFalse,
+					Reason:             condition.WorkNotAvailableReason,
+					ObservedGeneration: crp.Generation,
+				},
+			},
+			FailedPlacements: []placementv1beta1.FailedResourcePlacement{
+				{
+					ResourceIdentifier: failedDeploymentResourceIdentifier,
+					Condition: metav1.Condition{
+						Type:               string(placementv1beta1.ResourcesAvailableConditionType),
+						Status:             metav1.ConditionFalse,
+						Reason:             "ManifestNotAvailableYet",
+						ObservedGeneration: 2,
+					},
+				},
+			},
+		}
+		wantPlacementStatus = append(wantPlacementStatus, unavailableResourcePlacementStatus)
+
+		// For all the other connected member clusters rollout will be blocked.
+		rolloutBlockedPlacementStatus := placementv1beta1.ResourcePlacementStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(placementv1beta1.ResourceScheduledConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.ScheduleSucceededReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourceRolloutStartedConditionType),
+					Status:             metav1.ConditionFalse,
+					Reason:             condition.RolloutNotStartedYetReason,
+					ObservedGeneration: crp.Generation,
+				},
+			},
+		}
+
+		for i := 0; i < len(wantSelectedClusters)-1; i++ {
+			wantPlacementStatus = append(wantPlacementStatus, rolloutBlockedPlacementStatus)
+		}
+
+		wantCRPConditions := []metav1.Condition{
+			{
+				Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+				Status:             metav1.ConditionTrue,
+				Reason:             scheduler.FullyScheduledReason,
+				ObservedGeneration: crp.Generation,
+			},
+			{
+				Type:               string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+				Status:             metav1.ConditionFalse,
+				Reason:             condition.RolloutNotStartedYetReason,
+				ObservedGeneration: crp.Generation,
+			},
+		}
+
+		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+			Conditions:            wantCRPConditions,
+			PlacementStatuses:     wantPlacementStatus,
+			SelectedResources:     wantSelectedResourceIdentifiers,
+			ObservedResourceIndex: wantObservedResourceIndex,
+		}
+		if diff := cmp.Diff(crp.Status, wantStatus, safeDeploymentCRPStatusCmpOptions...); diff != "" {
+			return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
+		}
+		return nil
+	}
+}
+
 func workNamespaceRemovedFromClusterActual(cluster *framework.Cluster) func() error {
 	client := cluster.KubeClient
 

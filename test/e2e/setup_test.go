@@ -148,6 +148,9 @@ var (
 	lessFuncPlacementStatus = func(a, b placementv1beta1.ResourcePlacementStatus) bool {
 		return a.ClusterName < b.ClusterName
 	}
+	lessFuncPlacementStatusByConditions = func(a, b placementv1beta1.ResourcePlacementStatus) bool {
+		return len(a.Conditions) < len(b.Conditions)
+	}
 
 	resourceIdentifierStringFormat = "%s/%s/%s/%s/%s"
 	lessFuncResourceIdentifier     = func(a, b placementv1beta1.ResourceIdentifier) bool {
@@ -166,6 +169,7 @@ var (
 	ignoreConditionReasonField                                  = cmpopts.IgnoreFields(metav1.Condition{}, "Reason")
 	ignoreAgentStatusHeartbeatField                             = cmpopts.IgnoreFields(clusterv1beta1.AgentStatus{}, "LastReceivedHeartbeat")
 	ignoreNamespaceStatusField                                  = cmpopts.IgnoreFields(corev1.Namespace{}, "Status")
+	ignoreClusterNameField                                      = cmpopts.IgnoreFields(placementv1beta1.ResourcePlacementStatus{}, "ClusterName")
 	ignoreMemberClusterJoinAndPropertyProviderStartedConditions = cmpopts.IgnoreSliceElements(func(c metav1.Condition) bool {
 		return c.Type == string(clusterv1beta1.ConditionTypeMemberClusterReadyToJoin) ||
 			c.Type == string(clusterv1beta1.ConditionTypeMemberClusterJoined) ||
@@ -184,6 +188,18 @@ var (
 		cmpopts.SortSlices(lessFuncResourceIdentifier),
 		cmpopts.SortSlices(lessFuncFailedResourcePlacements),
 		ignoreConditionLTTAndMessageFields,
+		cmpopts.EquateEmpty(),
+	}
+
+	// We don't sort ResourcePlacementStatus by their name since we don't know which cluster will become unavailable first,
+	// prompting the rollout to be blocked for remaining clusters.
+	safeDeploymentCRPStatusCmpOptions = cmp.Options{
+		cmpopts.SortSlices(lessFuncCondition),
+		cmpopts.SortSlices(lessFuncPlacementStatusByConditions),
+		cmpopts.SortSlices(lessFuncResourceIdentifier),
+		cmpopts.SortSlices(lessFuncFailedResourcePlacements),
+		ignoreConditionLTTAndMessageFields,
+		ignoreClusterNameField,
 		cmpopts.EquateEmpty(),
 	}
 )
