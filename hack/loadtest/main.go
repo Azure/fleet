@@ -118,6 +118,6 @@ func runLoadTest(ctx context.Context, config *rest.Config) {
 	if err := util.CleanupAll(hubClient); err != nil {
 		klog.ErrorS(err, "clean up placement load test hit an error")
 	}
-	util.PrintTestMetrics()
+	util.PrintTestMetrics(*useTestResources)
 	klog.InfoS(" placement load test finished. For more metrics, please use prometheus")
 }

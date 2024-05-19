@@ -278,7 +278,20 @@ func waitForCrpToCompleteUpdate(ctx context.Context, hubClient client.Client, de
 	}
 }
 
-func PrintTestMetrics() {
+func PrintTestMetrics(useTestResources bool) {
+	// Gather metrics from all registered collectors
+	metricFamilies, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		fmt.Printf("Error gathering metrics: %v\n", err)
+		return
+	}
+
+	// Write metrics to console
+	for _, mf := range metricFamilies {
+		if mf.GetName() == "quantile_apply_crp_latency" || (mf.GetName() == "quantile_update_latency" && useTestResources) {
+			printMetricFamily(mf)
+		}
+	}
 	klog.Infof("CRP count %d", crpCount.Load())
 	klog.InfoS("Placement apply result", "total applySuccessCount", applySuccessCount.Load(), "applyFailCount", applyFailCount.Load(), "applyTimeoutCount", applyTimeoutCount.Load())
 	klog.InfoS("Placement update result", "total updateSuccessCount", updateSuccessCount.Load(), "updateFailCount", updateFailCount.Load(), "updateTimeoutCount", updateTimeoutCount.Load())
