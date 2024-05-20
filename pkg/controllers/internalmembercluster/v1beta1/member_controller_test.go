@@ -722,7 +722,7 @@ func TestUpdateResourceStats(t *testing.T) {
 		wantIMCStatus clusterv1beta1.InternalMemberClusterStatus
 	}{
 		{
-			name:  "multiple nodes, no pods",
+			name:  "report resource usage when there are multiple nodes but no pods",
 			nodes: nodes,
 			pods:  []*corev1.Pod{},
 			wantIMCStatus: clusterv1beta1.InternalMemberClusterStatus{
@@ -748,7 +748,7 @@ func TestUpdateResourceStats(t *testing.T) {
 			},
 		},
 		{
-			name:  "multiple nodes, multiple pods",
+			name:  "report resource usage when there aremultiple nodes,+ multiple pods",
 			nodes: nodes,
 			pods: []*corev1.Pod{
 				{
@@ -859,7 +859,7 @@ func TestUpdateResourceStats(t *testing.T) {
 			},
 		},
 		{
-			name:  "with pod not yet scheduled",
+			name:  "report resource usage when there are pods that are not yet scheduled (should not be accounted for in the usage report)",
 			nodes: nodes,
 			pods: []*corev1.Pod{
 				{
@@ -916,7 +916,7 @@ func TestUpdateResourceStats(t *testing.T) {
 			},
 		},
 		{
-			name:  "with pod succeeded",
+			name:  "report resource usage when there are pods that are succeeded (should not be accounted for in the usage report)",
 			nodes: nodes,
 			pods: []*corev1.Pod{
 				{
@@ -974,7 +974,7 @@ func TestUpdateResourceStats(t *testing.T) {
 			},
 		},
 		{
-			name:  "with pod failed",
+			name:  "report resource usage when there are pods that are failed (should not be accounted for in the usage report)",
 			nodes: nodes,
 			pods: []*corev1.Pod{
 				{
@@ -1032,7 +1032,7 @@ func TestUpdateResourceStats(t *testing.T) {
 			},
 		},
 		{
-			name:  "inconsistency, overallocated cpu",
+			name:  "report resource usage when there occurs inconsistency (more used CPU than allocatable)",
 			nodes: nodes,
 			pods: []*corev1.Pod{
 				{
@@ -1081,7 +1081,7 @@ func TestUpdateResourceStats(t *testing.T) {
 			},
 		},
 		{
-			name:  "inconsistency, overallocated memory",
+			name:  "report resource usage when there occurs inconsistency (more used memory than allocatable)",
 			nodes: nodes,
 			pods: []*corev1.Pod{
 				{
