@@ -22,7 +22,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/propertyprovider/aks"
+	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
@@ -229,7 +229,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     aks.NodeCountProperty,
+														Name:     propertyprovider.NodeCountProperty,
 														Operator: placementv1beta1.PropertySelectorGreaterThan,
 														Values: []string{
 															"4",
@@ -255,7 +255,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should not pick any cluster", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Should not select any cluster")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should not select any cluster")
 		})
@@ -274,7 +274,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 		It("should pick the new cluster", func() {
 			targetClusterNames := []string{memberCluster3WestProdName}
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -621,7 +621,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     aks.TotalCPUCapacityProperty,
+														Name:     propertyprovider.TotalCPUCapacityProperty,
 														Operator: placementv1beta1.PropertySelectorLessThan,
 														Values: []string{
 															"10000",
@@ -647,7 +647,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should pick all clusters", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Should not select any cluster")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should not select any cluster")
 		})
@@ -675,7 +675,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should keep the cluster in the scheduling decision", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -1300,7 +1300,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     aks.AllocatableMemoryCapacityProperty,
+														Name:     propertyprovider.AllocatableMemoryCapacityProperty,
 														Operator: placementv1beta1.PropertySelectorGreaterThan,
 														Values: []string{
 															"10000Gi",
@@ -1326,7 +1326,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should not pick any cluster", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{memberCluster3WestProdName}, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{memberCluster3WestProdName}, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Should not select any cluster")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should not select any cluster")
 		})
@@ -1358,7 +1358,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 		It("should pick the new cluster", func() {
 			targetClusterNames := []string{memberCluster3WestProdName}
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -1803,7 +1803,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 											PropertySelector: &placementv1beta1.PropertySelector{
 												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
-														Name:     aks.NodeCountProperty,
+														Name:     propertyprovider.NodeCountProperty,
 														Operator: placementv1beta1.PropertySelectorEqualTo,
 														Values: []string{
 															"4",
@@ -1829,7 +1829,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should pick one cluster", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster3WestProdName}, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster3WestProdName}, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Should not select any cluster")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should not select any cluster")
 		})
@@ -1846,7 +1846,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should keep the cluster in the scheduling decision", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster3WestProdName}, nil, "0", false)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster3WestProdName}, nil, "0")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
