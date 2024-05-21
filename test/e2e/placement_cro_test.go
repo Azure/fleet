@@ -362,7 +362,7 @@ var _ = Describe("creating clusterResourceOverride with incorrect path", Ordered
 	It("should not place the selected resources on member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 })
 
-var _ = Describe("creating clusterResourceOverride with incorrect value for path", Ordered, func() {
+var _ = Describe("creating clusterResourceOverride with and resource becomes invalid after override", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 
