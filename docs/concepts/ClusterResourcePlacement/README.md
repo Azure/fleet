@@ -448,6 +448,10 @@ Events:
 
 ## Tolerations
 
+Tolerations are a mechanism to allow the Fleet Scheduler to schedule resources to a `MemberCluster` that has specified on it.
+We adopt the concept of [taints & tolerations](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/) 
+introduced in Kubernetes to the multi-cluster use case.
+
 The `ClusterResourcePlacement` CR supports the specification of list of tolerations, which are applied to the `ClusterResourcePlacement`
 object. Each Toleration object comprises the following fields:
 - `key`: The key of the toleration.
