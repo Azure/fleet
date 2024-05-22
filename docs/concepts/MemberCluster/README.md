@@ -50,6 +50,10 @@ namespaces on the hub cluster.
 
 ## Taints
 
+Taints are a mechanism to prevent the Fleet Scheduler from scheduling resources to a `MemberCluster`. We adopt the concept of 
+[taints and tolerations](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/) introduced in Kubernetes to 
+the multi-cluster use case.
+
 The `MemberCluster` CR supports the specification of list of taints, which are applied to the `MemberCluster`. Each Taint object comprises
 the following fields:
 - `key`: The key of the taint.
