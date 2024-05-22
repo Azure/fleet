@@ -711,7 +711,9 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 			},
 		})
 		By(fmt.Sprintf("creating namespace %s on member cluster", ns.Name))
-		Expect(allMemberClusters[0].KubeClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
+		Eventually(func() error {
+			return allMemberClusters[0].KubeClient.Create(ctx, &ns)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
