@@ -161,10 +161,10 @@ The rollout will be as follows:
 
 - We try to pick clusters (cluster-3 and cluster-4) by specifying the label selector `loc: east`.
 - But this time around since we have `maxSurge` set to 2 we are saying we can resources propagated to a maximum of 
-4 clusters where our target is only 2, we will rollout the namespace with deployment to cluster-3 and cluster-4 before 
-removing the deployment from cluster-1 and cluster-2.
+4 clusters where our target is only 2, we will rollout the namespace with deployment to both cluster-3 and cluster-4 before 
+removing the deployment from cluster-1 and cluster-2. 
 - And since `maxUnavailable` is always set to 1 by default, we will try to remove the resource from cluster-1 first and 
-then from cluster-2 or vice versa because when `maxUnavailable` is 1 we need at least one cluster to be available.
+then from cluster-2 or vice versa because when `maxUnavailable` is 1 the policy needs at least one cluster to be available.
 
 ### UnavailablePeriodSeconds
 
