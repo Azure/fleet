@@ -1,6 +1,6 @@
 # How can I debug when my CRP status is ClusterResourcePlacementScheduled condition status is set to false?
 The `ClusterResourcePlacementScheduled` condition is set to `false` when the scheduler cannot find all the clusters needed as specified by the scheduling policy.
-> Note: In addition, it may be helpful to look into the logs for the scheduler controller to get more information on why the scheduling failed.
+> Note: In addition, it may be helpful to look into the logs for the [scheduler](https://github.com/Azure/fleet/blob/main/pkg/scheduler/scheduler.go) to get more information on why the scheduling failed.
 
 ### Common scenarios:
 
@@ -10,7 +10,7 @@ Instances where this condition may arise:
 - When the placement policy is set to `PickN`, and N clusters are specified, but there are fewer than N clusters that have joined the fleet or satisfy the placement policy.
 - When the CRP resource selector selects a reserved namespace.
 
->>Note: When the placement policy is set to `PickAll`, the `ClusterResourcePlacementScheduled` condition is always set to `true`.
+>Note: When the placement policy is set to `PickAll`, the `ClusterResourcePlacementScheduled` condition is always set to `true`.
 
 ### Example Scenario:
 

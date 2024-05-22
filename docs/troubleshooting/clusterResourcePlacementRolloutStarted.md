@@ -1,7 +1,7 @@
 # How can I debug when my CRP status is ClusterResourcePlacementRolloutStarted condition status is set to false?
 
 The `ClusterResourcePlacementRolloutStarted` condition status is set to `false` under the following circumstances: the selected resources have not been rolled out in all scheduled clusters yet.
-> Note: In addition, it may be helpful to look into the logs for the rollout controller to get more information on why the rollout did not start.
+> Note: In addition, it may be helpful to look into the logs for the [rollout controller](https://github.com/Azure/fleet/blob/main/pkg/controllers/rollout/controller.go) to get more information on why the rollout did not start.
 
 ## Common scenarios:
 

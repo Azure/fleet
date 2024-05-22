@@ -1,9 +1,11 @@
 # How can I debug when my CRP ClusterResourcePlacementApplied condition is set to false?
+> Note: In addition, it may be helpful to look into the logs for the [apply work controller](https://github.com/Azure/fleet/blob/main/pkg/controllers/work/apply_controller.go) to get more information on why the resources are not available
 
 ### Common scenarios:
-- When the CRP is unable to propagate resources to a selected cluster due to the resource already existing on the cluster and not being managed by the fleet controller.
+- When the CRP is unable to propagate resources to a selected cluster due to the resource already existing on the cluster and not being managed by the fleet controller. 
+To remedy, CRP can `AllowCoOwnership` within `ApplyStrategy` to allow the resource to be managed by the fleet controller.
 - When the CRP is unable to propagate resource to selected due to another CRP already managing the resource for selected cluster with a different apply strategy.
-- When the CRP is unable to propagate resource due to failing to apply manifest due to syntax errors or invalid resource configurations.
+- When the CRP is unable to propagate resource due to failing to apply manifest due to syntax errors (which can happen when a resource is being propagated through an envelope object) or invalid resource configurations.
 
 ### Investigation steps:
 

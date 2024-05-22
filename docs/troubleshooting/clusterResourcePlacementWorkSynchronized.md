@@ -1,7 +1,7 @@
 # How can I debug when my CRP status is ClusterResourcePlacementWorkSynchronized condition status is set to false?
 
 The `ClusterResourcePlacementWorkSynchronized` condition is false when the CRP has been recently updated but the associated work objects have not yet been synchronized with the changes.
-> Note: In addition, it may be helpful to look into the logs for the work generator controller to get more information on why the work synchronization failed.
+> Note: In addition, it may be helpful to look into the logs for the [work generator controller](https://github.com/Azure/fleet/blob/main/pkg/controllers/workgenerator/controller.go) to get more information on why the work synchronization failed.
 
 ## Common Scenarios:
 - If used, the `ClusterResourceOverride` or `ResourceOverride` is created with an invalid value for the resource.
@@ -108,7 +108,8 @@ that the work object `crp1-work` is prohibited from generating new content withi
 as it's currently undergoing termination.
 
 ### Resolution:
-- To address this specific issue, recreate the Custom Resource Placement (CRP) with a newly selected cluster.
-- Alternatively, delete the CRP and any work on the namespace, then wait for the namespace to regenerate
-
-In other scenarios, you might opt to wait for the work to finish propagating. If the issue persists, consider deleting the CRP and recreating it.
+To address the issue at hand, there are several potential solutions:
+- One option is to modify the Cluster Resource Placement (CRP) with a newly selected cluster. 
+- Another option is to delete the CRP to remove work through garbage collection.
+- It's also worth noting that the namespace can only regenerate if the cluster is re-joined, so another potential solution is to re-join the member cluster. 
+- In other scenarios, you might opt to wait for the work to finish propagating.

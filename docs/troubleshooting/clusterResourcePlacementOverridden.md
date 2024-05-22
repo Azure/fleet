@@ -1,7 +1,9 @@
 # How can I debug when my CRP status is ClusterResourcePlacementOverridden condition status is set to false?
 
 The status of the `ClusterResourcePlacementOverridden` condition is set to `false` when there is an Override API related issue.
-> Note: In addition, it may be helpful to look into the logs for the overrider controller to get more information on why the override did not succeed.
+> Note: In addition, it may be helpful to look into the logs for the overrider controller (includes 
+> controller for [ClusterResourceOverride](https://github.com/Azure/fleet/blob/main/pkg/controllers/overrider/clusterresource_controller.go) and 
+> [ResourceOverride](https://github.com/Azure/fleet/blob/main/pkg/controllers/overrider/resource_controller.go)) to get more information on why the override did not succeed.
 
 ## Common scenarios:
 
@@ -56,7 +58,7 @@ spec:
         value: new-value
 ```
 The `ClusterResourceOverride` is created to override the `ClusterRole` `secret-reader` by adding a new label `new-label`
-and value `new-value` for the clusters with the label `env: canary`.
+with a value `new-value` for the clusters with the label `env: canary`.
 
 ### CRP Spec:
 ```
@@ -142,8 +144,8 @@ The CRP attempted to override a propagated resource utilizing an applicable `Clu
 However, as the `ClusterResourcePlacementOverridden` condition remains false, looking at the placement status for the cluster
 where the condition `Overriden` failed will offer insights into the exact cause of the failure.
 The accompanying message highlights that the override failed due to the absence of the path `/metadata/labels/new-label` and its corresponding value.
-Based on the previous example of the cluster role `secret-reader`, it's evident that no labels were initially present.
-Therefore, the specified path for adding a new label is incorrect.
+Based on the previous example of the cluster role `secret-reader`, it's evident that the path `/metadata/labels` does not exist, meaning that `labels` does not exist. 
+Therefore, a new label cannot be added.
 
 ### Resolution:
 The solution here is to correct the path and value in the `ClusterResourceOverride` to successfully override the `ClusterRole` `secret-reader` as shown below:
@@ -154,3 +156,4 @@ jsonPatchOverrides:
     value: 
       newlabel: new-value
 ```
+This will successfully add the new label `newlabel` with the value `new-value` to the `ClusterRole` `secret-reader`, as we are creating the `labels` field and adding a new value `newlabel: new-value` to it.
