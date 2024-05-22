@@ -47,22 +47,53 @@ place with no surge.
 - For PickN, it's the number of clusters specified in the `ClusterResourcePlacement` policy.
 - For PickFixed, it's the length of the list of cluster names specified in the `ClusterResourcePlacement` policy.
 
-Example 1:
+#### Example 1:
 
-Consider a fleet with three connected member clusters (cluster-1, cluster-2 & cluster-3), and a `ClusterResourcePlacement` policy 
-with `PickAll` strategy, with maxUnavailable set to 1, and maxSurge set to 1, and we try to propagate a namespace with a deployment. 
+Consider a fleet with 4 connected member clusters (cluster-1, cluster-2, cluster-3 & cluster-4) where every member 
+cluster has label `env: prod`. The hub cluster has a namespace called `test-ns` with a deployment in it.
+
+The `ClusterResourcePlacement` spec is defined as follows:
+
+```yaml
+spec:
+  resourceSelectors:
+    - group: ""
+      kind: Namespace
+      version: v1          
+      name: test-ns
+  policy:
+    placementType: PickN
+    numberOfClusters: 3
+    affinity:
+      clusterAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          clusterSelectorTerms:
+              - labelSelector:
+                  matchLabels:
+                    env: prod
+```
 
 The rollout will be as follows:
 
-- we rollout the namespace with deployment to cluster-1, cluster-2 & cluster-3 since we can't track the initial 
-availability for the deployment
+- We try to pick 3 clusters out of 4, for this scenario let's say we pick cluster-1, cluster-2 & cluster-3.
+- Since we can't track the initial availability for the deployment, we rollout the namespace with deployment to 
+cluster-1, cluster-2 & cluster-3
 - Then we update the deployment with a bad image name to update the resource in place on cluster-1, cluster-2 & cluster-3
 - But since we have `maxUnavailable` set to 1, we will rollout the bad image name update for deployment to one of the clusters 
 (which cluster the resource is rolled out to first is non-deterministic)
-- Once the deployment is updated on one of the clusters, we will wait for the deployment's availability to be true before 
+- Once the deployment is updated on the first cluster, we will wait for the deployment's availability to be true before 
 rolling out to the other clusters
 - And since we rolled out a bad image name update for the deployment it's availability will always be false and hence the 
 rollout for the other two clusters will be stuck
+- Users might think `maxSurge` of 1 might be utilized here but in this case since we are updating the resource in place
+hence `maxSurge` will not be utilized to surge and pick cluster-4.
+
+> **Note:** `maxSurge` will be utilized to pick cluster-4, if we change the policy to pick 4 cluster or change placement 
+type to `PickAll`.
+
+#### Example 2:
+
+
 
 ### UnavailablePeriodSeconds
 
