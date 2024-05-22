@@ -40,8 +40,8 @@ var (
 	// associated with all resource properties.
 	resourcePropertyNamePrefix = "resources.kubernetes-fleet.io/"
 
-	// Below are a list of supported capacity types.
-	supportedResourceCapacityTypes = []string{"total", "allocatable", "available"}
+	// Below is the map of supported capacity types.
+	supportedResourceCapacityTypes = map[string]bool{"total": true, "allocatable": true, "available": true}
 )
 
 // ValidateClusterResourcePlacementAlpha validates a ClusterResourcePlacement v1alpha1 object.
@@ -452,7 +452,7 @@ func validateName(name string) error {
 		if len(segments) != 2 {
 			return fmt.Errorf("invalid resource property name %s, expected format is [PREFIX]/[CAPACITY_TYPE]-[RESOURCE_NAME]", name)
 		}
-		if !isValidCapacityType(segments[0]) {
+		if !supportedResourceCapacityTypes[segments[0]] {
 			return fmt.Errorf("invalid capacity type in resource property name %s, supported values are %+v", name, supportedResourceCapacityTypes)
 		}
 	}
@@ -486,13 +486,4 @@ func validateValues(values []string) error {
 		}
 	}
 	return nil
-}
-
-func isValidCapacityType(ct string) bool {
-	for _, resourceCapacityType := range supportedResourceCapacityTypes {
-		if ct == resourceCapacityType {
-			return true
-		}
-	}
-	return false
 }
