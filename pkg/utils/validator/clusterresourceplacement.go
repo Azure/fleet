@@ -9,6 +9,7 @@ package validator
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -42,7 +43,7 @@ var (
 
 	// Below is the map of supported capacity types.
 	supportedResourceCapacityTypesMap = map[string]bool{"total": true, "allocatable": true, "available": true}
-	supportedResourceCapacityTypes    = []string{"total", "allocatable", "available"}
+	supportedResourceCapacityTypes    = reflect.ValueOf(supportedResourceCapacityTypesMap).MapKeys()
 )
 
 // ValidateClusterResourcePlacementAlpha validates a ClusterResourcePlacement v1alpha1 object.
