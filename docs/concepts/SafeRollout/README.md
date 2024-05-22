@@ -38,13 +38,31 @@ unavailable. Minimum value for `MaxUnavailable` is set to 1 to avoid stuck rollo
 clusters` specified in `ClusterResourcePlacement` policy.
 
 `MaxSurge` only applies to rollouts to newly scheduled clusters, and doesn't apply to rollouts of workload triggered by 
-changes in selected resources. For updates to selected resources, we always try to do the updates in place with no surge.
+updates to already propagated resource. For updates to already propagated resources, we always try to do the updates in 
+place with no surge.
 
 `target number of clusters` changes based on the `ClusterResourcePlacement` policy.
 
 - For PickAll, it's the number of clusters picked by the scheduler.
 - For PickN, it's the number of clusters specified in the `ClusterResourcePlacement` policy.
 - For PickFixed, it's the length of the list of cluster names specified in the `ClusterResourcePlacement` policy.
+
+Example 1:
+
+Consider a fleet with three connected member clusters (cluster-1, cluster-2 & cluster-3), and a `ClusterResourcePlacement` policy 
+with `PickAll` strategy, with maxUnavailable set to 1, and maxSurge set to 1, and we try to propagate a namespace with a deployment. 
+
+The rollout will be as follows:
+
+- we rollout the namespace with deployment to cluster-1, cluster-2 & cluster-3 since we can't track the initial 
+availability for the deployment
+- Then we update the deployment with a bad image name to update the resource in place on cluster-1, cluster-2 & cluster-3
+- But since we have `maxUnavailable` set to 1, we will rollout the bad image name update for deployment to one of the clusters 
+(which cluster the resource is rolled out to first is non-deterministic)
+- Once the deployment is updated on one of the clusters, we will wait for the deployment's availability to be true before 
+rolling out to the other clusters
+- And since we rolled out a bad image name update for the deployment it's availability will always be false and hence the 
+rollout for the other two clusters will be stuck
 
 ### UnavailablePeriodSeconds
 
