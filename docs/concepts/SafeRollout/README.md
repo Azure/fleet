@@ -14,7 +14,7 @@ won't affect all the running instances all at once.
 ## Rollout Strategy
 
 We currently only support the `RollingUpdate` rollout strategy. It updates the resources in the selected target clusters
-gradually based on the 'maxUnavailable' and 'maxSurge' settings.
+gradually based on the `maxUnavailable` and `maxSurge` settings.
 
 ## In place update policy
 
@@ -34,10 +34,10 @@ RolloutUpdateConfig is used to control behavior of the rolling update strategy.
 specified in `ClusterResourcePlacement` policy in which resources propagated by the `ClusterResourcePlacement` can be 
 unavailable. Minimum value for `MaxUnavailable` is set to 1 to avoid stuck rollout during in-place resource update.
 
-`MaxSurge` specifies the maximum number of clusters that can be scheduled with resources above the `target number of 
-clusters` specified in `ClusterResourcePlacement` policy.
+`MaxSurge` specifies the maximum number of clusters that can be scheduled with resources above the `target number of clusters` 
+specified in `ClusterResourcePlacement` policy.
 
-`MaxSurge` only applies to rollouts to newly scheduled clusters, and doesn't apply to rollouts of workload triggered by 
+> **Note:** `MaxSurge` only applies to rollouts to newly scheduled clusters, and doesn't apply to rollouts of workload triggered by 
 updates to already propagated resource. For updates to already propagated resources, we always try to do the updates in 
 place with no surge.
 
@@ -90,7 +90,7 @@ rolling out to the other clusters
 - And since we rolled out a bad image name update for the deployment it's availability will always be false and hence the 
 rollout for the other two clusters will be stuck
 - Users might think `maxSurge` of 1 might be utilized here but in this case since we are updating the resource in place
-hence `maxSurge` will not be utilized to surge and pick cluster-4.
+`maxSurge` will not be utilized to surge and pick cluster-4.
 
 > **Note:** `maxSurge` will be utilized to pick cluster-4, if we change the policy to pick 4 cluster or change placement 
 type to `PickAll`.
@@ -160,17 +160,18 @@ spec:
 The rollout will be as follows:
 
 - We try to pick clusters (cluster-3 and cluster-4) by specifying the label selector `loc: east`.
-- But this time around since we have `maxSurge` set to 2 we are saying we can resources propagated to a maximum of 
-4 clusters where our target is only 2, we will rollout the namespace with deployment to both cluster-3 and cluster-4 before 
-removing the deployment from cluster-1 and cluster-2. 
+- But this time around since we have `maxSurge` set to 2 we are saying we can propagate resources to a maximum of 
+4 clusters but our target number of clusters specified is 2, we will rollout the namespace with deployment to both 
+cluster-3 and cluster-4 before removing the deployment from cluster-1 and cluster-2. 
 - And since `maxUnavailable` is always set to 1 by default, we will try to remove the resource from cluster-1 first and 
-then from cluster-2 or vice versa because when `maxUnavailable` is 1 the policy needs at least one cluster to be available.
+then from cluster-2 (or the other way around) because when `maxUnavailable` is 1 the policy mandates at least one cluster 
+to be available.
 
 ### UnavailablePeriodSeconds
 
 `UnavailablePeriodSeconds` is used to configure the waiting time between rollout phases when we cannot determine if the 
 resources have rolled out successfully or not. This field is used only if the availability of resources we propagate 
-are not trackable.
+are not trackable. Refer to the [Data only object](#data-only-objects) section for more details.
 
 ## Availability based Rollout
 We have built-in mechanisms to determine the availability of some common Kubernetes native resources. We only mark them 
