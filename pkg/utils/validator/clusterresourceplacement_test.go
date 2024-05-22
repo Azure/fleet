@@ -793,7 +793,7 @@ func TestValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
 			wantErr:    true,
 			wantErrMsg: "operator Eq requires exactly one value, got 2",
 		},
-		"invalid placement policy - PickAll with invalid property selector name": {
+		"invalid placement policy - PickAll with invalid property selector name, invalid capacity type": {
 			policy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickAllPlacementType,
 				Affinity: &placementv1beta1.Affinity{
@@ -821,6 +821,63 @@ func TestValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
 			},
 			wantErr:    true,
 			wantErrMsg: "invalid capacity type in resource property name resources.kubernetes-fleet.io/node-count, supported values are [total allocatable available]",
+		},
+		"invalid placement policy - PickAll with invalid property selector name, no segments": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "resources.kubernetes-fleet.io/totalcpu",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "invalid resource property name resources.kubernetes-fleet.io/totalcpu, expected format is [PREFIX]/[CAPACITY_TYPE]-[RESOURCE_NAME]",
+		},
+		"valid placement policy - PickAll with valid property selector name": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "resources.kubernetes-fleet.io/allocatable-memory",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
 		},
 	}
 	for testName, testCase := range tests {
@@ -1133,9 +1190,40 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 			wantErr:    true,
 			wantErrMsg: "toleration key cannot be empty, when operator is Equal",
 		},
-		"invalid placement policy - PickN with invalid property selector name": {
+		"invalid placement policy - PickN with invalid property selector name, invalid label name": {
 			policy: &placementv1beta1.PlacementPolicy{
-				PlacementType: placementv1beta1.PickNPlacementType,
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "resources.kubernetes-fleet.io/total-nospecialchars%^=@",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "name is not a valid Kubernetes label name",
+		},
+		"valid placement policy - PickN with valid property selector name": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
 				Affinity: &placementv1beta1.Affinity{
 					ClusterAffinity: &placementv1beta1.ClusterAffinity{
 						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
@@ -1159,8 +1247,7 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 					},
 				},
 			},
-			wantErr:    true,
-			wantErrMsg: "invalid resource property name: resources.kubernetes-fleet.io/total-allocatable-cpu, expected format [PREFIX]/[CAPACITY_TYPE]-[RESOURCE_NAME]",
+			wantErr: false,
 		},
 	}
 
