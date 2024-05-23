@@ -188,8 +188,9 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 
 			// Create the CRP.
 			strategy := &placementv1beta1.ApplyStrategy{
-				Type:             placementv1beta1.ApplyStrategyTypeServerSideApply,
-				AllowCoOwnership: true,
+				Type:                  placementv1beta1.ApplyStrategyTypeServerSideApply,
+				ServerSideApplyConfig: &placementv1beta1.ServerSideApplyConfig{ForceConflicts: false},
+				AllowCoOwnership:      true,
 			}
 			createCRP(crpName, strategy)
 		})
