@@ -18,7 +18,8 @@ Understand how multi-cluster scheduling works.
 ## [Scheduling Framework](Scheduling-Framework/README.md)
 Lower-level multi-cluster scheduling system design.
 
-## [SafeRollout](SafeRollout/README.md)
+## [Safe Rollout](SafeRollout/README.md)
+
 Understand how we support rolling out the changes in a safe way.
 
 ## [Override](Override/README.md)

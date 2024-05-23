@@ -18,7 +18,7 @@ gradually based on the `maxUnavailable` and `maxSurge` settings.
 
 ## In place update policy
 
-We always try to do in-place update if there is no change in the selected clusters. This is to avoid unnecessary
+We always try to do in-place update by respecting the rollout strategy if there is no change in the placement. This is to avoid unnecessary
 interrupts to the running workloads when there is only resource changes. For example, if you only change the tag of the
 deployment in the namespace you want to place, we will do an in-place update on the deployments already placed on the 
 targeted cluster instead of moving the existing deployments to other clusters even if the labels or properties of the 
@@ -81,10 +81,13 @@ The rollout will be as follows:
 
 - We try to pick 3 clusters out of 4, for this scenario let's say we pick cluster-1, cluster-2 & cluster-3.
 - Since we can't track the initial availability for the deployment, we rollout the namespace with deployment to 
-cluster-1, cluster-2 & cluster-3
-- Then we update the deployment with a bad image name to update the resource in place on cluster-1, cluster-2 & cluster-3
+cluster-1, cluster-2 & cluster-3.
+
+- Then we update the deployment with a bad image name to update the resource in place on cluster-1, cluster-2 & cluster-3.
+
 - But since we have `maxUnavailable` set to 1, we will rollout the bad image name update for deployment to one of the clusters 
-(which cluster the resource is rolled out to first is non-deterministic)
+(which cluster the resource is rolled out to first is non-deterministic).
+
 - Once the deployment is updated on the first cluster, we will wait for the deployment's availability to be true before 
 rolling out to the other clusters
 - And since we rolled out a bad image name update for the deployment it's availability will always be false and hence the 
@@ -199,7 +202,8 @@ For `Service` based on the service type the availability is determined as follow
 
 - For `ClusterIP` & `NodePort` service, we mark it as available when a cluster IP is assigned.
 - For `LoadBalancer` service, we mark it as available when a `LoadBalancerIngress` has been assigned along with an IP or Hostname.
-- For `ExternalName` service, we don't know how to determine the availability.
+- For `ExternalName` service, checking availability is not supported, so it will be marked as available with not trackable reason.
+
 
 #### Data only objects
 
