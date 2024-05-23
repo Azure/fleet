@@ -125,7 +125,7 @@ func (nt *NodeTracker) calculateCosts() {
 			continue
 		}
 		totalHourlyRate += hourlyRate * float64(len(ns))
-		klog.V(4).InfoS("Tallying total hourly rate of the cluster", "sku", sku, "hourlyRate", hourlyRate, "nodeCount", len(ns))
+		klog.V(2).InfoS("Tallying total hourly rate of the cluster", "sku", sku, "hourlyRate", hourlyRate, "nodeCount", len(ns))
 	}
 	// TO-DO (chenyu1): add a cap on the total hourly rate to ensure safe division.
 
@@ -152,7 +152,7 @@ func (nt *NodeTracker) calculateCosts() {
 		return
 	}
 	ci.perCPUCoreHourlyCost = totalHourlyRate / cpuCores
-	klog.V(4).InfoS("Calculated per CPU core hourly cost", "perCPUCoreHourlyCost", ci.perCPUCoreHourlyCost)
+	klog.V(2).InfoS("Calculated per CPU core hourly cost", "perCPUCoreHourlyCost", ci.perCPUCoreHourlyCost)
 
 	// Cast the memory resource quantitu into a float64 value. Precision might suffer a bit of
 	// loss, but it should be mostly acceptable in the case of cost calculation.
@@ -173,7 +173,7 @@ func (nt *NodeTracker) calculateCosts() {
 		return
 	}
 	ci.perGBMemoryHourlyCost = totalHourlyRate / (memoryBytes / (1024.0 * 1024.0 * 1024.0))
-	klog.V(4).InfoS("Calculated per GB memory hourly cost", "perGBMemoryHourlyCost", ci.perGBMemoryHourlyCost)
+	klog.V(2).InfoS("Calculated per GB memory hourly cost", "perGBMemoryHourlyCost", ci.perGBMemoryHourlyCost)
 
 	ci.lastUpdated = time.Now()
 	ci.err = nil
@@ -196,7 +196,7 @@ func (nt *NodeTracker) trackSKU(node *corev1.Node) bool {
 		}
 		ns[node.Name] = true
 		nt.nodeSetBySKU[sku] = ns
-		klog.V(4).InfoS("The node's SKU has not been tracked", "sku", sku, "node", klog.KObj(node))
+		klog.V(2).InfoS("The node's SKU has not been tracked", "sku", sku, "node", klog.KObj(node))
 		return true
 	case registeredSKU != sku:
 		// The node's SKU has changed.
@@ -215,11 +215,11 @@ func (nt *NodeTracker) trackSKU(node *corev1.Node) bool {
 		}
 		ns[node.Name] = true
 		nt.nodeSetBySKU[sku] = ns
-		klog.V(4).InfoS("The node's SKU has changed", "oldSKU", registeredSKU, "newSKU", sku, "node", klog.KObj(node))
+		klog.V(2).InfoS("The node's SKU has changed", "oldSKU", registeredSKU, "newSKU", sku, "node", klog.KObj(node))
 		return true
 	default:
 		// No further action is needed if the node's SKU remains the same.
-		klog.V(4).InfoS("The node's SKU has not changed", "sku", sku, "node", klog.KObj(node))
+		klog.V(2).InfoS("The node's SKU has not changed", "sku", sku, "node", klog.KObj(node))
 		return false
 	}
 }
@@ -235,7 +235,7 @@ func (nt *NodeTracker) trackAllocatableCapacity(node *corev1.Node) {
 		// Typically, a node's allocatable capacity is immutable after the node
 		// is created; here, the provider still performs a sanity check to avoid
 		// any inconsistencies.
-		klog.V(4).InfoS("Node's allocatable capacity has been tracked", "node", klog.KObj(node))
+		klog.V(2).InfoS("Node's allocatable capacity has been tracked", "node", klog.KObj(node))
 		for _, rn := range supportedResourceNames {
 			c1 := ra[rn]
 			c2 := node.Status.Allocatable[rn]
@@ -251,7 +251,7 @@ func (nt *NodeTracker) trackAllocatableCapacity(node *corev1.Node) {
 				// Update the tracked total capacity of the node.
 				ra[rn] = c2
 			}
-			klog.V(4).InfoS("Found an allocatable capacity change", "resource", rn, "node", klog.KObj(node), "oldCapacity", c1, "newCapacity", c2)
+			klog.V(2).InfoS("Found an allocatable capacity change", "resource", rn, "node", klog.KObj(node), "oldCapacity", c1, "newCapacity", c2)
 		}
 	} else {
 		ra = make(corev1.ResourceList)
@@ -264,7 +264,7 @@ func (nt *NodeTracker) trackAllocatableCapacity(node *corev1.Node) {
 			ta := nt.totalAllocatable[rn]
 			ta.Add(a)
 			nt.totalAllocatable[rn] = ta
-			klog.V(4).InfoS("Added allocatable capacity", "resource", rn, "node", klog.KObj(node), "capacity", a)
+			klog.V(2).InfoS("Added allocatable capacity", "resource", rn, "node", klog.KObj(node), "capacity", a)
 		}
 
 		nt.allocatableByNode[node.Name] = ra
@@ -284,7 +284,7 @@ func (nt *NodeTracker) trackTotalCapacity(node *corev1.Node) bool {
 		// Typically, a node's total capacity is immutable after the node
 		// is created; here, the provider still performs a sanity check to avoid
 		// any inconsistencies.
-		klog.V(4).InfoS("Node's total capacity has been tracked", "node", klog.KObj(node))
+		klog.V(2).InfoS("Node's total capacity has been tracked", "node", klog.KObj(node))
 		for _, rn := range supportedResourceNames {
 			c1 := rc[rn]
 			c2 := node.Status.Capacity[rn]
@@ -301,7 +301,7 @@ func (nt *NodeTracker) trackTotalCapacity(node *corev1.Node) bool {
 				rc[rn] = c2
 
 				isCapacityChanged = true
-				klog.V(4).InfoS("Found a total capacity change", "resource", rn, "node", klog.KObj(node), "oldCapacity", c1, "newCapacity", c2)
+				klog.V(2).InfoS("Found a total capacity change", "resource", rn, "node", klog.KObj(node), "oldCapacity", c1, "newCapacity", c2)
 			}
 		}
 	} else {
@@ -316,7 +316,7 @@ func (nt *NodeTracker) trackTotalCapacity(node *corev1.Node) bool {
 			tc := nt.totalCapacity[rn]
 			tc.Add(c)
 			nt.totalCapacity[rn] = tc
-			klog.V(4).InfoS("Added total capacity", "resource", rn, "node", klog.KObj(node), "capacity", c)
+			klog.V(2).InfoS("Added total capacity", "resource", rn, "node", klog.KObj(node), "capacity", c)
 		}
 
 		nt.capacityByNode[node.Name] = rc
