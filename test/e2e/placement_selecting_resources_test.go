@@ -675,13 +675,13 @@ var _ = Describe("validating CRP when selecting a reserved resource", Ordered, f
 
 var _ = Describe("validating CRP when failed to apply resources", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-
+	var existingNS corev1.Namespace
 	BeforeAll(func() {
 		By("creating work resources on hub cluster")
 		createWorkResources()
 
-		ns := appNamespace()
-		ns.SetOwnerReferences([]metav1.OwnerReference{
+		existingNS = appNamespace()
+		existingNS.SetOwnerReferences([]metav1.OwnerReference{
 			{
 				APIVersion: "another-api-version",
 				Kind:       "another-kind",
@@ -689,8 +689,8 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 				UID:        "another-uid",
 			},
 		})
-		By(fmt.Sprintf("creating namespace %s on member cluster", ns.Name))
-		Expect(allMemberClusters[0].KubeClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
+		By(fmt.Sprintf("creating namespace %s on member cluster", existingNS.Name))
+		Expect(allMemberClusters[0].KubeClient.Create(ctx, &existingNS)).Should(Succeed(), "Failed to create namespace %s", existingNS.Name)
 
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
@@ -709,6 +709,10 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 	})
 
 	AfterAll(func() {
+		By(fmt.Sprintf("garbage collect the %s", existingNS.Name))
+		propagage := metav1.DeletePropagationForeground
+		Expect(allMemberClusters[0].KubeClient.Delete(ctx, &existingNS, &client.DeleteOptions{PropagationPolicy: &propagage})).Should(Succeed(), "Failed to delete namespace %s", existingNS.Name)
+
 		By(fmt.Sprintf("garbage all things related to placement %s", crpName))
 		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 	})
