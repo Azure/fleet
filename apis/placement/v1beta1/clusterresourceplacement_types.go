@@ -522,9 +522,14 @@ type RollingUpdateConfig struct {
 	// +optional
 	MaxSurge *intstr.IntOrString `json:"maxSurge,omitempty"`
 
-	// UnavailablePeriodSeconds is used to config the time to wait between rolling out phases.
-	// A resource placement is considered available after `UnavailablePeriodSeconds` seconds
-	// has passed after the resources are applied to the target cluster successfully.
+	// UnavailablePeriodSeconds is used to configure the waiting time between rollout phases when we
+	// cannot determine if the resources have rolled out successfully or not.
+	// We have a built-in resource state detector to determine the availability status of following well-known Kubernetes
+	// native resources: Deployment, StatefulSet, DaemonSet, Job, Service, Namespace, ConfigMap, Secret,
+	// ClusterRole, ClusterRoleBinding, Role, RoleBinding.
+	// Please see [SafeRollout](https://github.com/Azure/fleet/tree/main/docs/concepts/SafeRollout/README.md) for more details.
+	// For other types of resources, we consider them as available after `UnavailablePeriodSeconds` seconds
+	// have passed since they were successfully applied to the target cluster.
 	// Default is 60.
 	// +kubebuilder:default=60
 	// +optional
