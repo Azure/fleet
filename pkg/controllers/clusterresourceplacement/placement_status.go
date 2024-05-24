@@ -47,12 +47,6 @@ const (
 	ResourceScheduleSucceededReason = "ScheduleSucceeded"
 	// ResourceScheduleFailedReason is the reason string of placement condition when the scheduler failed to schedule the selected resources.
 	ResourceScheduleFailedReason = "ScheduleFailed"
-
-	// ResourcePlacementStatus schedule condition message formats
-	resourcePlacementConditionScheduleFailedMessageFormat             = "%s is not selected: %s"
-	resourcePlacementConditionScheduleFailedWithScoreMessageFormat    = "%s is not selected with clusterScore %+v: %s"
-	resourcePlacementConditionScheduleSucceededMessageFormat          = "Successfully scheduled resources for placement in %s: %s"
-	resourcePlacementConditionScheduleSucceededWithScoreMessageFormat = "Successfully scheduled resources for placement in %s (affinity score: %d, topology spread score: %d): %s"
 )
 
 // setResourceConditions sets the resource related conditions by looking at the bindings and work, excluding the scheduled condition.
@@ -91,13 +85,10 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
 			Reason:             condition.ScheduleSucceededReason,
-			Message:            fmt.Sprintf(resourcePlacementConditionScheduleSucceededMessageFormat, c.ClusterName, c.Reason),
+			Message:            c.Reason,
 			ObservedGeneration: crp.Generation,
 		}
 		rps.ClusterName = c.ClusterName
-		if c.ClusterScore != nil {
-			scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleSucceededWithScoreMessageFormat, c.ClusterName, *c.ClusterScore.AffinityScore, *c.ClusterScore.TopologySpreadScore, c.Reason)
-		}
 		oldConditions, ok := oldResourcePlacementStatusMap[c.ClusterName]
 		if ok {
 			// update the lastTransitionTime considering the existing condition status instead of overwriting
@@ -136,12 +127,10 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
 			Reason:             ResourceScheduleFailedReason,
-			Message:            fmt.Sprintf(resourcePlacementConditionScheduleFailedMessageFormat, unselected[i].ClusterName, unselected[i].Reason),
+			Message:            unselected[i].Reason,
 			ObservedGeneration: crp.Generation,
 		}
-		if unselected[i].ClusterScore != nil {
-			scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleFailedWithScoreMessageFormat, unselected[i].ClusterName, unselected[i].ClusterScore, unselected[i].Reason)
-		}
+
 		meta.SetStatusCondition(&rp.Conditions, scheduledCondition)
 		placementStatuses = append(placementStatuses, rp)
 		klog.V(2).InfoS("Populated the resource placement status for the unscheduled cluster", "clusterResourcePlacement", klog.KObj(crp), "cluster", unselected[i].ClusterName)

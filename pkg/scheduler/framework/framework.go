@@ -40,9 +40,9 @@ const (
 
 	// The reasons to use for scheduling decisions.
 	pickedByPolicyReason                  = "picked by scheduling policy"
-	pickFixedInvalidClusterReasonTemplate = "cluster is not eligible for resource placement yet: %s"
-	pickFixedNotFoundClusterReason        = "specified cluster is not found"
-	notPickedByScoreReason                = "cluster does not score high enough"
+	pickFixedInvalidClusterReasonTemplate = "cluster \"%s\" is not eligible for resource placement yet: %s"
+	pickFixedNotFoundClusterReason        = "specified cluster \"%s\" is not found"
+	notPickedByScoreReason                = "cluster \"%s\" does not score high enough (affinity score: %d, topology spread score: %d)"
 
 	// FullyScheduledReason is the reason string of placement condition when the placement is scheduled.
 	FullyScheduledReason = "SchedulingPolicyFulfilled"

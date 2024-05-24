@@ -21,6 +21,12 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
+const (
+	// ClusterDecision schedule message templates.
+	resourceScheduleSucceededMessageFormat          = "Successfully scheduled resources for placement in \"%s\": %s"
+	resourceScheduleSucceededWithScoreMessageFormat = "Successfully scheduled resources for placement in \"%s\" (affinity score: %d, topology spread score: %d): %s"
+)
+
 // classifyBindings categorizes bindings into the following groups:
 //   - bound bindings, i.e., bindings that are associated with a normally operating cluster and
 //     have been cleared for processing by the dispatcher; and
@@ -200,7 +206,7 @@ func crossReferencePickedClustersAndDeDupBindings(
 							AffinityScore:       &affinityScore,
 							TopologySpreadScore: &topologySpreadScore,
 						},
-						Reason: pickedByPolicyReason,
+						Reason: fmt.Sprintf(resourceScheduleSucceededWithScoreMessageFormat, scored.Cluster.Name, affinityScore, topologySpreadScore, pickedByPolicyReason),
 					},
 				},
 			}
@@ -229,7 +235,7 @@ func patchBindingFromScoredCluster(binding *placementv1beta1.ClusterResourceBind
 			AffinityScore:       &affinityScore,
 			TopologySpreadScore: &topologySpreadScore,
 		},
-		Reason: pickedByPolicyReason,
+		Reason: fmt.Sprintf(resourceScheduleSucceededWithScoreMessageFormat, scored.Cluster.Name, affinityScore, topologySpreadScore, pickedByPolicyReason),
 	}
 
 	return &bindingWithPatch{
@@ -253,7 +259,7 @@ func patchBindingFromFixedCluster(binding *placementv1beta1.ClusterResourceBindi
 		ClusterName: clusterName,
 		Selected:    true,
 		// Scoring does not apply in this placement type.
-		Reason: pickedByPolicyReason,
+		Reason: fmt.Sprintf(resourceScheduleSucceededMessageFormat, clusterName, pickedByPolicyReason),
 	}
 
 	return &bindingWithPatch{
@@ -303,7 +309,7 @@ func newSchedulingDecisionsFromBindings(
 				AffinityScore:       ptr.To(int32(sc.Score.AffinityScore)),
 				TopologySpreadScore: ptr.To(int32(sc.Score.TopologySpreadScore)),
 			},
-			Reason: notPickedByScoreReason,
+			Reason: fmt.Sprintf(notPickedByScoreReason, sc.Cluster.Name, sc.Score.AffinityScore, sc.Score.TopologySpreadScore),
 		})
 
 		slotsLeft--
@@ -362,7 +368,7 @@ func newSchedulingDecisionsForPickFixedPlacementType(valid []*clusterv1beta1.Mem
 			ClusterName: cluster.Name,
 			Selected:    true,
 			// Scoring does not apply in this placement type.
-			Reason: pickedByPolicyReason,
+			Reason: fmt.Sprintf(resourceScheduleSucceededMessageFormat, cluster.Name, pickedByPolicyReason),
 		})
 	}
 
@@ -372,7 +378,7 @@ func newSchedulingDecisionsForPickFixedPlacementType(valid []*clusterv1beta1.Mem
 			ClusterName: clusterWithReason.cluster.Name,
 			Selected:    false,
 			// Scoring does not apply in this placement type.
-			Reason: fmt.Sprintf(pickFixedInvalidClusterReasonTemplate, clusterWithReason.reason),
+			Reason: fmt.Sprintf(pickFixedInvalidClusterReasonTemplate, clusterWithReason.cluster.Name, clusterWithReason.reason),
 		})
 	}
 
@@ -382,7 +388,7 @@ func newSchedulingDecisionsForPickFixedPlacementType(valid []*clusterv1beta1.Mem
 			ClusterName: clusterName,
 			Selected:    false,
 			// Scoring does not apply in this placement type.
-			Reason: pickFixedNotFoundClusterReason,
+			Reason: fmt.Sprintf(pickFixedNotFoundClusterReason, clusterName),
 		})
 	}
 
@@ -673,7 +679,7 @@ func crossReferenceValidTargetsWithBindings(
 						ClusterName: cluster.Name,
 						Selected:    true,
 						// Scoring does not apply in this placement type.
-						Reason: pickedByPolicyReason,
+						Reason: fmt.Sprintf(resourceScheduleSucceededMessageFormat, cluster.Name, pickedByPolicyReason),
 					},
 				},
 			}
