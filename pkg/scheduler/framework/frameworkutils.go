@@ -309,7 +309,7 @@ func newSchedulingDecisionsFromBindings(
 				AffinityScore:       ptr.To(int32(sc.Score.AffinityScore)),
 				TopologySpreadScore: ptr.To(int32(sc.Score.TopologySpreadScore)),
 			},
-			Reason: fmt.Sprintf(notPickedByScoreReason, sc.Cluster.Name, sc.Score.AffinityScore, sc.Score.TopologySpreadScore),
+			Reason: fmt.Sprintf(notPickedByScoreReasonTemplate, sc.Cluster.Name, sc.Score.AffinityScore, sc.Score.TopologySpreadScore),
 		})
 
 		slotsLeft--
@@ -388,7 +388,7 @@ func newSchedulingDecisionsForPickFixedPlacementType(valid []*clusterv1beta1.Mem
 			ClusterName: clusterName,
 			Selected:    false,
 			// Scoring does not apply in this placement type.
-			Reason: fmt.Sprintf(pickFixedNotFoundClusterReason, clusterName),
+			Reason: fmt.Sprintf(pickFixedNotFoundClusterReasonTemplate, clusterName),
 		})
 	}
 

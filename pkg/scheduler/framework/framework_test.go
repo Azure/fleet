@@ -2428,7 +2428,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 				{
 					ClusterName: anotherClusterName,
 					Selected:    false,
-					Reason:      fmt.Sprintf(notPickedByScoreReason, anotherClusterName, affinityScore3, topologySpreadScore3),
+					Reason:      fmt.Sprintf(notPickedByScoreReasonTemplate, anotherClusterName, affinityScore3, topologySpreadScore3),
 					ClusterScore: &placementv1beta1.ClusterScore{
 						AffinityScore:       &affinityScore3,
 						TopologySpreadScore: &topologySpreadScore3,
@@ -2502,7 +2502,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 						AffinityScore:       &affinityScore3,
 						TopologySpreadScore: &topologySpreadScore3,
 					},
-					Reason: fmt.Sprintf(notPickedByScoreReason, altClusterName, affinityScore3, topologySpreadScore3),
+					Reason: fmt.Sprintf(notPickedByScoreReasonTemplate, altClusterName, affinityScore3, topologySpreadScore3),
 				},
 				{
 					ClusterName: anotherClusterName,
@@ -2642,7 +2642,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 				{
 					ClusterName: altClusterName,
 					Selected:    false,
-					Reason:      fmt.Sprintf(notPickedByScoreReason, altClusterName, affinityScore2, topologySpreadScore2),
+					Reason:      fmt.Sprintf(notPickedByScoreReasonTemplate, altClusterName, affinityScore2, topologySpreadScore2),
 					ClusterScore: &placementv1beta1.ClusterScore{
 						AffinityScore:       &affinityScore2,
 						TopologySpreadScore: &topologySpreadScore2,
@@ -3300,7 +3300,7 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 						TopologySpreadScore: &topologySpreadScore3,
 						AffinityScore:       &affinityScore3,
 					},
-					Reason: fmt.Sprintf(notPickedByScoreReason, anotherClusterName, affinityScore3, topologySpreadScore3),
+					Reason: fmt.Sprintf(notPickedByScoreReasonTemplate, anotherClusterName, affinityScore3, topologySpreadScore3),
 				},
 			},
 		},
@@ -3367,7 +3367,7 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 						TopologySpreadScore: &topologySpreadScore3,
 						AffinityScore:       &affinityScore3,
 					},
-					Reason: fmt.Sprintf(notPickedByScoreReason, anotherClusterName, affinityScore3, topologySpreadScore3),
+					Reason: fmt.Sprintf(notPickedByScoreReasonTemplate, anotherClusterName, affinityScore3, topologySpreadScore3),
 				},
 				{
 					ClusterName: altClusterName,
@@ -6138,12 +6138,12 @@ func TestUpdatePolicySnapshotStatusForPickFixedPlacementType(t *testing.T) {
 				{
 					ClusterName: clusterName,
 					Selected:    false,
-					Reason:      fmt.Sprintf(pickFixedNotFoundClusterReason, clusterName),
+					Reason:      fmt.Sprintf(pickFixedNotFoundClusterReasonTemplate, clusterName),
 				},
 				{
 					ClusterName: altClusterName,
 					Selected:    false,
-					Reason:      fmt.Sprintf(pickFixedNotFoundClusterReason, altClusterName),
+					Reason:      fmt.Sprintf(pickFixedNotFoundClusterReasonTemplate, altClusterName),
 				},
 			},
 			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionFalse, NotFullyScheduledReason, fmt.Sprintf(notFullyScheduledMessage, 0)),
@@ -6186,7 +6186,7 @@ func TestUpdatePolicySnapshotStatusForPickFixedPlacementType(t *testing.T) {
 				{
 					ClusterName: anotherClusterName,
 					Selected:    false,
-					Reason:      fmt.Sprintf(pickFixedNotFoundClusterReason, anotherClusterName),
+					Reason:      fmt.Sprintf(pickFixedNotFoundClusterReasonTemplate, anotherClusterName),
 				},
 			},
 			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionFalse, NotFullyScheduledReason, fmt.Sprintf(notFullyScheduledMessage, 1)),
