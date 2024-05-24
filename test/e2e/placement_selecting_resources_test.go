@@ -57,11 +57,8 @@ var _ = Describe("creating CRP and selecting resources by name", Ordered, func()
 	})
 
 	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s", crpName))
-		cleanupCRP(crpName)
-
-		By("deleting created work resources")
-		cleanupWorkResources()
+		By(fmt.Sprintf("garbage all things related to placement %s", crpName))
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 	})
 
 	It("should update CRP status as expected", func() {
@@ -124,11 +121,8 @@ var _ = Describe("creating CRP and selecting resources by label", Ordered, func(
 	})
 
 	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s", crpName))
-		cleanupCRP(crpName)
-
-		By("deleting created work resources")
-		cleanupWorkResources()
+		By(fmt.Sprintf("garbage all things related to placement %s", crpName))
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 	})
 
 	It("should update CRP status as expected", func() {
@@ -196,11 +190,8 @@ var _ = Describe("validating CRP when cluster-scoped resources become selected a
 	})
 
 	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s", crpName))
-		cleanupCRP(crpName)
-
-		By("deleting created work resources")
-		cleanupWorkResources()
+		By(fmt.Sprintf("garbage all things related to placement %s", crpName))
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 	})
 
 	It("should update CRP status as expected", func() {
@@ -285,11 +276,8 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 	})
 
 	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s", crpName))
-		cleanupCRP(crpName)
-
-		By("deleting created work resources")
-		cleanupWorkResources()
+		By(fmt.Sprintf("garbage all things related to placement %s", crpName))
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 	})
 
 	It("should update CRP status as expected", func() {
@@ -362,11 +350,8 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 	})
 
 	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s", crpName))
-		cleanupCRP(crpName)
-
-		By("deleting created work resources")
-		cleanupWorkResources()
+		By(fmt.Sprintf("garbage all things related to placement %s", crpName))
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 	})
 
 	It("should update CRP status as expected", func() {
@@ -458,11 +443,8 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 	})
 
 	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s", crpName))
-		cleanupCRP(crpName)
-
-		By("created work resources")
-		cleanupWorkResources()
+		By(fmt.Sprintf("garbage all things related to placement %s", crpName))
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 	})
 
 	It("should update CRP status as expected", func() {
@@ -548,11 +530,8 @@ var _ = Describe("validating CRP when deleting resources in a matching namespace
 	})
 
 	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s", crpName))
-		cleanupCRP(crpName)
-
-		By("deleting created work resources")
-		cleanupWorkResources()
+		By(fmt.Sprintf("garbage all things related to placement %s", crpName))
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 	})
 
 	It("should update CRP status as expected", func() {
@@ -730,14 +709,8 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 	})
 
 	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s", crpName))
-		cleanupCRP(crpName)
-
-		By("deleting created work resources on hub cluster")
-		cleanupWorkResources()
-
-		By("deleting created work resources on member cluster")
-		cleanWorkResourcesOnCluster(allMemberClusters[0])
+		By(fmt.Sprintf("garbage all things related to placement %s", crpName))
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 	})
 
 	It("should update CRP status as expected", func() {
@@ -877,11 +850,8 @@ var _ = Describe("validating CRP when placing cluster scope resource (other than
 	})
 
 	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s", crpName))
-		cleanupCRP(crpName)
-
-		By("deleting created work resources")
-		cleanupWorkResources()
+		By(fmt.Sprintf("garbage all things related to placement %s", crpName))
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 	})
 
 	It("should update CRP status as expected", func() {
@@ -986,11 +956,8 @@ var _ = Describe("validating CRP revision history allowing single revision when 
 	})
 
 	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s", crpName))
-		cleanupCRP(crpName)
-
-		By("deleting created work resources")
-		cleanupWorkResources()
+		By(fmt.Sprintf("garbage all things related to placement %s", crpName))
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 	})
 
 	It("should update CRP status as expected", func() {
@@ -1082,11 +1049,8 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 	})
 
 	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s", crpName))
-		cleanupCRP(crpName)
-
-		By("deleting created work resources")
-		cleanupWorkResources()
+		By(fmt.Sprintf("garbage all things related to placement %s", crpName))
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 	})
 
 	It("should update CRP status as expected", func() {
@@ -1177,11 +1141,8 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 	})
 
 	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s", crpName))
-		cleanupCRP(crpName)
-
-		By("deleting resources created for multiple resource snapshots")
-		cleanupWorkResources()
+		By(fmt.Sprintf("garbage all things related to placement %s", crpName))
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 	})
 
 	It("check if created cluster resource snapshots are as expected", func() {
