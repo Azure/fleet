@@ -8,6 +8,7 @@ package v1beta1
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -49,6 +50,8 @@ const (
 	podName1 = "pod-1"
 	podName2 = "pod-2"
 	podName3 = "pod-3"
+	podName4 = "pod-4"
+	podName5 = "pod-5"
 
 	containerName1 = "container-1"
 	containerName2 = "container-2"
@@ -57,6 +60,10 @@ const (
 var (
 	ignoreLTTConditionField = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
 	ignoreAllTimeFields     = cmpopts.IgnoreTypes(time.Time{}, metav1.Time{})
+
+	sortByConditionType = cmpopts.SortSlices(func(a, b metav1.Condition) bool {
+		return a.Type < b.Type
+	})
 )
 
 func TestMarkInternalMemberClusterJoined(t *testing.T) {
@@ -1174,6 +1181,299 @@ func TestUpdateResourceStats(t *testing.T) {
 			}
 			if imc.Status.ResourceUsage.ObservationTime.Before(&metav1.Time{Time: timeStarted}) {
 				t.Fatalf("observation time for resource usage is before the start time")
+			}
+		})
+	}
+}
+
+// failedToStartProvider is a property provider that are expected to fail upon startup.
+type failedToStartProvider struct{}
+
+var _ propertyprovider.PropertyProvider = &failedToStartProvider{}
+
+func (p *failedToStartProvider) Start(_ context.Context, _ *rest.Config) error {
+	return fmt.Errorf("expected to fail")
+}
+
+func (p *failedToStartProvider) Collect(_ context.Context) propertyprovider.PropertyCollectionResponse {
+	return propertyprovider.PropertyCollectionResponse{}
+}
+
+// startTimedOutProvider is a property provider that will not return when its Start() method
+// is called until the hold channel is closed.
+type startTimedOutProvider struct {
+	hold <-chan struct{}
+}
+
+var _ propertyprovider.PropertyProvider = &startTimedOutProvider{}
+
+func (p *startTimedOutProvider) Start(_ context.Context, _ *rest.Config) error {
+	<-p.hold
+	return nil
+}
+
+func (p *startTimedOutProvider) Collect(_ context.Context) propertyprovider.PropertyCollectionResponse {
+	return propertyprovider.PropertyCollectionResponse{}
+}
+
+func TestConnectToPropertyProvider(t *testing.T) {
+	imcTemplate := &clusterv1beta1.InternalMemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: imcName,
+		},
+		Spec: clusterv1beta1.InternalMemberClusterSpec{},
+	}
+
+	// Note that to verify the correctness of the behavior, the data here is set to be
+	// explicitly different from the those returned by the dummy property provider.
+	nodes := []*corev1.Node{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName1,
+			},
+			Spec: corev1.NodeSpec{},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("10"),
+					corev1.ResourceMemory: resource.MustParse("10Gi"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("8"),
+					corev1.ResourceMemory: resource.MustParse("8Gi"),
+				},
+			},
+		},
+	}
+	pods := []*corev1.Pod{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: podName1,
+			},
+			Spec: corev1.PodSpec{
+				NodeName: nodeName1,
+				Containers: []corev1.Container{
+					{
+						Name: containerName1,
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("2"),
+								corev1.ResourceMemory: resource.MustParse("1Gi"),
+							},
+						},
+					},
+					{
+						Name: containerName2,
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("1"),
+								corev1.ResourceMemory: resource.MustParse("2Gi"),
+							},
+						},
+					},
+				},
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodRunning,
+			},
+		},
+	}
+
+	h := make(chan struct{})
+	// Always close the channel to avoid leaks.
+	defer func() {
+		close(h)
+	}()
+
+	testCases := []struct {
+		name             string
+		propertyProvider propertyprovider.PropertyProvider
+		wantIMCStatus    clusterv1beta1.InternalMemberClusterStatus
+	}{
+		{
+			name:             "provider failed to start",
+			propertyProvider: &failedToStartProvider{},
+			wantIMCStatus: clusterv1beta1.InternalMemberClusterStatus{
+				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+					propertyprovider.NodeCountProperty: {
+						Value: "1",
+					},
+				},
+				ResourceUsage: clusterv1beta1.ResourceUsage{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("10"),
+						corev1.ResourceMemory: resource.MustParse("10Gi"),
+					},
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("8"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+					Available: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("5"),
+						corev1.ResourceMemory: resource.MustParse("5Gi"),
+					},
+				},
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(clusterv1beta1.ConditionTypeClusterPropertyProviderStarted),
+						Status:             metav1.ConditionFalse,
+						Reason:             ClusterPropertyProviderStartedFailedReason,
+						Message:            fmt.Sprintf(ClusterPropertyProviderStartedFailedMessage, "expected to fail"),
+						ObservedGeneration: imcTemplate.GetGeneration(),
+					},
+				},
+			},
+		},
+		{
+			name: "no provider is set up, fall back to the default behavior",
+			wantIMCStatus: clusterv1beta1.InternalMemberClusterStatus{
+				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+					propertyprovider.NodeCountProperty: {
+						Value: "1",
+					},
+				},
+				ResourceUsage: clusterv1beta1.ResourceUsage{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("10"),
+						corev1.ResourceMemory: resource.MustParse("10Gi"),
+					},
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("8"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+					Available: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("5"),
+						corev1.ResourceMemory: resource.MustParse("5Gi"),
+					},
+				},
+			},
+		},
+		{
+			name:             "provider starts up successfully",
+			propertyProvider: &dummyProvider{},
+			wantIMCStatus: clusterv1beta1.InternalMemberClusterStatus{
+				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+					exampleClusterPropertyName: {
+						Value: exampleClusterPropertyValue,
+					},
+				},
+				ResourceUsage: clusterv1beta1.ResourceUsage{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("10"),
+						corev1.ResourceMemory: resource.MustParse("10Gi"),
+					},
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("5"),
+						corev1.ResourceMemory: resource.MustParse("5Gi"),
+					},
+					Available: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("5"),
+						corev1.ResourceMemory: resource.MustParse("5Gi"),
+					},
+				},
+				Conditions: []metav1.Condition{
+					{
+						Type:    examplePropertyProviderCondition,
+						Status:  examplePropertyProviderConditionStatus,
+						Reason:  examplePropertyProviderReason,
+						Message: examplePropertyProviderMessage,
+					},
+					{
+						Type:               string(clusterv1beta1.ConditionTypeClusterPropertyCollectionSucceeded),
+						Status:             metav1.ConditionTrue,
+						Reason:             ClusterPropertyCollectionSucceededReason,
+						Message:            ClusterPropertyCollectionSucceededMessage,
+						ObservedGeneration: imcTemplate.GetGeneration(),
+					},
+					{
+						Type:               string(clusterv1beta1.ConditionTypeClusterPropertyProviderStarted),
+						Status:             metav1.ConditionTrue,
+						Reason:             ClusterPropertyProviderStartedReason,
+						Message:            ClusterPropertyProviderStartedMessage,
+						ObservedGeneration: imcTemplate.GetGeneration(),
+					},
+				},
+			},
+		},
+		{
+			name: "provider failed to start within given time",
+			propertyProvider: &startTimedOutProvider{
+				hold: h,
+			},
+			wantIMCStatus: clusterv1beta1.InternalMemberClusterStatus{
+				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+					propertyprovider.NodeCountProperty: {
+						Value: "1",
+					},
+				},
+				ResourceUsage: clusterv1beta1.ResourceUsage{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("10"),
+						corev1.ResourceMemory: resource.MustParse("10Gi"),
+					},
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("8"),
+						corev1.ResourceMemory: resource.MustParse("8Gi"),
+					},
+					Available: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("5"),
+						corev1.ResourceMemory: resource.MustParse("5Gi"),
+					},
+				},
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(clusterv1beta1.ConditionTypeClusterPropertyProviderStarted),
+						Status:             metav1.ConditionFalse,
+						Reason:             ClusterPropertyProviderStartedTimedOutReason,
+						Message:            ClusterPropertyProviderStartedTimedOutMessage,
+						ObservedGeneration: imcTemplate.GetGeneration(),
+					},
+				},
+			},
+		},
+	}
+
+	ctx := context.Background()
+
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add scheme (corev1): %v", err)
+	}
+	if err := clusterv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add scheme (clusterv1beta1): %v", err)
+	}
+
+	fakeClientBuilder := fake.NewClientBuilder().WithScheme(scheme)
+	for _, obj := range nodes {
+		fakeClientBuilder.WithObjects(obj)
+	}
+	for _, obj := range pods {
+		fakeClientBuilder.WithObjects(obj)
+		fakeClientBuilder.WithStatusSubresource(obj)
+	}
+	fakeClient := fakeClientBuilder.Build()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &Reconciler{
+				memberClient: fakeClient,
+				propertyProviderCfg: &propertyProviderConfig{
+					propertyProvider: tc.propertyProvider,
+				},
+				recorder: utils.NewFakeRecorder(1),
+			}
+
+			imc := imcTemplate.DeepCopy()
+			if err := r.connectToPropertyProvider(ctx, imc); err != nil {
+				t.Fatalf("connectToPropertyProvider(), got error %v, want no error", err)
+			}
+
+			if diff := cmp.Diff(
+				imc.Status, tc.wantIMCStatus,
+				ignoreAllTimeFields,
+				ignoreLTTConditionField,
+				sortByConditionType,
+			); diff != "" {
+				t.Fatalf("InternalMemberCluster status (-got, +want):\n%s", diff)
 			}
 		})
 	}
