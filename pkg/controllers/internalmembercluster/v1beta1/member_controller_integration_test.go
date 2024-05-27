@@ -179,7 +179,7 @@ var _ = Describe("Test InternalMemberCluster Controller", func() {
 				if diff := cmp.Diff(
 					imc.Status, wantIMCStatus,
 					ignoreAllTimeFields,
-					sortConditionByType,
+					sortByConditionType,
 				); diff != "" {
 					return fmt.Errorf("InternalMemberCluster status diff (-got, +want):\n%s", diff)
 				}
@@ -333,7 +333,7 @@ var _ = Describe("Test InternalMemberCluster Controller", func() {
 				if diff := cmp.Diff(
 					imc.Status, wantIMCStatus,
 					ignoreAllTimeFields,
-					sortConditionByType,
+					sortByConditionType,
 				); diff != "" {
 					return fmt.Errorf("InternalMemberCluster status diff (-got, +want):\n%s", diff)
 				}
@@ -463,7 +463,7 @@ var _ = Describe("Test InternalMemberCluster Controller", func() {
 				if diff := cmp.Diff(
 					imc.Status, wantIMCStatus,
 					ignoreAllTimeFields,
-					sortConditionByType,
+					sortByConditionType,
 				); diff != "" {
 					return fmt.Errorf("InternalMemberCluster status diff (-got, +want):\n%s", diff)
 				}
@@ -569,7 +569,7 @@ var _ = Describe("Test InternalMemberCluster Controller", func() {
 				if diff := cmp.Diff(
 					imc.Status, wantIMCStatus,
 					ignoreAllTimeFields,
-					sortConditionByType,
+					sortByConditionType,
 				); diff != "" {
 					return fmt.Errorf("InternalMemberCluster status diff (-got, +want):\n%s", diff)
 				}
@@ -711,7 +711,7 @@ var _ = Describe("Test InternalMemberCluster Controller", func() {
 				if diff := cmp.Diff(
 					imc.Status, wantIMCStatus,
 					ignoreAllTimeFields,
-					sortConditionByType,
+					sortByConditionType,
 				); diff != "" {
 					return fmt.Errorf("InternalMemberCluster status diff (-got, +want):\n%s", diff)
 				}
@@ -813,7 +813,7 @@ var _ = Describe("Test InternalMemberCluster Controller", func() {
 				if diff := cmp.Diff(
 					imc.Status, wantIMCStatus,
 					ignoreAllTimeFields,
-					sortConditionByType,
+					sortByConditionType,
 				); diff != "" {
 					return fmt.Errorf("InternalMemberCluster status diff (-got, +want):\n%s", diff)
 				}

@@ -60,7 +60,7 @@ var (
 	ignoreLTTConditionField = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
 	ignoreAllTimeFields     = cmpopts.IgnoreTypes(time.Time{}, metav1.Time{})
 
-	sortConditionByType = cmpopts.SortSlices(func(a, b metav1.Condition) bool {
+	sortByConditionType = cmpopts.SortSlices(func(a, b metav1.Condition) bool {
 		return a.Type < b.Type
 	})
 )
