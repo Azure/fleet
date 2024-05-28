@@ -45,7 +45,7 @@ AKS_NODE_REGIONS=("westus" "northeurope" "eastasia")
 AKS_NODE_SKUS=("Standard_A4_v2" "Standard_B4ms" "Standard_D8s_v5" "Standard_E16_v5" "Standard_M16ms")
 AKS_SKU_COUNT=${#AKS_NODE_SKUS[@]}
 # The number of clusters that has pre-defined configuration for testing purposes. 
-RESERVED_CLUSTER_COUNT=3
+RESERVED_CLUSTER_COUNT=${MEMBER_CLUSTER_COUNT}
 
 # Create the kind clusters
 echo "Creating the kind clusters..."

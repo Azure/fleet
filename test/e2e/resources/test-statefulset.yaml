@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: test-statefulset
+  namespace: test-ns
+  labels:
+    test-key: test-value
+spec:
+  selector:
+    matchLabels:
+      app: custom # has to match .spec.template.metadata.labels
+  serviceName: "test-service"
+  replicas: 3 # by default is 1
+  template:
+    metadata:
+      labels:
+        app: custom # has to match .spec.selector.matchLabels
+    spec:
+      containers:
+        - name: nginx
+          image: nginx
+          ports:
+            - containerPort: 80
+              protocol: TCP

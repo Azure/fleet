@@ -7,6 +7,7 @@ package e2e
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,18 +28,20 @@ import (
 	"go.goms.io/fleet/test/utils/controller"
 )
 
+const randomImageName = "random-image-name"
+
 // Note that this container will run in parallel with other containers.
 var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 	Context("Test a CRP place enveloped objects successfully", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		workNamespaceName := appNamespace().Name
 		var wantSelectedResources []placementv1beta1.ResourceIdentifier
-		var testEnvelopDeployment corev1.ConfigMap
+		var testEnvelopeDeployment corev1.ConfigMap
 		var testDeployment appv1.Deployment
 
 		BeforeAll(func() {
 			readDeploymentTestManifest(&testDeployment)
-			readEnvelopConfigMapTestManifest(&testEnvelopDeployment)
+			readEnvelopConfigMapTestManifest(&testEnvelopeDeployment)
 			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 				{
 					Kind:    "Namespace",
@@ -47,7 +50,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				},
 				{
 					Kind:      "ConfigMap",
-					Name:      testEnvelopDeployment.Name,
+					Name:      testEnvelopeDeployment.Name,
 					Version:   "v1",
 					Namespace: workNamespaceName,
 				},
@@ -55,7 +58,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("Create the wrapped deployment resources in the namespace", func() {
-			createWrappedResourcesForRollout(&testEnvelopDeployment, &testDeployment)
+			createWrappedResourcesForRollout(&testEnvelopeDeployment, &testDeployment, "Deployment")
 		})
 
 		It("Create the CRP that select the name space", func() {
@@ -140,7 +143,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 	})
 
-	Context("Test a CRP place workload objects successfully, block rollout based on availability", Ordered, func() {
+	Context("Test a CRP place workload objects successfully, block rollout based on deployment availability", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		workNamespaceName := appNamespace().Name
 		var wantSelectedResources []placementv1beta1.ResourceIdentifier
@@ -214,7 +217,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				if err != nil {
 					return err
 				}
-				dep.Spec.Template.Spec.Containers[0].Image = "random-image-name"
+				dep.Spec.Template.Spec.Containers[0].Image = randomImageName
 				return hubClient.Update(ctx, &dep)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to change the image name in deployment")
 		})
@@ -227,8 +230,212 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				Name:      testDeployment.Name,
 				Namespace: testDeployment.Namespace,
 			}
-			crpStatusActual := safeDeploymentCRPStatusUpdatedActual(wantSelectedResources, failedDeploymentResourceIdentifier, allMemberClusterNames, "1")
+			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDeploymentResourceIdentifier, allMemberClusterNames, "1")
 			// For deployment, at the least it will take 4 minutes to be ready.
+			Eventually(crpStatusActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		AfterAll(func() {
+			// Remove the custom deletion blocker finalizer from the CRP.
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		})
+	})
+
+	Context("Test a CRP place workload objects successfully, block rollout based on daemonset availability", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		workNamespaceName := appNamespace().Name
+		var wantSelectedResources []placementv1beta1.ResourceIdentifier
+		var testEnvelopeDaemonSet corev1.ConfigMap
+		var testDaemonSet appv1.DaemonSet
+
+		BeforeAll(func() {
+			// Create the test resources.
+			readDaemonSetTestManifest(&testDaemonSet)
+			readEnvelopConfigMapTestManifest(&testEnvelopeDaemonSet)
+			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
+				{
+					Kind:    "Namespace",
+					Name:    workNamespaceName,
+					Version: "v1",
+				},
+				{
+					Kind:      "ConfigMap",
+					Name:      testEnvelopeDaemonSet.Name,
+					Version:   "v1",
+					Namespace: workNamespaceName,
+				},
+			}
+		})
+
+		It("create the deployment resource in the namespace", func() {
+			createWrappedResourcesForRollout(&testEnvelopeDaemonSet, &testDaemonSet, "DaemonSet")
+		})
+
+		It("create the CRP that select the name space", func() {
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							MaxUnavailable: &intstr.IntOrString{
+								Type:   intstr.Int,
+								IntVal: 1,
+							},
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
+
+		It("should update CRP status as expected", func() {
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", true)
+			Eventually(crpStatusUpdatedActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should place the resources on all member clusters", func() {
+			for idx := range allMemberClusters {
+				memberCluster := allMemberClusters[idx]
+				workResourcesPlacedActual := waitForDaemonSetPlacementToReady(memberCluster, &testDaemonSet)
+				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+			}
+		})
+
+		It("change the image name in daemonset, to make it unavailable", func() {
+			Eventually(func() error {
+				testDaemonSet.Spec.Template.Spec.Containers[0].Image = randomImageName
+				daemonSetByte, err := json.Marshal(testDaemonSet)
+				if err != nil {
+					return nil
+				}
+				testEnvelopeDaemonSet.Data["daemonset.yaml"] = string(daemonSetByte)
+				return hubClient.Update(ctx, &testEnvelopeDaemonSet)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to change the image name of daemonset in envelope object")
+		})
+
+		It("should update CRP status as expected", func() {
+			failedDaemonSetResourceIdentifier := placementv1beta1.ResourceIdentifier{
+				Group:     appv1.SchemeGroupVersion.Group,
+				Version:   appv1.SchemeGroupVersion.Version,
+				Kind:      "DaemonSet",
+				Name:      testDaemonSet.Name,
+				Namespace: testDaemonSet.Namespace,
+				Envelope: &placementv1beta1.EnvelopeIdentifier{
+					Name:      testEnvelopeDaemonSet.Name,
+					Namespace: testEnvelopeDaemonSet.Namespace,
+					Type:      "ConfigMap",
+				},
+			}
+			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDaemonSetResourceIdentifier, allMemberClusterNames, "1")
+			Eventually(crpStatusActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		AfterAll(func() {
+			// Remove the custom deletion blocker finalizer from the CRP.
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		})
+	})
+
+	Context("Test a CRP place workload objects successfully, block rollout based on statefulset availability", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		workNamespaceName := appNamespace().Name
+		var wantSelectedResources []placementv1beta1.ResourceIdentifier
+		var testEnvelopeStatefulSet corev1.ConfigMap
+		var testStatefulSet appv1.StatefulSet
+
+		BeforeAll(func() {
+			// Create the test resources.
+			readStatefulSetTestManifest(&testStatefulSet)
+			readEnvelopConfigMapTestManifest(&testEnvelopeStatefulSet)
+			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
+				{
+					Kind:    "Namespace",
+					Name:    workNamespaceName,
+					Version: "v1",
+				},
+				{
+					Kind:      "ConfigMap",
+					Name:      testEnvelopeStatefulSet.Name,
+					Version:   "v1",
+					Namespace: workNamespaceName,
+				},
+			}
+		})
+
+		It("create the deployment resource in the namespace", func() {
+			createWrappedResourcesForRollout(&testEnvelopeStatefulSet, &testStatefulSet, "StatefulSet")
+		})
+
+		It("create the CRP that select the name space", func() {
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							MaxUnavailable: &intstr.IntOrString{
+								Type:   intstr.Int,
+								IntVal: 1,
+							},
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
+
+		It("should update CRP status as expected", func() {
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", true)
+			Eventually(crpStatusUpdatedActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should place the resources on all member clusters", func() {
+			for idx := range allMemberClusters {
+				memberCluster := allMemberClusters[idx]
+				workResourcesPlacedActual := waitForStatefulSetPlacementToReady(memberCluster, &testStatefulSet)
+				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+			}
+		})
+
+		It("change the image name in statefulset, to make it unavailable", func() {
+			Eventually(func() error {
+				testStatefulSet.Spec.Template.Spec.Containers[0].Image = randomImageName
+				daemonSetByte, err := json.Marshal(testStatefulSet)
+				if err != nil {
+					return nil
+				}
+				testEnvelopeStatefulSet.Data["statefulset.yaml"] = string(daemonSetByte)
+				return hubClient.Update(ctx, &testEnvelopeStatefulSet)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to change the image name in statefulset")
+		})
+
+		It("should update CRP status as expected", func() {
+			failedDaemonSetResourceIdentifier := placementv1beta1.ResourceIdentifier{
+				Group:     appv1.SchemeGroupVersion.Group,
+				Version:   appv1.SchemeGroupVersion.Version,
+				Kind:      "StatefulSet",
+				Name:      testStatefulSet.Name,
+				Namespace: testStatefulSet.Namespace,
+				Envelope: &placementv1beta1.EnvelopeIdentifier{
+					Name:      testEnvelopeStatefulSet.Name,
+					Namespace: testEnvelopeStatefulSet.Namespace,
+					Type:      "ConfigMap",
+				},
+			}
+			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDaemonSetResourceIdentifier, allMemberClusterNames, "1")
 			Eventually(crpStatusActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -240,14 +447,26 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 })
 
 func readDeploymentTestManifest(testDeployment *appv1.Deployment) {
-	By("Read the deployment resources")
+	By("Read the deployment resource")
 	err := utils.GetObjectFromManifest("resources/test-deployment.yaml", testDeployment)
 	Expect(err).Should(Succeed())
 }
 
-func readEnvelopConfigMapTestManifest(testEnvelopDeployment *corev1.ConfigMap) {
+func readDaemonSetTestManifest(testDaemonSet *appv1.DaemonSet) {
+	By("Read the daemonSet resource")
+	err := utils.GetObjectFromManifest("resources/test-daemonset.yaml", testDaemonSet)
+	Expect(err).Should(Succeed())
+}
+
+func readStatefulSetTestManifest(testStatefulSet *appv1.StatefulSet) {
+	By("Read the statefulSet resource")
+	err := utils.GetObjectFromManifest("resources/test-statefulset.yaml", testStatefulSet)
+	Expect(err).Should(Succeed())
+}
+
+func readEnvelopConfigMapTestManifest(testEnvelopeObj *corev1.ConfigMap) {
 	By("Read testEnvelopConfigMap resource")
-	err := utils.GetObjectFromManifest("resources/test-envelop-deployment.yaml", testEnvelopDeployment)
+	err := utils.GetObjectFromManifest("resources/test-envelope-object.yaml", testEnvelopeObj)
 	Expect(err).Should(Succeed())
 }
 
@@ -258,19 +477,27 @@ func createDeploymentForRollout(testDeployment *appv1.Deployment) {
 	Expect(hubClient.Create(ctx, testDeployment)).To(Succeed(), "Failed to create test deployment %s", testDeployment.Name)
 }
 
-// createWrappedResourcesForRollout creates some enveloped resources on the hub cluster with a deployment for testing purposes.
-func createWrappedResourcesForRollout(testEnvelopDeployment *corev1.ConfigMap, testDeployment *appv1.Deployment) {
+// createWrappedResourcesForRollout creates an enveloped resource on the hub cluster with a workload object for testing purposes.
+func createWrappedResourcesForRollout(testEnvelopeObj *corev1.ConfigMap, obj metav1.Object, kind string) {
 	ns := appNamespace()
 	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
 	// modify the enveloped configMap according to the namespace
-	testEnvelopDeployment.Namespace = ns.Name
+	testEnvelopeObj.Namespace = ns.Name
 
 	// modify the embedded namespaced resource according to the namespace
-	testDeployment.Namespace = ns.Name
-	resourceDeploymentByte, err := json.Marshal(testDeployment)
+	obj.SetNamespace(ns.Name)
+	workloadObjectByte, err := json.Marshal(obj)
 	Expect(err).Should(Succeed())
-	testEnvelopDeployment.Data["deployment.yaml"] = string(resourceDeploymentByte)
-	Expect(hubClient.Create(ctx, testEnvelopDeployment)).To(Succeed(), "Failed to create testEnvelop deployment %s", testEnvelopDeployment.Name)
+	testEnvelopeObj.Data = make(map[string]string)
+	switch kind {
+	case "Deployment":
+		testEnvelopeObj.Data["deployment.yaml"] = string(workloadObjectByte)
+	case "DaemonSet":
+		testEnvelopeObj.Data["daemonset.yaml"] = string(workloadObjectByte)
+	case "StatefulSet":
+		testEnvelopeObj.Data["statefulset.yaml"] = string(workloadObjectByte)
+	}
+	Expect(hubClient.Create(ctx, testEnvelopeObj)).To(Succeed(), "Failed to create testEnvelop object %s containing %s", testEnvelopeObj.Name, kind)
 }
 
 func waitForDeploymentPlacementToReady(memberCluster *framework.Cluster, testDeployment *appv1.Deployment) func() error {
@@ -296,5 +523,47 @@ func waitForDeploymentPlacementToReady(memberCluster *framework.Cluster, testDep
 			return nil
 		}
 		return nil
+	}
+}
+
+func waitForDaemonSetPlacementToReady(memberCluster *framework.Cluster, testDaemonSet *appv1.DaemonSet) func() error {
+	workNamespaceName := appNamespace().Name
+	return func() error {
+		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: workNamespaceName}); err != nil {
+			return err
+		}
+		By("check the placedDaemonSet")
+		placedDaemonSet := &appv1.DaemonSet{}
+		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testDaemonSet.Name}, placedDaemonSet); err != nil {
+			return err
+		}
+		By("check the placedDaemonSet is ready")
+		if placedDaemonSet.Status.ObservedGeneration == placedDaemonSet.Generation &&
+			placedDaemonSet.Status.NumberAvailable == placedDaemonSet.Status.DesiredNumberScheduled &&
+			placedDaemonSet.Status.CurrentNumberScheduled == placedDaemonSet.Status.UpdatedNumberScheduled {
+			return nil
+		}
+		return errors.New("daemonset is not ready")
+	}
+}
+
+func waitForStatefulSetPlacementToReady(memberCluster *framework.Cluster, testStatefulSet *appv1.StatefulSet) func() error {
+	workNamespaceName := appNamespace().Name
+	return func() error {
+		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: workNamespaceName}); err != nil {
+			return err
+		}
+		By("check the placedStatefulSet")
+		placedStatefulSet := &appv1.StatefulSet{}
+		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testStatefulSet.Name}, placedStatefulSet); err != nil {
+			return err
+		}
+		By("check the placedStatefulSet is ready")
+		if placedStatefulSet.Status.ObservedGeneration == placedStatefulSet.Generation &&
+			placedStatefulSet.Status.CurrentReplicas == *placedStatefulSet.Spec.Replicas &&
+			placedStatefulSet.Status.CurrentReplicas == placedStatefulSet.Status.UpdatedReplicas {
+			return nil
+		}
+		return errors.New("statefulset is not ready")
 	}
 }

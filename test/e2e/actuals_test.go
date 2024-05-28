@@ -689,7 +689,7 @@ func customizedCRPStatusUpdatedActual(crpName string,
 	}
 }
 
-func safeDeploymentCRPStatusUpdatedActual(wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier, failedDeploymentResourceIdentifier placementv1beta1.ResourceIdentifier, wantSelectedClusters []string, wantObservedResourceIndex string) func() error {
+func safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier, failedWorkloadResourceIdentifier placementv1beta1.ResourceIdentifier, wantSelectedClusters []string, wantObservedResourceIndex string) func() error {
 	return func() error {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		crp := &placementv1beta1.ClusterResourcePlacement{}
@@ -740,7 +740,7 @@ func safeDeploymentCRPStatusUpdatedActual(wantSelectedResourceIdentifiers []plac
 			},
 			FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 				{
-					ResourceIdentifier: failedDeploymentResourceIdentifier,
+					ResourceIdentifier: failedWorkloadResourceIdentifier,
 					Condition: metav1.Condition{
 						Type:               string(placementv1beta1.ResourcesAvailableConditionType),
 						Status:             metav1.ConditionFalse,
@@ -795,7 +795,8 @@ func safeDeploymentCRPStatusUpdatedActual(wantSelectedResourceIdentifiers []plac
 			SelectedResources:     wantSelectedResourceIdentifiers,
 			ObservedResourceIndex: wantObservedResourceIndex,
 		}
-		if diff := cmp.Diff(crp.Status, wantStatus, safeDeploymentCRPStatusCmpOptions...); diff != "" {
+
+		if diff := cmp.Diff(crp.Status, wantStatus, safeRolloutCRPStatusCmpOptions...); diff != "" {
 			return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 		}
 		return nil

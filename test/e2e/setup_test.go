@@ -193,7 +193,7 @@ var (
 
 	// We don't sort ResourcePlacementStatus by their name since we don't know which cluster will become unavailable first,
 	// prompting the rollout to be blocked for remaining clusters.
-	safeDeploymentCRPStatusCmpOptions = cmp.Options{
+	safeRolloutCRPStatusCmpOptions = cmp.Options{
 		cmpopts.SortSlices(lessFuncCondition),
 		cmpopts.SortSlices(lessFuncPlacementStatusByConditions),
 		cmpopts.SortSlices(lessFuncResourceIdentifier),
