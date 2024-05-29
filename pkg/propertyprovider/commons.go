@@ -23,4 +23,13 @@ const (
 	TotalMemoryCapacityProperty       = "resources.kubernetes-fleet.io/total-memory"
 	AllocatableMemoryCapacityProperty = "resources.kubernetes-fleet.io/allocatable-memory"
 	AvailableMemoryCapacityProperty   = "resources.kubernetes-fleet.io/available-memory"
+
+	// ResourcePropertyNamePrefix is the prefix (also known as the subdomain) of the label name
+	// associated with all resource properties.
+	ResourcePropertyNamePrefix = "resources.kubernetes-fleet.io/"
+
+	// Below are a list of supported capacity types.
+	TotalCapacityName       = "total"
+	AllocatableCapacityName = "allocatable"
+	AvailableCapacityName   = "available"
 )

@@ -24,6 +24,7 @@ import (
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
 )
@@ -42,7 +43,7 @@ var (
 	resourcePropertyNamePrefix = "resources.kubernetes-fleet.io/"
 
 	// Below is the map of supported capacity types.
-	supportedResourceCapacityTypesMap = map[string]bool{"total": true, "allocatable": true, "available": true}
+	supportedResourceCapacityTypesMap = map[string]bool{propertyprovider.TotalCapacityName: true, propertyprovider.AllocatableCapacityName: true, propertyprovider.AvailableCapacityName: true}
 	supportedResourceCapacityTypes    = reflect.ValueOf(supportedResourceCapacityTypesMap).MapKeys()
 )
 
