@@ -37,7 +37,7 @@ func (o *Options) Validate() field.ErrorList {
 		errs = append(errs, field.Invalid(newPath.Child("WorkPendingGracePeriod"), o.WorkPendingGracePeriod, "Must be greater than 0"))
 	}
 
-	if o.EnableWebhook && o.WebhookServiceName == "" {
+	if o.WebhookServiceName == "" {
 		errs = append(errs, field.Invalid(newPath.Child("WebhookServiceName"), o.WebhookServiceName, "Webhook service name is required when webhook is enabled"))
 	}
 
