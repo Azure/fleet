@@ -33,8 +33,6 @@ type Options struct {
 	// It can be set to "0" to disable the metrics serving.
 	// Defaults to ":8080".
 	MetricsBindAddress string
-	// EnableWebhook indicates if we will run a webhook
-	EnableWebhook bool
 	// Webhook service name
 	WebhookServiceName string
 	// EnableGuardRail indicates if we will enable fleet guard rail webhook configurations.
@@ -105,7 +103,6 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.BoolVar(&o.LeaderElection.LeaderElect, "leader-elect", false, "Start a leader election client and gain leadership before executing the main loop. Enable this when running replicated components for high availability.")
 	flags.DurationVar(&o.LeaderElection.LeaseDuration.Duration, "leader-lease-duration", 15*time.Second, "This is effectively the maximum duration that a leader can be stopped before someone else will replace it.")
 	flag.StringVar(&o.LeaderElection.ResourceNamespace, "leader-election-namespace", utils.FleetSystemNamespace, "The namespace in which the leader election resource will be created.")
-	flag.BoolVar(&o.EnableWebhook, "enable-webhook", true, "If set, the fleet webhook is enabled.")
 	// set a defautl value 'fleetwebhook' for webhook service name for backward compatibility. The service name was hard coded to 'fleetwebhook' in the past.
 	flag.StringVar(&o.WebhookServiceName, "webhook-service-name", "fleetwebhook", "Fleet webhook service name.")
 	flag.BoolVar(&o.EnableGuardRail, "enable-guard-rail", false, "If set, the fleet guard rail webhook configurations are enabled.")
