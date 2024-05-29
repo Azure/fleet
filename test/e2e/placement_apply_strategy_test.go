@@ -589,7 +589,8 @@ var _ = Describe("validating two CRP selecting the same resources", Ordered, fun
 		})
 
 		AfterAll(func() {
-			for i := 0; i < 2; i++ {
+			// The test will create 3 CRPs in total.
+			for i := 0; i < 3; i++ {
 				crpName := fmt.Sprintf(crpNameWithSubIndexTemplate, GinkgoParallelProcess(), i)
 				By(fmt.Sprintf("deleting placement %s", crpName))
 				cleanupCRP(crpName)
@@ -608,7 +609,32 @@ var _ = Describe("validating two CRP selecting the same resources", Ordered, fun
 
 		It("can delete the CRP", func() {
 			// Delete the CRP.
-			for i := 0; i < 2; i++ {
+			crpName := fmt.Sprintf(crpNameWithSubIndexTemplate, GinkgoParallelProcess(), 0)
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+			}
+			Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", crpName)
+		})
+
+		It("add a new CRP and selecting the same resources", func() {
+			crpName := fmt.Sprintf(crpNameWithSubIndexTemplate, GinkgoParallelProcess(), 2)
+			createCRP(crpName, nil)
+		})
+
+		It("should update CRP status as expected", func() {
+			crpName := fmt.Sprintf(crpNameWithSubIndexTemplate, GinkgoParallelProcess(), 2)
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, workResourceIdentifiers(), allMemberClusterNames, nil, "0", true)
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+
+		})
+
+		It("should place the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClustersConsistently)
+
+		It("can delete the CRP", func() {
+			// Delete the CRP.
+			for i := 1; i < 3; i++ {
 				crpName := fmt.Sprintf(crpNameWithSubIndexTemplate, GinkgoParallelProcess(), i)
 				crp := &placementv1beta1.ClusterResourcePlacement{
 					ObjectMeta: metav1.ObjectMeta{
@@ -622,7 +648,7 @@ var _ = Describe("validating two CRP selecting the same resources", Ordered, fun
 		It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 		It("should remove controller finalizers from CRP", func() {
-			for i := 0; i < 2; i++ {
+			for i := 0; i < 3; i++ {
 				crpName := fmt.Sprintf(crpNameWithSubIndexTemplate, GinkgoParallelProcess(), i)
 				finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 				Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
