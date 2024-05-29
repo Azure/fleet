@@ -38,7 +38,7 @@ func (o *Options) Validate() field.ErrorList {
 	}
 
 	if o.WebhookServiceName == "" {
-		errs = append(errs, field.Invalid(newPath.Child("WebhookServiceName"), o.WebhookServiceName, "Webhook service name is required when webhook is enabled"))
+		errs = append(errs, field.Invalid(newPath.Child("WebhookServiceName"), o.WebhookServiceName, "Webhook service name is required"))
 	}
 
 	connectionType := o.WebhookClientConnectionType
