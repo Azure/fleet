@@ -38,10 +38,6 @@ var (
 	invalidTolerationValueErrFmt = "invalid toleration value %+v: %s"
 	uniqueTolerationErrFmt       = "toleration %+v already exists, tolerations must be unique"
 
-	// resourcePropertyNamePrefix is the prefix (also known as the subdomain) of the label name
-	// associated with all resource properties.
-	resourcePropertyNamePrefix = "resources.kubernetes-fleet.io/"
-
 	// Below is the map of supported capacity types.
 	supportedResourceCapacityTypesMap = map[string]bool{propertyprovider.TotalCapacityName: true, propertyprovider.AllocatableCapacityName: true, propertyprovider.AvailableCapacityName: true}
 	supportedResourceCapacityTypes    = reflect.ValueOf(supportedResourceCapacityTypesMap).MapKeys()
@@ -448,8 +444,8 @@ func validatePropertySorter(propertySorter *placementv1beta1.PropertySorter) err
 
 func validateName(name string) error {
 	// we expect the resource property names to be in this format `[PREFIX]/[CAPACITY_TYPE]-[RESOURCE_NAME]`.
-	if strings.HasPrefix(name, resourcePropertyNamePrefix) {
-		resourcePropertyName, _ := strings.CutPrefix(name, resourcePropertyNamePrefix)
+	if strings.HasPrefix(name, propertyprovider.ResourcePropertyNamePrefix) {
+		resourcePropertyName, _ := strings.CutPrefix(name, propertyprovider.ResourcePropertyNamePrefix)
 		// n=2 since we only care about the first segment to check capacity type.
 		segments := strings.SplitN(resourcePropertyName, "-", 2)
 		if len(segments) != 2 {
