@@ -1278,11 +1278,62 @@ func TestConnectToPropertyProvider(t *testing.T) {
 		},
 	}
 
+	// Summarize the expected properties and resource usage.
+	expectedProperties := map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+		propertyprovider.NodeCountProperty: {
+			Value: fmt.Sprintf("%d", len(nodes)),
+		},
+	}
+
+	expectedCPUTotalCapacity := resource.Quantity{}
+	expectedMemoryTotalCapacity := resource.Quantity{}
+	expectedCPUAllocatableCapacity := resource.Quantity{}
+	expectedMemoryAllocatableCapacity := resource.Quantity{}
+	for _, node := range nodes {
+		expectedCPUTotalCapacity.Add(node.Status.Capacity[corev1.ResourceCPU])
+		expectedMemoryTotalCapacity.Add(node.Status.Capacity[corev1.ResourceMemory])
+		expectedCPUAllocatableCapacity.Add(node.Status.Allocatable[corev1.ResourceCPU])
+		expectedMemoryAllocatableCapacity.Add(node.Status.Allocatable[corev1.ResourceMemory])
+	}
+	expectedCPUAvailableCapacity := expectedCPUAllocatableCapacity.DeepCopy()
+	expectedMemoryAvailableCapacity := expectedMemoryAllocatableCapacity.DeepCopy()
+	for _, pod := range pods {
+		if pod.Spec.NodeName == "" || pod.Status.Phase != corev1.PodRunning {
+			continue
+		}
+
+		for _, container := range pod.Spec.Containers {
+			expectedCPUAvailableCapacity.Sub(container.Resources.Requests[corev1.ResourceCPU])
+			expectedMemoryAvailableCapacity.Sub(container.Resources.Requests[corev1.ResourceMemory])
+		}
+	}
+
+	expectedResourceUsage := clusterv1beta1.ResourceUsage{
+		Capacity: corev1.ResourceList{
+			corev1.ResourceCPU:    expectedCPUTotalCapacity,
+			corev1.ResourceMemory: expectedMemoryTotalCapacity,
+		},
+		Allocatable: corev1.ResourceList{
+			corev1.ResourceCPU:    expectedCPUAllocatableCapacity,
+			corev1.ResourceMemory: expectedMemoryAllocatableCapacity,
+		},
+		Available: corev1.ResourceList{
+			corev1.ResourceCPU:    expectedCPUAvailableCapacity,
+			corev1.ResourceMemory: expectedMemoryAvailableCapacity,
+		},
+	}
+
 	h := make(chan struct{})
 	// Always close the channel to avoid leaks.
 	defer func() {
 		close(h)
 	}()
+
+	failedToStartP := &failedToStartProvider{}
+	dummyP := &dummyProvider{}
+	startTimedOutP := &startTimedOutProvider{hold: h}
+
+	ctx := context.Background()
 
 	testCases := []struct {
 		name             string
@@ -1291,27 +1342,10 @@ func TestConnectToPropertyProvider(t *testing.T) {
 	}{
 		{
 			name:             "provider failed to start",
-			propertyProvider: &failedToStartProvider{},
+			propertyProvider: failedToStartP,
 			wantIMCStatus: clusterv1beta1.InternalMemberClusterStatus{
-				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-					propertyprovider.NodeCountProperty: {
-						Value: "1",
-					},
-				},
-				ResourceUsage: clusterv1beta1.ResourceUsage{
-					Capacity: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("10"),
-						corev1.ResourceMemory: resource.MustParse("10Gi"),
-					},
-					Allocatable: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("8"),
-						corev1.ResourceMemory: resource.MustParse("8Gi"),
-					},
-					Available: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("5"),
-						corev1.ResourceMemory: resource.MustParse("5Gi"),
-					},
-				},
+				Properties:    expectedProperties,
+				ResourceUsage: expectedResourceUsage,
 				Conditions: []metav1.Condition{
 					{
 						Type:               string(clusterv1beta1.ConditionTypeClusterPropertyProviderStarted),
@@ -1326,50 +1360,16 @@ func TestConnectToPropertyProvider(t *testing.T) {
 		{
 			name: "no provider is set up, fall back to the default behavior",
 			wantIMCStatus: clusterv1beta1.InternalMemberClusterStatus{
-				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-					propertyprovider.NodeCountProperty: {
-						Value: "1",
-					},
-				},
-				ResourceUsage: clusterv1beta1.ResourceUsage{
-					Capacity: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("10"),
-						corev1.ResourceMemory: resource.MustParse("10Gi"),
-					},
-					Allocatable: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("8"),
-						corev1.ResourceMemory: resource.MustParse("8Gi"),
-					},
-					Available: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("5"),
-						corev1.ResourceMemory: resource.MustParse("5Gi"),
-					},
-				},
+				Properties:    expectedProperties,
+				ResourceUsage: expectedResourceUsage,
 			},
 		},
 		{
 			name:             "provider starts up successfully",
-			propertyProvider: &dummyProvider{},
+			propertyProvider: dummyP,
 			wantIMCStatus: clusterv1beta1.InternalMemberClusterStatus{
-				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-					exampleClusterPropertyName: {
-						Value: exampleClusterPropertyValue,
-					},
-				},
-				ResourceUsage: clusterv1beta1.ResourceUsage{
-					Capacity: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("10"),
-						corev1.ResourceMemory: resource.MustParse("10Gi"),
-					},
-					Allocatable: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("5"),
-						corev1.ResourceMemory: resource.MustParse("5Gi"),
-					},
-					Available: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("5"),
-						corev1.ResourceMemory: resource.MustParse("5Gi"),
-					},
-				},
+				Properties:    dummyP.Collect(ctx).Properties,
+				ResourceUsage: dummyP.Collect(ctx).Resources,
 				Conditions: []metav1.Condition{
 					{
 						Type:    examplePropertyProviderCondition,
@@ -1395,30 +1395,11 @@ func TestConnectToPropertyProvider(t *testing.T) {
 			},
 		},
 		{
-			name: "provider failed to start within given time",
-			propertyProvider: &startTimedOutProvider{
-				hold: h,
-			},
+			name:             "provider failed to start within given time",
+			propertyProvider: startTimedOutP,
 			wantIMCStatus: clusterv1beta1.InternalMemberClusterStatus{
-				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-					propertyprovider.NodeCountProperty: {
-						Value: "1",
-					},
-				},
-				ResourceUsage: clusterv1beta1.ResourceUsage{
-					Capacity: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("10"),
-						corev1.ResourceMemory: resource.MustParse("10Gi"),
-					},
-					Allocatable: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("8"),
-						corev1.ResourceMemory: resource.MustParse("8Gi"),
-					},
-					Available: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("5"),
-						corev1.ResourceMemory: resource.MustParse("5Gi"),
-					},
-				},
+				Properties:    expectedProperties,
+				ResourceUsage: expectedResourceUsage,
 				Conditions: []metav1.Condition{
 					{
 						Type:               string(clusterv1beta1.ConditionTypeClusterPropertyProviderStarted),
@@ -1431,8 +1412,6 @@ func TestConnectToPropertyProvider(t *testing.T) {
 			},
 		},
 	}
-
-	ctx := context.Background()
 
 	scheme := runtime.NewScheme()
 	if err := corev1.AddToScheme(scheme); err != nil {
