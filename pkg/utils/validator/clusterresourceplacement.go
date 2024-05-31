@@ -488,9 +488,11 @@ func validateValues(values []string) error {
 }
 
 func supportedResourceCapacityTypes() []string {
-	var capacityTypes []string
-	for k, _ := range supportedResourceCapacityTypesMap {
-		capacityTypes = append(capacityTypes, k)
+	i := 0
+	capacityTypes := make([]string, len(supportedResourceCapacityTypesMap))
+	for key := range supportedResourceCapacityTypesMap {
+		capacityTypes[i] = key
+		i++
 	}
 	sort.Strings(capacityTypes)
 	return capacityTypes
