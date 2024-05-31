@@ -149,7 +149,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		if err := errors.Unwrap(syncErr); err != nil && len(err.Error()) > 2 {
 			errorMessage = errorMessage[len(err.Error())+2:]
 		}
-
+		// remove all the failedPlacement as it does not reflect the latest status
+		resourceBinding.Status.FailedPlacements = nil
 		if !overrideSucceeded {
 			resourceBinding.SetConditions(metav1.Condition{
 				Status:             metav1.ConditionFalse,
@@ -176,7 +177,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 			Message:            "All of the works are synchronized to the latest",
 		})
 		if workUpdated {
-			// revert the applied condition if we made any changes to the work
+			// revert the applied condition and failedPlacement if we made any changes to the work
+			resourceBinding.Status.FailedPlacements = nil
 			resourceBinding.SetConditions(metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
@@ -185,13 +187,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 				ObservedGeneration: resourceBinding.Generation,
 			})
 		} else {
-			// try to gather the resource binding applied status if we didn't update any associated work spec this time
-			appliedCond := buildAllWorkAppliedCondition(works, &resourceBinding)
-			resourceBinding.SetConditions(appliedCond)
-			// only try to gather the available status if all the work objects are applied
-			if appliedCond.Status == metav1.ConditionTrue {
-				resourceBinding.SetConditions(buildAllWorkAvailableCondition(works, &resourceBinding))
-			}
+			setBindingStatus(works, &resourceBinding)
 		}
 	}
 
@@ -606,6 +602,40 @@ func getWorkNamePrefixFromSnapshotName(resourceSnapshot *fleetv1beta1.ClusterRes
 		return "", controller.NewUnexpectedBehaviorError(fmt.Errorf("resource snapshot %s has an invalid sub-index annotation %d or err %w", resourceSnapshot.Name, subIndexVal, err))
 	}
 	return fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, crpName, subIndexVal), nil
+}
+
+// setBindingStatus sets the binding status based on the works
+func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *fleetv1beta1.ClusterResourceBinding) {
+	bindingRef := klog.KRef(resourceBinding.Namespace, resourceBinding.Name)
+	// try to gather the resource binding applied status if we didn't update any associated work spec this time
+	appliedCond := buildAllWorkAppliedCondition(works, resourceBinding)
+	resourceBinding.SetConditions(appliedCond)
+	var availableCond metav1.Condition
+	// only try to gather the available status if all the work objects are applied
+	if appliedCond.Status == metav1.ConditionTrue {
+		availableCond = buildAllWorkAvailableCondition(works, resourceBinding)
+		resourceBinding.SetConditions(availableCond)
+	}
+	// collect and set the failed resource placements to the binding if not all the works are available
+	if appliedCond.Status != metav1.ConditionTrue || availableCond.Status != metav1.ConditionTrue {
+		failedResourcePlacements := make([]fleetv1beta1.FailedResourcePlacement, 0, controller.MaxFailedResourcePlacementLimit) // preallocate the memory
+		for _, work := range works {
+			if work.DeletionTimestamp != nil {
+				klog.V(2).InfoS("Ignoring the deleting work", "clusterResourceBinding", bindingRef, "work", klog.KObj(work))
+				continue // ignore the deleting work
+			}
+			failedManifests := controller.ExtractFailedResourcePlacementsFromWork(work)
+			failedResourcePlacements = append(failedResourcePlacements, failedManifests...)
+		}
+		// cut the list to keep only the max limit
+		if len(failedResourcePlacements) > controller.MaxFailedResourcePlacementLimit {
+			failedResourcePlacements = failedResourcePlacements[0:controller.MaxFailedResourcePlacementLimit]
+		}
+		resourceBinding.Status.FailedPlacements = failedResourcePlacements
+		if len(failedResourcePlacements) > 0 {
+			klog.V(2).InfoS("Populated failed manifests", "clusterResourceBinding", bindingRef, "numberOfFailedPlacements", len(failedResourcePlacements))
+		}
+	}
 }
 
 func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) metav1.Condition {

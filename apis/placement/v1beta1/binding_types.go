@@ -158,15 +158,15 @@ type ClusterResourceBindingList struct {
 }
 
 // SetConditions set the given conditions on the ClusterResourceBinding.
-func (m *ClusterResourceBinding) SetConditions(conditions ...metav1.Condition) {
+func (b *ClusterResourceBinding) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {
-		meta.SetStatusCondition(&m.Status.Conditions, c)
+		meta.SetStatusCondition(&b.Status.Conditions, c)
 	}
 }
 
 // GetCondition returns the condition of the given ClusterResourceBinding.
-func (m *ClusterResourceBinding) GetCondition(conditionType string) *metav1.Condition {
-	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
+func (b *ClusterResourceBinding) GetCondition(conditionType string) *metav1.Condition {
+	return meta.FindStatusCondition(b.Status.Conditions, conditionType)
 }
 
 func init() {
