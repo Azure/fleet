@@ -28,7 +28,14 @@ import (
 	"go.goms.io/fleet/test/utils/controller"
 )
 
-const randomImageName = "random-image-name"
+const (
+	randomImageName = "random-image-name"
+	deploymentKind  = "Deployment"
+	daemonSetKind   = "DaemonSet"
+	statefulSetKind = "StatefulSet"
+	configMapKind   = "ConfigMap"
+	namespaceKind   = "Namespace"
+)
 
 // Note that this container will run in parallel with other containers.
 var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
@@ -41,15 +48,15 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		BeforeAll(func() {
 			readDeploymentTestManifest(&testDeployment)
-			readEnvelopConfigMapTestManifest(&testEnvelopeDeployment)
+			readEnvelopeConfigMapTestManifest(&testEnvelopeDeployment)
 			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 				{
-					Kind:    "Namespace",
+					Kind:    namespaceKind,
 					Name:    workNamespaceName,
 					Version: "v1",
 				},
 				{
-					Kind:      "ConfigMap",
+					Kind:      configMapKind,
 					Name:      testEnvelopeDeployment.Name,
 					Version:   "v1",
 					Namespace: workNamespaceName,
@@ -58,7 +65,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("Create the wrapped deployment resources in the namespace", func() {
-			createWrappedResourcesForRollout(&testEnvelopeDeployment, &testDeployment, "Deployment")
+			createWrappedResourcesForRollout(&testEnvelopeDeployment, &testDeployment, deploymentKind)
 		})
 
 		It("Create the CRP that select the name space", func() {
@@ -154,14 +161,14 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			readDeploymentTestManifest(&testDeployment)
 			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 				{
-					Kind:    "Namespace",
+					Kind:    namespaceKind,
 					Name:    workNamespaceName,
 					Version: "v1",
 				},
 				{
 					Group:     "apps",
 					Version:   "v1",
-					Kind:      "Deployment",
+					Kind:      deploymentKind,
 					Name:      testDeployment.Name,
 					Namespace: workNamespaceName,
 				},
@@ -226,7 +233,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			failedDeploymentResourceIdentifier := placementv1beta1.ResourceIdentifier{
 				Group:     appv1.SchemeGroupVersion.Group,
 				Version:   appv1.SchemeGroupVersion.Version,
-				Kind:      "Deployment",
+				Kind:      deploymentKind,
 				Name:      testDeployment.Name,
 				Namespace: testDeployment.Namespace,
 			}
@@ -251,15 +258,15 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		BeforeAll(func() {
 			// Create the test resources.
 			readDaemonSetTestManifest(&testDaemonSet)
-			readEnvelopConfigMapTestManifest(&testEnvelopeDaemonSet)
+			readEnvelopeConfigMapTestManifest(&testEnvelopeDaemonSet)
 			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 				{
-					Kind:    "Namespace",
+					Kind:    namespaceKind,
 					Name:    workNamespaceName,
 					Version: "v1",
 				},
 				{
-					Kind:      "ConfigMap",
+					Kind:      configMapKind,
 					Name:      testEnvelopeDaemonSet.Name,
 					Version:   "v1",
 					Namespace: workNamespaceName,
@@ -267,8 +274,8 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			}
 		})
 
-		It("create the deployment resource in the namespace", func() {
-			createWrappedResourcesForRollout(&testEnvelopeDaemonSet, &testDaemonSet, "DaemonSet")
+		It("create the daemonset resource in the namespace", func() {
+			createWrappedResourcesForRollout(&testEnvelopeDaemonSet, &testDaemonSet, daemonSetKind)
 		})
 
 		It("create the CRP that select the name space", func() {
@@ -324,13 +331,13 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			failedDaemonSetResourceIdentifier := placementv1beta1.ResourceIdentifier{
 				Group:     appv1.SchemeGroupVersion.Group,
 				Version:   appv1.SchemeGroupVersion.Version,
-				Kind:      "DaemonSet",
+				Kind:      daemonSetKind,
 				Name:      testDaemonSet.Name,
 				Namespace: testDaemonSet.Namespace,
 				Envelope: &placementv1beta1.EnvelopeIdentifier{
 					Name:      testEnvelopeDaemonSet.Name,
 					Namespace: testEnvelopeDaemonSet.Namespace,
-					Type:      "ConfigMap",
+					Type:      configMapKind,
 				},
 			}
 			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDaemonSetResourceIdentifier, allMemberClusterNames, "1")
@@ -353,15 +360,15 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		BeforeAll(func() {
 			// Create the test resources.
 			readStatefulSetTestManifest(&testStatefulSet)
-			readEnvelopConfigMapTestManifest(&testEnvelopeStatefulSet)
+			readEnvelopeConfigMapTestManifest(&testEnvelopeStatefulSet)
 			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 				{
-					Kind:    "Namespace",
+					Kind:    namespaceKind,
 					Name:    workNamespaceName,
 					Version: "v1",
 				},
 				{
-					Kind:      "ConfigMap",
+					Kind:      configMapKind,
 					Name:      testEnvelopeStatefulSet.Name,
 					Version:   "v1",
 					Namespace: workNamespaceName,
@@ -369,8 +376,8 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			}
 		})
 
-		It("create the deployment resource in the namespace", func() {
-			createWrappedResourcesForRollout(&testEnvelopeStatefulSet, &testStatefulSet, "StatefulSet")
+		It("create the statefulset resource in the namespace", func() {
+			createWrappedResourcesForRollout(&testEnvelopeStatefulSet, &testStatefulSet, statefulSetKind)
 		})
 
 		It("create the CRP that select the name space", func() {
@@ -426,13 +433,13 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			failedDaemonSetResourceIdentifier := placementv1beta1.ResourceIdentifier{
 				Group:     appv1.SchemeGroupVersion.Group,
 				Version:   appv1.SchemeGroupVersion.Version,
-				Kind:      "StatefulSet",
+				Kind:      statefulSetKind,
 				Name:      testStatefulSet.Name,
 				Namespace: testStatefulSet.Namespace,
 				Envelope: &placementv1beta1.EnvelopeIdentifier{
 					Name:      testEnvelopeStatefulSet.Name,
 					Namespace: testEnvelopeStatefulSet.Namespace,
-					Type:      "ConfigMap",
+					Type:      configMapKind,
 				},
 			}
 			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDaemonSetResourceIdentifier, allMemberClusterNames, "1")
@@ -464,7 +471,7 @@ func readStatefulSetTestManifest(testStatefulSet *appv1.StatefulSet) {
 	Expect(err).Should(Succeed())
 }
 
-func readEnvelopConfigMapTestManifest(testEnvelopeObj *corev1.ConfigMap) {
+func readEnvelopeConfigMapTestManifest(testEnvelopeObj *corev1.ConfigMap) {
 	By("Read testEnvelopConfigMap resource")
 	err := utils.GetObjectFromManifest("resources/test-envelope-object.yaml", testEnvelopeObj)
 	Expect(err).Should(Succeed())
@@ -490,11 +497,11 @@ func createWrappedResourcesForRollout(testEnvelopeObj *corev1.ConfigMap, obj met
 	Expect(err).Should(Succeed())
 	testEnvelopeObj.Data = make(map[string]string)
 	switch kind {
-	case "Deployment":
+	case deploymentKind:
 		testEnvelopeObj.Data["deployment.yaml"] = string(workloadObjectByte)
-	case "DaemonSet":
+	case daemonSetKind:
 		testEnvelopeObj.Data["daemonset.yaml"] = string(workloadObjectByte)
-	case "StatefulSet":
+	case statefulSetKind:
 		testEnvelopeObj.Data["statefulset.yaml"] = string(workloadObjectByte)
 	}
 	Expect(hubClient.Create(ctx, testEnvelopeObj)).To(Succeed(), "Failed to create testEnvelop object %s containing %s", testEnvelopeObj.Name, kind)
