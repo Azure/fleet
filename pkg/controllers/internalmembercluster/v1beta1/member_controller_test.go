@@ -49,6 +49,8 @@ const (
 	podName1 = "pod-1"
 	podName2 = "pod-2"
 	podName3 = "pod-3"
+	podName4 = "pod-4"
+	podName5 = "pod-5"
 
 	containerName1 = "container-1"
 	containerName2 = "container-2"
@@ -57,6 +59,10 @@ const (
 var (
 	ignoreLTTConditionField = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
 	ignoreAllTimeFields     = cmpopts.IgnoreTypes(time.Time{}, metav1.Time{})
+
+	sortByConditionType = cmpopts.SortSlices(func(a, b metav1.Condition) bool {
+		return a.Type < b.Type
+	})
 )
 
 func TestMarkInternalMemberClusterJoined(t *testing.T) {
