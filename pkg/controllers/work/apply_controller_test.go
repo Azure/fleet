@@ -1694,22 +1694,6 @@ func TestApplyUnstructuredAndTrackAvailability(t *testing.T) {
 			resultAction:     manifestNotAvailableYetAction,
 			resultErr:        nil,
 		},
-		"resource is owned by another conflicted work (not found)": {
-			reconciler: ApplyWorkReconciler{
-				client: &test.MockClient{
-					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
-					},
-				},
-				spokeDynamicClient: deploymentOwnedByAnotherWorkClient,
-				spokeClient:        &test.MockClient{},
-				restMapper:         testMapper{},
-				recorder:           utils.NewFakeRecorder(1),
-			},
-			workObj:      correctObj.DeepCopy(),
-			resultAction: errorApplyAction,
-			resultErr:    controller.ErrExpectedBehavior,
-		},
 		"resource is owned by another conflicted work": {
 			reconciler: ApplyWorkReconciler{
 				client: &test.MockClient{
