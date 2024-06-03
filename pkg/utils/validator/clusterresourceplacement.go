@@ -9,7 +9,7 @@ package validator
 import (
 	"errors"
 	"fmt"
-	"reflect"
+	"sort"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -39,8 +39,8 @@ var (
 	uniqueTolerationErrFmt       = "toleration %+v already exists, tolerations must be unique"
 
 	// Below is the map of supported capacity types.
-	supportedResourceCapacityTypesMap = map[string]bool{propertyprovider.TotalCapacityName: true, propertyprovider.AllocatableCapacityName: true, propertyprovider.AvailableCapacityName: true}
-	supportedResourceCapacityTypes    = reflect.ValueOf(supportedResourceCapacityTypesMap).MapKeys()
+	supportedResourceCapacityTypesMap = map[string]bool{propertyprovider.AllocatableCapacityName: true, propertyprovider.AvailableCapacityName: true, propertyprovider.TotalCapacityName: true}
+	resourceCapacityTypes             = supportedResourceCapacityTypes()
 )
 
 // ValidateClusterResourcePlacementAlpha validates a ClusterResourcePlacement v1alpha1 object.
@@ -452,7 +452,7 @@ func validateName(name string) error {
 			return fmt.Errorf("invalid resource property name %s, expected format is [PREFIX]/[CAPACITY_TYPE]-[RESOURCE_NAME]", name)
 		}
 		if !supportedResourceCapacityTypesMap[segments[0]] {
-			return fmt.Errorf("invalid capacity type in resource property name %s, supported values are %+v", name, supportedResourceCapacityTypes)
+			return fmt.Errorf("invalid capacity type in resource property name %s, supported values are %+v", name, resourceCapacityTypes)
 		}
 	}
 
@@ -485,4 +485,15 @@ func validateValues(values []string) error {
 		}
 	}
 	return nil
+}
+
+func supportedResourceCapacityTypes() []string {
+	i := 0
+	capacityTypes := make([]string, len(supportedResourceCapacityTypesMap))
+	for key := range supportedResourceCapacityTypesMap {
+		capacityTypes[i] = key
+		i++
+	}
+	sort.Strings(capacityTypes)
+	return capacityTypes
 }

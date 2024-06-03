@@ -820,7 +820,7 @@ func TestValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
 				},
 			},
 			wantErr:    true,
-			wantErrMsg: "invalid capacity type in resource property name resources.kubernetes-fleet.io/node-count, supported values are [total allocatable available]",
+			wantErrMsg: "invalid capacity type in resource property name resources.kubernetes-fleet.io/node-count, supported values are [allocatable available total]",
 		},
 		"invalid placement policy - PickAll with invalid property selector name, no segments": {
 			policy: &placementv1beta1.PlacementPolicy{
