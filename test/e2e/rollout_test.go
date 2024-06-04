@@ -30,11 +30,6 @@ import (
 
 const (
 	randomImageName = "random-image-name"
-	deploymentKind  = "Deployment"
-	daemonSetKind   = "DaemonSet"
-	statefulSetKind = "StatefulSet"
-	configMapKind   = "ConfigMap"
-	namespaceKind   = "Namespace"
 )
 
 // Note that this container will run in parallel with other containers.
@@ -51,12 +46,12 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			readEnvelopeConfigMapTestManifest(&testEnvelopeDeployment)
 			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 				{
-					Kind:    namespaceKind,
+					Kind:    utils.NamespaceKind,
 					Name:    workNamespaceName,
 					Version: "v1",
 				},
 				{
-					Kind:      configMapKind,
+					Kind:      utils.ConfigMapKind,
 					Name:      testEnvelopeDeployment.Name,
 					Version:   "v1",
 					Namespace: workNamespaceName,
@@ -65,7 +60,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("Create the wrapped deployment resources in the namespace", func() {
-			createWrappedResourcesForRollout(&testEnvelopeDeployment, &testDeployment, deploymentKind)
+			createWrappedResourcesForRollout(&testEnvelopeDeployment, &testDeployment, utils.DeploymentKind)
 		})
 
 		It("Create the CRP that select the name space", func() {
@@ -91,8 +86,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
-			// For the development, at least it will take 4 minutes to be ready.
-			Eventually(crpStatusUpdatedActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
@@ -161,14 +155,14 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			readDeploymentTestManifest(&testDeployment)
 			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 				{
-					Kind:    namespaceKind,
+					Kind:    utils.NamespaceKind,
 					Name:    workNamespaceName,
 					Version: "v1",
 				},
 				{
 					Group:     "apps",
 					Version:   "v1",
-					Kind:      deploymentKind,
+					Kind:      utils.DeploymentKind,
 					Name:      testDeployment.Name,
 					Namespace: workNamespaceName,
 				},
@@ -205,8 +199,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
-			// For deployment, at the least it will take 4 minutes to be ready.
-			Eventually(crpStatusUpdatedActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
@@ -233,13 +226,12 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			failedDeploymentResourceIdentifier := placementv1beta1.ResourceIdentifier{
 				Group:     appv1.SchemeGroupVersion.Group,
 				Version:   appv1.SchemeGroupVersion.Version,
-				Kind:      deploymentKind,
+				Kind:      utils.DeploymentKind,
 				Name:      testDeployment.Name,
 				Namespace: testDeployment.Namespace,
 			}
 			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDeploymentResourceIdentifier, allMemberClusterNames, "1")
-			// For deployment, at the least it will take 4 minutes to be ready.
-			Eventually(crpStatusActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
@@ -261,12 +253,12 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			readEnvelopeConfigMapTestManifest(&testEnvelopeDaemonSet)
 			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 				{
-					Kind:    namespaceKind,
+					Kind:    utils.NamespaceKind,
 					Name:    workNamespaceName,
 					Version: "v1",
 				},
 				{
-					Kind:      configMapKind,
+					Kind:      utils.ConfigMapKind,
 					Name:      testEnvelopeDaemonSet.Name,
 					Version:   "v1",
 					Namespace: workNamespaceName,
@@ -275,7 +267,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("create the daemonset resource in the namespace", func() {
-			createWrappedResourcesForRollout(&testEnvelopeDaemonSet, &testDaemonSet, daemonSetKind)
+			createWrappedResourcesForRollout(&testEnvelopeDaemonSet, &testDaemonSet, utils.DaemonSetKind)
 		})
 
 		It("create the CRP that select the name space", func() {
@@ -304,7 +296,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", true)
-			Eventually(crpStatusUpdatedActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
@@ -331,17 +323,17 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			failedDaemonSetResourceIdentifier := placementv1beta1.ResourceIdentifier{
 				Group:     appv1.SchemeGroupVersion.Group,
 				Version:   appv1.SchemeGroupVersion.Version,
-				Kind:      daemonSetKind,
+				Kind:      utils.DaemonSetKind,
 				Name:      testDaemonSet.Name,
 				Namespace: testDaemonSet.Namespace,
 				Envelope: &placementv1beta1.EnvelopeIdentifier{
 					Name:      testEnvelopeDaemonSet.Name,
 					Namespace: testEnvelopeDaemonSet.Namespace,
-					Type:      configMapKind,
+					Type:      utils.ConfigMapKind,
 				},
 			}
 			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDaemonSetResourceIdentifier, allMemberClusterNames, "1")
-			Eventually(crpStatusActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
@@ -363,12 +355,12 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			readEnvelopeConfigMapTestManifest(&testEnvelopeStatefulSet)
 			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 				{
-					Kind:    namespaceKind,
+					Kind:    utils.NamespaceKind,
 					Name:    workNamespaceName,
 					Version: "v1",
 				},
 				{
-					Kind:      configMapKind,
+					Kind:      utils.ConfigMapKind,
 					Name:      testEnvelopeStatefulSet.Name,
 					Version:   "v1",
 					Namespace: workNamespaceName,
@@ -377,7 +369,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("create the statefulset resource in the namespace", func() {
-			createWrappedResourcesForRollout(&testEnvelopeStatefulSet, &testStatefulSet, statefulSetKind)
+			createWrappedResourcesForRollout(&testEnvelopeStatefulSet, &testStatefulSet, utils.StatefulSetKind)
 		})
 
 		It("create the CRP that select the name space", func() {
@@ -406,7 +398,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", true)
-			Eventually(crpStatusUpdatedActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
@@ -433,17 +425,17 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			failedDaemonSetResourceIdentifier := placementv1beta1.ResourceIdentifier{
 				Group:     appv1.SchemeGroupVersion.Group,
 				Version:   appv1.SchemeGroupVersion.Version,
-				Kind:      statefulSetKind,
+				Kind:      utils.StatefulSetKind,
 				Name:      testStatefulSet.Name,
 				Namespace: testStatefulSet.Namespace,
 				Envelope: &placementv1beta1.EnvelopeIdentifier{
 					Name:      testEnvelopeStatefulSet.Name,
 					Namespace: testEnvelopeStatefulSet.Namespace,
-					Type:      configMapKind,
+					Type:      utils.ConfigMapKind,
 				},
 			}
 			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDaemonSetResourceIdentifier, allMemberClusterNames, "1")
-			Eventually(crpStatusActual, 6*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
@@ -497,11 +489,11 @@ func createWrappedResourcesForRollout(testEnvelopeObj *corev1.ConfigMap, obj met
 	Expect(err).Should(Succeed())
 	testEnvelopeObj.Data = make(map[string]string)
 	switch kind {
-	case deploymentKind:
+	case utils.DeploymentKind:
 		testEnvelopeObj.Data["deployment.yaml"] = string(workloadObjectByte)
-	case daemonSetKind:
+	case utils.DaemonSetKind:
 		testEnvelopeObj.Data["daemonset.yaml"] = string(workloadObjectByte)
-	case statefulSetKind:
+	case utils.StatefulSetKind:
 		testEnvelopeObj.Data["statefulset.yaml"] = string(workloadObjectByte)
 	}
 	Expect(hubClient.Create(ctx, testEnvelopeObj)).To(Succeed(), "Failed to create testEnvelop object %s containing %s", testEnvelopeObj.Name, kind)

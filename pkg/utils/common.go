@@ -53,6 +53,12 @@ const (
 const (
 	// NetworkingGroupName is the group name of the fleet networking.
 	NetworkingGroupName = "networking.fleet.azure.com"
+
+	DeploymentKind  = "Deployment"
+	DaemonSetKind   = "DaemonSet"
+	StatefulSetKind = "StatefulSet"
+	ConfigMapKind   = "ConfigMap"
+	NamespaceKind   = "Namespace"
 )
 
 const (
@@ -131,7 +137,7 @@ var (
 	ConfigMapGVK = schema.GroupVersionKind{
 		Group:   corev1.GroupName,
 		Version: corev1.SchemeGroupVersion.Version,
-		Kind:    "ConfigMap",
+		Kind:    ConfigMapKind,
 	}
 
 	CRDMetaGVK = metav1.GroupVersionKind{
@@ -209,13 +215,13 @@ var (
 	NamespaceMetaGVK = metav1.GroupVersionKind{
 		Group:   corev1.GroupName,
 		Version: corev1.SchemeGroupVersion.Version,
-		Kind:    "Namespace",
+		Kind:    NamespaceKind,
 	}
 
 	NamespaceGVK = schema.GroupVersionKind{
 		Group:   corev1.GroupName,
 		Version: corev1.SchemeGroupVersion.Version,
-		Kind:    "Namespace",
+		Kind:    NamespaceKind,
 	}
 
 	NamespaceGVR = schema.GroupVersionResource{
@@ -293,7 +299,7 @@ var (
 	DeploymentGVK = schema.GroupVersionKind{
 		Group:   appv1.GroupName,
 		Version: appv1.SchemeGroupVersion.Version,
-		Kind:    "Deployment",
+		Kind:    DeploymentKind,
 	}
 
 	DaemonSettGVR = schema.GroupVersionResource{
@@ -405,7 +411,7 @@ func CheckCRDInstalled(discoveryClient discovery.DiscoveryInterface, gvk schema.
 func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Unstructured) (bool, error) {
 	// TODO:  add more special handling for different resource kind
 	switch uObj.GroupVersionKind() {
-	case corev1.SchemeGroupVersion.WithKind("ConfigMap"):
+	case corev1.SchemeGroupVersion.WithKind(ConfigMapKind):
 		// Skip the built-in custom CA certificate created in the namespace
 		if uObj.GetName() == "kube-root-ca.crt" {
 			return false, nil
