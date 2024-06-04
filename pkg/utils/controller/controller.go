@@ -15,7 +15,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -353,6 +353,7 @@ func FetchAllClusterResourceSnapshots(ctx context.Context, k8Client client.Clien
 	return resourceSnapshots, nil
 }
 
+// ExtractFailedResourcePlacementsFromWork extracts the failed resource placements from the work. d
 func ExtractFailedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1beta1.FailedResourcePlacement {
 	appliedCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 	availableCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
@@ -397,7 +398,7 @@ func ExtractFailedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1b
 		// The observedGeneration of the manifest condition is the generation of the applied manifest.
 		// The overall applied and available conditions are observing the latest work generation.
 		// So that the manifest condition should be latest, assuming they're populated by the work agent in one update call.
-		if appliedCond != nil && appliedCond.Status == v1.ConditionFalse {
+		if appliedCond != nil && appliedCond.Status == metav1.ConditionFalse {
 			if isEnveloped {
 				klog.V(2).InfoS("Find a failed to apply enveloped manifest",
 					"manifestName", manifestCondition.Identifier.Name,
@@ -414,7 +415,7 @@ func ExtractFailedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1b
 			break
 		}
 		availableCond = meta.FindStatusCondition(manifestCondition.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
-		if availableCond != nil && availableCond.Status == v1.ConditionFalse {
+		if availableCond != nil && availableCond.Status == metav1.ConditionFalse {
 			if isEnveloped {
 				klog.V(2).InfoS("Find an unavailable enveloped manifest",
 					"manifestName", manifestCondition.Identifier.Name,
