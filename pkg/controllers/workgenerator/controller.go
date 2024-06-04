@@ -604,9 +604,9 @@ func getWorkNamePrefixFromSnapshotName(resourceSnapshot *fleetv1beta1.ClusterRes
 	return fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, crpName, subIndexVal), nil
 }
 
-// setBindingStatus sets the binding status based on the works
+// setBindingStatus sets the binding status based on the works associated with the binding.
 func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *fleetv1beta1.ClusterResourceBinding) {
-	bindingRef := klog.KRef(resourceBinding.Namespace, resourceBinding.Name)
+	bindingRef := klog.KObj(resourceBinding)
 	// try to gather the resource binding applied status if we didn't update any associated work spec this time
 	appliedCond := buildAllWorkAppliedCondition(works, resourceBinding)
 	resourceBinding.SetConditions(appliedCond)
@@ -616,6 +616,7 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 		availableCond = buildAllWorkAvailableCondition(works, resourceBinding)
 		resourceBinding.SetConditions(availableCond)
 	}
+	resourceBinding.Status.FailedPlacements = nil
 	// collect and set the failed resource placements to the binding if not all the works are available
 	if appliedCond.Status != metav1.ConditionTrue || availableCond.Status != metav1.ConditionTrue {
 		failedResourcePlacements := make([]fleetv1beta1.FailedResourcePlacement, 0, controller.MaxFailedResourcePlacementLimit) // preallocate the memory

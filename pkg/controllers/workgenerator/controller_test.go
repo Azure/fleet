@@ -7,10 +7,10 @@ package workgenerator
 
 import (
 	"errors"
-	"sort"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -487,6 +487,83 @@ func TestSetBindingStatus(t *testing.T) {
 			works: map[string]*fleetv1beta1.Work{},
 			want:  nil,
 		},
+		"both work are available": {
+			works: map[string]*fleetv1beta1.Work{
+				"work1": {
+					Status: fleetv1beta1.WorkStatus{
+						ManifestConditions: []fleetv1beta1.ManifestCondition{
+							{
+								Identifier: fleetv1beta1.WorkResourceIdentifier{
+									Ordinal:   1,
+									Group:     "",
+									Version:   "v1",
+									Kind:      "Service",
+									Name:      "svc-name",
+									Namespace: "svc-namespace",
+								},
+								Conditions: []metav1.Condition{
+									{
+										Type:   fleetv1beta1.WorkConditionTypeApplied,
+										Status: metav1.ConditionTrue,
+									},
+									{
+										Type:   fleetv1beta1.WorkConditionTypeAvailable,
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+						Conditions: []metav1.Condition{
+							{
+								Type:   fleetv1beta1.WorkConditionTypeApplied,
+								Status: metav1.ConditionTrue,
+							},
+							{
+								Type:   fleetv1beta1.WorkConditionTypeAvailable,
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+				"work2": {
+					Status: fleetv1beta1.WorkStatus{
+						ManifestConditions: []fleetv1beta1.ManifestCondition{
+							{
+								Identifier: fleetv1beta1.WorkResourceIdentifier{
+									Ordinal:   0,
+									Group:     "",
+									Version:   "v1",
+									Kind:      "ConfigMap",
+									Name:      "config-name",
+									Namespace: "config-namespace",
+								},
+								Conditions: []metav1.Condition{
+									{
+										Type:   fleetv1beta1.WorkConditionTypeApplied,
+										Status: metav1.ConditionTrue,
+									},
+									{
+										Type:   fleetv1beta1.WorkConditionTypeAvailable,
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+						Conditions: []metav1.Condition{
+							{
+								Type:   fleetv1beta1.WorkConditionTypeApplied,
+								Status: metav1.ConditionTrue,
+							},
+							{
+								Type:   fleetv1beta1.WorkConditionTypeAvailable,
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			want: nil,
+		},
 		"One work has one not available and one work has one not applied": {
 			works: map[string]*fleetv1beta1.Work{
 				"work1": {
@@ -761,16 +838,18 @@ func TestSetBindingStatus(t *testing.T) {
 			binding := &fleetv1beta1.ClusterResourceBinding{}
 			setBindingStatus(tt.works, binding)
 			got := binding.Status.FailedPlacements
-			sort.Slice(got, func(i, j int) bool {
-				if got[i].Group < got[j].Group {
-					return true
-				}
-				if got[i].Kind < got[j].Kind {
-					return true
-				}
-				return got[i].Name < got[j].Name
-			})
-			if diff := cmp.Diff(got, tt.want); diff != "" {
+			statusCmpOptions := []cmp.Option{
+				cmpopts.SortSlices(func(i, j fleetv1beta1.FailedResourcePlacement) bool {
+					if i.Group < j.Group {
+						return true
+					}
+					if i.Kind < j.Kind {
+						return true
+					}
+					return i.Name < j.Name
+				}),
+			}
+			if diff := cmp.Diff(got, tt.want, statusCmpOptions...); diff != "" {
 				t.Errorf("setBindingStatus test `%s` mismatch (-got +want):\n%s", name, diff)
 			}
 		})
