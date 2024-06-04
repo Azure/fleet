@@ -48,12 +48,12 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				{
 					Kind:    utils.NamespaceKind,
 					Name:    workNamespaceName,
-					Version: "v1",
+					Version: corev1.SchemeGroupVersion.Version,
 				},
 				{
 					Kind:      utils.ConfigMapKind,
 					Name:      testEnvelopeDeployment.Name,
-					Version:   "v1",
+					Version:   corev1.SchemeGroupVersion.Version,
 					Namespace: workNamespaceName,
 				},
 			}
@@ -157,11 +157,11 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				{
 					Kind:    utils.NamespaceKind,
 					Name:    workNamespaceName,
-					Version: "v1",
+					Version: corev1.SchemeGroupVersion.Version,
 				},
 				{
-					Group:     "apps",
-					Version:   "v1",
+					Group:     appv1.SchemeGroupVersion.Group,
+					Version:   appv1.SchemeGroupVersion.Version,
 					Kind:      utils.DeploymentKind,
 					Name:      testDeployment.Name,
 					Namespace: workNamespaceName,
@@ -255,12 +255,12 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				{
 					Kind:    utils.NamespaceKind,
 					Name:    workNamespaceName,
-					Version: "v1",
+					Version: corev1.SchemeGroupVersion.Version,
 				},
 				{
 					Kind:      utils.ConfigMapKind,
 					Name:      testEnvelopeDaemonSet.Name,
-					Version:   "v1",
+					Version:   corev1.SchemeGroupVersion.Version,
 					Namespace: workNamespaceName,
 				},
 			}
@@ -329,7 +329,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				Envelope: &placementv1beta1.EnvelopeIdentifier{
 					Name:      testEnvelopeDaemonSet.Name,
 					Namespace: testEnvelopeDaemonSet.Namespace,
-					Type:      utils.ConfigMapKind,
+					Type:      placementv1beta1.ConfigMapEnvelopeType,
 				},
 			}
 			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDaemonSetResourceIdentifier, allMemberClusterNames, "1")
@@ -357,12 +357,12 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				{
 					Kind:    utils.NamespaceKind,
 					Name:    workNamespaceName,
-					Version: "v1",
+					Version: corev1.SchemeGroupVersion.Version,
 				},
 				{
 					Kind:      utils.ConfigMapKind,
 					Name:      testEnvelopeStatefulSet.Name,
-					Version:   "v1",
+					Version:   corev1.SchemeGroupVersion.Version,
 					Namespace: workNamespaceName,
 				},
 			}
@@ -422,7 +422,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			failedDaemonSetResourceIdentifier := placementv1beta1.ResourceIdentifier{
+			failedStatefulSetResourceIdentifier := placementv1beta1.ResourceIdentifier{
 				Group:     appv1.SchemeGroupVersion.Group,
 				Version:   appv1.SchemeGroupVersion.Version,
 				Kind:      utils.StatefulSetKind,
@@ -431,10 +431,10 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				Envelope: &placementv1beta1.EnvelopeIdentifier{
 					Name:      testEnvelopeStatefulSet.Name,
 					Namespace: testEnvelopeStatefulSet.Namespace,
-					Type:      utils.ConfigMapKind,
+					Type:      placementv1beta1.ConfigMapEnvelopeType,
 				},
 			}
-			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDaemonSetResourceIdentifier, allMemberClusterNames, "1")
+			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedStatefulSetResourceIdentifier, allMemberClusterNames, "1")
 			Eventually(crpStatusActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
