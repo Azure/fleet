@@ -353,7 +353,7 @@ func FetchAllClusterResourceSnapshots(ctx context.Context, k8Client client.Clien
 	return resourceSnapshots, nil
 }
 
-// ExtractFailedResourcePlacementsFromWork extracts the failed resource placements from the work. d
+// ExtractFailedResourcePlacementsFromWork extracts the failed resource placements from the work.
 func ExtractFailedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1beta1.FailedResourcePlacement {
 	appliedCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 	availableCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
