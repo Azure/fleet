@@ -16,7 +16,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -87,7 +86,6 @@ var _ = BeforeSuite(func() {
 	By("Set all the customized scheme")
 	Expect(placementv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(workv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
-	Expect(kruisev1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(clusterv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(placementv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 

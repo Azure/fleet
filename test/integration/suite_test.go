@@ -15,7 +15,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
@@ -31,6 +30,7 @@ import (
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/cmd/hubagent/workload"
 	mcv1alpha1 "go.goms.io/fleet/pkg/controllers/membercluster/v1alpha1"
+	kruisev1alpha1 "go.goms.io/fleet/test/utils/apis/kruise/apps/v1alpha1"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to

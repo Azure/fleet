@@ -13,7 +13,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	omegatypes "github.com/onsi/gomega/types"
-	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
 	"golang.org/x/exp/slices"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -31,6 +30,7 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
+	kruisev1alpha1 "go.goms.io/fleet/test/utils/apis/kruise/apps/v1alpha1"
 )
 
 const (

@@ -27,7 +27,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,6 +35,7 @@ import (
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	kruisev1alpha1 "go.goms.io/fleet/test/utils/apis/kruise/apps/v1alpha1"
 )
 
 var _ = Describe("Work Status Reconciler", func() {

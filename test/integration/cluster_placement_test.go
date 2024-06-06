@@ -14,7 +14,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
 	adminv1 "k8s.io/api/admissionregistration/v1"
 	coordv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -33,6 +32,7 @@ import (
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	workv1alpha1controller "go.goms.io/fleet/pkg/controllers/workv1alpha1"
 	"go.goms.io/fleet/pkg/utils"
+	kruisev1alpha1 "go.goms.io/fleet/test/utils/apis/kruise/apps/v1alpha1"
 )
 
 const ClusterRoleKind = "ClusterRole"

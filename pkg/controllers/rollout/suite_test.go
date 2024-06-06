@@ -15,7 +15,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -75,7 +74,6 @@ var _ = BeforeSuite(func() {
 	By("Set all the customized scheme")
 	Expect(fleetv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(workv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
-	Expect(kruisev1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(placementv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 
 	By("starting the controller manager")

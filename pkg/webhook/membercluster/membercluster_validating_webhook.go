@@ -22,7 +22,7 @@ var (
 )
 
 type memberClusterValidator struct {
-	decoder *admission.Decoder
+	decoder webhook.AdmissionDecoder
 }
 
 // Add registers the webhook for K8s bulit-in object types.

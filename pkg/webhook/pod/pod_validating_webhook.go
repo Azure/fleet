@@ -40,7 +40,7 @@ func Add(mgr manager.Manager) error {
 }
 
 type podValidator struct {
-	decoder *admission.Decoder
+	decoder webhook.AdmissionDecoder
 }
 
 // Handle podValidator denies a pod if it is not created in the system namespaces.

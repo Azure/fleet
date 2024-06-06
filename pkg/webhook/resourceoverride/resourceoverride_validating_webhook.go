@@ -30,7 +30,7 @@ var (
 
 type resourceOverrideValidator struct {
 	client  client.Client
-	decoder *admission.Decoder
+	decoder webhook.AdmissionDecoder
 }
 
 // Add registers the webhook for K8s bulit-in object types.
