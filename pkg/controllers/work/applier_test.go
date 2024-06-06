@@ -192,7 +192,6 @@ func TestFindConflictedWork(t *testing.T) {
 					Name:       "work1",
 				},
 			},
-			wantErr: controller.ErrExpectedBehavior,
 		},
 	}
 	for _, tc := range tests {
@@ -289,8 +288,6 @@ func TestValidateOwnerReference(t *testing.T) {
 					Name:       "work1",
 				},
 			},
-			want:    errorApplyAction,
-			wantErr: controller.ErrExpectedBehavior,
 		},
 		{
 			name: "no conflicted work and not owned by others",

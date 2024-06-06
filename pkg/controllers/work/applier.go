@@ -65,8 +65,8 @@ func findConflictedWork(ctx context.Context, hubClient client.Client, namespace 
 			if errors.IsNotFound(err) {
 				// The work may be just deleted by the time we are checking it and the ownerRef is already stale.
 				// Or it could be manually deleted by the user.
-				// Return the error to retry.
-				return nil, controller.NewExpectedBehaviorError(err)
+				// Then ignore this owner.
+				continue
 			}
 			return nil, controller.NewAPIServerError(true, err)
 		}

@@ -370,7 +370,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 				t.Errorf("ValidateClusterResourcePlacement() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("ValidateClusterResourcePlacement() got %v, should containt want %s", gotErr, testCase.wantErrMsg)
+				t.Errorf("ValidateClusterResourcePlacement() got %v, should contain want %s", gotErr, testCase.wantErrMsg)
 			}
 		})
 	}
@@ -489,7 +489,7 @@ func TestValidateClusterResourcePlacement_RolloutStrategy(t *testing.T) {
 				t.Errorf("validateRolloutStrategy() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("validateRolloutStrategy() got %v, should containt want %s", gotErr, testCase.wantErrMsg)
+				t.Errorf("validateRolloutStrategy() got %v, should contain want %s", gotErr, testCase.wantErrMsg)
 			}
 		})
 	}
@@ -605,7 +605,7 @@ func TestValidateClusterResourcePlacement_PickFixedPlacementPolicy(t *testing.T)
 				t.Errorf("validatePlacementPolicy() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("validatePlacementPolicy() got %v, should containt want %s", gotErr, testCase.wantErrMsg)
+				t.Errorf("validatePlacementPolicy() got %v, should contain want %s", gotErr, testCase.wantErrMsg)
 			}
 		})
 	}
@@ -793,6 +793,92 @@ func TestValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
 			wantErr:    true,
 			wantErrMsg: "operator Eq requires exactly one value, got 2",
 		},
+		"invalid placement policy - PickAll with invalid property selector name, invalid capacity type": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "resources.kubernetes-fleet.io/node-count",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "invalid capacity type in resource property name resources.kubernetes-fleet.io/node-count, supported values are [allocatable available total]",
+		},
+		"invalid placement policy - PickAll with invalid property selector name, no segments": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "resources.kubernetes-fleet.io/totalcpu",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "invalid resource property name resources.kubernetes-fleet.io/totalcpu, expected format is [PREFIX]/[CAPACITY_TYPE]-[RESOURCE_NAME]",
+		},
+		"valid placement policy - PickAll with valid property selector name": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "resources.kubernetes-fleet.io/allocatable-memory",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
 	}
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
@@ -801,7 +887,7 @@ func TestValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
 				t.Errorf("validatePlacementPolicy() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("validatePlacementPolicy() got %v, should containt want %s", gotErr, testCase.wantErrMsg)
+				t.Errorf("validatePlacementPolicy() got %v, should contain want %s", gotErr, testCase.wantErrMsg)
 			}
 		})
 	}
@@ -1104,6 +1190,65 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 			wantErr:    true,
 			wantErrMsg: "toleration key cannot be empty, when operator is Equal",
 		},
+		"invalid placement policy - PickN with invalid property selector name, invalid label name": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "resources.kubernetes-fleet.io/total-nospecialchars%^=@",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "name is not a valid Kubernetes label name",
+		},
+		"valid placement policy - PickN with valid property selector name": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "resources.kubernetes-fleet.io/total-allocatable-cpu",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for testName, testCase := range tests {
@@ -1113,7 +1258,7 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 				t.Errorf("validatePlacementPolicy() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("validatePlacementPolicy() got %v, should containt want %s", gotErr, testCase.wantErrMsg)
+				t.Errorf("validatePlacementPolicy() got %v, should contain want %s", gotErr, testCase.wantErrMsg)
 			}
 		})
 	}
@@ -1414,7 +1559,7 @@ func TestValidateTolerations(t *testing.T) {
 				t.Errorf("validateTolerations() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("validateTolerations() got %v, should containt want %s", gotErr, testCase.wantErrMsg)
+				t.Errorf("validateTolerations() got %v, should contain want %s", gotErr, testCase.wantErrMsg)
 			}
 		})
 	}

@@ -17,17 +17,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-)
-
-const (
-	// resourcePropertyNamePrefix is the prefix (also known as the subdomain) of the label name
-	// associated with all resource properties.
-	resourcePropertyNamePrefix = "resources.kubernetes-fleet.io/"
-
-	// Below are a list of supported capacity types.
-	totalCapacityName       = "total"
-	allocatableCapacityName = "allocatable"
-	availableCapacityName   = "available"
+	"go.goms.io/fleet/pkg/propertyprovider"
 )
 
 // clusterRequirement is a type alias for ClusterSelectorTerm in the API, which allows
@@ -55,13 +45,13 @@ func retrieveResourceUsageFrom(cluster *clusterv1beta1.MemberCluster, name strin
 	var q resource.Quantity
 	var found bool
 	switch cn {
-	case totalCapacityName:
+	case propertyprovider.TotalCapacityName:
 		// The property concerns the total capacity of a resource.
 		q, found = cluster.Status.ResourceUsage.Capacity[corev1.ResourceName(tn)]
-	case allocatableCapacityName:
+	case propertyprovider.AllocatableCapacityName:
 		// The property concerns the allocatable capacity of a resource.
 		q, found = cluster.Status.ResourceUsage.Allocatable[corev1.ResourceName(tn)]
-	case availableCapacityName:
+	case propertyprovider.AvailableCapacityName:
 		// The property concerns the available capacity of a resource.
 		q, found = cluster.Status.ResourceUsage.Available[corev1.ResourceName(tn)]
 	default:
@@ -89,8 +79,8 @@ func retrievePropertyValueFrom(cluster *clusterv1beta1.MemberCluster, name strin
 	// Check if the expression concerns a resource property.
 	var q *resource.Quantity
 	var err error
-	if strings.HasPrefix(name, resourcePropertyNamePrefix) {
-		name, _ := strings.CutPrefix(name, resourcePropertyNamePrefix)
+	if strings.HasPrefix(name, propertyprovider.ResourcePropertyNamePrefix) {
+		name, _ := strings.CutPrefix(name, propertyprovider.ResourcePropertyNamePrefix)
 
 		// Retrieve the property value from the cluster resource usage data.
 		q, err = retrieveResourceUsageFrom(cluster, name)

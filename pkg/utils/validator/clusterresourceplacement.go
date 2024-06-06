@@ -9,6 +9,8 @@ package validator
 import (
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -22,6 +24,7 @@ import (
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
 )
@@ -34,6 +37,10 @@ var (
 	invalidTolerationKeyErrFmt   = "invalid toleration key %+v: %s"
 	invalidTolerationValueErrFmt = "invalid toleration value %+v: %s"
 	uniqueTolerationErrFmt       = "toleration %+v already exists, tolerations must be unique"
+
+	// Below is the map of supported capacity types.
+	supportedResourceCapacityTypesMap = map[string]bool{propertyprovider.AllocatableCapacityName: true, propertyprovider.AvailableCapacityName: true, propertyprovider.TotalCapacityName: true}
+	resourceCapacityTypes             = supportedResourceCapacityTypes()
 )
 
 // ValidateClusterResourcePlacementAlpha validates a ClusterResourcePlacement v1alpha1 object.
@@ -436,6 +443,19 @@ func validatePropertySorter(propertySorter *placementv1beta1.PropertySorter) err
 }
 
 func validateName(name string) error {
+	// we expect the resource property names to be in this format `[PREFIX]/[CAPACITY_TYPE]-[RESOURCE_NAME]`.
+	if strings.HasPrefix(name, propertyprovider.ResourcePropertyNamePrefix) {
+		resourcePropertyName, _ := strings.CutPrefix(name, propertyprovider.ResourcePropertyNamePrefix)
+		// n=2 since we only care about the first segment to check capacity type.
+		segments := strings.SplitN(resourcePropertyName, "-", 2)
+		if len(segments) != 2 {
+			return fmt.Errorf("invalid resource property name %s, expected format is [PREFIX]/[CAPACITY_TYPE]-[RESOURCE_NAME]", name)
+		}
+		if !supportedResourceCapacityTypesMap[segments[0]] {
+			return fmt.Errorf("invalid capacity type in resource property name %s, supported values are %+v", name, resourceCapacityTypes)
+		}
+	}
+
 	if err := validation.IsQualifiedName(name); err != nil {
 		return fmt.Errorf("name is not a valid Kubernetes label name: %v", err)
 	}
@@ -465,4 +485,15 @@ func validateValues(values []string) error {
 		}
 	}
 	return nil
+}
+
+func supportedResourceCapacityTypes() []string {
+	i := 0
+	capacityTypes := make([]string, len(supportedResourceCapacityTypesMap))
+	for key := range supportedResourceCapacityTypesMap {
+		capacityTypes[i] = key
+		i++
+	}
+	sort.Strings(capacityTypes)
+	return capacityTypes
 }

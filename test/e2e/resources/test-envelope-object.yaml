@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: envelop-object
+  namespace: app
+  annotations:
+    kubernetes-fleet.io/envelope-configmap: "true"
