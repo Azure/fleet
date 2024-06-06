@@ -106,9 +106,13 @@ var _ = Describe("placing resources using a CRP of PickFixed placement type", fu
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on specified clusters")
 
 			// Update the CRP to pick a different cluster.
-			Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp)).To(Succeed(), "Failed to get CRP")
-			crp.Spec.Policy.ClusterNames = []string{memberCluster2EastCanaryName}
-			Eventually(hubClient.Update(ctx, crp), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP")
+			Eventually(func() error {
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+					return err
+				}
+				crp.Spec.Policy.ClusterNames = []string{memberCluster2EastCanaryName}
+				return hubClient.Update(ctx, crp)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP")
 		})
 
 		It("should update CRP status as expected", func() {
