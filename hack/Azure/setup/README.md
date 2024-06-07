@@ -60,7 +60,7 @@ If you would like to add a prometheus server to access metrics, run the followin
             additionalScrapeConfigs:
             - job_name: "fleet"
               static_configs:
-              - targets: [<EXTERNAL-IP>:8080"]
+              - targets: ["<EXTERNAL-IP>:8080"]
     ```
     Replace `<EXTERNAL-IP>` with the external IP address obtained previously.
 </details>
@@ -109,15 +109,15 @@ These labels can then be used for targeting specific clusters in resource placem
 run the commands below:
 
 ```sh
-# Replace the values of <MEMBER_CLUSTER>, <LABEL_KEY>, and <LABEL_VALUE> with those of your own.
-export MEMBER_CLUSTER=<YOUR-MEMBER-CLUSTER<
-export LABEL_KEY=YOUR-<LABEL-KEY>
+# Replace the values of <YOUR-MEMBER_CLUSTER>, <YOUR-LABEL_KEY>, and <YOUR-LABEL_VALUE> with those of your own.
+export MEMBER_CLUSTER=<YOUR-MEMBER-CLUSTER>
+export LABEL_KEY=<YOUR-LABEL-KEY>
 export LABEL_VALUE=<YOUR-LABEL-VALUE>
 kubectl label membercluster $MEMBER_CLUSTER $LABEL_KEY=$LABEL_VALUE
 ```
 
 Or, you can add the same label to multiple clusters at once by running the following script:
-```
+```sh
 # Replace the value <number-of-member-cluster> to the desired number of member clusters you want to label.
 chmod +x hack/Azure/setup/labelMC.sh
 ./hack/Azure/setup/labelMC.sh $LABEL_KEY=$LABEL_VALUE <number-of-member-clusters>
