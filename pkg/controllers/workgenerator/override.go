@@ -158,7 +158,7 @@ func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, 
 				return err
 			}
 		}
-		klog.V(2).InfoS("Applied resourceOverrideSnapshots", "resource", klog.KObj(&uResource), "numberOfOverrides", len(croMap[key]))
+		klog.V(2).InfoS("Applied resourceOverrideSnapshots", "resource", klog.KObj(&uResource), "numberOfOverrides", len(roMap[key]))
 	}
 	return nil
 }
