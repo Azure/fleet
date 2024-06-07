@@ -1,15 +1,15 @@
 # CAN ONLY BE RUN AFTER CREATING NEEDED AKS CLUSTERS AND HUB CLUSTER. This script creates member clusters from
 # AKS Cluster's and joins them onto the hub cluster.
 
-export HUB_CLUSTER=$1
+export HUB_CLUSTER="$1"
 export HUB_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$HUB_CLUSTER\")].name}")
 export HUB_CLUSTER_ADDRESS=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$HUB_CLUSTER\")].cluster.server}")
 
 for MC in "${@:2}"; do
 
 # Note that Fleet will recognize your cluster with this name once it joins.
-export MEMBER_CLUSTER=${MC}
-export MEMBER_CLUSTER_CONTEXT=${MC}
+export MEMBER_CLUSTER=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$MC\")].name}")
+export MEMBER_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$MC\")].name}")
 
 export SERVICE_ACCOUNT="$MEMBER_CLUSTER-hub-cluster-access"
 
@@ -37,7 +37,7 @@ type: kubernetes.io/service-account-token
 EOF
 
 echo "Creating member cluster..."
-export TOKEN=$(kubectl get secret $SERVICE_ACCOUNT_SECRET -n fleet-system -o jsonpath='{.data.token}' | base64 -d)
+export TOKEN="$(kubectl get secret $SERVICE_ACCOUNT_SECRET -n fleet-system -o jsonpath='{.data.token}' | base64 --decode)"
 cat <<EOF | kubectl apply -f -
 apiVersion: cluster.kubernetes-fleet.io/v1beta1
 kind: MemberCluster
