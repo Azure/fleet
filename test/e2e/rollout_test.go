@@ -63,7 +63,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			createWrappedResourcesForRollout(&testEnvelopeDeployment, &testDeployment, utils.DeploymentKind)
 		})
 
-		It("Create the CRP that select the name space", func() {
+		It("Create the CRP that select the namespace", func() {
 			crp := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
@@ -173,27 +173,8 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			createDeploymentForRollout(&testDeployment)
 		})
 
-		It("create the CRP that select the name space", func() {
-			crp := &placementv1beta1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName,
-					// Add a custom finalizer; this would allow us to better observe
-					// the behavior of the controllers.
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
-					ResourceSelectors: workResourceSelector(),
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							MaxUnavailable: &intstr.IntOrString{
-								Type:   intstr.Int,
-								IntVal: 1,
-							},
-						},
-					},
-				},
-			}
+		It("create the CRP that select the namespace", func() {
+			crp := buildCRPForSafeRollout()
 			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
 		})
 
@@ -270,27 +251,8 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			createWrappedResourcesForRollout(&testEnvelopeDaemonSet, &testDaemonSet, utils.DaemonSetKind)
 		})
 
-		It("create the CRP that select the name space", func() {
-			crp := &placementv1beta1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName,
-					// Add a custom finalizer; this would allow us to better observe
-					// the behavior of the controllers.
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
-					ResourceSelectors: workResourceSelector(),
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							MaxUnavailable: &intstr.IntOrString{
-								Type:   intstr.Int,
-								IntVal: 1,
-							},
-						},
-					},
-				},
-			}
+		It("create the CRP that select the namespace", func() {
+			crp := buildCRPForSafeRollout()
 			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
 		})
 
@@ -372,27 +334,8 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			createWrappedResourcesForRollout(&testEnvelopeStatefulSet, &testStatefulSet, utils.StatefulSetKind)
 		})
 
-		It("create the CRP that select the name space", func() {
-			crp := &placementv1beta1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName,
-					// Add a custom finalizer; this would allow us to better observe
-					// the behavior of the controllers.
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
-					ResourceSelectors: workResourceSelector(),
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							MaxUnavailable: &intstr.IntOrString{
-								Type:   intstr.Int,
-								IntVal: 1,
-							},
-						},
-					},
-				},
-			}
+		It("create the CRP that select the namespace", func() {
+			crp := buildCRPForSafeRollout()
 			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
 		})
 
@@ -443,6 +386,82 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 		})
 	})
+
+	Context("Test a CRP place workload objects successfully, block rollout based on service availability", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		workNamespaceName := appNamespace().Name
+		var wantSelectedResources []placementv1beta1.ResourceIdentifier
+		var testService corev1.Service
+
+		BeforeAll(func() {
+			// Create the test resources.
+			readServiceTestManifest(&testService)
+			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
+				{
+					Kind:    utils.NamespaceKind,
+					Name:    workNamespaceName,
+					Version: corev1.SchemeGroupVersion.Version,
+				},
+				{
+					Kind:      utils.ServiceKind,
+					Name:      testService.Name,
+					Version:   corev1.SchemeGroupVersion.Version,
+					Namespace: workNamespaceName,
+				},
+			}
+		})
+
+		It("create the service resource in the namespace", func() {
+			createServiceForRollout(&testService)
+		})
+
+		It("create the CRP that select the namespace", func() {
+			crp := buildCRPForSafeRollout()
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
+
+		It("should update CRP status as expected", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
+			Eventually(crpStatusUpdatedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should place the resources on all member clusters", func() {
+			for idx := range allMemberClusters {
+				memberCluster := allMemberClusters[idx]
+				workResourcesPlacedActual := waitForServiceToReady(memberCluster, &testService)
+				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+			}
+		})
+
+		It("change service to LoadBalancer, to make it unavailable", func() {
+			Eventually(func() error {
+				var service corev1.Service
+				err := hubClient.Get(ctx, types.NamespacedName{Name: testService.Name, Namespace: testService.Namespace}, &service)
+				if err != nil {
+					return err
+				}
+				service.Spec.Type = corev1.ServiceTypeLoadBalancer
+				return hubClient.Update(ctx, &service)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to change the service type to LoadBalancer")
+		})
+
+		It("should update CRP status as expected", func() {
+			failedDeploymentResourceIdentifier := placementv1beta1.ResourceIdentifier{
+				Group:     corev1.SchemeGroupVersion.Group,
+				Version:   corev1.SchemeGroupVersion.Version,
+				Kind:      utils.ServiceKind,
+				Name:      testService.Name,
+				Namespace: testService.Namespace,
+			}
+			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDeploymentResourceIdentifier, allMemberClusterNames, "1")
+			Eventually(crpStatusActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		AfterAll(func() {
+			// Remove the custom deletion blocker finalizer from the CRP.
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		})
+	})
 })
 
 func readDeploymentTestManifest(testDeployment *appv1.Deployment) {
@@ -463,6 +482,12 @@ func readStatefulSetTestManifest(testStatefulSet *appv1.StatefulSet) {
 	Expect(err).Should(Succeed())
 }
 
+func readServiceTestManifest(testService *corev1.Service) {
+	By("Read the service resource")
+	err := utils.GetObjectFromManifest("resources/test-service.yaml", testService)
+	Expect(err).Should(Succeed())
+}
+
 func readEnvelopeConfigMapTestManifest(testEnvelopeObj *corev1.ConfigMap) {
 	By("Read testEnvelopConfigMap resource")
 	err := utils.GetObjectFromManifest("resources/test-envelope-object.yaml", testEnvelopeObj)
@@ -474,6 +499,13 @@ func createDeploymentForRollout(testDeployment *appv1.Deployment) {
 	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
 	testDeployment.Namespace = ns.Name
 	Expect(hubClient.Create(ctx, testDeployment)).To(Succeed(), "Failed to create test deployment %s", testDeployment.Name)
+}
+
+func createServiceForRollout(testService *corev1.Service) {
+	ns := appNamespace()
+	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
+	testService.Namespace = ns.Name
+	Expect(hubClient.Create(ctx, testService)).To(Succeed(), "Failed to create test service %s", testService.Name)
 }
 
 // createWrappedResourcesForRollout creates an enveloped resource on the hub cluster with a workload object for testing purposes.
@@ -564,5 +596,47 @@ func waitForStatefulSetPlacementToReady(memberCluster *framework.Cluster, testSt
 			return nil
 		}
 		return errors.New("statefulset is not ready")
+	}
+}
+
+func waitForServiceToReady(memberCluster *framework.Cluster, testService *corev1.Service) func() error {
+	workNamespaceName := appNamespace().Name
+	return func() error {
+		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: workNamespaceName}); err != nil {
+			return err
+		}
+		By("check the placedService")
+		placedService := &corev1.Service{}
+		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testService.Name}, placedService); err != nil {
+			return err
+		}
+		By("check the placedService is ready")
+		if placedService.Spec.ClusterIP != "" {
+			return nil
+		}
+		return errors.New("service is not ready")
+	}
+}
+
+func buildCRPForSafeRollout() *placementv1beta1.ClusterResourcePlacement {
+	return &placementv1beta1.ClusterResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess()),
+			// Add a custom finalizer; this would allow us to better observe
+			// the behavior of the controllers.
+			Finalizers: []string{customDeletionBlockerFinalizer},
+		},
+		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			ResourceSelectors: workResourceSelector(),
+			Strategy: placementv1beta1.RolloutStrategy{
+				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+					MaxUnavailable: &intstr.IntOrString{
+						Type:   intstr.Int,
+						IntVal: 1,
+					},
+				},
+			},
+		},
 	}
 }
