@@ -243,22 +243,19 @@ var _ = Describe("Work Status Reconciler", func() {
 		Expect(len(appliedWork.Status.AppliedResources)).Should(Equal(2))
 
 		By("replace configMap with a bad object from the work")
-		broadcastJob := &kruisev1alpha1.BroadcastJob{
+		cloneSet := &kruisev1alpha1.CloneSet{
 			TypeMeta: metav1.TypeMeta{
-				APIVersion: kruisev1alpha1.SchemeGroupVersion.String(),
-				Kind:       "BroadcastJob",
+				APIVersion: "invalid",
+				Kind:       "CloneSet",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "broadcastjob-" + utilrand.String(5),
+				Name:      "invalid-" + utilrand.String(5),
 				Namespace: workNamespace,
-			},
-			Spec: kruisev1alpha1.BroadcastJobSpec{
-				Paused: true,
 			},
 		}
 		currentWork.Spec.Workload.Manifests = []workv1alpha1.Manifest{
 			{
-				RawExtension: runtime.RawExtension{Object: broadcastJob},
+				RawExtension: runtime.RawExtension{Object: cloneSet},
 			},
 		}
 		Expect(k8sClient.Update(context.Background(), currentWork)).Should(Succeed())

@@ -563,22 +563,17 @@ var _ = Describe("Work Controller", func() {
 		})
 
 		It("Check that failed to apply manifest has the proper identification", func() {
-			broadcastName := "testfail"
-			namespace := defaultNS
-			broadcastJob := &kruisev1alpha1.BroadcastJob{
+			cloneSet := &kruisev1alpha1.CloneSet{
 				TypeMeta: metav1.TypeMeta{
-					APIVersion: kruisev1alpha1.SchemeGroupVersion.String(),
-					Kind:       "BroadcastJob",
+					APIVersion: "invalid",
+					Kind:       "CloneSet",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      broadcastName,
-					Namespace: namespace,
-				},
-				Spec: kruisev1alpha1.BroadcastJobSpec{
-					Paused: true,
+					Name:      "testfail",
+					Namespace: defaultNS,
 				},
 			}
-			work = createWorkWithManifest(testWorkNamespace, broadcastJob)
+			work = createWorkWithManifest(testWorkNamespace, cloneSet)
 			err := k8sClient.Create(context.Background(), work)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -600,11 +595,10 @@ var _ = Describe("Work Controller", func() {
 			}, timeout, interval).Should(BeTrue())
 			expectedResourceID := fleetv1beta1.WorkResourceIdentifier{
 				Ordinal:   0,
-				Group:     "apps.kruise.io",
-				Version:   "v1alpha1",
-				Kind:      "BroadcastJob",
-				Namespace: broadcastJob.GetNamespace(),
-				Name:      broadcastJob.GetName(),
+				Version:   "invalid",
+				Kind:      "CloneSet",
+				Namespace: cloneSet.GetNamespace(),
+				Name:      cloneSet.GetName(),
 			}
 			Expect(cmp.Diff(resultWork.Status.ManifestConditions[0].Identifier, expectedResourceID)).Should(BeEmpty())
 		})
