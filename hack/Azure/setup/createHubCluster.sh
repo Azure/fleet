@@ -1,8 +1,6 @@
 # This script creates a Hub CLuster from an AKS Cluster (AKS Cluster and Container Registry must be created beforehand).
 
-export RESOURCE_GROUP=$1
-export LOCATION=$2
-export HUB_CLUSTER=$3
+export HUB_CLUSTER=$1
 
 az account set -s ${SUB}
 az group create --name $RESOURCE_GROUP --location $LOCATION

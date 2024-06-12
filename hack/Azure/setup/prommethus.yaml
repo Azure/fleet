@@ -1,0 +1,8 @@
+prometheus:
+  service:
+    type: LoadBalancer
+    prometheusSpec:
+      additionalScrapeConfigs:
+        - job_name: "fleet"
+          static_configs:
+          - targets: ["<EXTERNAL-IP>:8080"]
