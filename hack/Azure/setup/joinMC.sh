@@ -36,7 +36,7 @@ metadata:
 type: kubernetes.io/service-account-token
 EOF
 
-echo "Creating member cluster..."
+echo "Creating member cluster CR..."
 export TOKEN="$(kubectl get secret $SERVICE_ACCOUNT_SECRET -n fleet-system -o jsonpath='{.data.token}' | base64 --decode)"
 cat <<EOF | kubectl apply -f -
 apiVersion: cluster.kubernetes-fleet.io/v1beta1
@@ -49,7 +49,7 @@ spec:
         kind: ServiceAccount
         namespace: fleet-system
         apiGroup: ""
-    heartbeatPeriodSeconds: 60
+    heartbeatPeriodSeconds: 15
 EOF
 
 # # Install the member agent helm chart on the member cluster.
@@ -72,6 +72,9 @@ kubectl config use-context $MEMBER_CLUSTER_CONTEXT
 # Create the secret with the token extracted previously for member agent to use.
 echo "Creating secret..."
 kubectl create secret generic hub-kubeconfig-secret --from-literal=token=$TOKEN
+
+echo "Uninstalling member-agent..."
+helm uninstall member-agent --wait
 
 echo "Installing member-agent..."
 helm install member-agent charts/member-agent/ \

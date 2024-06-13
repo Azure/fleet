@@ -27,10 +27,12 @@ run the commands bellow:
 ```sh
 # Replace the value of <AZURE-SUBSCRIPTION-ID> with your Azure subscription ID.
 export SUB=<AZURE-SUBSCRIPTION-ID>
+export RESOURCE_GROUP=<HUB_RESOURCE_GROUP>
+export LOCATION=<HUB_LOCATION>
 
-# Run the script. Be sure to replace the values of <RESOURCE-GROUP-NAME>, <LOCATION>, and <HUB-CLUSTER-NAME> with those of your own.
+# Run the script. Be sure to replace the values of <HUB-CLUSTER-NAME> with those of your own.
 chmod +x hack/Azure/setup/createHubCluster.sh
-./hack/Azure/setup/createHubCluster.sh <RESOURCE-GROUP-NAME> <LOCATION> <HUB-CLUSTER-NAME>
+./hack/Azure/setup/createHubCluster.sh <HUB-CLUSTER-NAME>
 ```
 
 It may take a few minutes for the script to finish running. Once it is completed, verify that the `hub-agent` has been installed:
@@ -49,9 +51,9 @@ If you would like to add a prometheus server to access metrics, run the followin
 
 2. Install the Prometheus community Helm Chart
    ```
-    helm install prom prometheus-community/kube-prometheus-stack -f prom1.yaml
+    helm install prom prometheus-community/kube-prometheus-stack -f prommethus.yaml
    ```
-   The `prom1.yaml` file should contain the following YAML code:
+   The `prommethus.yaml` file should contain the following YAML code:
     ```yaml
     prometheus:
         service:
@@ -76,13 +78,14 @@ A cluster can join in a hub cluster if:
 
 > Note
 >
-> To run this script, make sure you have already created cluster(s) and gotten their credentials.
+> To run this script, make sure you have already created cluster(s) and gotten their credentials in the same 
+> Kubeconfig file as the hub cluster.
 > 
 
 For your convenience, Fleet provides a script that can automate the process of joining a cluster
 onto a hub cluster. To use the script, run the commands below after creating needed AKS clusters:
 ```sh
-# Pass in the hub cluster name and a list of cluster names (separated by a space) as arguments to the script that you would like to 
+# Pass in the hub cluster name and a list of cluster context names (separated by a space) as arguments to the script that you would like to 
 # join the fleet as member clusters. Their context will be used to access the cluster.
 # Ex.: ./hack/setup/joinMC.sh test-hub member member2 member3 
 # Run the script.
