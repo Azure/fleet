@@ -30,7 +30,6 @@ import (
 var (
 	// pre loaded test manifests
 	testConfigMap, testEnvelopConfigMap corev1.ConfigMap
-	testService                         corev1.Service
 	testEnvelopeWebhook                 admv1.MutatingWebhookConfiguration
 	testEnvelopeResourceQuota           corev1.ResourceQuota
 )
@@ -302,10 +301,6 @@ func readEnvelopTestManifests() {
 
 	By("Read testEnvelopConfigMap resource")
 	err = utils.GetObjectFromManifest("resources/test-envelop-configmap.yaml", &testEnvelopConfigMap)
-	Expect(err).Should(Succeed())
-
-	By("Read testService resource")
-	err = utils.GetObjectFromManifest("resources/test-service.yaml", &testService)
 	Expect(err).Should(Succeed())
 
 	By("Read EnvelopeWebhook")

@@ -58,6 +58,7 @@ const (
 	DaemonSetKind   = "DaemonSet"
 	StatefulSetKind = "StatefulSet"
 	ConfigMapKind   = "ConfigMap"
+	ServiceKind     = "Service"
 	NamespaceKind   = "Namespace"
 )
 
