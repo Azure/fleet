@@ -8,6 +8,7 @@ package tests
 // This file features utilities used in the test suites.
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -726,4 +727,33 @@ func removeTaintsFromMemberClusters(memberClusterNames []string) {
 		mc.Spec.Taints = nil
 		Expect(hubClient.Update(ctx, &mc)).Should(Succeed(), "Failed to update member cluster")
 	}
+}
+
+func resetClusterPropertiesFor(clusterName string) {
+	now := metav1.Now()
+	expectedPropertyStatus := propertiesByCluster[clusterName]
+
+	// Reset the agent status.
+	Eventually(func() error {
+		memberCluster := &clusterv1beta1.MemberCluster{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: clusterName}, memberCluster); err != nil {
+			return fmt.Errorf("failed to get member cluster: %w", err)
+		}
+
+		properties := map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{}
+		for pn, pv := range expectedPropertyStatus.Properties {
+			pvc := pv.DeepCopy()
+			pvc.ObservationTime = now
+			properties[pn] = *pvc
+		}
+		memberCluster.Status.Properties = properties
+
+		memberCluster.Status.ResourceUsage = *expectedPropertyStatus.ResourceUsage.DeepCopy()
+		memberCluster.Status.ResourceUsage.ObservationTime = now
+
+		if err := hubClient.Status().Update(ctx, memberCluster); err != nil {
+			return fmt.Errorf("failed to update member cluster status: %w", err)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to reset cluster properties")
 }
