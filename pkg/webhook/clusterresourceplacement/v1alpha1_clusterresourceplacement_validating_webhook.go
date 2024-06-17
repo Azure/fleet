@@ -23,7 +23,7 @@ var (
 )
 
 type v1alpha1ClusterResourcePlacementValidator struct {
-	decoder *admission.Decoder
+	decoder webhook.AdmissionDecoder
 }
 
 // AddV1Alpha1 registers the webhook for K8s bulit-in object types.
