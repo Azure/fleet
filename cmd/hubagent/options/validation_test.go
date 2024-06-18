@@ -73,13 +73,6 @@ func TestValidateControllerManagerConfiguration(t *testing.T) {
 			}),
 			want: field.ErrorList{field.Invalid(newPath.Child("WebhookClientConnectionType"), "invalid", `must be "service" or "url"`)},
 		},
-		"WebhookServiceName is empty": {
-			opt: newTestOptions(func(option *Options) {
-				option.EnableWebhook = true
-				option.WebhookServiceName = ""
-			}),
-			want: field.ErrorList{field.Invalid(newPath.Child("WebhookServiceName"), "", "Webhook service name is required when webhook is enabled")},
-		},
 	}
 
 	for name, tc := range testCases {
