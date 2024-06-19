@@ -1,0 +1,10 @@
+apiVersion: test.kubernetes-fleet.io/v1alpha1
+kind: TestResource
+metadata:
+  name: random-test-resource
+  namespace: app
+spec:
+  foo: foo2
+  items:
+    - a
+    - b

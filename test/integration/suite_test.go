@@ -11,11 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
@@ -25,12 +22,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	// +kubebuilder:scaffold:imports
-
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/cmd/hubagent/workload"
 	mcv1alpha1 "go.goms.io/fleet/pkg/controllers/membercluster/v1alpha1"
+	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -40,7 +37,7 @@ var (
 	mgr manager.Manager
 
 	// pre loaded test manifests
-	namespacedResource = []string{"Namespace", "PodDisruptionBudget", "CloneSet", "ConfigMap", "Secret", "Service"}
+	namespacedResource = []string{"Namespace", "PodDisruptionBudget", "TestResource", "ConfigMap", "Secret", "Service"}
 )
 
 func TestAPIs(t *testing.T) {
@@ -61,7 +58,7 @@ var _ = BeforeSuite(func() {
 	By("Set all the customized scheme")
 	Expect(fleetv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(workv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
-	Expect(kruisev1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
+	Expect(testv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(fleetv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 
 	// get the codec with the all the scheme
@@ -99,7 +96,7 @@ var _ = BeforeSuite(func() {
 	}).SetupWithManager(mgr)
 	Expect(err).Should(Succeed())
 
-	By("Create all the test manifest resources")
+	By("Create/Get all the test manifest resources")
 	applyTestManifests()
 
 	By("Setup custom controllers")

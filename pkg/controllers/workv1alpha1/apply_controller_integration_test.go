@@ -30,18 +30,16 @@ import (
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
+
+	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
 )
 
 const timeout = time.Second * 10
@@ -337,19 +335,21 @@ var _ = Describe("Work Controller", func() {
 		})
 
 		It("Should pick up the crd change correctly", func() {
-			cloneName := "testcloneset"
-			cloneNamespace := defaultNS
-			cloneSet := &kruisev1alpha1.CloneSet{
+			testResourceName := "test-resource-name"
+			testResourceNamespace := defaultNS
+			testResource := &testv1alpha1.TestResource{
 				TypeMeta: metav1.TypeMeta{
-					APIVersion: kruisev1alpha1.SchemeGroupVersion.String(),
-					Kind:       "CloneSet",
+					APIVersion: testv1alpha1.GroupVersion.String(),
+					Kind:       "TestResource",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      cloneName,
-					Namespace: cloneNamespace,
+					Name:      testResourceName,
+					Namespace: testResourceNamespace,
 				},
-				Spec: kruisev1alpha1.CloneSetSpec{
-					Selector: &metav1.LabelSelector{
+				Spec: testv1alpha1.TestResourceSpec{
+					Foo: "foo",
+					Bar: "bar",
+					LabelSelector: &metav1.LabelSelector{
 						MatchExpressions: []metav1.LabelSelectorRequirement{
 							{
 								Key:      "region",
@@ -366,23 +366,23 @@ var _ = Describe("Work Controller", func() {
 			}
 
 			By("create the work")
-			work = createWorkWithManifest(workNamespace, cloneSet)
+			work = createWorkWithManifest(workNamespace, testResource)
 			err := k8sClient.Create(context.Background(), work)
 			Expect(err).ToNot(HaveOccurred())
 
 			By("wait for the work to be applied")
 			waitForWorkToApply(work.GetName(), work.GetNamespace())
 
-			By("Check applied CloneSet")
-			var appliedCloneSet kruisev1alpha1.CloneSet
-			Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: cloneName, Namespace: cloneNamespace}, &appliedCloneSet)).Should(Succeed())
+			By("Check applied TestResource")
+			var appliedTestResource testv1alpha1.TestResource
+			Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: testResourceName, Namespace: testResourceNamespace}, &appliedTestResource)).Should(Succeed())
 
-			By("verify the CloneSet spec")
-			Expect(cmp.Diff(appliedCloneSet.Spec, cloneSet.Spec)).Should(BeEmpty())
+			By("verify the TestResource spec")
+			Expect(cmp.Diff(appliedTestResource.Spec, testResource.Spec)).Should(BeEmpty())
 
-			By("Modify and update the applied CloneSet")
+			By("Modify and update the applied TestResource")
 			// add/modify/remove a match
-			appliedCloneSet.Spec.Selector.MatchExpressions = []metav1.LabelSelectorRequirement{
+			appliedTestResource.Spec.LabelSelector.MatchExpressions = []metav1.LabelSelectorRequirement{
 				{
 					Key:      "region",
 					Operator: metav1.LabelSelectorOpNotIn,
@@ -393,47 +393,45 @@ var _ = Describe("Work Controller", func() {
 					Operator: metav1.LabelSelectorOpExists,
 				},
 			}
-			appliedCloneSet.Spec.ScaleStrategy.PodsToDelete = []string{"a", "b"}
-			appliedCloneSet.Spec.MinReadySeconds = 10
-			Expect(k8sClient.Update(context.Background(), &appliedCloneSet)).Should(Succeed())
+			appliedTestResource.Spec.Items = []string{"a", "b"}
+			appliedTestResource.Spec.Foo = "foo1"
+			appliedTestResource.Spec.Bar = "bar1"
+			Expect(k8sClient.Update(context.Background(), &appliedTestResource)).Should(Succeed())
 
-			By("Verify applied CloneSet modified")
-			var modifiedCloneSet kruisev1alpha1.CloneSet
-			Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: cloneName, Namespace: cloneNamespace}, &modifiedCloneSet)).Should(Succeed())
-			Expect(cmp.Diff(appliedCloneSet.Spec, modifiedCloneSet.Spec)).Should(BeEmpty())
+			By("Verify applied TestResource modified")
+			var modifiedTestResource testv1alpha1.TestResource
+			Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: testResourceName, Namespace: testResourceNamespace}, &modifiedTestResource)).Should(Succeed())
+			Expect(cmp.Diff(appliedTestResource.Spec, modifiedTestResource.Spec)).Should(BeEmpty())
 
-			By("Modify the cloneset")
-			cloneSet.Spec.Selector.MatchExpressions = []metav1.LabelSelectorRequirement{
+			By("Modify the TestResource")
+			testResource.Spec.LabelSelector.MatchExpressions = []metav1.LabelSelectorRequirement{
 				{
 					Key:      "region",
 					Operator: metav1.LabelSelectorOpNotIn,
 					Values:   []string{"us", "asia", "eu"},
 				},
 			}
-			cloneSet.Spec.Replicas = ptr.To(int32(10))
-			cloneSet.Spec.MinReadySeconds = 1
-			maxuavail := intstr.FromInt(10)
-			cloneSet.Spec.ScaleStrategy.MaxUnavailable = &maxuavail
+			testResource.Spec.Foo = "foo2"
+			testResource.Spec.Bar = "bar2"
 			By("update the work")
 			resultWork := waitForWorkToApply(work.GetName(), work.GetNamespace())
-			rawCM, err := json.Marshal(cloneSet)
+			rawTR, err := json.Marshal(testResource)
 			Expect(err).Should(Succeed())
-			resultWork.Spec.Workload.Manifests[0].Raw = rawCM
+			resultWork.Spec.Workload.Manifests[0].Raw = rawTR
 			Expect(k8sClient.Update(context.Background(), resultWork)).Should(Succeed())
 			waitForWorkToApply(work.GetName(), work.GetNamespace())
 
-			By("Get the last applied cloneset")
-			Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: cloneName, Namespace: cloneNamespace}, &appliedCloneSet)).Should(Succeed())
+			By("Get the last applied TestResource")
+			Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: testResourceName, Namespace: testResourceNamespace}, &appliedTestResource)).Should(Succeed())
 
-			By("Check the cloneset spec, its an overide for arrays")
-			expectStrategy := kruisev1alpha1.CloneSetScaleStrategy{
-				PodsToDelete:   []string{"a", "b"},
-				MaxUnavailable: &maxuavail,
-			}
-			Expect(cmp.Diff(appliedCloneSet.Spec.ScaleStrategy, expectStrategy)).Should(BeEmpty())
-			Expect(cmp.Diff(appliedCloneSet.Spec.Selector, cloneSet.Spec.Selector)).Should(BeEmpty())
-			Expect(cmp.Diff(appliedCloneSet.Spec.Replicas, ptr.To(int32(10)))).Should(BeEmpty())
-			Expect(cmp.Diff(appliedCloneSet.Spec.MinReadySeconds, int32(1))).Should(BeEmpty())
+			By("Check the TestResource spec, its an override for arrays")
+			expectedItems := []string{"a", "b"}
+			Expect(cmp.Diff(appliedTestResource.Spec.Items, expectedItems)).Should(BeEmpty())
+			Expect(cmp.Diff(appliedTestResource.Spec.LabelSelector, testResource.Spec.LabelSelector)).Should(BeEmpty())
+			Expect(cmp.Diff(appliedTestResource.Spec.Foo, "foo2")).Should(BeEmpty())
+			Expect(cmp.Diff(appliedTestResource.Spec.Bar, "bar2")).Should(BeEmpty())
+
+			Expect(k8sClient.Delete(ctx, work)).Should(Succeed(), "Failed to deleted the work")
 		})
 
 		It("Check that owner references is merged instead of override", func() {
@@ -546,26 +544,27 @@ var _ = Describe("Work Controller", func() {
 		})
 
 		It("Check that failed to apply manifest has the proper identification", func() {
-			broadcastName := "testfail"
-			namespace := defaultNS
-			broadcastJob := &kruisev1alpha1.BroadcastJob{
+			testResourceName := "test-resource-name-failed"
+			// to ensure apply fails.
+			namespace := "random-test-namespace"
+			testResource := &testv1alpha1.TestResource{
 				TypeMeta: metav1.TypeMeta{
-					APIVersion: kruisev1alpha1.SchemeGroupVersion.String(),
-					Kind:       "BroadcastJob",
+					APIVersion: testv1alpha1.GroupVersion.String(),
+					Kind:       "TestResource",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      broadcastName,
+					Name:      testResourceName,
 					Namespace: namespace,
 				},
-				Spec: kruisev1alpha1.BroadcastJobSpec{
-					Paused: true,
+				Spec: testv1alpha1.TestResourceSpec{
+					Foo: "foo",
 				},
 			}
-			work = createWorkWithManifest(workNamespace, broadcastJob)
+			work = createWorkWithManifest(workNamespace, testResource)
 			err := k8sClient.Create(context.Background(), work)
 			Expect(err).ToNot(HaveOccurred())
 
-			By("wait for the work to be applied")
+			By("wait for the work to be applied, apply condition set to failed")
 			var resultWork workv1alpha1.Work
 			Eventually(func() bool {
 				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: work.Name, Namespace: work.GetNamespace()}, &resultWork)
@@ -583,11 +582,12 @@ var _ = Describe("Work Controller", func() {
 			}, timeout, interval).Should(BeTrue())
 			expectedResourceID := workv1alpha1.ResourceIdentifier{
 				Ordinal:   0,
-				Group:     "apps.kruise.io",
-				Version:   "v1alpha1",
-				Kind:      "BroadcastJob",
-				Namespace: broadcastJob.GetNamespace(),
-				Name:      broadcastJob.GetName(),
+				Group:     testv1alpha1.GroupVersion.Group,
+				Version:   testv1alpha1.GroupVersion.Version,
+				Resource:  "testresources",
+				Kind:      testResource.Kind,
+				Namespace: testResource.GetNamespace(),
+				Name:      testResource.GetName(),
 			}
 			Expect(cmp.Diff(resultWork.Status.ManifestConditions[0].Identifier, expectedResourceID)).Should(BeEmpty())
 		})
