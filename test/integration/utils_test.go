@@ -13,7 +13,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	omegatypes "github.com/onsi/gomega/types"
-	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
 	"golang.org/x/exp/slices"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -31,6 +30,7 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
+	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
 )
 
 const (
@@ -47,10 +47,10 @@ var (
 	genericCodec runtime.Decoder
 
 	// pre loaded test manifests
-	testClonesetCRD apiextensionsv1.CustomResourceDefinition
 	testClusterRole rbacv1.ClusterRole
 	testNameSpace   corev1.Namespace
-	testCloneset    kruisev1alpha1.CloneSet
+	testResourceCRD apiextensionsv1.CustomResourceDefinition
+	testResource    testv1alpha1.TestResource
 	testConfigMap   corev1.ConfigMap
 	testSecret      corev1.Secret
 	testService     corev1.Service
@@ -60,14 +60,14 @@ var (
 // applyTestManifests creates the test manifests in the hub cluster.
 // Here is the list, please do NOT change this list unless you know what you are doing.
 // ClusterScoped resource:
-// Cloneset CRD, ClusterRole, Namespace
+// TestResource CRD, ClusterRole, Namespace
 // Namespaced resources:
-// Cloneset CR, Pdb, Configmap, Secret, Service.
+// TestResource CR, Pdb, Configmap, Secret, Service.
 func applyTestManifests() {
-	By("Create testCloneset CRD")
-	err := utils.GetObjectFromManifest("manifests/resources/test_clonesets_crd.yaml", &testClonesetCRD)
+	By("Create testResource CRD")
+	err := utils.GetObjectFromManifest("manifests/resources/test_testresources_crd.yaml", &testResourceCRD)
 	Expect(err).Should(Succeed())
-	Expect(k8sClient.Create(ctx, &testClonesetCRD)).Should(Succeed())
+	Expect(k8sClient.Create(ctx, &testResourceCRD)).Should(Succeed())
 
 	// TODO: replace the rest objects with programmatic definition
 	By("Create testClusterRole resource")
@@ -100,10 +100,10 @@ func applyTestManifests() {
 	Expect(err).Should(Succeed())
 	Expect(k8sClient.Create(ctx, &testService)).Should(Succeed())
 
-	By("Create testCloneset resource")
-	err = utils.GetObjectFromManifest("manifests/resources/test-cloneset.yaml", &testCloneset)
+	By("Create testResource resource")
+	err = utils.GetObjectFromManifest("manifests/resources/test-resource.yaml", &testResource)
 	Expect(err).Should(Succeed())
-	Expect(k8sClient.Create(ctx, &testCloneset)).Should(Succeed())
+	Expect(k8sClient.Create(ctx, &testResource)).Should(Succeed())
 }
 
 func deleteTestManifests() {
@@ -123,11 +123,11 @@ func deleteTestManifests() {
 	By("Delete testService resource")
 	Expect(k8sClient.Delete(ctx, &testService)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 
-	By("Delete testCloneset resource")
-	Expect(k8sClient.Delete(ctx, &testCloneset)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
+	By("Delete testResource resource")
+	Expect(k8sClient.Delete(ctx, &testResource)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 
-	By("Delete testCloneset CRD")
-	Expect(k8sClient.Delete(ctx, &testClonesetCRD)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
+	By("Delete testResource CRD")
+	Expect(k8sClient.Delete(ctx, &testResourceCRD)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 
 	// delete the namespace the last as there is no GC
 	By("Delete namespace")
@@ -145,10 +145,10 @@ func verifyManifest(manifest unstructured.Unstructured) {
 	// compare with the original
 	switch manifest.GetObjectKind().GroupVersionKind().Kind {
 	case "CustomResourceDefinition":
-		var workClonesetCRD apiextensionsv1.CustomResourceDefinition
-		Expect(runtime.DefaultUnstructuredConverter.FromUnstructured(manifest.Object, &workClonesetCRD)).Should(Succeed())
-		Expect(workClonesetCRD.GetName()).Should(Equal(testClonesetCRD.GetName()))
-		Expect(workClonesetCRD.Spec.Versions[0]).Should(Equal(testClonesetCRD.Spec.Versions[0]))
+		var workTestResource apiextensionsv1.CustomResourceDefinition
+		Expect(runtime.DefaultUnstructuredConverter.FromUnstructured(manifest.Object, &workTestResource)).Should(Succeed())
+		Expect(workTestResource.GetName()).Should(Equal(testResourceCRD.Name))
+		Expect(workTestResource.Spec.Versions[0]).Should(Equal(testResourceCRD.Spec.Versions[0]))
 
 	case "ClusterRole":
 		var workClusterRole rbacv1.ClusterRole
@@ -161,11 +161,11 @@ func verifyManifest(manifest unstructured.Unstructured) {
 		Expect(runtime.DefaultUnstructuredConverter.FromUnstructured(manifest.Object, &workNameSpace)).Should(Succeed())
 		Expect(workNameSpace.GetName()).Should(Equal(testNameSpace.GetName()))
 
-	case "CloneSet":
-		var workCloneset kruisev1alpha1.CloneSet
-		Expect(runtime.DefaultUnstructuredConverter.FromUnstructured(manifest.Object, &workCloneset)).Should(Succeed())
-		Expect(workCloneset.GetName()).Should(Equal(testCloneset.GetName()))
-		Expect(workCloneset.Spec).Should(Equal(testCloneset.Spec))
+	case "TestResource":
+		var workTestResource testv1alpha1.TestResource
+		Expect(runtime.DefaultUnstructuredConverter.FromUnstructured(manifest.Object, &workTestResource)).Should(Succeed())
+		Expect(workTestResource.GetName()).Should(Equal(workTestResource.GetName()))
+		Expect(workTestResource.Spec).Should(Equal(workTestResource.Spec))
 
 	case "ConfigMap":
 		var workConfigMap corev1.ConfigMap

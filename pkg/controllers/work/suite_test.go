@@ -31,7 +31,6 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
@@ -46,6 +45,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -159,7 +159,7 @@ var _ = BeforeSuite(func() {
 
 	err = fleetv1beta1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
-	err = kruisev1alpha1.AddToScheme(scheme.Scheme)
+	err = testv1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 	opts := ctrl.Options{
 		Scheme: scheme.Scheme,

@@ -233,7 +233,7 @@ CRD_OPTIONS ?= "crd"
 .PHONY: manifests
 manifests: $(CONTROLLER_GEN)
 	$(CONTROLLER_GEN) \
-		$(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+		$(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./apis/..." output:crd:artifacts:config=config/crd/bases
 
 # Generate code
 generate: $(CONTROLLER_GEN)
