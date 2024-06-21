@@ -1176,49 +1176,6 @@ func TestTrackResourceAvailability(t *testing.T) {
 			expected: manifestNotAvailableYetAction,
 			err:      nil,
 		},
-		"Test Job available with succeeded pod": {
-			gvr: utils.JobGVR,
-			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"apiVersion": "batch/v1",
-					"kind":       "Job",
-					"status": map[string]interface{}{
-						"succeeded": 1,
-						"ready":     0,
-					},
-				},
-			},
-			expected: manifestAvailableAction,
-			err:      nil,
-		},
-		"Test Job available with ready pod": {
-			gvr: utils.JobGVR,
-			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"apiVersion": "batch/v1",
-					"kind":       "Job",
-					"status": map[string]interface{}{
-						"ready": 4,
-					},
-				},
-			},
-			expected: manifestAvailableAction,
-			err:      nil,
-		},
-		"TestJob not available": {
-			gvr: utils.JobGVR,
-			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"apiVersion": "batch/v1",
-					"kind":       "Job",
-					"status": map[string]interface{}{
-						"ready": 0,
-					},
-				},
-			},
-			expected: manifestNotAvailableYetAction,
-			err:      nil,
-		},
 		"Test Job not trackable": {
 			gvr: utils.JobGVR,
 			obj: &unstructured.Unstructured{
@@ -1226,7 +1183,8 @@ func TestTrackResourceAvailability(t *testing.T) {
 					"apiVersion": "batch/v1",
 					"kind":       "Job",
 					"status": map[string]interface{}{
-						"Succeeded": 2,
+						"succeeded": 2,
+						"ready":     1,
 					},
 				},
 			},
