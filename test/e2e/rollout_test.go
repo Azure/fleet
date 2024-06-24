@@ -490,7 +490,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			}
 		})
 
-		It("create the service resource in the namespace", func() {
+		It("create the job resource in the namespace", func() {
 			createJobForRollout(&testJob)
 		})
 
