@@ -27,7 +27,7 @@ spec:
       name: Age
       type: date
     - jsonPath: .status.properties.kubernetes-fleet\.io/node-count.value
-      name: NodeCount
+      name: Node-Count
       type: string
     - jsonPath: .status.resourceUsage.available.cpu
       name: Available-CPU
@@ -417,7 +417,7 @@ spec:
       name: Age
       type: date
     - jsonPath: .status.properties.kubernetes-fleet\.io/node-count.value
-      name: NodeCount
+      name: Node-Count
       type: string
     - jsonPath: .status.resourceUsage.available.cpu
       name: Available-CPU
