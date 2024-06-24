@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -463,6 +464,75 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 		})
 	})
+
+	Context("Test a CRP place workload objects successfully, don't block rollout based on job availability", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		workNamespaceName := appNamespace().Name
+		var wantSelectedResources []placementv1beta1.ResourceIdentifier
+		var testJob batchv1.Job
+
+		BeforeAll(func() {
+			// Create the test resources.
+			readJobTestManifest(&testJob)
+			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
+				{
+					Kind:    utils.NamespaceKind,
+					Name:    workNamespaceName,
+					Version: corev1.SchemeGroupVersion.Version,
+				},
+				{
+					Kind:      utils.JobKind,
+					Name:      testJob.Name,
+					Version:   batchv1.SchemeGroupVersion.Version,
+					Namespace: workNamespaceName,
+				},
+			}
+		})
+
+		It("create the service resource in the namespace", func() {
+			createJobForRollout(&testJob)
+		})
+
+		It("create the CRP that select the namespace", func() {
+			crp := buildCRPForSafeRollout()
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
+
+		It("should update CRP status as expected", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
+			Eventually(crpStatusUpdatedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should place the resources on all member clusters", func() {
+			for idx := range allMemberClusters {
+				memberCluster := allMemberClusters[idx]
+				workResourcesPlacedActual := waitForJobToBePlaced(memberCluster, &testJob)
+				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+			}
+		})
+
+		It("suspend job", func() {
+			Eventually(func() error {
+				var service corev1.Service
+				err := hubClient.Get(ctx, types.NamespacedName{Name: testJob.Name, Namespace: testJob.Namespace}, &service)
+				if err != nil {
+					return err
+				}
+				testJob.Spec.Suspend = ptr.To(true)
+				return hubClient.Update(ctx, &service)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to change the service type to LoadBalancer")
+		})
+
+		It("should update CRP status as expected", func() {
+			crpStatusActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "1")
+			Eventually(crpStatusActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		AfterAll(func() {
+			// Remove the custom deletion blocker finalizer from the CRP.
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		})
+	})
 })
 
 func readDeploymentTestManifest(testDeployment *appv1.Deployment) {
@@ -489,6 +559,12 @@ func readServiceTestManifest(testService *corev1.Service) {
 	Expect(err).Should(Succeed())
 }
 
+func readJobTestManifest(testManifest *batchv1.Job) {
+	By("Read the job resource")
+	err := utils.GetObjectFromManifest("resources/test-job.yaml", testManifest)
+	Expect(err).Should(Succeed())
+}
+
 func readEnvelopeConfigMapTestManifest(testEnvelopeObj *corev1.ConfigMap) {
 	By("Read testEnvelopConfigMap resource")
 	err := utils.GetObjectFromManifest("resources/test-envelope-object.yaml", testEnvelopeObj)
@@ -507,6 +583,12 @@ func createServiceForRollout(testService *corev1.Service) {
 	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
 	testService.Namespace = ns.Name
 	Expect(hubClient.Create(ctx, testService)).To(Succeed(), "Failed to create test service %s", testService.Name)
+}
+
+func createJobForRollout(testJob *batchv1.Job) {
+	ns := appNamespace()
+	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
+	testJob.Namespace = ns.Name
 }
 
 // createWrappedResourcesForRollout creates an enveloped resource on the hub cluster with a workload object for testing purposes.
@@ -616,6 +698,21 @@ func waitForServiceToReady(memberCluster *framework.Cluster, testService *corev1
 			return nil
 		}
 		return errors.New("service is not ready")
+	}
+}
+
+func waitForJobToBePlaced(memberCluster *framework.Cluster, testJob *batchv1.Job) func() error {
+	workNamespaceName := appNamespace().Name
+	return func() error {
+		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: workNamespaceName}); err != nil {
+			return err
+		}
+		By("check the placedJob")
+		placedJob := &batchv1.Job{}
+		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testJob.Name}, placedJob); err != nil {
+			return err
+		}
+		return nil
 	}
 }
 
