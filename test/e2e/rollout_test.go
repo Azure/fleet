@@ -710,11 +710,7 @@ func waitForJobToBePlaced(memberCluster *framework.Cluster, testJob *batchv1.Job
 			return err
 		}
 		By("check the placedJob")
-		placedJob := &batchv1.Job{}
-		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testJob.Name}, placedJob); err != nil {
-			return err
-		}
-		return nil
+		return memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testJob.Name}, &batchv1.Job{})
 	}
 }
 
