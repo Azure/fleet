@@ -600,7 +600,7 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 
 		It("should allow CREATE operation on Other CRDs", func() {
 			var crd apiextensionsv1.CustomResourceDefinition
-			Expect(utils.GetObjectFromManifest("./test/integration/manifests/resources/test_testresources_crd.yaml", &crd)).Should(Succeed())
+			Expect(utils.GetObjectFromManifest("./test/manifests/test_testresources_crd.yaml", &crd)).Should(Succeed())
 
 			By("create test resource CRD")
 			Expect(HubCluster.KubeClient.Create(ctx, &crd)).To(Succeed())
