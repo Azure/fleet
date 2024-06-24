@@ -307,7 +307,7 @@ var _ = AfterSuite(func() {
 
 func readTestManifests() {
 	By("Read testResource CRD")
-	rawByte, err := os.ReadFile("manifests/test_testresources_crd.yaml")
+	rawByte, err := os.ReadFile("../../../test/manifests/test_testresources_crd.yaml")
 	Expect(err).Should(Succeed())
 	testResourceCRD, err = yaml.ToJSON(rawByte)
 	Expect(err).Should(Succeed())
@@ -319,7 +319,7 @@ func readTestManifests() {
 	Expect(err).Should(Succeed())
 
 	By("Read TestResource CR")
-	rawByte, err = os.ReadFile("manifests/test-resource.yaml")
+	rawByte, err = os.ReadFile("../../../test/manifests/test-resource.yaml")
 	Expect(err).Should(Succeed())
 	testResource, err = yaml.ToJSON(rawByte)
 	Expect(err).Should(Succeed())
