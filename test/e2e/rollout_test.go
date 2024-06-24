@@ -481,9 +481,10 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 					Version: corev1.SchemeGroupVersion.Version,
 				},
 				{
+					Group:     batchv1.SchemeGroupVersion.Group,
+					Version:   batchv1.SchemeGroupVersion.Version,
 					Kind:      utils.JobKind,
 					Name:      testJob.Name,
-					Version:   batchv1.SchemeGroupVersion.Version,
 					Namespace: workNamespaceName,
 				},
 			}
@@ -499,7 +500,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", false)
 			Eventually(crpStatusUpdatedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -513,19 +514,19 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("suspend job", func() {
 			Eventually(func() error {
-				var service corev1.Service
-				err := hubClient.Get(ctx, types.NamespacedName{Name: testJob.Name, Namespace: testJob.Namespace}, &service)
+				var job batchv1.Job
+				err := hubClient.Get(ctx, types.NamespacedName{Name: testJob.Name, Namespace: testJob.Namespace}, &job)
 				if err != nil {
 					return err
 				}
-				testJob.Spec.Suspend = ptr.To(true)
-				return hubClient.Update(ctx, &service)
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to change the service type to LoadBalancer")
+				job.Spec.Suspend = ptr.To(true)
+				return hubClient.Update(ctx, &job)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to suspend job")
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "1")
-			Eventually(crpStatusActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "1", false)
+			Eventually(crpStatusUpdatedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
@@ -589,6 +590,7 @@ func createJobForRollout(testJob *batchv1.Job) {
 	ns := appNamespace()
 	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
 	testJob.Namespace = ns.Name
+	Expect(hubClient.Create(ctx, testJob)).To(Succeed(), "Failed to create test job %s", testJob.Name)
 }
 
 // createWrappedResourcesForRollout creates an enveloped resource on the hub cluster with a workload object for testing purposes.
