@@ -274,12 +274,24 @@ func newSchedulingDecisionsFromBindings(
 	// Pre-allocate with a reasonable capacity.
 	newDecisions := make([]placementv1beta1.ClusterDecision, 0, maxUnselectedClusterDecisionCount)
 
+	// Track clusters that have been added to the decision list.
+	//
+	// This is to avoid duplicate entries in the decision list, caused by a rare occurrence
+	// where a cluster is picked before, but later loses its status as a matching (or most
+	// preferable) cluster (e.g., a label/cluster property change) under the evaluation
+	// of **the same** scheduling policy.
+	//
+	// Note that for such occurrences, we will honor the previously made decisions in an attempt
+	// to reduce fluctations.
+	seenClusters := make(map[string]bool)
+
 	// Build new scheduling decisions.
 	slotsLeft := clustersDecisionArrayLengthLimitInAPI
 	for _, bindingSet := range existing {
 		setLength := len(bindingSet)
 		for i := 0; i < setLength && i < slotsLeft; i++ {
 			newDecisions = append(newDecisions, bindingSet[i].Spec.ClusterDecision)
+			seenClusters[bindingSet[i].Spec.TargetCluster] = true
 		}
 
 		slotsLeft -= setLength
@@ -294,6 +306,11 @@ func newSchedulingDecisionsFromBindings(
 	for _, sc := range notPicked {
 		if slotsLeft == 0 || maxUnselectedClusterDecisionCount == 0 {
 			break
+		}
+
+		if seenClusters[sc.Cluster.Name] {
+			// Skip clusters that have been added to the decision list.
+			continue
 		}
 
 		newDecisions = append(newDecisions, placementv1beta1.ClusterDecision{
@@ -313,6 +330,11 @@ func newSchedulingDecisionsFromBindings(
 	// Move some decisions from unbound clusters, if there are still enough room.
 	for i := 0; i < maxUnselectedClusterDecisionCount && i < len(filtered) && i < slotsLeft; i++ {
 		clusterWithStatus := filtered[i]
+		if _, ok := seenClusters[clusterWithStatus.cluster.Name]; ok {
+			// Skip clusters that have been added to the decision list.
+			continue
+		}
+
 		newDecisions = append(newDecisions, placementv1beta1.ClusterDecision{
 			ClusterName: clusterWithStatus.cluster.Name,
 			Selected:    false,
