@@ -284,15 +284,20 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *clusterv1beta1.Membe
 	}
 
 	// migration: To add new label to all existing member cluster namespaces.
-	if currentNS.GetLabels()[placementv1beta1.FleetResourceLabelKey] == "" {
+	if currentNS.GetLabels()[placementv1beta1.FleetResourceLabelKey] == "" || currentNS.DeletionTimestamp != nil {
 		klog.V(2).InfoS("patching namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
 		patch := client.MergeFrom(currentNS.DeepCopy())
 		currentNS.ObjectMeta.Labels[placementv1beta1.FleetResourceLabelKey] = fleetNamespaceLabelValue
+
+		// There is a corner case that the same member leaves and joins again in a short time.
+		// And garbage collector does not delete the namespace before the member joins.
+		resetDeletionTimestamp := currentNS.DeletionTimestamp != nil
+		currentNS.DeletionTimestamp = nil
 		if err := r.Client.Patch(ctx, &currentNS, patch, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
 			return "", fmt.Errorf("failed to patch namespace %s: %w", namespaceName, err)
 		}
 		r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonNamespacePatched, "Namespace was patched")
-		klog.V(2).InfoS("patched namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
+		klog.V(2).InfoS("patched namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName, "resetDeletionTimestamp", resetDeletionTimestamp)
 	}
 	return namespaceName, nil
 }
@@ -327,16 +332,20 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *clusterv1beta1.MemberClus
 	}
 
 	// Updates role if currentRole != expectedRole.
-	if reflect.DeepEqual(currentRole.Rules, expectedRole.Rules) {
+	if reflect.DeepEqual(currentRole.Rules, expectedRole.Rules) || currentRole.DeletionTimestamp == nil {
 		return roleName, nil
 	}
 	currentRole.Rules = expectedRole.Rules
+	// There is a corner case that the same member leaves and joins again in a short time.
+	// And garbage collector does not delete the role before the member joins.
+	resetDeletionTimestamp := currentRole.DeletionTimestamp != nil
+	currentRole.DeletionTimestamp = nil
 	klog.V(2).InfoS("updating role", "memberCluster", klog.KObj(mc), "role", roleName)
 	if err := r.Client.Update(ctx, &currentRole, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
 		return "", fmt.Errorf("failed to update role %s with rules %+v: %w", roleName, currentRole.Rules, err)
 	}
 	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonRoleUpdated, "role was updated")
-	klog.V(2).InfoS("updated role", "memberCluster", klog.KObj(mc), "role", roleName)
+	klog.V(2).InfoS("updated role", "memberCluster", klog.KObj(mc), "role", roleName, "resetDeletionTimestamp", resetDeletionTimestamp)
 	return roleName, nil
 }
 
@@ -375,17 +384,23 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *clusterv1beta1.Mem
 	}
 
 	// Updates role binding if currentRoleBinding != expectedRoleBinding.
-	if reflect.DeepEqual(currentRoleBinding.Subjects, expectedRoleBinding.Subjects) && reflect.DeepEqual(currentRoleBinding.RoleRef, expectedRoleBinding.RoleRef) {
+	if reflect.DeepEqual(currentRoleBinding.Subjects, expectedRoleBinding.Subjects) &&
+		reflect.DeepEqual(currentRoleBinding.RoleRef, expectedRoleBinding.RoleRef) &&
+		currentRoleBinding.DeletionTimestamp == nil {
 		return nil
 	}
 	currentRoleBinding.Subjects = expectedRoleBinding.Subjects
 	currentRoleBinding.RoleRef = expectedRoleBinding.RoleRef
+	// There is a corner case that the same member leaves and joins again in a short time.
+	// And garbage collector does not delete the role binding before the member joins.
+	resetDeletionTimestamp := currentRoleBinding.DeletionTimestamp != nil
+	currentRoleBinding.DeletionTimestamp = nil
 	klog.V(2).InfoS("updating role binding", "memberCluster", klog.KObj(mc), "subject", mc.Spec.Identity)
 	if err := r.Client.Update(ctx, &expectedRoleBinding, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
 		return fmt.Errorf("failed to update role binding %s: %w", roleBindingName, err)
 	}
 	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonRoleBindingUpdated, "role binding was updated")
-	klog.V(2).InfoS("updated role binding", "memberCluster", klog.KObj(mc), "subject", mc.Spec.Identity)
+	klog.V(2).InfoS("updated role binding", "memberCluster", klog.KObj(mc), "subject", mc.Spec.Identity, "resetDeletionTimestamp", resetDeletionTimestamp)
 	return nil
 }
 
@@ -421,16 +436,20 @@ func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *clusterv
 	}
 
 	// Updates internal member cluster if currentImc != expectedImc.
-	if reflect.DeepEqual(currentImc.Spec, expectedImc.Spec) {
+	if reflect.DeepEqual(currentImc.Spec, expectedImc.Spec) && currentImc.DeletionTimestamp == nil {
 		return currentImc, nil
 	}
 	currentImc.Spec = expectedImc.Spec
+	// There is a corner case that the same member leaves and joins again in a short time.
+	// And garbage collector does not delete the internal member cluster before the member joins.
+	resetDeletionTimestamp := currentImc.DeletionTimestamp != nil
+	currentImc.DeletionTimestamp = nil
 	klog.V(2).InfoS("updating internal member cluster", "InternalMemberCluster", klog.KObj(currentImc), "spec", currentImc.Spec)
 	if err := r.Client.Update(ctx, currentImc, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
 		return nil, fmt.Errorf("failed to update internal member cluster %s with spec %+v: %w", klog.KObj(currentImc), currentImc.Spec, err)
 	}
 	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonIMCSpecUpdated, "internal member cluster spec updated")
-	klog.V(2).InfoS("updated internal member cluster", "InternalMemberCluster", klog.KObj(currentImc), "spec", currentImc.Spec)
+	klog.V(2).InfoS("updated internal member cluster", "InternalMemberCluster", klog.KObj(currentImc), "spec", currentImc.Spec, "resetDeletionTimestamp", resetDeletionTimestamp)
 	return currentImc, nil
 }
 
