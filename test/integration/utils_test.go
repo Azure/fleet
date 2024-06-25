@@ -65,7 +65,7 @@ var (
 // TestResource CR, Pdb, Configmap, Secret, Service.
 func applyTestManifests() {
 	By("Create testResource CRD")
-	err := utils.GetObjectFromManifest("manifests/resources/test_testresources_crd.yaml", &testResourceCRD)
+	err := utils.GetObjectFromManifest("../manifests/test_testresources_crd.yaml", &testResourceCRD)
 	Expect(err).Should(Succeed())
 	Expect(k8sClient.Create(ctx, &testResourceCRD)).Should(Succeed())
 
@@ -101,7 +101,7 @@ func applyTestManifests() {
 	Expect(k8sClient.Create(ctx, &testService)).Should(Succeed())
 
 	By("Create testResource resource")
-	err = utils.GetObjectFromManifest("manifests/resources/test-resource.yaml", &testResource)
+	err = utils.GetObjectFromManifest("../manifests/test-resource.yaml", &testResource)
 	Expect(err).Should(Succeed())
 	Expect(k8sClient.Create(ctx, &testResource)).Should(Succeed())
 }

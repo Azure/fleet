@@ -82,7 +82,7 @@ func readObjFromFile(relativeFilePath string, namespaceName string) (*unstructur
 }
 
 func ApplyClusterScopeManifests(ctx context.Context, hubClient client.Client) error {
-	if err := applyObjectFromManifest(ctx, hubClient, "", "hack/loadtest/manifests/test_testresources_crd.yaml"); err != nil {
+	if err := applyObjectFromManifest(ctx, hubClient, "", "test/manifests/test_testresources_crd.yaml"); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			return err
 		}
@@ -120,7 +120,7 @@ func applyTestManifests(ctx context.Context, hubClient client.Client, namespaceN
 	if err := applyObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-service.yaml"); err != nil {
 		return err
 	}
-	if err := applyObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-resource.yaml"); err != nil {
+	if err := applyObjectFromManifest(ctx, hubClient, namespaceName, "test/manifests/test-resource.yaml"); err != nil {
 		return err
 	}
 	if err := applyObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-configmap-2.yaml"); err != nil {
@@ -146,7 +146,7 @@ func deleteTestManifests(ctx context.Context, hubClient client.Client, namespace
 	if err := deleteObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-service.yaml"); err != nil {
 		return err
 	}
-	if err := deleteObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-resource.yaml"); err != nil {
+	if err := deleteObjectFromManifest(ctx, hubClient, namespaceName, "test/manifests/test-resource.yaml"); err != nil {
 		return err
 	}
 	if err := deleteObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-configmap-2.yaml"); err != nil {
