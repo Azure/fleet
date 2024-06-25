@@ -317,7 +317,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 	discoverClient := discovery.NewDiscoveryClientForConfigOrDie(memberConfig)
 
 	if *enableV1Alpha1APIs {
-		gvk := workv1alpha1.SchemeGroupVersion.WithKind(workv1alpha1.WorkKind)
+		gvk := workv1alpha1.SchemeGroupVersion.WithKind(workv1alpha1.AppliedWorkKind)
 		if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
 			klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
 			return err
@@ -342,7 +342,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 	}
 
 	if *enableV1Beta1APIs {
-		gvk := placementv1beta1.GroupVersion.WithKind(placementv1beta1.WorkKind)
+		gvk := placementv1beta1.GroupVersion.WithKind(placementv1beta1.AppliedWorkKind)
 		if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
 			klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
 			return err
