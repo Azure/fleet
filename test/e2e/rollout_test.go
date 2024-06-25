@@ -37,7 +37,7 @@ const (
 var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 	Context("Test a CRP place enveloped objects successfully", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-		workNamespaceName := appNamespace().Name
+		workNamespace := appNamespace()
 		var wantSelectedResources []placementv1beta1.ResourceIdentifier
 		var testEnvelopeDeployment corev1.ConfigMap
 		var testDeployment appv1.Deployment
@@ -48,20 +48,20 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 				{
 					Kind:    utils.NamespaceKind,
-					Name:    workNamespaceName,
+					Name:    workNamespace.Name,
 					Version: corev1.SchemeGroupVersion.Version,
 				},
 				{
 					Kind:      utils.ConfigMapKind,
 					Name:      testEnvelopeDeployment.Name,
 					Version:   corev1.SchemeGroupVersion.Version,
-					Namespace: workNamespaceName,
+					Namespace: workNamespace.Name,
 				},
 			}
 		})
 
 		It("Create the wrapped deployment resources in the namespace", func() {
-			createWrappedResourcesForRollout(&testEnvelopeDeployment, &testDeployment, utils.DeploymentKind)
+			createWrappedResourcesForRollout(&testEnvelopeDeployment, &testDeployment, utils.DeploymentKind, workNamespace)
 		})
 
 		It("Create the CRP that select the namespace", func() {
@@ -147,7 +147,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 	Context("Test a CRP place workload objects successfully, block rollout based on deployment availability", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-		workNamespaceName := appNamespace().Name
+		workNamespace := appNamespace()
 		var wantSelectedResources []placementv1beta1.ResourceIdentifier
 		var testDeployment appv1.Deployment
 
@@ -157,7 +157,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 				{
 					Kind:    utils.NamespaceKind,
-					Name:    workNamespaceName,
+					Name:    workNamespace.Name,
 					Version: corev1.SchemeGroupVersion.Version,
 				},
 				{
@@ -165,13 +165,15 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 					Version:   appv1.SchemeGroupVersion.Version,
 					Kind:      utils.DeploymentKind,
 					Name:      testDeployment.Name,
-					Namespace: workNamespaceName,
+					Namespace: workNamespace.Name,
 				},
 			}
 		})
 
 		It("create the deployment resource in the namespace", func() {
-			createDeploymentForRollout(&testDeployment)
+			Expect(hubClient.Create(ctx, &workNamespace)).To(Succeed(), "Failed to create namespace %s", workNamespace.Name)
+			testDeployment.Namespace = workNamespace.Name
+			Expect(hubClient.Create(ctx, &testDeployment)).To(Succeed(), "Failed to create test deployment %s", testDeployment.Name)
 		})
 
 		It("create the CRP that select the namespace", func() {
@@ -224,7 +226,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 	Context("Test a CRP place workload objects successfully, block rollout based on daemonset availability", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-		workNamespaceName := appNamespace().Name
+		workNamespace := appNamespace()
 		var wantSelectedResources []placementv1beta1.ResourceIdentifier
 		var testEnvelopeDaemonSet corev1.ConfigMap
 		var testDaemonSet appv1.DaemonSet
@@ -236,20 +238,20 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 				{
 					Kind:    utils.NamespaceKind,
-					Name:    workNamespaceName,
+					Name:    workNamespace.Name,
 					Version: corev1.SchemeGroupVersion.Version,
 				},
 				{
 					Kind:      utils.ConfigMapKind,
 					Name:      testEnvelopeDaemonSet.Name,
 					Version:   corev1.SchemeGroupVersion.Version,
-					Namespace: workNamespaceName,
+					Namespace: workNamespace.Name,
 				},
 			}
 		})
 
 		It("create the daemonset resource in the namespace", func() {
-			createWrappedResourcesForRollout(&testEnvelopeDaemonSet, &testDaemonSet, utils.DaemonSetKind)
+			createWrappedResourcesForRollout(&testEnvelopeDaemonSet, &testDaemonSet, utils.DaemonSetKind, workNamespace)
 		})
 
 		It("create the CRP that select the namespace", func() {
@@ -307,7 +309,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 	Context("Test a CRP place workload objects successfully, block rollout based on statefulset availability", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-		workNamespaceName := appNamespace().Name
+		workNamespace := appNamespace()
 		var wantSelectedResources []placementv1beta1.ResourceIdentifier
 		var testEnvelopeStatefulSet corev1.ConfigMap
 		var testStatefulSet appv1.StatefulSet
@@ -319,20 +321,20 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 				{
 					Kind:    utils.NamespaceKind,
-					Name:    workNamespaceName,
+					Name:    workNamespace.Name,
 					Version: corev1.SchemeGroupVersion.Version,
 				},
 				{
 					Kind:      utils.ConfigMapKind,
 					Name:      testEnvelopeStatefulSet.Name,
 					Version:   corev1.SchemeGroupVersion.Version,
-					Namespace: workNamespaceName,
+					Namespace: workNamespace.Name,
 				},
 			}
 		})
 
 		It("create the statefulset resource in the namespace", func() {
-			createWrappedResourcesForRollout(&testEnvelopeStatefulSet, &testStatefulSet, utils.StatefulSetKind)
+			createWrappedResourcesForRollout(&testEnvelopeStatefulSet, &testStatefulSet, utils.StatefulSetKind, workNamespace)
 		})
 
 		It("create the CRP that select the namespace", func() {
@@ -390,7 +392,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 	Context("Test a CRP place workload objects successfully, block rollout based on service availability", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-		workNamespaceName := appNamespace().Name
+		workNamespace := appNamespace()
 		var wantSelectedResources []placementv1beta1.ResourceIdentifier
 		var testService corev1.Service
 
@@ -400,20 +402,22 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 				{
 					Kind:    utils.NamespaceKind,
-					Name:    workNamespaceName,
+					Name:    workNamespace.Name,
 					Version: corev1.SchemeGroupVersion.Version,
 				},
 				{
 					Kind:      utils.ServiceKind,
 					Name:      testService.Name,
 					Version:   corev1.SchemeGroupVersion.Version,
-					Namespace: workNamespaceName,
+					Namespace: workNamespace.Name,
 				},
 			}
 		})
 
 		It("create the service resource in the namespace", func() {
-			createServiceForRollout(&testService)
+			Expect(hubClient.Create(ctx, &workNamespace)).To(Succeed(), "Failed to create namespace %s", workNamespace.Name)
+			testService.Namespace = workNamespace.Name
+			Expect(hubClient.Create(ctx, &testService)).To(Succeed(), "Failed to create test service %s", testService.Name)
 		})
 
 		It("create the CRP that select the namespace", func() {
@@ -467,7 +471,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 	Context("Test a CRP place workload objects successfully, don't block rollout based on job availability", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-		workNamespaceName := appNamespace().Name
+		workNamespace := appNamespace()
 		var wantSelectedResources []placementv1beta1.ResourceIdentifier
 		var testJob batchv1.Job
 
@@ -477,7 +481,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 				{
 					Kind:    utils.NamespaceKind,
-					Name:    workNamespaceName,
+					Name:    workNamespace.Name,
 					Version: corev1.SchemeGroupVersion.Version,
 				},
 				{
@@ -485,13 +489,15 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 					Version:   batchv1.SchemeGroupVersion.Version,
 					Kind:      utils.JobKind,
 					Name:      testJob.Name,
-					Namespace: workNamespaceName,
+					Namespace: workNamespace.Name,
 				},
 			}
 		})
 
 		It("create the job resource in the namespace", func() {
-			createJobForRollout(&testJob)
+			Expect(hubClient.Create(ctx, &workNamespace)).To(Succeed(), "Failed to create namespace %s", workNamespace.Name)
+			testJob.Namespace = workNamespace.Name
+			Expect(hubClient.Create(ctx, &testJob)).To(Succeed(), "Failed to create test job %s", testJob.Name)
 		})
 
 		It("create the CRP that select the namespace", func() {
@@ -572,36 +578,14 @@ func readEnvelopeConfigMapTestManifest(testEnvelopeObj *corev1.ConfigMap) {
 	Expect(err).Should(Succeed())
 }
 
-func createDeploymentForRollout(testDeployment *appv1.Deployment) {
-	ns := appNamespace()
-	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
-	testDeployment.Namespace = ns.Name
-	Expect(hubClient.Create(ctx, testDeployment)).To(Succeed(), "Failed to create test deployment %s", testDeployment.Name)
-}
-
-func createServiceForRollout(testService *corev1.Service) {
-	ns := appNamespace()
-	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
-	testService.Namespace = ns.Name
-	Expect(hubClient.Create(ctx, testService)).To(Succeed(), "Failed to create test service %s", testService.Name)
-}
-
-func createJobForRollout(testJob *batchv1.Job) {
-	ns := appNamespace()
-	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
-	testJob.Namespace = ns.Name
-	Expect(hubClient.Create(ctx, testJob)).To(Succeed(), "Failed to create test job %s", testJob.Name)
-}
-
 // createWrappedResourcesForRollout creates an enveloped resource on the hub cluster with a workload object for testing purposes.
-func createWrappedResourcesForRollout(testEnvelopeObj *corev1.ConfigMap, obj metav1.Object, kind string) {
-	ns := appNamespace()
-	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
+func createWrappedResourcesForRollout(testEnvelopeObj *corev1.ConfigMap, obj metav1.Object, kind string, namespace corev1.Namespace) {
+	Expect(hubClient.Create(ctx, &namespace)).To(Succeed(), "Failed to create namespace %s", namespace.Name)
 	// modify the enveloped configMap according to the namespace
-	testEnvelopeObj.Namespace = ns.Name
+	testEnvelopeObj.Namespace = namespace.Name
 
 	// modify the embedded namespaced resource according to the namespace
-	obj.SetNamespace(ns.Name)
+	obj.SetNamespace(namespace.Name)
 	workloadObjectByte, err := json.Marshal(obj)
 	Expect(err).Should(Succeed())
 	testEnvelopeObj.Data = make(map[string]string)
