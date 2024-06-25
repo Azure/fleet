@@ -18,7 +18,7 @@ import (
 // +kubebuilder:storageversion
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Joined")].status`,name="Joined",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
-// +kubebuilder:printcolumn:JSONPath=`.status.properties.kubernetes-fleet\.io/node-count.value`,name="NodeCount",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.properties.kubernetes-fleet\.io/node-count.value`,name="Node-Count",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.resourceUsage.available.cpu`,name="Available-CPU",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.resourceUsage.available.memory`,name="Available-Memory",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.resourceUsage.allocatable.cpu`,name="Allocatable-CPU", priority=1, type=string
