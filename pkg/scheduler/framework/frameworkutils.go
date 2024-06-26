@@ -309,7 +309,10 @@ func newSchedulingDecisionsFromBindings(
 		}
 
 		if seenClusters[sc.Cluster.Name] {
+			// Skip clusters that have been added to the decision list.
+			continue
 		}
+
 		newDecisions = append(newDecisions, placementv1beta1.ClusterDecision{
 			ClusterName: sc.Cluster.Name,
 			Selected:    false,
