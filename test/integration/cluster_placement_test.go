@@ -14,7 +14,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
 	adminv1 "k8s.io/api/admissionregistration/v1"
 	coordv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -33,6 +32,7 @@ import (
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	workv1alpha1controller "go.goms.io/fleet/pkg/controllers/workv1alpha1"
 	"go.goms.io/fleet/pkg/utils"
+	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
 )
 
 const ClusterRoleKind = "ClusterRole"
@@ -145,7 +145,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 							Group:   apiextensionsv1.GroupName,
 							Version: "v1",
 							Kind:    "CustomResourceDefinition",
-							Name:    "clonesets.apps.kruise.io",
+							Name:    "testresources.test.kubernetes-fleet.io",
 						},
 					},
 				},
@@ -587,34 +587,34 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			By("Select all the resources in a namespace clusterResourcePlacement created")
 
 			By("Create a new namespace")
-			newSpace := corev1.Namespace{
+			newNamespace := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "test-delete-namespace" + utilrand.String(10),
 					Labels: nsLabel,
 				},
 			}
-			Expect(k8sClient.Create(ctx, &newSpace)).Should(Succeed())
-			By(fmt.Sprintf("Create a new namespace %s clusterResourcePlacement will select", newSpace.Name))
+			Expect(k8sClient.Create(ctx, &newNamespace)).Should(Succeed())
+			By(fmt.Sprintf("Create a new namespace %s clusterResourcePlacement will select", newNamespace.Name))
 
 			By("Create a new Pdb in the new namespace")
 			newPdb := testPdb.DeepCopy()
-			newPdb.Namespace = newSpace.Name
+			newPdb.Namespace = newNamespace.Name
 			newPdb.SetResourceVersion("")
 			newPdb.SetGeneration(0)
 			Expect(k8sClient.Create(ctx, newPdb)).Should(Succeed())
 
-			By("Create a new CloneSet in the new namespace")
-			newCloneSet := testCloneset.DeepCopy()
-			newCloneSet.Namespace = newSpace.Name
-			newCloneSet.SetResourceVersion("")
-			newCloneSet.SetGeneration(0)
-			Expect(k8sClient.Create(ctx, newCloneSet)).Should(Succeed())
+			By("Create a new TestResource in the new namespace")
+			newTestResource := testResource.DeepCopy()
+			newTestResource.Namespace = newNamespace.Name
+			newTestResource.SetResourceVersion("")
+			newTestResource.SetGeneration(0)
+			Expect(k8sClient.Create(ctx, newTestResource)).Should(Succeed())
 
 			By("Verify that we pick up the clusterRole and all the resources we created in the new namespace")
-			verifyPartialWorkObjects(crp, []string{"PodDisruptionBudget", "CloneSet", ClusterRoleKind}, 4, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
+			verifyPartialWorkObjects(crp, []string{"PodDisruptionBudget", "TestResource", ClusterRoleKind}, 4, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
 
 			By("Remove the namespace resource")
-			Expect(k8sClient.Delete(ctx, &newSpace)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, &newNamespace)).Should(Succeed())
 
 			By("Verify that we pick up the namespace delete")
 			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
@@ -806,7 +806,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 							Group:   apiextensionsv1.GroupName,
 							Version: "v1",
 							Kind:    "CustomResourceDefinition",
-							Name:    "clonesets.apps.kruise.io",
+							Name:    "testresources.test.kubernetes-fleet.io",
 						},
 					},
 					Policy: &fleetv1alpha1.PlacementPolicy{
@@ -1620,25 +1620,20 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, ns)).Should(Succeed(), "Failed to create %s namespace", ns.Name)
-			By("create clone set")
-			cs := &kruisev1alpha1.CloneSet{
+			By("create test resource")
+			tr := &testv1alpha1.TestResource{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-cloneset",
+					Name:      "test-resource-name",
 					Namespace: ns.Name,
 				},
-				Spec: kruisev1alpha1.CloneSetSpec{
-					Replicas: ptr.To(int32(20)),
-					Selector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{"app.kubernetes.io/name": "test-clone-set"},
-					},
-					Template: corev1.PodTemplateSpec{
-						ObjectMeta: metav1.ObjectMeta{
-							Labels: map[string]string{"app.kubernetes.io/name": "test-clone-set"},
-						},
+				Spec: testv1alpha1.TestResourceSpec{
+					Foo: "foo",
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app.kubernetes.io/name": "test-resource-name"},
 					},
 				},
 			}
-			Expect(k8sClient.Create(ctx, cs)).Should(Succeed(), "Failed to create %s clone set", cs.Name)
+			Expect(k8sClient.Create(ctx, tr)).Should(Succeed(), "Failed to create %s test resource", tr.Name)
 			By("create clusterResourcePlacement CR")
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1662,13 +1657,13 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			var clusterWork workv1alpha1.Work
 			workResourceIdentifier1 := workv1alpha1.ResourceIdentifier{
-				Group:     kruisev1alpha1.GroupVersion.Group,
-				Kind:      "CloneSet",
-				Name:      cs.Name,
-				Namespace: cs.Namespace,
+				Group:     testv1alpha1.GroupVersion.Group,
+				Kind:      "TestResource",
+				Name:      tr.Name,
+				Namespace: tr.Namespace,
 				Ordinal:   0,
-				Resource:  "clonesets",
-				Version:   kruisev1alpha1.GroupVersion.Version,
+				Resource:  "testresources",
+				Version:   testv1alpha1.GroupVersion.Version,
 			}
 			workResourceIdentifier2 := workv1alpha1.ResourceIdentifier{
 				Group:    corev1.GroupName,
@@ -1676,7 +1671,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Name:     ns.Name,
 				Ordinal:  1,
 				Resource: "namespaces",
-				Version:  "v1",
+				Version:  corev1.SchemeGroupVersion.Version,
 			}
 
 			Eventually(func() error {
@@ -1720,11 +1715,11 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed(), "Failed to update %s work status", clusterWork.Name)
 
 			fleetResourceIdentifier1 := fleetv1alpha1.ResourceIdentifier{
-				Group:     kruisev1alpha1.GroupVersion.Group,
-				Version:   kruisev1alpha1.GroupVersion.Version,
-				Kind:      "CloneSet",
-				Name:      cs.Name,
-				Namespace: cs.Namespace,
+				Group:     testv1alpha1.GroupVersion.Group,
+				Version:   testv1alpha1.GroupVersion.Version,
+				Kind:      "TestResource",
+				Name:      tr.Name,
+				Namespace: tr.Namespace,
 			}
 			fleetResourceIdentifier2 := fleetv1alpha1.ResourceIdentifier{
 				Group:   corev1.GroupName,
@@ -1785,7 +1780,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					Group:   apiextensionsv1.GroupName,
 					Version: "v1",
 					Kind:    "CustomResourceDefinition",
-					Name:    "clonesets.apps.kruise.io",
+					Name:    "testresources.test.kubernetes-fleet.io",
 				},
 				{
 					Group:   corev1.GroupName,
@@ -1805,7 +1800,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			workResourceIdentifier2 = workv1alpha1.ResourceIdentifier{
 				Group:    apiextensionsv1.GroupName,
 				Kind:     "CustomResourceDefinition",
-				Name:     "clonesets.apps.kruise.io",
+				Name:     "testresources.test.kubernetes-fleet.io",
 				Ordinal:  1,
 				Resource: "customresourcedefinitions",
 				Version:  "v1",
@@ -1834,7 +1829,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Group:   apiextensionsv1.GroupName,
 				Version: "v1",
 				Kind:    "CustomResourceDefinition",
-				Name:    "clonesets.apps.kruise.io",
+				Name:    "testresources.test.kubernetes-fleet.io",
 			}
 
 			wantCRPStatus = fleetv1alpha1.ClusterResourcePlacementStatus{

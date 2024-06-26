@@ -16,7 +16,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,10 +48,10 @@ var (
 	cancel    context.CancelFunc
 
 	// pre loaded test manifests
-	testClonesetCRD, testNameSpace, testCloneset, testConfigMap, testEnvelopConfigMap, testEnvelopConfigMap2, testPdb []byte
+	testResourceCRD, testNameSpace, testResource, testConfigMap, testEnvelopConfigMap, testEnvelopConfigMap2, testPdb []byte
 
 	// want overridden manifest which is overridden by cro-1 and ro-1
-	wantOverriddenTestCloneSet []byte
+	wantOverriddenTestResource []byte
 
 	// the content of the enveloped resources
 	testEnvelopeWebhook, testEnvelopeResourceQuota []byte
@@ -87,7 +86,6 @@ var _ = BeforeSuite(func() {
 	By("Set all the customized scheme")
 	Expect(placementv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(workv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
-	Expect(kruisev1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(clusterv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(placementv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 
@@ -214,10 +212,10 @@ func createOverrides() {
 			OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
 				ResourceSelectors: []placementv1alpha1.ResourceSelector{
 					{
-						Group:   "apps.kruise.io",
+						Group:   "test.kubernetes-fleet.io",
 						Version: "v1alpha1",
-						Kind:    "CloneSet",
-						Name:    "guestbook-clone",
+						Kind:    "TestResource",
+						Name:    "random-test-resource",
 					},
 				},
 				Policy: &placementv1alpha1.OverridePolicy{
@@ -229,8 +227,8 @@ func createOverrides() {
 							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 								{
 									Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
-									Path:     "/spec/replicas",
-									Value:    apiextensionsv1.JSON{Raw: []byte("30")},
+									Path:     "/spec/foo",
+									Value:    apiextensionsv1.JSON{Raw: []byte(`"foo2"`)},
 								},
 							},
 						},
@@ -308,10 +306,10 @@ var _ = AfterSuite(func() {
 })
 
 func readTestManifests() {
-	By("Read testCloneset CRD")
-	rawByte, err := os.ReadFile("manifests/test_clonesets_crd.yaml")
+	By("Read testResource CRD")
+	rawByte, err := os.ReadFile("../../../test/manifests/test_testresources_crd.yaml")
 	Expect(err).Should(Succeed())
-	testClonesetCRD, err = yaml.ToJSON(rawByte)
+	testResourceCRD, err = yaml.ToJSON(rawByte)
 	Expect(err).Should(Succeed())
 
 	By("Read namespace")
@@ -320,16 +318,16 @@ func readTestManifests() {
 	testNameSpace, err = yaml.ToJSON(rawByte)
 	Expect(err).Should(Succeed())
 
-	By("Read clonesetCR")
-	rawByte, err = os.ReadFile("manifests/test-cloneset.yaml")
+	By("Read TestResource CR")
+	rawByte, err = os.ReadFile("../../../test/manifests/test-resource.yaml")
 	Expect(err).Should(Succeed())
-	testCloneset, err = yaml.ToJSON(rawByte)
+	testResource, err = yaml.ToJSON(rawByte)
 	Expect(err).Should(Succeed())
 
-	By("Read want overridden clonesetCR")
-	rawByte, err = os.ReadFile("manifests/test-cloneset-overridden.yaml")
+	By("Read want overridden TestResource CR")
+	rawByte, err = os.ReadFile("manifests/test-resource-overriden.yaml")
 	Expect(err).Should(Succeed())
-	wantOverriddenTestCloneSet, err = yaml.ToJSON(rawByte)
+	wantOverriddenTestResource, err = yaml.ToJSON(rawByte)
 	Expect(err).Should(Succeed())
 
 	By("Read testConfigMap resource")

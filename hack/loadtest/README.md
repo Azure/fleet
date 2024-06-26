@@ -27,7 +27,7 @@ Create any resources you would like to place and/or a crp file to use.
 >
 >     group: apiextensions.k8s.io
 >     kind: CustomResourceDefinition
->     name: clonesets.apps.kruise.io
+>     name: testresources.test.kubernetes-fleet.io
 >     version: v1
 
 - `max-current-placement`: The number of current placement load. Default value is `20`.
@@ -36,7 +36,7 @@ Create any resources you would like to place and/or a crp file to use.
 - `poll-interval-millisecond`: The poll interval for verification (in milli-second). Default value is `250`.
 -  `use-test-resources`: Boolean to include all test resources in the test. Default value is `false`.
 >  **_NOTE:_** If this option is true, the test will create resources and add them to the crp for them to be placed. The following resources are added:
-> `Namespace` that contains all the resources, `PodDisruptionBudget`, 2 `ConfigMap`'s, `Secret`, `Service`, `Cloneset`, `Role`, and `RoleBinding`.
+> `Namespace` that contains all the resources, `PodDisruptionBudget`, 2 `ConfigMap`'s, `Secret`, `Service`, `TestResource`, `Role`, and `RoleBinding`.
 >  If this option is false, the test will only use the resources specified in the crp file.
 
 ### Run the Load Test:

@@ -118,7 +118,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 		It("Should not create work for the binding with state scheduled", func() {
 			// create master resource snapshot with 2 number of resources
 			masterSnapshot := generateResourceSnapshot(1, 1, 0, [][]byte{
-				testClonesetCRD, testNameSpace, testCloneset,
+				testResourceCRD, testNameSpace, testResource,
 			})
 			Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 			// create a scheduled binding
@@ -154,7 +154,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 		It("Should only creat work after all the resource snapshots are created", func() {
 			// create master resource snapshot with 1 number of resources
 			masterSnapshot := generateResourceSnapshot(1, 2, 0, [][]byte{
-				testClonesetCRD, testNameSpace, testCloneset,
+				testResourceCRD, testNameSpace, testResource,
 			})
 			Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 			By(fmt.Sprintf("master resource snapshot `%s` created", masterSnapshot.Name))
@@ -190,7 +190,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			Expect(binding.GetCondition(string(placementv1beta1.ResourceBindingOverridden)).Message).Should(ContainSubstring("resource snapshots are still being created for the masterResourceSnapshot"))
 			// create the second resource snapshot
 			secondSnapshot := generateResourceSnapshot(1, 2, 1, [][]byte{
-				testClonesetCRD, testNameSpace, testCloneset,
+				testResourceCRD, testNameSpace, testResource,
 			})
 			Expect(k8sClient.Create(ctx, secondSnapshot)).Should(Succeed())
 			By(fmt.Sprintf("secondSnapshot resource snapshot `%s` created", secondSnapshot.Name))
@@ -207,7 +207,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 		It("Should handle the case that the snapshot is deleted", func() {
 			// generate master resource snapshot
 			masterSnapshot := generateResourceSnapshot(1, 1, 0, [][]byte{
-				testClonesetCRD, testNameSpace, testCloneset,
+				testResourceCRD, testNameSpace, testResource,
 			})
 			Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 			By(fmt.Sprintf("master resource snapshot `%s` created", masterSnapshot.Name))
@@ -249,7 +249,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 
 			BeforeEach(func() {
 				masterSnapshot = generateResourceSnapshot(1, 1, 0, [][]byte{
-					testClonesetCRD, testNameSpace, testCloneset,
+					testResourceCRD, testNameSpace, testResource,
 				})
 				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 				By(fmt.Sprintf("master resource snapshot  %s created", masterSnapshot.Name))
@@ -307,9 +307,9 @@ var _ = Describe("Test Work Generator Controller", func() {
 					Spec: placementv1beta1.WorkSpec{
 						Workload: placementv1beta1.WorkloadTemplate{
 							Manifests: []placementv1beta1.Manifest{
-								{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
+								{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
 								{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
-								{RawExtension: runtime.RawExtension{Raw: testCloneset}},
+								{RawExtension: runtime.RawExtension{Raw: testResource}},
 							},
 						},
 					},
@@ -345,9 +345,9 @@ var _ = Describe("Test Work Generator Controller", func() {
 				}, duration, interval).Should(Succeed(), "controller should not remove work in hub cluster for unscheduled binding")
 				//inspect the work manifest to make sure it still has the same content
 				expectedManifest := []placementv1beta1.Manifest{
-					{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
+					{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
 					{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
-					{RawExtension: runtime.RawExtension{Raw: testCloneset}},
+					{RawExtension: runtime.RawExtension{Raw: testResource}},
 				}
 				diff := cmp.Diff(expectedManifest, work.Spec.Workload.Manifests)
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work manifest(%s) mismatch (-want +got):\n%s", work.Name, diff))
@@ -394,9 +394,9 @@ var _ = Describe("Test Work Generator Controller", func() {
 					Spec: placementv1beta1.WorkSpec{
 						Workload: placementv1beta1.WorkloadTemplate{
 							Manifests: []placementv1beta1.Manifest{
-								{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
+								{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
 								{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
-								{RawExtension: runtime.RawExtension{Raw: testCloneset}},
+								{RawExtension: runtime.RawExtension{Raw: testResource}},
 							},
 						},
 					},
@@ -458,9 +458,9 @@ var _ = Describe("Test Work Generator Controller", func() {
 					Spec: placementv1beta1.WorkSpec{
 						Workload: placementv1beta1.WorkloadTemplate{
 							Manifests: []placementv1beta1.Manifest{
-								{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
+								{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
 								{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
-								{RawExtension: runtime.RawExtension{Raw: testCloneset}},
+								{RawExtension: runtime.RawExtension{Raw: testResource}},
 							},
 						},
 					},
@@ -485,7 +485,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 
 			BeforeEach(func() {
 				masterSnapshot = generateResourceSnapshot(1, 1, 0, [][]byte{
-					testConfigMap, testEnvelopConfigMap, testClonesetCRD, testNameSpace,
+					testConfigMap, testEnvelopConfigMap, testResourceCRD, testNameSpace,
 				})
 				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 				By(fmt.Sprintf("master resource snapshot  %s created", masterSnapshot.Name))
@@ -535,7 +535,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 						Workload: placementv1beta1.WorkloadTemplate{
 							Manifests: []placementv1beta1.Manifest{
 								{RawExtension: runtime.RawExtension{Raw: testConfigMap}},
-								{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
+								{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
 								{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
 							},
 						},
@@ -599,7 +599,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				fetchEnvelopedWork(&workList, binding)
 				// create a second snapshot with a modified enveloped object
 				masterSnapshot = generateResourceSnapshot(2, 1, 0, [][]byte{
-					testEnvelopConfigMap2, testClonesetCRD, testNameSpace,
+					testEnvelopConfigMap2, testResourceCRD, testNameSpace,
 				})
 				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 				By(fmt.Sprintf("another master resource snapshot  %s created", masterSnapshot.Name))
@@ -650,7 +650,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 					Spec: placementv1beta1.WorkSpec{
 						Workload: placementv1beta1.WorkloadTemplate{
 							Manifests: []placementv1beta1.Manifest{
-								{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
+								{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
 								{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
 							},
 						},
@@ -704,7 +704,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				By("create a second snapshot without an enveloped object")
 				// create a second snapshot without an enveloped object
 				masterSnapshot = generateResourceSnapshot(2, 1, 0, [][]byte{
-					testClonesetCRD, testNameSpace,
+					testResourceCRD, testNameSpace,
 				})
 				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 				By(fmt.Sprintf("another master resource snapshot  %s created", masterSnapshot.Name))
@@ -752,7 +752,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 
 			BeforeEach(func() {
 				masterSnapshot = generateResourceSnapshot(2, 2, 0, [][]byte{
-					testClonesetCRD, testNameSpace, testCloneset,
+					testResourceCRD, testNameSpace, testResource,
 				})
 				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 				By(fmt.Sprintf("master resource snapshot  %s created", masterSnapshot.Name))
@@ -794,9 +794,9 @@ var _ = Describe("Test Work Generator Controller", func() {
 				By(fmt.Sprintf("first work %s is created in %s", work.Name, work.Namespace))
 				//inspect the work manifest
 				expectedManifest := []placementv1beta1.Manifest{
-					{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
+					{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
 					{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
-					{RawExtension: runtime.RawExtension{Raw: testCloneset}},
+					{RawExtension: runtime.RawExtension{Raw: testResource}},
 				}
 				diff := cmp.Diff(expectedManifest, work.Spec.Workload.Manifests)
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work manifest(%s) mismatch (-want +got):\n%s", work.Name, diff))
@@ -864,9 +864,9 @@ var _ = Describe("Test Work Generator Controller", func() {
 				By(fmt.Sprintf("first work %s is created in %s", work.Name, work.Namespace))
 				//inspect the work manifest
 				expectedManifest := []placementv1beta1.Manifest{
-					{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
+					{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
 					{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
-					{RawExtension: runtime.RawExtension{Raw: testCloneset}},
+					{RawExtension: runtime.RawExtension{Raw: testResource}},
 				}
 				diff := cmp.Diff(expectedManifest, work.Spec.Workload.Manifests)
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work manifest(%s) mismatch (-want +got):\n%s", work.Name, diff))
@@ -937,7 +937,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				By(fmt.Sprintf("second work %s is created in %s", work.Name, work.Namespace))
 				// update the master resource snapshot with 3 resources in it
 				masterSnapshot = generateResourceSnapshot(3, 3, 0, [][]byte{
-					testClonesetCRD, testNameSpace,
+					testResourceCRD, testNameSpace,
 				})
 				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 				By(fmt.Sprintf("new master resource snapshot  %s created", masterSnapshot.Name))
@@ -948,7 +948,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				By(fmt.Sprintf("resource binding  %s updated", binding.Name))
 				// Now create the second resource snapshot
 				secondSnapshot = generateResourceSnapshot(3, 3, 1, [][]byte{
-					testCloneset, testConfigMap,
+					testResource, testConfigMap,
 				})
 				Expect(k8sClient.Create(ctx, secondSnapshot)).Should(Succeed())
 				By(fmt.Sprintf("new secondary resource snapshot  %s created", secondSnapshot.Name))
@@ -960,7 +960,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				By(fmt.Sprintf("third resource snapshot  %s created", secondSnapshot.Name))
 				// check the work for the master resource snapshot is created
 				expectedManifest := []placementv1beta1.Manifest{
-					{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
+					{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
 					{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
 				}
 				Eventually(func() error {
@@ -977,7 +977,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				By(fmt.Sprintf("first work %s is updated in %s", work.Name, work.Namespace))
 				// check the work for the secondary resource snapshot is created, it's name is crp-subindex
 				expectedManifest = []placementv1beta1.Manifest{
-					{RawExtension: runtime.RawExtension{Raw: testCloneset}},
+					{RawExtension: runtime.RawExtension{Raw: testResource}},
 					{RawExtension: runtime.RawExtension{Raw: testConfigMap}},
 				}
 				Eventually(func() error {
@@ -1028,7 +1028,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				By(fmt.Sprintf("second work %s is created in %s", work.Name, work.Namespace))
 				// update the master resource snapshot with only 1 resource snapshot that contains everything in it
 				masterSnapshot = generateResourceSnapshot(3, 1, 0, [][]byte{
-					testClonesetCRD, testNameSpace, testCloneset, testConfigMap, testPdb,
+					testResourceCRD, testNameSpace, testResource, testConfigMap, testPdb,
 				})
 				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 				By(fmt.Sprintf("new master resource snapshot  %s created", masterSnapshot.Name))
@@ -1039,9 +1039,9 @@ var _ = Describe("Test Work Generator Controller", func() {
 				By(fmt.Sprintf("resource binding  %s updated", binding.Name))
 				//inspect the work manifest that should have been updated to contain all
 				expectedManifest := []placementv1beta1.Manifest{
-					{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
+					{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
 					{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
-					{RawExtension: runtime.RawExtension{Raw: testCloneset}},
+					{RawExtension: runtime.RawExtension{Raw: testResource}},
 					{RawExtension: runtime.RawExtension{Raw: testConfigMap}},
 					{RawExtension: runtime.RawExtension{Raw: testPdb}},
 				}
@@ -1121,7 +1121,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 
 			BeforeEach(func() {
 				masterSnapshot = generateResourceSnapshot(1, 1, 0, [][]byte{
-					testClonesetCRD, testNameSpace, testCloneset,
+					testResourceCRD, testNameSpace, testResource,
 				})
 				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 				By(fmt.Sprintf("master resource snapshot  %s created", masterSnapshot.Name))
@@ -1188,9 +1188,9 @@ var _ = Describe("Test Work Generator Controller", func() {
 					Spec: placementv1beta1.WorkSpec{
 						Workload: placementv1beta1.WorkloadTemplate{
 							Manifests: []placementv1beta1.Manifest{
-								{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
+								{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
 								{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
-								{RawExtension: runtime.RawExtension{Raw: wantOverriddenTestCloneSet}},
+								{RawExtension: runtime.RawExtension{Raw: wantOverriddenTestResource}},
 							},
 						},
 					},
@@ -1226,9 +1226,9 @@ var _ = Describe("Test Work Generator Controller", func() {
 				}, duration, interval).Should(Succeed(), "controller should not remove work in hub cluster for unscheduled binding")
 				//inspect the work manifest to make sure it still has the same content
 				expectedManifest := []placementv1beta1.Manifest{
-					{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
+					{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
 					{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
-					{RawExtension: runtime.RawExtension{Raw: wantOverriddenTestCloneSet}},
+					{RawExtension: runtime.RawExtension{Raw: wantOverriddenTestResource}},
 				}
 				diff := cmp.Diff(expectedManifest, work.Spec.Workload.Manifests)
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work manifest(%s) mismatch (-want +got):\n%s", work.Name, diff))
@@ -1242,7 +1242,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 
 			BeforeEach(func() {
 				masterSnapshot = generateResourceSnapshot(1, 1, 0, [][]byte{
-					testClonesetCRD, testNameSpace, testCloneset,
+					testResourceCRD, testNameSpace, testResource,
 				})
 				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 				By(fmt.Sprintf("master resource snapshot  %s created", masterSnapshot.Name))
@@ -1297,7 +1297,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 
 			BeforeEach(func() {
 				masterSnapshot = generateResourceSnapshot(1, 1, 0, [][]byte{
-					testClonesetCRD, testNameSpace, testCloneset,
+					testResourceCRD, testNameSpace, testResource,
 				})
 				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 				By(fmt.Sprintf("master resource snapshot  %s created", masterSnapshot.Name))

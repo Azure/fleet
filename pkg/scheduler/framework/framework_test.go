@@ -3594,6 +3594,89 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:                              "duplicate entries",
+			maxUnselectedClusterDecisionCount: 0,
+			notPicked: ScoredClusters{
+				{
+					Cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: clusterName,
+						},
+					},
+					Score: &ClusterScore{
+						AffinityScore:       int(affinityScore3),
+						TopologySpreadScore: int(topologySpreadScore3),
+					},
+				},
+			},
+			filtered: []*filteredClusterWithStatus{
+				{
+					cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altClusterName,
+						},
+					},
+					status: filteredStatus,
+				},
+			},
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: clusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									TopologySpreadScore: &topologySpreadScore1,
+									AffinityScore:       &affinityScore1,
+								},
+								Reason: fmt.Sprintf(resourceScheduleSucceededWithScoreMessageFormat, clusterName, affinityScore1, topologySpreadScore1),
+							},
+						},
+					},
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altBindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: altClusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									TopologySpreadScore: &topologySpreadScore2,
+									AffinityScore:       &affinityScore2,
+								},
+								Reason: fmt.Sprintf(resourceScheduleSucceededWithScoreMessageFormat, altClusterName, affinityScore2, topologySpreadScore2),
+							},
+						},
+					},
+				},
+			},
+			want: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						TopologySpreadScore: &topologySpreadScore1,
+						AffinityScore:       &affinityScore1,
+					},
+					Reason: fmt.Sprintf(resourceScheduleSucceededWithScoreMessageFormat, clusterName, affinityScore1, topologySpreadScore1),
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						TopologySpreadScore: &topologySpreadScore2,
+						AffinityScore:       &affinityScore2,
+					},
+					Reason: fmt.Sprintf(resourceScheduleSucceededWithScoreMessageFormat, altClusterName, affinityScore2, topologySpreadScore2),
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {

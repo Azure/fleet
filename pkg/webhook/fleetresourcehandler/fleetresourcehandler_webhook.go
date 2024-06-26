@@ -48,7 +48,7 @@ type fleetResourceValidator struct {
 	client            client.Client
 	whiteListedUsers  []string
 	isFleetV1Beta1API bool
-	decoder           *admission.Decoder
+	decoder           webhook.AdmissionDecoder
 }
 
 // Handle receives the request then allows/denies the request to modify fleet resources.

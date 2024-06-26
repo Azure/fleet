@@ -15,7 +15,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -41,7 +40,7 @@ var (
 	cancel    context.CancelFunc
 
 	// pre loaded test manifests
-	testClonesetCRD, testNameSpace, testCloneset, testConfigMap, testPdb []byte
+	testResourceCRD, testNameSpace, testResource, testConfigMap, testPdb []byte
 )
 
 func TestAPIs(t *testing.T) {
@@ -75,7 +74,6 @@ var _ = BeforeSuite(func() {
 	By("Set all the customized scheme")
 	Expect(fleetv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(workv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
-	Expect(kruisev1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(placementv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 
 	By("starting the controller manager")
@@ -119,10 +117,10 @@ var _ = AfterSuite(func() {
 })
 
 func readTestManifests() {
-	By("Read testCloneset CRD")
-	rawByte, err := os.ReadFile("manifests/test_clonesets_crd.yaml")
+	By("Read testResource CRD")
+	rawByte, err := os.ReadFile("../../../test/manifests/test_testresources_crd.yaml")
 	Expect(err).Should(Succeed())
-	testClonesetCRD, err = yaml.ToJSON(rawByte)
+	testResourceCRD, err = yaml.ToJSON(rawByte)
 	Expect(err).Should(Succeed())
 
 	By("Read namespace")
@@ -131,10 +129,10 @@ func readTestManifests() {
 	testNameSpace, err = yaml.ToJSON(rawByte)
 	Expect(err).Should(Succeed())
 
-	By("Read clonesetCR")
-	rawByte, err = os.ReadFile("manifests/test-cloneset.yaml")
+	By("Read testResource CR")
+	rawByte, err = os.ReadFile("../../../test/manifests/test-resource.yaml")
 	Expect(err).Should(Succeed())
-	testCloneset, err = yaml.ToJSON(rawByte)
+	testResource, err = yaml.ToJSON(rawByte)
 	Expect(err).Should(Succeed())
 
 	By("Read testConfigMap resource")

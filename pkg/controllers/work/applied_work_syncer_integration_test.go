@@ -27,7 +27,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,6 +35,7 @@ import (
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
 )
 
 var _ = Describe("Work Status Reconciler", func() {
@@ -228,22 +228,20 @@ var _ = Describe("Work Status Reconciler", func() {
 		Expect(len(appliedWork.Status.AppliedResources)).Should(Equal(2))
 
 		By("replace configMap with a bad object from the work")
-		broadcastJob := &kruisev1alpha1.BroadcastJob{
+		testResource := &testv1alpha1.TestResource{
 			TypeMeta: metav1.TypeMeta{
-				APIVersion: kruisev1alpha1.SchemeGroupVersion.String(),
-				Kind:       "BroadcastJob",
+				APIVersion: testv1alpha1.GroupVersion.String(),
+				Kind:       "TestResource",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "broadcastjob-" + utilrand.String(5),
-				Namespace: testWorkNamespace,
-			},
-			Spec: kruisev1alpha1.BroadcastJobSpec{
-				Paused: true,
+				Name: "testresource-" + utilrand.String(5),
+				// to ensure the resource is not applied.
+				Namespace: "random-test-namespace",
 			},
 		}
 		currentWork.Spec.Workload.Manifests = []fleetv1beta1.Manifest{
 			{
-				RawExtension: runtime.RawExtension{Object: broadcastJob},
+				RawExtension: runtime.RawExtension{Object: testResource},
 			},
 		}
 		Expect(k8sClient.Update(context.Background(), currentWork)).Should(Succeed())

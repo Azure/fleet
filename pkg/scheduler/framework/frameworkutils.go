@@ -283,7 +283,7 @@ func newSchedulingDecisionsFromBindings(
 	//
 	// Note that for such occurrences, we will honor the previously made decisions in an attempt
 	// to reduce fluctations.
-	seenClusters := map[string]bool{}
+	seenClusters := make(map[string]bool)
 
 	// Build new scheduling decisions.
 	slotsLeft := clustersDecisionArrayLengthLimitInAPI
@@ -308,11 +308,8 @@ func newSchedulingDecisionsFromBindings(
 			break
 		}
 
-		if _, ok := seenClusters[sc.Cluster.Name]; ok {
-			// Skip clusters that have been added to the decision list.
-			continue
+		if seenClusters[sc.Cluster.Name] {
 		}
-
 		newDecisions = append(newDecisions, placementv1beta1.ClusterDecision{
 			ClusterName: sc.Cluster.Name,
 			Selected:    false,

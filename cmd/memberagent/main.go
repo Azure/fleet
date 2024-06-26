@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -313,8 +314,14 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		targetNS = ns
 		break
 	}
+	discoverClient := discovery.NewDiscoveryClientForConfigOrDie(memberConfig)
 
 	if *enableV1Alpha1APIs {
+		gvk := workv1alpha1.SchemeGroupVersion.WithKind(workv1alpha1.AppliedWorkKind)
+		if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
+			klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
+			return err
+		}
 		// create the work controller, so we can pass it to the internal member cluster reconciler
 		workController := workv1alpha1controller.NewApplyWorkReconciler(
 			hubMgr.GetClient(),
@@ -335,6 +342,11 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 	}
 
 	if *enableV1Beta1APIs {
+		gvk := placementv1beta1.GroupVersion.WithKind(placementv1beta1.AppliedWorkKind)
+		if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
+			klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
+			return err
+		}
 		// create the work controller, so we can pass it to the internal member cluster reconciler
 		workController := work.NewApplyWorkReconciler(
 			hubMgr.GetClient(),

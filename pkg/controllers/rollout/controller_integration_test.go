@@ -611,7 +611,7 @@ func generateResourceSnapshot(testCRPName string, resourceIndex int, isLatest bo
 		},
 	}
 	rawContents := [][]byte{
-		testClonesetCRD, testNameSpace, testCloneset, testConfigMap, testPdb,
+		testResourceCRD, testNameSpace, testResource, testConfigMap, testPdb,
 	}
 	for _, rawContent := range rawContents {
 		clusterResourceSnapshot.Spec.SelectedResources = append(clusterResourceSnapshot.Spec.SelectedResources,

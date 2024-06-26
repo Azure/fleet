@@ -1,8 +1,3 @@
-ms.topic: article
-ms.custom: azure-kubernetes-service, devx-track-azurecli
-ms.date: 04/19/2024
-author: michaelawyu
-
 # Apply Fleet property-based scheduling (preview) on your Azure Kubernetes Service (AKS) cluster
 
 This document explains how to try out the latest Fleet feature, property-based scheduling, using AKS clusters.

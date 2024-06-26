@@ -28,7 +28,6 @@ import (
 
 	"go.uber.org/atomic"
 	appv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -444,9 +443,6 @@ func trackResourceAvailability(gvr schema.GroupVersionResource, curObj *unstruct
 	case utils.DaemonSettGVR:
 		return trackDaemonSetAvailability(curObj)
 
-	case utils.JobGVR:
-		return trackJobAvailability(curObj)
-
 	case utils.ServiceGVR:
 		return trackServiceAvailability(curObj)
 
@@ -516,29 +512,6 @@ func trackDaemonSetAvailability(curObj *unstructured.Unstructured) (ApplyAction,
 	}
 	klog.V(2).InfoS("Still need to wait for daemonSet to be available", "daemonSet", klog.KObj(curObj))
 	return manifestNotAvailableYetAction, nil
-}
-
-func trackJobAvailability(curObj *unstructured.Unstructured) (ApplyAction, error) {
-	var job batchv1.Job
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &job); err != nil {
-		return errorApplyAction, controller.NewUnexpectedBehaviorError(err)
-	}
-	if job.Status.Succeeded > 0 {
-		klog.V(2).InfoS("Job is available with at least one succeeded pod", "job", klog.KObj(curObj))
-		return manifestAvailableAction, nil
-	}
-	if job.Status.Ready != nil {
-		// we consider a job available if there is at least one pod ready
-		if *job.Status.Ready > 0 {
-			klog.V(2).InfoS("Job is available with at least one ready pod", "job", klog.KObj(curObj))
-			return manifestAvailableAction, nil
-		}
-		klog.V(2).InfoS("Still need to wait for job to be available", "job", klog.KObj(curObj))
-		return manifestNotAvailableYetAction, nil
-	}
-	// this field only exists in k8s 1.24+ by default, so we can't track the availability of the job without it
-	klog.V(2).InfoS("Job does not have ready status, we can't track its availability", "job", klog.KObj(curObj))
-	return manifestNotTrackableAction, nil
 }
 
 func trackServiceAvailability(curObj *unstructured.Unstructured) (ApplyAction, error) {

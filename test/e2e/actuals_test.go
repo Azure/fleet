@@ -689,7 +689,7 @@ func customizedCRPStatusUpdatedActual(crpName string,
 	}
 }
 
-func safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier, failedWorkloadResourceIdentifier placementv1beta1.ResourceIdentifier, wantSelectedClusters []string, wantObservedResourceIndex string) func() error {
+func safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier, failedWorkloadResourceIdentifier placementv1beta1.ResourceIdentifier, wantSelectedClusters []string, wantObservedResourceIndex string, failedResourceObservedGeneration int64) func() error {
 	return func() error {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		crp := &placementv1beta1.ClusterResourcePlacement{}
@@ -745,7 +745,7 @@ func safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResourceIdentifiers [
 						Type:               string(placementv1beta1.ResourcesAvailableConditionType),
 						Status:             metav1.ConditionFalse,
 						Reason:             "ManifestNotAvailableYet",
-						ObservedGeneration: 2,
+						ObservedGeneration: failedResourceObservedGeneration,
 					},
 				},
 			},

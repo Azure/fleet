@@ -194,9 +194,6 @@ desired scheduled nodes.
 #### StatefulSet
 We only mark a `StatefulSet` as available when all its pods are running, ready and updated according to the latest revision.
 
-#### Job
-We only mark a `Job` as available when it has at least one succeeded pod or one ready pod.
-
 #### Service
 For `Service` based on the service type the availability is determined as follows:
 
