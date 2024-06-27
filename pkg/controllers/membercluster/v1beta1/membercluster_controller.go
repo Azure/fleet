@@ -84,7 +84,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	// Handle deleting/leaving member cluster, garbage collect all the resources in the cluster namespace
 	if !mc.DeletionTimestamp.IsZero() {
 		klog.V(2).InfoS("the member cluster is leaving", "memberCluster", mcObjRef)
-		return r.handleDelete(ctx, mc.DeepCopy())
+		return runtime.Result{}, r.handleDelete(ctx, mc.DeepCopy())
 	}
 
 	// Add the finalizer to the member cluster
@@ -117,21 +117,34 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 // handleDelete handles the delete event of the member cluster, makes sure the agent has finished leaving the fleet first and
 // then garbage collects all the resources in the cluster namespace.
-func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.MemberCluster) (runtime.Result, error) {
+func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.MemberCluster) error {
 	mcObjRef := klog.KObj(mc)
 	if !controllerutil.ContainsFinalizer(mc, placementv1beta1.MemberClusterFinalizer) {
 		klog.V(2).InfoS("No need to do anything for the deleting member cluster without a finalizer", "memberCluster", mcObjRef)
-		return runtime.Result{}, nil
+		return nil
 	}
-	currentImc, err := r.getInternalMemberCluster(ctx, mc.GetName())
-	if err != nil {
-		return runtime.Result{}, err
+	// check if the namespace still exist
+	var currentNS corev1.Namespace
+	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: namespaceName}, &currentNS); err != nil {
+		if !apierrors.IsNotFound(err) {
+			klog.ErrorS(err, "failed to get the member cluster namespace", "memberCluster", mcObjRef)
+			return controller.NewAPIServerError(true, err)
+		}
+		klog.V(2).InfoS("the member cluster namespace is not found, remove the finalizer", "memberCluster", mcObjRef)
+		controllerutil.RemoveFinalizer(mc, placementv1beta1.MemberClusterFinalizer)
+		return controller.NewUpdateIgnoreConflictError(r.Update(ctx, mc, &client.UpdateOptions{}))
 	}
-	// we don't need to wait for the agent to leave if the internal member cluster is not found
-	if currentImc == nil {
-		controller.NewUnexpectedBehaviorError(fmt.Errorf("internal member cluster %s not found", mcObjRef))
-		klog.V(2).InfoS("InternalMemberCluster not found, start garbage collecting", "memberCluster", mcObjRef)
-		return runtime.Result{}, r.garbageCollect(ctx, mc)
+	currentImc := &clusterv1beta1.InternalMemberCluster{}
+	imcNamespacedName := types.NamespacedName{Namespace: namespaceName, Name: mc.Name}
+	if err := r.Client.Get(ctx, imcNamespacedName, currentImc); err != nil {
+		if !apierrors.IsNotFound(err) {
+			klog.ErrorS(err, "failed to get internal member cluster", "internalMemberCluster", imcNamespacedName)
+			return controller.NewAPIServerError(true, err)
+		}
+		// we don't need to wait for the agent to leave if the internal member cluster is not found
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("internal member cluster %s not found", mcObjRef)), "InternalMemberCluster not found, start garbage collecting", "memberCluster", mcObjRef)
+		return r.garbageCollect(ctx, mc)
 	}
 	// calculate the current status of the member cluster from imc status
 	r.syncInternalMemberClusterStatus(currentImc, mc)
@@ -141,17 +154,16 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 	//       beyond a pre-agreed threshold (which should be in the order of hours instead of minutes) and proceed with garbage collection
 	if condition.IsConditionStatusFalse(cond, mc.GetGeneration()) {
 		klog.V(2).InfoS("Agent already left, start garbage collecting", "memberCluster", mcObjRef)
-		return runtime.Result{}, r.garbageCollect(ctx, mc)
+		return r.garbageCollect(ctx, mc)
 	}
-	klog.V(2).InfoS("Need to wait for agent to leave", "memberCluster", mcObjRef, "agentJoinedCondition", cond)
-	// mark the imc as left again to make sure the agent is leaving the fleet
-	if err = r.leave(ctx, mc, currentImc); err != nil {
+	klog.V(2).InfoS("Need to wait for the agent to leave", "memberCluster", mcObjRef, "agentJoinedCondition", cond)
+	// mark the imc as left to make sure the agent is leaving the fleet
+	if err := r.leave(ctx, mc, currentImc); err != nil {
 		klog.ErrorS(err, "failed to mark the imc as leave", "memberCluster", mcObjRef)
-		return runtime.Result{}, err
+		return err
 	}
 	// update the mc status to track the leaving status while we wait for all the agents to leave
-	err = r.updateMemberClusterStatus(ctx, mc)
-	return runtime.Result{}, controller.NewUpdateIgnoreConflictError(err)
+	return controller.NewUpdateIgnoreConflictError(r.updateMemberClusterStatus(ctx, mc))
 }
 
 func (r *Reconciler) getInternalMemberCluster(ctx context.Context, name string) (*clusterv1beta1.InternalMemberCluster, error) {
@@ -197,7 +209,7 @@ func (r *Reconciler) garbageCollectWork(ctx context.Context, mc *clusterv1beta1.
 	}
 	klog.V(2).InfoS("try to remove all the work finalizers in the cluster namespace",
 		"memberCluster", klog.KObj(mc), "number of work", len(works.Items))
-	return errs.Wait()
+	return controller.NewAPIServerError(false, errs.Wait())
 }
 
 // garbageCollect is used to garbage collect all the resources in the cluster namespace associated with the member cluster.
@@ -212,15 +224,11 @@ func (r *Reconciler) garbageCollect(ctx context.Context, mc *clusterv1beta1.Memb
 	if err := r.garbageCollectWork(ctx, mc, namespaceName); err != nil {
 		return err
 	}
-	// delete the namespace in the foreground so that we are sure it is deleted before we mark the member cluster as left
-	deletePolicy := metav1.DeletePropagationForeground
-	if err := r.Delete(ctx, &clusterNS, &client.DeleteOptions{PropagationPolicy: &deletePolicy}); err != nil {
-		klog.ErrorS(err, "failed to remove the cluster namespace",
-			"memberCluster", klog.KObj(mc), "namespace", namespaceName)
-		return err
+	if err := r.Delete(ctx, &clusterNS); err != nil {
+		klog.ErrorS(err, "failed to remove the cluster namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
 	}
-	controllerutil.RemoveFinalizer(mc, placementv1beta1.MemberClusterFinalizer)
-	return r.Update(ctx, mc, &client.UpdateOptions{})
+	klog.V(2).InfoS("deleted the member cluster namespace", "memberCluster", klog.KObj(mc))
+	return nil
 }
 
 // ensureFinalizer makes sure that the member cluster CR has a finalizer on it
@@ -441,7 +449,7 @@ func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *clusterv
 	if currentImc == nil {
 		klog.V(2).InfoS("creating internal member cluster", "InternalMemberCluster", klog.KObj(&expectedImc), "spec", expectedImc.Spec)
 		if err := r.Client.Create(ctx, &expectedImc, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
-			return nil, fmt.Errorf("failed to create internal member cluster %s with spec %+v: %w", klog.KObj(&expectedImc), expectedImc.Spec, err)
+			return nil, controller.NewAPIServerError(false, fmt.Errorf("failed to create internal member cluster %s with spec %+v: %w", klog.KObj(&expectedImc), expectedImc.Spec, err))
 		}
 		r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonIMCCreated, "Internal member cluster was created")
 		klog.V(2).InfoS("created internal member cluster", "InternalMemberCluster", klog.KObj(&expectedImc), "spec", expectedImc.Spec)
@@ -455,7 +463,7 @@ func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *clusterv
 	currentImc.Spec = expectedImc.Spec
 	klog.V(2).InfoS("updating internal member cluster", "InternalMemberCluster", klog.KObj(currentImc), "spec", currentImc.Spec)
 	if err := r.Client.Update(ctx, currentImc, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
-		return nil, fmt.Errorf("failed to update internal member cluster %s with spec %+v: %w", klog.KObj(currentImc), currentImc.Spec, err)
+		return nil, controller.NewAPIServerError(false, fmt.Errorf("failed to update internal member cluster %s with spec %+v: %w", klog.KObj(currentImc), currentImc.Spec, err))
 	}
 	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonIMCSpecUpdated, "internal member cluster spec updated")
 	klog.V(2).InfoS("updated internal member cluster", "InternalMemberCluster", klog.KObj(currentImc), "spec", currentImc.Spec)
@@ -517,7 +525,7 @@ func (r *Reconciler) aggregateJoinedCondition(mc *clusterv1beta1.MemberCluster) 
 	reportedAgents := make(map[clusterv1beta1.AgentType]bool)
 	for _, agentStatus := range mc.Status.AgentStatus {
 		if !r.agents[agentStatus.Type] {
-			controller.NewUnexpectedBehaviorError(fmt.Errorf("find an unexpected agent type %s for member cluster %s", agentStatus.Type, mc.Name))
+			_ = controller.NewUnexpectedBehaviorError(fmt.Errorf("find an unexpected agent type %s for member cluster %s", agentStatus.Type, mc.Name))
 			continue // ignore any unexpected agent type
 		}
 		condition := meta.FindStatusCondition(agentStatus.Conditions, string(clusterv1beta1.AgentJoined))

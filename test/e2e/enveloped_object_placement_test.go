@@ -162,6 +162,105 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 	})
 
+	Context("Test a CRP place enveloped objects successfully", Ordered, func() {
+		It("Create the test resources in the namespace", createWrappedResourcesForEnvelopTest)
+
+		It("Create the CRP that select the name space", func() {
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: ptr.To(2),
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
+
+		It("should update CRP status as expected", func() {
+			// resourceQuota is enveloped so it's not trackable yet
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", false)
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should place the resources on all member clusters", func() {
+			for idx := range allMemberClusters {
+				memberCluster := allMemberClusters[idx]
+				workResourcesPlacedActual := checkEnvelopQuotaAndMutationWebhookPlacement(memberCluster)
+				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+			}
+		})
+
+		It("Update the envelop configMap with bad configuration", func() {
+			// modify the embedded namespaced resource to add a scope but it will be rejected as its immutable
+			badEnvelopeResourceQuota := testEnvelopeResourceQuota.DeepCopy()
+			badEnvelopeResourceQuota.Spec.Scopes = []corev1.ResourceQuotaScope{
+				corev1.ResourceQuotaScopeNotBestEffort, corev1.ResourceQuotaScopeNotTerminating,
+			}
+			badResourceQuotaByte, err := json.Marshal(badEnvelopeResourceQuota)
+			Expect(err).Should(Succeed())
+			// Get the config map.
+			Expect(hubClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testEnvelopConfigMap.Name}, &testEnvelopConfigMap)).To(Succeed(), "Failed to get config map")
+			testEnvelopConfigMap.Data["resourceQuota.yaml"] = string(badResourceQuotaByte)
+			Expect(hubClient.Update(ctx, &testEnvelopConfigMap)).To(Succeed(), "Failed to update the enveloped config map")
+		})
+
+		It("should update CRP status with failed to apply resourceQuota", func() {
+			// rolloutStarted is false, but other conditions are true.
+			// "The rollout is being blocked by the rollout strategy in 2 cluster(s)",
+			crpStatusUpdatedActual := checkForRolloutStuckOnOneFailedClusterStatus(wantSelectedResources)
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("Update the envelop configMap back with good configuration", func() {
+			// Get the config map.
+			Expect(hubClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testEnvelopConfigMap.Name}, &testEnvelopConfigMap)).To(Succeed(), "Failed to get config map")
+			resourceQuotaByte, err := json.Marshal(testEnvelopeResourceQuota)
+			Expect(err).Should(Succeed())
+			testEnvelopConfigMap.Data["resourceQuota.yaml"] = string(resourceQuotaByte)
+			Expect(hubClient.Update(ctx, &testEnvelopConfigMap)).To(Succeed(), "Failed to update the enveloped config map")
+		})
+
+		It("should update CRP status as success again", func() {
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "2", false)
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should place the resources on all member clusters again", func() {
+			for idx := range allMemberClusters {
+				memberCluster := allMemberClusters[idx]
+				workResourcesPlacedActual := checkEnvelopQuotaAndMutationWebhookPlacement(memberCluster)
+				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+			}
+		})
+
+		It("can delete the CRP", func() {
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+			}
+			Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP")
+		})
+
+		It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
+
+		It("should remove controller finalizers from CRP", func() {
+			finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
+			Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP")
+		})
+	})
+
 	AfterAll(func() {
 		// Remove the custom deletion blocker finalizer from the CRP.
 		cleanupCRP(crpName)
