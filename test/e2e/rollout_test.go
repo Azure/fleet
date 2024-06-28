@@ -601,14 +601,13 @@ func createWrappedResourcesForRollout(testEnvelopeObj *corev1.ConfigMap, obj met
 }
 
 func waitForDeploymentPlacementToReady(memberCluster *framework.Cluster, testDeployment *appv1.Deployment) func() error {
-	workNamespaceName := appNamespace().Name
 	return func() error {
-		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: workNamespaceName}); err != nil {
+		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: testDeployment.Namespace}); err != nil {
 			return err
 		}
 		By("check the placedDeployment")
 		placedDeployment := &appv1.Deployment{}
-		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testDeployment.Name}, placedDeployment); err != nil {
+		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: testDeployment.Namespace, Name: testDeployment.Name}, placedDeployment); err != nil {
 			return err
 		}
 		By("check the placedDeployment is ready")
@@ -627,14 +626,13 @@ func waitForDeploymentPlacementToReady(memberCluster *framework.Cluster, testDep
 }
 
 func waitForDaemonSetPlacementToReady(memberCluster *framework.Cluster, testDaemonSet *appv1.DaemonSet) func() error {
-	workNamespaceName := appNamespace().Name
 	return func() error {
-		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: workNamespaceName}); err != nil {
+		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: testDaemonSet.Namespace}); err != nil {
 			return err
 		}
 		By("check the placedDaemonSet")
 		placedDaemonSet := &appv1.DaemonSet{}
-		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testDaemonSet.Name}, placedDaemonSet); err != nil {
+		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: testDaemonSet.Namespace, Name: testDaemonSet.Name}, placedDaemonSet); err != nil {
 			return err
 		}
 		By("check the placedDaemonSet is ready")
@@ -648,14 +646,13 @@ func waitForDaemonSetPlacementToReady(memberCluster *framework.Cluster, testDaem
 }
 
 func waitForStatefulSetPlacementToReady(memberCluster *framework.Cluster, testStatefulSet *appv1.StatefulSet) func() error {
-	workNamespaceName := appNamespace().Name
 	return func() error {
-		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: workNamespaceName}); err != nil {
+		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: testStatefulSet.Namespace}); err != nil {
 			return err
 		}
 		By("check the placedStatefulSet")
 		placedStatefulSet := &appv1.StatefulSet{}
-		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testStatefulSet.Name}, placedStatefulSet); err != nil {
+		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: testStatefulSet.Namespace, Name: testStatefulSet.Name}, placedStatefulSet); err != nil {
 			return err
 		}
 		By("check the placedStatefulSet is ready")
@@ -669,14 +666,13 @@ func waitForStatefulSetPlacementToReady(memberCluster *framework.Cluster, testSt
 }
 
 func waitForServiceToReady(memberCluster *framework.Cluster, testService *corev1.Service) func() error {
-	workNamespaceName := appNamespace().Name
 	return func() error {
-		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: workNamespaceName}); err != nil {
+		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: testService.Namespace}); err != nil {
 			return err
 		}
 		By("check the placedService")
 		placedService := &corev1.Service{}
-		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testService.Name}, placedService); err != nil {
+		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: testService.Namespace, Name: testService.Name}, placedService); err != nil {
 			return err
 		}
 		By("check the placedService is ready")
@@ -688,13 +684,12 @@ func waitForServiceToReady(memberCluster *framework.Cluster, testService *corev1
 }
 
 func waitForJobToBePlaced(memberCluster *framework.Cluster, testJob *batchv1.Job) func() error {
-	workNamespaceName := appNamespace().Name
 	return func() error {
-		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: workNamespaceName}); err != nil {
+		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: testJob.Namespace}); err != nil {
 			return err
 		}
 		By("check the placedJob")
-		return memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testJob.Name}, &batchv1.Job{})
+		return memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: testJob.Namespace, Name: testJob.Name}, &batchv1.Job{})
 	}
 }
 
