@@ -135,6 +135,17 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 		controllerutil.RemoveFinalizer(mc, placementv1beta1.MemberClusterFinalizer)
 		return runtime.Result{}, controller.NewUpdateIgnoreConflictError(r.Update(ctx, mc))
 	}
+	// check if the namespace is being deleted already, just wait for it to be deleted
+	if !currentNS.DeletionTimestamp.IsZero() {
+		klog.V(2).InfoS("The member cluster namespace is still being deleted", "memberCluster", mcObjRef, "delete timestamp", currentNS.DeletionTimestamp)
+		var stuckErr error
+		if time.Now().After(currentNS.DeletionTimestamp.Add(5 * time.Minute)) {
+			// alert if the namespace is stuck in deleting for more than 5 minutes
+			stuckErr = controller.NewUnexpectedBehaviorError(fmt.Errorf("the member cluster namespace %s has been deleting since %s", namespaceName, currentNS.DeletionTimestamp.Format(time.RFC3339)))
+		}
+		return runtime.Result{RequeueAfter: time.Second}, stuckErr
+	}
+	cond := meta.FindStatusCondition(mc.Status.Conditions, string(clusterv1beta1.AgentJoined))
 	currentImc := &clusterv1beta1.InternalMemberCluster{}
 	imcNamespacedName := types.NamespacedName{Namespace: namespaceName, Name: mc.Name}
 	if err := r.Client.Get(ctx, imcNamespacedName, currentImc); err != nil {
@@ -143,12 +154,16 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 			return runtime.Result{}, controller.NewAPIServerError(true, err)
 		}
 		// we don't need to wait for the agent to leave if the internal member cluster is not found
-		klog.V(2).Info("InternalMemberCluster not found, start garbage collecting", "memberCluster", mcObjRef)
+		if condition.IsConditionStatusTrue(cond, mc.GetGeneration()) {
+			// alert if the MC status is joined but imc is missing
+			klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("internalMemberCluster %s not found", namespaceName)), "The member cluster is joined but its internalMemberCluster is missing", "memberCluster", mcObjRef)
+		} else {
+			klog.V(2).Info("InternalMemberCluster not found, start garbage collecting", "memberCluster", mcObjRef)
+		}
 		return runtime.Result{Requeue: true}, r.garbageCollect(ctx, mc)
 	}
 	// calculate the current status of the member cluster from imc status
 	r.syncInternalMemberClusterStatus(currentImc, mc)
-	cond := meta.FindStatusCondition(mc.Status.Conditions, string(clusterv1beta1.AgentJoined))
 	// TODO: check the last heartbeat time from all agents and assume the member cluster is dead if they haven't sent heartbeat
 	//       beyond a pre-agreed threshold (which should be in the order of hours instead of minutes) and proceed with garbage collection
 	// check if the cluster is already left
@@ -163,7 +178,7 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 		return runtime.Result{}, err
 	}
 	// update the mc status to track the leaving status while we wait for all the agents to leave
-	return runtime.Result{Requeue: true}, controller.NewUpdateIgnoreConflictError(r.updateMemberClusterStatus(ctx, mc))
+	return runtime.Result{}, controller.NewUpdateIgnoreConflictError(r.updateMemberClusterStatus(ctx, mc))
 }
 
 func (r *Reconciler) getInternalMemberCluster(ctx context.Context, name string) (*clusterv1beta1.InternalMemberCluster, error) {

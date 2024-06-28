@@ -830,5 +830,4 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			Expect(ns.DeletionTimestamp != nil).Should(BeTrue())
 		})
 	})
-
 })

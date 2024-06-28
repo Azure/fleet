@@ -28,6 +28,7 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 const (
@@ -1543,21 +1544,118 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 }
 
 func TestHandleDelete(t *testing.T) {
+	memberClusterWithFinalizer := clusterv1beta1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test",
+			Finalizers: []string{placementv1beta1.MemberClusterFinalizer},
+		},
+	}
 	tests := map[string]struct {
 		r             *Reconciler
 		memberCluster *clusterv1beta1.MemberCluster
 		wantResult    ctrl.Result
 		wantErr       error
 	}{
-		"Handle delete with finalizer": {
-			r: &Reconciler{Client: &test.MockClient{
-				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
-					return errors.New("random update error")
-				}},
+		"return success when the mc has no finalizer": {
+			r: &Reconciler{Client: &test.MockClient{},
 				recorder: utils.NewFakeRecorder(1),
 			},
 			memberCluster: &clusterv1beta1.MemberCluster{},
-			wantErr:,
+			wantResult:    ctrl.Result{},
+			wantErr:       nil,
+		},
+		"return success when the namespace does not exit": {
+			r: &Reconciler{Client: &test.MockClient{
+				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					return &apierrors.StatusError{
+						ErrStatus: metav1.Status{
+							Status: metav1.StatusFailure,
+							Reason: metav1.StatusReasonNotFound,
+						}}
+				},
+				MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					// mock remove finalizer
+					return nil
+				}},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster: memberClusterWithFinalizer.DeepCopy(),
+			wantResult:    ctrl.Result{},
+			wantErr:       nil,
+		},
+		"requeue when the namespace is still deleting": {
+			r: &Reconciler{Client: &test.MockClient{
+				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					o := obj.(*corev1.Namespace)
+					*o = corev1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:   namespace1,
+							Labels: map[string]string{placementv1beta1.FleetResourceLabelKey: "true"},
+							DeletionTimestamp: &metav1.Time{
+								Time: time.Now(),
+							},
+						},
+					}
+					return nil
+				}},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster: memberClusterWithFinalizer.DeepCopy(),
+			wantResult:    ctrl.Result{RequeueAfter: time.Second},
+			wantErr:       nil,
+		},
+		"requeue with error when the namespace is stuck in deleting": {
+			r: &Reconciler{Client: &test.MockClient{
+				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					o := obj.(*corev1.Namespace)
+					*o = corev1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:   namespace1,
+							Labels: map[string]string{placementv1beta1.FleetResourceLabelKey: "true"},
+							DeletionTimestamp: &metav1.Time{
+								Time: time.Now().Add(-time.Hour),
+							},
+						},
+					}
+					return nil
+				}},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster: memberClusterWithFinalizer.DeepCopy(),
+			wantResult:    ctrl.Result{RequeueAfter: time.Second},
+			wantErr:       controller.ErrUnexpectedBehavior,
+		},
+		"requeue with no error when the imc does not exist": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						if key.Namespace == "" {
+							// this is to get the namespace
+							o := obj.(*corev1.Namespace)
+							*o = corev1.Namespace{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:   namespace1,
+									Labels: map[string]string{placementv1beta1.FleetResourceLabelKey: "true"},
+								},
+							}
+							return nil
+						}
+						// this is to get the imc
+						return &apierrors.StatusError{
+							ErrStatus: metav1.Status{
+								Status: metav1.StatusFailure,
+								Reason: metav1.StatusReasonNotFound,
+							},
+						}
+					},
+					MockList:   test.NewMockListFn(nil),
+					MockDelete: test.NewMockDeleteFn(nil),
+				},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster: memberClusterWithFinalizer.DeepCopy(),
+			wantResult:    ctrl.Result{Requeue: true},
+			wantErr:       nil,
 		},
 	}
 
