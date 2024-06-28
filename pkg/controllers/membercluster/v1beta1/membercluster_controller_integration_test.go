@@ -15,7 +15,6 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -229,7 +228,8 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			result, err := r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
+
 			Expect(err).Should(Succeed())
 
 			var imc clusterv1beta1.InternalMemberCluster
@@ -252,7 +252,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			result, err = r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
 			Expect(err).Should(Succeed())
 			// check the cluster namespace is being deleted. There is no namespace controller so it won't be removed
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &ns)).Should(Succeed())
@@ -277,14 +277,14 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			Expect(mcNamespace.Labels[placementv1beta1.FleetResourceLabelKey]).Should(Equal("true"))
 		})
 
-		It("member cluster is deleted even with work objects after the leave workflow is completed", func() {
+		It("member cluster is deleting even with work objects after the leave workflow is completed", func() {
 			By("Delete member cluster to initiate leave workflow")
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, mc)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, mc))
 
 			By("trigger reconcile again to initiate leave workflow")
 			result, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: memberClusterNamespacedName})
-			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
 			Expect(err).Should(Succeed())
 
 			var imc clusterv1beta1.InternalMemberCluster
@@ -324,116 +324,18 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			result, err = r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
 			Expect(err).Should(Succeed())
+
+			By("check the workers objects don't have finalizer")
+			for i := 0; i < 10; i++ {
+				work := placementv1beta1.Work{}
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf("work%d", i), Namespace: namespaceName}, &work)).Should(Succeed())
+				Expect(work.Finalizers).Should(BeEmpty())
+			}
 			// check the cluster namespace is being deleted. There is no namespace controller so it won't be removed
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &ns)).Should(Succeed())
 			Expect(ns.DeletionTimestamp != nil).Should(BeTrue())
-		})
-
-		PIt("member cluster can leave and join even with work objects", func() {
-			By("Delete member cluster to initiate leave workflow")
-			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, mc)).Should(Succeed())
-			Expect(k8sClient.Delete(ctx, mc))
-
-			By("trigger reconcile again to initiate leave workflow")
-			result, err := r.Reconcile(ctx, ctrl.Request{
-				NamespacedName: memberClusterNamespacedName,
-			})
-			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Succeed())
-
-			var imc clusterv1beta1.InternalMemberCluster
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
-			Expect(imc.Spec.State).To(Equal(clusterv1beta1.ClusterStateLeave))
-			// check mc still exist
-			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, mc)).Should(Succeed())
-
-			By("Create works in the cluster namespace")
-			for i := 0; i < 10; i++ {
-				work := placementv1beta1.Work{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      fmt.Sprintf("work%d", i),
-						Namespace: namespaceName,
-						Labels: map[string]string{
-							placementv1beta1.ParentBindingLabel:               "resourceBindingName",
-							placementv1beta1.CRPTrackingLabel:                 "parentCRP",
-							placementv1beta1.ParentResourceSnapshotIndexLabel: "resourceIndexLabel",
-						},
-						Finalizers: []string{placementv1beta1.WorkFinalizer},
-					},
-				}
-				Expect(k8sClient.Create(ctx, &work)).Should(Succeed())
-			}
-
-			By("mark Internal Member Cluster as left")
-			imcLeftCondition := metav1.Condition{
-				Type:               string(clusterv1beta1.AgentJoined),
-				Status:             metav1.ConditionFalse,
-				Reason:             "InternalMemberClusterLeft",
-				ObservedGeneration: imc.GetGeneration(),
-			}
-			imc.SetConditionsWithType(clusterv1beta1.MemberAgent, imcLeftCondition)
-			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
-
-			By("trigger reconcile again to mark member cluster as left")
-			result, err = r.Reconcile(ctx, ctrl.Request{
-				NamespacedName: memberClusterNamespacedName,
-			})
-			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Succeed())
-			// check mc is deleted
-			Expect(apierrors.IsNotFound(k8sClient.Get(ctx, memberClusterNamespacedName, mc))).Should(BeTrue())
-
-			By("create member cluster for join again")
-			mc = &clusterv1beta1.MemberCluster{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "MemberCluster",
-					APIVersion: clusterv1beta1.GroupVersion.Version,
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: memberClusterName,
-				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					Identity: rbacv1.Subject{
-						Kind: rbacv1.ServiceAccountKind,
-						Name: "hub-access2",
-					},
-				},
-			}
-			Expect(k8sClient.Create(ctx, mc)).Should(Succeed())
-
-			By("trigger reconcile to initiate the join workflow")
-			result, err = r.Reconcile(ctx, ctrl.Request{
-				NamespacedName: memberClusterNamespacedName,
-			})
-			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Succeed())
-
-			By("simulate member agent updating internal member cluster status")
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
-			joinedCondition := metav1.Condition{
-				Type:               string(clusterv1beta1.AgentJoined),
-				Status:             metav1.ConditionTrue,
-				Reason:             reasonMemberClusterJoined,
-				ObservedGeneration: imc.GetGeneration(),
-			}
-			// Update the agent status.
-			imc.SetConditionsWithType(clusterv1beta1.MemberAgent, joinedCondition)
-
-			By("trigger reconcile again to update member cluster status to joined")
-			result, err = r.Reconcile(ctx, ctrl.Request{
-				NamespacedName: memberClusterNamespacedName,
-			})
-			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Succeed())
-
-			By("check the join succeed again")
-			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, mc)).Should(Succeed())
-			joinCondition := mc.GetCondition(string(clusterv1beta1.ConditionTypeMemberClusterJoined))
-			Expect(joinCondition).NotTo(BeNil())
-			Expect(joinCondition.Status).To(Equal(metav1.ConditionTrue))
-			Expect(joinCondition.Reason).To(Equal(reasonMemberClusterJoined))
 		})
 	})
 
@@ -778,7 +680,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			result, err := r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
 			Expect(err).Should(Succeed())
 
 			By("getting imc status")
@@ -800,7 +702,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			result, err = r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
 			Expect(err).Should(Succeed())
 
 			By("checking mc status")
@@ -855,7 +757,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			result, err = r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
 			Expect(err).Should(Succeed())
 
 			By("checking mc status")
@@ -919,7 +821,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			result, err = r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
 			Expect(err).Should(Succeed())
 
 			// check the cluster namespace is being deleted. There is no namespace controller so it won't be removed

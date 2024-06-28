@@ -22,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
@@ -1537,6 +1538,38 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 				assert.Contains(t, err.Error(), tt.wantedError, utils.TestCaseMsg, testName)
 			}
 			assert.Equal(t, tt.verifyNumberOfRetry(), true, utils.TestCaseMsg, testName)
+		})
+	}
+}
+
+func TestHandleDelete(t *testing.T) {
+	tests := map[string]struct {
+		r             *Reconciler
+		memberCluster *clusterv1beta1.MemberCluster
+		wantResult    ctrl.Result
+		wantErr       error
+	}{
+		"Handle delete with finalizer": {
+			r: &Reconciler{Client: &test.MockClient{
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+					return errors.New("random update error")
+				}},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster: &clusterv1beta1.MemberCluster{},
+			wantErr:,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			result, err := tt.r.handleDelete(context.Background(), tt.memberCluster)
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("handleDelete() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantResult != result {
+				t.Errorf("handleDelete() result = %v, wantResult %v", result, tt.wantResult)
+			}
 		})
 	}
 }

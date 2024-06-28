@@ -76,20 +76,20 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	var mc clusterv1beta1.MemberCluster
 	if err := r.Client.Get(ctx, req.NamespacedName, &mc); err != nil {
-		klog.ErrorS(err, "failed to get member cluster", "memberCluster", req.Name)
+		klog.ErrorS(err, "Failed to get member cluster", "memberCluster", req.Name)
 		return runtime.Result{}, client.IgnoreNotFound(err)
 	}
 	mcObjRef := klog.KObj(&mc)
 
 	// Handle deleting/leaving member cluster, garbage collect all the resources in the cluster namespace
 	if !mc.DeletionTimestamp.IsZero() {
-		klog.V(2).InfoS("the member cluster is leaving", "memberCluster", mcObjRef)
-		return runtime.Result{}, r.handleDelete(ctx, mc.DeepCopy())
+		klog.V(2).InfoS("The member cluster is leaving", "memberCluster", mcObjRef)
+		return r.handleDelete(ctx, mc.DeepCopy())
 	}
 
 	// Add the finalizer to the member cluster
 	if err := r.ensureFinalizer(ctx, &mc); err != nil {
-		klog.ErrorS(err, "failed to add the finalizer to member cluster", "memberCluster", mcObjRef)
+		klog.ErrorS(err, "Failed to add the finalizer to member cluster", "memberCluster", mcObjRef)
 		return runtime.Result{}, err
 	}
 	currentIMC, err := r.getInternalMemberCluster(ctx, mc.GetName())
@@ -97,7 +97,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{}, err
 	}
 	if err := r.join(ctx, &mc, currentIMC); err != nil {
-		klog.ErrorS(err, "failed to join", "memberCluster", mcObjRef)
+		klog.ErrorS(err, "Failed to join", "memberCluster", mcObjRef)
 		return runtime.Result{}, err
 	}
 
@@ -105,9 +105,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	r.syncInternalMemberClusterStatus(currentIMC, &mc)
 	if err := r.updateMemberClusterStatus(ctx, &mc); err != nil {
 		if apierrors.IsConflict(err) {
-			klog.V(2).InfoS("failed to update status due to conflicts", "memberCluster", mcObjRef)
+			klog.V(2).InfoS("Failed to update status due to conflicts", "memberCluster", mcObjRef)
 		} else {
-			klog.ErrorS(err, "failed to update status", "memberCluster", mcObjRef)
+			klog.ErrorS(err, "Failed to update status", "memberCluster", mcObjRef)
 		}
 		return runtime.Result{}, client.IgnoreNotFound(err)
 	}
@@ -117,69 +117,69 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 // handleDelete handles the delete event of the member cluster, makes sure the agent has finished leaving the fleet first and
 // then garbage collects all the resources in the cluster namespace.
-func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.MemberCluster) error {
+func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.MemberCluster) (runtime.Result, error) {
 	mcObjRef := klog.KObj(mc)
 	if !controllerutil.ContainsFinalizer(mc, placementv1beta1.MemberClusterFinalizer) {
 		klog.V(2).InfoS("No need to do anything for the deleting member cluster without a finalizer", "memberCluster", mcObjRef)
-		return nil
+		return runtime.Result{}, nil
 	}
 	// check if the namespace still exist
 	var currentNS corev1.Namespace
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: namespaceName}, &currentNS); err != nil {
 		if !apierrors.IsNotFound(err) {
-			klog.ErrorS(err, "failed to get the member cluster namespace", "memberCluster", mcObjRef)
-			return controller.NewAPIServerError(true, err)
+			klog.ErrorS(err, "Failed to get the member cluster namespace", "memberCluster", mcObjRef)
+			return runtime.Result{}, controller.NewAPIServerError(true, err)
 		}
-		klog.V(2).InfoS("the member cluster namespace is not found, remove the finalizer", "memberCluster", mcObjRef)
+		klog.V(2).InfoS("The member cluster namespace is not found, remove the finalizer", "memberCluster", mcObjRef)
 		controllerutil.RemoveFinalizer(mc, placementv1beta1.MemberClusterFinalizer)
-		return controller.NewUpdateIgnoreConflictError(r.Update(ctx, mc, &client.UpdateOptions{}))
+		return runtime.Result{}, controller.NewUpdateIgnoreConflictError(r.Update(ctx, mc))
 	}
 	currentImc := &clusterv1beta1.InternalMemberCluster{}
 	imcNamespacedName := types.NamespacedName{Namespace: namespaceName, Name: mc.Name}
 	if err := r.Client.Get(ctx, imcNamespacedName, currentImc); err != nil {
 		if !apierrors.IsNotFound(err) {
-			klog.ErrorS(err, "failed to get internal member cluster", "internalMemberCluster", imcNamespacedName)
-			return controller.NewAPIServerError(true, err)
+			klog.ErrorS(err, "Failed to get internal member cluster", "internalMemberCluster", imcNamespacedName)
+			return runtime.Result{}, controller.NewAPIServerError(true, err)
 		}
 		// we don't need to wait for the agent to leave if the internal member cluster is not found
-		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("internal member cluster %s not found", mcObjRef)), "InternalMemberCluster not found, start garbage collecting", "memberCluster", mcObjRef)
-		return r.garbageCollect(ctx, mc)
+		klog.V(2).Info("InternalMemberCluster not found, start garbage collecting", "memberCluster", mcObjRef)
+		return runtime.Result{Requeue: true}, r.garbageCollect(ctx, mc)
 	}
 	// calculate the current status of the member cluster from imc status
 	r.syncInternalMemberClusterStatus(currentImc, mc)
 	cond := meta.FindStatusCondition(mc.Status.Conditions, string(clusterv1beta1.AgentJoined))
-	// check if the cluster is already left
 	// TODO: check the last heartbeat time from all agents and assume the member cluster is dead if they haven't sent heartbeat
 	//       beyond a pre-agreed threshold (which should be in the order of hours instead of minutes) and proceed with garbage collection
+	// check if the cluster is already left
 	if condition.IsConditionStatusFalse(cond, mc.GetGeneration()) {
 		klog.V(2).InfoS("Agent already left, start garbage collecting", "memberCluster", mcObjRef)
-		return r.garbageCollect(ctx, mc)
+		return runtime.Result{Requeue: true}, r.garbageCollect(ctx, mc)
 	}
 	klog.V(2).InfoS("Need to wait for the agent to leave", "memberCluster", mcObjRef, "agentJoinedCondition", cond)
 	// mark the imc as left to make sure the agent is leaving the fleet
 	if err := r.leave(ctx, mc, currentImc); err != nil {
-		klog.ErrorS(err, "failed to mark the imc as leave", "memberCluster", mcObjRef)
-		return err
+		klog.ErrorS(err, "Failed to mark the imc as leave", "memberCluster", mcObjRef)
+		return runtime.Result{}, err
 	}
 	// update the mc status to track the leaving status while we wait for all the agents to leave
-	return controller.NewUpdateIgnoreConflictError(r.updateMemberClusterStatus(ctx, mc))
+	return runtime.Result{Requeue: true}, controller.NewUpdateIgnoreConflictError(r.updateMemberClusterStatus(ctx, mc))
 }
 
 func (r *Reconciler) getInternalMemberCluster(ctx context.Context, name string) (*clusterv1beta1.InternalMemberCluster, error) {
 	// Get current internal member cluster.
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, name)
 	imcNamespacedName := types.NamespacedName{Namespace: namespaceName, Name: name}
-	currentImc := &clusterv1beta1.InternalMemberCluster{}
-	if err := r.Client.Get(ctx, imcNamespacedName, currentImc); err != nil {
+	currentIMC := &clusterv1beta1.InternalMemberCluster{}
+	if err := r.Client.Get(ctx, imcNamespacedName, currentIMC); err != nil {
 		if !apierrors.IsNotFound(err) {
-			klog.ErrorS(err, "failed to get internal member cluster", "internalMemberCluster", imcNamespacedName)
+			klog.ErrorS(err, "Failed to get internal member cluster", "internalMemberCluster", imcNamespacedName)
 			return nil, err
 		}
 		// Not found.
-		currentImc = nil
+		currentIMC = nil
 	}
-	return currentImc, nil
+	return currentIMC, nil
 }
 
 // garbageCollectWork remove all the finalizers on the work that are in the cluster namespace
@@ -190,7 +190,7 @@ func (r *Reconciler) garbageCollectWork(ctx context.Context, mc *clusterv1beta1.
 		client.InNamespace(namespaceName),
 	}
 	if err := r.Client.List(ctx, &works, listOpts...); err != nil {
-		klog.ErrorS(err, "failed to list all the work object", "memberCluster", klog.KObj(mc))
+		klog.ErrorS(err, "Failed to list all the work object", "memberCluster", klog.KObj(mc))
 		return client.IgnoreNotFound(err)
 	}
 	// remove all the finalizers on the work objects in parallel
@@ -200,7 +200,7 @@ func (r *Reconciler) garbageCollectWork(ctx context.Context, mc *clusterv1beta1.
 		errs.Go(func() error {
 			staleWork.SetFinalizers(nil)
 			if updateErr := r.Update(cctx, staleWork, &client.UpdateOptions{}); updateErr != nil {
-				klog.ErrorS(updateErr, "failed to remove the finalizer from the work",
+				klog.ErrorS(updateErr, "Failed to remove the finalizer from the work",
 					"memberCluster", klog.KObj(mc), "work", klog.KObj(staleWork))
 				return updateErr
 			}
@@ -217,17 +217,18 @@ func (r *Reconciler) garbageCollect(ctx context.Context, mc *clusterv1beta1.Memb
 	// check if the namespace still exist
 	var clusterNS corev1.Namespace
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
-	if err := r.Client.Get(ctx, types.NamespacedName{Name: namespaceName}, &clusterNS); apierrors.IsNotFound(err) {
-		klog.V(2).InfoS("the member cluster namespace is successfully deleted", "memberCluster", klog.KObj(mc))
-		return nil
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: namespaceName}, &clusterNS); err != nil {
+		klog.ErrorS(err, "Failed to get the member cluster namespace", "memberCluster", klog.KObj(mc))
+		return err
 	}
 	if err := r.garbageCollectWork(ctx, mc, namespaceName); err != nil {
 		return err
 	}
 	if err := r.Delete(ctx, &clusterNS); err != nil {
-		klog.ErrorS(err, "failed to remove the cluster namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
+		klog.ErrorS(err, "Failed to remove the cluster namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
+		return err
 	}
-	klog.V(2).InfoS("deleted the member cluster namespace", "memberCluster", klog.KObj(mc))
+	klog.V(2).InfoS("Deleted the member cluster namespace", "memberCluster", klog.KObj(mc))
 	return nil
 }
 
@@ -236,7 +237,7 @@ func (r *Reconciler) ensureFinalizer(ctx context.Context, mc *clusterv1beta1.Mem
 	if controllerutil.ContainsFinalizer(mc, placementv1beta1.MemberClusterFinalizer) {
 		return nil
 	}
-	klog.InfoS("add the member cluster finalizer", "memberCluster", klog.KObj(mc))
+	klog.InfoS("Added the member cluster finalizer", "memberCluster", klog.KObj(mc))
 	controllerutil.AddFinalizer(mc, placementv1beta1.MemberClusterFinalizer)
 	return r.Update(ctx, mc, client.FieldOwner(utils.MCControllerFieldManagerName))
 }
