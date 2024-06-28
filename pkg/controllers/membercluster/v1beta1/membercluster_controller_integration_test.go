@@ -228,7 +228,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			result, err := r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
+			Expect(result).Should(Equal(ctrl.Result{}))
 
 			Expect(err).Should(Succeed())
 
@@ -284,7 +284,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 
 			By("trigger reconcile again to initiate leave workflow")
 			result, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: memberClusterNamespacedName})
-			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
+			Expect(result).Should(Equal(ctrl.Result{}))
 			Expect(err).Should(Succeed())
 
 			var imc clusterv1beta1.InternalMemberCluster
@@ -680,7 +680,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			result, err := r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
+			Expect(result).Should(Equal(ctrl.Result{}))
 			Expect(err).Should(Succeed())
 
 			By("getting imc status")
@@ -702,7 +702,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			result, err = r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
+			Expect(result).Should(Equal(ctrl.Result{}))
 			Expect(err).Should(Succeed())
 
 			By("checking mc status")
@@ -757,7 +757,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			result, err = r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
+			Expect(result).Should(Equal(ctrl.Result{}))
 			Expect(err).Should(Succeed())
 
 			By("checking mc status")
