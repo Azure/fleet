@@ -23,6 +23,7 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
 )
 
 var _ = Describe("Test MemberCluster Controller", func() {
@@ -229,14 +230,15 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			Expect(result).Should(Equal(ctrl.Result{}))
-
 			Expect(err).Should(Succeed())
 
 			var imc clusterv1beta1.InternalMemberCluster
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
 			Expect(imc.Spec.State).To(Equal(clusterv1beta1.ClusterStateLeave))
-			// check mc still exist
+
+			By("verify mc joined status still be true")
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, mc)).Should(Succeed())
+			Expect(condition.IsConditionStatusTrue(mc.GetCondition(string(clusterv1beta1.ConditionTypeMemberClusterJoined)), mc.Generation)).Should(BeTrue())
 
 			By("mark Internal Member Cluster as left")
 			imcLeftCondition := metav1.Condition{
@@ -254,6 +256,11 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			})
 			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
 			Expect(err).Should(Succeed())
+
+			By("verify mc joined status is set to be false")
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, mc)).Should(Succeed())
+			Expect(condition.IsConditionStatusFalse(mc.GetCondition(string(clusterv1beta1.ConditionTypeMemberClusterJoined)), mc.Generation)).Should(BeTrue())
+
 			// check the cluster namespace is being deleted. There is no namespace controller so it won't be removed
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &ns)).Should(Succeed())
 			Expect(ns.DeletionTimestamp != nil).Should(BeTrue())
@@ -333,6 +340,11 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf("work%d", i), Namespace: namespaceName}, &work)).Should(Succeed())
 				Expect(work.Finalizers).Should(BeEmpty())
 			}
+
+			By("verify mc joined status is set to be false")
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, mc)).Should(Succeed())
+			Expect(condition.IsConditionStatusFalse(mc.GetCondition(string(clusterv1beta1.ConditionTypeMemberClusterJoined)), mc.Generation)).Should(BeTrue())
+
 			// check the cluster namespace is being deleted. There is no namespace controller so it won't be removed
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &ns)).Should(Succeed())
 			Expect(ns.DeletionTimestamp != nil).Should(BeTrue())

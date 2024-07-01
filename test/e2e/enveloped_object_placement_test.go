@@ -162,11 +162,8 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 	})
 
 	AfterAll(func() {
-		// Remove the custom deletion blocker finalizer from the CRP.
-		cleanupCRP(crpName)
-
-		// Delete the created resources.
-		cleanupWorkResources()
+		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 	})
 })
 

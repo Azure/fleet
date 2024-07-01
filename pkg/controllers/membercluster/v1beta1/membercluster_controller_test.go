@@ -8,6 +8,7 @@ package v1beta1
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -1546,7 +1547,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 func TestHandleDelete(t *testing.T) {
 	memberClusterWithFinalizer := clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       "test",
+			Name:       "mc1",
 			Finalizers: []string{placementv1beta1.MemberClusterFinalizer},
 		},
 	}
@@ -1556,7 +1557,7 @@ func TestHandleDelete(t *testing.T) {
 		wantResult    ctrl.Result
 		wantErr       error
 	}{
-		"return success when the mc has no finalizer": {
+		"do nothing when the mc has no finalizer": {
 			r: &Reconciler{Client: &test.MockClient{},
 				recorder: utils.NewFakeRecorder(1),
 			},
@@ -1564,7 +1565,7 @@ func TestHandleDelete(t *testing.T) {
 			wantResult:    ctrl.Result{},
 			wantErr:       nil,
 		},
-		"return success when the namespace does not exit": {
+		"remove memberCluster's finalizer when the namespace does not exit": {
 			r: &Reconciler{Client: &test.MockClient{
 				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					return &apierrors.StatusError{
@@ -1574,7 +1575,11 @@ func TestHandleDelete(t *testing.T) {
 						}}
 				},
 				MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-					// mock remove finalizer
+					// this is to verify that the update call is to remove the memberCluster finalizer
+					o := obj.(*clusterv1beta1.MemberCluster)
+					if o.Name != memberClusterWithFinalizer.Name || len(o.Finalizers) != 0 {
+						return fmt.Errorf("unexpected MemberCluster object %+v", o)
+					}
 					return nil
 				}},
 				recorder: utils.NewFakeRecorder(1),
@@ -1604,7 +1609,7 @@ func TestHandleDelete(t *testing.T) {
 			wantResult:    ctrl.Result{RequeueAfter: time.Second},
 			wantErr:       nil,
 		},
-		"requeue with error when the namespace is stuck in deleting": {
+		"requeue with error when the namespace is stuck in deleting for too long": {
 			r: &Reconciler{Client: &test.MockClient{
 				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					o := obj.(*corev1.Namespace)
@@ -1613,7 +1618,7 @@ func TestHandleDelete(t *testing.T) {
 							Name:   namespace1,
 							Labels: map[string]string{placementv1beta1.FleetResourceLabelKey: "true"},
 							DeletionTimestamp: &metav1.Time{
-								Time: time.Now().Add(-time.Hour),
+								Time: time.Now().Add(-time.Hour), //deletion stuck
 							},
 						},
 					}
@@ -1625,7 +1630,7 @@ func TestHandleDelete(t *testing.T) {
 			wantResult:    ctrl.Result{RequeueAfter: time.Second},
 			wantErr:       controller.ErrUnexpectedBehavior,
 		},
-		"requeue with no error when the imc does not exist": {
+		"Remove the namespace when the imc does not exist": {
 			r: &Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -1648,8 +1653,15 @@ func TestHandleDelete(t *testing.T) {
 							},
 						}
 					},
-					MockList:   test.NewMockListFn(nil),
-					MockDelete: test.NewMockDeleteFn(nil),
+					MockList: test.NewMockListFn(nil),
+					MockDelete: func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+						// this is to verify that the delete call is to remove the namespace
+						o := obj.(*corev1.Namespace)
+						if o.Name != namespace1 {
+							return fmt.Errorf("unexpected delete namespace object %+v", o)
+						}
+						return nil
+					},
 				},
 				recorder: utils.NewFakeRecorder(1),
 			},

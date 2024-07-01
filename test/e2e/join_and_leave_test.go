@@ -16,8 +16,8 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
-// Note that this container will run in parallel with other containers.
-var _ = Describe("placing wrapped resources using a CRP", Ordered, Serial, func() {
+// Note that this container cannot run in parallel with other containers.
+var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 	var wantSelectedResources []placementv1beta1.ResourceIdentifier
@@ -45,7 +45,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, Serial, func(
 		}
 	})
 
-	Context("Test cluster join and leave flow with CRP not deleted", Ordered, Serial, func() {
+	Context("Test cluster join and leave flow with CRP not deleted", func() {
 		It("Create the test resources in the namespace", createWrappedResourcesForEnvelopTest)
 
 		It("Create the CRP that select the name space and place it to all clusters", func() {
@@ -63,6 +63,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, Serial, func(
 						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
 							UnavailablePeriodSeconds: ptr.To(2),
 						},
+						ApplyStrategy: &placementv1beta1.ApplyStrategy{AllowCoOwnership: true},
 					},
 				},
 			}
@@ -70,7 +71,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, Serial, func(
 		})
 
 		It("should update CRP status as expected", func() {
-			// resourceQuota is enveloped so it's not trackable yet
+			// resourceQuota is not trackable yet
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", false)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
@@ -89,7 +90,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, Serial, func(
 			checkIfAllMemberClustersHaveLeft()
 		})
 
-		It("should update CRP status as expected", func() {
+		It("should update CRP status as expected after rejoining the same cluster", func() {
 			// resourceQuota is enveloped so it's not trackable yet
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, nil, nil, "0", false)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
@@ -101,13 +102,15 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, Serial, func(
 			checkIfAllMemberClustersHaveJoined()
 			checkIfAzurePropertyProviderIsWorking()
 		})
+
+		It("should update CRP status as expected", func() {
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", false)
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
 	})
 
 	AfterAll(func() {
-		// Remove the custom deletion blocker finalizer from the CRP.
-		cleanupCRP(crpName)
-
-		// Delete the created resources.
-		cleanupWorkResources()
+		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 	})
 })
