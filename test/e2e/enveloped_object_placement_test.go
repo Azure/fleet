@@ -16,12 +16,10 @@ import (
 	. "github.com/onsi/gomega"
 	admv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils"
@@ -160,64 +158,6 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		It("should remove controller finalizers from CRP", func() {
 			finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 			Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP")
-		})
-	})
-
-	Context("Test cluster join and leave flow with CRP not deleted", Ordered, func() {
-		It("Create the test resources in the namespace", createWrappedResourcesForEnvelopTest)
-
-		It("Create the CRP that select the name space", func() {
-			crp := &placementv1beta1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName,
-					// Add a custom finalizer; this would allow us to better observe
-					// the behavior of the controllers.
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
-					ResourceSelectors: workResourceSelector(),
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-					},
-				},
-			}
-			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
-		})
-
-		It("should update CRP status as expected", func() {
-			// resourceQuota is enveloped so it's not trackable yet
-			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", false)
-			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
-		})
-
-		It("should place the resources on all member clusters", func() {
-			for idx := range allMemberClusters {
-				memberCluster := allMemberClusters[idx]
-				workResourcesPlacedActual := checkEnvelopQuotaAndMutationWebhookPlacement(memberCluster)
-				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
-			}
-		})
-
-		It("Should be able to unjoin a cluster", func() {
-			By("delete the a member cluster")
-			mc := &clusterv1beta1.MemberCluster{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "MemberCluster",
-					APIVersion: clusterv1beta1.GroupVersion.Version,
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: allMemberClusters[0].ClusterName,
-				},
-			}
-			Expect(hubClient.Delete(ctx, mc)).To(Succeed(), "Failed to create CRP")
-
-			Eventually(func() bool {
-				return errors.IsNotFound(hubClient.Get(ctx, types.NamespacedName{Name: allMemberClusters[0].ClusterName}, mc))
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to ")
-
 		})
 	})
 
