@@ -137,7 +137,7 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 	}
 	// check if the namespace is being deleted already, just wait for it to be deleted
 	if !currentNS.DeletionTimestamp.IsZero() {
-		klog.V(2).InfoS("The member cluster namespace is still being deleted", "memberCluster", mcObjRef, "delete timestamp", currentNS.DeletionTimestamp)
+		klog.V(2).InfoS("The member cluster namespace is still being deleted", "memberCluster", mcObjRef, "deleteTimestamp", currentNS.DeletionTimestamp)
 		var stuckErr error
 		if time.Now().After(currentNS.DeletionTimestamp.Add(5 * time.Minute)) {
 			// alert if the namespace is stuck in deleting for more than 5 minutes
@@ -177,7 +177,8 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 		klog.ErrorS(err, "Failed to mark the imc as leave", "memberCluster", mcObjRef)
 		return runtime.Result{}, err
 	}
-	// update the mc status to track the leaving status while we wait for all the agents to leave
+	// update the mc status to track the leaving status while we wait for all the agents to leave.
+	// once the imc is updated, the mc controller will reconcile again.
 	return runtime.Result{}, controller.NewUpdateIgnoreConflictError(r.updateMemberClusterStatus(ctx, mc))
 }
 
@@ -222,9 +223,9 @@ func (r *Reconciler) garbageCollectWork(ctx context.Context, mc *clusterv1beta1.
 			return nil
 		})
 	}
-	klog.V(2).InfoS("try to remove all the work finalizers in the cluster namespace",
+	klog.V(2).InfoS("Try to remove all the work finalizers in the cluster namespace",
 		"memberCluster", klog.KObj(mc), "number of work", len(works.Items))
-	return controller.NewAPIServerError(false, errs.Wait())
+	return controller.NewUpdateIgnoreConflictError(errs.Wait())
 }
 
 // garbageCollect is used to garbage collect all the resources in the cluster namespace associated with the member cluster.
@@ -234,14 +235,14 @@ func (r *Reconciler) garbageCollect(ctx context.Context, mc *clusterv1beta1.Memb
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: namespaceName}, &clusterNS); err != nil {
 		klog.ErrorS(err, "Failed to get the member cluster namespace", "memberCluster", klog.KObj(mc))
-		return err
+		return controller.NewAPIServerError(true, err)
 	}
 	if err := r.garbageCollectWork(ctx, mc, namespaceName); err != nil {
 		return err
 	}
 	if err := r.Delete(ctx, &clusterNS); err != nil {
 		klog.ErrorS(err, "Failed to remove the cluster namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
-		return err
+		return controller.NewAPIServerError(false, err)
 	}
 	klog.V(2).InfoS("Deleted the member cluster namespace", "memberCluster", klog.KObj(mc))
 	return nil
