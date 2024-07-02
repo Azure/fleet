@@ -293,18 +293,22 @@ func checkForRolloutStuckOnOneFailedClusterStatus(wantSelectedResources []placem
 
 func readEnvelopTestManifests() {
 	By("Read the testConfigMap resources")
+	testConfigMap = corev1.ConfigMap{}
 	err := utils.GetObjectFromManifest("resources/test-configmap.yaml", &testConfigMap)
 	Expect(err).Should(Succeed())
 
 	By("Read testEnvelopConfigMap resource")
+	testEnvelopConfigMap = corev1.ConfigMap{}
 	err = utils.GetObjectFromManifest("resources/test-envelop-configmap.yaml", &testEnvelopConfigMap)
 	Expect(err).Should(Succeed())
 
 	By("Read EnvelopeWebhook")
+	testEnvelopeWebhook = admv1.MutatingWebhookConfiguration{}
 	err = utils.GetObjectFromManifest("resources/webhook.yaml", &testEnvelopeWebhook)
 	Expect(err).Should(Succeed())
 
 	By("Read ResourceQuota")
+	testEnvelopeResourceQuota = corev1.ResourceQuota{}
 	err = utils.GetObjectFromManifest("resources/resourcequota.yaml", &testEnvelopeResourceQuota)
 	Expect(err).Should(Succeed())
 }
