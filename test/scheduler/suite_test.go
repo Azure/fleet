@@ -19,7 +19,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap/zapcore"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -32,6 +34,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/scheduler"
 	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/queue"
@@ -66,6 +69,10 @@ const (
 
 	regionLabel = "region"
 	envLabel    = "env"
+
+	// energyEfficiencyRatingPropertyName is the name of a fictional property that is used for testing
+	// purposes only.
+	energyEfficiencyRatingPropertyName = "test.only/energy-efficiency-rating"
 )
 
 var (
@@ -147,6 +154,245 @@ var (
 		memberCluster9LeftCentralProd: {
 			regionLabel: "central",
 			envLabel:    "prod",
+		},
+	}
+
+	// The resource and non-resource properties associated with each cluster. In the context
+	// of this test suite, all properties are set manually.
+	//
+	// The properties for each cluster are:
+	// * cluster 1:
+	//   * non-resource properties:
+	//	   2 nodes, 100 energy-efficiency rating
+	//   * resource properties (total/allocatable/available capacity):
+	//     CPU cores: 4/3/2, Memory: 4/3/2 Gi
+	// * cluster 2:
+	//   * non-resource properties:
+	//     4 nodes, 60 energy-efficiency rating
+	//   * resource properties (total/allocatable/available capacity):
+	//     CPU cores: 8/7/4, Memory: 8/7/4 Gi
+	// * cluster 3:
+	//   * non-resource properties:
+	//     6 nodes, 40 energy-efficiency rating
+	//   * resource properties (total/allocatable/available capacity):
+	//     CPU cores: 12/11/6, Memory: 12/11/6 Gi
+	// * cluster 4:
+	//   * non-resource properties:
+	//     2 nodes, 80 energy-efficiency rating
+	//   * resource properties (total/allocatable/available capacity):
+	//     CPU cores: 8/6/2, Memory: 4/2/1 Gi
+	// * cluster 5:
+	//   * non-resource properties:
+	//     8 nodes, 40 energy-efficiency rating
+	//   * resource properties (total/allocatable/available capacity):
+	//     CPU cores: 32/30/8, Memory: 16/14/4 Gi
+	// * cluster 6:
+	//   * non-resource properties:
+	//     2 nodes, 60 energy-efficiency rating
+	//   * resource properties (total/allocatable/available capacity):
+	//     CPU cores: 4/2/1, Memory: 8/6/4 Gi
+	// * cluster 7:
+	//   * non-resource properties:
+	//     8 nodes, 20 energy-efficiency rating
+	//   * resource properties (total/allocatable/available capacity):
+	//     CPU cores: 16/14/4, Memory: 32/30/16 Gi
+	// * cluster 8 (unhealthy):
+	//   * non-resource properties:
+	//     1 node, 100 energy-efficiency rating
+	//   * resource properties (total/allocatable/available capacity):
+	//     CPU cores: 8/6/0, Memory: 8/6/0 Gi
+	propertiesByCluster = map[string]clusterv1beta1.MemberClusterStatus{
+		memberCluster1EastProd: {
+			Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+				propertyprovider.NodeCountProperty: {
+					Value: "2",
+				},
+				energyEfficiencyRatingPropertyName: {
+					Value: "100",
+				},
+			},
+			ResourceUsage: clusterv1beta1.ResourceUsage{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("3"),
+					corev1.ResourceMemory: resource.MustParse("3Gi"),
+				},
+				Available: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2"),
+					corev1.ResourceMemory: resource.MustParse("2Gi"),
+				},
+			},
+		},
+		memberCluster2EastProd: {
+			Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+				propertyprovider.NodeCountProperty: {
+					Value: "4",
+				},
+				energyEfficiencyRatingPropertyName: {
+					Value: "60",
+				},
+			},
+			ResourceUsage: clusterv1beta1.ResourceUsage{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("8"),
+					corev1.ResourceMemory: resource.MustParse("8Gi"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("7"),
+					corev1.ResourceMemory: resource.MustParse("7Gi"),
+				},
+				Available: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+			},
+		},
+		memberCluster3EastCanary: {
+			Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+				propertyprovider.NodeCountProperty: {
+					Value: "6",
+				},
+				energyEfficiencyRatingPropertyName: {
+					Value: "40",
+				},
+			},
+			ResourceUsage: clusterv1beta1.ResourceUsage{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("12"),
+					corev1.ResourceMemory: resource.MustParse("12Gi"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("11"),
+					corev1.ResourceMemory: resource.MustParse("11Gi"),
+				},
+				Available: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("6"),
+					corev1.ResourceMemory: resource.MustParse("6Gi"),
+				},
+			},
+		},
+		memberCluster4CentralProd: {
+			Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+				propertyprovider.NodeCountProperty: {
+					Value: "2",
+				},
+				energyEfficiencyRatingPropertyName: {
+					Value: "80",
+				},
+			},
+			ResourceUsage: clusterv1beta1.ResourceUsage{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("8"),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("6"),
+					corev1.ResourceMemory: resource.MustParse("2Gi"),
+				},
+				Available: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2"),
+					corev1.ResourceMemory: resource.MustParse("1Gi"),
+				},
+			},
+		},
+		memberCluster5CentralProd: {
+			Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+				propertyprovider.NodeCountProperty: {
+					Value: "8",
+				},
+				energyEfficiencyRatingPropertyName: {
+					Value: "40",
+				},
+			},
+			ResourceUsage: clusterv1beta1.ResourceUsage{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("32"),
+					corev1.ResourceMemory: resource.MustParse("16Gi"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("30"),
+					corev1.ResourceMemory: resource.MustParse("14Gi"),
+				},
+				Available: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("8"),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+			},
+		},
+		memberCluster6WestProd: {
+			Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+				propertyprovider.NodeCountProperty: {
+					Value: "2",
+				},
+				energyEfficiencyRatingPropertyName: {
+					Value: "60",
+				},
+			},
+			ResourceUsage: clusterv1beta1.ResourceUsage{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("8Gi"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2"),
+					corev1.ResourceMemory: resource.MustParse("6Gi"),
+				},
+				Available: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+			},
+		},
+		memberCluster7WestCanary: {
+			Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+				propertyprovider.NodeCountProperty: {
+					Value: "8",
+				},
+				energyEfficiencyRatingPropertyName: {
+					Value: "20",
+				},
+			},
+			ResourceUsage: clusterv1beta1.ResourceUsage{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("16"),
+					corev1.ResourceMemory: resource.MustParse("32Gi"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("14"),
+					corev1.ResourceMemory: resource.MustParse("30Gi"),
+				},
+				Available: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("16Gi"),
+				},
+			},
+		},
+		memberCluster8UnhealthyEastProd: {
+			Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+				propertyprovider.NodeCountProperty: {
+					Value: "1",
+				},
+				energyEfficiencyRatingPropertyName: {
+					Value: "100",
+				},
+			},
+			ResourceUsage: clusterv1beta1.ResourceUsage{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("8"),
+					corev1.ResourceMemory: resource.MustParse("8Gi"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("6"),
+					corev1.ResourceMemory: resource.MustParse("6Gi"),
+				},
+				Available: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.Quantity{},
+					corev1.ResourceMemory: resource.Quantity{},
+				},
+			},
 		},
 	}
 )
@@ -261,6 +507,11 @@ func setupResources() {
 		},
 	}
 	Expect(hubClient.Delete(ctx, memberCluster)).To(Succeed(), "Failed to delete member cluster")
+
+	// Add properties to the clusters.
+	for clusterName := range propertiesByCluster {
+		resetClusterPropertiesFor(clusterName)
+	}
 }
 
 func beforeSuiteForProcess1() []byte {
