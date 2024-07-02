@@ -45,7 +45,7 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 		}
 	})
 
-	Context("Test cluster join and leave flow with CRP not deleted", func() {
+	Context("Test cluster join and leave flow with CRP not deleted", Ordered, Serial, func() {
 		It("Create the test resources in the namespace", createWrappedResourcesForEnvelopTest)
 
 		It("Create the CRP that select the name space and place it to all clusters", func() {
