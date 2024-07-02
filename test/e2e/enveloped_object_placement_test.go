@@ -178,10 +178,11 @@ func checkEnvelopQuotaAndMutationWebhookPlacement(memberCluster *framework.Clust
 		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testConfigMap.Name}, placedConfigMap); err != nil {
 			return err
 		}
-		if err := hubCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testConfigMap.Name}, &testConfigMap); err != nil {
+		hubConfigMap := &corev1.ConfigMap{}
+		if err := hubCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testConfigMap.Name}, hubConfigMap); err != nil {
 			return err
 		}
-		if diff := cmp.Diff(placedConfigMap.Data, testConfigMap.Data); diff != "" {
+		if diff := cmp.Diff(placedConfigMap.Data, hubConfigMap.Data); diff != "" {
 			return fmt.Errorf("configmap diff (-got, +want): %s", diff)
 		}
 		By("check the namespaced envelope objects")

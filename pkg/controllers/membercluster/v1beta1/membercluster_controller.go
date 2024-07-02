@@ -145,7 +145,6 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 		}
 		return runtime.Result{RequeueAfter: time.Second}, stuckErr
 	}
-	mcJoinedCondition := meta.FindStatusCondition(mc.Status.Conditions, string(clusterv1beta1.ConditionTypeMemberClusterJoined))
 	currentImc := &clusterv1beta1.InternalMemberCluster{}
 	imcNamespacedName := types.NamespacedName{Namespace: namespaceName, Name: mc.Name}
 	if err := r.Client.Get(ctx, imcNamespacedName, currentImc); err != nil {
@@ -153,13 +152,8 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 			klog.ErrorS(err, "Failed to get internal member cluster", "internalMemberCluster", imcNamespacedName)
 			return runtime.Result{}, controller.NewAPIServerError(true, err)
 		}
-		// we don't need to wait for the agent to leave if the internal member cluster is not found
-		if condition.IsConditionStatusTrue(mcJoinedCondition, mc.GetGeneration()) {
-			// alert if the MC status is joined but imc is missing
-			klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("internalMemberCluster %s not found", namespaceName)), "The member cluster is joined but its internalMemberCluster is missing", "memberCluster", mcObjRef)
-		} else {
-			klog.V(2).Info("InternalMemberCluster not found, start garbage collecting", "memberCluster", mcObjRef)
-		}
+		// this is possible since we garbage collect the internal member cluster first before deleting the MC
+		klog.V(2).Info("InternalMemberCluster not found, start garbage collecting", "memberCluster", mcObjRef)
 		return runtime.Result{Requeue: true}, r.garbageCollect(ctx, mc)
 	}
 	// calculate the current status of the member cluster from imc status
@@ -167,7 +161,7 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 	// TODO: check the last heartbeat time from all agents and assume the member cluster is left if they haven't sent heartbeat
 	//       beyond a pre-agreed threshold.
 	// check if the cluster is already left
-	mcJoinedCondition = meta.FindStatusCondition(mc.Status.Conditions, string(clusterv1beta1.ConditionTypeMemberClusterJoined))
+	mcJoinedCondition := meta.FindStatusCondition(mc.Status.Conditions, string(clusterv1beta1.ConditionTypeMemberClusterJoined))
 	if condition.IsConditionStatusFalse(mcJoinedCondition, mc.GetGeneration()) {
 		klog.V(2).InfoS("Agent already left, start garbage collecting", "memberCluster", mcObjRef)
 		if gcErr := r.garbageCollect(ctx, mc); gcErr != nil {
@@ -175,7 +169,7 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 		}
 		return runtime.Result{Requeue: true}, controller.NewUpdateIgnoreConflictError(r.updateMemberClusterStatus(ctx, mc))
 	}
-	klog.V(2).InfoS("Need to wait for the agent to leave", "memberCluster", mcObjRef, "agentJoinedCondition", mcJoinedCondition)
+	klog.V(2).InfoS("Need to wait for the agent to leave", "memberCluster", mcObjRef, "joinedCondition", mcJoinedCondition)
 	// mark the imc as left to make sure the agent is leaving the fleet
 	if err := r.leave(ctx, mc, currentImc); err != nil {
 		klog.ErrorS(err, "Failed to mark the imc as leave", "memberCluster", mcObjRef)
