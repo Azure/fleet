@@ -41,7 +41,6 @@ func TestMemberCluster(t *testing.T) {
 var _ = BeforeSuite(func() {
 	done := make(chan interface{})
 	go func() {
-
 		By("Setup klog")
 		fs := flag.NewFlagSet("klog", flag.ContinueOnError)
 		klog.InitFlags(fs)

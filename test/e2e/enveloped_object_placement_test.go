@@ -10,11 +10,10 @@ import (
 	"fmt"
 	"strings"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	admv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -163,11 +162,8 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 	})
 
 	AfterAll(func() {
-		// Remove the custom deletion blocker finalizer from the CRP.
-		cleanupCRP(crpName)
-
-		// Delete the created resources.
-		cleanupWorkResources()
+		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 	})
 })
 
@@ -182,10 +178,11 @@ func checkEnvelopQuotaAndMutationWebhookPlacement(memberCluster *framework.Clust
 		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testConfigMap.Name}, placedConfigMap); err != nil {
 			return err
 		}
-		if err := hubCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testConfigMap.Name}, &testConfigMap); err != nil {
+		hubConfigMap := &corev1.ConfigMap{}
+		if err := hubCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testConfigMap.Name}, hubConfigMap); err != nil {
 			return err
 		}
-		if diff := cmp.Diff(placedConfigMap.Data, testConfigMap.Data); diff != "" {
+		if diff := cmp.Diff(placedConfigMap.Data, hubConfigMap.Data); diff != "" {
 			return fmt.Errorf("configmap diff (-got, +want): %s", diff)
 		}
 		By("check the namespaced envelope objects")
@@ -296,18 +293,22 @@ func checkForRolloutStuckOnOneFailedClusterStatus(wantSelectedResources []placem
 
 func readEnvelopTestManifests() {
 	By("Read the testConfigMap resources")
+	testConfigMap = corev1.ConfigMap{}
 	err := utils.GetObjectFromManifest("resources/test-configmap.yaml", &testConfigMap)
 	Expect(err).Should(Succeed())
 
 	By("Read testEnvelopConfigMap resource")
+	testEnvelopConfigMap = corev1.ConfigMap{}
 	err = utils.GetObjectFromManifest("resources/test-envelop-configmap.yaml", &testEnvelopConfigMap)
 	Expect(err).Should(Succeed())
 
 	By("Read EnvelopeWebhook")
+	testEnvelopeWebhook = admv1.MutatingWebhookConfiguration{}
 	err = utils.GetObjectFromManifest("resources/webhook.yaml", &testEnvelopeWebhook)
 	Expect(err).Should(Succeed())
 
 	By("Read ResourceQuota")
+	testEnvelopeResourceQuota = corev1.ResourceQuota{}
 	err = utils.GetObjectFromManifest("resources/resourcequota.yaml", &testEnvelopeResourceQuota)
 	Expect(err).Should(Succeed())
 }
