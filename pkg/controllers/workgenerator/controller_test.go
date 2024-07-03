@@ -972,7 +972,10 @@ func TestSetBindingStatus(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if tt.maxFailedResourcePlacementLimit != nil {
 				maxFailedResourcePlacementLimit = *tt.maxFailedResourcePlacementLimit
+			} else {
+				maxFailedResourcePlacementLimit = originalMaxFailedResourcePlacementLimit
 			}
+
 			binding := &fleetv1beta1.ClusterResourceBinding{}
 			setBindingStatus(tt.works, binding)
 			got := binding.Status.FailedPlacements
