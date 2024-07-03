@@ -23,6 +23,7 @@ import (
 // +kubebuilder:printcolumn:JSONPath=`.status.resourceUsage.available.memory`,name="Available-Memory",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.resourceUsage.allocatable.cpu`,name="Allocatable-CPU", priority=1, type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.resourceUsage.allocatable.memory`,name="Allocatable-Memory", priority=1, type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.agentStatus[?(@.type=="MemberAgent")].lastReceivedHeartbeat`,name="Last-Heartbeat-Member-Agent",type=string
 
 // MemberCluster is a resource created in the hub cluster to represent a member cluster within a fleet.
 type MemberCluster struct {
