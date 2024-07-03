@@ -26,6 +26,9 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    - jsonPath: .status.agentStatus[?(@.type=="MemberAgent")].lastReceivedHeartbeat
+      name: Time-Since-Last-Heartbeat
+      type: date
     - jsonPath: .status.properties.kubernetes-fleet\.io/node-count.value
       name: Node-Count
       type: string
@@ -42,9 +45,6 @@ spec:
     - jsonPath: .status.resourceUsage.allocatable.memory
       name: Allocatable-Memory
       priority: 1
-      type: string
-    - jsonPath: .status.agentStatus[?(@.type=="MemberAgent")].lastReceivedHeartbeat
-      name: Last-Heartbeat-Member-Agent
       type: string
     name: v1
     schema:
@@ -419,6 +419,9 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    - jsonPath: .status.agentStatus[?(@.type=="MemberAgent")].lastReceivedHeartbeat
+      name: Time-Since-Last-Heartbeat
+      type: date
     - jsonPath: .status.properties.kubernetes-fleet\.io/node-count.value
       name: Node-Count
       type: string
@@ -435,9 +438,6 @@ spec:
     - jsonPath: .status.resourceUsage.allocatable.memory
       name: Allocatable-Memory
       priority: 1
-      type: string
-    - jsonPath: .status.agentStatus[?(@.type=="MemberAgent")].lastReceivedHeartbeat
-      name: Last-Heartbeat-Member-Agent
       type: string
     name: v1beta1
     schema:
