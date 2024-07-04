@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
@@ -51,7 +52,7 @@ var (
 // NewUnexpectedBehaviorError returns ErrUnexpectedBehavior type error when err is not nil.
 func NewUnexpectedBehaviorError(err error) error {
 	if err != nil {
-		klog.ErrorS(err, "Unexpected behavior identified by the controller")
+		klog.ErrorS(err, "Unexpected behavior identified by the controller", "stackTrace", debug.Stack())
 		return fmt.Errorf("%w: %v", ErrUnexpectedBehavior, err.Error())
 	}
 	return nil
