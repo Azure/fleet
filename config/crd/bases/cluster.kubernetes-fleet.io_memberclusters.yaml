@@ -26,6 +26,9 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    - jsonPath: .status.agentStatus[?(@.type=="MemberAgent")].lastReceivedHeartbeat
+      name: Time-Since-Last-Heartbeat
+      type: date
     - jsonPath: .status.properties.kubernetes-fleet\.io/node-count.value
       name: Node-Count
       type: string
@@ -415,6 +418,9 @@ spec:
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
+      type: date
+    - jsonPath: .status.agentStatus[?(@.type=="MemberAgent")].lastReceivedHeartbeat
+      name: Time-Since-Last-Heartbeat
       type: date
     - jsonPath: .status.properties.kubernetes-fleet\.io/node-count.value
       name: Node-Count
