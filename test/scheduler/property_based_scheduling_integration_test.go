@@ -429,6 +429,9 @@ var _ = Describe("scheduling CRPs of the PickAll placement type using cluster pr
 		policySnapshotName1 := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 		policySnapshotName2 := fmt.Sprintf(policySnapshotNameTemplate, crpName, 2)
 
+		// wantScheduledClusters1, wantIgnoredClusters1, and wantBoundClusters1 are
+		// the clusters picked (bound) and unpicked respectively with the original
+		// property selector (before the property selector update).
 		wantScheduledClusters1 := []string{
 			memberCluster1EastProd,
 			memberCluster2EastProd,
@@ -448,6 +451,9 @@ var _ = Describe("scheduling CRPs of the PickAll placement type using cluster pr
 			memberCluster4CentralProd,
 		}
 
+		// wantScheduledClusters2, wantIgnoredClusters2, and wantBoundClusters2 are
+		// the clusters picked (bound) and unpicked respectively with the new
+		// property selector (after the property selector update).
 		wantScheduledClusters2 := []string{
 			memberCluster3EastCanary,
 			memberCluster5CentralProd,
@@ -465,6 +471,8 @@ var _ = Describe("scheduling CRPs of the PickAll placement type using cluster pr
 			memberCluster8UnhealthyEastProd,
 			memberCluster9LeftCentralProd,
 		}
+		// wantTargetClusters and wantUnselectedClusters are the clusters picked
+		// and unpicked respectively after the property selector update.
 		wantTargetClusters := []string{}
 		wantTargetClusters = append(wantTargetClusters, wantScheduledClusters2...)
 		wantTargetClusters = append(wantTargetClusters, wantBoundClusters2...)
@@ -685,6 +693,8 @@ var _ = Describe("scheduling CRPs of the PickAll placement type using cluster pr
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 
+		// wantTargetClusters1 and wantIgnoredClusters1 are the picked and unpicked clusters
+		// respectively before the cluster properties refresh.
 		wantTargetClusters1 := []string{
 			memberCluster3EastCanary,
 			memberCluster5CentralProd,
@@ -699,6 +709,8 @@ var _ = Describe("scheduling CRPs of the PickAll placement type using cluster pr
 			memberCluster9LeftCentralProd,
 		}
 
+		// wantTargetClusters2 and wantIgnoredClusters2 are the picked and unpicked clusters
+		// respectively after the cluster properties refresh.
 		wantTargetClusters2 := []string{
 			memberCluster3EastCanary,
 			memberCluster5CentralProd,
