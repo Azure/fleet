@@ -1236,7 +1236,7 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 				Group:   "apps",
 				Kind:    "Deployment",
 				Version: "v1",
-				Name:    "test-deployment-%d",
+				Name:    "test-deployment",
 			}
 			ro.Spec.ResourceSelectors = append(ro.Spec.ResourceSelectors, newSelector)
 			clusterSelectorTerm := placementv1beta1.ClusterSelectorTerm{
