@@ -1,4 +1,4 @@
-package clusterresourceplacement
+package validating
 
 import (
 	"context"

@@ -48,7 +48,8 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceoverride"
-	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
+	crpmutating "go.goms.io/fleet/pkg/webhook/clusterresourceplacement/mutating"
+	crpvalidating "go.goms.io/fleet/pkg/webhook/clusterresourceplacement/validating"
 	"go.goms.io/fleet/pkg/webhook/fleetresourcehandler"
 	"go.goms.io/fleet/pkg/webhook/membercluster"
 	"go.goms.io/fleet/pkg/webhook/pod"
@@ -59,6 +60,7 @@ import (
 const (
 	fleetWebhookCertFileName      = "tls.crt"
 	fleetWebhookKeyFileName       = "tls.key"
+	fleetMutatingWebhookCfgName   = "fleet-mutating-webhook-configuration"
 	fleetValidatingWebhookCfgName = "fleet-validating-webhook-configuration"
 	fleetGuardRailWebhookCfgName  = "fleet-guard-rail-webhook-configuration"
 
@@ -179,6 +181,9 @@ func (w *Config) Start(ctx context.Context) error {
 
 // createFleetWebhookConfiguration creates the ValidatingWebhookConfiguration object for the webhook.
 func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
+	if err := w.createMutatingWebhookConfiguration(ctx, w.buildFleetMutatingWebhooks(), fleetMutatingWebhookCfgName); err != nil {
+		return err
+	}
 	if err := w.createValidatingWebhookConfiguration(ctx, w.buildFleetValidatingWebhooks(), fleetValidatingWebhookCfgName); err != nil {
 		return err
 	}
@@ -187,6 +192,45 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func (w *Config) createMutatingWebhookConfiguration(ctx context.Context, webhooks []admv1.MutatingWebhook, configName string) error {
+	mutatingWebhookConfig := admv1.MutatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: configName,
+			Labels: map[string]string{
+				"admissions.enforcer/disabled": "true",
+			},
+		},
+		Webhooks: webhooks,
+	}
+
+	fleetOwnerRef, err := buildFleetOwnerRef(ctx, w.mgr.GetClient())
+	if err != nil {
+		return err
+	}
+
+	// We need to ensure this webhook configuration is garbage collected if Fleet is uninstalled from the cluster.
+	// Since the fleet-system namespace is a prerequisite for core Fleet components, we bind to this namespace.
+	mutatingWebhookConfig.OwnerReferences = []metav1.OwnerReference{fleetOwnerRef}
+
+	if err := w.mgr.GetClient().Create(ctx, &mutatingWebhookConfig); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return err
+		}
+		klog.V(2).InfoS("mutating webhook configuration exists, need to overwrite", "name", configName)
+		// Here we simply use delete/create pattern to implement full overwrite
+		if err := w.mgr.GetClient().Delete(ctx, &mutatingWebhookConfig); err != nil {
+			return err
+		}
+		if err = w.mgr.GetClient().Create(ctx, &mutatingWebhookConfig); err != nil {
+			return err
+		}
+		klog.V(2).InfoS("successfully overwritten mutating webhook configuration", "name", configName)
+		return nil
+	}
+	klog.V(2).InfoS("successfully created mutating webhook configuration", "name", configName)
 	return nil
 }
 
@@ -201,11 +245,14 @@ func (w *Config) createValidatingWebhookConfiguration(ctx context.Context, webho
 		Webhooks: webhooks,
 	}
 
-	// We need to ensure this webhook configuration is garbage collected if Fleet is uninstalled from the cluster.
-	// Since the fleet-system namespace is a prerequisite for core Fleet components, we bind to this namespace.
-	if err := bindWebhookConfigToFleetSystem(ctx, w.mgr.GetClient(), &validatingWebhookConfig); err != nil {
+	fleetOwnerRef, err := buildFleetOwnerRef(ctx, w.mgr.GetClient())
+	if err != nil {
 		return err
 	}
+
+	// We need to ensure this webhook configuration is garbage collected if Fleet is uninstalled from the cluster.
+	// Since the fleet-system namespace is a prerequisite for core Fleet components, we bind to this namespace.
+	validatingWebhookConfig.OwnerReferences = []metav1.OwnerReference{fleetOwnerRef}
 
 	if err := w.mgr.GetClient().Create(ctx, &validatingWebhookConfig); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
@@ -224,6 +271,31 @@ func (w *Config) createValidatingWebhookConfiguration(ctx context.Context, webho
 	}
 	klog.V(2).InfoS("successfully created validating webhook configuration", "name", configName)
 	return nil
+}
+
+// buildValidatingWebHooks returns a slice of fleet mutating webhook objects.
+func (w *Config) buildFleetMutatingWebhooks() []admv1.MutatingWebhook {
+	webhooks := []admv1.MutatingWebhook{
+		{
+			Name:                    "fleet.clusterresourceplacementv1beta1.mutating",
+			ClientConfig:            w.createClientConfig(crpmutating.MutationPath),
+			FailurePolicy:           &failFailurePolicy,
+			SideEffects:             &sideEffortsNone,
+			AdmissionReviewVersions: admissionReviewVersions,
+			Rules: []admv1.RuleWithOperations{
+				{
+					Operations: []admv1.OperationType{
+						admv1.Create,
+						admv1.Update,
+					},
+					Rule: createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{placementv1beta1.ClusterResourcePlacementResource}, &clusterScope),
+				},
+			},
+			TimeoutSeconds: longWebhookTimeout,
+		},
+	}
+
+	return webhooks
 }
 
 // buildValidatingWebHooks returns a slice of fleet validating webhook objects.
@@ -247,7 +319,7 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 		},
 		{
 			Name:                    "fleet.clusterresourceplacementv1alpha1.validating",
-			ClientConfig:            w.createClientConfig(clusterresourceplacement.V1Alpha1CRPValidationPath),
+			ClientConfig:            w.createClientConfig(crpvalidating.V1Alpha1CRPValidationPath),
 			FailurePolicy:           &failFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
@@ -264,7 +336,7 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 		},
 		{
 			Name:                    "fleet.clusterresourceplacementv1beta1.validating",
-			ClientConfig:            w.createClientConfig(clusterresourceplacement.ValidationPath),
+			ClientConfig:            w.createClientConfig(crpvalidating.ValidationPath),
 			FailurePolicy:           &failFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
@@ -732,23 +804,19 @@ func genCertAndKeyFile(certData, keyData []byte, certDir string) error {
 	return nil
 }
 
-// bindWebhookConfigToFleetSystem sets the OwnerReference of the argued ValidatingWebhookConfiguration to the cluster scoped fleet-system namespace.
-func bindWebhookConfigToFleetSystem(ctx context.Context, k8Client client.Client, validatingWebhookConfig *admv1.ValidatingWebhookConfiguration) error {
+func buildFleetOwnerRef(ctx context.Context, k8Client client.Client) (metav1.OwnerReference, error) {
 	var fleetNs corev1.Namespace
 	if err := k8Client.Get(ctx, client.ObjectKey{Name: "fleet-system"}, &fleetNs); err != nil {
-		return err
+		return metav1.OwnerReference{}, err
 	}
 
-	ownerRef := metav1.OwnerReference{
+	return metav1.OwnerReference{
 		APIVersion:         fleetNs.GroupVersionKind().GroupVersion().String(),
 		Kind:               fleetNs.Kind,
 		Name:               fleetNs.GetName(),
 		UID:                fleetNs.GetUID(),
 		BlockOwnerDeletion: ptr.To(false),
-	}
-
-	validatingWebhookConfig.OwnerReferences = []metav1.OwnerReference{ownerRef}
-	return nil
+	}, nil
 }
 
 // createRule returns a admission rule using the arguments passed.
