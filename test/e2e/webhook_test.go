@@ -631,7 +631,7 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations re
 		Consistently(func(g Gomega) error {
 			cro1 := &placementv1alpha1.ClusterResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf("test-create-cro-%d", GinkgoParallelProcess()),
+					Name: fmt.Sprintf("test-cro-%d", GinkgoParallelProcess()),
 				},
 				Spec: placementv1alpha1.ClusterResourceOverrideSpec{
 					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
@@ -697,7 +697,7 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations re
 
 var _ = Describe("webhook tests for ClusterResourceOverride UPDATE operations", Ordered, func() {
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
-	cro1Name := fmt.Sprintf("test-update-cro-%d", GinkgoParallelProcess())
+	cro1Name := fmt.Sprintf("test-cro-%d", GinkgoParallelProcess())
 	cro := &placementv1alpha1.ClusterResourceOverride{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: croName,
@@ -1079,7 +1079,7 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operations resource 
 			By("create 2nd resourceOverride with same resource selection")
 			ro1 := &placementv1alpha1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("test-create-ro-%d", GinkgoParallelProcess()),
+					Name:      fmt.Sprintf("test-ro-%d", GinkgoParallelProcess()),
 					Namespace: roNamespace,
 				},
 				Spec: placementv1alpha1.ResourceOverrideSpec{
@@ -1126,7 +1126,7 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operations resource 
 
 var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered, func() {
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
-	ro1Name := fmt.Sprintf("test-update-ro-%d", GinkgoParallelProcess())
+	ro1Name := fmt.Sprintf("test-ro-%d", GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 	selector := placementv1alpha1.ResourceSelector{
 		Group:   "apps",
@@ -1210,7 +1210,7 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 							Group:   "apps",
 							Kind:    "Deployment",
 							Version: "v1",
-							Name:    "test-deployment-1",
+							Name:    "test-deployment",
 						},
 					},
 					Policy: &placementv1alpha1.OverridePolicy{
@@ -1236,7 +1236,7 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 				Group:   "apps",
 				Kind:    "Deployment",
 				Version: "v1",
-				Name:    fmt.Sprintf("test-deployment-%d", 1),
+				Name:    "test-deployment-%d",
 			}
 			ro.Spec.ResourceSelectors = append(ro.Spec.ResourceSelectors, newSelector)
 			clusterSelectorTerm := placementv1beta1.ClusterSelectorTerm{
