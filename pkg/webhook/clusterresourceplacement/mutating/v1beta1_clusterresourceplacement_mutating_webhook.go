@@ -61,6 +61,7 @@ func (v *clusterResourcePlacementMutator) Handle(_ context.Context, req admissio
 		if len(resp.Patches) > 0 {
 			klog.V(2).Infof("Admit CRP %s/%s patches", crp.Namespace, crp.Name)
 		}
+		return resp
 	}
 	return admission.Allowed("")
 }
