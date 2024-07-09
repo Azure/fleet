@@ -1076,10 +1076,10 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operations resource 
 
 	It("should deny create RO with invalid resource override", func() {
 		Consistently(func(g Gomega) error {
-			By("create 2nd resourceOverride with same resource selection")
+			By("deny create 2nd resourceOverride with same resource selection")
 			ro1 := &placementv1alpha1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("test-ro-%d", GinkgoParallelProcess()),
+					Name:      fmt.Sprintf("test-create-ro-%d", GinkgoParallelProcess()),
 					Namespace: roNamespace,
 				},
 				Spec: placementv1alpha1.ResourceOverrideSpec{
@@ -1126,7 +1126,7 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operations resource 
 
 var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered, func() {
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
-	ro1Name := fmt.Sprintf("test-ro-%d", GinkgoParallelProcess())
+	ro1Name := fmt.Sprintf("test-update-ro-%d", GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 	selector := placementv1alpha1.ResourceSelector{
 		Group:   "apps",
