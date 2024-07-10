@@ -29,10 +29,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 // propertyProviderConfig is a group of settings for configuring the the property provider.
@@ -82,7 +82,7 @@ type Reconciler struct {
 	// the join/leave agent maintains the list of controllers in the member cluster
 	// so that it can make sure that all the agents on the member cluster have joined/left
 	// before updating the internal member cluster CR status
-	workController *work.ApplyWorkReconciler
+	workController controller.MemberController
 
 	// The context in which the reconciler runs in, i.e., the context that cancels
 	// when the member agent ends.
@@ -165,7 +165,7 @@ func NewReconciler(globalCtx context.Context,
 	hubClient client.Client,
 	memberCfg *rest.Config,
 	memberClient client.Client,
-	workController *work.ApplyWorkReconciler,
+	workController controller.MemberController,
 	propertyProvider propertyprovider.PropertyProvider,
 ) (*Reconciler, error) {
 	rawMemberClientSet, err := kubernetes.NewForConfig(memberCfg)
