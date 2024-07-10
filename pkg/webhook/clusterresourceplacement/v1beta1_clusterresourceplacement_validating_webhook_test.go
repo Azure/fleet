@@ -3,14 +3,11 @@ package clusterresourceplacement
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -32,35 +29,7 @@ var (
 		Kind:    "ClusterRole",
 		Name:    "test-cluster-role",
 	}
-
-	ClusterRoleGVK = schema.GroupVersionKind{
-		Group:   rbacv1.GroupName,
-		Version: rbacv1.SchemeGroupVersion.Version,
-		Kind:    "ClusterRole",
-	}
-
-	ClusterRoleGVR = schema.GroupVersionResource{
-		Group:    rbacv1.GroupName,
-		Version:  rbacv1.SchemeGroupVersion.Version,
-		Resource: "clusterroles",
-	}
 )
-
-// This interface is needed for testMapper abstract class.
-type testMapper struct {
-	meta.RESTMapper
-}
-
-func (m testMapper) RESTMapping(gk schema.GroupKind, _ ...string) (*meta.RESTMapping, error) {
-	if gk.Kind == "ClusterRole" {
-		return &meta.RESTMapping{
-			Resource:         ClusterRoleGVR,
-			GroupVersionKind: ClusterRoleGVK,
-			Scope:            nil,
-		}, nil
-	}
-	return nil, errors.New("test error: mapping does not exist")
-}
 
 func TestHandle(t *testing.T) {
 	invalidCRPObject := &placementv1beta1.ClusterResourcePlacement{
@@ -192,7 +161,7 @@ func TestHandle(t *testing.T) {
 				},
 			},
 			resourceInformer: &testinformer.FakeManager{
-				APIResources:            map[schema.GroupVersionKind]bool{ClusterRoleGVK: true},
+				APIResources:            map[schema.GroupVersionKind]bool{utils.ClusterRoleGVK: true},
 				IsClusterScopedResource: true,
 			},
 			resourceValidator: clusterResourcePlacementValidator{
@@ -217,7 +186,7 @@ func TestHandle(t *testing.T) {
 				},
 			},
 			resourceInformer: &testinformer.FakeManager{
-				APIResources:            map[schema.GroupVersionKind]bool{ClusterRoleGVK: true},
+				APIResources:            map[schema.GroupVersionKind]bool{utils.ClusterRoleGVK: true},
 				IsClusterScopedResource: true,
 			},
 			resourceValidator: clusterResourcePlacementValidator{
@@ -246,7 +215,7 @@ func TestHandle(t *testing.T) {
 				},
 			},
 			resourceInformer: &testinformer.FakeManager{
-				APIResources:            map[schema.GroupVersionKind]bool{ClusterRoleGVK: true},
+				APIResources:            map[schema.GroupVersionKind]bool{utils.ClusterRoleGVK: true},
 				IsClusterScopedResource: true,
 			},
 			resourceValidator: clusterResourcePlacementValidator{
@@ -275,7 +244,7 @@ func TestHandle(t *testing.T) {
 				},
 			},
 			resourceInformer: &testinformer.FakeManager{
-				APIResources:            map[schema.GroupVersionKind]bool{ClusterRoleGVK: true},
+				APIResources:            map[schema.GroupVersionKind]bool{utils.ClusterRoleGVK: true},
 				IsClusterScopedResource: true,
 			},
 			resourceValidator: clusterResourcePlacementValidator{
@@ -304,7 +273,7 @@ func TestHandle(t *testing.T) {
 				},
 			},
 			resourceInformer: &testinformer.FakeManager{
-				APIResources:            map[schema.GroupVersionKind]bool{ClusterRoleGVK: true},
+				APIResources:            map[schema.GroupVersionKind]bool{utils.ClusterRoleGVK: true},
 				IsClusterScopedResource: true,
 			},
 			resourceValidator: clusterResourcePlacementValidator{
@@ -333,7 +302,7 @@ func TestHandle(t *testing.T) {
 				},
 			},
 			resourceInformer: &testinformer.FakeManager{
-				APIResources:            map[schema.GroupVersionKind]bool{ClusterRoleGVK: true},
+				APIResources:            map[schema.GroupVersionKind]bool{utils.ClusterRoleGVK: true},
 				IsClusterScopedResource: true,
 			},
 			resourceValidator: clusterResourcePlacementValidator{
@@ -345,7 +314,7 @@ func TestHandle(t *testing.T) {
 
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			validator.RestMapper = testMapper{}
+			validator.RestMapper = utils.TestMapper{}
 			validator.ResourceInformer = testCase.resourceInformer
 			gotResult := testCase.resourceValidator.Handle(context.Background(), testCase.req)
 			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)

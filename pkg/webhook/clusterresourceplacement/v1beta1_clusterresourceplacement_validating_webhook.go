@@ -48,7 +48,7 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 				return admission.Errored(http.StatusBadRequest, err)
 			}
 			// this is a special case where we allow updates to old v1beta1 CRP with invalid fields so that we can update
-			// the CRP with valid fields or removing the finalizer via update & delete the CRP.
+			// the CRP with valid fields or remove the finalizer via update & delete the CRP.
 			if err := validator.ValidateClusterResourcePlacement(&oldCRP); err != nil {
 				klog.V(2).InfoS("old v1beta1 cluster resource placement has invalid fields, allow update", "operation", req.Operation, "namespacedName", types.NamespacedName{Name: crp.Name})
 				return admission.Allowed("updates to v1beta1 CRP with invalid fields are allowed")

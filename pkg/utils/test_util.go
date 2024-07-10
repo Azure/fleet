@@ -6,6 +6,7 @@ Licensed under the MIT license.
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -13,9 +14,11 @@ import (
 	"github.com/onsi/gomega/format"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -135,4 +138,27 @@ func (matcher AlreadyExistMatcher) FailureMessage(actual interface{}) (message s
 // NegatedFailureMessage builds an error message.
 func (matcher AlreadyExistMatcher) NegatedFailureMessage(actual interface{}) (message string) {
 	return format.Message(actual, "not to be already exist")
+}
+
+// TestMapper interface for abstract class.
+type TestMapper struct {
+	meta.RESTMapper
+}
+
+func (m TestMapper) RESTMapping(gk schema.GroupKind, _ ...string) (*meta.RESTMapping, error) {
+	if gk.Kind == "ClusterRole" {
+		return &meta.RESTMapping{
+			Resource:         ClusterRoleGVR,
+			GroupVersionKind: ClusterRoleGVK,
+			Scope:            nil,
+		}, nil
+	}
+	if gk.Kind == "Deployment" {
+		return &meta.RESTMapping{
+			Resource:         DeploymentGVR,
+			GroupVersionKind: DeploymentGVK,
+			Scope:            nil,
+		}, nil
+	}
+	return nil, errors.New("test error: mapping does not exist")
 }

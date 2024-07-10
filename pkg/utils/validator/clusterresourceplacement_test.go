@@ -6,13 +6,10 @@ Licensed under the MIT license.
 package validator
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -34,40 +31,7 @@ var (
 		Kind:    "ClusterRole",
 		Name:    "test-cluster-role",
 	}
-	ClusterRoleGVK = schema.GroupVersionKind{
-		Group:   rbacv1.GroupName,
-		Version: rbacv1.SchemeGroupVersion.Version,
-		Kind:    "ClusterRole",
-	}
-	ClusterRoleGVR = schema.GroupVersionResource{
-		Group:    rbacv1.GroupName,
-		Version:  rbacv1.SchemeGroupVersion.Version,
-		Resource: "clusterroles",
-	}
 )
-
-// This interface is needed for testMapper abstract class.
-type testMapper struct {
-	meta.RESTMapper
-}
-
-func (m testMapper) RESTMapping(gk schema.GroupKind, _ ...string) (*meta.RESTMapping, error) {
-	if gk.Kind == "ClusterRole" {
-		return &meta.RESTMapping{
-			Resource:         ClusterRoleGVR,
-			GroupVersionKind: ClusterRoleGVK,
-			Scope:            nil,
-		}, nil
-	}
-	if gk.Kind == "Deployment" {
-		return &meta.RESTMapping{
-			Resource:         utils.DeploymentGVR,
-			GroupVersionKind: utils.DeploymentGVK,
-			Scope:            nil,
-		}, nil
-	}
-	return nil, errors.New("test error: mapping does not exist")
-}
 
 func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 	tests := map[string]struct {
@@ -255,7 +219,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 				},
 			},
 			resourceInformer: &testinformer.FakeManager{
-				APIResources:            map[schema.GroupVersionKind]bool{ClusterRoleGVK: true},
+				APIResources:            map[schema.GroupVersionKind]bool{utils.ClusterRoleGVK: true},
 				IsClusterScopedResource: true},
 			wantErr: false,
 		},
@@ -273,7 +237,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 			},
 			wantErr: true,
 			resourceInformer: &testinformer.FakeManager{
-				APIResources:            map[schema.GroupVersionKind]bool{ClusterRoleGVK: true},
+				APIResources:            map[schema.GroupVersionKind]bool{utils.ClusterRoleGVK: true},
 				IsClusterScopedResource: true},
 			wantErrMsg: "the name field cannot have length exceeding 63",
 		},
@@ -300,7 +264,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 				},
 			},
 			resourceInformer: &testinformer.FakeManager{
-				APIResources:            map[schema.GroupVersionKind]bool{ClusterRoleGVK: true},
+				APIResources:            map[schema.GroupVersionKind]bool{utils.ClusterRoleGVK: true},
 				IsClusterScopedResource: true},
 			wantErr:    true,
 			wantErrMsg: "the labelSelector and name fields are mutually exclusive in selector",
@@ -363,7 +327,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 	}
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
-			RestMapper = testMapper{}
+			RestMapper = utils.TestMapper{}
 			ResourceInformer = testCase.resourceInformer
 			gotErr := ValidateClusterResourcePlacement(testCase.crp)
 			if (gotErr != nil) != testCase.wantErr {

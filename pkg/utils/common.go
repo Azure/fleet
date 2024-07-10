@@ -352,6 +352,12 @@ var (
 		Resource: "clusterroles",
 	}
 
+	ClusterRoleGVK = schema.GroupVersionKind{
+		Group:   rbacv1.GroupName,
+		Version: rbacv1.SchemeGroupVersion.Version,
+		Kind:    "ClusterRole",
+	}
+
 	RoleBindingGVR = schema.GroupVersionResource{
 		Group:    rbacv1.GroupName,
 		Version:  rbacv1.SchemeGroupVersion.Version,
