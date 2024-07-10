@@ -71,6 +71,7 @@ kubectl config use-context $MEMBER_CLUSTER_CONTEXT
 
 # Create the secret with the token extracted previously for member agent to use.
 echo "Creating secret..."
+kubectl delete secret hub-kubeconfig-secret
 kubectl create secret generic hub-kubeconfig-secret --from-literal=token=$TOKEN
 
 echo "Uninstalling member-agent..."
@@ -86,7 +87,7 @@ helm install member-agent charts/member-agent/ \
         --set image.pullPolicy=Always \
         --set refreshtoken.pullPolicy=Always \
         --set config.memberClusterName=$MEMBER_CLUSTER \
-        --set logVerbosity=5 \
+        --set logVerbosity=8 \
         --set namespace=fleet-system \
         --set enableV1Alpha1APIs=false \
         --set enableV1Beta1APIs=true
