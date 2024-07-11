@@ -208,7 +208,7 @@ func checkIfAllMemberClustersHaveJoined() {
 				wantAgentStatus,
 				cmpopts.SortSlices(lessFuncCondition),
 				ignoreConditionObservedGenerationField,
-				ignoreConditionLTTAndMessageFields,
+				condition.IgnoreConditionLTTAndMessageFields,
 				ignoreAgentStatusHeartbeatField,
 			); diff != "" {
 				return fmt.Errorf("agent status diff (-got, +want): %s", diff)
@@ -268,7 +268,7 @@ func checkIfAzurePropertyProviderIsWorking() {
 			if diff := cmp.Diff(
 				mcObj.Status.Conditions, wantStatus.Conditions,
 				ignoreMemberClusterJoinAndPropertyProviderStartedConditions,
-				ignoreConditionLTTAndMessageFields, ignoreConditionReasonField,
+				condition.IgnoreConditionLTTAndMessageFields, ignoreConditionReasonField,
 				ignoreTimeTypeFields,
 			); diff != "" {
 				return fmt.Errorf("member cluster status conditions diff (-got, +want):\n%s", diff)

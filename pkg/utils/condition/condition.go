@@ -9,9 +9,11 @@ package condition
 import (
 	"fmt"
 
+	"github.com/google/go-cmp/cmp/cmpopts"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils"
 )
 
 // A group of condition reason string which is used to populate the placement condition.
@@ -96,6 +98,21 @@ const (
 	// AllWorkAvailableReason is the reason string of placement condition if all works are available.
 	AllWorkAvailableReason = "AllWorkAreAvailable"
 )
+
+// IgnoreConditionLTTAndMessageFields is a cmpopts.IgnoreFields that ignores the LastTransitionTime and Message fields
+var IgnoreConditionLTTAndMessageFields = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "Message")
+
+// LessFuncResourceIdentifier is a less function for sorting resource identifiers
+var LessFuncResourceIdentifier = func(a, b fleetv1beta1.ResourceIdentifier) bool {
+	aStr := fmt.Sprintf(utils.ResourceIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name)
+	bStr := fmt.Sprintf(utils.ResourceIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name)
+	return aStr < bStr
+}
+
+// LessFuncFailedResourcePlacements is a less function for sorting failed resource placements
+var LessFuncFailedResourcePlacements = func(a, b fleetv1beta1.FailedResourcePlacement) bool {
+	return LessFuncResourceIdentifier(a.ResourceIdentifier, b.ResourceIdentifier)
+}
 
 // EqualCondition compares one condition with another; it ignores the LastTransitionTime and Message fields,
 // and will consider the ObservedGeneration values from the two conditions a match if the current

@@ -297,7 +297,7 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 				},
 			}
 			got := buildAllWorkAppliedCondition(tt.works, binding)
-			if diff := cmp.Diff(got, tt.want, ignoreConditionOption); diff != "" {
+			if diff := cmp.Diff(got, tt.want, cmpConditionOption); diff != "" {
 				t.Errorf("buildAllWorkAppliedCondition test `%s` mismatch (-got +want):\n%s", name, diff)
 			}
 		})
@@ -473,7 +473,7 @@ func TestBuildAllWorkAvailableCondition(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			got := buildAllWorkAvailableCondition(tt.works, tt.binding)
-			if diff := cmp.Diff(got, tt.want, ignoreConditionOption); diff != "" {
+			if diff := cmp.Diff(got, tt.want, cmpConditionOption); diff != "" {
 				t.Errorf("buildAllWorkAvailableCondition test `%s` mismatch (-got +want):\n%s", name, diff)
 			}
 		})

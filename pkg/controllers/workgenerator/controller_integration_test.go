@@ -47,10 +47,14 @@ var (
 	validResourceOverrideSnapshot          placementv1alpha1.ResourceOverrideSnapshot
 	invalidClusterResourceOverrideSnapshot placementv1alpha1.ClusterResourceOverrideSnapshot
 
-	ignoreConditionOption = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "Message")
+	cmpConditionOption = cmp.Options{cmpopts.SortSlices(condition.LessFuncResourceIdentifier),
+		cmpopts.SortSlices(condition.LessFuncFailedResourcePlacements), condition.IgnoreConditionLTTAndMessageFields, cmpopts.EquateEmpty()}
 
-	fakeReason  = "fakeApplyFailureReason"
-	fakeMessage = "fake apply failure message"
+	fakeFailedAppliedReason  = "fakeApplyFailureReason"
+	fakeFailedAppliedMessage = "fake apply failure message"
+
+	fakeFailedAvailableReason  = "fakeNotAvailableReason"
+	fakeFailedAvailableMessage = "fake not available message"
 )
 
 const (
@@ -185,7 +189,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 					},
 				},
 			}
-			diff := cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
+			diff := cmp.Diff(wantStatus, binding.Status, cmpConditionOption)
 			Expect(diff).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got):\n%s", binding.Name, diff))
 			Expect(binding.GetCondition(string(placementv1beta1.ResourceBindingOverridden)).Message).Should(ContainSubstring("resource snapshots are still being created for the masterResourceSnapshot"))
 			// create the second resource snapshot
@@ -355,128 +359,88 @@ var _ = Describe("Test Work Generator Controller", func() {
 				verifyBindingStatusSyncedNotApplied(binding, false, false)
 			})
 
-			It("Should mark the binding as failed to apply with failed placement", func() {
-				// check the binding status till the bound condition is true
-				Eventually(func() bool {
-					if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding); err != nil {
-						return false
-					}
-					// only check the work created status as the applied status reason changes depends on where the reconcile logic is
-					return condition.IsConditionStatusTrue(
-						meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingWorkSynchronized)), binding.GetGeneration())
-				}, timeout, interval).Should(BeTrue(), fmt.Sprintf("binding(%s) condition should be true", binding.Name))
-				// check the work is created by now
+			Context("Test Bound ClusterResourceBinding with failed to apply manifests", func() {
 				work := placementv1beta1.Work{}
-				Eventually(func() error {
-					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName), Namespace: memberClusterNamespaceName}, &work)
-				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
-				By(fmt.Sprintf("work %s is created in %s", work.Name, work.Namespace))
-				//inspect the work
-				wantWork := placementv1beta1.Work{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName),
-						Namespace: memberClusterNamespaceName,
-						OwnerReferences: []metav1.OwnerReference{
-							{
-								APIVersion:         placementv1beta1.GroupVersion.String(),
-								Kind:               "ClusterResourceBinding",
-								Name:               binding.Name,
-								UID:                binding.UID,
-								BlockOwnerDeletion: ptr.To(true),
+				BeforeEach(func() {
+					// check the binding status till the bound condition is true
+					Eventually(func() bool {
+						if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding); err != nil {
+							return false
+						}
+						// only check the work created status as the applied status reason changes depends on where the reconcile logic is
+						return condition.IsConditionStatusTrue(
+							meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingWorkSynchronized)), binding.GetGeneration())
+					}, timeout, interval).Should(BeTrue(), fmt.Sprintf("binding(%s) condition should be true", binding.Name))
+					// check the work is created by now
+					Eventually(func() error {
+						return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName), Namespace: memberClusterNamespaceName}, &work)
+					}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
+					By(fmt.Sprintf("work %s is created in %s", work.Name, work.Namespace))
+					//inspect the work
+					wantWork := placementv1beta1.Work{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName),
+							Namespace: memberClusterNamespaceName,
+							OwnerReferences: []metav1.OwnerReference{
+								{
+									APIVersion:         placementv1beta1.GroupVersion.String(),
+									Kind:               "ClusterResourceBinding",
+									Name:               binding.Name,
+									UID:                binding.UID,
+									BlockOwnerDeletion: ptr.To(true),
+								},
+							},
+							Labels: map[string]string{
+								placementv1beta1.CRPTrackingLabel:                 testCRPName,
+								placementv1beta1.ParentBindingLabel:               binding.Name,
+								placementv1beta1.ParentResourceSnapshotIndexLabel: "1",
 							},
 						},
-						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel:                 testCRPName,
-							placementv1beta1.ParentBindingLabel:               binding.Name,
-							placementv1beta1.ParentResourceSnapshotIndexLabel: "1",
-						},
-					},
-					Spec: placementv1beta1.WorkSpec{
-						Workload: placementv1beta1.WorkloadTemplate{
-							Manifests: []placementv1beta1.Manifest{
-								{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
-								{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
-								{RawExtension: runtime.RawExtension{Raw: testResource}},
+						Spec: placementv1beta1.WorkSpec{
+							Workload: placementv1beta1.WorkloadTemplate{
+								Manifests: []placementv1beta1.Manifest{
+									{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
+									{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
+									{RawExtension: runtime.RawExtension{Raw: testResource}},
+								},
 							},
 						},
-					},
-				}
-				diff := cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
-				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
-				// check the binding status that it should be marked as work not applied eventually
-				verifyBindingStatusSyncedNotApplied(binding, false, true)
-				// mark the work as not applied with failed manifests
-				markWorkAsFailedToApply(&work)
-				// check the binding status that it should have failed placement
-				verifyBindStatusNotAppliedWithFailedPlacement(binding, false)
-				// mark the work applied
-				markWorkApplied(&work)
-				// check the binding status that it should be marked as applied true eventually
-				verifyBindStatusAppliedNotAvailable(binding, false)
-				// mark the work available
-				markWorkAvailable(&work)
-				// check the binding status that it should be marked as available true eventually
-				verifyBindStatusAvail(binding, false)
-			})
+					}
+					diff := cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
+					Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
+					// check the binding status that it should be marked as work not applied eventually
+					verifyBindingStatusSyncedNotApplied(binding, false, true)
+				})
 
-			It("Should mark the binding as available without failed placement after it available", func() {
-				// check the binding status till the bound condition is true
-				Eventually(func() bool {
-					if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding); err != nil {
-						return false
-					}
-					// only check the work created status as the applied status reason changes depends on where the reconcile logic is
-					return condition.IsConditionStatusTrue(
-						meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingWorkSynchronized)), binding.GetGeneration())
-				}, timeout, interval).Should(BeTrue(), fmt.Sprintf("binding(%s) condition should be true", binding.Name))
-				// check the work is created by now
-				work := placementv1beta1.Work{}
-				Eventually(func() error {
-					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName), Namespace: memberClusterNamespaceName}, &work)
-				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
-				By(fmt.Sprintf("work %s is created in %s", work.Name, work.Namespace))
-				//inspect the work
-				wantWork := placementv1beta1.Work{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName),
-						Namespace: memberClusterNamespaceName,
-						OwnerReferences: []metav1.OwnerReference{
-							{
-								APIVersion:         placementv1beta1.GroupVersion.String(),
-								Kind:               "ClusterResourceBinding",
-								Name:               binding.Name,
-								UID:                binding.UID,
-								BlockOwnerDeletion: ptr.To(true),
-							},
-						},
-						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel:                 testCRPName,
-							placementv1beta1.ParentBindingLabel:               binding.Name,
-							placementv1beta1.ParentResourceSnapshotIndexLabel: "1",
-						},
-					},
-					Spec: placementv1beta1.WorkSpec{
-						Workload: placementv1beta1.WorkloadTemplate{
-							Manifests: []placementv1beta1.Manifest{
-								{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
-								{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
-								{RawExtension: runtime.RawExtension{Raw: testResource}},
-							},
-						},
-					},
-				}
-				diff := cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
-				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
-				// check the binding status that it should be marked as work not applied eventually
-				verifyBindingStatusSyncedNotApplied(binding, false, true)
-				// mark the work as not applied with failed manifests
-				markWorkAsFailedToApply(&work)
-				// check the binding status that it should have failed placement
-				verifyBindStatusNotAppliedWithFailedPlacement(binding, false)
-				// mark the work available directly
-				markWorkAvailable(&work)
-				// check the binding status that it should be marked as available true eventually
-				verifyBindStatusAvail(binding, false)
+				It("Should update the binding when the work overall condition changed", func() {
+					// mark the work as not applied with failed manifests
+					markWorkWithFailedToApplyAndNotAvailable(&work)
+					// check the binding status that it should have failed placement
+					verifyBindStatusNotAppliedWithFailedPlacement(binding, false) // mark the work applied but still not available with failed manifests
+					// mark the work available directly
+					markWorkAvailable(&work)
+					// check the binding status that it should be marked as available true eventually
+					verifyBindStatusAvail(binding, false)
+				})
+
+				It("Should update the binding when the failed placement list has changed but over all condition didn't change", func() {
+					// mark the work as not applied with failed manifests
+					markWorkWithFailedToApplyAndNotAvailable(&work)
+					// check the binding status that it should have failed placement
+					verifyBindStatusNotAppliedWithFailedPlacement(binding, false) // mark the work applied but still not available with failed manifests
+					// change one of the failed manifests to be applied
+					markWorkAsAppliedButNotAvailableWithFailedManifest(&work)
+					// check the binding status that it should be applied but not available and with two failed placement
+					verifyBindStatusNotAvailableWithTwoFailedPlacement(binding, false)
+					// mark one of the failed manifests as available but no change in the overall condition
+					markOneManifestAvailable(&work)
+					// check the binding status that it should be applied but not available and with one failed placement
+					verifyBindStatusNotAvailableWithOneFailedPlacement(binding, false)
+					// mark the work available directly
+					markWorkAvailable(&work)
+					// check the binding status that it should be marked as available true eventually
+					verifyBindStatusAvail(binding, false)
+				})
 			})
 		})
 
@@ -911,7 +875,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				verifyBindingStatusSyncedNotApplied(binding, false, true)
 				// mark one work applied while the other failed
 				markWorkApplied(&work)
-				markWorkAsFailedToApply(&secondWork)
+				markWorkWithFailedToApplyAndNotAvailable(&secondWork)
 				// check the binding status that it should be marked as applied true eventually
 				verifyBindStatusNotAppliedWithFailedPlacement(binding, false)
 				// mark failed the work available
@@ -1286,7 +1250,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 							},
 						},
 					}
-					return cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
+					return cmp.Diff(wantStatus, binding.Status, cmpConditionOption)
 				}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
 				Expect(binding.GetCondition(string(placementv1beta1.ResourceBindingOverridden)).Message).Should(ContainSubstring("Failed to apply the override rules on the resources: add operation does not apply"))
 			})
@@ -1341,7 +1305,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 							},
 						},
 					}
-					return cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
+					return cmp.Diff(wantStatus, binding.Status, cmpConditionOption)
 				}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
 			})
 		})
@@ -1417,7 +1381,7 @@ func verifyBindingStatusSyncedNotApplied(binding *placementv1beta1.ClusterResour
 			},
 			FailedPlacements: nil,
 		}
-		return cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
+		return cmp.Diff(wantStatus, binding.Status, cmpConditionOption)
 	}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
 }
 
@@ -1457,7 +1421,7 @@ func verifyBindStatusAppliedNotAvailable(binding *placementv1beta1.ClusterResour
 			},
 			FailedPlacements: nil,
 		}
-		return cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
+		return cmp.Diff(wantStatus, binding.Status, cmpConditionOption)
 	}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
 }
 
@@ -1497,7 +1461,7 @@ func verifyBindStatusAvail(binding *placementv1beta1.ClusterResourceBinding, has
 			},
 			FailedPlacements: nil,
 		}
-		return cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
+		return cmp.Diff(wantStatus, binding.Status, cmpConditionOption)
 	}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got):\n", binding.Name))
 }
 
@@ -1519,10 +1483,25 @@ func verifyBindStatusNotAppliedWithFailedPlacement(binding *placementv1beta1.Clu
 						Namespace: "svc-namespace",
 					},
 					Condition: metav1.Condition{
+						Type:    placementv1beta1.WorkConditionTypeAvailable,
+						Status:  metav1.ConditionFalse,
+						Reason:  fakeFailedAvailableReason,
+						Message: fakeFailedAvailableMessage,
+					},
+				},
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Name:      "config-name",
+						Namespace: "config-namespace",
+					},
+					Condition: metav1.Condition{
 						Type:    placementv1beta1.WorkConditionTypeApplied,
 						Status:  metav1.ConditionFalse,
-						Reason:  fakeReason,
-						Message: fakeMessage,
+						Reason:  fakeFailedAppliedReason,
+						Message: fakeFailedAppliedMessage,
 					},
 				},
 			},
@@ -1547,7 +1526,134 @@ func verifyBindStatusNotAppliedWithFailedPlacement(binding *placementv1beta1.Clu
 				},
 			},
 		}
-		return cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
+		return cmp.Diff(wantStatus, binding.Status, cmpConditionOption)
+	}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
+}
+
+func verifyBindStatusNotAvailableWithTwoFailedPlacement(binding *placementv1beta1.ClusterResourceBinding, hasOverride bool) {
+	Eventually(func() string {
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
+		overrideReason := condition.OverrideNotSpecifiedReason
+		if hasOverride {
+			overrideReason = condition.OverriddenSucceededReason
+		}
+		wantStatus := placementv1beta1.ResourceBindingStatus{
+			FailedPlacements: []placementv1beta1.FailedResourcePlacement{
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+					Condition: metav1.Condition{
+						Type:    placementv1beta1.WorkConditionTypeAvailable,
+						Status:  metav1.ConditionFalse,
+						Reason:  fakeFailedAvailableReason,
+						Message: fakeFailedAvailableMessage,
+					},
+				},
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Name:      "config-name",
+						Namespace: "config-namespace",
+					},
+					Condition: metav1.Condition{
+						Type:    placementv1beta1.WorkConditionTypeAvailable,
+						Status:  metav1.ConditionFalse,
+						Reason:  fakeFailedAvailableReason,
+						Message: fakeFailedAvailableMessage,
+					},
+				},
+			},
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(placementv1beta1.ResourceBindingOverridden),
+					Status:             metav1.ConditionTrue,
+					Reason:             overrideReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Type:               string(placementv1beta1.ResourceBindingWorkSynchronized),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.AllWorkSyncedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Type:               string(placementv1beta1.ResourceBindingApplied),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.AllWorkAppliedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Type:               string(placementv1beta1.ResourceBindingAvailable),
+					Status:             metav1.ConditionFalse,
+					Reason:             condition.WorkNotAvailableReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+			},
+		}
+		return cmp.Diff(wantStatus, binding.Status, cmpConditionOption)
+	}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
+}
+
+func verifyBindStatusNotAvailableWithOneFailedPlacement(binding *placementv1beta1.ClusterResourceBinding, hasOverride bool) {
+	Eventually(func() string {
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
+		overrideReason := condition.OverrideNotSpecifiedReason
+		if hasOverride {
+			overrideReason = condition.OverriddenSucceededReason
+		}
+		wantStatus := placementv1beta1.ResourceBindingStatus{
+			FailedPlacements: []placementv1beta1.FailedResourcePlacement{
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+					Condition: metav1.Condition{
+						Type:    placementv1beta1.WorkConditionTypeAvailable,
+						Status:  metav1.ConditionFalse,
+						Reason:  fakeFailedAvailableReason,
+						Message: fakeFailedAvailableMessage,
+					},
+				},
+			},
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(placementv1beta1.ResourceBindingOverridden),
+					Status:             metav1.ConditionTrue,
+					Reason:             overrideReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Type:               string(placementv1beta1.ResourceBindingWorkSynchronized),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.AllWorkSyncedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Type:               string(placementv1beta1.ResourceBindingApplied),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.AllWorkAppliedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Type:               string(placementv1beta1.ResourceBindingAvailable),
+					Status:             metav1.ConditionFalse,
+					Reason:             condition.WorkNotAvailableReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+			},
+		}
+		return cmp.Diff(wantStatus, binding.Status, cmpConditionOption)
 	}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
 }
 
@@ -1646,12 +1752,20 @@ func markWorkAvailable(work *placementv1beta1.Work) {
 	By(fmt.Sprintf("resource work `%s` is marked as available", work.Name))
 }
 
-// markWorkAsFailedToApply marks the work as not applied with failedPlacement
-func markWorkAsFailedToApply(work *placementv1beta1.Work) {
+// markWorkWithFailedToApplyAndNotAvailable marks the work as not applied with failedPlacement
+func markWorkWithFailedToApplyAndNotAvailable(work *placementv1beta1.Work) {
 	meta.SetStatusCondition(&work.Status.Conditions, metav1.Condition{
 		Status:             metav1.ConditionFalse,
 		Type:               placementv1beta1.WorkConditionTypeApplied,
 		Reason:             "failedToApplyManifest",
+		Message:            "fake available manifest",
+		ObservedGeneration: work.Generation,
+		LastTransitionTime: metav1.Now(),
+	})
+	meta.SetStatusCondition(&work.Status.Conditions, metav1.Condition{
+		Status:             metav1.ConditionFalse,
+		Type:               placementv1beta1.WorkConditionTypeAvailable,
+		Reason:             "availableManifest",
 		Message:            "fake available manifest",
 		ObservedGeneration: work.Generation,
 		LastTransitionTime: metav1.Now(),
@@ -1669,9 +1783,129 @@ func markWorkAsFailedToApply(work *placementv1beta1.Work) {
 			Conditions: []metav1.Condition{
 				{
 					Type:               placementv1beta1.WorkConditionTypeApplied,
+					Status:             metav1.ConditionFalse,
+					Reason:             fakeFailedAppliedReason,
+					Message:            fakeFailedAppliedMessage,
+					LastTransitionTime: metav1.Now(),
+				},
+			},
+		},
+		{
+			Identifier: placementv1beta1.WorkResourceIdentifier{
+				Ordinal:   1,
+				Group:     "",
+				Version:   "v1",
+				Kind:      "Service",
+				Name:      "svc-name",
+				Namespace: "svc-namespace",
+			},
+			Conditions: []metav1.Condition{
+				{
+					Type:               placementv1beta1.WorkConditionTypeApplied,
 					Status:             metav1.ConditionTrue,
-					Reason:             "fakeAvailableManifest",
-					Message:            "fake available manifest",
+					Reason:             "fakeAppliedManifest",
+					Message:            "fake apply manifest",
+					LastTransitionTime: metav1.Now(),
+				},
+				{
+					Type:               placementv1beta1.WorkConditionTypeAvailable,
+					Status:             metav1.ConditionFalse,
+					Reason:             fakeFailedAvailableReason,
+					Message:            fakeFailedAvailableMessage,
+					LastTransitionTime: metav1.Now(),
+				},
+			},
+		},
+	}
+	Expect(k8sClient.Status().Update(ctx, work)).Should(Succeed())
+	By(fmt.Sprintf("resource work `%s` is marked as available", work.Name))
+}
+
+// markWorkAsAppliedButNotAvailableWithFailedManifest marks the work as not available with failedPlacement
+func markWorkAsAppliedButNotAvailableWithFailedManifest(work *placementv1beta1.Work) {
+	meta.SetStatusCondition(&work.Status.Conditions, metav1.Condition{
+		Status:             metav1.ConditionTrue,
+		Type:               placementv1beta1.WorkConditionTypeApplied,
+		Reason:             "appliedManifest",
+		Message:            "fake apply manifest",
+		ObservedGeneration: work.Generation,
+		LastTransitionTime: metav1.Now(),
+	})
+	work.Status.ManifestConditions = []placementv1beta1.ManifestCondition{
+		{
+			Identifier: placementv1beta1.WorkResourceIdentifier{
+				Ordinal:   0,
+				Group:     "",
+				Version:   "v1",
+				Kind:      "ConfigMap",
+				Name:      "config-name",
+				Namespace: "config-namespace",
+			},
+			Conditions: []metav1.Condition{
+				{
+					Type:               placementv1beta1.WorkConditionTypeApplied,
+					Status:             metav1.ConditionTrue,
+					Reason:             "fakeAppliedManifest",
+					Message:            "fake apply manifest",
+					LastTransitionTime: metav1.Now(),
+				},
+				{
+					Type:               placementv1beta1.WorkConditionTypeAvailable,
+					Status:             metav1.ConditionFalse,
+					Reason:             fakeFailedAvailableReason,
+					Message:            fakeFailedAvailableMessage,
+					LastTransitionTime: metav1.Now(),
+				},
+			},
+		},
+		{
+			Identifier: placementv1beta1.WorkResourceIdentifier{
+				Ordinal:   1,
+				Group:     "",
+				Version:   "v1",
+				Kind:      "Service",
+				Name:      "svc-name",
+				Namespace: "svc-namespace",
+			},
+			Conditions: []metav1.Condition{
+				{
+					Type:               placementv1beta1.WorkConditionTypeApplied,
+					Status:             metav1.ConditionTrue,
+					Reason:             "fakeAppliedManifest",
+					Message:            "fake apply manifest",
+					LastTransitionTime: metav1.Now(),
+				},
+				{
+					Type:               placementv1beta1.WorkConditionTypeAvailable,
+					Status:             metav1.ConditionFalse,
+					Reason:             fakeFailedAvailableReason,
+					Message:            fakeFailedAvailableMessage,
+					LastTransitionTime: metav1.Now(),
+				},
+			},
+		},
+	}
+	Expect(k8sClient.Status().Update(ctx, work)).Should(Succeed())
+	By(fmt.Sprintf("resource work `%s` is marked as available", work.Name))
+}
+
+func markOneManifestAvailable(work *placementv1beta1.Work) {
+	work.Status.ManifestConditions = []placementv1beta1.ManifestCondition{
+		{
+			Identifier: placementv1beta1.WorkResourceIdentifier{
+				Ordinal:   0,
+				Group:     "",
+				Version:   "v1",
+				Kind:      "ConfigMap",
+				Name:      "config-name",
+				Namespace: "config-namespace",
+			},
+			Conditions: []metav1.Condition{
+				{
+					Type:               placementv1beta1.WorkConditionTypeApplied,
+					Status:             metav1.ConditionTrue,
+					Reason:             "fakeAppliedManifest",
+					Message:            "fake apply manifest",
 					LastTransitionTime: metav1.Now(),
 				},
 				{
@@ -1695,9 +1929,16 @@ func markWorkAsFailedToApply(work *placementv1beta1.Work) {
 			Conditions: []metav1.Condition{
 				{
 					Type:               placementv1beta1.WorkConditionTypeApplied,
+					Status:             metav1.ConditionTrue,
+					Reason:             "fakeAppliedManifest",
+					Message:            "fake apply manifest",
+					LastTransitionTime: metav1.Now(),
+				},
+				{
+					Type:               placementv1beta1.WorkConditionTypeAvailable,
 					Status:             metav1.ConditionFalse,
-					Reason:             fakeReason,
-					Message:            fakeMessage,
+					Reason:             fakeFailedAvailableReason,
+					Message:            fakeFailedAvailableMessage,
 					LastTransitionTime: metav1.Now(),
 				},
 			},

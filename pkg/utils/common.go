@@ -81,6 +81,9 @@ const (
 
 	// LastWorkUpdateTimeAnnotationKey is used to mark the last update time on a work object.
 	LastWorkUpdateTimeAnnotationKey = "work.fleet.azure.com/last-update-time"
+
+	// ResourceIdentifierStringFormat is the format of the resource identifier string.
+	ResourceIdentifierStringFormat = "%s/%s/%s/%s/%s"
 )
 
 var (

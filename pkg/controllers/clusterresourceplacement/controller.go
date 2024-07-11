@@ -241,10 +241,8 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 	}
 
 	klog.V(2).InfoS("Placement rollout has not finished yet and requeue the request", "clusterResourcePlacement", crpKObj, "status", crp.Status, "generation", crp.Generation)
-	// we need to requeue the request to update the status of the resources eg, failedManifests.
-	// The binding status won't be changed.
-	// TODO: once we move to populate the failedManifests from the binding, no need to requeue.
-	return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+	// no need to requeue the request as the binding status will be changed.
+	return ctrl.Result{}, nil
 }
 
 func (r *Reconciler) getOrCreateClusterSchedulingPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, revisionHistoryLimit int) (*fleetv1beta1.ClusterSchedulingPolicySnapshot, error) {
