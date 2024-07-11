@@ -8,6 +8,7 @@ import (
 	"reflect"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -86,30 +87,36 @@ func ValidateV1Alpha1MemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCl
 	return response
 }
 
-// ValidateMemberClusterUpdate checks to see if user had updated the member cluster resource and allows/denies the request.
-func ValidateMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberCluster, req admission.Request, whiteListedUsers []string) admission.Response {
+// ValidateFleetMemberClusterUpdate checks to see if user had updated the fleet member cluster resource and allows/denies the request.
+func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberCluster, req admission.Request, whiteListedUsers []string) admission.Response {
 	namespacedName := types.NamespacedName{Name: currentMC.GetName()}
 	userInfo := req.UserInfo
-	response := admission.Allowed(fmt.Sprintf("user %s in groups %v most likely %s read-only field/fields of member cluster resource %+v/%s, so no field/fields will be updated", userInfo.Username, userInfo.Groups, req.Operation, req.RequestKind, req.SubResource))
-	isLabelUpdated := isMapFieldUpdated(currentMC.GetLabels(), oldMC.GetLabels())
-	isAnnotationUpdated := isMapFieldUpdated(currentMC.GetAnnotations(), oldMC.GetAnnotations())
-	isTaintsUpdated := isTaintsFieldUpdated(currentMC.Spec.Taints, oldMC.Spec.Taints)
+	// any user is allowed to modify labels, annotations, taints on fleet MC.
 	// set taints field to nil.
 	currentMC.Spec.Taints = nil
 	oldMC.Spec.Taints = nil
-	isObjUpdated, err := isMemberClusterUpdated(&currentMC, &oldMC)
+	isObjUpdated, err := isMemberClusterUpdated(currentMC.DeepCopy(), oldMC.DeepCopy())
 	if err != nil {
 		return admission.Denied(err.Error())
 	}
-	if (isLabelUpdated || isAnnotationUpdated || isTaintsUpdated) && !isObjUpdated {
-		// we allow any user to modify MemberCluster/Namespace labels, annotations & taints.
-		klog.V(3).InfoS("user in groups is allowed to modify member cluster labels/annotations", "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
-		response = admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
+	if isObjUpdated || isFleetClusterResourceIDAnnotationUpdated(currentMC.Annotations, oldMC.Annotations) {
+		return ValidateUserForResource(req, whiteListedUsers)
 	}
-	if isObjUpdated {
-		response = ValidateUserForResource(req, whiteListedUsers)
+	klog.V(3).InfoS(allowedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
+	return admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
+}
+
+// ValidatedUpstreamMemberClusterUpdate checks to see if user had updated the upstream member cluster resource and allows/denies the request.
+func ValidatedUpstreamMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberCluster, req admission.Request, whiteListedUsers []string) admission.Response {
+	namespacedName := types.NamespacedName{Name: currentMC.GetName()}
+	userInfo := req.UserInfo
+	// any user is allowed to modify MC spec for upstream MC.
+	isStatusUpdated := isMemberClusterStatusUpdated(currentMC.Status, oldMC.Status)
+	if isStatusUpdated || isFleetClusterResourceIDAnnotationAdded(currentMC.Annotations, oldMC.Annotations) {
+		return ValidateUserForResource(req, whiteListedUsers)
 	}
-	return response
+	klog.V(3).InfoS(allowedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
+	return admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
 }
 
 // isMasterGroupUserOrWhiteListedUser returns true is user belongs to white listed users or user belongs to system:masters group.
@@ -144,9 +151,20 @@ func isMapFieldUpdated(currentMap, oldMap map[string]string) bool {
 	return !reflect.DeepEqual(currentMap, oldMap)
 }
 
-// isTaintsFieldUpdated return true if member cluster taints is updated.
-func isTaintsFieldUpdated(currentTaints, oldTaints []clusterv1beta1.Taint) bool {
-	return !reflect.DeepEqual(currentTaints, oldTaints)
+func isFleetClusterResourceIDAnnotationUpdated(currentMap, oldMap map[string]string) bool {
+	currentVal, currentExists := currentMap[utils.FleetClusterResourceIsAnnotationKey]
+	oldVal, oldExists := oldMap[utils.FleetClusterResourceIsAnnotationKey]
+	return oldExists && !currentExists || oldVal != currentVal
+}
+
+func isFleetClusterResourceIDAnnotationAdded(currentMap, oldMap map[string]string) bool {
+	_, currentExists := currentMap[utils.FleetClusterResourceIsAnnotationKey]
+	_, oldExists := oldMap[utils.FleetClusterResourceIsAnnotationKey]
+	return !oldExists && currentExists
+}
+
+func isMemberClusterStatusUpdated(currentMCStatus, oldMCStatus clusterv1beta1.MemberClusterStatus) bool {
+	return !equality.Semantic.DeepEqual(currentMCStatus, oldMCStatus)
 }
 
 // isMemberClusterUpdated returns true is member cluster spec or status is updated.

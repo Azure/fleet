@@ -90,6 +90,9 @@ const (
 
 	// ResourceIdentifierWithEnvelopeIdentifierStringFormat is the format of the resource identifier string with envelope identifier.
 	ResourceIdentifierWithEnvelopeIdentifierStringFormat = "%s/%s/%s/%s/%s/%s/%s/%s"
+
+	// FleetClusterResourceIsAnnotationKey is used to mark the cluster resource is created by fleet.
+	FleetClusterResourceIsAnnotationKey = "fleet.azure.com/cluster-resource-id"
 )
 
 var (

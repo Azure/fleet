@@ -26,7 +26,9 @@ import (
 )
 
 const (
-	mcName = "test-mc"
+	mcName                 = "test-mc"
+	testClusterResourceID1 = "test-cluster-resource-id-1"
+	testClusterResourceID2 = "test-cluster-resource-id-2"
 )
 
 func TestHandleCRD(t *testing.T) {
@@ -394,12 +396,64 @@ func TestHandleV1Alpha1MemberCluster(t *testing.T) {
 }
 
 func TestHandleMemberCluster(t *testing.T) {
-	MCObject := &clusterv1beta1.MemberCluster{
+	fleetMCObject := &clusterv1beta1.MemberCluster{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "MemberCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "test-mc",
+			Annotations: map[string]string{utils.FleetClusterResourceIsAnnotationKey: testClusterResourceID1},
+		},
+		Spec: clusterv1beta1.MemberClusterSpec{
+			Identity: rbacv1.Subject{
+				Kind: "User",
+				Name: "test-user",
+			},
+		},
+	}
+	updateClusterResourceIDAnnotationFleetMCObject := &clusterv1beta1.MemberCluster{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "MemberCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "test-mc",
+			Annotations: map[string]string{utils.FleetClusterResourceIsAnnotationKey: testClusterResourceID2},
+		},
+		Spec: clusterv1beta1.MemberClusterSpec{
+			Identity: rbacv1.Subject{
+				Kind: "User",
+				Name: "test-user",
+			},
+		},
+	}
+	mcObject := &clusterv1beta1.MemberCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind: "MemberCluster",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-mc",
+		},
+		Spec: clusterv1beta1.MemberClusterSpec{
+			Identity: rbacv1.Subject{
+				Kind: "User",
+				Name: "test-user",
+			},
+		},
+	}
+	labelUpdatedFleetMCObject := &clusterv1beta1.MemberCluster{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "MemberCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "test-mc",
+			Labels:      map[string]string{"test-key": "test-value"},
+			Annotations: map[string]string{utils.FleetClusterResourceIsAnnotationKey: testClusterResourceID1},
+		},
+		Spec: clusterv1beta1.MemberClusterSpec{
+			Identity: rbacv1.Subject{
+				Kind: "User",
+				Name: "test-user",
+			},
 		},
 	}
 	labelUpdatedMCObject := &clusterv1beta1.MemberCluster{
@@ -410,24 +464,61 @@ func TestHandleMemberCluster(t *testing.T) {
 			Name:   "test-mc",
 			Labels: map[string]string{"test-key": "test-value"},
 		},
+		Spec: clusterv1beta1.MemberClusterSpec{
+			Identity: rbacv1.Subject{
+				Kind: "User",
+				Name: "test-user",
+			},
+		},
+	}
+	annotationUpdatedFleetMCObject := &clusterv1beta1.MemberCluster{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "MemberCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-mc",
+			Annotations: map[string]string{
+				utils.FleetClusterResourceIsAnnotationKey: testClusterResourceID1,
+				"test-key": "test-value",
+			},
+		},
+		Spec: clusterv1beta1.MemberClusterSpec{
+			Identity: rbacv1.Subject{
+				Kind: "User",
+				Name: "test-user",
+			},
+		},
 	}
 	annotationUpdatedMCObject := &clusterv1beta1.MemberCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind: "MemberCluster",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        "test-mc",
-			Annotations: map[string]string{"test-key": "test-value"},
+			Name: "test-mc",
+			Annotations: map[string]string{
+				"test-key": "test-value",
+			},
+		},
+		Spec: clusterv1beta1.MemberClusterSpec{
+			Identity: rbacv1.Subject{
+				Kind: "User",
+				Name: "test-user",
+			},
 		},
 	}
-	taintUpdatedMCObject := &clusterv1beta1.MemberCluster{
+	taintUpdatedFleetMCObject := &clusterv1beta1.MemberCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind: "MemberCluster",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-mc",
+			Name:        "test-mc",
+			Annotations: map[string]string{utils.FleetClusterResourceIsAnnotationKey: testClusterResourceID1},
 		},
 		Spec: clusterv1beta1.MemberClusterSpec{
+			Identity: rbacv1.Subject{
+				Kind: "User",
+				Name: "test-user",
+			},
 			Taints: []clusterv1beta1.Taint{
 				{
 					Key:    "key1",
@@ -435,6 +526,22 @@ func TestHandleMemberCluster(t *testing.T) {
 					Effect: corev1.TaintEffectNoSchedule,
 				},
 			},
+		},
+	}
+	specUpdatedFleetMCObject := &clusterv1beta1.MemberCluster{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "MemberCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "test-mc",
+			Annotations: map[string]string{utils.FleetClusterResourceIsAnnotationKey: testClusterResourceID1},
+		},
+		Spec: clusterv1beta1.MemberClusterSpec{
+			Identity: rbacv1.Subject{
+				Kind: "User",
+				Name: "test-user",
+			},
+			HeartbeatPeriodSeconds: 30,
 		},
 	}
 	specUpdatedMCObject := &clusterv1beta1.MemberCluster{
@@ -445,15 +552,33 @@ func TestHandleMemberCluster(t *testing.T) {
 			Name: "test-mc",
 		},
 		Spec: clusterv1beta1.MemberClusterSpec{
+			Identity: rbacv1.Subject{
+				Kind: "User",
+				Name: "test-user",
+			},
+			Taints: []clusterv1beta1.Taint{
+				{
+					Key:    "key1",
+					Value:  "value1",
+					Effect: corev1.TaintEffectNoSchedule,
+				},
+			},
 			HeartbeatPeriodSeconds: 30,
 		},
 	}
-	statusUpdatedMCObject := &clusterv1beta1.MemberCluster{
+	statusUpdatedFleetMCObject := &clusterv1beta1.MemberCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind: "MemberCluster",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-mc",
+			Name:        "test-mc",
+			Annotations: map[string]string{utils.FleetClusterResourceIsAnnotationKey: testClusterResourceID1},
+		},
+		Spec: clusterv1beta1.MemberClusterSpec{
+			Identity: rbacv1.Subject{
+				Kind: "User",
+				Name: "test-user",
+			},
 		},
 		Status: clusterv1beta1.MemberClusterStatus{
 			Conditions: []metav1.Condition{
@@ -465,15 +590,50 @@ func TestHandleMemberCluster(t *testing.T) {
 		},
 	}
 
-	MCObjectBytes, err := json.Marshal(MCObject)
+	statusUpdatedMCObject := &clusterv1beta1.MemberCluster{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "MemberCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-mc",
+		},
+		Spec: clusterv1beta1.MemberClusterSpec{
+			Identity: rbacv1.Subject{
+				Kind: "User",
+				Name: "test-user",
+			},
+		},
+		Status: clusterv1beta1.MemberClusterStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:   string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
+					Status: metav1.ConditionTrue,
+				},
+			},
+		},
+	}
+
+	fleetMCObjectBytes, err := json.Marshal(fleetMCObject)
+	assert.Nil(t, err)
+	updateClusterResourceIDAnnotationFleetMCObjectBytes, err := json.Marshal(updateClusterResourceIDAnnotationFleetMCObject)
+	assert.Nil(t, err)
+	mcObjectBytes, err := json.Marshal(mcObject)
+	assert.Nil(t, err)
+	labelUpdatedFleetMCObjectBytes, err := json.Marshal(labelUpdatedFleetMCObject)
 	assert.Nil(t, err)
 	labelUpdatedMCObjectBytes, err := json.Marshal(labelUpdatedMCObject)
 	assert.Nil(t, err)
+	annotationUpdatedFleetMCObjectBytes, err := json.Marshal(annotationUpdatedFleetMCObject)
+	assert.Nil(t, err)
 	annotationUpdatedMCObjectBytes, err := json.Marshal(annotationUpdatedMCObject)
 	assert.Nil(t, err)
-	taintUpdatedMCObjectBytes, err := json.Marshal(taintUpdatedMCObject)
+	taintUpdatedFleetMCObjectBytes, err := json.Marshal(taintUpdatedFleetMCObject)
+	assert.Nil(t, err)
+	specUpdatedFleetMCObjectBytes, err := json.Marshal(specUpdatedFleetMCObject)
 	assert.Nil(t, err)
 	specUpdatedMCObjectBytes, err := json.Marshal(specUpdatedMCObject)
+	assert.Nil(t, err)
+	statusUpdatedFleetMCObjectBytes, err := json.Marshal(statusUpdatedFleetMCObject)
 	assert.Nil(t, err)
 	statusUpdatedMCObjectBytes, err := json.Marshal(statusUpdatedMCObject)
 	assert.Nil(t, err)
@@ -489,13 +649,13 @@ func TestHandleMemberCluster(t *testing.T) {
 		resourceValidator fleetResourceValidator
 		wantResponse      admission.Response
 	}{
-		"allow create MC for user in system:masters group": {
+		"allow create fleet MC for user in system:masters group": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    labelUpdatedMCObjectBytes,
-						Object: labelUpdatedMCObject,
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -510,7 +670,53 @@ func TestHandleMemberCluster(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"system:masters"}), admissionv1.Create, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
-		"allow any user to modify MC labels": {
+		"allow create upstream MC for any user": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    mcObjectBytes,
+						Object: mcObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"system:masters"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Create,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"system:masters"}), admissionv1.Create, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow any user to modify fleet MC labels": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    labelUpdatedFleetMCObjectBytes,
+						Object: labelUpdatedFleetMCObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"test-group"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow any user to modify upstream MC labels": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
@@ -519,8 +725,8 @@ func TestHandleMemberCluster(t *testing.T) {
 						Object: labelUpdatedMCObject,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    MCObjectBytes,
-						Object: MCObject,
+						Raw:    mcObjectBytes,
+						Object: mcObject,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -535,17 +741,17 @@ func TestHandleMemberCluster(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
-		"allow any user to modify MC annotations": {
+		"allow any user to modify fleet MC annotations other than fleet cluster resource ID annotation": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    annotationUpdatedMCObjectBytes,
-						Object: annotationUpdatedMCObject,
+						Raw:    annotationUpdatedFleetMCObjectBytes,
+						Object: annotationUpdatedFleetMCObject,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    MCObjectBytes,
-						Object: MCObject,
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -560,17 +766,17 @@ func TestHandleMemberCluster(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
-		"allow any user to modify MC taints": {
+		"deny any user to modify fleet MC annotations, update fleet cluster resource ID annotation": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    taintUpdatedMCObjectBytes,
-						Object: taintUpdatedMCObject,
+						Raw:    updateClusterResourceIDAnnotationFleetMCObjectBytes,
+						Object: updateClusterResourceIDAnnotationFleetMCObject,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    MCObjectBytes,
-						Object: MCObject,
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -583,19 +789,44 @@ func TestHandleMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
-		"allow system:masters group user to modify MC spec": {
+		"deny any user to modify fleet MC annotations, remove fleet cluster resource ID annotation": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    specUpdatedMCObjectBytes,
-						Object: specUpdatedMCObject,
+						Raw:    mcObjectBytes,
+						Object: mcObject,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    MCObjectBytes,
-						Object: MCObject,
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"test-group"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow user in system:masters group to modify fleet MC annotations, update fleet cluster resource ID annotation": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    updateClusterResourceIDAnnotationFleetMCObjectBytes,
+						Object: updateClusterResourceIDAnnotationFleetMCObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -610,17 +841,268 @@ func TestHandleMemberCluster(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"system:masters"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
-		"allow system:masters group user to modify MC status": {
+		"allow user in system:masters group to modify fleet MC annotations, remove fleet cluster resource ID annotation": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    statusUpdatedMCObjectBytes,
-						Object: statusUpdatedMCObject,
+						Raw:    mcObjectBytes,
+						Object: mcObject,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    MCObjectBytes,
-						Object: MCObject,
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"system:masters"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"system:masters"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow any user to modify upstream MC annotations, without adding fleet cluster resource ID annotation": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    annotationUpdatedMCObjectBytes,
+						Object: annotationUpdatedMCObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    mcObjectBytes,
+						Object: mcObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"test-group"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"deny any user to modify upstream MC annotations, by adding fleet cluster resource ID annotation": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    mcObjectBytes,
+						Object: mcObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"test-group"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow user in system:masters group to modify upstream MC annotations, by adding fleet cluster resource ID annotation": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    mcObjectBytes,
+						Object: mcObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"system:masters"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"system:masters"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow any user to modify fleet MC taints": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    taintUpdatedFleetMCObjectBytes,
+						Object: taintUpdatedFleetMCObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"test-group"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow system:masters group user to modify fleet MC spec": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    specUpdatedFleetMCObjectBytes,
+						Object: specUpdatedFleetMCObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"system:masters"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"system:masters"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"deny update of fleet MC spec by non system:masters group": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    specUpdatedFleetMCObjectBytes,
+						Object: specUpdatedFleetMCObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"test-group"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"deny update of fleet MC spec by non whitelisted user ": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    specUpdatedFleetMCObjectBytes,
+						Object: specUpdatedFleetMCObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"test-group"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder:          decoder,
+				whiteListedUsers: []string{"test-user1"},
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"deny update of fleet MC spec apart from taints by any user": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    specUpdatedFleetMCObjectBytes,
+						Object: specUpdatedFleetMCObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"test-group"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow update of MC spec by any user": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    specUpdatedMCObjectBytes,
+						Object: specUpdatedMCObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    mcObjectBytes,
+						Object: mcObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"test-group"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow system:masters group user to modify fleet MC status": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    statusUpdatedFleetMCObjectBytes,
+						Object: statusUpdatedFleetMCObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -636,17 +1118,17 @@ func TestHandleMemberCluster(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"system:masters"}), admissionv1.Update, &utils.MCMetaGVK, "status", types.NamespacedName{Name: "test-mc"})),
 		},
-		"allow whitelisted user to modify MC status": {
+		"allow whitelisted user to modify fleet MC status": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    statusUpdatedMCObjectBytes,
-						Object: statusUpdatedMCObject,
+						Raw:    statusUpdatedFleetMCObjectBytes,
+						Object: statusUpdatedFleetMCObject,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    MCObjectBytes,
-						Object: MCObject,
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -663,17 +1145,17 @@ func TestHandleMemberCluster(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "status", types.NamespacedName{Name: "test-mc"})),
 		},
-		"deny update of member cluster spec by non system:masters group": {
+		"deny user not in system:masters group to modify fleet MC status": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    specUpdatedMCObjectBytes,
-						Object: specUpdatedMCObject,
+						Raw:    statusUpdatedFleetMCObjectBytes,
+						Object: statusUpdatedFleetMCObject,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    MCObjectBytes,
-						Object: MCObject,
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -681,24 +1163,51 @@ func TestHandleMemberCluster(t *testing.T) {
 					},
 					RequestKind: &utils.MCMetaGVK,
 					Operation:   admissionv1.Update,
+					SubResource: "status",
 				},
 			},
 			resourceValidator: fleetResourceValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "status", types.NamespacedName{Name: "test-mc"})),
 		},
-		"deny update of member cluster spec by non whitelisted user ": {
+		"allow system:masters group user to modify upstream MC status": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    specUpdatedMCObjectBytes,
-						Object: specUpdatedMCObject,
+						Raw:    statusUpdatedMCObjectBytes,
+						Object: statusUpdatedMCObject,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    MCObjectBytes,
-						Object: MCObject,
+						Raw:    mcObjectBytes,
+						Object: mcObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"system:masters"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+					SubResource: "status",
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"system:masters"}), admissionv1.Update, &utils.MCMetaGVK, "status", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow whitelisted user to modify upstream MC status": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    statusUpdatedMCObjectBytes,
+						Object: statusUpdatedMCObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    mcObjectBytes,
+						Object: mcObject,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -706,13 +1215,40 @@ func TestHandleMemberCluster(t *testing.T) {
 					},
 					RequestKind: &utils.MCMetaGVK,
 					Operation:   admissionv1.Update,
+					SubResource: "status",
 				},
 			},
 			resourceValidator: fleetResourceValidator{
 				decoder:          decoder,
-				whiteListedUsers: []string{"test-user1"},
+				whiteListedUsers: []string{"test-user"},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "status", types.NamespacedName{Name: "test-mc"})),
+		},
+		"deny user not in system:masters group to modify upstream MC status": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    statusUpdatedMCObjectBytes,
+						Object: statusUpdatedMCObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    mcObjectBytes,
+						Object: mcObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"test-group"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+					SubResource: "status",
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "status", types.NamespacedName{Name: "test-mc"})),
 		},
 	}
 

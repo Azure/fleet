@@ -128,7 +128,11 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 		if err := v.decoder.DecodeRaw(req.OldObject, &oldMC); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
-		return validation.ValidateMemberClusterUpdate(currentMC, oldMC, req, v.whiteListedUsers)
+		isFleetMC := isAnnotationPresent(oldMC.GetAnnotations(), utils.FleetClusterResourceIsAnnotationKey)
+		if isFleetMC {
+			return validation.ValidateFleetMemberClusterUpdate(currentMC, oldMC, req, v.whiteListedUsers)
+		}
+		return validation.ValidatedUpstreamMemberClusterUpdate(currentMC, oldMC, req, v.whiteListedUsers)
 	}
 	return validation.ValidateUserForResource(req, v.whiteListedUsers)
 }
@@ -197,4 +201,9 @@ func parseMemberClusterNameFromNamespace(namespace string) string {
 		mcName = namespace[startIndex:]
 	}
 	return mcName
+}
+
+func isAnnotationPresent(annotations map[string]string, key string) bool {
+	_, exists := annotations[key]
+	return exists
 }
