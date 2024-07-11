@@ -54,8 +54,8 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 				if marshalErr != nil {
 					return admission.Denied(marshalErr.Error())
 				}
-				if !isSpecUpdated && validator.AreFinalizersRemoved(&oldCRP, &crp) {
-					return admission.Allowed("finalizers are removed")
+				if !isSpecUpdated && validator.IsFinalizerRemoved(&oldCRP, &crp) {
+					return admission.Allowed("finalizer is removed")
 				}
 				return admission.Denied(err.Error())
 			}
