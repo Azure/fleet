@@ -313,7 +313,7 @@ func TestHandle(t *testing.T) {
 			resourceValidator: clusterResourcePlacementValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed("finalizers are removed"),
+			wantResponse: admission.Allowed("finalizer is removed"),
 		},
 		"deny CRP update - invalid old CRP object, finalizer not removed, spec update is valid": {
 			req: admission.Request{
