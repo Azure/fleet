@@ -47,11 +47,17 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 			if err := v.decoder.DecodeRaw(req.OldObject, &oldCRP); err != nil {
 				return admission.Errored(http.StatusBadRequest, err)
 			}
-			// this is a special case where we allow updates to old v1beta1 CRP with invalid fields so that we can update
-			// the CRP with valid fields or remove the finalizer via update & delete the CRP.
+			// this is a special case where we allow updates to old v1beta1 CRP with invalid fields so that we can
+			// update the CRP to remove finalizer then delete CRP.
 			if err := validator.ValidateClusterResourcePlacement(&oldCRP); err != nil {
-				klog.V(2).InfoS("old v1beta1 cluster resource placement has invalid fields, allow update", "operation", req.Operation, "namespacedName", types.NamespacedName{Name: crp.Name})
-				return admission.Allowed("updates to v1beta1 CRP with invalid fields are allowed")
+				isSpecUpdated, marshalErr := validator.IsPlacementSpecUpdated(&oldCRP.Spec, &crp.Spec)
+				if marshalErr != nil {
+					return admission.Denied(marshalErr.Error())
+				}
+				if !isSpecUpdated && validator.AreFinalizersRemoved(&oldCRP, &crp) {
+					return admission.Allowed("finalizers are removed")
+				}
+				return admission.Denied(err.Error())
 			}
 			// handle update case where placement type should be immutable.
 			if validator.IsPlacementPolicyTypeUpdated(oldCRP.Spec.Policy, crp.Spec.Policy) {

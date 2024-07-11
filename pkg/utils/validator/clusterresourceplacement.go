@@ -7,6 +7,8 @@ Licensed under the MIT license.
 package validator
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -154,6 +156,28 @@ func IsPlacementPolicyTypeUpdated(oldPolicy, currentPolicy *placementv1beta1.Pla
 	}
 	// general case where placement type wasn't updated but other fields in placement policy might have changed.
 	return false
+}
+
+func AreFinalizersRemoved(oldCRP, currentCRP *placementv1beta1.ClusterResourcePlacement) bool {
+	if len(oldCRP.GetFinalizers()) > 0 && len(currentCRP.GetFinalizers()) == 0 {
+		return true
+	}
+	return false
+}
+
+func IsPlacementSpecUpdated(oldSpec, currentSpec *placementv1beta1.ClusterResourcePlacementSpec) (bool, error) {
+	oldSpecBytes, err := json.Marshal(oldSpec)
+	if err != nil {
+		return false, err
+	}
+	currentSpecBytes, err := json.Marshal(currentSpec)
+	if err != nil {
+		return false, err
+	}
+	oldSpecHash := sha256.Sum256(oldSpecBytes)
+	currentSpecHash := sha256.Sum256(currentSpecBytes)
+
+	return oldSpecHash != currentSpecHash, nil
 }
 
 func validatePlacementPolicy(policy *placementv1beta1.PlacementPolicy) error {

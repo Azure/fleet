@@ -34,7 +34,27 @@ var (
 func TestHandle(t *testing.T) {
 	invalidCRPObject := &placementv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-crp",
+			Name:       "test-crp",
+			Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+		},
+		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+			},
+			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+			Strategy: placementv1beta1.RolloutStrategy{
+				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: 0},
+				},
+			},
+		},
+	}
+
+	invalidCRPObjectFinalizersRemoved := &placementv1beta1.ClusterResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-crp",
+			Finalizers: []string{},
 		},
 		Spec: placementv1beta1.ClusterResourcePlacementSpec{
 			Policy: &placementv1beta1.PlacementPolicy{
@@ -86,9 +106,10 @@ func TestHandle(t *testing.T) {
 		},
 	}
 
-	updatedValidCRPObject := &placementv1beta1.ClusterResourcePlacement{
+	updatedValidSpecCRPObject := &placementv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-crp",
+			Name:       "test-crp",
+			Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 		},
 		Spec: placementv1beta1.ClusterResourcePlacementSpec{
 			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
@@ -96,6 +117,39 @@ func TestHandle(t *testing.T) {
 				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
 					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: 1},
+				},
+			},
+		},
+	}
+
+	updatedInvalidSpecCRPObject := &placementv1beta1.ClusterResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-crp",
+			Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+		},
+		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+			Strategy: placementv1beta1.RolloutStrategy{
+				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: -1},
+				},
+			},
+		},
+	}
+
+	updatedLabelInvalidCRPObject := &placementv1beta1.ClusterResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-crp",
+			Labels:     map[string]string{"key1": "value1"},
+			Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+		},
+		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+			Strategy: placementv1beta1.RolloutStrategy{
+				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: 0},
 				},
 			},
 		},
@@ -123,7 +177,16 @@ func TestHandle(t *testing.T) {
 	invalidCRPObjectBytes, err := json.Marshal(invalidCRPObject)
 	assert.Nil(t, err)
 
-	updatedValidCRPObjectBytes, err := json.Marshal(updatedValidCRPObject)
+	invalidCRPObjectFinalizersRemovedBytes, err := json.Marshal(invalidCRPObjectFinalizersRemoved)
+	assert.Nil(t, err)
+
+	updatedValidSpecCRPObjectBytes, err := json.Marshal(updatedValidSpecCRPObject)
+	assert.Nil(t, err)
+
+	updatedInvalidSpecCRPObjectBytes, err := json.Marshal(updatedInvalidSpecCRPObject)
+	assert.Nil(t, err)
+
+	updatedLabelInvalidCRPObjectBytes, err := json.Marshal(updatedLabelInvalidCRPObject)
 	assert.Nil(t, err)
 
 	updatedPlacementTypeCRPObjectBytes, err := json.Marshal(updatedPlacementTypeCRPObject)
@@ -203,8 +266,8 @@ func TestHandle(t *testing.T) {
 						Object: validCRPObject,
 					},
 					Object: runtime.RawExtension{
-						Raw:    updatedValidCRPObjectBytes,
-						Object: updatedValidCRPObject,
+						Raw:    updatedValidSpecCRPObjectBytes,
+						Object: updatedValidSpecCRPObject,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -223,7 +286,7 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Allowed("any user is allowed to modify v1beta1 CRP"),
 		},
-		"allow CRP update - invalid old CRP object": {
+		"allow CRP update - invalid old CRP object, finalizer removed": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
@@ -232,8 +295,8 @@ func TestHandle(t *testing.T) {
 						Object: invalidCRPObject,
 					},
 					Object: runtime.RawExtension{
-						Raw:    updatedValidCRPObjectBytes,
-						Object: updatedValidCRPObject,
+						Raw:    invalidCRPObjectFinalizersRemovedBytes,
+						Object: invalidCRPObjectFinalizersRemoved,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -250,7 +313,94 @@ func TestHandle(t *testing.T) {
 			resourceValidator: clusterResourcePlacementValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed("updates to v1beta1 CRP with invalid fields are allowed"),
+			wantResponse: admission.Allowed("finalizers are removed"),
+		},
+		"deny CRP update - invalid old CRP object, finalizer not removed, spec update is valid": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-crp",
+					OldObject: runtime.RawExtension{
+						Raw:    invalidCRPObjectBytes,
+						Object: invalidCRPObject,
+					},
+					Object: runtime.RawExtension{
+						Raw:    updatedValidSpecCRPObjectBytes,
+						Object: updatedValidSpecCRPObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"system:masters"},
+					},
+					RequestKind: &utils.ClusterResourcePlacementMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{utils.ClusterRoleGVK: true},
+				IsClusterScopedResource: true,
+			},
+			resourceValidator: clusterResourcePlacementValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Denied("the rollout Strategy field  is invalid: maxUnavailable must be greater than or equal to 1, got `0`"),
+		},
+		"deny CRP update - invalid old CRP object, finalizer not removed, spec update is invalid": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-crp",
+					OldObject: runtime.RawExtension{
+						Raw:    invalidCRPObjectBytes,
+						Object: invalidCRPObject,
+					},
+					Object: runtime.RawExtension{
+						Raw:    updatedInvalidSpecCRPObjectBytes,
+						Object: updatedInvalidSpecCRPObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"system:masters"},
+					},
+					RequestKind: &utils.ClusterResourcePlacementMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{utils.ClusterRoleGVK: true},
+				IsClusterScopedResource: true,
+			},
+			resourceValidator: clusterResourcePlacementValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Denied("the rollout Strategy field  is invalid: maxUnavailable must be greater than or equal to 1, got `0`"),
+		},
+		"deny CRP update - invalid old CRP object, finalizer not removed, label is updated": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-crp",
+					OldObject: runtime.RawExtension{
+						Raw:    invalidCRPObjectBytes,
+						Object: invalidCRPObject,
+					},
+					Object: runtime.RawExtension{
+						Raw:    updatedLabelInvalidCRPObjectBytes,
+						Object: updatedLabelInvalidCRPObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"system:masters"},
+					},
+					RequestKind: &utils.ClusterResourcePlacementMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{utils.ClusterRoleGVK: true},
+				IsClusterScopedResource: true,
+			},
+			resourceValidator: clusterResourcePlacementValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Denied("the rollout Strategy field  is invalid: maxUnavailable must be greater than or equal to 1, got `0`"),
 		},
 		"deny CRP update - immutable placement type": {
 			req: admission.Request{
