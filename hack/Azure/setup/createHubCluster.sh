@@ -4,7 +4,7 @@ export HUB_CLUSTER=$1
 
 az account set -s ${SUB}
 az group create --name $RESOURCE_GROUP --location $LOCATION
-az aks create --resource-group $RESOURCE_GROUP --name $HUB_CLUSTER --node-count 2
+az aks create --resource-group $RESOURCE_GROUP --name $HUB_CLUSTER --location $LOCATION --node-count 2
 az aks get-credentials --resource-group $RESOURCE_GROUP --name $HUB_CLUSTER
 
 export HUB_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$HUB_CLUSTER\")].name}")
