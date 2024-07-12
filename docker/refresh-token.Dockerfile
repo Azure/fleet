@@ -1,5 +1,5 @@
 # Build the hubagent binary
-FROM golang:1.22.4 as builder
+FROM mcr.microsoft.com/oss/go/microsoft/golang:1.22.4 as builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
