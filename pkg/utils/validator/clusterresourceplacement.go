@@ -158,9 +158,11 @@ func IsPlacementPolicyTypeUpdated(oldPolicy, currentPolicy *placementv1beta1.Pla
 	return false
 }
 
-func IsFinalizerRemoved(oldCRP, currentCRP *placementv1beta1.ClusterResourcePlacement) bool {
-	if len(oldCRP.GetFinalizers()) > 0 && len(currentCRP.GetFinalizers()) == 0 {
-		return true
+func IsFinalizerRemoved(oldFinalizers, currentFinalizers []string) bool {
+	if len(oldFinalizers) > 0 && len(currentFinalizers) >= 0 {
+		if len(oldFinalizers) > len(currentFinalizers) {
+			return true
+		}
 	}
 	return false
 }
