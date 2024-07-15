@@ -17,10 +17,15 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/propertyprovider"
+)
+
+const (
+	nonExistentClusterPropertyName = "non-existent-cluster-property"
 )
 
 var _ = Describe("scheduling CRPs of the PickAll placement type using cluster properties", func() {
@@ -841,6 +846,790 @@ var _ = Describe("scheduling CRPs of the PickAll placement type using cluster pr
 			for idx := range wantTargetClusters2 {
 				resetClusterPropertiesFor(wantIgnoredClusters2[idx])
 			}
+		})
+	})
+})
+
+var _ = Describe("scheduling CRPs of the PickN placement type using cluster properties", func() {
+	Context("pick clusters with specific properties (single sorter, ascending)", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
+		numberOfClusters := 3
+
+		wantPickedClusters := []string{
+			memberCluster1EastProd,
+			memberCluster4CentralProd,
+			memberCluster6WestProd,
+		}
+		wantNotPickedClusters := []string{
+			memberCluster2EastProd,
+			memberCluster3EastCanary,
+			memberCluster5CentralProd,
+			memberCluster7WestCanary,
+		}
+		wantFilteredClusters := []string{
+			memberCluster8UnhealthyEastProd,
+			memberCluster9LeftCentralProd,
+		}
+		wantNotPickedOrFilteredClusters := []string{}
+		wantNotPickedOrFilteredClusters = append(wantNotPickedOrFilteredClusters, wantNotPickedClusters...)
+		wantNotPickedOrFilteredClusters = append(wantNotPickedOrFilteredClusters, wantFilteredClusters...)
+
+		scoreByCluster := map[string]*placementv1beta1.ClusterScore{
+			memberCluster1EastProd: {
+				AffinityScore:       ptr.To(int32(86)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster2EastProd: {
+				AffinityScore:       ptr.To(int32(57)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster3EastCanary: {
+				AffinityScore:       ptr.To(int32(29)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster4CentralProd: {
+				AffinityScore:       ptr.To(int32(86)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster5CentralProd: &zeroScore,
+			memberCluster6WestProd: {
+				AffinityScore:       ptr.To(int32(86)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster7WestCanary:        &zeroScore,
+			memberCluster8UnhealthyEastProd: &zeroScore,
+			memberCluster9LeftCentralProd:   &zeroScore,
+		}
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: ptr.To(int32(numberOfClusters)),
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+							{
+								Weight: 100,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									PropertySorter: &placementv1beta1.PropertySorter{
+										Name:      propertyprovider.NodeCountProperty,
+										SortOrder: placementv1beta1.Ascending,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
+		})
+
+		It("should add scheduler cleanup finalizer to the CRP", func() {
+			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
+		})
+
+		It("should create scheduled bindings for all matching clusters", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpName, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+		})
+
+		It("should not create any binding for non-matching clusters", func() {
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(wantNotPickedOrFilteredClusters, crpName)
+			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+		})
+
+		It("should report status correctly", func() {
+			statusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(numberOfClusters, wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update status")
+			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update status")
+		})
+
+		AfterAll(func() {
+			// Delete the CRP.
+			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+		})
+	})
+
+	Context("pick clusters with specific properties (single sorter, descending)", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
+		numberOfClusters := 3
+
+		wantPickedClusters := []string{
+			memberCluster7WestCanary,
+			memberCluster5CentralProd,
+			memberCluster3EastCanary,
+		}
+		wantNotPickedClusters := []string{
+			memberCluster1EastProd,
+			memberCluster2EastProd,
+			memberCluster4CentralProd,
+			memberCluster6WestProd,
+		}
+		wantFilteredClusters := []string{
+			memberCluster8UnhealthyEastProd,
+			memberCluster9LeftCentralProd,
+		}
+		wantNotPickedOrFilteredClusters := []string{}
+		wantNotPickedOrFilteredClusters = append(wantNotPickedOrFilteredClusters, wantNotPickedClusters...)
+		wantNotPickedOrFilteredClusters = append(wantNotPickedOrFilteredClusters, wantFilteredClusters...)
+
+		scoreByCluster := map[string]*placementv1beta1.ClusterScore{
+			memberCluster1EastProd: {
+				AffinityScore:       ptr.To(int32(14)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster2EastProd: {
+				AffinityScore:       ptr.To(int32(43)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster3EastCanary: {
+				AffinityScore:       ptr.To(int32(71)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster4CentralProd: {
+				AffinityScore:       ptr.To(int32(14)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster5CentralProd: {
+				AffinityScore:       ptr.To(int32(100)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster6WestProd: {
+				AffinityScore:       ptr.To(int32(14)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster7WestCanary: {
+				AffinityScore:       ptr.To(int32(100)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster8UnhealthyEastProd: &zeroScore,
+			memberCluster9LeftCentralProd:   &zeroScore,
+		}
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Create a CRP of the PickAll placement type, along with its associated policy snapshot.
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: ptr.To(int32(numberOfClusters)),
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+							{
+								Weight: 100,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									PropertySorter: &placementv1beta1.PropertySorter{
+										Name:      propertyprovider.NodeCountProperty,
+										SortOrder: placementv1beta1.Descending,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
+		})
+
+		It("should add scheduler cleanup finalizer to the CRP", func() {
+			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
+		})
+
+		It("should create scheduled bindings for all matching clusters", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpName, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+		})
+
+		It("should not create any binding for non-matching clusters", func() {
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(wantNotPickedOrFilteredClusters, crpName)
+			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+		})
+
+		It("should report status correctly", func() {
+			statusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(numberOfClusters, wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update status")
+			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update status")
+		})
+
+		AfterAll(func() {
+			// Delete the CRP.
+			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+		})
+	})
+
+	// This spec has been marked as serial as it updates the cluster properties, which may
+	// interfere with other specs if run in parallel.
+	Context("pick clusters with specific properties (single sorter, same property value across the board)", Serial, Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
+		numberOfClusters := 3
+
+		// As the property to sort is of the same value across all clusters, Fleet scheduler
+		// will have to rank them by name to break the tie, in order to achieve deterministic
+		// behavior.
+		wantPickedClusters := []string{
+			memberCluster5CentralProd,
+			memberCluster6WestProd,
+			memberCluster7WestCanary,
+		}
+		wantNotPickedClusters := []string{
+			memberCluster1EastProd,
+			memberCluster2EastProd,
+			memberCluster3EastCanary,
+			memberCluster4CentralProd,
+		}
+		wantFilteredClusters := []string{
+			memberCluster8UnhealthyEastProd,
+			memberCluster9LeftCentralProd,
+		}
+		wantNotPickedOrFilteredClusters := []string{}
+		wantNotPickedOrFilteredClusters = append(wantNotPickedOrFilteredClusters, wantNotPickedClusters...)
+		wantNotPickedOrFilteredClusters = append(wantNotPickedOrFilteredClusters, wantFilteredClusters...)
+
+		BeforeAll(func() {
+			// Add a new property to all clusters.
+			now := metav1.Now()
+			for clusterName := range propertiesByCluster {
+				Eventually(func() error {
+					memberCluster := &clusterv1beta1.MemberCluster{}
+					if err := hubClient.Get(ctx, types.NamespacedName{Name: clusterName}, memberCluster); err != nil {
+						return fmt.Errorf("failed to get member cluster: %w", err)
+					}
+
+					if memberCluster.Status.Properties == nil {
+						memberCluster.Status.Properties = make(map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue)
+					}
+					memberCluster.Status.Properties[nonExistentClusterPropertyName] = clusterv1beta1.PropertyValue{
+						Value:           "0",
+						ObservationTime: now,
+					}
+					return hubClient.Status().Update(ctx, memberCluster)
+				}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the property of all clusters")
+			}
+
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: ptr.To(int32(numberOfClusters)),
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+							{
+								Weight: 100,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									PropertySorter: &placementv1beta1.PropertySorter{
+										Name:      nonExistentClusterPropertyName,
+										SortOrder: placementv1beta1.Ascending,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
+		})
+
+		It("should add scheduler cleanup finalizer to the CRP", func() {
+			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
+		})
+
+		It("should create scheduled bindings for all matching clusters", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, zeroScoreByCluster, crpName, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+		})
+
+		It("should not create any binding for non-matching clusters", func() {
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(wantNotPickedOrFilteredClusters, crpName)
+			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+		})
+
+		It("should report status correctly", func() {
+			statusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(numberOfClusters, wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update status")
+			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update status")
+		})
+
+		AfterAll(func() {
+			// Delete the CRP.
+			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+
+			// Reset the cluster properties.
+			for clusterName := range propertiesByCluster {
+				resetClusterPropertiesFor(clusterName)
+			}
+		})
+	})
+
+	Context("pick clusters with specific properties (single sorter, specified property not available across the board)", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
+		numberOfClusters := 3
+
+		// As the property to sort is not available on any cluster, Fleet scheduler
+		// will have to rank them by name to break the tie, in order to achieve deterministic
+		// behavior.
+		wantPickedClusters := []string{
+			memberCluster5CentralProd,
+			memberCluster6WestProd,
+			memberCluster7WestCanary,
+		}
+		wantNotPickedClusters := []string{
+			memberCluster1EastProd,
+			memberCluster2EastProd,
+			memberCluster3EastCanary,
+			memberCluster4CentralProd,
+		}
+		wantFilteredClusters := []string{
+			memberCluster8UnhealthyEastProd,
+			memberCluster9LeftCentralProd,
+		}
+		wantNotPickedOrFilteredClusters := []string{}
+		wantNotPickedOrFilteredClusters = append(wantNotPickedOrFilteredClusters, wantNotPickedClusters...)
+		wantNotPickedOrFilteredClusters = append(wantNotPickedOrFilteredClusters, wantFilteredClusters...)
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: ptr.To(int32(numberOfClusters)),
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+							{
+								Weight: 100,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									PropertySorter: &placementv1beta1.PropertySorter{
+										Name:      nonExistentClusterPropertyName,
+										SortOrder: placementv1beta1.Ascending,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
+		})
+
+		It("should add scheduler cleanup finalizer to the CRP", func() {
+			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
+		})
+
+		It("should create scheduled bindings for all matching clusters", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, zeroScoreByCluster, crpName, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+		})
+
+		It("should not create any binding for non-matching clusters", func() {
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(wantNotPickedOrFilteredClusters, crpName)
+			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+		})
+
+		It("should report status correctly", func() {
+			statusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(numberOfClusters, wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update status")
+			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update status")
+		})
+
+		AfterAll(func() {
+			// Delete the CRP.
+			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+
+			// Reset the cluster properties.
+			for clusterName := range propertiesByCluster {
+				resetClusterPropertiesFor(clusterName)
+			}
+		})
+	})
+
+	Context("pick clusters with specific properties (multiple sorters)", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
+		numberOfClusters := 3
+
+		wantPickedClusters := []string{
+			memberCluster1EastProd,
+			memberCluster4CentralProd,
+			memberCluster6WestProd,
+		}
+		wantNotPickedClusters := []string{
+			memberCluster2EastProd,
+			memberCluster3EastCanary,
+			memberCluster5CentralProd,
+			memberCluster7WestCanary,
+		}
+		wantFilteredClusters := []string{
+			memberCluster8UnhealthyEastProd,
+			memberCluster9LeftCentralProd,
+		}
+		wantNotPickedOrFilteredClusters := []string{}
+		wantNotPickedOrFilteredClusters = append(wantNotPickedOrFilteredClusters, wantNotPickedClusters...)
+		wantNotPickedOrFilteredClusters = append(wantNotPickedOrFilteredClusters, wantFilteredClusters...)
+
+		scoreByCluster := map[string]*placementv1beta1.ClusterScore{
+			memberCluster1EastProd: {
+				AffinityScore:       ptr.To(int32(168)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster2EastProd: {
+				AffinityScore:       ptr.To(int32(108)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster3EastCanary: {
+				AffinityScore:       ptr.To(int32(68)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster4CentralProd: {
+				AffinityScore:       ptr.To(int32(146)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster5CentralProd: {
+				AffinityScore:       ptr.To(int32(46)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster6WestProd: {
+				AffinityScore:       ptr.To(int32(135)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster7WestCanary: {
+				AffinityScore:       ptr.To(int32(60)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster8UnhealthyEastProd: &zeroScore,
+			memberCluster9LeftCentralProd:   &zeroScore,
+		}
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: ptr.To(int32(numberOfClusters)),
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+							{
+								Weight: 100,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									PropertySorter: &placementv1beta1.PropertySorter{
+										Name:      propertyprovider.NodeCountProperty,
+										SortOrder: placementv1beta1.Ascending,
+									},
+								},
+							},
+							{
+								Weight: 80,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									PropertySorter: &placementv1beta1.PropertySorter{
+										Name:      energyEfficiencyRatingPropertyName,
+										SortOrder: placementv1beta1.Descending,
+									},
+								},
+							},
+							{
+								Weight: 60,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									PropertySorter: &placementv1beta1.PropertySorter{
+										Name:      propertyprovider.AllocatableMemoryCapacityProperty,
+										SortOrder: placementv1beta1.Descending,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
+		})
+
+		It("should add scheduler cleanup finalizer to the CRP", func() {
+			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
+		})
+
+		It("should create scheduled bindings for all matching clusters", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpName, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+		})
+
+		It("should not create any binding for non-matching clusters", func() {
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(wantNotPickedOrFilteredClusters, crpName)
+			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+		})
+
+		It("should report status correctly", func() {
+			statusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(numberOfClusters, wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update status")
+			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update status")
+		})
+
+		AfterAll(func() {
+			// Delete the CRP.
+			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+		})
+	})
+
+	Context("pick clusters with both label selector and property sorter (single preferred term)", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
+		numberOfClusters := 4
+
+		wantPickedClusters := []string{
+			memberCluster3EastCanary,
+			memberCluster7WestCanary,
+			memberCluster6WestProd,
+			memberCluster5CentralProd,
+		}
+		wantNotPickedClusters := []string{
+			memberCluster1EastProd,
+			memberCluster2EastProd,
+			memberCluster4CentralProd,
+		}
+		wantFilteredClusters := []string{
+			memberCluster8UnhealthyEastProd,
+			memberCluster9LeftCentralProd,
+		}
+		wantNotPickedOrFilteredClusters := []string{}
+		wantNotPickedOrFilteredClusters = append(wantNotPickedOrFilteredClusters, wantNotPickedClusters...)
+		wantNotPickedOrFilteredClusters = append(wantNotPickedOrFilteredClusters, wantFilteredClusters...)
+
+		scoreByCluster := map[string]*placementv1beta1.ClusterScore{
+			memberCluster1EastProd: &zeroScore,
+			memberCluster2EastProd: &zeroScore,
+			memberCluster3EastCanary: {
+				AffinityScore:       ptr.To(int32(75)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster4CentralProd: &zeroScore,
+			memberCluster5CentralProd: &zeroScore,
+			memberCluster6WestProd:    &zeroScore,
+			memberCluster7WestCanary: {
+				AffinityScore:       ptr.To(int32(50)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster8UnhealthyEastProd: &zeroScore,
+			memberCluster9LeftCentralProd:   &zeroScore,
+		}
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Create a CRP of the PickAll placement type, along with its associated policy snapshot.
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: ptr.To(int32(numberOfClusters)),
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+							{
+								Weight: 100,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											envLabel: "canary",
+										},
+									},
+									PropertySorter: &placementv1beta1.PropertySorter{
+										Name:      propertyprovider.AvailableCPUCapacityProperty,
+										SortOrder: placementv1beta1.Descending,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
+		})
+
+		It("should add scheduler cleanup finalizer to the CRP", func() {
+			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
+		})
+
+		It("should create scheduled bindings for all matching clusters", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpName, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+		})
+
+		It("should not create any binding for non-matching clusters", func() {
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(wantNotPickedOrFilteredClusters, crpName)
+			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+		})
+
+		It("should report status correctly", func() {
+			statusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(numberOfClusters, wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update status")
+			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update status")
+		})
+
+		AfterAll(func() {
+			// Delete the CRP.
+			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+		})
+	})
+
+	Context("pick clusters with both label selectors and property sorters (multiple preferred terms)", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
+		numberOfClusters := 4
+
+		wantPickedClusters := []string{
+			memberCluster3EastCanary,
+			memberCluster1EastProd,
+			memberCluster7WestCanary,
+			memberCluster2EastProd,
+		}
+		wantNotPickedClusters := []string{
+			memberCluster6WestProd,
+			memberCluster4CentralProd,
+			memberCluster5CentralProd,
+		}
+		wantFilteredClusters := []string{
+			memberCluster8UnhealthyEastProd,
+			memberCluster9LeftCentralProd,
+		}
+		wantNotPickedOrFilteredClusters := []string{}
+		wantNotPickedOrFilteredClusters = append(wantNotPickedOrFilteredClusters, wantNotPickedClusters...)
+		wantNotPickedOrFilteredClusters = append(wantNotPickedOrFilteredClusters, wantFilteredClusters...)
+
+		scoreByCluster := map[string]*placementv1beta1.ClusterScore{
+			memberCluster1EastProd: {
+				AffinityScore:       ptr.To(int32(100)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster2EastProd: {
+				AffinityScore:       ptr.To(int32(50)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster3EastCanary: {
+				AffinityScore:       ptr.To(int32(100)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster4CentralProd: &zeroScore,
+			memberCluster5CentralProd: &zeroScore,
+			memberCluster6WestProd:    &zeroScore,
+			memberCluster7WestCanary: {
+				AffinityScore:       ptr.To(int32(50)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster8UnhealthyEastProd: &zeroScore,
+			memberCluster9LeftCentralProd:   &zeroScore,
+		}
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Create a CRP of the PickAll placement type, along with its associated policy snapshot.
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: ptr.To(int32(numberOfClusters)),
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+							{
+								Weight: 100,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											envLabel: "canary",
+										},
+									},
+									PropertySorter: &placementv1beta1.PropertySorter{
+										Name:      propertyprovider.AvailableCPUCapacityProperty,
+										SortOrder: placementv1beta1.Descending,
+									},
+								},
+							},
+							{
+								Weight: 100,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "east",
+										},
+									},
+									PropertySorter: &placementv1beta1.PropertySorter{
+										Name:      energyEfficiencyRatingPropertyName,
+										SortOrder: placementv1beta1.Descending,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
+		})
+
+		It("should add scheduler cleanup finalizer to the CRP", func() {
+			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
+		})
+
+		It("should create scheduled bindings for all matching clusters", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpName, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+		})
+
+		It("should not create any binding for non-matching clusters", func() {
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(wantNotPickedOrFilteredClusters, crpName)
+			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+		})
+
+		It("should report status correctly", func() {
+			statusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(numberOfClusters, wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update status")
+			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update status")
+		})
+
+		AfterAll(func() {
+			// Delete the CRP.
+			ensureCRPAndAllRelatedResourcesDeletion(crpName)
 		})
 	})
 })
