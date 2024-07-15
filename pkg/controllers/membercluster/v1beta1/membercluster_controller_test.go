@@ -8,6 +8,7 @@ package v1beta1
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -22,11 +23,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 const (
@@ -1537,6 +1540,146 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 				assert.Contains(t, err.Error(), tt.wantedError, utils.TestCaseMsg, testName)
 			}
 			assert.Equal(t, tt.verifyNumberOfRetry(), true, utils.TestCaseMsg, testName)
+		})
+	}
+}
+
+func TestHandleDelete(t *testing.T) {
+	memberClusterWithFinalizer := clusterv1beta1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "mc1",
+			Finalizers: []string{placementv1beta1.MemberClusterFinalizer},
+		},
+	}
+	tests := map[string]struct {
+		r             *Reconciler
+		memberCluster *clusterv1beta1.MemberCluster
+		wantResult    ctrl.Result
+		wantErr       error
+	}{
+		"do nothing when the mc has no finalizer": {
+			r: &Reconciler{Client: &test.MockClient{},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster: &clusterv1beta1.MemberCluster{},
+			wantResult:    ctrl.Result{},
+			wantErr:       nil,
+		},
+		"remove memberCluster's finalizer when the namespace does not exit": {
+			r: &Reconciler{Client: &test.MockClient{
+				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					return &apierrors.StatusError{
+						ErrStatus: metav1.Status{
+							Status: metav1.StatusFailure,
+							Reason: metav1.StatusReasonNotFound,
+						}}
+				},
+				MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					// this is to verify that the update call is to remove the memberCluster finalizer
+					o := obj.(*clusterv1beta1.MemberCluster)
+					if o.Name != memberClusterWithFinalizer.Name || len(o.Finalizers) != 0 {
+						return fmt.Errorf("unexpected MemberCluster object %+v", o)
+					}
+					return nil
+				}},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster: memberClusterWithFinalizer.DeepCopy(),
+			wantResult:    ctrl.Result{},
+			wantErr:       nil,
+		},
+		"requeue when the namespace is still deleting": {
+			r: &Reconciler{Client: &test.MockClient{
+				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					o := obj.(*corev1.Namespace)
+					*o = corev1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:   namespace1,
+							Labels: map[string]string{placementv1beta1.FleetResourceLabelKey: "true"},
+							DeletionTimestamp: &metav1.Time{
+								Time: time.Now(),
+							},
+						},
+					}
+					return nil
+				}},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster: memberClusterWithFinalizer.DeepCopy(),
+			wantResult:    ctrl.Result{RequeueAfter: time.Second},
+			wantErr:       nil,
+		},
+		"requeue with error when the namespace is stuck in deleting for too long": {
+			r: &Reconciler{Client: &test.MockClient{
+				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					o := obj.(*corev1.Namespace)
+					*o = corev1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:   namespace1,
+							Labels: map[string]string{placementv1beta1.FleetResourceLabelKey: "true"},
+							DeletionTimestamp: &metav1.Time{
+								Time: time.Now().Add(-time.Hour), //deletion stuck
+							},
+						},
+					}
+					return nil
+				}},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster: memberClusterWithFinalizer.DeepCopy(),
+			wantResult:    ctrl.Result{RequeueAfter: time.Second},
+			wantErr:       controller.ErrUnexpectedBehavior,
+		},
+		"Remove the namespace when the imc does not exist": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						if key.Namespace == "" {
+							// this is to get the namespace
+							o := obj.(*corev1.Namespace)
+							*o = corev1.Namespace{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:   namespace1,
+									Labels: map[string]string{placementv1beta1.FleetResourceLabelKey: "true"},
+								},
+							}
+							return nil
+						}
+						// this is to get the imc
+						return &apierrors.StatusError{
+							ErrStatus: metav1.Status{
+								Status: metav1.StatusFailure,
+								Reason: metav1.StatusReasonNotFound,
+							},
+						}
+					},
+					MockList: test.NewMockListFn(nil),
+					MockDelete: func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+						// this is to verify that the delete call is to remove the namespace
+						o := obj.(*corev1.Namespace)
+						if o.Name != namespace1 {
+							return fmt.Errorf("unexpected delete namespace object %+v", o)
+						}
+						return nil
+					},
+				},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster: memberClusterWithFinalizer.DeepCopy(),
+			wantResult:    ctrl.Result{Requeue: true},
+			wantErr:       nil,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			result, err := tt.r.handleDelete(context.Background(), tt.memberCluster)
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("handleDelete() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantResult != result {
+				t.Errorf("handleDelete() result = %v, wantResult %v", result, tt.wantResult)
+			}
 		})
 	}
 }

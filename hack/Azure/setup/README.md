@@ -49,11 +49,13 @@ If you would like to add a prometheus server to access metrics, run the followin
     kubectl get service -n fleet-system
     ````
 
-2. Install the Prometheus community Helm Chart
+2. Get the Prometheus community Helm Chart
    ```
-    helm install prom prometheus-community/kube-prometheus-stack -f prommethus.yaml
+   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+   helm repo update
    ```
-   The `prommethus.yaml` file should contain the following YAML code:
+   
+3. Edit the prometheus.yaml file in this directory to replace `<EXTERNAL-IP>` with the external IP address obtained previously.:
     ```yaml
     prometheus:
         service:
@@ -64,7 +66,10 @@ If you would like to add a prometheus server to access metrics, run the followin
               static_configs:
               - targets: ["<EXTERNAL-IP>:8080"]
     ```
-    Replace `<EXTERNAL-IP>` with the external IP address obtained previously.
+4. Install the Prometheus server
+    ```
+    helm install prom prometheus-community/kube-prometheus-stack -f ./hack/Azure/setup/prometheus.yaml
+    ```
 </details>
 
 

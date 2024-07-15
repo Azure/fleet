@@ -60,6 +60,7 @@ const (
 	ConfigMapKind   = "ConfigMap"
 	ServiceKind     = "Service"
 	NamespaceKind   = "Namespace"
+	JobKind         = "Job"
 )
 
 const (

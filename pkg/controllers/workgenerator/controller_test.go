@@ -13,6 +13,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/work"
@@ -482,7 +483,7 @@ func TestBuildAllWorkAvailableCondition(t *testing.T) {
 func TestSetBindingStatus(t *testing.T) {
 	tests := map[string]struct {
 		works                           map[string]*fleetv1beta1.Work
-		maxFailedResourcePlacementLimit int
+		maxFailedResourcePlacementLimit *int
 		want                            []fleetv1beta1.FailedResourcePlacement
 	}{
 		"NoWorks": {
@@ -633,7 +634,7 @@ func TestSetBindingStatus(t *testing.T) {
 									Group:     "",
 									Version:   "v1",
 									Kind:      "ConfigMap",
-									Name:      "config-name",
+									Name:      "config-name-1",
 									Namespace: "config-namespace",
 								},
 								Conditions: []metav1.Condition{
@@ -653,7 +654,7 @@ func TestSetBindingStatus(t *testing.T) {
 									Group:     "",
 									Version:   "v1",
 									Kind:      "Service",
-									Name:      "svc-name",
+									Name:      "svc-name-1",
 									Namespace: "svc-namespace",
 								},
 								Conditions: []metav1.Condition{
@@ -677,7 +678,6 @@ func TestSetBindingStatus(t *testing.T) {
 					},
 				},
 			},
-			maxFailedResourcePlacementLimit: 2,
 			want: []fleetv1beta1.FailedResourcePlacement{
 				{
 					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
@@ -697,7 +697,7 @@ func TestSetBindingStatus(t *testing.T) {
 						Group:     "",
 						Version:   "v1",
 						Kind:      "Service",
-						Name:      "svc-name",
+						Name:      "svc-name-1",
 						Namespace: "svc-namespace",
 					},
 					Condition: metav1.Condition{
@@ -774,7 +774,7 @@ func TestSetBindingStatus(t *testing.T) {
 									Group:     "",
 									Version:   "v1",
 									Kind:      "ConfigMap",
-									Name:      "config-name",
+									Name:      "config-name-1",
 									Namespace: "config-namespace",
 								},
 								Conditions: []metav1.Condition{
@@ -794,7 +794,7 @@ func TestSetBindingStatus(t *testing.T) {
 									Group:     "",
 									Version:   "v1",
 									Kind:      "Service",
-									Name:      "svc-name",
+									Name:      "svc-name-1",
 									Namespace: "svc-namespace",
 								},
 								Conditions: []metav1.Condition{
@@ -818,7 +818,7 @@ func TestSetBindingStatus(t *testing.T) {
 					},
 				},
 			},
-			maxFailedResourcePlacementLimit: 1,
+			maxFailedResourcePlacementLimit: ptr.To(1),
 			want: []fleetv1beta1.FailedResourcePlacement{
 				{
 					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
@@ -946,7 +946,6 @@ func TestSetBindingStatus(t *testing.T) {
 					},
 				},
 			},
-			maxFailedResourcePlacementLimit: 2,
 			want: []fleetv1beta1.FailedResourcePlacement{
 				{
 					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
@@ -971,10 +970,29 @@ func TestSetBindingStatus(t *testing.T) {
 	}()
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			maxFailedResourcePlacementLimit = tt.maxFailedResourcePlacementLimit
+			if tt.maxFailedResourcePlacementLimit != nil {
+				maxFailedResourcePlacementLimit = *tt.maxFailedResourcePlacementLimit
+			} else {
+				maxFailedResourcePlacementLimit = originalMaxFailedResourcePlacementLimit
+			}
+
 			binding := &fleetv1beta1.ClusterResourceBinding{}
 			setBindingStatus(tt.works, binding)
 			got := binding.Status.FailedPlacements
+			// setBindingStatus is using map to populate the failedResourcePlacement.
+			// There is no default order in traversing the map.
+			// When the result of failedResourcePlacement exceeds the limit, the result will be truncated and cannot be
+			// guaranteed.
+			if maxFailedResourcePlacementLimit == len(tt.want) {
+				opt := cmp.Comparer(func(x, y fleetv1beta1.FailedResourcePlacement) bool {
+					return x.Condition.Status == y.Condition.Status // condition should be set as false
+				})
+				if diff := cmp.Diff(got, tt.want, opt); diff != "" {
+					t.Errorf("setBindingStatus got FailedPlacements mismatch (-got +want):\n%s", diff)
+				}
+				return
+			}
+
 			statusCmpOptions := []cmp.Option{
 				cmpopts.SortSlices(func(i, j fleetv1beta1.FailedResourcePlacement) bool {
 					if i.Group < j.Group {
@@ -987,7 +1005,7 @@ func TestSetBindingStatus(t *testing.T) {
 				}),
 			}
 			if diff := cmp.Diff(got, tt.want, statusCmpOptions...); diff != "" {
-				t.Errorf("setBindingStatus test `%s` mismatch (-got +want):\n%s", name, diff)
+				t.Errorf("setBindingStatus got FailedPlacements mismatch (-got +want):\n%s", diff)
 			}
 		})
 	}

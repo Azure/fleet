@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
@@ -51,7 +52,7 @@ var (
 // NewUnexpectedBehaviorError returns ErrUnexpectedBehavior type error when err is not nil.
 func NewUnexpectedBehaviorError(err error) error {
 	if err != nil {
-		klog.ErrorS(err, "Unexpected behavior identified by the controller")
+		klog.ErrorS(err, "Unexpected behavior identified by the controller", "stackTrace", debug.Stack())
 		return fmt.Errorf("%w: %v", ErrUnexpectedBehavior, err.Error())
 	}
 	return nil
@@ -343,4 +344,14 @@ func FetchAllClusterResourceSnapshots(ctx context.Context, k8Client client.Clien
 		return nil, NewExpectedBehaviorError(misMatchErr)
 	}
 	return resourceSnapshots, nil
+}
+
+// MemberController configures how to join or leave the fleet as a member.
+type MemberController interface {
+	// Join describes the process of joining the fleet as a member.
+	Join(ctx context.Context) error
+
+	// Leaves describes the process of leaving the fleet as a member.
+	// For example, delete all the resources created by the member controller.
+	Leave(ctx context.Context) error
 }
