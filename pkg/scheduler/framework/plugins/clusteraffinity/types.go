@@ -247,11 +247,11 @@ func interpolateWeightFor(cluster *clusterv1beta1.MemberCluster, property string
 
 	if minF == maxF {
 		// Process a corner case where the specified property is of the same value across all
-		// clusters. This would result in a NaN result in the weight interpolation step if left
-		// unchecked (as the value is the minimum and the maximum at the same value), which
-		// might lead to confusion on the user end.
+		// clusters. This is not an invalid case, however, it would result in a NaN output in
+		// the weight interpolation step if left unchecked (as the value is the minimum and
+		// the maximum at the same time), which might lead to confusion on the user end.
 		//
-		// In this case, we would assign a weight of 0 to all clusters.
+		// In this case, we would assign a weight of 0.
 		return 0, nil
 	}
 
