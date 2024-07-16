@@ -15,6 +15,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -208,7 +209,7 @@ func checkIfAllMemberClustersHaveJoined() {
 				wantAgentStatus,
 				cmpopts.SortSlices(lessFuncCondition),
 				ignoreConditionObservedGenerationField,
-				condition.IgnoreConditionLTTAndMessageFields,
+				utils.IgnoreConditionLTTAndMessageFields,
 				ignoreAgentStatusHeartbeatField,
 			); diff != "" {
 				return fmt.Errorf("agent status diff (-got, +want): %s", diff)
@@ -268,7 +269,7 @@ func checkIfAzurePropertyProviderIsWorking() {
 			if diff := cmp.Diff(
 				mcObj.Status.Conditions, wantStatus.Conditions,
 				ignoreMemberClusterJoinAndPropertyProviderStartedConditions,
-				condition.IgnoreConditionLTTAndMessageFields, ignoreConditionReasonField,
+				utils.IgnoreConditionLTTAndMessageFields, ignoreConditionReasonField,
 				ignoreTimeTypeFields,
 			); diff != "" {
 				return fmt.Errorf("member cluster status conditions diff (-got, +want):\n%s", diff)
@@ -1102,5 +1103,63 @@ func checkIfOverrideAnnotationsOnAllMemberClusters(includeNamespace bool, wantAn
 			Expect(validateAnnotationOfWorkNamespaceOnCluster(memberCluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of work namespace on %s", memberCluster.ClusterName)
 		}
 		Expect(validateOverrideAnnotationOfConfigMapOnCluster(memberCluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of config map on %s", memberCluster.ClusterName)
+	}
+}
+
+func readDeploymentTestManifest(testDeployment *appsv1.Deployment) {
+	By("Read the deployment resource")
+	err := utils.GetObjectFromManifest("resources/test-deployment.yaml", testDeployment)
+	Expect(err).Should(Succeed())
+}
+
+func readDaemonSetTestManifest(testDaemonSet *appsv1.DaemonSet) {
+	By("Read the daemonSet resource")
+	err := utils.GetObjectFromManifest("resources/test-daemonset.yaml", testDaemonSet)
+	Expect(err).Should(Succeed())
+}
+
+func readStatefulSetTestManifest(testStatefulSet *appsv1.StatefulSet, withVolume bool) {
+	By("Read the statefulSet resource")
+	if withVolume {
+		Expect(utils.GetObjectFromManifest("resources/statefulset-with-volume.yaml", testStatefulSet)).Should(Succeed())
+	} else {
+		Expect(utils.GetObjectFromManifest("resources/test-statefulset.yaml", testStatefulSet)).Should(Succeed())
+	}
+}
+
+func readServiceTestManifest(testService *corev1.Service) {
+	By("Read the service resource")
+	err := utils.GetObjectFromManifest("resources/test-service.yaml", testService)
+	Expect(err).Should(Succeed())
+}
+
+func readJobTestManifest(testManifest *batchv1.Job) {
+	By("Read the job resource")
+	err := utils.GetObjectFromManifest("resources/test-job.yaml", testManifest)
+	Expect(err).Should(Succeed())
+}
+
+func readEnvelopeConfigMapTestManifest(testEnvelopeObj *corev1.ConfigMap) {
+	By("Read testEnvelopConfigMap resource")
+	err := utils.GetObjectFromManifest("resources/test-envelope-object.yaml", testEnvelopeObj)
+	Expect(err).Should(Succeed())
+}
+
+// constructWrappedResources fill the enveloped resource with the workload object
+func constructWrappedResources(testEnvelopeObj *corev1.ConfigMap, workloadObj metav1.Object, kind string, namespace corev1.Namespace) {
+	// modify the enveloped configMap according to the namespace
+	testEnvelopeObj.Namespace = namespace.Name
+
+	// modify the embedded namespaced resource according to the namespace
+	workloadObj.SetNamespace(namespace.Name)
+	workloadObjectByte, err := json.Marshal(workloadObj)
+	Expect(err).Should(Succeed())
+	switch kind {
+	case utils.DeploymentKind:
+		testEnvelopeObj.Data["deployment.yaml"] = string(workloadObjectByte)
+	case utils.DaemonSetKind:
+		testEnvelopeObj.Data["daemonset.yaml"] = string(workloadObjectByte)
+	case utils.StatefulSetKind:
+		testEnvelopeObj.Data["statefulset.yaml"] = string(workloadObjectByte)
 	}
 }

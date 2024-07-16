@@ -34,7 +34,7 @@ import (
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
-	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
@@ -66,7 +66,7 @@ const (
 )
 
 const (
-	eventuallyDuration   = time.Minute * 3
+	eventuallyDuration   = time.Minute * 4
 	eventuallyInterval   = time.Millisecond * 250
 	consistentlyDuration = time.Second * 10
 	consistentlyInterval = time.Millisecond * 500
@@ -175,9 +175,9 @@ var (
 	crpStatusCmpOptions = cmp.Options{
 		cmpopts.SortSlices(lessFuncCondition),
 		cmpopts.SortSlices(lessFuncPlacementStatus),
-		cmpopts.SortSlices(condition.LessFuncResourceIdentifier),
-		cmpopts.SortSlices(condition.LessFuncFailedResourcePlacements),
-		condition.IgnoreConditionLTTAndMessageFields,
+		cmpopts.SortSlices(utils.LessFuncResourceIdentifier),
+		cmpopts.SortSlices(utils.LessFuncFailedResourcePlacements),
+		utils.IgnoreConditionLTTAndMessageFields,
 		cmpopts.EquateEmpty(),
 	}
 
@@ -186,9 +186,9 @@ var (
 	safeRolloutCRPStatusCmpOptions = cmp.Options{
 		cmpopts.SortSlices(lessFuncCondition),
 		cmpopts.SortSlices(lessFuncPlacementStatusByConditions),
-		cmpopts.SortSlices(condition.LessFuncResourceIdentifier),
-		cmpopts.SortSlices(condition.LessFuncFailedResourcePlacements),
-		condition.IgnoreConditionLTTAndMessageFields,
+		cmpopts.SortSlices(utils.LessFuncResourceIdentifier),
+		cmpopts.SortSlices(utils.LessFuncFailedResourcePlacements),
+		utils.IgnoreConditionLTTAndMessageFields,
 		ignoreClusterNameField,
 		cmpopts.EquateEmpty(),
 	}

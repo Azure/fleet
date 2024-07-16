@@ -47,8 +47,7 @@ var (
 	validResourceOverrideSnapshot          placementv1alpha1.ResourceOverrideSnapshot
 	invalidClusterResourceOverrideSnapshot placementv1alpha1.ClusterResourceOverrideSnapshot
 
-	cmpConditionOption = cmp.Options{cmpopts.SortSlices(condition.LessFuncResourceIdentifier),
-		cmpopts.SortSlices(condition.LessFuncFailedResourcePlacements), condition.IgnoreConditionLTTAndMessageFields, cmpopts.EquateEmpty()}
+	cmpConditionOption = cmp.Options{cmpopts.SortSlices(utils.LessFuncFailedResourcePlacements), utils.IgnoreConditionLTTAndMessageFields, cmpopts.EquateEmpty()}
 
 	fakeFailedAppliedReason  = "fakeApplyFailureReason"
 	fakeFailedAppliedMessage = "fake apply failure message"

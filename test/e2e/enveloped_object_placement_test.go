@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -37,12 +36,12 @@ var (
 )
 
 // Note that this container will run in parallel with other containers.
-var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
-	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-	workNamespaceName := appNamespace().Name
-	var wantSelectedResources []placementv1beta1.ResourceIdentifier
-
+var _ = Describe("placing wrapped resources using a CRP", func() {
 	Context("Test a CRP place enveloped objects successfully", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		workNamespaceName := appNamespace().Name
+		var wantSelectedResources []placementv1beta1.ResourceIdentifier
+
 		BeforeAll(func() {
 			// Create the test resources.
 			readEnvelopTestManifests()
@@ -163,10 +162,17 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 			Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP")
 		})
+
+		AfterAll(func() {
+			By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		})
 	})
 
 	Context("Test a CRP place workload objects with mixed availability", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		workNamespace := appNamespace()
+		var wantSelectedResources []placementv1beta1.ResourceIdentifier
 		var testDeployment appv1.Deployment
 		var testDaemonSet appv1.DaemonSet
 		var testStatefulSet appv1.StatefulSet
@@ -235,7 +241,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				Namespace: testStatefulSet.Namespace,
 				Envelope: &placementv1beta1.EnvelopeIdentifier{
 					Name:      testEnvelopeConfig.Name,
-					Namespace: workNamespaceName,
+					Namespace: workNamespace.Name,
 					Type:      placementv1beta1.ConfigMapEnvelopeType,
 				},
 			}
@@ -309,17 +315,17 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 					return err
 				}
 
-				if diff := cmp.Diff(wantStatus, crp.Status, crpStatusCmpOptions...); diff != "" {
-					return fmt.Errorf("CRP status diff (-want, +got): %s", diff)
+				if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
+					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 				}
 				return nil
-			}, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
-	})
 
-	AfterEach(func() {
-		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		AfterAll(func() {
+			By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		})
 	})
 })
 

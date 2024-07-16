@@ -842,7 +842,7 @@ func safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResourceIdentifiers [
 		}
 
 		if diff := cmp.Diff(crp.Status, wantStatus, safeRolloutCRPStatusCmpOptions...); diff != "" {
-			return fmt.Errorf("CRP status diff (-want, +got): %s", diff)
+			return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 		}
 		return nil
 	}

@@ -15,8 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
@@ -888,8 +886,7 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 						// we need to compare the failed placement if the work is not applied or available
 						oldFailedPlacements := extractFailedResourcePlacementsFromWork(oldWork)
 						newFailedPlacements := extractFailedResourcePlacementsFromWork(newWork)
-						if cmp.Equal(oldFailedPlacements, newFailedPlacements, cmp.Options{cmpopts.SortSlices(condition.LessFuncResourceIdentifier),
-							cmpopts.SortSlices(condition.LessFuncFailedResourcePlacements), condition.IgnoreConditionLTTAndMessageFields, cmpopts.EquateEmpty()}) {
+						if utils.IsFailedResourcePlacementsEqual(oldFailedPlacements, newFailedPlacements) {
 							klog.V(2).InfoS("The failed placement list didn't change on failed work, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
 							return
 						}

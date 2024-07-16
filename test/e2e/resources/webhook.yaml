@@ -13,7 +13,7 @@ webhooks:
       name: azure-wi-webhook-webhook-service
       namespace: app
       path: /mutate-v1-pod
-  failurePolicy: Fail
+  failurePolicy: Ignore
   matchPolicy: Equivalent
   name: mutation.azure-workload-identity.io
   rules:
@@ -27,3 +27,4 @@ webhooks:
     resources:
     - pods
   sideEffects: None
+  timeoutSeconds: 1

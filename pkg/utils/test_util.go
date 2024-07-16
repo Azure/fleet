@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/onsi/gomega/format"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -25,6 +26,9 @@ import (
 var (
 	genericCodecs = serializer.NewCodecFactory(scheme.Scheme)
 	genericCodec  = genericCodecs.UniversalDeserializer()
+
+	// IgnoreConditionLTTAndMessageFields is a cmpopts.IgnoreFields that ignores the LastTransitionTime and Message fields
+	IgnoreConditionLTTAndMessageFields = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "Message")
 )
 
 const (

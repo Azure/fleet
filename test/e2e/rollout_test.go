@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -25,7 +24,6 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
-	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 	"go.goms.io/fleet/test/utils/controller"
 )
 
@@ -87,7 +85,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
-			Eventually(crpStatusUpdatedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
@@ -134,7 +132,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 						return "no available work found"
 					}
 					return ""
-				}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(),
+				}, eventuallyDuration, eventuallyInterval).Should(BeEmpty(),
 					"work condition mismatch for work %s (-want, +got):", memberCluster.ClusterName)
 			}
 		})
@@ -183,7 +181,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
-			Eventually(crpStatusUpdatedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
@@ -215,7 +213,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				Namespace: testDeployment.Namespace,
 			}
 			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDeploymentResourceIdentifier, allMemberClusterNames, "1", 2)
-			Eventually(crpStatusActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
@@ -261,7 +259,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", true)
-			Eventually(crpStatusUpdatedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
@@ -298,7 +296,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				},
 			}
 			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDaemonSetResourceIdentifier, allMemberClusterNames, "1", 2)
-			Eventually(crpStatusActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
@@ -344,7 +342,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", true)
-			Eventually(crpStatusUpdatedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
@@ -381,7 +379,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				},
 			}
 			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedStatefulSetResourceIdentifier, allMemberClusterNames, "1", 2)
-			Eventually(crpStatusActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
@@ -427,7 +425,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
-			Eventually(crpStatusUpdatedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
@@ -460,7 +458,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			}
 			// failedResourceObservedGeneration is set to 0 because generation is not populated for service.
 			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDeploymentResourceIdentifier, allMemberClusterNames, "1", 0)
-			Eventually(crpStatusActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
@@ -502,12 +500,16 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("create the CRP that select the namespace", func() {
 			crp := buildCRPForSafeRollout()
+			// the job we are trying to propagate takes 10s to complete. MaxUnavailable is set to 1. So setting UnavailablePeriodSeconds to 15s
+			// so that after each rollout phase we only wait for 15s before proceeding to the next since Job is not trackable,
+			// we want rollout to finish in a reasonable time.
+			crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds = ptr.To(15)
 			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
 		})
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", false)
-			Eventually(crpStatusUpdatedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
@@ -532,7 +534,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "1", false)
-			Eventually(crpStatusUpdatedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
@@ -542,70 +544,12 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 	})
 })
 
-func readDeploymentTestManifest(testDeployment *appv1.Deployment) {
-	By("Read the deployment resource")
-	err := utils.GetObjectFromManifest("resources/test-deployment.yaml", testDeployment)
-	Expect(err).Should(Succeed())
-}
-
-func readDaemonSetTestManifest(testDaemonSet *appv1.DaemonSet) {
-	By("Read the daemonSet resource")
-	err := utils.GetObjectFromManifest("resources/test-daemonset.yaml", testDaemonSet)
-	Expect(err).Should(Succeed())
-}
-
-func readStatefulSetTestManifest(testStatefulSet *appv1.StatefulSet, withVolume bool) {
-	By("Read the statefulSet resource")
-	if withVolume {
-		Expect(utils.GetObjectFromManifest("resources/statefulset-with-volume.yaml", testStatefulSet)).Should(Succeed())
-	} else {
-		Expect(utils.GetObjectFromManifest("resources/test-statefulset.yaml", testStatefulSet)).Should(Succeed())
-	}
-}
-
-func readServiceTestManifest(testService *corev1.Service) {
-	By("Read the service resource")
-	err := utils.GetObjectFromManifest("resources/test-service.yaml", testService)
-	Expect(err).Should(Succeed())
-}
-
-func readJobTestManifest(testManifest *batchv1.Job) {
-	By("Read the job resource")
-	err := utils.GetObjectFromManifest("resources/test-job.yaml", testManifest)
-	Expect(err).Should(Succeed())
-}
-
-func readEnvelopeConfigMapTestManifest(testEnvelopeObj *corev1.ConfigMap) {
-	By("Read testEnvelopConfigMap resource")
-	err := utils.GetObjectFromManifest("resources/test-envelope-object.yaml", testEnvelopeObj)
-	Expect(err).Should(Succeed())
-}
-
 // createWrappedResourcesForRollout creates an enveloped resource on the hub cluster with a workload object for testing purposes.
 func createWrappedResourcesForRollout(testEnvelopeObj *corev1.ConfigMap, obj metav1.Object, kind string, namespace corev1.Namespace) {
 	Expect(hubClient.Create(ctx, &namespace)).To(Succeed(), "Failed to create namespace %s", namespace.Name)
 	testEnvelopeObj.Data = make(map[string]string)
 	constructWrappedResources(testEnvelopeObj, obj, kind, namespace)
 	Expect(hubClient.Create(ctx, testEnvelopeObj)).To(Succeed(), "Failed to create testEnvelop object %s containing %s", testEnvelopeObj.Name, kind)
-}
-
-// constructWrappedResources fill the enveloped resource with the workload object
-func constructWrappedResources(testEnvelopeObj *corev1.ConfigMap, workloadObj metav1.Object, kind string, namespace corev1.Namespace) {
-	// modify the enveloped configMap according to the namespace
-	testEnvelopeObj.Namespace = namespace.Name
-
-	// modify the embedded namespaced resource according to the namespace
-	workloadObj.SetNamespace(namespace.Name)
-	workloadObjectByte, err := json.Marshal(workloadObj)
-	Expect(err).Should(Succeed())
-	switch kind {
-	case utils.DeploymentKind:
-		testEnvelopeObj.Data["deployment.yaml"] = string(workloadObjectByte)
-	case utils.DaemonSetKind:
-		testEnvelopeObj.Data["daemonset.yaml"] = string(workloadObjectByte)
-	case utils.StatefulSetKind:
-		testEnvelopeObj.Data["statefulset.yaml"] = string(workloadObjectByte)
-	}
 }
 
 func waitForDeploymentPlacementToReady(memberCluster *framework.Cluster, testDeployment *appv1.Deployment) func() error {

@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"sort"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -34,6 +36,7 @@ import (
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
 )
@@ -84,6 +87,9 @@ const (
 
 	// ResourceIdentifierStringFormat is the format of the resource identifier string.
 	ResourceIdentifierStringFormat = "%s/%s/%s/%s/%s"
+
+	// ResourceIdentifierWithEnvelopeIdentifierStringFormat is the format of the resource identifier string with envelope identifier.
+	ResourceIdentifierWithEnvelopeIdentifierStringFormat = "%s/%s/%s/%s/%s/%s/%s/%s"
 )
 
 var (
@@ -485,4 +491,51 @@ func GenerateGroupString(groups []string) string {
 		groupString = fmt.Sprintf(lessGroupsStringFormat, groups)
 	}
 	return groupString
+}
+
+// LessFuncResourceIdentifier is a less function for sorting resource identifiers
+var LessFuncResourceIdentifier = func(a, b placementv1beta1.ResourceIdentifier) bool {
+	aStr := fmt.Sprintf(ResourceIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name)
+	bStr := fmt.Sprintf(ResourceIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name)
+	return aStr < bStr
+}
+
+// LessFuncFailedResourcePlacements is a less function for sorting failed resource placements
+var LessFuncFailedResourcePlacements = func(a, b placementv1beta1.FailedResourcePlacement) bool {
+	var aStr, bStr string
+	if a.Envelope != nil {
+		aStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name, a.Envelope.Type, a.Envelope.Namespace, a.Envelope.Name)
+	} else {
+		aStr = fmt.Sprintf(ResourceIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name)
+	}
+	if b.Envelope != nil {
+		bStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name, b.Envelope.Type, b.Envelope.Namespace, b.Envelope.Name)
+	} else {
+		bStr = fmt.Sprintf(ResourceIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name)
+
+	}
+	return aStr < bStr
+}
+
+func IsFailedResourcePlacementsEqual(oldFailedResourcePlacements, newFailedResourcePlacements []placementv1beta1.FailedResourcePlacement) bool {
+	if len(oldFailedResourcePlacements) != len(newFailedResourcePlacements) {
+		return false
+	}
+	sort.Slice(oldFailedResourcePlacements, func(i, j int) bool {
+		return LessFuncFailedResourcePlacements(oldFailedResourcePlacements[i], oldFailedResourcePlacements[j])
+	})
+	sort.Slice(newFailedResourcePlacements, func(i, j int) bool {
+		return LessFuncFailedResourcePlacements(newFailedResourcePlacements[i], newFailedResourcePlacements[j])
+	})
+	for i := range oldFailedResourcePlacements {
+		oldFailedResourcePlacement := oldFailedResourcePlacements[i]
+		newFailedResourcePlacement := newFailedResourcePlacements[i]
+		if !equality.Semantic.DeepEqual(oldFailedResourcePlacement.ResourceIdentifier, newFailedResourcePlacement.ResourceIdentifier) {
+			return false
+		}
+		if !condition.EqualCondition(&newFailedResourcePlacement.Condition, &oldFailedResourcePlacement.Condition) {
+			return false
+		}
+	}
+	return true
 }
