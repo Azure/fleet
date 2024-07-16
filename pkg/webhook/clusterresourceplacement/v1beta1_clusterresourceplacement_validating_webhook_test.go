@@ -69,6 +69,7 @@ func TestHandle(t *testing.T) {
 				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
 					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: 0},
+					MaxSurge:       &intstr.IntOrString{Type: intstr.Int, IntVal: 0},
 				},
 			},
 		},
@@ -163,7 +164,7 @@ func TestHandle(t *testing.T) {
 			Strategy: placementv1beta1.RolloutStrategy{
 				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: 1},
+					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: 2},
 				},
 			},
 		},
@@ -312,7 +313,7 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Allowed("any user is allowed to modify v1beta1 CRP"),
 		},
-		"allow CRP update - invalid old CRP object, finalizer removed, new CRP is deleting": {
+		"allow CRP update - invalid old CRP object - new CRP is deleting, finalizer removed": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
@@ -341,7 +342,7 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Allowed("allow update v1beta1 CRP to remove finalizer to delete CRP"),
 		},
-		"deny CRP update - invalid old CRP object, finalizer removed, new CRP is not deleting": {
+		"deny CRP update - invalid old CRP object - new CRP is not deleting, finalizer removed": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
@@ -370,7 +371,7 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, errString)),
 		},
-		"deny CRP update - invalid old CRP object, finalizer not removed, new CRP is deleting": {
+		"deny CRP update - invalid old CRP object - new CRP is deleting, finalizer not removed": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
@@ -399,7 +400,7 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, errString)),
 		},
-		"deny CRP update - invalid old CRP object, label is updated": {
+		"deny CRP update - invalid old CRP object - new CRP label is updated": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
@@ -428,7 +429,7 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, errString)),
 		},
-		"deny CRP update - invalid old CRP object, new CRP is valid": {
+		"deny CRP update - invalid old CRP object - new CRP is valid": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
@@ -457,7 +458,7 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, errString)),
 		},
-		"deny CRP update - valid old CRP object, new CRP is invalid": {
+		"deny CRP update - valid old CRP object - new CRP is invalid": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
@@ -486,7 +487,7 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(denyCreateUpdateInvalidCRPFmt, errString)),
 		},
-		"deny CRP update - immutable placement type": {
+		"deny CRP update - new CRP immutable placement type": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
@@ -515,7 +516,7 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Denied("placement type is immutable"),
 		},
-		"deny CRP update - tolerations updated": {
+		"deny CRP update - new CRP tolerations updated": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
