@@ -170,6 +170,26 @@ func TestHandle(t *testing.T) {
 		},
 	}
 
+	updatedValidSpecCRPObjectDeletingFinalizerRemoved := &placementv1beta1.ClusterResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-crp",
+			Finalizers:        []string{},
+			DeletionTimestamp: ptr.To(metav1.NewTime(time.Now())),
+		},
+		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+			},
+			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+			Strategy: placementv1beta1.RolloutStrategy{
+				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: 2},
+				},
+			},
+		},
+	}
+
 	updatedLabelInvalidCRPObject := &placementv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "test-crp",
@@ -214,6 +234,8 @@ func TestHandle(t *testing.T) {
 	invalidCRPObjectDeletingBytes, err := json.Marshal(invalidCRPObjectDeleting)
 	assert.Nil(t, err)
 	updatedValidSpecCRPObjectBytes, err := json.Marshal(updatedValidSpecCRPObject)
+	assert.Nil(t, err)
+	updatedValidSpecCRPObjectDeletingFinalizerRemovedBytes, err := json.Marshal(updatedValidSpecCRPObjectDeletingFinalizerRemoved)
 	assert.Nil(t, err)
 	updatedLabelInvalidCRPObjectBytes, err := json.Marshal(updatedLabelInvalidCRPObject)
 	assert.Nil(t, err)
@@ -313,7 +335,7 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Allowed("any user is allowed to modify v1beta1 CRP"),
 		},
-		"allow CRP update - invalid old CRP object - new CRP is deleting, finalizer removed": {
+		"allow CRP update - invalid old CRP object, invalid new CRP is deleting, finalizer removed": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
@@ -342,7 +364,36 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Allowed("allow update v1beta1 CRP to remove finalizer to delete CRP"),
 		},
-		"deny CRP update - invalid old CRP object - new CRP is not deleting, finalizer removed": {
+		"allow CRP update - invalid old CRP object, valid new CRP is deleting, finalizer removed": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-crp",
+					OldObject: runtime.RawExtension{
+						Raw:    invalidCRPObjectBytes,
+						Object: invalidCRPObject,
+					},
+					Object: runtime.RawExtension{
+						Raw:    updatedValidSpecCRPObjectDeletingFinalizerRemovedBytes,
+						Object: updatedValidSpecCRPObjectDeletingFinalizerRemoved,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"system:masters"},
+					},
+					RequestKind: &utils.ClusterResourcePlacementMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{utils.ClusterRoleGVK: true},
+				IsClusterScopedResource: true,
+			},
+			resourceValidator: clusterResourcePlacementValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Allowed("allow update v1beta1 CRP to remove finalizer to delete CRP"),
+		},
+		"deny CRP update - invalid old CRP, invalid new CRP is not deleting, finalizer removed": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
@@ -371,7 +422,7 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, errString)),
 		},
-		"deny CRP update - invalid old CRP object - new CRP is deleting, finalizer not removed": {
+		"deny CRP update - invalid old CRP, invalid new CRP is deleting, finalizer not removed": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
@@ -400,7 +451,7 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, errString)),
 		},
-		"deny CRP update - invalid old CRP object - new CRP label is updated": {
+		"deny CRP update - invalid old CRP, invalid new CRP label is updated": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
@@ -429,7 +480,7 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, errString)),
 		},
-		"deny CRP update - invalid old CRP object - new CRP is valid": {
+		"deny CRP update - invalid old CRP, valid new CRP": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
@@ -458,7 +509,7 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, errString)),
 		},
-		"deny CRP update - valid old CRP object - new CRP is invalid": {
+		"deny CRP update - valid old CRP, invalid new CRP": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
