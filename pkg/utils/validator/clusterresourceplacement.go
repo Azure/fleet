@@ -7,8 +7,6 @@ Licensed under the MIT license.
 package validator
 
 import (
-	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -165,21 +163,6 @@ func IsFinalizerRemoved(oldFinalizers, currentFinalizers []string) bool {
 		}
 	}
 	return false
-}
-
-func IsPlacementSpecUpdated(oldSpec, currentSpec *placementv1beta1.ClusterResourcePlacementSpec) (bool, error) {
-	oldSpecBytes, err := json.Marshal(oldSpec)
-	if err != nil {
-		return false, err
-	}
-	currentSpecBytes, err := json.Marshal(currentSpec)
-	if err != nil {
-		return false, err
-	}
-	oldSpecHash := sha256.Sum256(oldSpecBytes)
-	currentSpecHash := sha256.Sum256(currentSpecBytes)
-
-	return oldSpecHash != currentSpecHash, nil
 }
 
 func validatePlacementPolicy(policy *placementv1beta1.PlacementPolicy) error {
