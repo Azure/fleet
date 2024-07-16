@@ -58,7 +58,7 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 				if crp.DeletionTimestamp != nil && validator.IsFinalizerRemoved(oldCRP.Finalizers, crp.Finalizers) {
 					return admission.Allowed("allow update v1beta1 CRP to remove finalizer to delete CRP")
 				}
-				return admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, err.Error()))
+				return admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, err))
 			}
 			// handle update case where placement type should be immutable.
 			if validator.IsPlacementPolicyTypeUpdated(oldCRP.Spec.Policy, crp.Spec.Policy) {
@@ -71,7 +71,7 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 		}
 		if err := validator.ValidateClusterResourcePlacement(&crp); err != nil {
 			klog.V(2).InfoS("v1beta1 cluster resource placement has invalid fields, request is denied", "operation", req.Operation, "namespacedName", types.NamespacedName{Name: crp.Name})
-			return admission.Denied(fmt.Sprintf(denyCreateUpdateInvalidCRPFmt, err.Error()))
+			return admission.Denied(fmt.Sprintf(denyCreateUpdateInvalidCRPFmt, err))
 		}
 	}
 	klog.V(2).InfoS("user is allowed to modify v1beta1 cluster resource placement", "operation", req.Operation, "user", req.UserInfo.Username, "group", req.UserInfo.Groups, "namespacedName", types.NamespacedName{Name: crp.Name})
