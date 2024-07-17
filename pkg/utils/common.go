@@ -533,7 +533,7 @@ func IsFailedResourcePlacementsEqual(oldFailedResourcePlacements, newFailedResou
 		if !equality.Semantic.DeepEqual(oldFailedResourcePlacement.ResourceIdentifier, newFailedResourcePlacement.ResourceIdentifier) {
 			return false
 		}
-		if !condition.EqualCondition(&newFailedResourcePlacement.Condition, &oldFailedResourcePlacement.Condition) {
+		if !condition.EqualCondition(&oldFailedResourcePlacement.Condition, &newFailedResourcePlacement.Condition) {
 			return false
 		}
 	}

@@ -882,7 +882,7 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 				// we try to filter out events, we only need to handle the updated event if the applied or available condition flip between true and false
 				// or the failed placements are changed.
 				if condition.EqualCondition(oldAppliedCondition, newAppliedCondition) && condition.EqualCondition(oldAvailableCondition, newAvailableCondition) {
-					if !condition.IsConditionStatusTrue(newAppliedCondition, newWork.Generation) || !condition.IsConditionStatusTrue(newAvailableCondition, newWork.Generation) {
+					if condition.IsConditionStatusFalse(newAppliedCondition, newWork.Generation) || condition.IsConditionStatusFalse(newAvailableCondition, newWork.Generation) {
 						// we need to compare the failed placement if the work is not applied or available
 						oldFailedPlacements := extractFailedResourcePlacementsFromWork(oldWork)
 						newFailedPlacements := extractFailedResourcePlacementsFromWork(newWork)

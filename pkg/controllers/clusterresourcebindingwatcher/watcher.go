@@ -114,7 +114,7 @@ func isBindingStatusUpdated(oldBinding, newBinding *fleetv1beta1.ClusterResource
 	for i := condition.RolloutStartedCondition; i < condition.TotalCondition; i++ {
 		oldCond := oldBinding.GetCondition(string(i.ResourceBindingConditionType()))
 		newCond := newBinding.GetCondition(string(i.ResourceBindingConditionType()))
-		if !condition.EqualCondition(newCond, oldCond) {
+		if !condition.EqualCondition(oldCond, newCond) {
 			klog.V(2).InfoS("The binding condition has changed, need to update the corresponding CRP", "oldBinding", klog.KObj(oldBinding), "newBinding", klog.KObj(newBinding))
 			return true
 		}
@@ -123,5 +123,6 @@ func isBindingStatusUpdated(oldBinding, newBinding *fleetv1beta1.ClusterResource
 		klog.V(2).InfoS("The binding failed placement has changed, need to update the corresponding CRP", "oldBinding", klog.KObj(oldBinding), "newBinding", klog.KObj(newBinding))
 		return true
 	}
+	klog.V(5).InfoS("The binding status has not changed, no need to update the corresponding CRP", "oldBinding", klog.KObj(oldBinding), "newBinding", klog.KObj(newBinding))
 	return false
 }
