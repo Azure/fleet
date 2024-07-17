@@ -18,7 +18,8 @@ import (
 )
 
 const (
-	denyUpdateOldInvalidCRPFmt    = "deny update old v1beta1 CRP has invalid fields %s"
+	allowUpdateOldInvalidCRPFmt   = "allow update on old invalid v1beta1 CRP with DeletionTimestamp set"
+	denyUpdateOldInvalidCRPFmt    = "deny update on old invalid v1beta1 CRP with DeletionTimestamp not set %s"
 	denyCreateUpdateInvalidCRPFmt = "deny create/update v1beta1 CRP has invalid fields %s"
 )
 
@@ -55,8 +56,8 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 			// this is a special case where we allow updates to old v1beta1 CRP with invalid fields so that we can
 			// update the CRP to remove finalizer then delete CRP.
 			if err := validator.ValidateClusterResourcePlacement(&oldCRP); err != nil {
-				if crp.DeletionTimestamp != nil && validator.IsFinalizerRemoved(oldCRP.Finalizers, crp.Finalizers) {
-					return admission.Allowed("allow update v1beta1 CRP to remove finalizer to delete CRP")
+				if crp.DeletionTimestamp != nil {
+					return admission.Allowed(allowUpdateOldInvalidCRPFmt)
 				}
 				return admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, err))
 			}

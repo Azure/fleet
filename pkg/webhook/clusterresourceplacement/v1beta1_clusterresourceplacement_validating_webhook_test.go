@@ -362,9 +362,9 @@ func TestHandle(t *testing.T) {
 			resourceValidator: clusterResourcePlacementValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed("allow update v1beta1 CRP to remove finalizer to delete CRP"),
+			wantResponse: admission.Allowed(allowUpdateOldInvalidCRPFmt),
 		},
-		"allow CRP update - invalid old CRP object, valid new CRP is deleting, finalizer removed": {
+		"allow CRP update - invalid old CRP object, valid new CRP is deleting, finalizer removed, spec updated": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
@@ -391,7 +391,7 @@ func TestHandle(t *testing.T) {
 			resourceValidator: clusterResourcePlacementValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed("allow update v1beta1 CRP to remove finalizer to delete CRP"),
+			wantResponse: admission.Allowed(allowUpdateOldInvalidCRPFmt),
 		},
 		"deny CRP update - invalid old CRP, invalid new CRP is not deleting, finalizer removed": {
 			req: admission.Request{
@@ -422,7 +422,7 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, errString)),
 		},
-		"deny CRP update - invalid old CRP, invalid new CRP is deleting, finalizer not removed": {
+		"allow CRP update - invalid old CRP, invalid new CRP is deleting, finalizer not removed": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
@@ -449,9 +449,9 @@ func TestHandle(t *testing.T) {
 			resourceValidator: clusterResourcePlacementValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, errString)),
+			wantResponse: admission.Allowed(allowUpdateOldInvalidCRPFmt),
 		},
-		"deny CRP update - invalid old CRP, invalid new CRP label is updated": {
+		"deny CRP update - invalid old CRP, invalid new CRP, label is updated": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
@@ -480,7 +480,7 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, errString)),
 		},
-		"deny CRP update - invalid old CRP, valid new CRP": {
+		"deny CRP update - invalid old CRP, valid new CRP, spec updated": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",
@@ -509,7 +509,7 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, errString)),
 		},
-		"deny CRP update - valid old CRP, invalid new CRP": {
+		"deny CRP update - valid old CRP, invalid new CRP, spec updated": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crp",

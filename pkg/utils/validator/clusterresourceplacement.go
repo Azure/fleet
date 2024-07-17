@@ -156,15 +156,6 @@ func IsPlacementPolicyTypeUpdated(oldPolicy, currentPolicy *placementv1beta1.Pla
 	return false
 }
 
-func IsFinalizerRemoved(oldFinalizers, currentFinalizers []string) bool {
-	if len(oldFinalizers) > 0 && len(currentFinalizers) >= 0 {
-		if len(oldFinalizers) > len(currentFinalizers) {
-			return true
-		}
-	}
-	return false
-}
-
 func validatePlacementPolicy(policy *placementv1beta1.PlacementPolicy) error {
 	allErr := make([]error, 0)
 	switch policy.PlacementType {
