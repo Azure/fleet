@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: index
+  namespace: test-afd
+data:
+  v1.html: |
+    <!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <title>Docker Nginx</title>
+    </head>
+    <body>
+      <h2>Hello from Nginx container v1</h2>
+    </body>
+    </html>
+  v2.html: |
+    <!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <title>Fleet Nginx</title>
+    </head>
+    <body>
+      <h2>Hello from Nginx container v2</h2>
+    </body>
