@@ -744,6 +744,10 @@ func TestPickBindingsToRoll(t *testing.T) {
 	crpWithApplyStrategy.Spec.Strategy.ApplyStrategy = &fleetv1beta1.ApplyStrategy{
 		Type: fleetv1beta1.ApplyStrategyTypeServerSideApply,
 	}
+	crpWithUnavailablePeriod := clusterResourcePlacementForTest("test",
+		createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 3))
+	crpWithUnavailablePeriod.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds = ptr.To(60)
+
 	readyBinding := generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1)
 	readyBinding.Generation = 15
 	readyBinding.Status.Conditions = []metav1.Condition{
@@ -754,6 +758,43 @@ func TestPickBindingsToRoll(t *testing.T) {
 			LastTransitionTime: metav1.Time{
 				Time: now.Add(-time.Hour),
 			},
+		},
+	}
+	notReadyBinding := generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2)
+	notReadyBinding.Generation = 15
+	notReadyBinding.Status.Conditions = []metav1.Condition{
+		{
+			Type:               string(fleetv1beta1.ResourceBindingApplied),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: 15,
+		},
+		{
+			Type:               string(fleetv1beta1.ResourceBindingAvailable),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: 15,
+			LastTransitionTime: metav1.Time{
+				Time: now.Add(-1 * time.Minute),
+			},
+			Reason: work.WorkNotTrackableReason,
+		},
+	}
+
+	notReadyBinding2 := generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3)
+	notReadyBinding2.Generation = 15
+	notReadyBinding2.Status.Conditions = []metav1.Condition{
+		{
+			Type:               string(fleetv1beta1.ResourceBindingApplied),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: 15,
+		},
+		{
+			Type:               string(fleetv1beta1.ResourceBindingAvailable),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: 15,
+			LastTransitionTime: metav1.Time{
+				Time: now.Add(-35 * time.Second),
+			},
+			Reason: work.WorkNotTrackableReason,
 		},
 	}
 	tests := map[string]struct {
@@ -767,6 +808,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 		wantDesiredBindingsSpec     []fleetv1beta1.ResourceBindingSpec // used to construct the want toBeUpdatedBindings
 		wantStaleUnselectedBindings []int
 		wantNeedRoll                bool
+		wantWaitTime                time.Duration
 		wantErr                     error
 	}{
 		// TODO: add more tests
@@ -786,6 +828,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
+			wantWaitTime: 0,
 		},
 		"test bound with out dated bindings and updated apply strategy": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -805,6 +848,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
+			wantWaitTime: 0,
 		},
 		"test bound with out dated bindings and empty overrides": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -824,6 +868,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
+			wantWaitTime: 0,
 		},
 		"test bound with out dated bindings and matched overrides": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -916,6 +961,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
+			wantWaitTime: 0,
 		},
 		"test bound with out dated bindings and no matched overrides": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -997,6 +1043,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
+			wantWaitTime: 0,
 		},
 		"test bound with out dated bindings and stale overrides": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1089,6 +1136,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
+			wantWaitTime: 0,
 		},
 		"test bound with latest resources": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1100,6 +1148,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantTobeUpdatedBindings:     []int{},
 			wantStaleUnselectedBindings: []int{},
 			wantNeedRoll:                false,
+			wantWaitTime:                0,
 		},
 		"test bound with only failed to apply binding": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1117,6 +1166,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
+			wantWaitTime: 0,
 		},
 		"test bound with failed to apply binding, unselected bound bindings": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1159,6 +1209,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
+			wantWaitTime: 0,
 		},
 		"test bound with failed to apply bindings when there is no max unavailable allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1200,6 +1251,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
+			wantWaitTime: 0,
 		},
 		"test no binding when there is no max unavailable allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1241,6 +1293,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
+			wantWaitTime: 0,
 		},
 		"test with no bindings": {
 			allBindings:                []*fleetv1beta1.ClusterResourceBinding{},
@@ -1249,6 +1302,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 5)),
 			wantTobeUpdatedBindings: []int{},
 			wantNeedRoll:            false,
+			wantWaitTime:            0,
 		},
 		"test with scheduled bindings (one of them is failed)": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1272,6 +1326,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
+			wantWaitTime: 0,
 		},
 		"test with scheduled bindings (always update the scheduled binding first)": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1296,6 +1351,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
+			wantWaitTime: 0,
 		},
 		"test remove unscheduled bindings": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1327,6 +1383,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				{},
 			},
 			wantNeedRoll: true,
+			wantWaitTime: 0,
 		},
 		"test overrides and the cluster is not found": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1365,6 +1422,28 @@ func TestPickBindingsToRoll(t *testing.T) {
 				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
 			wantErr: controller.ErrExpectedBehavior,
 		},
+		"test bound bindings with different waitTimes": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				notReadyBinding,
+				notReadyBinding2,
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			crp:                        crpWithUnavailablePeriod,
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				{
+					State:                fleetv1beta1.BindingStateBound,
+					TargetCluster:        cluster2,
+					ResourceSnapshotName: "snapshot-2",
+				},
+				{
+					State:                fleetv1beta1.BindingStateBound,
+					TargetCluster:        cluster3,
+					ResourceSnapshotName: "snapshot-2",
+				},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: 25 * time.Second,
+		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -1386,7 +1465,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 					Name: tt.latestResourceSnapshotName,
 				},
 			}
-			gotUpdatedBindings, gotStaleUnselectedBindings, gotNeedRoll, err := r.pickBindingsToRoll(context.Background(), tt.allBindings, resourceSnapshot, tt.crp, tt.matchedCROs, tt.matchedROs)
+			gotUpdatedBindings, gotStaleUnselectedBindings, gotNeedRoll, gotWaitTime, err := r.pickBindingsToRoll(context.Background(), tt.allBindings, resourceSnapshot, tt.crp, tt.matchedCROs, tt.matchedROs)
 			if (err != nil) != (tt.wantErr != nil) || err != nil && !errors.Is(err, tt.wantErr) {
 				t.Fatalf("pickBindingsToRoll() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -1415,6 +1494,10 @@ func TestPickBindingsToRoll(t *testing.T) {
 			}
 			if gotNeedRoll != tt.wantNeedRoll {
 				t.Errorf("pickBindingsToRoll() = needRoll %v, want %v", gotNeedRoll, tt.wantNeedRoll)
+			}
+
+			if gotWaitTime.Round(time.Second) != tt.wantWaitTime {
+				t.Errorf("pickBindingsToRoll() = waitTime %v, want %v", gotWaitTime, tt.wantWaitTime)
 			}
 		})
 	}
