@@ -133,7 +133,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	// pick the bindings to be updated according to the rollout plan
 	// staleBoundBindings is a list of "Bound" bindings and are not selected in this round because of the rollout strategy.
-	toBeUpdatedBindings, staleBoundBindings, needRoll, err := r.pickBindingsToRoll(ctx, allBindings, latestResourceSnapshot, &crp, matchedCRO, matchedRO)
+	toBeUpdatedBindings, staleBoundBindings, needRoll, waitTime, err := r.pickBindingsToRoll(ctx, allBindings, latestResourceSnapshot, &crp, matchedCRO, matchedRO)
 	if err != nil {
 		klog.ErrorS(err, "Failed to pick the bindings to roll", "clusterResourcePlacement", crpName)
 		return runtime.Result{}, err
@@ -159,10 +159,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	// Update all the bindings in parallel according to the rollout plan.
 	// We need to requeue the request regardless if the binding updates succeed or not
 	// to avoid the case that the rollout process stalling because the time based binding readiness does not trigger any event.
-	// We wait for 1/5 of the UnavailablePeriodSeconds so we can catch the next ready one early.
-	// TODO: only wait the time we need to wait for the first applied but not ready binding to be ready
-	return runtime.Result{RequeueAfter: time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second / 5},
-		r.updateBindings(ctx, toBeUpdatedBindings)
+	// Wait the time we need to wait for the first applied but not ready binding to be ready
+	return runtime.Result{Requeue: true, RequeueAfter: waitTime}, r.updateBindings(ctx, toBeUpdatedBindings)
 }
 
 func (r *Reconciler) checkAndUpdateStaleBindingsStatus(ctx context.Context, bindings []*fleetv1beta1.ClusterResourceBinding) error {
@@ -299,7 +297,7 @@ func createUpdateInfo(binding *fleetv1beta1.ClusterResourceBinding, crp *fleetv1
 // Thus, it also returns a bool indicating whether there are out of sync bindings to be rolled to differentiate those
 // two cases.
 func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*fleetv1beta1.ClusterResourceBinding, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, crp *fleetv1beta1.ClusterResourcePlacement,
-	matchedCROs []*fleetv1alpha1.ClusterResourceOverrideSnapshot, matchedROs []*fleetv1alpha1.ResourceOverrideSnapshot) ([]toBeUpdatedBinding, []toBeUpdatedBinding, bool, error) {
+	matchedCROs []*fleetv1alpha1.ClusterResourceOverrideSnapshot, matchedROs []*fleetv1alpha1.ResourceOverrideSnapshot) ([]toBeUpdatedBinding, []toBeUpdatedBinding, bool, time.Duration, error) {
 	// Those are the bindings that are chosen by the scheduler to be applied to selected clusters.
 	// They include the bindings that are already applied to the clusters and the bindings that are newly selected by the scheduler.
 	schedulerTargetedBinds := make([]*fleetv1beta1.ClusterResourceBinding, 0)
@@ -333,25 +331,30 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 	readyTimeCutOff := time.Now().Add(-time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second)
 
 	// classify the bindings into different categories
-	// TODO: calculate the time we need to wait for the first applied but not ready binding to be ready.
+	// Wait for the first applied but not ready binding to be ready.
 	// return wait time longer if the rollout is stuck on failed apply/available bindings
+	minWaitTime := time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second
+	allReady := true
 	crpKObj := klog.KObj(crp)
-	for idx := range allBindings {
-		binding := allBindings[idx]
+	for _, binding := range allBindings {
 		bindingKObj := klog.KObj(binding)
 		switch binding.Spec.State {
 		case fleetv1beta1.BindingStateUnscheduled:
-			appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
-			availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
-			if condition.IsConditionStatusFalse(appliedCondition, binding.Generation) || condition.IsConditionStatusFalse(availableCondition, binding.Generation) {
+			if !isBindingAvailable(binding) {
 				klog.V(3).InfoS("Found a failed to be ready unscheduled binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 			} else {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
 			}
-			_, bindingReady := isBindingReady(binding, readyTimeCutOff)
+			waitTime, bindingReady := isBindingReady(binding, readyTimeCutOff)
 			if bindingReady {
 				klog.V(3).InfoS("Found a ready unscheduled binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 				readyBindings = append(readyBindings, binding)
+			} else {
+				allReady = false
+				klog.Info("Binding WaitTime:", waitTime)
+				if waitTime >= 0 && waitTime < minWaitTime {
+					minWaitTime = waitTime
+				}
 			}
 			if binding.DeletionTimestamp.IsZero() {
 				// it's not been deleted yet, so it is a removal candidate
@@ -362,7 +365,6 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 				// it is being deleted, it can be removed from the cluster at any time, so it can be unavailable at any time
 				canBeUnavailableBindings = append(canBeUnavailableBindings, binding)
 			}
-
 		case fleetv1beta1.BindingStateScheduled:
 			// the scheduler has picked a cluster for this binding
 			schedulerTargetedBinds = append(schedulerTargetedBinds, binding)
@@ -370,32 +372,33 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			// pickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
 			cro, ro, err := r.pickFromResourceMatchedOverridesForTargetCluster(ctx, binding, matchedCROs, matchedROs)
 			if err != nil {
-				return nil, nil, false, err
+				return nil, nil, false, minWaitTime, err
 			}
 			boundingCandidates = append(boundingCandidates, createUpdateInfo(binding, crp, latestResourceSnapshot, cro, ro))
-
 		case fleetv1beta1.BindingStateBound:
-			bindingFailed := false
 			schedulerTargetedBinds = append(schedulerTargetedBinds, binding)
-			if _, bindingReady := isBindingReady(binding, readyTimeCutOff); bindingReady {
+			if waitTime, bindingReady := isBindingReady(binding, readyTimeCutOff); bindingReady {
 				klog.V(3).InfoS("Found a ready bound binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 				readyBindings = append(readyBindings, binding)
+			} else {
+				allReady = false
+				if waitTime >= 0 && waitTime < minWaitTime {
+					minWaitTime = waitTime
+				}
 			}
 			// check if the binding is failed or still on going
-			appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
-			availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
-			if condition.IsConditionStatusFalse(appliedCondition, binding.Generation) || condition.IsConditionStatusFalse(availableCondition, binding.Generation) {
-				klog.V(3).InfoS("Found a failed to be ready bound binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
-				bindingFailed = true
-			} else {
+			bindingFailed := false
+			if isBindingAvailable(binding) {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
+			} else {
+				bindingFailed = true
+				klog.V(3).InfoS("Found a failed to be ready bound binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 			}
 			// pickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
 			cro, ro, err := r.pickFromResourceMatchedOverridesForTargetCluster(ctx, binding, matchedCROs, matchedROs)
 			if err != nil {
-				return nil, nil, false, err
+				return nil, nil, false, 0, err
 			}
-
 			// The binding needs update if it's not pointing to the latest resource resourceBinding or the overrides.
 			if binding.Spec.ResourceSnapshotName != latestResourceSnapshot.Name || !equality.Semantic.DeepEqual(binding.Spec.ClusterResourceOverrideSnapshots, cro) || !equality.Semantic.DeepEqual(binding.Spec.ResourceOverrideSnapshots, ro) {
 				updateInfo := createUpdateInfo(binding, crp, latestResourceSnapshot, cro, ro)
@@ -408,9 +411,14 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			}
 		}
 	}
+	if minWaitTime == time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds)*time.Second && allReady {
+		minWaitTime = 0
+	}
+	klog.Info("MinWaitTime:", minWaitTime)
 
+	// Calculate target number
 	targetNumber := r.calculateRealTarget(crp, schedulerTargetedBinds)
-	klog.V(2).InfoS("Calculated the targetNumber", "clusterResourcePlacement", crpKObj,
+	klog.V(2).InfoS("Calculated the targetNumber", "clusterResourcePlacement", klog.KObj(crp),
 		"targetNumber", targetNumber, "readyBindingNumber", len(readyBindings), "canBeUnavailableBindingNumber", len(canBeUnavailableBindings),
 		"canBeReadyBindingNumber", len(canBeReadyBindings), "boundingCandidateNumber", len(boundingCandidates),
 		"removeCandidateNumber", len(removeCandidates), "updateCandidateNumber", len(updateCandidates), "applyFailedUpdateCandidateNumber", len(applyFailedUpdateCandidates))
@@ -418,20 +426,34 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 	// the list of bindings that are to be updated by this rolling phase
 	toBeUpdatedBindingList := make([]toBeUpdatedBinding, 0)
 	if len(removeCandidates)+len(updateCandidates)+len(boundingCandidates)+len(applyFailedUpdateCandidates) == 0 {
-		return toBeUpdatedBindingList, nil, false, nil
+		return toBeUpdatedBindingList, nil, false, minWaitTime, nil
 	}
 
-	// calculate the max number of bindings that can be unavailable according to user specified maxUnavailable
-	maxUnavailableNumber, _ := intstr.GetScaledValueFromIntOrPercent(crp.Spec.Strategy.RollingUpdate.MaxUnavailable, targetNumber, true)
-	minAvailableNumber := targetNumber - maxUnavailableNumber
-	// This is the lower bound of the number of bindings that can be available during the rolling update
-	// Since we can't predict the number of bindings that can be unavailable after they are applied, we don't take them into account
-	lowerBoundAvailableNumber := len(readyBindings) - len(canBeUnavailableBindings)
-	maxNumberToRemove := lowerBoundAvailableNumber - minAvailableNumber
-	klog.V(2).InfoS("Calculated the max number of bindings to remove", "clusterResourcePlacement", crpKObj,
-		"maxUnavailableNumber", maxUnavailableNumber, "minAvailableNumber", minAvailableNumber,
-		"lowerBoundAvailableBindings", lowerBoundAvailableNumber, "maxNumberOfBindingsToRemove", maxNumberToRemove)
+	toBeUpdatedBindingList, staleUnselectedBinding := determineBindingsToUpdate(crp, removeCandidates, updateCandidates, boundingCandidates, applyFailedUpdateCandidates, targetNumber,
+		readyBindings, canBeReadyBindings, canBeUnavailableBindings)
 
+	return toBeUpdatedBindingList, staleUnselectedBinding, true, minWaitTime, nil
+}
+
+func isBindingAvailable(binding *fleetv1beta1.ClusterResourceBinding) bool {
+	appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
+	availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
+	if condition.IsConditionStatusFalse(appliedCondition, binding.Generation) || condition.IsConditionStatusFalse(availableCondition, binding.Generation) {
+		return false
+	}
+	return true
+}
+
+// Determine bindings to update
+func determineBindingsToUpdate(
+	crp *fleetv1beta1.ClusterResourcePlacement,
+	removeCandidates, updateCandidates, boundingCandidates, applyFailedUpdateCandidates []toBeUpdatedBinding,
+	targetNumber int,
+	readyBindings, canBeReadyBindings, canBeUnavailableBindings []*fleetv1beta1.ClusterResourceBinding,
+) ([]toBeUpdatedBinding, []toBeUpdatedBinding) {
+	toBeUpdatedBindingList := make([]toBeUpdatedBinding, 0)
+	// calculate the max number of bindings that can be unavailable according to user specified maxUnavailable
+	maxNumberToRemove := calculateMaxToRemove(crp, targetNumber, readyBindings, canBeUnavailableBindings)
 	// we can still update the bindings that are failed to apply already regardless of the maxNumberToRemove
 	toBeUpdatedBindingList = append(toBeUpdatedBindingList, applyFailedUpdateCandidates...)
 
@@ -452,16 +474,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 	}
 
 	// calculate the max number of bindings that can be added according to user specified MaxSurge
-	maxSurgeNumber, _ := intstr.GetScaledValueFromIntOrPercent(crp.Spec.Strategy.RollingUpdate.MaxSurge, targetNumber, true)
-	maxReadyNumber := targetNumber + maxSurgeNumber
-	// This is the upper bound of the number of bindings that can be ready during the rolling update
-	// We count anything that still has work object on the hub cluster as can be ready since the member agent may have connection issue with the hub cluster
-	upperBoundReadyNumber := len(canBeReadyBindings)
-	maxNumberToAdd := maxReadyNumber - upperBoundReadyNumber
-
-	klog.V(2).InfoS("Calculated the max number of bindings to add", "clusterResourcePlacement", crpKObj,
-		"maxSurgeNumber", maxSurgeNumber, "maxReadyNumber", maxReadyNumber, "upperBoundReadyBindings",
-		upperBoundReadyNumber, "maxNumberOfBindingsToAdd", maxNumberToAdd)
+	maxNumberToAdd := calculateMaxToAdd(crp, targetNumber, canBeReadyBindings)
 
 	// boundingCandidatesUnselectedIndex stores the last index of the boundingCandidates which are not selected to be updated.
 	// The rolloutStarted condition of these elements from this index should be updated.
@@ -478,12 +491,36 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 	if boundingCandidatesUnselectedIndex < len(boundingCandidates) {
 		staleUnselectedBinding = append(staleUnselectedBinding, boundingCandidates[boundingCandidatesUnselectedIndex:]...)
 	}
-
-	return toBeUpdatedBindingList, staleUnselectedBinding, true, nil
+	return toBeUpdatedBindingList, staleUnselectedBinding
 }
 
+func calculateMaxToRemove(crp *fleetv1beta1.ClusterResourcePlacement, targetNumber int, readyBindings, canBeUnavailableBindings []*fleetv1beta1.ClusterResourceBinding) int {
+	maxUnavailableNumber, _ := intstr.GetScaledValueFromIntOrPercent(crp.Spec.Strategy.RollingUpdate.MaxUnavailable, targetNumber, true)
+	minAvailableNumber := targetNumber - maxUnavailableNumber
+	// This is the lower bound of the number of bindings that can be available during the rolling update
+	// Since we can't predict the number of bindings that can be unavailable after they are applied, we don't take them into account
+	lowerBoundAvailableNumber := len(readyBindings) - len(canBeUnavailableBindings)
+	maxNumberToRemove := lowerBoundAvailableNumber - minAvailableNumber
+	klog.V(2).InfoS("Calculated the max number of bindings to remove", "clusterResourcePlacement", klog.KObj(crp),
+		"maxUnavailableNumber", maxUnavailableNumber, "minAvailableNumber", minAvailableNumber,
+		"lowerBoundAvailableBindings", lowerBoundAvailableNumber, "maxNumberOfBindingsToRemove", maxNumberToRemove)
+	return maxNumberToRemove
+}
+
+func calculateMaxToAdd(crp *fleetv1beta1.ClusterResourcePlacement, targetNumber int, canBeReadyBindings []*fleetv1beta1.ClusterResourceBinding) int {
+	maxSurgeNumber, _ := intstr.GetScaledValueFromIntOrPercent(crp.Spec.Strategy.RollingUpdate.MaxSurge, targetNumber, true)
+	maxReadyNumber := targetNumber + maxSurgeNumber
+	// This is the upper bound of the number of bindings that can be ready during the rolling update
+	// We count anything that still has work object on the hub cluster as can be ready since the member agent may have connection issue with the hub cluster
+	upperBoundReadyNumber := len(canBeReadyBindings)
+	maxNumberToAdd := maxReadyNumber - upperBoundReadyNumber
+
+	klog.V(2).InfoS("Calculated the max number of bindings to add", "clusterResourcePlacement", klog.KObj(crp),
+		"maxSurgeNumber", maxSurgeNumber, "maxReadyNumber", maxReadyNumber, "upperBoundReadyBindings",
+		upperBoundReadyNumber, "maxNumberOfBindingsToAdd", maxNumberToAdd)
+	return maxNumberToAdd
+}
 func (r *Reconciler) calculateRealTarget(crp *fleetv1beta1.ClusterResourcePlacement, schedulerTargetedBinds []*fleetv1beta1.ClusterResourceBinding) int {
-	crpKObj := klog.KObj(crp)
 	// calculate the target number of bindings
 	targetNumber := 0
 
@@ -501,7 +538,7 @@ func (r *Reconciler) calculateRealTarget(crp *fleetv1beta1.ClusterResourcePlacem
 	default:
 		// should never happen
 		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("unknown placement type")),
-			"Encountered an invalid placementType", "clusterResourcePlacement", crpKObj)
+			"Encountered an invalid placementType", "clusterResourcePlacement", klog.KObj(crp))
 		targetNumber = 0
 	}
 	return targetNumber
