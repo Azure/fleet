@@ -91,10 +91,10 @@ func ValidateV1Alpha1MemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCl
 func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberCluster, req admission.Request, whiteListedUsers []string) admission.Response {
 	namespacedName := types.NamespacedName{Name: currentMC.GetName()}
 	userInfo := req.UserInfo
-	// any user is allowed to modify labels, annotations, taints on fleet MC.
 	// set taints field to nil.
 	currentMC.Spec.Taints = nil
 	oldMC.Spec.Taints = nil
+	// any user is allowed to modify labels, annotations, taints on fleet MC.
 	isObjUpdated, err := isMemberClusterUpdated(currentMC.DeepCopy(), oldMC.DeepCopy())
 	if err != nil {
 		return admission.Denied(err.Error())
@@ -111,8 +111,7 @@ func ValidatedUpstreamMemberClusterUpdate(currentMC, oldMC clusterv1beta1.Member
 	namespacedName := types.NamespacedName{Name: currentMC.GetName()}
 	userInfo := req.UserInfo
 	// any user is allowed to modify MC spec for upstream MC.
-	isStatusUpdated := isMemberClusterStatusUpdated(currentMC.Status, oldMC.Status)
-	if isStatusUpdated || isFleetClusterResourceIDAnnotationAdded(currentMC.Annotations, oldMC.Annotations) {
+	if isMemberClusterStatusUpdated(currentMC.Status, oldMC.Status) || isFleetClusterResourceIDAnnotationAdded(currentMC.Annotations, oldMC.Annotations) {
 		return ValidateUserForResource(req, whiteListedUsers)
 	}
 	klog.V(3).InfoS(allowedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)

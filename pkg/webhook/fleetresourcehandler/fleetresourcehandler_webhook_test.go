@@ -670,6 +670,27 @@ func TestHandleMemberCluster(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"system:masters"}), admissionv1.Create, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
+		"deny create fleet MC for user not in system:masters group": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"test-group"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Create,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Create, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
 		"allow create upstream MC for any user": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
@@ -680,7 +701,7 @@ func TestHandleMemberCluster(t *testing.T) {
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
-						Groups:   []string{"system:masters"},
+						Groups:   []string{"test-group"},
 					},
 					RequestKind: &utils.MCMetaGVK,
 					Operation:   admissionv1.Create,
@@ -689,7 +710,82 @@ func TestHandleMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"system:masters"}), admissionv1.Create, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Allowed("upstream member cluster resource is allowed to be created/deleted by any user"),
+		},
+		"allow delete fleet MC for user in system:masters group": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"system:masters"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Delete,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"system:masters"}), admissionv1.Delete, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"deny delete fleet MC for user not in system:masters group": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    fleetMCObjectBytes,
+						Object: fleetMCObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"test-group"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Delete,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Delete, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow delete upstream MC for any user": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    mcObjectBytes,
+						Object: mcObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    mcObjectBytes,
+						Object: mcObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"test-group"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Delete,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Allowed("upstream member cluster resource is allowed to be created/deleted by any user"),
 		},
 		"allow any user to modify fleet MC labels": {
 			req: admission.Request{

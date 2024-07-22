@@ -44,7 +44,7 @@ var (
 	testGroups = []string{"system:authenticated"}
 )
 
-var _ = Describe("fleet guard rail tests for deny MC CREATE operations", func() {
+var _ = Describe("fleet guard rail tests for deny fleet MC CREATE operations", func() {
 	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
 
 	It("should deny CREATE operation on member cluster CR for user not in system:masters group", func() {
@@ -81,7 +81,7 @@ var _ = Describe("fleet guard rail tests for allow/deny MC UPDATE, DELETE operat
 		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 
-	It("should deny UPDATE operation on member cluster CR for user not in MC identity", func() {
+	It("should deny UPDATE operation on member cluster CR for user not in systems:masters group", func() {
 		Eventually(func(g Gomega) error {
 			var mc clusterv1beta1.MemberCluster
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())

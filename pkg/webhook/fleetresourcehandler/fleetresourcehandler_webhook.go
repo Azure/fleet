@@ -128,13 +128,19 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 		if err := v.decoder.DecodeRaw(req.OldObject, &oldMC); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
-		isFleetMC := isAnnotationPresent(oldMC.GetAnnotations(), utils.FleetClusterResourceIsAnnotationKey)
+		isFleetMC := isAnnotationPresent(oldMC.Annotations, utils.FleetClusterResourceIsAnnotationKey)
 		if isFleetMC {
 			return validation.ValidateFleetMemberClusterUpdate(currentMC, oldMC, req, v.whiteListedUsers)
 		}
 		return validation.ValidatedUpstreamMemberClusterUpdate(currentMC, oldMC, req, v.whiteListedUsers)
 	}
-	return validation.ValidateUserForResource(req, v.whiteListedUsers)
+	isFleetMC := isAnnotationPresent(currentMC.Annotations, utils.FleetClusterResourceIsAnnotationKey)
+	if isFleetMC {
+		return validation.ValidateUserForResource(req, v.whiteListedUsers)
+	}
+	klog.V(3).InfoS("upstream member cluster resource is allowed to be created/deleted by any user",
+		"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "kind", req.RequestKind.Kind, "subResource", req.SubResource, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
+	return admission.Allowed("upstream member cluster resource is allowed to be created/deleted by any user")
 }
 
 // handleFleetReservedNamespacedResource allows/denies the request to modify object after validation.
