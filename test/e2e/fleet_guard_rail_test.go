@@ -314,8 +314,6 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 			if err != nil {
 				return err
 			}
-			labels := make(map[string]string)
-			labels[testKey] = testValue
 			mc.SetLabels(map[string]string{testKey: testValue})
 			return impersonateHubClient.Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
