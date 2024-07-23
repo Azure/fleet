@@ -100,6 +100,9 @@ var (
 	envLabelName      = "env"
 	envLabelValue1    = "prod"
 	envLabelValue2    = "canary"
+	clusterID1        = "test-cluster-id-1"
+	clusterID2        = "test-cluster-id-2"
+	clusterID3        = "test-cluster-id-3"
 
 	labelsByClusterName = map[string]map[string]string{
 		memberCluster1EastProdName: {
@@ -113,6 +116,17 @@ var (
 		memberCluster3WestProdName: {
 			regionLabelName: regionLabelValue2,
 			envLabelName:    envLabelValue1,
+		},
+	}
+	annotationsByClusterName = map[string]map[string]string{
+		memberCluster1EastProdName: {
+			utils.FleetClusterResourceIsAnnotationKey: clusterID1,
+		},
+		memberCluster2EastCanaryName: {
+			utils.FleetClusterResourceIsAnnotationKey: clusterID2,
+		},
+		memberCluster3WestProdName: {
+			utils.FleetClusterResourceIsAnnotationKey: clusterID3,
 		},
 	}
 

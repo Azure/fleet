@@ -52,11 +52,12 @@ var (
 )
 
 // createMemberCluster creates a MemberCluster object.
-func createMemberCluster(name, svcAccountName string, labels map[string]string) {
+func createMemberCluster(name, svcAccountName string, labels, annotations map[string]string) {
 	mcObj := &clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   name,
-			Labels: labels,
+			Name:        name,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: clusterv1beta1.MemberClusterSpec{
 			Identity: rbacv1.Subject{
@@ -169,7 +170,7 @@ func markMemberClusterAsLeft(name string) {
 func setAllMemberClustersToJoin() {
 	for idx := range allMemberClusters {
 		memberCluster := allMemberClusters[idx]
-		createMemberCluster(memberCluster.ClusterName, memberCluster.PresentingServiceAccountInHubClusterName, labelsByClusterName[memberCluster.ClusterName])
+		createMemberCluster(memberCluster.ClusterName, memberCluster.PresentingServiceAccountInHubClusterName, labelsByClusterName[memberCluster.ClusterName], annotationsByClusterName[memberCluster.ClusterName])
 	}
 }
 
@@ -397,7 +398,7 @@ func summarizeAKSClusterProperties(memberCluster *framework.Cluster, mcObj *clus
 // have left the fleet.
 func setupInvalidClusters() {
 	// Create a member cluster object that represents the unhealthy cluster.
-	createMemberCluster(memberCluster4UnhealthyName, hubClusterSAName, nil)
+	createMemberCluster(memberCluster4UnhealthyName, hubClusterSAName, nil, nil)
 
 	// Mark the member cluster as unhealthy.
 

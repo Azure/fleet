@@ -47,7 +47,195 @@ var (
 var _ = Describe("fleet guard rail tests for deny fleet MC CREATE operations", func() {
 	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
 
-	It("should deny CREATE operation on member cluster CR for user not in system:masters group", func() {
+	It("should deny CREATE operation on fleet member cluster CR for user not in system:masters group", func() {
+		mc := &clusterv1beta1.MemberCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        mcName,
+				Annotations: map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1},
+			},
+			Spec: clusterv1beta1.MemberClusterSpec{
+				Identity: rbacv1.Subject{
+					Name:      testUser,
+					Kind:      "ServiceAccount",
+					Namespace: utils.FleetSystemNamespace,
+				},
+				HeartbeatPeriodSeconds: 60,
+			},
+		}
+
+		By(fmt.Sprintf("expecting denial of operation CREATE of fleet member cluster %s", mc.Name))
+		err := impersonateHubClient.Create(ctx, mc)
+		var statusErr *k8sErrors.StatusError
+		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create fleet member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+		Expect(statusErr.Status().Message).Should(ContainSubstring(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &mcGVK, "", types.NamespacedName{Name: mc.Name})))
+	})
+})
+
+var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE operations", Serial, Ordered, func() {
+	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
+
+	BeforeAll(func() {
+		createMemberCluster(mcName, testUser, nil, map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
+	})
+
+	AfterAll(func() {
+		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
+	})
+
+	It("should deny update operation on fleet member cluster CR fleet cluster id annotation for user not in system:masters group", func() {
+		Eventually(func(g Gomega) error {
+			var mc clusterv1beta1.MemberCluster
+			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
+
+			By(fmt.Sprintf("update fleet member cluster, cluster id annotation %s", mc.Name))
+			mc.Annotations[utils.FleetClusterResourceIsAnnotationKey] = clusterID2
+			err := impersonateHubClient.Update(ctx, &mc)
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
+			var statusErr *k8sErrors.StatusError
+			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update fleet member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			g.Expect(statusErr.Status().Message).Should(ContainSubstring(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "", types.NamespacedName{Name: mc.Name})))
+
+			return nil
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+		Eventually(func(g Gomega) error {
+			var mc clusterv1beta1.MemberCluster
+			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
+
+			By(fmt.Sprintf("remove fleet member cluster, cluster id annotation %s", mc.Name))
+			mc.SetAnnotations(nil)
+			err := impersonateHubClient.Update(ctx, &mc)
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
+			var statusErr *k8sErrors.StatusError
+			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update fleet member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			g.Expect(statusErr.Status().Message).Should(ContainSubstring(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "", types.NamespacedName{Name: mc.Name})))
+
+			return nil
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	})
+
+	It("should deny UPDATE operation on fleet member cluster CR spec for user not in systems:masters group", func() {
+		Eventually(func(g Gomega) error {
+			var mc clusterv1beta1.MemberCluster
+			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
+
+			By(fmt.Sprintf("update fleet member cluster spec for MC %s", mc.Name))
+			mc.Spec.HeartbeatPeriodSeconds = 30
+
+			By(fmt.Sprintf("expecting denial of operation UPDATE of fleet member cluster %s", mc.Name))
+			err := impersonateHubClient.Update(ctx, &mc)
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
+			var statusErr *k8sErrors.StatusError
+			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update fleet member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			g.Expect(statusErr.Status().Message).Should(ContainSubstring(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "", types.NamespacedName{Name: mc.Name})))
+			return nil
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	})
+
+	It("should deny update operation on fleet member cluster CR status for user not in system:masters group", func() {
+		Eventually(func(g Gomega) error {
+			var mc clusterv1beta1.MemberCluster
+			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
+
+			By(fmt.Sprintf("update fleet member cluster status for MC %s", mc.Name))
+			g.Expect(mc.Status.Conditions).ToNot(BeEmpty())
+			mc.Status.Conditions[0].Reason = "update"
+			err := impersonateHubClient.Status().Update(ctx, &mc)
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
+			var statusErr *k8sErrors.StatusError
+			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update fleet member cluster status call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			g.Expect(statusErr.Status().Message).Should(ContainSubstring(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "status", types.NamespacedName{Name: mc.Name})))
+			return nil
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	})
+
+	It("should deny DELETE operation on fleet member cluster CR for user not in system:masters group", func() {
+		mc := clusterv1beta1.MemberCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: mcName,
+			},
+		}
+
+		By(fmt.Sprintf("expecting denial of operation DELETE of fleet member cluster %s", mc.Name))
+		err := impersonateHubClient.Delete(ctx, &mc)
+		var statusErr *k8sErrors.StatusError
+		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+		Expect(statusErr.Status().Message).Should(ContainSubstring(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &mcGVK, "", types.NamespacedName{Name: mc.Name})))
+	})
+
+	It("should allow update operation on fleet member cluster CR labels for any user", func() {
+		var mc clusterv1beta1.MemberCluster
+		By(fmt.Sprintf("update labels in fleet member cluster %s, expecting successful UPDATE of fleet member cluster", mcName))
+		Eventually(func(g Gomega) error {
+			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
+			labels := make(map[string]string)
+			labels["test-key"] = "test-value"
+			mc.SetLabels(labels)
+			return impersonateHubClient.Update(ctx, &mc)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	})
+
+	It("should allow update operation on fleet member cluster CR annotations for any user", func() {
+		var mc clusterv1beta1.MemberCluster
+		By(fmt.Sprintf("update annotations in fleet member cluster %s, expecting successful UPDATE of fleet member cluster", mcName))
+		Eventually(func(g Gomega) error {
+			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
+			annotations := make(map[string]string)
+			annotations["test-key"] = "test-value"
+			mc.SetLabels(annotations)
+			return impersonateHubClient.Update(ctx, &mc)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	})
+
+	It("should allow update operation on fleet member cluster CR taints for any user", func() {
+		var mc clusterv1beta1.MemberCluster
+		By(fmt.Sprintf("update taints in fleet member cluster %s, expecting successful UPDATE of fleet member cluster", mcName))
+		Eventually(func(g Gomega) error {
+			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
+			taint := clusterv1beta1.Taint{
+				Key:    "key1",
+				Value:  "value1",
+				Effect: corev1.TaintEffectNoSchedule,
+			}
+			mc.Spec.Taints = append(mc.Spec.Taints, taint)
+			return impersonateHubClient.Update(ctx, &mc)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	})
+
+	It("should allow update operation on fleet member cluster CR spec for user in system:masters group", func() {
+		var mc clusterv1beta1.MemberCluster
+		By(fmt.Sprintf("update spec of fleet member cluster %s, expecting successful UPDATE of fleet member cluster", mcName))
+		Eventually(func(g Gomega) error {
+			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
+			mc.Spec.HeartbeatPeriodSeconds = 31
+			return hubClient.Update(ctx, &mc)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	})
+
+	It("should allow update operation on fleet member cluster CR status for user in system:masters group", func() {
+		var mc clusterv1beta1.MemberCluster
+		By(fmt.Sprintf("update status of fleet member cluster %s, expecting successful UPDATE of fleet member cluster", mcName))
+		Eventually(func(g Gomega) error {
+			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
+			g.Expect(mc.Status.Conditions).ToNot(BeEmpty())
+			mc.Status.Conditions[0].Reason = "update"
+			return hubClient.Status().Update(ctx, &mc)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	})
+})
+
+var _ = Describe("fleet guard rail tests for allow upstream MC CREATE operations", func() {
+	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
+
+	It("should allow CREATE, DELETE operation on upstream member cluster CR for user not in system:masters group", func() {
 		mc := &clusterv1beta1.MemberCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: mcName,
@@ -62,62 +250,64 @@ var _ = Describe("fleet guard rail tests for deny fleet MC CREATE operations", f
 			},
 		}
 
-		By(fmt.Sprintf("expecting denial of operation CREATE of member cluster %s", mc.Name))
-		err := impersonateHubClient.Create(ctx, mc)
-		var statusErr *k8sErrors.StatusError
-		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-		Expect(statusErr.Status().Message).Should(ContainSubstring(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &mcGVK, "", types.NamespacedName{Name: mc.Name})))
+		Expect(impersonateHubClient.Create(ctx, mc)).Should(Succeed())
+		Expect(impersonateHubClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed())
+		Expect(impersonateHubClient.Delete(ctx, mc)).Should(Succeed())
 	})
 })
 
-var _ = Describe("fleet guard rail tests for allow/deny MC UPDATE, DELETE operations", Serial, Ordered, func() {
+var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE operations", Serial, Ordered, func() {
 	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
-		createMemberCluster(mcName, testUser, nil)
+		createMemberCluster(mcName, testUser, nil, nil)
 	})
 
 	AfterAll(func() {
 		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 
-	It("should deny UPDATE operation on member cluster CR for user not in systems:masters group", func() {
+	It("should deny update operation on upstream member cluster CR fleet cluster id annotation for user not in system:masters group", func() {
 		Eventually(func(g Gomega) error {
 			var mc clusterv1beta1.MemberCluster
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
 
-			By(fmt.Sprintf("update member cluster spec for MC %s", mc.Name))
-			mc.Spec.HeartbeatPeriodSeconds = 30
-
-			By(fmt.Sprintf("expecting denial of operation UPDATE of member cluster %s", mc.Name))
+			By(fmt.Sprintf("add fleet member cluster, cluster id annotation %s", mc.Name))
+			mc.SetAnnotations(map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
 			err := impersonateHubClient.Update(ctx, &mc)
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
+
 			var statusErr *k8sErrors.StatusError
-			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update upstream member cluster status call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			g.Expect(statusErr.Status().Message).Should(ContainSubstring(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "", types.NamespacedName{Name: mc.Name})))
 			return nil
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
-	It("should deny DELETE operation on member cluster CR for user not in system:masters group", func() {
-		mc := clusterv1beta1.MemberCluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: mcName,
-			},
-		}
+	It("should deny update operation on upstream member cluster CR status for user not in system:masters group", func() {
+		Eventually(func(g Gomega) error {
+			var mc clusterv1beta1.MemberCluster
+			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
 
-		By(fmt.Sprintf("expecting denial of operation DELETE of member cluster %s", mc.Name))
-		err := impersonateHubClient.Delete(ctx, &mc)
-		var statusErr *k8sErrors.StatusError
-		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-		Expect(statusErr.Status().Message).Should(ContainSubstring(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &mcGVK, "", types.NamespacedName{Name: mc.Name})))
+			By(fmt.Sprintf("update upstream member cluster status for MC %s", mc.Name))
+			g.Expect(mc.Status.Conditions).ToNot(BeEmpty())
+			mc.Status.Conditions[0].Reason = "update"
+			err := impersonateHubClient.Status().Update(ctx, &mc)
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
+			var statusErr *k8sErrors.StatusError
+			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update upstream member cluster status call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			g.Expect(statusErr.Status().Message).Should(ContainSubstring(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "status", types.NamespacedName{Name: mc.Name})))
+			return nil
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
-	It("should allow update operation on member cluster CR labels for any user", func() {
+	It("should allow update operation on upstream member cluster CR labels for any user", func() {
 		var mc clusterv1beta1.MemberCluster
-		By(fmt.Sprintf("update labels in member cluster %s, expecting successful UPDATE of member cluster", mcName))
+		By(fmt.Sprintf("update labels in upstream member cluster %s, expecting successful UPDATE of upstream member cluster", mcName))
 		Eventually(func(g Gomega) error {
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
 			labels := make(map[string]string)
@@ -127,9 +317,9 @@ var _ = Describe("fleet guard rail tests for allow/deny MC UPDATE, DELETE operat
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
-	It("should allow update operation on member cluster CR annotations for any user", func() {
+	It("should allow update operation on upstream member cluster CR annotations for any user", func() {
 		var mc clusterv1beta1.MemberCluster
-		By(fmt.Sprintf("update annotations in member cluster %s, expecting successful UPDATE of member cluster", mcName))
+		By(fmt.Sprintf("update annotations in upstream member cluster %s, expecting successful UPDATE of upstream member cluster", mcName))
 		Eventually(func(g Gomega) error {
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
 			annotations := make(map[string]string)
@@ -139,9 +329,9 @@ var _ = Describe("fleet guard rail tests for allow/deny MC UPDATE, DELETE operat
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
-	It("should allow update operation on member cluster CR taints for any user", func() {
+	It("should allow update operation on upstream member cluster CR taints for any user", func() {
 		var mc clusterv1beta1.MemberCluster
-		By(fmt.Sprintf("update taints in member cluster %s, expecting successful UPDATE of member cluster", mcName))
+		By(fmt.Sprintf("update taints in upstream member cluster %s, expecting successful UPDATE of upstream member cluster", mcName))
 		Eventually(func(g Gomega) error {
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
 			taint := clusterv1beta1.Taint{
@@ -154,9 +344,9 @@ var _ = Describe("fleet guard rail tests for allow/deny MC UPDATE, DELETE operat
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
-	It("should allow update operation on member cluster CR spec for user in system:masters group", func() {
+	It("should allow update operation on upstream member cluster CR spec for user in system:masters group", func() {
 		var mc clusterv1beta1.MemberCluster
-		By(fmt.Sprintf("update spec of member cluster %s, expecting successful UPDATE of member cluster", mcName))
+		By(fmt.Sprintf("update spec of upstream member cluster %s, expecting successful UPDATE of upstream member cluster", mcName))
 		Eventually(func(g Gomega) error {
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
 			mc.Spec.HeartbeatPeriodSeconds = 31
@@ -164,9 +354,22 @@ var _ = Describe("fleet guard rail tests for allow/deny MC UPDATE, DELETE operat
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
-	It("should allow update operation on member cluster CR status for user in system:masters group", func() {
+	It("should allow UPDATE operation on upstream member cluster CR spec for user not in systems:masters group", func() {
+		Eventually(func(g Gomega) error {
+			var mc clusterv1beta1.MemberCluster
+			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
+
+			By(fmt.Sprintf("update upstream member cluster spec for MC %s", mc.Name))
+			mc.Spec.HeartbeatPeriodSeconds = 30
+
+			By(fmt.Sprintf("expecting denial of operation UPDATE of upstream member cluster %s", mc.Name))
+			return impersonateHubClient.Update(ctx, &mc)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	})
+
+	It("should allow update operation on upstream member cluster CR status for user in system:masters group", func() {
 		var mc clusterv1beta1.MemberCluster
-		By(fmt.Sprintf("update status of member cluster %s, expecting successful UPDATE of member cluster", mcName))
+		By(fmt.Sprintf("update status of upstream member cluster %s, expecting successful UPDATE of upstream member cluster", mcName))
 		Eventually(func(g Gomega) error {
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
 			g.Expect(mc.Status.Conditions).ToNot(BeEmpty())
@@ -181,7 +384,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 	imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 	BeforeAll(func() {
-		createMemberCluster(mcName, testIdentity, nil)
+		createMemberCluster(mcName, testIdentity, nil, map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
 		checkInternalMemberClusterExists(mcName, imcNamespace)
 	})
 
@@ -269,7 +472,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 	imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 	BeforeAll(func() {
-		createMemberCluster(mcName, testUser, nil)
+		createMemberCluster(mcName, testUser, nil, map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
 		checkInternalMemberClusterExists(mcName, imcNamespace)
 	})
 
@@ -324,7 +527,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 	workName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
-		createMemberCluster(mcName, testIdentity, nil)
+		createMemberCluster(mcName, testIdentity, nil, map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
 		checkInternalMemberClusterExists(mcName, imcNamespace)
 		createWorkResource(workName, imcNamespace)
 	})
@@ -422,7 +625,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 	workName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
-		createMemberCluster(mcName, testUser, nil)
+		createMemberCluster(mcName, testUser, nil, map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
 		checkInternalMemberClusterExists(mcName, imcNamespace)
 		createWorkResource(workName, imcNamespace)
 	})
@@ -480,7 +683,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 		BeforeEach(func() {
-			createMemberCluster(mcName, "random-user", nil)
+			createMemberCluster(mcName, "random-user", nil, map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
 			checkInternalMemberClusterExists(mcName, imcNamespace)
 			ise := internalServiceExport(iseName, imcNamespace)
 			// can return no kind match error.
@@ -518,7 +721,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 		epName := fmt.Sprintf(endpointSliceExportNameTemplate, GinkgoParallelProcess())
 		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 		BeforeEach(func() {
-			createMemberCluster(mcName, "test-user", nil)
+			createMemberCluster(mcName, "test-user", nil, map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
 			checkInternalMemberClusterExists(mcName, imcNamespace)
 		})
 
@@ -551,7 +754,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 		BeforeEach(func() {
-			createMemberCluster(mcName, testUser, nil)
+			createMemberCluster(mcName, testUser, nil, map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
 			checkInternalMemberClusterExists(mcName, imcNamespace)
 			ise := internalServiceExport(iseName, imcNamespace)
 			// can return no kind match error.

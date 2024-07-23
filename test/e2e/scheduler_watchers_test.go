@@ -90,7 +90,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("can add a new member cluster", func() {
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil, nil)
 
 			// Mark the newly created member cluster as healthy.
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
@@ -122,7 +122,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create a new member cluster.
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil, nil)
 			// Mark the newly created member cluster as healthy.
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 
@@ -315,7 +315,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create a new member cluster.
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil, nil)
 			// Mark the newly created member cluster as unhealthy.
 			markMemberClusterAsUnhealthy(fakeClusterName1ForWatcherTests)
 
@@ -384,7 +384,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			labels := map[string]string{
 				labelNameForWatcherTests: labelValueForWatcherTests,
 			}
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, labels)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, labels, nil)
 			// Mark the newly created member cluster as healthy.
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 
@@ -473,7 +473,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			labels := map[string]string{
 				labelNameForWatcherTests: labelValueForWatcherTests,
 			}
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, labels)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, labels, nil)
 			// Mark the newly created member cluster as healthy.
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 
@@ -538,7 +538,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create a new member cluster.
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil, nil)
 			// Mark the newly created member cluster as healthy.
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 
@@ -738,7 +738,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("can add a new member cluster", func() {
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil, nil)
 
 			// Mark the newly created member cluster as healthy.
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
@@ -769,7 +769,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create a new member cluster.
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil, nil)
 			// Mark the newly created member cluster as unhealthy.
 			markMemberClusterAsUnhealthy(fakeClusterName1ForWatcherTests)
 
@@ -833,7 +833,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create a new member cluster.
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil, nil)
 			// Mark the newly created member cluster as healthy.
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 
@@ -898,7 +898,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create a new member cluster.
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil, nil)
 			// Mark the newly created member cluster as healthy.
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 
@@ -995,7 +995,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("can add a new member cluster", func() {
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil, nil)
 
 			// Mark the newly created member cluster as healthy.
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
@@ -1028,7 +1028,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create a new member cluster.
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil, nil)
 			// Mark the newly created member cluster as healthy.
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 
@@ -1117,7 +1117,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create a new member cluster.
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{labelNameForWatcherTests: labelValueForWatcherTests})
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{labelNameForWatcherTests: labelValueForWatcherTests}, nil)
 			// Mark the newly created member cluster as unhealthy.
 			markMemberClusterAsUnhealthy(fakeClusterName1ForWatcherTests)
 
@@ -1236,7 +1236,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("can add a new member cluster in a region which would violate the topology spread constraint", func() {
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue1})
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue1}, nil)
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 		})
 
@@ -1247,7 +1247,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("can add a new member cluster in a region which would re-balance the topology spread", func() {
-			createMemberCluster(fakeClusterName2ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue2})
+			createMemberCluster(fakeClusterName2ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue2}, nil)
 			markMemberClusterAsHealthy(fakeClusterName2ForWatcherTests)
 		})
 
@@ -1439,7 +1439,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("can add a new member cluster in a region which would violate the topology spread constraint", func() {
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue1})
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue1}, nil)
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 		})
 
@@ -1463,7 +1463,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create a new member cluster.
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{labelNameForWatcherTests: labelValueForWatcherTests})
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{labelNameForWatcherTests: labelValueForWatcherTests}, nil)
 			// Mark the newly created member cluster as healthy.
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 
@@ -1528,7 +1528,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create a new member cluster.
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{labelNameForWatcherTests: labelValueForWatcherTests})
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{labelNameForWatcherTests: labelValueForWatcherTests}, nil)
 			// Mark the newly created member cluster as healthy.
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 
@@ -1615,7 +1615,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create a new member cluster.
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{labelNameForWatcherTests: labelValueForWatcherTests})
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{labelNameForWatcherTests: labelValueForWatcherTests}, nil)
 			// Mark the newly created member cluster as healthy.
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 
@@ -1694,8 +1694,8 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create new member clusters.
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue1})
-			createMemberCluster(fakeClusterName2ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue2})
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue1}, nil)
+			createMemberCluster(fakeClusterName2ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue2}, nil)
 			// Mark the newly created member clusters as healthy.
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 			markMemberClusterAsHealthy(fakeClusterName2ForWatcherTests)
