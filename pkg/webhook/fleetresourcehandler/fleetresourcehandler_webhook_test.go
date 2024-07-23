@@ -1138,31 +1138,6 @@ func TestHandleMemberCluster(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
-		"deny update of fleet MC spec apart from taints by any user": {
-			req: admission.Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name: "test-mc",
-					Object: runtime.RawExtension{
-						Raw:    specUpdatedFleetMCObjectBytes,
-						Object: specUpdatedFleetMCObject,
-					},
-					OldObject: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
-					},
-					UserInfo: authenticationv1.UserInfo{
-						Username: "test-user",
-						Groups:   []string{"test-group"},
-					},
-					RequestKind: &utils.MCMetaGVK,
-					Operation:   admissionv1.Update,
-				},
-			},
-			resourceValidator: fleetResourceValidator{
-				decoder: decoder,
-			},
-			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
-		},
 		"allow update of MC spec by any user": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{

@@ -89,6 +89,9 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 				return err
 			}
 			By(fmt.Sprintf("update fleet member cluster, cluster id annotation %s", mc.Name))
+			if len(mc.Annotations) == 0 {
+				return errors.New("annotations are empty")
+			}
 			mc.Annotations[utils.FleetClusterResourceIsAnnotationKey] = clusterID2
 			err = impersonateHubClient.Update(ctx, &mc)
 			if k8sErrors.IsConflict(err) {
@@ -253,7 +256,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 	})
 })
 
-var _ = Describe("fleet guard rail tests for allow upstream MC CREATE operations", func() {
+var _ = Describe("fleet guard rail tests for allow upstream MC CREATE, DELETE operations", func() {
 	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
 
 	It("should allow CREATE, DELETE operation on upstream member cluster CR for user not in system:masters group", func() {
@@ -413,7 +416,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 				return err
 			}
 			By(fmt.Sprintf("update upstream member cluster spec for MC %s", mc.Name))
-			mc.Spec.HeartbeatPeriodSeconds = 30
+			mc.Spec.HeartbeatPeriodSeconds = 32
 			By(fmt.Sprintf("expecting denial of operation UPDATE of upstream member cluster %s", mc.Name))
 			return impersonateHubClient.Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())

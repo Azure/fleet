@@ -150,18 +150,21 @@ func isMapFieldUpdated(currentMap, oldMap map[string]string) bool {
 	return !reflect.DeepEqual(currentMap, oldMap)
 }
 
+// isFleetClusterResourceIDAnnotationUpdated returns true if fleet cluster resource ID annotation is updated/removed.
 func isFleetClusterResourceIDAnnotationUpdated(currentMap, oldMap map[string]string) bool {
 	currentVal, currentExists := currentMap[utils.FleetClusterResourceIsAnnotationKey]
 	oldVal, oldExists := oldMap[utils.FleetClusterResourceIsAnnotationKey]
 	return oldExists && !currentExists || oldVal != currentVal
 }
 
+// isFleetClusterResourceIDAnnotationAdded returns true if fleet cluster resource ID annotation is added.
 func isFleetClusterResourceIDAnnotationAdded(currentMap, oldMap map[string]string) bool {
 	_, currentExists := currentMap[utils.FleetClusterResourceIsAnnotationKey]
 	_, oldExists := oldMap[utils.FleetClusterResourceIsAnnotationKey]
 	return !oldExists && currentExists
 }
 
+// isMemberClusterStatusUpdated returns true if member cluster status is updated.
 func isMemberClusterStatusUpdated(currentMCStatus, oldMCStatus clusterv1beta1.MemberClusterStatus) bool {
 	return !equality.Semantic.DeepEqual(currentMCStatus, oldMCStatus)
 }

@@ -209,6 +209,7 @@ func parseMemberClusterNameFromNamespace(namespace string) string {
 	return mcName
 }
 
+// isAnnotationPresent returns true if the key is present in the annotations map.
 func isAnnotationPresent(annotations map[string]string, key string) bool {
 	_, exists := annotations[key]
 	return exists
