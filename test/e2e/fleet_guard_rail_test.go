@@ -33,6 +33,9 @@ import (
 const (
 	testUser     = "test-user"
 	testIdentity = "test-identity"
+	testReason   = "test-reason"
+	testKey      = "test-key"
+	testValue    = "test-value"
 )
 
 var (
@@ -114,6 +117,9 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 		Eventually(func(g Gomega) error {
 			var mc clusterv1beta1.MemberCluster
 			err := hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)
+			if err != nil {
+				return err
+			}
 			By(fmt.Sprintf("update fleet member cluster spec for MC %s", mc.Name))
 			mc.Spec.HeartbeatPeriodSeconds = 30
 			By(fmt.Sprintf("expecting denial of operation UPDATE of fleet member cluster %s", mc.Name))
@@ -136,7 +142,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			if len(mc.Status.Conditions) == 0 {
 				return errors.New("status conditions are empty")
 			}
-			mc.Status.Conditions[0].Reason = "update"
+			mc.Status.Conditions[0].Reason = testReason
 			err = impersonateHubClient.Status().Update(ctx, &mc)
 			if k8sErrors.IsConflict(err) {
 				return err
@@ -163,9 +169,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			if err != nil {
 				return err
 			}
-			labels := make(map[string]string)
-			labels["test-key"] = "test-value"
-			mc.SetLabels(labels)
+			mc.SetLabels(map[string]string{testKey: testValue})
 			return impersonateHubClient.Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
@@ -178,9 +182,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			if err != nil {
 				return err
 			}
-			annotations := make(map[string]string)
-			annotations["test-key"] = "test-value"
-			mc.SetLabels(annotations)
+			mc.SetAnnotations(map[string]string{testKey: testValue})
 			return impersonateHubClient.Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
@@ -227,7 +229,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			if len(mc.Status.Conditions) == 0 {
 				return errors.New("status conditions are empty")
 			}
-			mc.Status.Conditions[0].Reason = "update"
+			mc.Status.Conditions[0].Reason = testReason
 			return hubClient.Status().Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
@@ -295,7 +297,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 			if len(mc.Status.Conditions) == 0 {
 				return errors.New("status conditions are empty")
 			}
-			mc.Status.Conditions[0].Reason = "update"
+			mc.Status.Conditions[0].Reason = testReason
 			err = impersonateHubClient.Status().Update(ctx, &mc)
 			if k8sErrors.IsConflict(err) {
 				return err
@@ -313,8 +315,8 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 				return err
 			}
 			labels := make(map[string]string)
-			labels["test-key"] = "test-value"
-			mc.SetLabels(labels)
+			labels[testKey] = testValue
+			mc.SetLabels(map[string]string{testKey: testValue})
 			return impersonateHubClient.Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
@@ -327,9 +329,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 			if err != nil {
 				return err
 			}
-			annotations := make(map[string]string)
-			annotations["test-key"] = "test-value"
-			mc.SetLabels(annotations)
+			mc.SetAnnotations(map[string]string{testKey: testValue})
 			return impersonateHubClient.Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
@@ -390,7 +390,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 			if len(mc.Status.Conditions) == 0 {
 				return errors.New("status conditions are empty")
 			}
-			mc.Status.Conditions[0].Reason = "update"
+			mc.Status.Conditions[0].Reason = testReason
 			return hubClient.Status().Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
@@ -517,7 +517,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 			if err != nil {
 				return err
 			}
-			imc.Labels = map[string]string{"test-key": "test-value"}
+			imc.Labels = map[string]string{testKey: testValue}
 			By("expecting successful UPDATE of Internal Member Cluster Status")
 			return impersonateHubClient.Update(ctx, &imc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
@@ -650,7 +650,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 			if err != nil {
 				return err
 			}
-			w.SetLabels(map[string]string{"test-key": "test-value"})
+			w.SetLabels(map[string]string{testKey: testValue})
 			By("expecting successful UPDATE of work")
 			return impersonateHubClient.Update(ctx, &w)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
@@ -720,7 +720,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 				if err != nil {
 					return err
 				}
-				ise.SetLabels(map[string]string{"test-key": "test-value"})
+				ise.SetLabels(map[string]string{testKey: testValue})
 				By("expecting denial of operation UPDATE of Internal Service Export")
 				err = impersonateHubClient.Update(ctx, &ise)
 				if k8sErrors.IsConflict(err) {
@@ -791,7 +791,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 				if err != nil {
 					return err
 				}
-				ise.SetLabels(map[string]string{"test-key": "test-value"})
+				ise.SetLabels(map[string]string{testKey: testValue})
 				By("expecting denial of operation UPDATE of Internal Service Export")
 				return impersonateHubClient.Update(ctx, &ise)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
