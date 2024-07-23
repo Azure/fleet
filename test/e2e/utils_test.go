@@ -7,7 +7,9 @@ package e2e
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -18,7 +20,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -471,7 +473,7 @@ func cleanupInvalidClusters() {
 		Expect(hubClient.Delete(ctx, mcObj)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete member cluster object")
 		Eventually(func() error {
 			mcObj := &clusterv1beta1.MemberCluster{}
-			if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj); !errors.IsNotFound(err) {
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj); !k8serrors.IsNotFound(err) {
 				return fmt.Errorf("member cluster still exists or an unexpected error occurred: %w", err)
 			}
 			return nil
@@ -544,7 +546,7 @@ func cleanupMemberCluster(memberClusterName string) {
 	Eventually(func() error {
 		mcObj := &clusterv1beta1.MemberCluster{}
 		err := hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName}, mcObj)
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			return nil
 		}
 		if err != nil {
@@ -558,7 +560,7 @@ func cleanupMemberCluster(memberClusterName string) {
 	// Wait until the member cluster is fully removed.
 	Eventually(func() error {
 		mcObj := &clusterv1beta1.MemberCluster{}
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName}, mcObj); !errors.IsNotFound(err) {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName}, mcObj); !k8serrors.IsNotFound(err) {
 			return fmt.Errorf("member cluster still exists or an unexpected error occurred: %w", err)
 		}
 		return nil
@@ -581,7 +583,7 @@ func ensureMemberClusterAndRelatedResourcesDeletion(memberClusterName string) {
 	reservedNSName := fmt.Sprintf(utils.NamespaceNameFormat, memberClusterName)
 	Eventually(func() error {
 		ns := corev1.Namespace{}
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: reservedNSName}, &ns); !errors.IsNotFound(err) {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: reservedNSName}, &ns); !k8serrors.IsNotFound(err) {
 			return fmt.Errorf("namespace still exists or an unexpected error occurred: %w", err)
 		}
 		return nil
@@ -682,7 +684,7 @@ func checkIfAllMemberClustersHaveLeft() {
 
 		Eventually(func() error {
 			mcObj := &clusterv1beta1.MemberCluster{}
-			if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster.ClusterName}, mcObj); !errors.IsNotFound(err) {
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster.ClusterName}, mcObj); !k8serrors.IsNotFound(err) {
 				return fmt.Errorf("member cluster still exists or an unexpected error occurred: %w", err)
 			}
 
@@ -737,7 +739,7 @@ func cleanupCRP(name string) {
 	Eventually(func() error {
 		crp := &placementv1beta1.ClusterResourcePlacement{}
 		err := hubClient.Get(ctx, types.NamespacedName{Name: name}, crp)
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			return nil
 		}
 		if err != nil {
@@ -1074,7 +1076,7 @@ func cleanupClusterResourceOverride(name string) {
 	}
 	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, cro))).To(Succeed(), "Failed to delete clusterResourceOverride %s", name)
 	Eventually(func() error {
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &placementv1alpha1.ClusterResourceOverride{}); !errors.IsNotFound(err) {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &placementv1alpha1.ClusterResourceOverride{}); !k8serrors.IsNotFound(err) {
 			return fmt.Errorf("clusterResourceOverride %s still exists or an unexpected error occurred: %w", name, err)
 		}
 		return nil
@@ -1090,7 +1092,7 @@ func cleanupResourceOverride(name string, namespace string) {
 	}
 	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, ro))).To(Succeed(), "Failed to delete resourceOverride %s", name)
 	Eventually(func() error {
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, &placementv1alpha1.ResourceOverride{}); !errors.IsNotFound(err) {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, &placementv1alpha1.ResourceOverride{}); !k8serrors.IsNotFound(err) {
 			return fmt.Errorf("resourceOverride %s still exists or an unexpected error occurred: %w", name, err)
 		}
 		return nil
@@ -1163,4 +1165,15 @@ func constructWrappedResources(testEnvelopeObj *corev1.ConfigMap, workloadObj me
 	case utils.StatefulSetKind:
 		testEnvelopeObj.Data["statefulset.yaml"] = string(workloadObjectByte)
 	}
+}
+
+// checkIfStatusError checks if the error is a status error and if error contains the error message.
+func checkIfStatusError(err error, errorMsg string) error {
+	var statusErr *k8serrors.StatusError
+	if errors.As(err, &statusErr) {
+		if strings.Contains(statusErr.ErrStatus.Message, errorMsg) {
+			return nil
+		}
+	}
+	return fmt.Errorf("error message %s not found in error %w", errorMsg, err)
 }
