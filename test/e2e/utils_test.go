@@ -1167,8 +1167,8 @@ func constructWrappedResources(testEnvelopeObj *corev1.ConfigMap, workloadObj me
 	}
 }
 
-// checkIfStatusError checks if the error is a status error and if error contains the error message.
-func checkIfStatusError(err error, errorMsg string) error {
+// checkIfStatusErrorWithMessage checks if the error is a status error and if error contains the error message.
+func checkIfStatusErrorWithMessage(err error, errorMsg string) error {
 	var statusErr *k8serrors.StatusError
 	if errors.As(err, &statusErr) {
 		if strings.Contains(statusErr.ErrStatus.Message, errorMsg) {

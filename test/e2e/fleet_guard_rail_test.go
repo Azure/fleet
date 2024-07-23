@@ -33,9 +33,9 @@ import (
 const (
 	testUser     = "test-user"
 	testIdentity = "test-identity"
-	testReason   = "test-reason"
 	testKey      = "test-key"
 	testValue    = "test-value"
+	testReason   = "testReason"
 )
 
 var (
@@ -66,7 +66,7 @@ var _ = Describe("fleet guard rail tests for deny fleet MC CREATE operations", f
 		}
 
 		By(fmt.Sprintf("expecting denial of operation CREATE of fleet member cluster %s", mc.Name))
-		Expect(checkIfStatusError(impersonateHubClient.Create(ctx, mc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &mcGVK, "", types.NamespacedName{Name: mc.Name}))).Should(Succeed())
+		Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, mc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &mcGVK, "", types.NamespacedName{Name: mc.Name}))).Should(Succeed())
 	})
 })
 
@@ -94,7 +94,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
-			return checkIfStatusError(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "", types.NamespacedName{Name: mc.Name}))
+			return checkIfStatusErrorWithMessage(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "", types.NamespacedName{Name: mc.Name}))
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 
 		Eventually(func(g Gomega) error {
@@ -109,7 +109,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
-			return checkIfStatusError(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "", types.NamespacedName{Name: mc.Name}))
+			return checkIfStatusErrorWithMessage(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "", types.NamespacedName{Name: mc.Name}))
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -127,7 +127,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
-			return checkIfStatusError(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "", types.NamespacedName{Name: mc.Name}))
+			return checkIfStatusErrorWithMessage(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "", types.NamespacedName{Name: mc.Name}))
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -147,7 +147,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
-			return checkIfStatusError(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "status", types.NamespacedName{Name: mc.Name}))
+			return checkIfStatusErrorWithMessage(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "status", types.NamespacedName{Name: mc.Name}))
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -158,7 +158,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			},
 		}
 		By(fmt.Sprintf("expecting denial of operation DELETE of fleet member cluster %s", mc.Name))
-		Expect(checkIfStatusError(impersonateHubClient.Delete(ctx, &mc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &mcGVK, "", types.NamespacedName{Name: mc.Name}))).Should(Succeed())
+		Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Delete(ctx, &mc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &mcGVK, "", types.NamespacedName{Name: mc.Name}))).Should(Succeed())
 	})
 
 	It("should allow update operation on fleet member cluster CR labels for any user", func() {
@@ -182,8 +182,26 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			if err != nil {
 				return err
 			}
-			mc.SetAnnotations(map[string]string{testKey: testValue})
+			annotations := mc.GetAnnotations()
+			if len(annotations) == 0 {
+				return errors.New("annotations are empty")
+			}
+			annotations[testKey] = testValue
+			mc.SetAnnotations(annotations)
 			return impersonateHubClient.Update(ctx, &mc)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	})
+
+	It("should allow update operation on fleet member cluster CR to modify fleet cluster resource id annotation for user in system:masters group", func() {
+		var mc clusterv1beta1.MemberCluster
+		By(fmt.Sprintf("update fleet member cluster, remove cluster id annotation %s", mcName))
+		Eventually(func(g Gomega) error {
+			err := hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)
+			if err != nil {
+				return err
+			}
+			mc.SetAnnotations(nil)
+			return hubClient.Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -255,6 +273,7 @@ var _ = Describe("fleet guard rail tests for allow upstream MC CREATE operations
 		Expect(impersonateHubClient.Create(ctx, mc)).Should(Succeed())
 		Expect(impersonateHubClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed())
 		Expect(impersonateHubClient.Delete(ctx, mc)).Should(Succeed())
+		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 })
 
@@ -282,7 +301,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
-			return checkIfStatusError(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "", types.NamespacedName{Name: mc.Name}))
+			return checkIfStatusErrorWithMessage(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "", types.NamespacedName{Name: mc.Name}))
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -302,7 +321,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
-			return checkIfStatusError(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "status", types.NamespacedName{Name: mc.Name}))
+			return checkIfStatusErrorWithMessage(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "status", types.NamespacedName{Name: mc.Name}))
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -329,6 +348,29 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 			}
 			mc.SetAnnotations(map[string]string{testKey: testValue})
 			return impersonateHubClient.Update(ctx, &mc)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	})
+
+	It("should allow update operation on upstream member cluster CR to add fleet cluster resource id annotation for user in system:masters group", func() {
+		var mc clusterv1beta1.MemberCluster
+		By(fmt.Sprintf("update fleet member cluster, add cluster id annotation %s", mcName))
+		Eventually(func(g Gomega) error {
+			err := hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)
+			if err != nil {
+				return err
+			}
+			mc.SetAnnotations(map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
+			err = hubClient.Update(ctx, &mc)
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
+			// remove the annotation to allow other tests to run correctly.
+			err = hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)
+			if err != nil {
+				return err
+			}
+			mc.SetAnnotations(nil)
+			return hubClient.Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -419,7 +461,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 			},
 		}
 		By(fmt.Sprintf("expecting denial of operation CREATE of Internal Member Cluster %s/%s", mcName, imcNamespace))
-		Expect(checkIfStatusError(impersonateHubClient.Create(ctx, &imc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}))).Should(Succeed())
+		Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, &imc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}))).Should(Succeed())
 	})
 
 	It("should deny UPDATE operation on internal member cluster CR for user not in MC identity in fleet member namespace", func() {
@@ -435,7 +477,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
-			return checkIfStatusError(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}))
+			return checkIfStatusErrorWithMessage(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}))
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -443,7 +485,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 		var imc clusterv1beta1.InternalMemberCluster
 		Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
 		By("expecting denial of operation DELETE of Internal Member Cluster")
-		Expect(checkIfStatusError(impersonateHubClient.Delete(ctx, &imc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}))).Should(Succeed())
+		Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Delete(ctx, &imc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}))).Should(Succeed())
 	})
 
 	It("should deny UPDATE operation on internal member cluster CR status for user not in MC identity in fleet member namespace", func() {
@@ -468,7 +510,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
-			return checkIfStatusError(err, fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString(testGroups), admissionv1.Update, &imcGVK, "status", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}))
+			return checkIfStatusErrorWithMessage(err, fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString(testGroups), admissionv1.Update, &imcGVK, "status", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}))
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 })
@@ -588,7 +630,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 			},
 		}
 		By(fmt.Sprintf("expecting denial of operation CREATE of Work %s/%s", workName, imcNamespace))
-		Expect(checkIfStatusError(impersonateHubClient.Create(ctx, &w), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &workGVK, "", types.NamespacedName{Name: w.Name, Namespace: w.Namespace}))).Should(Succeed())
+		Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, &w), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &workGVK, "", types.NamespacedName{Name: w.Name, Namespace: w.Namespace}))).Should(Succeed())
 	})
 
 	It("should deny UPDATE operation on work CR status for user not in MC identity", func() {
@@ -614,7 +656,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
-			return checkIfStatusError(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &workGVK, "status", types.NamespacedName{Name: w.Name, Namespace: w.Namespace}))
+			return checkIfStatusErrorWithMessage(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &workGVK, "status", types.NamespacedName{Name: w.Name, Namespace: w.Namespace}))
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
 
@@ -622,7 +664,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 		var w placementv1beta1.Work
 		Expect(hubClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: imcNamespace}, &w)).Should(Succeed())
 		By("expecting denial of operation DELETE of work")
-		Expect(checkIfStatusError(impersonateHubClient.Delete(ctx, &w), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &workGVK, "", types.NamespacedName{Name: w.Name, Namespace: w.Namespace}))).Should(Succeed())
+		Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Delete(ctx, &w), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &workGVK, "", types.NamespacedName{Name: w.Name, Namespace: w.Namespace}))).Should(Succeed())
 	})
 })
 
@@ -724,7 +766,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 				if k8sErrors.IsConflict(err) {
 					return err
 				}
-				return checkIfStatusError(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &iseGVK, "", types.NamespacedName{Name: ise.Name, Namespace: ise.Namespace}))
+				return checkIfStatusErrorWithMessage(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &iseGVK, "", types.NamespacedName{Name: ise.Name, Namespace: ise.Namespace}))
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 	})
@@ -810,12 +852,12 @@ var _ = Describe("fleet guard rail restrict internal fleet resources from being 
 					HeartbeatPeriodSeconds: 30,
 				},
 			}
-			Expect(checkIfStatusError(impersonateHubClient.Create(ctx, &imc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}))).Should(Succeed())
+			Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, &imc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}))).Should(Succeed())
 		})
 	})
 
 	It("should deny CREATE operation on internal service export resource in kube-system namespace for invalid user", func() {
 		ise := internalServiceExport("test-ise", "kube-system")
-		Expect(checkIfStatusError(impersonateHubClient.Create(ctx, &ise), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &iseGVK, "", types.NamespacedName{Name: ise.Name, Namespace: ise.Namespace}))).Should(Succeed())
+		Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, &ise), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &iseGVK, "", types.NamespacedName{Name: ise.Name, Namespace: ise.Namespace}))).Should(Succeed())
 	})
 })
