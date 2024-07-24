@@ -69,7 +69,7 @@ helm install hub-agent fleet/charts/hub-agent/ \
     --set image.pullPolicy=Always \
     --set image.repository=$REGISTRY/$HUB_AGENT_IMAGE \
     --set image.tag=$FLEET_VERSION \
-    --set logVerbosity=2 \
+    --set logVerbosity=5 \
     --set namespace=fleet-system \
     --set enableWebhook=true \
     --set webhookClientConnectionType=service \
@@ -107,8 +107,8 @@ export MEMBER_CLUSTER=YOUR-MEMBER-CLUSTER
 export MEMBER_CLUSTER_CONTEXT=YOUR-MEMBER-CLUSTER-CONTEXT
 
 # Run the script.
-chmod +x fleet/hack/membership/join.sh
-./fleet/hack/membership/join.sh
+chmod +x fleet/hack/hack/Azure/setup/joinMC.sh
+./fleet/hack/Azure/setup/joinMC.sh
 ```
 
 It may take a few minutes for the script to finish running. Once it is completed, verify
