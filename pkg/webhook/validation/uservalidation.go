@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -95,18 +94,18 @@ func ValidateV1Alpha1MemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCl
 func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberCluster, req admission.Request, whiteListedUsers []string) admission.Response {
 	namespacedName := types.NamespacedName{Name: currentMC.GetName()}
 	userInfo := req.UserInfo
-	// set taints field to nil.
-	currentMC.Spec.Taints = nil
-	oldMC.Spec.Taints = nil
-	isAnnotationUpdated, err := isFleetAnnotationUpdated(currentMC.Annotations, oldMC.Annotations)
-	if err != nil {
+	if areAllFleetAnnotationsRemoved(currentMC.Annotations, oldMC.Annotations) {
 		klog.V(2).InfoS(deniedRemoveFleetAnnotation, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		return admission.Denied(deniedRemoveFleetAnnotation)
 	}
+	// set taints field to nil.
+	currentMC.Spec.Taints = nil
+	oldMC.Spec.Taints = nil
 	isObjUpdated, err := isMemberClusterUpdated(currentMC.DeepCopy(), oldMC.DeepCopy())
 	if err != nil {
 		return admission.Denied(err.Error())
 	}
+	isAnnotationUpdated := isFleetAnnotationUpdated(currentMC.Annotations, oldMC.Annotations)
 	if isObjUpdated || isAnnotationUpdated {
 		return ValidateUserForResource(req, whiteListedUsers)
 	}
@@ -165,25 +164,30 @@ func isMapFieldUpdated(currentMap, oldMap map[string]string) bool {
 
 // isFleetAnnotationUpdated returns true if fleet pre-fixed annotations are updated/deleted,
 // also returns an error if all fleet pre-fixed annotations are removed.
-func isFleetAnnotationUpdated(currentMap, oldMap map[string]string) (bool, error) {
-	currentExists := utils.IsFleetAnnotationPresent(currentMap)
-	oldExists := utils.IsFleetAnnotationPresent(oldMap)
-	if oldExists && !currentExists {
-		return true, errors.New("all fleet pre-fixed annotations are removed")
-	}
+func isFleetAnnotationUpdated(currentMap, oldMap map[string]string) bool {
 	for oldKey, oldValue := range oldMap {
 		if strings.HasPrefix(oldKey, utils.FleetAnnotationPrefix) {
 			currentValue, exists := currentMap[oldKey]
 			if exists {
 				if currentValue != oldValue {
-					return true, nil
+					return true
 				}
 			} else {
-				return true, nil
+				return true
 			}
 		}
 	}
-	return false, nil
+	return false
+}
+
+// areAllFleetAnnotationsRemoved returns true if all fleet pre-fixed annotations are removed.
+func areAllFleetAnnotationsRemoved(currentMap, oldMap map[string]string) bool {
+	currentExists := utils.IsFleetAnnotationPresent(currentMap)
+	oldExists := utils.IsFleetAnnotationPresent(oldMap)
+	if oldExists && !currentExists {
+		return true
+	}
+	return false
 }
 
 // isFleetAnnotationAdded returns true if fleet pre-fixed annotation is added.
