@@ -116,7 +116,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
-	It("should deny update operation on fleet member cluster CR, fleet prefixed annotation for user in system:masters group", func() {
+	It("should deny update operation on fleet member cluster CR remove fleet prefixed annotation for user in system:masters group", func() {
 		Eventually(func(g Gomega) error {
 			var mc clusterv1beta1.MemberCluster
 			err := hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)
@@ -194,7 +194,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
-	It("should allow update operation on fleet member cluster CR annotations for any user", func() {
+	It("should allow update operation on fleet member cluster CR annotations except fleet pre-fixed annotation for any user", func() {
 		var mc clusterv1beta1.MemberCluster
 		By(fmt.Sprintf("update annotations in fleet member cluster %s, expecting successful UPDATE of fleet member cluster", mcName))
 		Eventually(func(g Gomega) error {
@@ -212,7 +212,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
-	It("should allow update operation on fleet member cluster CR to modify fleet pre-fixed annotation for user in system:masters group", func() {
+	It("should allow update operation on fleet member cluster CR to modify fleet pre-fixed annotation value for user in system:masters group", func() {
 		var mc clusterv1beta1.MemberCluster
 		By(fmt.Sprintf("update fleet member cluster, remove cluster id annotation %s", mcName))
 		Eventually(func(g Gomega) error {
@@ -314,7 +314,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 
-	It("should deny update operation on upstream member cluster CR fleet pre-fixed annotation for user not in system:masters group", func() {
+	It("should deny update operation on upstream member cluster CR add fleet pre-fixed annotation for user not in system:masters group", func() {
 		Eventually(func(g Gomega) error {
 			var mc clusterv1beta1.MemberCluster
 			err := hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)
@@ -331,7 +331,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
-	It("should deny update operation on upstream member cluster CR fleet pre-fixed annotation for user in system:masters group", func() {
+	It("should deny update operation on upstream member cluster CR add fleet pre-fixed annotation for user in system:masters group", func() {
 		Eventually(func(g Gomega) error {
 			var mc clusterv1beta1.MemberCluster
 			err := hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)
