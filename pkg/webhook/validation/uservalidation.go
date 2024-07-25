@@ -123,7 +123,7 @@ func ValidatedUpstreamMemberClusterUpdate(currentMC, oldMC clusterv1beta1.Member
 		return admission.Denied(deniedAddFleetAnnotation)
 	}
 	// any user is allowed to modify MC spec for upstream MC.
-	if isMemberClusterStatusUpdated(currentMC.Status, oldMC.Status) {
+	if !equality.Semantic.DeepEqual(currentMC.Status, oldMC.Status) {
 		return ValidateUserForResource(req, whiteListedUsers)
 	}
 	klog.V(3).InfoS(allowedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
@@ -162,8 +162,7 @@ func isMapFieldUpdated(currentMap, oldMap map[string]string) bool {
 	return !reflect.DeepEqual(currentMap, oldMap)
 }
 
-// isFleetAnnotationUpdated returns true if fleet pre-fixed annotations are updated/deleted,
-// also returns an error if all fleet pre-fixed annotations are removed.
+// isFleetAnnotationUpdated returns true if fleet pre-fixed annotations are updated/deleted.
 func isFleetAnnotationUpdated(currentMap, oldMap map[string]string) bool {
 	for oldKey, oldValue := range oldMap {
 		if strings.HasPrefix(oldKey, utils.FleetAnnotationPrefix) {
@@ -184,10 +183,7 @@ func isFleetAnnotationUpdated(currentMap, oldMap map[string]string) bool {
 func areAllFleetAnnotationsRemoved(currentMap, oldMap map[string]string) bool {
 	currentExists := utils.IsFleetAnnotationPresent(currentMap)
 	oldExists := utils.IsFleetAnnotationPresent(oldMap)
-	if oldExists && !currentExists {
-		return true
-	}
-	return false
+	return oldExists && !currentExists
 }
 
 // isFleetAnnotationAdded returns true if fleet pre-fixed annotation is added.
@@ -195,11 +191,6 @@ func isFleetAnnotationAdded(currentMap, oldMap map[string]string) bool {
 	currentExists := utils.IsFleetAnnotationPresent(currentMap)
 	oldExists := utils.IsFleetAnnotationPresent(oldMap)
 	return !oldExists && currentExists
-}
-
-// isMemberClusterStatusUpdated returns true if member cluster status is updated.
-func isMemberClusterStatusUpdated(currentMCStatus, oldMCStatus clusterv1beta1.MemberClusterStatus) bool {
-	return !equality.Semantic.DeepEqual(currentMCStatus, oldMCStatus)
 }
 
 // isMemberClusterUpdated returns true is member cluster spec or status is updated.
