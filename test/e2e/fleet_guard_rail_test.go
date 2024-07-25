@@ -112,7 +112,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
-			return checkIfStatusErrorWithMessage(err, "no user is allowed to remove all fleet pre-fixed annotation from a fleet member cluster")
+			return checkIfStatusErrorWithMessage(err, "no user is allowed to remove all fleet pre-fixed annotations from a fleet member cluster")
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -129,7 +129,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
-			return checkIfStatusErrorWithMessage(err, "no user is allowed to remove all fleet pre-fixed annotation from a fleet member cluster")
+			return checkIfStatusErrorWithMessage(err, "no user is allowed to remove all fleet pre-fixed annotations from a fleet member cluster")
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 

@@ -31,10 +31,10 @@ const (
 	kubeControllerManagerUser = "system:kube-controller-manager"
 	serviceAccountFmt         = "system:serviceaccount:fleet-system:%s"
 
-	allowedModifyResource     = "user in groups is allowed to modify resource"
-	deniedModifyResource      = "user in groups is not allowed to modify resource"
-	denyAddFleetAnnotation    = "no user is allowed to add a fleet pre-fixed annotation to an upstream member cluster"
-	denyRemoveFleetAnnotation = "no user is allowed to remove all fleet pre-fixed annotation from a fleet member cluster"
+	allowedModifyResource       = "user in groups is allowed to modify resource"
+	deniedModifyResource        = "user in groups is not allowed to modify resource"
+	deniedAddFleetAnnotation    = "no user is allowed to add a fleet pre-fixed annotation to an upstream member cluster"
+	deniedRemoveFleetAnnotation = "no user is allowed to remove all fleet pre-fixed annotations from a fleet member cluster"
 
 	ResourceAllowedFormat      = "user: '%s' in '%s' is allowed to %s resource %+v/%s: %+v"
 	ResourceDeniedFormat       = "user: '%s' in '%s' is not allowed to %s resource %+v/%s: %+v"
@@ -100,8 +100,8 @@ func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberClus
 	oldMC.Spec.Taints = nil
 	isAnnotationUpdated, err := isFleetAnnotationUpdated(currentMC.Annotations, oldMC.Annotations)
 	if err != nil {
-		klog.V(2).InfoS(denyRemoveFleetAnnotation, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
-		return admission.Denied(denyRemoveFleetAnnotation)
+		klog.V(2).InfoS(deniedRemoveFleetAnnotation, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
+		return admission.Denied(deniedRemoveFleetAnnotation)
 	}
 	isObjUpdated, err := isMemberClusterUpdated(currentMC.DeepCopy(), oldMC.DeepCopy())
 	if err != nil {
@@ -120,8 +120,8 @@ func ValidatedUpstreamMemberClusterUpdate(currentMC, oldMC clusterv1beta1.Member
 	namespacedName := types.NamespacedName{Name: currentMC.GetName()}
 	userInfo := req.UserInfo
 	if isFleetAnnotationAdded(currentMC.Annotations, oldMC.Annotations) {
-		klog.V(2).InfoS(denyAddFleetAnnotation, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
-		return admission.Denied(denyAddFleetAnnotation)
+		klog.V(2).InfoS(deniedAddFleetAnnotation, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
+		return admission.Denied(deniedAddFleetAnnotation)
 	}
 	// any user is allowed to modify MC spec for upstream MC.
 	if isMemberClusterStatusUpdated(currentMC.Status, oldMC.Status) {
@@ -185,12 +185,6 @@ func isFleetAnnotationUpdated(currentMap, oldMap map[string]string) (bool, error
 	}
 	return false, nil
 }
-
-//func isAllFleetAnnotationsRemoved(currentMap, oldMap map[string]string) bool {
-//	currentExists := utils.IsFleetAnnotationPresent(currentMap)
-//	oldExists := utils.IsFleetAnnotationPresent(oldMap)
-//	return oldExists && !currentExists
-//}
 
 // isFleetAnnotationAdded returns true if fleet pre-fixed annotation is added.
 func isFleetAnnotationAdded(currentMap, oldMap map[string]string) bool {

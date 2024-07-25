@@ -933,7 +933,7 @@ func TestHandleMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Denied("no user is allowed to remove all fleet pre-fixed annotation from a fleet member cluster"),
+			wantResponse: admission.Denied("no user is allowed to remove all fleet pre-fixed annotations from a fleet member cluster"),
 		},
 		"allow user in system:masters group to modify fleet MC annotations, update one fleet pre-fixed annotation": {
 			req: admission.Request{
