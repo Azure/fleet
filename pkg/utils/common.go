@@ -557,7 +557,7 @@ func IsFailedResourcePlacementsEqual(oldFailedResourcePlacements, newFailedResou
 
 // IsFleetAnnotationPresent returns true if a key with fleet prefix is present in the annotations map.
 func IsFleetAnnotationPresent(annotations map[string]string) bool {
-	for k, _ := range annotations {
+	for k := range annotations {
 		if strings.HasPrefix(k, FleetAnnotationPrefix) {
 			return true
 		}
