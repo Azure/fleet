@@ -63,9 +63,10 @@ export HUB_AGENT_IMAGE="hub-agent"
 
 # Clone the Fleet repository from GitHub.
 git clone https://github.com/Azure/fleet.git
+cd fleet
 
 # Install the helm chart for running Fleet agents on the hub cluster.
-helm install hub-agent fleet/charts/hub-agent/ \
+helm install hub-agent ./charts/hub-agent/ \
     --set image.pullPolicy=Always \
     --set image.repository=$REGISTRY/$HUB_AGENT_IMAGE \
     --set image.tag=$FLEET_VERSION \
@@ -107,8 +108,8 @@ export MEMBER_CLUSTER=YOUR-MEMBER-CLUSTER
 export MEMBER_CLUSTER_CONTEXT=YOUR-MEMBER-CLUSTER-CONTEXT
 
 # Run the script.
-chmod +x fleet/hack/hack/Azure/setup/joinMC.sh
-./fleet/hack/Azure/setup/joinMC.sh
+chmod +x ./hack/Azure/setup/joinMC.sh
+./hack/Azure/setup/joinMC.sh
 ```
 
 It may take a few minutes for the script to finish running. Once it is completed, verify
