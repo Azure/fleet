@@ -798,7 +798,7 @@ func extractFailedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1b
 			}
 			failedManifest.Condition = *appliedCond
 			res = append(res, failedManifest)
-			break
+			continue //jump to the next manifest
 		}
 		availableCond = meta.FindStatusCondition(manifestCondition.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 		if availableCond != nil && availableCond.Status == metav1.ConditionFalse {
@@ -809,7 +809,7 @@ func extractFailedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1b
 					"version", manifestCondition.Identifier.Version, "kind", manifestCondition.Identifier.Kind,
 					"envelopeType", envelopeType, "envelopObjName", envelopObjName, "envelopObjNamespace", envelopObjNamespace)
 			} else {
-				klog.V(2).InfoS("Find an unavailable enveloped manifest",
+				klog.V(2).InfoS("Find an unavailable manifest",
 					"manifestName", manifestCondition.Identifier.Name, "group", manifestCondition.Identifier.Group,
 					"version", manifestCondition.Identifier.Version, "kind", manifestCondition.Identifier.Kind)
 			}
@@ -874,19 +874,29 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 						"Failed to process an update event for work object")
 					return
 				}
-				oldAppliedStatus := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
-				newAppliedStatus := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
-				oldAvailableStatus := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
-				newAvailableStatus := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+				oldAppliedCondition := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
+				newAppliedCondition := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
+				oldAvailableCondition := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+				newAvailableCondition := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 
-				// we only need to handle the case the applied or available condition is changed between the
-				// new and old work objects. Otherwise, it won't affect the binding applied condition
-				if condition.EqualCondition(oldAppliedStatus, newAppliedStatus) && condition.EqualCondition(oldAvailableStatus, newAvailableStatus) {
-					klog.V(2).InfoS("The work applied or available condition didn't flip between true and false, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
-					return
+				// we try to filter out events, we only need to handle the updated event if the applied or available condition flip between true and false
+				// or the failed placements are changed.
+				if condition.EqualCondition(oldAppliedCondition, newAppliedCondition) && condition.EqualCondition(oldAvailableCondition, newAvailableCondition) {
+					if condition.IsConditionStatusFalse(newAppliedCondition, newWork.Generation) || condition.IsConditionStatusFalse(newAvailableCondition, newWork.Generation) {
+						// we need to compare the failed placement if the work is not applied or available
+						oldFailedPlacements := extractFailedResourcePlacementsFromWork(oldWork)
+						newFailedPlacements := extractFailedResourcePlacementsFromWork(newWork)
+						if utils.IsFailedResourcePlacementsEqual(oldFailedPlacements, newFailedPlacements) {
+							klog.V(2).InfoS("The failed placement list didn't change on failed work, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
+							return
+						}
+					} else {
+						klog.V(2).InfoS("The work applied or available condition stayed as true, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
+						return
+					}
 				}
-				klog.V(2).InfoS("Received a work update event", "work", klog.KObj(newWork), "parentBindingName", parentBindingName)
 				// We need to update the binding status in this case
+				klog.V(2).InfoS("Received a work update event that we need to handle", "work", klog.KObj(newWork), "parentBindingName", parentBindingName)
 				queue.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 					Name: parentBindingName,
 				}})

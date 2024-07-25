@@ -15,6 +15,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	admv1 "k8s.io/api/admissionregistration/v1"
+	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -23,6 +24,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
@@ -34,35 +36,36 @@ var (
 )
 
 // Note that this container will run in parallel with other containers.
-var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
-	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-	var wantSelectedResources []placementv1beta1.ResourceIdentifier
-	BeforeAll(func() {
-		// Create the test resources.
-		readEnvelopTestManifests()
-		wantSelectedResources = []placementv1beta1.ResourceIdentifier{
-			{
-				Kind:    "Namespace",
-				Name:    workNamespaceName,
-				Version: "v1",
-			},
-			{
-				Kind:      "ConfigMap",
-				Name:      testConfigMap.Name,
-				Version:   "v1",
-				Namespace: workNamespaceName,
-			},
-			{
-				Kind:      "ConfigMap",
-				Name:      testEnvelopConfigMap.Name,
-				Version:   "v1",
-				Namespace: workNamespaceName,
-			},
-		}
-	})
-
+var _ = Describe("placing wrapped resources using a CRP", func() {
 	Context("Test a CRP place enveloped objects successfully", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		workNamespaceName := appNamespace().Name
+		var wantSelectedResources []placementv1beta1.ResourceIdentifier
+
+		BeforeAll(func() {
+			// Create the test resources.
+			readEnvelopTestManifests()
+			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
+				{
+					Kind:    "Namespace",
+					Name:    workNamespaceName,
+					Version: "v1",
+				},
+				{
+					Kind:      "ConfigMap",
+					Name:      testConfigMap.Name,
+					Version:   "v1",
+					Namespace: workNamespaceName,
+				},
+				{
+					Kind:      "ConfigMap",
+					Name:      testEnvelopConfigMap.Name,
+					Version:   "v1",
+					Namespace: workNamespaceName,
+				},
+			}
+		})
+
 		It("Create the test resources in the namespace", createWrappedResourcesForEnvelopTest)
 
 		It("Create the CRP that select the name space", func() {
@@ -159,11 +162,170 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 			Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP")
 		})
+
+		AfterAll(func() {
+			By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		})
 	})
 
-	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+	Context("Test a CRP place workload objects with mixed availability", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		workNamespace := appNamespace()
+		var wantSelectedResources []placementv1beta1.ResourceIdentifier
+		var testDeployment appv1.Deployment
+		var testDaemonSet appv1.DaemonSet
+		var testStatefulSet appv1.StatefulSet
+		var testEnvelopeConfig corev1.ConfigMap
+
+		BeforeAll(func() {
+			// read the test resources.
+			readDeploymentTestManifest(&testDeployment)
+			readDaemonSetTestManifest(&testDaemonSet)
+			readStatefulSetTestManifest(&testStatefulSet, true)
+			readEnvelopeConfigMapTestManifest(&testEnvelopeConfig)
+			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
+				{
+					Kind:    utils.NamespaceKind,
+					Name:    workNamespace.Name,
+					Version: corev1.SchemeGroupVersion.Version,
+				},
+				{
+					Kind:      utils.ConfigMapKind,
+					Name:      testEnvelopeConfig.Name,
+					Version:   corev1.SchemeGroupVersion.Version,
+					Namespace: workNamespace.Name,
+				},
+			}
+		})
+
+		It("Create the namespace", func() {
+			Expect(hubClient.Create(ctx, &workNamespace)).To(Succeed(), "Failed to create namespace %s", workNamespace.Name)
+		})
+
+		It("Create the wrapped resources in the namespace", func() {
+			testEnvelopeConfig.Data = make(map[string]string)
+			constructWrappedResources(&testEnvelopeConfig, &testDeployment, utils.DeploymentKind, workNamespace)
+			constructWrappedResources(&testEnvelopeConfig, &testDaemonSet, utils.DaemonSetKind, workNamespace)
+			constructWrappedResources(&testEnvelopeConfig, &testStatefulSet, utils.StatefulSetKind, workNamespace)
+			Expect(hubClient.Create(ctx, &testEnvelopeConfig)).To(Succeed(), "Failed to create testEnvelop object %s containing workloads", testEnvelopeConfig.Name)
+		})
+
+		It("Create the CRP that select the namespace", func() {
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: ptr.To(2),
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
+
+		It("should update CRP status with only a not available statefulset", func() {
+			// the statefulset has an invalid storage class PVC
+			failedStatefulSetResourceIdentifier := placementv1beta1.ResourceIdentifier{
+				Group:     appv1.SchemeGroupVersion.Group,
+				Version:   appv1.SchemeGroupVersion.Version,
+				Kind:      utils.StatefulSetKind,
+				Name:      testStatefulSet.Name,
+				Namespace: testStatefulSet.Namespace,
+				Envelope: &placementv1beta1.EnvelopeIdentifier{
+					Name:      testEnvelopeConfig.Name,
+					Namespace: workNamespace.Name,
+					Type:      placementv1beta1.ConfigMapEnvelopeType,
+				},
+			}
+			// We only expect the statefulset to not be available all the clusters
+			PlacementStatuses := make([]placementv1beta1.ResourcePlacementStatus, 0)
+			for _, memberClusterName := range allMemberClusterNames {
+				unavailableResourcePlacementStatus := placementv1beta1.ResourcePlacementStatus{
+					ClusterName: memberClusterName,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceScheduledConditionType),
+							Status:             metav1.ConditionTrue,
+							Reason:             condition.ScheduleSucceededReason,
+							ObservedGeneration: 1,
+						},
+						{
+							Type:               string(placementv1beta1.ResourceRolloutStartedConditionType),
+							Status:             metav1.ConditionTrue,
+							Reason:             condition.RolloutStartedReason,
+							ObservedGeneration: 1,
+						},
+						{
+							Type:               string(placementv1beta1.ResourceOverriddenConditionType),
+							Status:             metav1.ConditionTrue,
+							Reason:             condition.OverrideNotSpecifiedReason,
+							ObservedGeneration: 1,
+						},
+						{
+							Type:               string(placementv1beta1.ResourceWorkSynchronizedConditionType),
+							Status:             metav1.ConditionTrue,
+							Reason:             condition.AllWorkSyncedReason,
+							ObservedGeneration: 1,
+						},
+						{
+							Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+							Status:             metav1.ConditionTrue,
+							Reason:             condition.AllWorkAppliedReason,
+							ObservedGeneration: 1,
+						},
+						{
+							Type:               string(placementv1beta1.ResourcesAvailableConditionType),
+							Status:             metav1.ConditionFalse,
+							Reason:             condition.WorkNotAvailableReason,
+							ObservedGeneration: 1,
+						},
+					},
+					FailedPlacements: []placementv1beta1.FailedResourcePlacement{
+						{
+							ResourceIdentifier: failedStatefulSetResourceIdentifier,
+							Condition: metav1.Condition{
+								Type:               string(placementv1beta1.ResourcesAvailableConditionType),
+								Status:             metav1.ConditionFalse,
+								Reason:             "ManifestNotAvailableYet",
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				}
+				PlacementStatuses = append(PlacementStatuses, unavailableResourcePlacementStatus)
+			}
+			wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+				Conditions:            crpNotAvailableConditions(1, false),
+				PlacementStatuses:     PlacementStatuses,
+				SelectedResources:     wantSelectedResources,
+				ObservedResourceIndex: "0",
+			}
+
+			Eventually(func() error {
+				crp := &placementv1beta1.ClusterResourcePlacement{}
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+					return err
+				}
+
+				if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
+					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		AfterAll(func() {
+			By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		})
 	})
 })
 

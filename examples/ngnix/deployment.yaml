@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-nginx
+  namespace: test-afd
+spec:
+  selector:
+    matchLabels:
+      app: internal-app
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: internal-app 
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.14.2
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - mountPath: /usr/share/nginx/html/index.html
+          name: cfgmap
+          subPath: v1.html
+      volumes:
+      - name: cfgmap
+        configMap:
+          name: index

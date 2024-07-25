@@ -109,7 +109,7 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 			meta.RemoveStatusCondition(&rps.Conditions, string(i.ResourcePlacementConditionType()))
 		}
 		placementStatuses = append(placementStatuses, rps)
-		klog.V(2).InfoS("Populated the resource placement status for the scheduled cluster", "clusterResourcePlacement", klog.KObj(crp), "cluster", c.ClusterName)
+		klog.V(2).InfoS("Populated the resource placement status for the scheduled cluster", "clusterResourcePlacement", klog.KObj(crp), "cluster", c.ClusterName, "resourcePlacementStatus", rps)
 	}
 	isClusterScheduled := len(placementStatuses) > 0
 
@@ -227,7 +227,8 @@ func (r *Reconciler) buildClusterResourceBindings(ctx context.Context, crp *flee
 //	TotalCondition
 //
 // )
-func (r *Reconciler) setResourcePlacementStatusPerCluster(crp *fleetv1beta1.ClusterResourcePlacement, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, binding *fleetv1beta1.ClusterResourceBinding, status *fleetv1beta1.ResourcePlacementStatus) ([]metav1.ConditionStatus, error) {
+func (r *Reconciler) setResourcePlacementStatusPerCluster(crp *fleetv1beta1.ClusterResourcePlacement, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot,
+	binding *fleetv1beta1.ClusterResourceBinding, status *fleetv1beta1.ResourcePlacementStatus) ([]metav1.ConditionStatus, error) {
 	if binding == nil {
 		meta.SetStatusCondition(&status.Conditions, condition.RolloutStartedCondition.UnknownResourceConditionPerCluster(crp.Generation))
 		return []metav1.ConditionStatus{metav1.ConditionUnknown}, nil
@@ -246,6 +247,7 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(crp *fleetv1beta1.Clus
 			if !condition.IsConditionStatusTrue(bindingCond, binding.Generation) &&
 				!condition.IsConditionStatusFalse(bindingCond, binding.Generation) {
 				meta.SetStatusCondition(&status.Conditions, i.UnknownResourceConditionPerCluster(crp.Generation))
+				klog.V(5).InfoS("Find an unknown condition", "bindingCond", bindingCond, "clusterResourceBinding", klog.KObj(binding), "clusterResourcePlacement", klog.KObj(crp))
 				res = append(res, metav1.ConditionUnknown)
 				break
 			}
@@ -294,5 +296,6 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(crp *fleetv1beta1.Clus
 	// At this point, either the generation is not the one in the binding spec or the status is true/unknown.
 	// It means the rollout controller has not handled the binding yet.
 	meta.SetStatusCondition(&status.Conditions, condition.RolloutStartedCondition.UnknownResourceConditionPerCluster(crp.Generation))
+	klog.V(5).InfoS("The staled binding rollout status is unknown", "clusterResourceBinding", klog.KObj(binding), "clusterResourcePlacement", klog.KObj(crp))
 	return []metav1.ConditionStatus{metav1.ConditionUnknown}, nil
 }

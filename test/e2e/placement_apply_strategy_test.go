@@ -779,6 +779,20 @@ func buildApplyConflictFailedPlacements(generation int64, cluster []string) []pl
 						ObservedGeneration: 0,
 					},
 				},
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Kind:      "ConfigMap",
+						Name:      fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess()),
+						Namespace: workNamespaceName,
+						Version:   "v1",
+					},
+					Condition: metav1.Condition{
+						Type:               placementv1beta1.WorkConditionTypeApplied,
+						Status:             metav1.ConditionFalse,
+						Reason:             work.ApplyConflictBetweenPlacementsReason,
+						ObservedGeneration: 0,
+					},
+				},
 			},
 			Conditions: resourcePlacementApplyFailedConditions(generation),
 		})

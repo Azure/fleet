@@ -37,7 +37,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -86,22 +85,6 @@ var (
 		Raw: rawTestDeployment,
 	}}
 )
-
-// This interface is needed for testMapper abstract class.
-type testMapper struct {
-	meta.RESTMapper
-}
-
-func (m testMapper) RESTMapping(gk schema.GroupKind, _ ...string) (*meta.RESTMapping, error) {
-	if gk.Kind == "Deployment" {
-		return &meta.RESTMapping{
-			Resource:         testGvr,
-			GroupVersionKind: testDeployment.GroupVersionKind(),
-			Scope:            nil,
-		}, nil
-	}
-	return nil, errors.New("test error: mapping does not exist")
-}
 
 func TestSetManifestHashAnnotation(t *testing.T) {
 	// basic setup
@@ -439,7 +422,7 @@ func TestApplyUnstructured(t *testing.T) {
 				client:             &test.MockClient{},
 				spokeDynamicClient: dynamicClientNotFound,
 				spokeClient:        &test.MockClient{},
-				restMapper:         testMapper{},
+				restMapper:         utils.TestMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:        correctObj.DeepCopy(),
@@ -452,7 +435,7 @@ func TestApplyUnstructured(t *testing.T) {
 				client:             &test.MockClient{},
 				spokeDynamicClient: generatedSpecDynamicClient,
 				spokeClient:        &test.MockClient{},
-				restMapper:         testMapper{},
+				restMapper:         utils.TestMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:        generatedSpecObj.DeepCopy(),
@@ -465,7 +448,7 @@ func TestApplyUnstructured(t *testing.T) {
 				client:             &test.MockClient{},
 				spokeDynamicClient: dynamicClientError,
 				spokeClient:        &test.MockClient{},
-				restMapper:         testMapper{},
+				restMapper:         utils.TestMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:      correctObj.DeepCopy(),
@@ -477,7 +460,7 @@ func TestApplyUnstructured(t *testing.T) {
 				client:             &test.MockClient{},
 				spokeDynamicClient: diffOwnerDynamicClient,
 				spokeClient:        &test.MockClient{},
-				restMapper:         testMapper{},
+				restMapper:         utils.TestMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:      correctObj.DeepCopy(),
@@ -506,7 +489,7 @@ func TestApplyUnstructured(t *testing.T) {
 		"happy path - with updates": {
 			reconciler: ApplyWorkReconciler{
 				spokeDynamicClient: diffSpecDynamicClient,
-				restMapper:         testMapper{},
+				restMapper:         utils.TestMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:        correctObj,
@@ -517,7 +500,7 @@ func TestApplyUnstructured(t *testing.T) {
 		"test create succeeds for large manifest when object does not exist": {
 			reconciler: ApplyWorkReconciler{
 				spokeDynamicClient: dynamicClientLargeObjNotFound,
-				restMapper:         testMapper{},
+				restMapper:         utils.TestMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:        largeObj,
@@ -528,7 +511,7 @@ func TestApplyUnstructured(t *testing.T) {
 		"test apply succeeds on update for large manifest when object exists": {
 			reconciler: ApplyWorkReconciler{
 				spokeDynamicClient: dynamicClientLargeObjFound,
-				restMapper:         testMapper{},
+				restMapper:         utils.TestMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:        updatedLargeObj,
@@ -539,7 +522,7 @@ func TestApplyUnstructured(t *testing.T) {
 		"test create fails for large manifest when object does not exist": {
 			reconciler: ApplyWorkReconciler{
 				spokeDynamicClient: dynamicClientLargeObjCreateFail,
-				restMapper:         testMapper{},
+				restMapper:         utils.TestMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:      largeObj,
@@ -549,7 +532,7 @@ func TestApplyUnstructured(t *testing.T) {
 		"test apply fails for large manifest when object exists": {
 			reconciler: ApplyWorkReconciler{
 				spokeDynamicClient: dynamicClientLargeObjApplyFail,
-				restMapper:         testMapper{},
+				restMapper:         utils.TestMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:      updatedLargeObj,
@@ -621,7 +604,7 @@ func TestApplyManifest(t *testing.T) {
 				client:             &test.MockClient{},
 				spokeDynamicClient: fakeDynamicClient,
 				spokeClient:        &test.MockClient{},
-				restMapper:         testMapper{},
+				restMapper:         utils.TestMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 				joined:             atomic.NewBool(true),
 			},
@@ -636,7 +619,7 @@ func TestApplyManifest(t *testing.T) {
 				client:             &test.MockClient{},
 				spokeDynamicClient: fakeDynamicClient,
 				spokeClient:        &test.MockClient{},
-				restMapper:         testMapper{},
+				restMapper:         utils.TestMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 				joined:             atomic.NewBool(true),
 			},
@@ -654,7 +637,7 @@ func TestApplyManifest(t *testing.T) {
 				client:             &test.MockClient{},
 				spokeDynamicClient: fakeDynamicClient,
 				spokeClient:        &test.MockClient{},
-				restMapper:         testMapper{},
+				restMapper:         utils.TestMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 				joined:             atomic.NewBool(true),
 			},
@@ -669,7 +652,7 @@ func TestApplyManifest(t *testing.T) {
 				client:             &test.MockClient{},
 				spokeDynamicClient: clientFailDynamicClient,
 				spokeClient:        &test.MockClient{},
-				restMapper:         testMapper{},
+				restMapper:         utils.TestMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 				joined:             atomic.NewBool(true),
 			},
@@ -805,7 +788,7 @@ func TestReconcile(t *testing.T) {
 				client:             &test.MockClient{},
 				spokeDynamicClient: happyDynamicClient,
 				spokeClient:        &test.MockClient{},
-				restMapper:         testMapper{},
+				restMapper:         utils.TestMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 				joined:             atomic.NewBool(false),
 			},
@@ -822,7 +805,7 @@ func TestReconcile(t *testing.T) {
 				},
 				spokeDynamicClient: fakeDynamicClient,
 				spokeClient:        &test.MockClient{},
-				restMapper:         testMapper{},
+				restMapper:         utils.TestMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 				joined:             atomic.NewBool(true),
 			},
@@ -836,7 +819,7 @@ func TestReconcile(t *testing.T) {
 				},
 				spokeDynamicClient: fakeDynamicClient,
 				spokeClient:        &test.MockClient{},
-				restMapper:         testMapper{},
+				restMapper:         utils.TestMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 				joined:             atomic.NewBool(true),
 			},
@@ -872,7 +855,7 @@ func TestReconcile(t *testing.T) {
 						return nil
 					},
 				},
-				restMapper: testMapper{},
+				restMapper: utils.TestMapper{},
 				recorder:   utils.NewFakeRecorder(1),
 				joined:     atomic.NewBool(true),
 			},
@@ -897,7 +880,7 @@ func TestReconcile(t *testing.T) {
 				},
 				spokeDynamicClient: fakeDynamicClient,
 				spokeClient:        &test.MockClient{},
-				restMapper:         testMapper{},
+				restMapper:         utils.TestMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 				joined:             atomic.NewBool(true),
 			},
@@ -928,7 +911,7 @@ func TestReconcile(t *testing.T) {
 						return nil
 					},
 				},
-				restMapper: testMapper{},
+				restMapper: utils.TestMapper{},
 				recorder:   utils.NewFakeRecorder(1),
 				joined:     atomic.NewBool(true),
 			},
@@ -950,7 +933,7 @@ func TestReconcile(t *testing.T) {
 						return nil
 					},
 				},
-				restMapper: testMapper{},
+				restMapper: utils.TestMapper{},
 				recorder:   utils.NewFakeRecorder(2),
 				joined:     atomic.NewBool(true),
 			},
@@ -969,7 +952,7 @@ func TestReconcile(t *testing.T) {
 				spokeClient: &test.MockClient{
 					MockGet: getMockAppliedWork,
 				},
-				restMapper: testMapper{},
+				restMapper: utils.TestMapper{},
 				recorder:   utils.NewFakeRecorder(2),
 				joined:     atomic.NewBool(true),
 			},
@@ -991,7 +974,7 @@ func TestReconcile(t *testing.T) {
 						return nil
 					},
 				},
-				restMapper: testMapper{},
+				restMapper: utils.TestMapper{},
 				recorder:   utils.NewFakeRecorder(1),
 				joined:     atomic.NewBool(true),
 			},

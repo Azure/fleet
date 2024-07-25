@@ -1,0 +1,18 @@
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourcePlacement
+metadata:
+  name: afd-crp
+spec:
+  resourceSelectors:
+    - group: ""
+      kind: Namespace
+      name: test-afd
+      version: v1
+  policy:
+    placementType: PickAll
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 2 
+      maxSurge: 25%
+      unavailablePeriodSeconds: 60

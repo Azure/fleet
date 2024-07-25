@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
@@ -99,7 +100,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				klog.ErrorS(err, "Failed to process update event")
 				return false
 			}
-			return areConditionsUpdated(oldBinding, newBinding)
+			return isBindingStatusUpdated(oldBinding, newBinding)
 		},
 	}
 
@@ -109,14 +110,19 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func areConditionsUpdated(oldBinding, newBinding *fleetv1beta1.ClusterResourceBinding) bool {
+func isBindingStatusUpdated(oldBinding, newBinding *fleetv1beta1.ClusterResourceBinding) bool {
 	for i := condition.RolloutStartedCondition; i < condition.TotalCondition; i++ {
 		oldCond := oldBinding.GetCondition(string(i.ResourceBindingConditionType()))
 		newCond := newBinding.GetCondition(string(i.ResourceBindingConditionType()))
-		// oldCond.ObservedGeneration will always be less than or equal to newCond.ObservedGeneration.
 		if !condition.EqualCondition(oldCond, newCond) {
+			klog.V(2).InfoS("The binding condition has changed, need to update the corresponding CRP", "oldBinding", klog.KObj(oldBinding), "newBinding", klog.KObj(newBinding))
 			return true
 		}
 	}
+	if !utils.IsFailedResourcePlacementsEqual(oldBinding.Status.FailedPlacements, newBinding.Status.FailedPlacements) {
+		klog.V(2).InfoS("The binding failed placement has changed, need to update the corresponding CRP", "oldBinding", klog.KObj(oldBinding), "newBinding", klog.KObj(newBinding))
+		return true
+	}
+	klog.V(5).InfoS("The binding status has not changed, no need to update the corresponding CRP", "oldBinding", klog.KObj(oldBinding), "newBinding", klog.KObj(newBinding))
 	return false
 }

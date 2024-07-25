@@ -17,6 +17,12 @@ import (
 	"go.goms.io/fleet/pkg/utils/validator"
 )
 
+const (
+	allowUpdateOldInvalidCRPFmt   = "allow update on old invalid v1beta1 CRP with DeletionTimestamp set"
+	denyUpdateOldInvalidCRPFmt    = "deny update on old invalid v1beta1 CRP with DeletionTimestamp not set %s"
+	denyCreateUpdateInvalidCRPFmt = "deny create/update v1beta1 CRP has invalid fields %s"
+)
+
 var (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating v1beta1 CRP resources.
 	ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, placementv1beta1.GroupVersion.Group, placementv1beta1.GroupVersion.Version, "clusterresourceplacement")
@@ -42,14 +48,18 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 			klog.ErrorS(err, "failed to decode v1beta1 CRP object for create/update operation", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
 			return admission.Errored(http.StatusBadRequest, err)
 		}
-		if err := validator.ValidateClusterResourcePlacement(&crp); err != nil {
-			klog.V(2).InfoS("v1beta1 cluster resource placement has invalid fields, request is denied", "operation", req.Operation, "namespacedName", types.NamespacedName{Name: crp.Name})
-			return admission.Denied(err.Error())
-		}
 		if req.Operation == admissionv1.Update {
 			var oldCRP placementv1beta1.ClusterResourcePlacement
 			if err := v.decoder.DecodeRaw(req.OldObject, &oldCRP); err != nil {
 				return admission.Errored(http.StatusBadRequest, err)
+			}
+			// this is a special case where we allow updates to old v1beta1 CRP with invalid fields so that we can
+			// update the CRP to remove finalizer then delete CRP.
+			if err := validator.ValidateClusterResourcePlacement(&oldCRP); err != nil {
+				if crp.DeletionTimestamp != nil {
+					return admission.Allowed(allowUpdateOldInvalidCRPFmt)
+				}
+				return admission.Denied(fmt.Sprintf(denyUpdateOldInvalidCRPFmt, err))
 			}
 			// handle update case where placement type should be immutable.
 			if validator.IsPlacementPolicyTypeUpdated(oldCRP.Spec.Policy, crp.Spec.Policy) {
@@ -59,6 +69,10 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 			if validator.IsTolerationsUpdatedOrDeleted(oldCRP.Tolerations(), crp.Tolerations()) {
 				return admission.Denied("tolerations have been updated/deleted, only additions to tolerations are allowed")
 			}
+		}
+		if err := validator.ValidateClusterResourcePlacement(&crp); err != nil {
+			klog.V(2).InfoS("v1beta1 cluster resource placement has invalid fields, request is denied", "operation", req.Operation, "namespacedName", types.NamespacedName{Name: crp.Name})
+			return admission.Denied(fmt.Sprintf(denyCreateUpdateInvalidCRPFmt, err))
 		}
 	}
 	klog.V(2).InfoS("user is allowed to modify v1beta1 cluster resource placement", "operation", req.Operation, "user", req.UserInfo.Username, "group", req.UserInfo.Groups, "namespacedName", types.NamespacedName{Name: crp.Name})

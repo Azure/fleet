@@ -1,0 +1,22 @@
+apiVersion: placement.kubernetes-fleet.io/v1alpha1
+kind: ResourceOverride
+metadata:
+  name: config-ro
+  namespace: test-afd
+spec:
+  resourceSelectors:
+    -  group: "apps"
+       kind: Deployment
+       version: v1
+       name: test-nginx 
+  policy:
+    overrideRules:
+      - clusterSelector:
+          clusterSelectorTerms:
+            - labelSelector:
+                matchLabels:
+                  fleet.azure.com/location: eastus
+        jsonPatchOverrides:
+          - op: replace
+            path: /spec/template/spec/containers/0/volumeMounts/0/subPath
+            value: v2.html
