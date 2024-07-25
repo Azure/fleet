@@ -181,7 +181,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 		Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Delete(ctx, &mc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &mcGVK, "", types.NamespacedName{Name: mc.Name}))).Should(Succeed())
 	})
 
-	It("should allow update operation on fleet member cluster CR labels for any user", func() {
+	It("should allow update operation on fleet member cluster CR labels for non system user", func() {
 		var mc clusterv1beta1.MemberCluster
 		By(fmt.Sprintf("update labels in fleet member cluster %s, expecting successful UPDATE of fleet member cluster", mcName))
 		Eventually(func(g Gomega) error {
@@ -194,7 +194,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
-	It("should allow update operation on fleet member cluster CR annotations except fleet pre-fixed annotation for any user", func() {
+	It("should allow update operation on fleet member cluster CR annotations except fleet pre-fixed annotation for non system user", func() {
 		var mc clusterv1beta1.MemberCluster
 		By(fmt.Sprintf("update annotations in fleet member cluster %s, expecting successful UPDATE of fleet member cluster", mcName))
 		Eventually(func(g Gomega) error {
@@ -231,7 +231,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
-	It("should allow update operation on fleet member cluster CR taints for any user", func() {
+	It("should allow update operation on fleet member cluster CR taints for non system user", func() {
 		var mc clusterv1beta1.MemberCluster
 		By(fmt.Sprintf("update taints in fleet member cluster %s, expecting successful UPDATE of fleet member cluster", mcName))
 		Eventually(func(g Gomega) error {
@@ -368,7 +368,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
-	It("should allow update operation on upstream member cluster CR labels for any user", func() {
+	It("should allow update operation on upstream member cluster CR labels for non system user", func() {
 		var mc clusterv1beta1.MemberCluster
 		By(fmt.Sprintf("update labels in upstream member cluster %s, expecting successful UPDATE of upstream member cluster", mcName))
 		Eventually(func(g Gomega) error {
@@ -381,7 +381,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
-	It("should allow update operation on upstream member cluster CR annotations for any user", func() {
+	It("should allow update operation on upstream member cluster CR annotations for non system user", func() {
 		var mc clusterv1beta1.MemberCluster
 		By(fmt.Sprintf("update annotations in upstream member cluster %s, expecting successful UPDATE of upstream member cluster", mcName))
 		Eventually(func(g Gomega) error {
@@ -394,7 +394,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
-	It("should allow update operation on upstream member cluster CR taints for any user", func() {
+	It("should allow update operation on upstream member cluster CR taints for non system user", func() {
 		var mc clusterv1beta1.MemberCluster
 		By(fmt.Sprintf("update taints in upstream member cluster %s, expecting successful UPDATE of upstream member cluster", mcName))
 		Eventually(func(g Gomega) error {
