@@ -1,4 +1,4 @@
-# Tutorial: Migrating Applications to Another Region When a Region Goes Down
+# Tutorial: Migrating Applications to Another Cluster When a Cluster Goes Down
 This tutorial demonstrates how to move applications from clusters in a region that have gone down to clusters in another region using AKS Fleet.
 
 ## Scenario
@@ -237,11 +237,11 @@ Summary:
 - The placement policy PickN selects 2 clusters. The clusters are selected based on the label `fleet.azure.com/location: westus`.
 - It targets resources in the `test-app` namespace.
 
-## Migrating Applications to a Different Region
+## Migrating Applications to a Cluster in a Different Region
 When the clusters in WestUS go down, update the ClusterResourcePlacement (CRP) to migrate the applications to another region. 
 For this tutorial, we will move them to WestEurope.
 
-#### Update the CRP for Migration to WestEurope
+#### Update the CRP for Migration to WestEurope Cluster
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1
 kind: ClusterResourcePlacement

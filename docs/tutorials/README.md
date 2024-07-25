@@ -11,7 +11,7 @@ Follow the instructions provided to get the most out of Fleet's features.
 
 
 Below is a walkthrough of all the how-to guides currently available:
-* [Migrating Applications to Another Region When a Region Goes Down ](RegionMigrationDR.md)
+* [Migrating Applications to Another Cluster When a Cluster Goes Down ](ClusterMigrationDR.md)
 
   This tutorial guides you through migrating application resources across regions using Fleet. 
   If a region experiences an outage, you can update the `ClusterResourcePlacement` (CRP) to redeploy your Kubernetes Service 
