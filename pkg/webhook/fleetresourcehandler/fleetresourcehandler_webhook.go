@@ -128,13 +128,13 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 		if err := v.decoder.DecodeRaw(req.OldObject, &oldMC); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
-		isFleetMC := isAnnotationPresent(oldMC.Annotations, utils.FleetClusterResourceIsAnnotationKey)
+		isFleetMC := utils.IsFleetAnnotationPresent(oldMC.Annotations)
 		if isFleetMC {
 			return validation.ValidateFleetMemberClusterUpdate(currentMC, oldMC, req, v.whiteListedUsers)
 		}
 		return validation.ValidatedUpstreamMemberClusterUpdate(currentMC, oldMC, req, v.whiteListedUsers)
 	}
-	isFleetMC := isAnnotationPresent(currentMC.Annotations, utils.FleetClusterResourceIsAnnotationKey)
+	isFleetMC := utils.IsFleetAnnotationPresent(currentMC.Annotations)
 	if isFleetMC {
 		return validation.ValidateUserForResource(req, v.whiteListedUsers)
 	}
@@ -207,10 +207,4 @@ func parseMemberClusterNameFromNamespace(namespace string) string {
 		mcName = namespace[startIndex:]
 	}
 	return mcName
-}
-
-// isAnnotationPresent returns true if the key is present in the annotations map.
-func isAnnotationPresent(annotations map[string]string, key string) bool {
-	_, exists := annotations[key]
-	return exists
 }

@@ -53,7 +53,7 @@ var _ = Describe("fleet guard rail tests for deny fleet MC CREATE operations", f
 		mc := &clusterv1beta1.MemberCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        mcName,
-				Annotations: map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1},
+				Annotations: map[string]string{fleetClusterResourceIsAnnotationKey: clusterID1},
 			},
 			Spec: clusterv1beta1.MemberClusterSpec{
 				Identity: rbacv1.Subject{
@@ -74,14 +74,14 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
-		createMemberCluster(mcName, testUser, nil, map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
+		createMemberCluster(mcName, testUser, nil, map[string]string{fleetClusterResourceIsAnnotationKey: clusterID1})
 	})
 
 	AfterAll(func() {
 		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 
-	It("should deny update operation on fleet member cluster CR fleet cluster id annotation for user not in system:masters group", func() {
+	It("should deny update operation on fleet member cluster CR, fleet prefixed annotation for user not in system:masters group", func() {
 		Eventually(func(g Gomega) error {
 			var mc clusterv1beta1.MemberCluster
 			err := hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)
@@ -92,7 +92,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			if len(mc.Annotations) == 0 {
 				return errors.New("annotations are empty")
 			}
-			mc.Annotations[utils.FleetClusterResourceIsAnnotationKey] = clusterID2
+			mc.Annotations[fleetClusterResourceIsAnnotationKey] = clusterID2
 			err = impersonateHubClient.Update(ctx, &mc)
 			if k8sErrors.IsConflict(err) {
 				return err
@@ -112,7 +112,24 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
-			return checkIfStatusErrorWithMessage(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "", types.NamespacedName{Name: mc.Name}))
+			return checkIfStatusErrorWithMessage(err, "no user is allowed to remove all fleet pre-fixed annotation from a fleet member cluster")
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	})
+
+	It("should deny update operation on fleet member cluster CR, fleet prefixed annotation for user in system:masters group", func() {
+		Eventually(func(g Gomega) error {
+			var mc clusterv1beta1.MemberCluster
+			err := hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)
+			if err != nil {
+				return err
+			}
+			By(fmt.Sprintf("remove fleet member cluster, cluster id annotation %s", mc.Name))
+			mc.SetAnnotations(nil)
+			err = hubClient.Update(ctx, &mc)
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
+			return checkIfStatusErrorWithMessage(err, "no user is allowed to remove all fleet pre-fixed annotation from a fleet member cluster")
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -195,7 +212,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
-	It("should allow update operation on fleet member cluster CR to modify fleet cluster resource id annotation for user in system:masters group", func() {
+	It("should allow update operation on fleet member cluster CR to modify fleet pre-fixed annotation for user in system:masters group", func() {
 		var mc clusterv1beta1.MemberCluster
 		By(fmt.Sprintf("update fleet member cluster, remove cluster id annotation %s", mcName))
 		Eventually(func(g Gomega) error {
@@ -203,7 +220,13 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			if err != nil {
 				return err
 			}
-			mc.SetAnnotations(nil)
+			annotations := mc.GetAnnotations()
+			_, exists := annotations[fleetClusterResourceIsAnnotationKey]
+			if !exists {
+				return errors.New("fleet-prefixed cluster resource id annotation not found")
+			}
+			annotations[fleetClusterResourceIsAnnotationKey] = clusterID2
+			mc.SetAnnotations(annotations)
 			return hubClient.Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
@@ -291,7 +314,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 
-	It("should deny update operation on upstream member cluster CR fleet cluster id annotation for user not in system:masters group", func() {
+	It("should deny update operation on upstream member cluster CR fleet pre-fixed annotation for user not in system:masters group", func() {
 		Eventually(func(g Gomega) error {
 			var mc clusterv1beta1.MemberCluster
 			err := hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)
@@ -299,12 +322,29 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 				return err
 			}
 			By(fmt.Sprintf("add fleet member cluster, cluster id annotation %s", mc.Name))
-			mc.SetAnnotations(map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
+			mc.SetAnnotations(map[string]string{fleetClusterResourceIsAnnotationKey: clusterID1})
 			err = impersonateHubClient.Update(ctx, &mc)
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
-			return checkIfStatusErrorWithMessage(err, fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "", types.NamespacedName{Name: mc.Name}))
+			return checkIfStatusErrorWithMessage(err, "no user is allowed to add a fleet pre-fixed annotation to an upstream member cluster")
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	})
+
+	It("should deny update operation on upstream member cluster CR fleet pre-fixed annotation for user in system:masters group", func() {
+		Eventually(func(g Gomega) error {
+			var mc clusterv1beta1.MemberCluster
+			err := hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)
+			if err != nil {
+				return err
+			}
+			By(fmt.Sprintf("add fleet member cluster, cluster id annotation %s", mc.Name))
+			mc.SetAnnotations(map[string]string{fleetClusterResourceIsAnnotationKey: clusterID1})
+			err = hubClient.Update(ctx, &mc)
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
+			return checkIfStatusErrorWithMessage(err, "no user is allowed to add a fleet pre-fixed annotation to an upstream member cluster")
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -351,29 +391,6 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 			}
 			mc.SetAnnotations(map[string]string{testKey: testValue})
 			return impersonateHubClient.Update(ctx, &mc)
-		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
-	})
-
-	It("should allow update operation on upstream member cluster CR to add fleet cluster resource id annotation for user in system:masters group", func() {
-		var mc clusterv1beta1.MemberCluster
-		By(fmt.Sprintf("update fleet member cluster, add cluster id annotation %s", mcName))
-		Eventually(func(g Gomega) error {
-			err := hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)
-			if err != nil {
-				return err
-			}
-			mc.SetAnnotations(map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
-			err = hubClient.Update(ctx, &mc)
-			if k8sErrors.IsConflict(err) {
-				return err
-			}
-			// remove the annotation to allow other tests to run correctly.
-			err = hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)
-			if err != nil {
-				return err
-			}
-			mc.SetAnnotations(nil)
-			return hubClient.Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -444,7 +461,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 	imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 	BeforeAll(func() {
-		createMemberCluster(mcName, testIdentity, nil, map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
+		createMemberCluster(mcName, testIdentity, nil, map[string]string{fleetClusterResourceIsAnnotationKey: clusterID1})
 		checkInternalMemberClusterExists(mcName, imcNamespace)
 	})
 
@@ -523,7 +540,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 	imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 	BeforeAll(func() {
-		createMemberCluster(mcName, testUser, nil, map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
+		createMemberCluster(mcName, testUser, nil, map[string]string{fleetClusterResourceIsAnnotationKey: clusterID1})
 		checkInternalMemberClusterExists(mcName, imcNamespace)
 	})
 
@@ -586,7 +603,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 	workName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
-		createMemberCluster(mcName, testIdentity, nil, map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
+		createMemberCluster(mcName, testIdentity, nil, map[string]string{fleetClusterResourceIsAnnotationKey: clusterID1})
 		checkInternalMemberClusterExists(mcName, imcNamespace)
 		createWorkResource(workName, imcNamespace)
 	})
@@ -677,7 +694,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 	workName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
-		createMemberCluster(mcName, testUser, nil, map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
+		createMemberCluster(mcName, testUser, nil, map[string]string{fleetClusterResourceIsAnnotationKey: clusterID1})
 		checkInternalMemberClusterExists(mcName, imcNamespace)
 		createWorkResource(workName, imcNamespace)
 	})
@@ -743,7 +760,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 		BeforeEach(func() {
-			createMemberCluster(mcName, "random-user", nil, map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
+			createMemberCluster(mcName, "random-user", nil, map[string]string{fleetClusterResourceIsAnnotationKey: clusterID1})
 			checkInternalMemberClusterExists(mcName, imcNamespace)
 			ise := internalServiceExport(iseName, imcNamespace)
 			// can return no kind match error.
@@ -781,7 +798,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 		epName := fmt.Sprintf(endpointSliceExportNameTemplate, GinkgoParallelProcess())
 		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 		BeforeEach(func() {
-			createMemberCluster(mcName, "test-user", nil, map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
+			createMemberCluster(mcName, "test-user", nil, map[string]string{fleetClusterResourceIsAnnotationKey: clusterID1})
 			checkInternalMemberClusterExists(mcName, imcNamespace)
 		})
 
@@ -814,7 +831,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 		BeforeEach(func() {
-			createMemberCluster(mcName, testUser, nil, map[string]string{utils.FleetClusterResourceIsAnnotationKey: clusterID1})
+			createMemberCluster(mcName, testUser, nil, map[string]string{fleetClusterResourceIsAnnotationKey: clusterID1})
 			checkInternalMemberClusterExists(mcName, imcNamespace)
 			ise := internalServiceExport(iseName, imcNamespace)
 			// can return no kind match error.

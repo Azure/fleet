@@ -29,6 +29,10 @@ const (
 	mcName                 = "test-mc"
 	testClusterResourceID1 = "test-cluster-resource-id-1"
 	testClusterResourceID2 = "test-cluster-resource-id-2"
+	testLocation           = "test-location"
+
+	fleetClusterResourceIsAnnotationKey = "fleet.azure.com/cluster-resource-id"
+	fleetLocationAnnotationKey          = "fleet.azure.com/location"
 )
 
 func TestHandleCRD(t *testing.T) {
@@ -401,8 +405,11 @@ func TestHandleMemberCluster(t *testing.T) {
 			Kind: "MemberCluster",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        "test-mc",
-			Annotations: map[string]string{utils.FleetClusterResourceIsAnnotationKey: testClusterResourceID1},
+			Name: "test-mc",
+			Annotations: map[string]string{
+				fleetClusterResourceIsAnnotationKey: testClusterResourceID1,
+				fleetLocationAnnotationKey:          testLocation,
+			},
 		},
 		Spec: clusterv1beta1.MemberClusterSpec{
 			Identity: rbacv1.Subject{
@@ -411,13 +418,33 @@ func TestHandleMemberCluster(t *testing.T) {
 			},
 		},
 	}
-	updateClusterResourceIDAnnotationFleetMCObject := &clusterv1beta1.MemberCluster{
+	updateClusterResourceIDAnnotationFleetMCObject1 := &clusterv1beta1.MemberCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind: "MemberCluster",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        "test-mc",
-			Annotations: map[string]string{utils.FleetClusterResourceIsAnnotationKey: testClusterResourceID2},
+			Name: "test-mc",
+			Annotations: map[string]string{
+				fleetClusterResourceIsAnnotationKey: testClusterResourceID2,
+				fleetLocationAnnotationKey:          testLocation,
+			},
+		},
+		Spec: clusterv1beta1.MemberClusterSpec{
+			Identity: rbacv1.Subject{
+				Kind: "User",
+				Name: "test-user",
+			},
+		},
+	}
+	updateClusterResourceIDAnnotationFleetMCObject2 := &clusterv1beta1.MemberCluster{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "MemberCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-mc",
+			Annotations: map[string]string{
+				fleetClusterResourceIsAnnotationKey: testClusterResourceID2,
+			},
 		},
 		Spec: clusterv1beta1.MemberClusterSpec{
 			Identity: rbacv1.Subject{
@@ -445,9 +472,12 @@ func TestHandleMemberCluster(t *testing.T) {
 			Kind: "MemberCluster",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        "test-mc",
-			Labels:      map[string]string{"test-key": "test-value"},
-			Annotations: map[string]string{utils.FleetClusterResourceIsAnnotationKey: testClusterResourceID1},
+			Name:   "test-mc",
+			Labels: map[string]string{"test-key": "test-value"},
+			Annotations: map[string]string{
+				fleetClusterResourceIsAnnotationKey: testClusterResourceID1,
+				fleetLocationAnnotationKey:          testLocation,
+			},
 		},
 		Spec: clusterv1beta1.MemberClusterSpec{
 			Identity: rbacv1.Subject{
@@ -478,8 +508,9 @@ func TestHandleMemberCluster(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-mc",
 			Annotations: map[string]string{
-				utils.FleetClusterResourceIsAnnotationKey: testClusterResourceID1,
-				"test-key": "test-value",
+				fleetClusterResourceIsAnnotationKey: testClusterResourceID1,
+				fleetLocationAnnotationKey:          testLocation,
+				"test-key":                          "test-value",
 			},
 		},
 		Spec: clusterv1beta1.MemberClusterSpec{
@@ -511,8 +542,11 @@ func TestHandleMemberCluster(t *testing.T) {
 			Kind: "MemberCluster",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        "test-mc",
-			Annotations: map[string]string{utils.FleetClusterResourceIsAnnotationKey: testClusterResourceID1},
+			Name: "test-mc",
+			Annotations: map[string]string{
+				fleetClusterResourceIsAnnotationKey: testClusterResourceID1,
+				fleetLocationAnnotationKey:          testLocation,
+			},
 		},
 		Spec: clusterv1beta1.MemberClusterSpec{
 			Identity: rbacv1.Subject{
@@ -533,8 +567,11 @@ func TestHandleMemberCluster(t *testing.T) {
 			Kind: "MemberCluster",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        "test-mc",
-			Annotations: map[string]string{utils.FleetClusterResourceIsAnnotationKey: testClusterResourceID1},
+			Name: "test-mc",
+			Annotations: map[string]string{
+				fleetClusterResourceIsAnnotationKey: testClusterResourceID1,
+				fleetLocationAnnotationKey:          testLocation,
+			},
 		},
 		Spec: clusterv1beta1.MemberClusterSpec{
 			Identity: rbacv1.Subject{
@@ -571,8 +608,11 @@ func TestHandleMemberCluster(t *testing.T) {
 			Kind: "MemberCluster",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        "test-mc",
-			Annotations: map[string]string{utils.FleetClusterResourceIsAnnotationKey: testClusterResourceID1},
+			Name: "test-mc",
+			Annotations: map[string]string{
+				fleetClusterResourceIsAnnotationKey: testClusterResourceID1,
+				fleetLocationAnnotationKey:          testLocation,
+			},
 		},
 		Spec: clusterv1beta1.MemberClusterSpec{
 			Identity: rbacv1.Subject{
@@ -615,7 +655,9 @@ func TestHandleMemberCluster(t *testing.T) {
 
 	fleetMCObjectBytes, err := json.Marshal(fleetMCObject)
 	assert.Nil(t, err)
-	updateClusterResourceIDAnnotationFleetMCObjectBytes, err := json.Marshal(updateClusterResourceIDAnnotationFleetMCObject)
+	updateClusterResourceIDAnnotationFleetMCObjectBytes1, err := json.Marshal(updateClusterResourceIDAnnotationFleetMCObject1)
+	assert.Nil(t, err)
+	updateClusterResourceIDAnnotationFleetMCObjectBytes2, err := json.Marshal(updateClusterResourceIDAnnotationFleetMCObject2)
 	assert.Nil(t, err)
 	mcObjectBytes, err := json.Marshal(mcObject)
 	assert.Nil(t, err)
@@ -654,8 +696,7 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -675,8 +716,7 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -696,8 +736,7 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    mcObjectBytes,
-						Object: mcObject,
+						Raw: mcObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -717,12 +756,10 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -742,12 +779,10 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -767,12 +802,10 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    mcObjectBytes,
-						Object: mcObject,
+						Raw: mcObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    mcObjectBytes,
-						Object: mcObject,
+						Raw: mcObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -792,12 +825,10 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    labelUpdatedFleetMCObjectBytes,
-						Object: labelUpdatedFleetMCObject,
+						Raw: labelUpdatedFleetMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -817,12 +848,10 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    labelUpdatedMCObjectBytes,
-						Object: labelUpdatedMCObject,
+						Raw: labelUpdatedMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    mcObjectBytes,
-						Object: mcObject,
+						Raw: mcObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -837,17 +866,15 @@ func TestHandleMemberCluster(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
-		"allow any user to modify fleet MC annotations other than fleet cluster resource ID annotation": {
+		"allow any user to modify fleet MC annotations other than fleet pre-fixed annotation": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    annotationUpdatedFleetMCObjectBytes,
-						Object: annotationUpdatedFleetMCObject,
+						Raw: annotationUpdatedFleetMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -862,17 +889,15 @@ func TestHandleMemberCluster(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
-		"deny any user to modify fleet MC annotations, update fleet cluster resource ID annotation": {
+		"deny any user to modify fleet MC annotations, update fleet pre-fixed annotation": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    updateClusterResourceIDAnnotationFleetMCObjectBytes,
-						Object: updateClusterResourceIDAnnotationFleetMCObject,
+						Raw: updateClusterResourceIDAnnotationFleetMCObjectBytes1,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -887,17 +912,15 @@ func TestHandleMemberCluster(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
-		"deny any user to modify fleet MC annotations, remove fleet cluster resource ID annotation": {
+		"deny user in system:masters group to modify fleet MC annotations, remove all fleet pre-fixed annotations": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    mcObjectBytes,
-						Object: mcObject,
+						Raw: mcObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -910,19 +933,17 @@ func TestHandleMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Denied("no user is allowed to remove all fleet pre-fixed annotation from a fleet member cluster"),
 		},
-		"allow user in system:masters group to modify fleet MC annotations, update fleet cluster resource ID annotation": {
+		"allow user in system:masters group to modify fleet MC annotations, update one fleet pre-fixed annotation": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    updateClusterResourceIDAnnotationFleetMCObjectBytes,
-						Object: updateClusterResourceIDAnnotationFleetMCObject,
+						Raw: updateClusterResourceIDAnnotationFleetMCObjectBytes1,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -937,17 +958,15 @@ func TestHandleMemberCluster(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"system:masters"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
-		"allow user in system:masters group to modify fleet MC annotations, remove fleet cluster resource ID annotation": {
+		"allow user in system:masters group to modify fleet MC annotations, update one fleet pre-fixed annotation and remove another fleet pre-fixed annotation": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    mcObjectBytes,
-						Object: mcObject,
+						Raw: updateClusterResourceIDAnnotationFleetMCObjectBytes2,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -967,12 +986,10 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    annotationUpdatedMCObjectBytes,
-						Object: annotationUpdatedMCObject,
+						Raw: annotationUpdatedMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    mcObjectBytes,
-						Object: mcObject,
+						Raw: mcObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -987,42 +1004,15 @@ func TestHandleMemberCluster(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
-		"deny any user to modify upstream MC annotations, by adding fleet cluster resource ID annotation": {
+		"deny user in system:masters group to modify upstream MC annotations, by adding fleet cluster resource ID annotation": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    mcObjectBytes,
-						Object: mcObject,
-					},
-					UserInfo: authenticationv1.UserInfo{
-						Username: "test-user",
-						Groups:   []string{"test-group"},
-					},
-					RequestKind: &utils.MCMetaGVK,
-					Operation:   admissionv1.Update,
-				},
-			},
-			resourceValidator: fleetResourceValidator{
-				decoder: decoder,
-			},
-			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
-		},
-		"allow user in system:masters group to modify upstream MC annotations, by adding fleet cluster resource ID annotation": {
-			req: admission.Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name: "test-mc",
-					Object: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
-					},
-					OldObject: runtime.RawExtension{
-						Raw:    mcObjectBytes,
-						Object: mcObject,
+						Raw: mcObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -1035,19 +1025,17 @@ func TestHandleMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"system:masters"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Denied("no user is allowed to add a fleet pre-fixed annotation to an upstream member cluster"),
 		},
 		"allow any user to modify fleet MC taints": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    taintUpdatedFleetMCObjectBytes,
-						Object: taintUpdatedFleetMCObject,
+						Raw: taintUpdatedFleetMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -1067,12 +1055,10 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    specUpdatedFleetMCObjectBytes,
-						Object: specUpdatedFleetMCObject,
+						Raw: specUpdatedFleetMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -1092,12 +1078,10 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    specUpdatedFleetMCObjectBytes,
-						Object: specUpdatedFleetMCObject,
+						Raw: specUpdatedFleetMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -1117,12 +1101,10 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    specUpdatedFleetMCObjectBytes,
-						Object: specUpdatedFleetMCObject,
+						Raw: specUpdatedFleetMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -1143,12 +1125,10 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    specUpdatedMCObjectBytes,
-						Object: specUpdatedMCObject,
+						Raw: specUpdatedMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    mcObjectBytes,
-						Object: mcObject,
+						Raw: mcObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -1168,12 +1148,10 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    statusUpdatedFleetMCObjectBytes,
-						Object: statusUpdatedFleetMCObject,
+						Raw: statusUpdatedFleetMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -1194,12 +1172,10 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    statusUpdatedFleetMCObjectBytes,
-						Object: statusUpdatedFleetMCObject,
+						Raw: statusUpdatedFleetMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -1221,12 +1197,10 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    statusUpdatedFleetMCObjectBytes,
-						Object: statusUpdatedFleetMCObject,
+						Raw: statusUpdatedFleetMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    fleetMCObjectBytes,
-						Object: fleetMCObject,
+						Raw: fleetMCObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -1247,12 +1221,10 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    statusUpdatedMCObjectBytes,
-						Object: statusUpdatedMCObject,
+						Raw: statusUpdatedMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    mcObjectBytes,
-						Object: mcObject,
+						Raw: mcObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -1273,12 +1245,10 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    statusUpdatedMCObjectBytes,
-						Object: statusUpdatedMCObject,
+						Raw: statusUpdatedMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    mcObjectBytes,
-						Object: mcObject,
+						Raw: mcObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -1300,12 +1270,10 @@ func TestHandleMemberCluster(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-mc",
 					Object: runtime.RawExtension{
-						Raw:    statusUpdatedMCObjectBytes,
-						Object: statusUpdatedMCObject,
+						Raw: statusUpdatedMCObjectBytes,
 					},
 					OldObject: runtime.RawExtension{
-						Raw:    mcObjectBytes,
-						Object: mcObject,
+						Raw: mcObjectBytes,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",

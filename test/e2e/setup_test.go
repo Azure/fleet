@@ -60,9 +60,10 @@ const (
 	hubClusterSAName = "fleet-hub-agent"
 	fleetSystemNS    = "fleet-system"
 
-	kubeConfigPathEnvVarName         = "KUBECONFIG"
-	propertyProviderEnvVarName       = "PROPERTY_PROVIDER"
-	azurePropertyProviderEnvVarValue = "azure"
+	kubeConfigPathEnvVarName            = "KUBECONFIG"
+	propertyProviderEnvVarName          = "PROPERTY_PROVIDER"
+	azurePropertyProviderEnvVarValue    = "azure"
+	fleetClusterResourceIsAnnotationKey = "fleet.azure.com/cluster-resource-id"
 )
 
 const (
@@ -120,13 +121,13 @@ var (
 	}
 	annotationsByClusterName = map[string]map[string]string{
 		memberCluster1EastProdName: {
-			utils.FleetClusterResourceIsAnnotationKey: clusterID1,
+			fleetClusterResourceIsAnnotationKey: clusterID1,
 		},
 		memberCluster2EastCanaryName: {
-			utils.FleetClusterResourceIsAnnotationKey: clusterID2,
+			fleetClusterResourceIsAnnotationKey: clusterID2,
 		},
 		memberCluster3WestProdName: {
-			utils.FleetClusterResourceIsAnnotationKey: clusterID3,
+			fleetClusterResourceIsAnnotationKey: clusterID3,
 		},
 	}
 

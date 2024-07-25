@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -29,8 +31,10 @@ const (
 	kubeControllerManagerUser = "system:kube-controller-manager"
 	serviceAccountFmt         = "system:serviceaccount:fleet-system:%s"
 
-	allowedModifyResource = "user in groups is allowed to modify resource"
-	deniedModifyResource  = "user in groups is not allowed to modify resource"
+	allowedModifyResource     = "user in groups is allowed to modify resource"
+	deniedModifyResource      = "user in groups is not allowed to modify resource"
+	denyAddFleetAnnotation    = "no user is allowed to add a fleet pre-fixed annotation to an upstream member cluster"
+	denyRemoveFleetAnnotation = "no user is allowed to remove all fleet pre-fixed annotation from a fleet member cluster"
 
 	ResourceAllowedFormat      = "user: '%s' in '%s' is allowed to %s resource %+v/%s: %+v"
 	ResourceDeniedFormat       = "user: '%s' in '%s' is not allowed to %s resource %+v/%s: %+v"
@@ -94,14 +98,19 @@ func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberClus
 	// set taints field to nil.
 	currentMC.Spec.Taints = nil
 	oldMC.Spec.Taints = nil
-	// any user is allowed to modify labels, annotations, taints on fleet MC.
+	isAnnotationUpdated, err := isFleetAnnotationUpdated(currentMC.Annotations, oldMC.Annotations)
+	if err != nil {
+		klog.V(2).InfoS(denyRemoveFleetAnnotation, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
+		return admission.Denied(denyRemoveFleetAnnotation)
+	}
 	isObjUpdated, err := isMemberClusterUpdated(currentMC.DeepCopy(), oldMC.DeepCopy())
 	if err != nil {
 		return admission.Denied(err.Error())
 	}
-	if isObjUpdated || isFleetClusterResourceIDAnnotationUpdated(currentMC.Annotations, oldMC.Annotations) {
+	if isObjUpdated || isAnnotationUpdated {
 		return ValidateUserForResource(req, whiteListedUsers)
 	}
+	// any user is allowed to modify labels, annotations, taints on fleet MC except fleet pre-fixed annotations.
 	klog.V(3).InfoS(allowedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 	return admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
 }
@@ -110,8 +119,12 @@ func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberClus
 func ValidatedUpstreamMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberCluster, req admission.Request, whiteListedUsers []string) admission.Response {
 	namespacedName := types.NamespacedName{Name: currentMC.GetName()}
 	userInfo := req.UserInfo
+	if isFleetAnnotationAdded(currentMC.Annotations, oldMC.Annotations) {
+		klog.V(2).InfoS(denyAddFleetAnnotation, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
+		return admission.Denied(denyAddFleetAnnotation)
+	}
 	// any user is allowed to modify MC spec for upstream MC.
-	if isMemberClusterStatusUpdated(currentMC.Status, oldMC.Status) || isFleetClusterResourceIDAnnotationAdded(currentMC.Annotations, oldMC.Annotations) {
+	if isMemberClusterStatusUpdated(currentMC.Status, oldMC.Status) {
 		return ValidateUserForResource(req, whiteListedUsers)
 	}
 	klog.V(3).InfoS(allowedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
@@ -150,17 +163,39 @@ func isMapFieldUpdated(currentMap, oldMap map[string]string) bool {
 	return !reflect.DeepEqual(currentMap, oldMap)
 }
 
-// isFleetClusterResourceIDAnnotationUpdated returns true if fleet cluster resource ID annotation is updated/removed.
-func isFleetClusterResourceIDAnnotationUpdated(currentMap, oldMap map[string]string) bool {
-	currentVal, currentExists := currentMap[utils.FleetClusterResourceIsAnnotationKey]
-	oldVal, oldExists := oldMap[utils.FleetClusterResourceIsAnnotationKey]
-	return oldExists && !currentExists || oldVal != currentVal
+// isFleetAnnotationUpdated returns true if fleet pre-fixed annotations are updated/deleted,
+// also returns an error if all fleet pre-fixed annotations are removed.
+func isFleetAnnotationUpdated(currentMap, oldMap map[string]string) (bool, error) {
+	currentExists := utils.IsFleetAnnotationPresent(currentMap)
+	oldExists := utils.IsFleetAnnotationPresent(oldMap)
+	if oldExists && !currentExists {
+		return true, errors.New("all fleet pre-fixed annotations are removed")
+	}
+	for oldKey, oldValue := range oldMap {
+		if strings.HasPrefix(oldKey, utils.FleetAnnotationPrefix) {
+			currentValue, exists := currentMap[oldKey]
+			if exists {
+				if currentValue != oldValue {
+					return true, nil
+				}
+			} else {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
-// isFleetClusterResourceIDAnnotationAdded returns true if fleet cluster resource ID annotation is added.
-func isFleetClusterResourceIDAnnotationAdded(currentMap, oldMap map[string]string) bool {
-	_, currentExists := currentMap[utils.FleetClusterResourceIsAnnotationKey]
-	_, oldExists := oldMap[utils.FleetClusterResourceIsAnnotationKey]
+//func isAllFleetAnnotationsRemoved(currentMap, oldMap map[string]string) bool {
+//	currentExists := utils.IsFleetAnnotationPresent(currentMap)
+//	oldExists := utils.IsFleetAnnotationPresent(oldMap)
+//	return oldExists && !currentExists
+//}
+
+// isFleetAnnotationAdded returns true if fleet pre-fixed annotation is added.
+func isFleetAnnotationAdded(currentMap, oldMap map[string]string) bool {
+	currentExists := utils.IsFleetAnnotationPresent(currentMap)
+	oldExists := utils.IsFleetAnnotationPresent(oldMap)
 	return !oldExists && currentExists
 }
 
