@@ -63,7 +63,8 @@ const (
 	kubeConfigPathEnvVarName            = "KUBECONFIG"
 	propertyProviderEnvVarName          = "PROPERTY_PROVIDER"
 	azurePropertyProviderEnvVarValue    = "azure"
-	fleetClusterResourceIsAnnotationKey = "fleet.azure.com/cluster-resource-id"
+	fleetClusterResourceIDAnnotationKey = "fleet.azure.com/cluster-resource-id"
+	fleetLocationAnnotationKey          = "fleet.azure.com/location"
 )
 
 const (
@@ -121,13 +122,13 @@ var (
 	}
 	annotationsByClusterName = map[string]map[string]string{
 		memberCluster1EastProdName: {
-			fleetClusterResourceIsAnnotationKey: clusterID1,
+			fleetClusterResourceIDAnnotationKey: clusterID1,
 		},
 		memberCluster2EastCanaryName: {
-			fleetClusterResourceIsAnnotationKey: clusterID2,
+			fleetClusterResourceIDAnnotationKey: clusterID2,
 		},
 		memberCluster3WestProdName: {
-			fleetClusterResourceIsAnnotationKey: clusterID3,
+			fleetClusterResourceIDAnnotationKey: clusterID3,
 		},
 	}
 
