@@ -82,15 +82,16 @@ export REGISTRY="mcr.microsoft.com/aks/fleet"
 export FLEET_VERSION=$(curl "https://api.github.com/repos/Azure/fleet/tags" | jq -r '.[0].name')
 export HUB_AGENT_IMAGE="hub-agent"
 
-# Clone the Fleet repository from GitHub.
+# Clone the Fleet repository from GitHub if not already done.
 git clone https://github.com/Azure/fleet.git
+cd fleet
 
 # Install the helm chart for running Fleet agents on the hub cluster.
-helm install hub-agent fleet/charts/hub-agent/ \
+helm install hub-agent ./charts/hub-agent/ \
     --set image.pullPolicy=Always \
     --set image.repository=$REGISTRY/$HUB_AGENT_IMAGE \
     --set image.tag=$FLEET_VERSION \
-    --set logVerbosity=2 \
+    --set logVerbosity=5 \
     --set namespace=fleet-system \
     --set enableWebhook=true \
     --set webhookClientConnectionType=service \
@@ -123,8 +124,8 @@ export HUB_CLUSTER_ADDRESS="https://$(docker inspect $HUB_CLUSTER-control-plane 
 export MEMBER_CLUSTER_CONTEXT=kind-$MEMBER_CLUSTER
 
 # Run the script.
-chmod +x fleet/hack/membership/join.sh
-./fleet/hack/membership/join.sh
+chmod +x ./hack/membership/join.sh
+./hack/membership/join.sh
 ```
 
 It may take a few minutes for the script to finish running. Once it is completed, verify

@@ -64,13 +64,19 @@ FLEET_VERSION="${FLEET_VERSION:-$(curl "https://api.github.com/repos/Azure/fleet
 MEMBER_AGENT_IMAGE="${MEMBER_AGENT_NAME:-member-agent}"
 REFRESH_TOKEN_IMAGE="${REFRESH_TOKEN_NAME:-refresh-token}"
 
-echo "Preparing to join a cluster into a fleet..."
+echo "docker pull images and load to kind"
+docker image pull --platform linux/amd64 $REGISTRY/$MEMBER_AGENT_IMAGE:$FLEET_VERSION
+docker image pull --platform linux/amd64 $REGISTRY/$REFRESH_TOKEN_IMAGE:$FLEET_VERSION
+kind load docker-image --name $MEMBER_CLUSTER $REGISTRY/$MEMBER_AGENT_IMAGE:$FLEET_VERSION
+kind load docker-image --name $MEMBER_CLUSTER $REGISTRY/$REFRESH_TOKEN_IMAGE:$FLEET_VERSION
 
+echo "Preparing to join a cluster into a fleet..."
 kubectl config use-context $HUB_CLUSTER_CONTEXT
 
 echo "Setting up a service account..."
 
 export SERVICE_ACCOUNT="$MEMBER_CLUSTER-hub-cluster-access"
+kubectl delete serviceaccount $SERVICE_ACCOUNT -n fleet-system  --ignore-not-found
 kubectl create serviceaccount $SERVICE_ACCOUNT -n fleet-system
 
 echo "Creating a secret..."
@@ -101,23 +107,25 @@ spec:
         kind: ServiceAccount
         namespace: fleet-system
         apiGroup: ""
-    heartbeatPeriodSeconds: 60
+    heartbeatPeriodSeconds: 15
 EOF
 
 echo "Installing the member agent..."
 
 kubectl config use-context $MEMBER_CLUSTER_CONTEXT
+kubectl delete secret hub-kubeconfig-secret --ignore-not-found --wait
 kubectl create secret generic hub-kubeconfig-secret --from-literal=token=$TOKEN
-helm install member-agent fleet/charts/member-agent/ \
+helm uninstall member-agent --ignore-not-found --wait
+helm install member-agent charts/member-agent/ \
     --set config.hubURL=$HUB_CLUSTER_ADDRESS \
     --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
     --set image.tag=$FLEET_VERSION \
+    --set image.pullPolicy=Never \
     --set refreshtoken.repository=$REGISTRY/$REFRESH_TOKEN_IMAGE \
     --set refreshtoken.tag=$FLEET_VERSION \
-    --set image.pullPolicy=Always \
-    --set refreshtoken.pullPolicy=Always \
+    --set refreshtoken.pullPolicy=Never \
     --set config.memberClusterName="$MEMBER_CLUSTER" \
-    --set logVerbosity=5 \
+    --set logVerbosity=6 \
     --set namespace=fleet-system \
     --set enableV1Alpha1APIs=false \
     --set enableV1Beta1APIs=true
