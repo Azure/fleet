@@ -1,5 +1,5 @@
 # Tutorial: Migrating Applications to Another Cluster When a Cluster Goes Down
-This tutorial demonstrates how to move applications from clusters in a region that have gone down to clusters in another region using AKS Fleet.
+This tutorial demonstrates how to move applications from clusters have gone down to other operational clusters using Fleet.
 
 ## Scenario
 Your fleet consists of the following clusters:
@@ -8,10 +8,10 @@ Your fleet consists of the following clusters:
 2. Member Cluster 3 (EastUS2, 2 nodes)
 3. Member Cluster 4 & Member Cluster 5 (WestEurope, 3 nodes each)
 
-Due to an outage in WestUS, you need to migrate your applications from the WestUS clusters to clusters in EastUS2 or WestEurope.
+Due to certain circumstances, Member Cluster 1 and Member Cluster 2 are down, requiring you to migrate your applications from these clusters to other operational ones.
 
 ## Current Application Resources
-The following resources are currently deployed in the WestUS clusters:
+The following resources are currently deployed in Member Cluster 1 and Member Cluster 2 by the ClusterResourcePlacement:
 
 #### Service
 ```yaml
@@ -234,14 +234,14 @@ status:
 ```
 Summary:
 - This defines a ClusterResourcePlacement named `crp-migration`.
-- The placement policy PickN selects 2 clusters. The clusters are selected based on the label `fleet.azure.com/location: westus`.
+- The PickN placement policy selects 2 clusters based on the label `fleet.azure.com/location: westus`. Consequently, it chooses Member Cluster 1 and Member Cluster 2, as they are located in WestUS.
 - It targets resources in the `test-app` namespace.
 
-## Migrating Applications to a Cluster in a Different Region
-When the clusters in WestUS go down, update the ClusterResourcePlacement (CRP) to migrate the applications to another region. 
-For this tutorial, we will move them to WestEurope.
+## Migrating Applications to a Cluster to Other Operational Clusters
+When the clusters in WestUS go down, update the ClusterResourcePlacement (CRP) to migrate the applications to other clusters. 
+In this tutorial, we will move them to Member Cluster 4 and Member Cluster 5, which are located in WestEurope.
 
-#### Update the CRP for Migration to WestEurope Cluster
+#### Update the CRP for Migration to Clusters in WestEurope
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1
 kind: ClusterResourcePlacement
@@ -274,11 +274,11 @@ kubectl apply -f crp.yaml
 
 ### Results
 After applying the updated `crp.yaml`, the Fleet will schedule the application on the available clusters in WestEurope. 
-You can check the status of the CRP to ensure that the application has been successfully migrated and is running in the new region:
+You can check the status of the CRP to ensure that the application has been successfully migrated and is running on the newly selected clusters:
 ```bash
 kubectl get crp crp-migration -o yaml
 ```
-You should see a status indicating that the application is now running in the WestEurope clusters, similar to the following:
+You should see a status indicating that the application is now running in the clusters located in WestEurope, similar to the following:
 #### CRP Status
 ```yaml
 ...
