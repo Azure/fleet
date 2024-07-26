@@ -184,22 +184,15 @@ as available in the target clusters when they meet the criteria we defined.
 We have an agent running in the target cluster to check the status of the resources. We have specific criteria for each 
 of the following resources to determine if they are available or not. Here are the list of resources we support:
 
-#### Deployment
-We only mark a `Deployment` as available when all its pods are running, ready and updated according to the latest spec. 
-
-#### DaemonSet 
-We only mark a `DaemonSet` as available when all its pods are available and updated according to the latest spec on all 
-desired scheduled nodes.
-
-#### StatefulSet
-We only mark a `StatefulSet` as available when all its pods are running, ready and updated according to the latest revision.
+#### Deployment/DaemonSet/StatefulSet
+We only mark them as available if the number of updated replicas equals the number of desired replicas.
 
 #### Service
 For `Service` based on the service type the availability is determined as follows:
 
 - For `ClusterIP` & `NodePort` service, we mark it as available when a cluster IP is assigned.
 - For `LoadBalancer` service, we mark it as available when a `LoadBalancerIngress` has been assigned along with an IP or Hostname.
-- For `ExternalName` service, checking availability is not supported, so it will be marked as available with not trackable reason.
+- For `ExternalName` service, checking availability is not supported, so it will be marked as available with a "not trackable" reason.
 
 
 #### Data only objects
