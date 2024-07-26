@@ -392,7 +392,7 @@ var _ = Describe("webhook tests for MC taints", Ordered, func() {
 	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
-		createMemberCluster(mcName, testUser, nil)
+		createMemberCluster(mcName, testUser, nil, nil)
 	})
 
 	AfterAll(func() {
