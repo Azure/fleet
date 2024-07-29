@@ -15,13 +15,17 @@ export SERVICE_ACCOUNT="$MEMBER_CLUSTER-hub-cluster-access"
 
 #echo "Switching into hub cluster context..."
 kubectl config use-context $HUB_CLUSTER_CONTEXT
+
+echo "Create test namespace"
+kubectl create namespace test-ns
+
 # The service account can, in theory, be created in any namespace; for simplicity reasons,
 # here you will use the namespace reserved by Fleet installation, `fleet-system`.
 #
 # Note that if you choose a different value, commands in some steps below need to be
 # modified accordingly.
 echo "Creating member service account..."
-kubectl create serviceaccount $SERVICE_ACCOUNT -n fleet-system
+kubectl create serviceaccount $SERVICE_ACCOUNT -n test-ns
 
 echo "Creating member service account secret..."
 export SERVICE_ACCOUNT_SECRET="$MEMBER_CLUSTER-hub-cluster-access-token"
@@ -30,14 +34,14 @@ apiVersion: v1
 kind: Secret
 metadata:
     name: $SERVICE_ACCOUNT_SECRET
-    namespace: fleet-system
+    namespace: test-ns
     annotations:
         kubernetes.io/service-account.name: $SERVICE_ACCOUNT
 type: kubernetes.io/service-account-token
 EOF
 
 echo "Creating member cluster CR..."
-export TOKEN="$(kubectl get secret $SERVICE_ACCOUNT_SECRET -n fleet-system -o jsonpath='{.data.token}' | base64 --decode)"
+export TOKEN="$(kubectl get secret $SERVICE_ACCOUNT_SECRET -n test-ns -o jsonpath='{.data.token}' | base64 --decode)"
 cat <<EOF | kubectl apply -f -
 apiVersion: cluster.kubernetes-fleet.io/v1beta1
 kind: MemberCluster
@@ -47,7 +51,7 @@ spec:
     identity:
         name: $MEMBER_CLUSTER-hub-cluster-access
         kind: ServiceAccount
-        namespace: fleet-system
+        namespace: test-ns
         apiGroup: ""
     heartbeatPeriodSeconds: 15
 EOF
@@ -61,7 +65,7 @@ EOF
 # more information.
 echo "Retrieving image..."
 export REGISTRY="mcr.microsoft.com/aks/fleet"
-export FLEET_VERSION="${FLEET_VERSION:-$(curl "https://api.github.com/repos/Azure/fleet/tags" | jq -r '.[0].name')}"
+export FLEET_VERSION="v0.10.8"
 export MEMBER_AGENT_IMAGE="member-agent"
 export REFRESH_TOKEN_IMAGE="${REFRESH_TOKEN_NAME:-refresh-token}"
 export OUTPUT_TYPE="${OUTPUT_TYPE:-type=docker}"
