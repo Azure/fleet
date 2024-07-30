@@ -1,7 +1,7 @@
 # CAN ONLY BE RUN AFTER CREATING NEEDED AKS CLUSTERS AND HUB CLUSTER. This script creates member clusters for
 # AKS Clusters and joins them onto the fleet hub cluster.
 
-export AGENT_IMAGE_VERSION="$1"
+export IMAGE_TAG="$1"
 
 export HUB_CLUSTER="$2"
 export HUB_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$HUB_CLUSTER\")].name}")
@@ -86,9 +86,9 @@ echo "Installing member-agent..."
 helm install member-agent charts/member-agent/ \
         --set config.hubURL=$HUB_CLUSTER_ADDRESS  \
         --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
-        --set image.tag=$AGENT_IMAGE_VERSION \
+        --set image.tag=$IMAGE_TAG \
         --set refreshtoken.repository=$REGISTRY/$REFRESH_TOKEN_IMAGE \
-        --set refreshtoken.tag=$AGENT_IMAGE_VERSION \
+        --set refreshtoken.tag=$IMAGE_TAG \
         --set image.pullPolicy=Always \
         --set refreshtoken.pullPolicy=Always \
         --set config.memberClusterName=$MEMBER_CLUSTER \

@@ -30,9 +30,12 @@ export SUB=<AZURE-SUBSCRIPTION-ID>
 export RESOURCE_GROUP=<HUB_RESOURCE_GROUP>
 export LOCATION=<HUB_LOCATION>
 
-# Run the script. Be sure to replace the values of <HUB-CLUSTER-NAME> with those of your own.
+# Run the script. Be sure to replace the values of <IMAGE-TAG> <HUB-CLUSTER-NAME> with those of your own.
+# The latest fleet image tag could be found here https://github.com/Azure/fleet/releases.
+# Ex.: ./hack/setup/createHubCluster.sh v0.10.8 test-hub
+# Run the script.
 chmod +x hack/Azure/setup/createHubCluster.sh
-./hack/Azure/setup/createHubCluster.sh <HUB-CLUSTER-NAME>
+./hack/Azure/setup/createHubCluster.sh <IMAGE-TAG> <HUB-CLUSTER-NAME>
 ```
 
 It may take a few minutes for the script to finish running. Once it is completed, verify that the `hub-agent` has been installed:
@@ -90,12 +93,12 @@ A cluster can join in a hub cluster if:
 For your convenience, Fleet provides a script that can automate the process of joining a cluster
 onto a hub cluster. To use the script, run the commands below after creating needed AKS clusters:
 ```sh
-# Pass in the hub cluster name and a list of cluster context names (separated by a space) as arguments to the script that you would like to 
-# join the fleet as member clusters. Their context will be used to access the cluster.
-# Ex.: ./hack/setup/joinMC.sh test-hub member member2 member3 
+# Pass in the fleet image tag, hub cluster name and a list of cluster context names (separated by a space) as arguments to the script that you would like to 
+# join the fleet as member clusters. Their context will be used to access the cluster. The latest fleet image tag can be found here https://github.com/Azure/fleet/releases.
+# Ex.: ./hack/setup/joinMC.sh v0.10.8 test-hub member member2 member3 
 # Run the script.
 chmod +x hack/Azure/setup/joinMC.sh
-./hack/Azure/setup/joinMC.sh <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> <MEMBER-CLUSTER-NAME-4>
+./hack/Azure/setup/joinMC.sh <IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> <MEMBER-CLUSTER-NAME-4>
 ```
 
 It may take a few minutes for the script to finish running. Once it is completed, verify
