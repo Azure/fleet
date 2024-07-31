@@ -90,6 +90,9 @@ const (
 
 	// ResourceIdentifierWithEnvelopeIdentifierStringFormat is the format of the resource identifier string with envelope identifier.
 	ResourceIdentifierWithEnvelopeIdentifierStringFormat = "%s/%s/%s/%s/%s/%s/%s/%s"
+
+	// FleetAnnotationPrefix is the prefix used to annotate fleet member cluster resources.
+	FleetAnnotationPrefix = "fleet.azure.com"
 )
 
 var (
@@ -550,4 +553,14 @@ func IsFailedResourcePlacementsEqual(oldFailedResourcePlacements, newFailedResou
 		}
 	}
 	return true
+}
+
+// IsFleetAnnotationPresent returns true if a key with fleet prefix is present in the annotations map.
+func IsFleetAnnotationPresent(annotations map[string]string) bool {
+	for k := range annotations {
+		if strings.HasPrefix(k, FleetAnnotationPrefix) {
+			return true
+		}
+	}
+	return false
 }

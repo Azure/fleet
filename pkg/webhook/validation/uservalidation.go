@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -28,8 +30,10 @@ const (
 	kubeControllerManagerUser = "system:kube-controller-manager"
 	serviceAccountFmt         = "system:serviceaccount:fleet-system:%s"
 
-	allowedModifyResource = "user in groups is allowed to modify resource"
-	deniedModifyResource  = "user in groups is not allowed to modify resource"
+	allowedModifyResource       = "user in groups is allowed to modify resource"
+	deniedModifyResource        = "user in groups is not allowed to modify resource"
+	deniedAddFleetAnnotation    = "no user is allowed to add a fleet pre-fixed annotation to an upstream member cluster"
+	deniedRemoveFleetAnnotation = "no user is allowed to remove all fleet pre-fixed annotations from a fleet member cluster"
 
 	ResourceAllowedFormat      = "user: '%s' in '%s' is allowed to %s resource %+v/%s: %+v"
 	ResourceDeniedFormat       = "user: '%s' in '%s' is not allowed to %s resource %+v/%s: %+v"
@@ -86,30 +90,44 @@ func ValidateV1Alpha1MemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCl
 	return response
 }
 
-// ValidateMemberClusterUpdate checks to see if user had updated the member cluster resource and allows/denies the request.
-func ValidateMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberCluster, req admission.Request, whiteListedUsers []string) admission.Response {
+// ValidateFleetMemberClusterUpdate checks to see if user had updated the fleet member cluster resource and allows/denies the request.
+func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberCluster, req admission.Request, whiteListedUsers []string) admission.Response {
 	namespacedName := types.NamespacedName{Name: currentMC.GetName()}
 	userInfo := req.UserInfo
-	response := admission.Allowed(fmt.Sprintf("user %s in groups %v most likely %s read-only field/fields of member cluster resource %+v/%s, so no field/fields will be updated", userInfo.Username, userInfo.Groups, req.Operation, req.RequestKind, req.SubResource))
-	isLabelUpdated := isMapFieldUpdated(currentMC.GetLabels(), oldMC.GetLabels())
-	isAnnotationUpdated := isMapFieldUpdated(currentMC.GetAnnotations(), oldMC.GetAnnotations())
-	isTaintsUpdated := isTaintsFieldUpdated(currentMC.Spec.Taints, oldMC.Spec.Taints)
+	if areAllFleetAnnotationsRemoved(currentMC.Annotations, oldMC.Annotations) {
+		klog.V(2).InfoS(deniedRemoveFleetAnnotation, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
+		return admission.Denied(deniedRemoveFleetAnnotation)
+	}
 	// set taints field to nil.
 	currentMC.Spec.Taints = nil
 	oldMC.Spec.Taints = nil
-	isObjUpdated, err := isMemberClusterUpdated(&currentMC, &oldMC)
+	isObjUpdated, err := isMemberClusterUpdated(currentMC.DeepCopy(), oldMC.DeepCopy())
 	if err != nil {
 		return admission.Denied(err.Error())
 	}
-	if (isLabelUpdated || isAnnotationUpdated || isTaintsUpdated) && !isObjUpdated {
-		// we allow any user to modify MemberCluster/Namespace labels, annotations & taints.
-		klog.V(3).InfoS("user in groups is allowed to modify member cluster labels/annotations", "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
-		response = admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
+	isAnnotationUpdated := isFleetAnnotationUpdated(currentMC.Annotations, oldMC.Annotations)
+	if isObjUpdated || isAnnotationUpdated {
+		return ValidateUserForResource(req, whiteListedUsers)
 	}
-	if isObjUpdated {
-		response = ValidateUserForResource(req, whiteListedUsers)
+	// any user is allowed to modify labels, annotations, taints on fleet MC except fleet pre-fixed annotations.
+	klog.V(3).InfoS(allowedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
+	return admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
+}
+
+// ValidatedUpstreamMemberClusterUpdate checks to see if user had updated the upstream member cluster resource and allows/denies the request.
+func ValidatedUpstreamMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberCluster, req admission.Request, whiteListedUsers []string) admission.Response {
+	namespacedName := types.NamespacedName{Name: currentMC.GetName()}
+	userInfo := req.UserInfo
+	if isFleetAnnotationAdded(currentMC.Annotations, oldMC.Annotations) {
+		klog.V(2).InfoS(deniedAddFleetAnnotation, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
+		return admission.Denied(deniedAddFleetAnnotation)
 	}
-	return response
+	// any user is allowed to modify MC spec for upstream MC.
+	if !equality.Semantic.DeepEqual(currentMC.Status, oldMC.Status) {
+		return ValidateUserForResource(req, whiteListedUsers)
+	}
+	klog.V(3).InfoS(allowedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
+	return admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
 }
 
 // isMasterGroupUserOrWhiteListedUser returns true is user belongs to white listed users or user belongs to system:masters group.
@@ -144,9 +162,35 @@ func isMapFieldUpdated(currentMap, oldMap map[string]string) bool {
 	return !reflect.DeepEqual(currentMap, oldMap)
 }
 
-// isTaintsFieldUpdated return true if member cluster taints is updated.
-func isTaintsFieldUpdated(currentTaints, oldTaints []clusterv1beta1.Taint) bool {
-	return !reflect.DeepEqual(currentTaints, oldTaints)
+// isFleetAnnotationUpdated returns true if fleet pre-fixed annotations are updated/deleted.
+func isFleetAnnotationUpdated(currentMap, oldMap map[string]string) bool {
+	for oldKey, oldValue := range oldMap {
+		if strings.HasPrefix(oldKey, utils.FleetAnnotationPrefix) {
+			currentValue, exists := currentMap[oldKey]
+			if exists {
+				if currentValue != oldValue {
+					return true
+				}
+			} else {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// areAllFleetAnnotationsRemoved returns true if all fleet pre-fixed annotations are removed.
+func areAllFleetAnnotationsRemoved(currentMap, oldMap map[string]string) bool {
+	currentExists := utils.IsFleetAnnotationPresent(currentMap)
+	oldExists := utils.IsFleetAnnotationPresent(oldMap)
+	return oldExists && !currentExists
+}
+
+// isFleetAnnotationAdded returns true if fleet pre-fixed annotation is added.
+func isFleetAnnotationAdded(currentMap, oldMap map[string]string) bool {
+	currentExists := utils.IsFleetAnnotationPresent(currentMap)
+	oldExists := utils.IsFleetAnnotationPresent(oldMap)
+	return !oldExists && currentExists
 }
 
 // isMemberClusterUpdated returns true is member cluster spec or status is updated.
