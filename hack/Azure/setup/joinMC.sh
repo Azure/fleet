@@ -7,6 +7,15 @@ export HUB_CLUSTER="$2"
 export HUB_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$HUB_CLUSTER\")].name}")
 export HUB_CLUSTER_ADDRESS=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$HUB_CLUSTER\")].cluster.server}")
 
+echo "Switching into hub cluster context..."
+kubectl config use-context $HUB_CLUSTER_CONTEXT
+
+echo "Delete existing namespace to host resources required to connect to fleet"
+kubectl delete namespace connect-to-fleet --ignore-not-found=true
+
+echo "Create namespace to host resources required to connect to fleet"
+kubectl create namespace connect-to-fleet
+
 for MC in "${@:3}"; do
 
 # Note that Fleet will recognize your cluster with this name once it joins.
@@ -14,12 +23,6 @@ export MEMBER_CLUSTER=$(kubectl config view -o jsonpath="{.contexts[?(@.context.
 export MEMBER_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$MC\")].name}")
 
 export SERVICE_ACCOUNT="$MEMBER_CLUSTER-hub-cluster-access"
-
-#echo "Switching into hub cluster context..."
-kubectl config use-context $HUB_CLUSTER_CONTEXT
-
-echo "Create namespace to host resources required to connect to fleet"
-kubectl create namespace connect-to-fleet
 
 # The service account can, in theory, be created in any namespace; for simplicity reasons,
 # we create our own namespace `connect-to-fleet` to host the service account and the secret.
@@ -76,7 +79,7 @@ kubectl config use-context $MEMBER_CLUSTER_CONTEXT
 
 # Create the secret with the token extracted previously for member agent to use.
 echo "Creating secret..."
-kubectl delete secret hub-kubeconfig-secret
+kubectl delete secret hub-kubeconfig-secret --ignore-not-found=true
 kubectl create secret generic hub-kubeconfig-secret --from-literal=token=$TOKEN
 
 echo "Uninstalling member-agent..."
@@ -99,5 +102,5 @@ helm install member-agent charts/member-agent/ \
 
 kubectl get pods -A
 kubectl config use-context $HUB_CLUSTER_CONTEXT
-kubectl get membercluster $MEMBER_CLUSTER
+kubectl get membercluster -A
 done
