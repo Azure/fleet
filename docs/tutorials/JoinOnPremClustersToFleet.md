@@ -1,0 +1,60 @@
+# Tutorial: Join On-Prem Clusters to Fleet hub cluster
+This tutorial will guide you through the process of joining your on-prem clusters as member clusters to a Fleet hub cluster.
+
+Follow these guides to setup your fleet and get access to your fleet hub cluster:
+
+- https://learn.microsoft.com/en-us/azure/kubernetes-fleet/quickstart-create-fleet-and-members?tabs=with-hub-cluster
+- https://learn.microsoft.com/en-us/azure/kubernetes-fleet/quickstart-access-fleet-kubernetes-api
+
+## Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/)
+- [Helm](https://github.com/helm/helm#install)
+- [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
+
+## Steps to join on-prem clusters to Fleet hub cluster
+
+Clone the [fleet repository](https://github.com/Azure/fleet) and navigate to the root directory of the repo.
+
+Run the following script sets up the resources on the hub cluster and each on-prem cluster to allow the member agent 
+installed to be able to communicate with the hub cluster.
+
+The latest fleet image tag could be found here https://github.com/Azure/fleet/releases. 
+Please ensure kubectl can access the kube-config of the hub cluster and all the on-prem clusters.
+
+```shell
+./hack/Azure/setup/joinMC.sh <FLEET-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
+```
+
+The output should look like:
+
+```
+NAME               JOINED    AGE     NODE-COUNT   AVAILABLE-CPU   AVAILABLE-MEMORY
+test-cluster-1     Unknown   2m40s   1            530m            2678020Ki
+test-cluster-2     Unknown   2m30s   1            890m            3566856Ki
+```
+
+The JOINED column will be `Unknown` until the fleet networking member agent controllers are installed on each on-prem cluster. 
+We can confirm that the member agent was installed correctly when we see `NODE-COUNT`, `AVAILABLE-CPU`, and `AVAILABLE-MEMORY` columns populated.
+
+> **Note:** The script in the fleet-networking repo can only be used once the script in the fleet repo has been run. 
+
+Clone the [fleet-networking repository](https://github.com/Azure/fleet-networking) and navigate to the root directory of the repo.
+
+Run the following script to join your on-prem clusters to the Fleet hub cluster by installing the fleet networking member agent controllers on each on-prem cluster.
+
+The latest fleet-networking image tag could be found here https://github.com/Azure/fleet-networking/releases
+Please ensure kubectl can access the kube-config of the hub cluster and all the on-prem clusters.
+
+```shell
+./hack/Azure/joinMC.sh <FLEET-IMAGE-TAG> <FLEET-NETWORKING-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
+```
+
+The output should look like:
+
+```
+% kubectl get membercluster -A
+NAME               JOINED   AGE     NODE-COUNT   AVAILABLE-CPU   AVAILABLE-MEMORY
+test-cluster-1     True     3m17s   1            130m            2153732Ki
+test-cluster-2     True     3m7s    1            690m            3304712Ki
+```
