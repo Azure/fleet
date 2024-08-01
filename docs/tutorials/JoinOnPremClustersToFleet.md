@@ -22,6 +22,8 @@ installed to be able to communicate with the hub cluster.
 The latest fleet image tag could be found here in [fleet releases](https://github.com/Azure/fleet/releases).
 Please ensure kubectl can access the kube-config of the hub cluster and all the on-prem clusters.
 
+Ex: `./hack/Azure/setup/joinMC.sh v0.1.0 hub test-cluster-1 test-cluster-2`
+
 ```shell
 ./hack/Azure/setup/joinMC.sh <FLEET-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
 ```
@@ -35,7 +37,8 @@ test-cluster-1     Unknown   2m40s   1            530m            2678020Ki
 test-cluster-2     Unknown   2m30s   1            890m            3566856Ki
 ```
 
-The JOINED column will be `Unknown` until the fleet networking member agent controllers are installed on each on-prem cluster.
+> **Note:** The `JOINED` column will be `Unknown` until the fleet networking member agent charts are installed on each on-prem cluster.
+
 We can confirm that the member agent was installed correctly when we see `NODE-COUNT`, `AVAILABLE-CPU`, and `AVAILABLE-MEMORY` columns populated.
 The columns can take upto a minute to populate.
 
@@ -47,6 +50,8 @@ Run the following script to join your on-prem clusters to the Fleet hub cluster 
 
 The latest fleet-networking image tag could be found here [fleet-networking releases](https://github.com/Azure/fleet-networking/releases).
 Please ensure kubectl can access the kube-config of the hub cluster and all the on-prem clusters.
+
+Ex: `./hack/Azure/joinMC.sh v0.1.0 v0.2.0 hub test-cluster-1 test-cluster-2`
 
 ```shell
 ./hack/Azure/joinMC.sh <FLEET-IMAGE-TAG> <FLEET-NETWORKING-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
@@ -61,6 +66,6 @@ test-cluster-1     True     3m17s   1            130m            2153732Ki
 test-cluster-2     True     3m7s    1            690m            3304712Ki
 ```
 
-The `JOINED` column will be `True` once the fleet networking member agent controllers are installed on each on-prem cluster.
+The `JOINED` column will be `True` once both fleet networking member agent charts are installed on each on-prem cluster.
 The column can take upto a minute to populate. The `JOINED` column indicates that the agent have all joined once.
-The column is not meant for tracking agent health status.
+The column is not meant for tracking each agent's health status.
