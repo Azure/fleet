@@ -391,7 +391,12 @@ func pickAllPolicySnapshotStatusUpdatedActual(scored, filtered []string, policyS
 	}
 }
 
-func hasNScheduledOrBoundBindingsPresentActual(crpName string, n int) func() error {
+func hasNScheduledOrBoundBindingsPresentActual(crpName string, clusters []string) func() error {
+	clusterMap := make(map[string]bool)
+	for _, name := range clusters {
+		clusterMap[name] = true
+	}
+
 	return func() error {
 		bindingList := &placementv1beta1.ClusterResourceBindingList{}
 		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
@@ -400,15 +405,22 @@ func hasNScheduledOrBoundBindingsPresentActual(crpName string, n int) func() err
 			return err
 		}
 
-		scheduledOrBoundBindingCount := 0
+		matchedScheduledOrBoundBindingCount := 0
 		for _, binding := range bindingList.Items {
-			if binding.Spec.State == placementv1beta1.BindingStateBound || binding.Spec.State == placementv1beta1.BindingStateScheduled {
-				scheduledOrBoundBindingCount++
+			// A match is found iff the binding is of the scheduled or bound state, and its
+			// target cluster is in the given list.
+			//
+			// We do not simply check against the state here as there exists a rare case where
+			// the system might be in an in-between state and happen to have just the enough
+			// number of bindings (though not the wanted ones).
+			_, matched := clusterMap[binding.Spec.TargetCluster]
+			if (binding.Spec.State == placementv1beta1.BindingStateBound || binding.Spec.State == placementv1beta1.BindingStateScheduled) && matched {
+				matchedScheduledOrBoundBindingCount++
 			}
 		}
 
-		if scheduledOrBoundBindingCount != n {
-			return fmt.Errorf("got %d, want %d scheduled or bound bindings", scheduledOrBoundBindingCount, n)
+		if matchedScheduledOrBoundBindingCount != len(clusterMap) {
+			return fmt.Errorf("got %d, want %d matched scheduled or bound bindings", matchedScheduledOrBoundBindingCount, len(clusterMap))
 		}
 
 		return nil

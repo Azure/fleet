@@ -76,7 +76,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, int(numOfClusters))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -141,7 +141,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClusters))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -189,7 +189,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, int(numOfClusters))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, []string{})
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -269,7 +269,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, int(numOfClusters))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -372,7 +372,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClusters))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -477,7 +477,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClusters))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -604,7 +604,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClusters))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -701,7 +701,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClusters))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -829,7 +829,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClusters))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -929,7 +929,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClusters))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -1066,7 +1066,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClusters))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -1185,7 +1185,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClusters))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -1325,7 +1325,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClusters))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -1471,7 +1471,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClusters))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -1537,7 +1537,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 
 			// Verify that scheduling has been completed.
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, int(numOfClustersBefore))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClustersBefore)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 
@@ -1568,7 +1568,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, int(numOfClustersAfter))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClustersAfter)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -1628,7 +1628,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 
 			// Verify that scheduling has been completed.
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, int(numOfClustersBefore))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClustersBefore)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 
@@ -1659,7 +1659,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, int(numOfClustersAfter))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClustersAfter)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -1851,7 +1851,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			createPickNCRPWithPolicySnapshot(crpName, policySnapshotNameBefore, policy)
 
 			// Verify that scheduling has been completed.
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClustersBefore))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClustersBefore)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 
@@ -1892,7 +1892,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClustersAfter))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClustersAfter)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})

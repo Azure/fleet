@@ -415,7 +415,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, 0)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, []string{})
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -438,7 +438,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, 2)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClustersAfter)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -632,7 +632,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClusters))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -685,7 +685,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, int(numOfClustersAfter))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClustersAfter)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -800,7 +800,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClusters))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
@@ -853,7 +853,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, int(numOfClustersAfter))
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClustersAfter)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
