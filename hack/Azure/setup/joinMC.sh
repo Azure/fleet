@@ -1,5 +1,5 @@
 # CAN ONLY BE RUN AFTER CREATING NEEDED AKS CLUSTERS AND HUB CLUSTER. This script creates member clusters for
-# AKS Clusters and joins them onto the fleet hub cluster.
+# AKS Clusters and joins them onto the hub cluster.
 
 export IMAGE_TAG="$1"
 
@@ -102,5 +102,5 @@ helm install member-agent charts/member-agent/ \
 
 kubectl get pods -A
 kubectl config use-context $HUB_CLUSTER_CONTEXT
-kubectl get membercluster -A
+kubectl get membercluster $MEMBER_CLUSTER
 done
