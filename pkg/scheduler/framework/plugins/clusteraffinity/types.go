@@ -34,7 +34,8 @@ func retrieveResourceUsageFrom(cluster *clusterv1beta1.MemberCluster, name strin
 	//
 	// As a pre-defined rule, all the resource properties are assigned a label name of the format
 	// `[PREFIX]/[CAPACITY_TYPE]-[RESOURCE_NAME]`; for example, the allocatable CPU capacity of a
-	// a cluster has the label name, `resources.kubernetes-fleet.io/allocatable-cpu`.
+	// a cluster has the label name, `resources.kubernetes-fleet.io/allocatable-cpu`. Note that at
+	// this point of process, the prefix has been removed.
 	segs := strings.Split(name, "-")
 	if len(segs) != 2 || len(segs[0]) == 0 || len(segs[1]) == 0 {
 		return nil, fmt.Errorf("invalid resource property name: %s", name)

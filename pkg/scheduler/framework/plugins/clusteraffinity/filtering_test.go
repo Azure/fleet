@@ -32,6 +32,7 @@ const (
 
 	envLabelName   = "env"
 	envLabelValue1 = "prod"
+	envLabelValue2 = "canary"
 
 	nodeCountPropertyValue1 = "3"
 
