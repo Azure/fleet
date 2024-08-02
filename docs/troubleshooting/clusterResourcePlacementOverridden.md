@@ -1,30 +1,27 @@
 # How can I debug when my CRP status is ClusterResourcePlacementOverridden condition status is set to false?
 
 The status of the `ClusterResourcePlacementOverridden` condition is set to `false` when there is an Override API related issue.
-> Note: In addition, it may be helpful to look into the logs for the overrider controller (includes 
+> Note: To get more information, look into the logs for the overrider controller (includes 
 > controller for [ClusterResourceOverride](https://github.com/Azure/fleet/blob/main/pkg/controllers/overrider/clusterresource_controller.go) and 
-> [ResourceOverride](https://github.com/Azure/fleet/blob/main/pkg/controllers/overrider/resource_controller.go)) to get more information on why the override did not succeed.
+> [ResourceOverride](https://github.com/Azure/fleet/blob/main/pkg/controllers/overrider/resource_controller.go)).
 
 ## Common scenarios:
-
+Instances where this condition may arise:
 - The `ClusterResourceOverride` or `ResourceOverride`  is created with an invalid field path for the resource.
 
-## Example Scenario:
+## Case Study:
 In the following example, an attempt is made to override the cluster role `secret-reader` that is being propagated by the `ClusterResourcePlacement` to the selected clusters.
-However, the `ClusterResourceOverride` is created with an invalid path for the resource.
+However, the `ClusterResourceOverride` is created with an invalid path for the field within resource.
 
 ### ClusterRole:
 ```
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-annotations:
-kubectl.kubernetes.io/last-applied-configuration: |
-{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"ClusterRole","metadata":{"annotations":{},"name":"secret-reader"},"rules":[{"apiGroups":[""],"resources":["secrets"],"verbs":["get","watch","list"]}]}
-creationTimestamp: "2024-05-14T15:36:48Z"
-name: secret-reader
-resourceVersion: "81334"
-uid: 108e6312-3416-49be-aa3d-a665c5df58b4
+    creationTimestamp: "2024-05-14T15:36:48Z"
+    name: secret-reader
+    resourceVersion: "81334"
+    uid: 108e6312-3416-49be-aa3d-a665c5df58b4
 rules:
 - apiGroups:
   - ""
@@ -57,10 +54,10 @@ spec:
         path: /metadata/labels/new-label
         value: new-value
 ```
-The `ClusterResourceOverride` is created to override the `ClusterRole` `secret-reader` by adding a new label `new-label`
-with a value `new-value` for the clusters with the label `env: canary`.
+The `ClusterResourceOverride` is created to override the `ClusterRole` `secret-reader` by adding a new label (`new-label`)
+that has the value `new-value` for the clusters with the label `env: canary`.
 
-### CRP Spec:
+### ClusterResourcePlacement Spec:
 ```
 spec:
   resourceSelectors:
@@ -84,7 +81,7 @@ spec:
       allowCoOwnership: true
 ```
 
-### CRP Status:
+### ClusterResourcePlacement Status:
 ```
 status:
   conditions:
@@ -143,12 +140,13 @@ status:
 The CRP attempted to override a propagated resource utilizing an applicable `ClusterResourceOverrideSnapshot`.
 However, as the `ClusterResourcePlacementOverridden` condition remains false, looking at the placement status for the cluster
 where the condition `Overriden` failed will offer insights into the exact cause of the failure.
-The accompanying message highlights that the override failed due to the absence of the path `/metadata/labels/new-label` and its corresponding value.
-Based on the previous example of the cluster role `secret-reader`, it's evident that the path `/metadata/labels` does not exist, meaning that `labels` does not exist. 
-Therefore, a new label cannot be added.
+
+In this situation, the message indicates that the override failed because the path `/metadata/labels/new-label` and its corresponding value are missing.
+Based on the previous example of the cluster role `secret-reader`, you can see that the path `/metadata/labels/` doesn't exist. This means that `labels` doesn't exist.
+Therefore, a new label can't be added.
 
 ### Resolution:
-The solution here is to correct the path and value in the `ClusterResourceOverride` to successfully override the `ClusterRole` `secret-reader` as shown below:
+To successfully override the cluster role `secret-reader`, correct the path and value in `ClusterResourceOverride`, as shown in the following code:
 ```
 jsonPatchOverrides:
   - op: add

@@ -1,15 +1,16 @@
 # How can I debug when my CRP ClusterResourcePlacementAvailable condition is set to false?
-The ClusterResourcePlacementAvailable condition is false when some of the resources are not available yet. We will place some of the detailed failure in the `FailedResourcePlacement` array.
-> Note: In addition, it may be helpful to look into the logs for the [apply work controller](https://github.com/Azure/fleet/blob/main/pkg/controllers/work/apply_controller.go) to get more information on why the resources are not available
+The `ClusterResourcePlacementAvailable` condition is `false` when some of the resources are not available yet. We will place some of the detailed failure in the `FailedResourcePlacement` array.
+> Note: To get more information about why resources are unavailable check [apply work controller](https://github.com/Azure/fleet/blob/main/pkg/controllers/work/apply_controller.go) logs.
 
 ### Common scenarios:
-- When the CRP is unable to propagate resources to a selected cluster due the member cluster not having enough resource availability.
-- When the CRP is unable to propagate resource to a selected cluster due the deployment having a bad image name.
+Instances where this condition may arise:
+- The member cluster doesn't have enough resource availability.
+- The deployment contains an invalid image name.
 
-### Example Scenario:
+### Case Study:
 The example output below demonstrates a scenario where the CRP is unable to propagate a deployment to a member cluster due to the deployment having a bad image name.
 
-#### CRP spec:
+#### ClusterResourcePlacement spec:
 ```
 spec:
   resourceSelectors:
@@ -24,7 +25,7 @@ spec:
     type: RollingUpdate
 ```
 
-#### CRP status:
+#### ClusterResourcePlacement status:
 ```
 status:
   conditions:
@@ -131,11 +132,11 @@ status:
     version: v1
  ```
 In the `ClusterResourcePlacement` status, within the `failedPlacements` section for `kind-cluster-1`, we get a clear message
-as to why the resource failed to apply on the member cluster. Immediately preceding this in the conditions section,
-the `Available` condition for `kind-cluster-1` is flagged as false, citing the `NotAllWorkAreAvailable` reason.
+as to why the resource failed to apply on the member cluster. In the preceding `conditions` section,
+the `Available` condition for `kind-cluster-1` is flagged as `false` and shows `NotAllWorkAreAvailable` reason.
 This signifies that the Work object intended for the member cluster `kind-cluster-1` is not yet available.
 
-To gain more insights also take a look at the `work` object, please check this [section](#how-and-where-to-find-the-correct-work-resource) for more details,
+For more information, see this [section](#how-and-where-to-find-the-correct-work-resource).
 
 ### Work status of kind-cluster-1:
 ```
@@ -194,13 +195,13 @@ conditions:
     resource: deployments
     version: v1
 ```
-Looking at the status `Available` condition for `kind-cluster-1`, we see that the deployment `my-deployment` is not available yet on the member cluster.
-Therefore, there might be something wrong with the deployment manifest.
+Check the `Available` status for `kind-cluster-1`. You can see that the `my-deployment` deployment isn't yet available on the member cluster. 
+This suggests that an issue might be affecting the deployment manifest.
 
 #### Resolution:
-In this scenario, a viable solution is to take a look at the deployment in the member cluster, as this may clearly indicate that the root cause of the issue is a bad image name. 
-Once the issue has been identified, you can then proceed to rectify the deployment manifest and update it accordingly. 
-After fixing the resource manifest and updating it, the CRP will automatically propagate the corrected resource to the member cluster.
+In this situation, a potential solution is to check the deployment in the member cluster because the message indicates that the root cause of the issue is a bad image name. 
+After this image name is identified, you can correct the deployment manifest and update it. 
+After you fix and update the resource manifest, the `ClusterResourcePlacement` object API automatically propagates the corrected resource to the member cluster.
 
-For all other scenarios, it's crucial to confirm that the propagated resource is configured correctly.
-Additionally, ensure that the selected cluster possesses sufficient available capacity to accommodate the new resources.
+For all other situations, make sure that the propagated resource is configured correctly. 
+Additionally, verify that the selected cluster has sufficient available capacity to accommodate the new resources.

@@ -1,6 +1,6 @@
 # How can I debug when my CRP status is ClusterResourcePlacementScheduled condition status is set to false?
 The `ClusterResourcePlacementScheduled` condition is set to `false` when the scheduler cannot find all the clusters needed as specified by the scheduling policy.
-> Note: In addition, it may be helpful to look into the logs for the [scheduler](https://github.com/Azure/fleet/blob/main/pkg/scheduler/scheduler.go) to get more information on why the scheduling failed.
+> Note: To get more information about why the scheduling fails, you can check the [scheduler](https://github.com/Azure/fleet/blob/main/pkg/scheduler/scheduler.go) logs.
 
 ### Common scenarios:
 
@@ -8,13 +8,14 @@ Instances where this condition may arise:
 
 - When the placement policy is set to `PickFixed`, but the specified cluster names do not match any joined member cluster name in the fleet, or the specified cluster is no longer connected to the fleet.
 - When the placement policy is set to `PickN`, and N clusters are specified, but there are fewer than N clusters that have joined the fleet or satisfy the placement policy.
-- When the CRP resource selector selects a reserved namespace.
+- When the `ClusterResourcePlacement` resource selector selects a reserved namespace.
 
 >Note: When the placement policy is set to `PickAll`, the `ClusterResourcePlacementScheduled` condition is always set to `true`.
 
-### Example Scenario:
+### Case Study:
 
-The example output below demonstrates a `ClusterResourcePlacement` with a `PickN` placement policy attempting to propagate resources to two clusters labeled `env:prod`. In this instance, two clusters, namely `kind-cluster-1` and `kind-cluster-2`, are joined to the fleet, with only one member cluster, `kind-cluster-1`, having the label `env:prod`.
+In the following example, the `ClusterResourcePlacement` with a `PickN` placement policy is trying to propagate resources to two clusters labeled `env:prod`. 
+The two clusters, named `kind-cluster-1` and `kind-cluster-2`, have joined the fleet. However, only one member cluster, `kind-cluster-1`, has the label `env:prod`.
 
 ### CRP spec:
 ```
@@ -36,7 +37,7 @@ spec:
     type: RollingUpdate
 ```
 
-### CRP status:
+### ClusterResourcePlacement status:
 ```
 status:
   conditions:
@@ -134,9 +135,9 @@ status:
 The `ClusterResourcePlacementScheduled` condition is set to `false`, the goal is to select two clusters with the label `env:prod`, but only one member cluster possesses the correct label as specified in `clusterAffinity`.
 
 We can also take a look at the `ClusterSchedulingPolicySnapshot` status to figure out why the scheduler could not schedule the resource for the placement policy specified.
+To learn how to get the latest `ClusterSchedulingPolicySnapshot`, see [How can I find and verify the latest ClusterSchedulingPolicySnapshot for a ClusterResourcePlacement deployment?](README.md#how-can-i-find-and-verify-the-latest-clusterschedulingpolicysnapshot-for-a-clusterresourceplacement) to learn how to get the latest `ClusterSchedulingPolicySnapshot`.
 
-The corresponding `ClusterSchedulingPolicySnapshot` spec and status gives us even more information on why scheduling failed. Please refer to this [section](#how-to-find--verify-the-latest-clusterschedulingpolicysnapshot-for-a-crp) to learn how to get the latest `ClusterSchedulingPolicySnapshot`.
-
+The corresponding `ClusterSchedulingPolicySnapshot` spec and status gives us even more information on why scheduling failed.
 ### Latest ClusterSchedulingPolicySnapshot:
 ```
 apiVersion: placement.kubernetes-fleet.io/v1
