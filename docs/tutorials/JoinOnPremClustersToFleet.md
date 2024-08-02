@@ -20,7 +20,8 @@ Run the following script sets up the resources on the hub cluster and each on-pr
 installed to be able to communicate with the hub cluster.
 
 The latest fleet image tag could be found here in [fleet releases](https://github.com/Azure/fleet/releases).
-Please ensure kubectl can access the kube-config of the hub cluster and all the on-prem clusters.
+
+> **Note:** Please ensure kubectl can access the kube-config of the hub cluster and all the on-prem clusters.
 
 Ex: `./hack/Azure/setup/joinMC.sh v0.1.0 hub test-cluster-1 test-cluster-2`
 
@@ -54,7 +55,7 @@ Please ensure kubectl can access the kube-config of the hub cluster and all the 
 Ex: `./hack/Azure/joinMC.sh v0.1.0 v0.2.0 hub test-cluster-1 test-cluster-2`
 
 ```shell
-./hack/Azure/joinMC.sh <FLEET-IMAGE-TAG> <FLEET-NETWORKING-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
+./hack/membership/joinMC.sh <FLEET-IMAGE-TAG> <FLEET-NETWORKING-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
 ```
 
 The output should look like:
