@@ -70,3 +70,44 @@ The `JOINED` column will be `True` once both fleet networking member agent chart
 member agents are able to communicate with fleet hub cluster.
 The column can take upto a minute to populate. The `JOINED` column indicates that all three fleet member agents have all joined once.
 The column is not meant for tracking each member agent's health status.
+
+> **Note:** Once all the on-prem clusters have joined, ensure you follow the steps below to make the clusters leave before re-running the script.
+
+# Steps to make on-prem cluster leave the Fleet hub cluster
+
+Delete the `MemberCluster` resource for a particular on-prem cluster in the hub cluster.
+
+The join script in the fleet repo creates `MemberCluster` resource with the same name as your on-prem cluster.
+Replace <cluster-name> with the name of your on-prem cluster.
+
+```
+kubectl config use-context hub
+kubectl delete membercluster <cluster-name>
+```
+
+Once the above delete command completes the on-prem cluster has successfully left the Fleet hub cluster. 
+But we still need to clean-up residual resources on the hub and on-prem clusters.
+
+> **Note:** There is a case where `MemberCluster` resource deletion is stuck, this occurs because we didn't install all the member agents required. 
+> If this case occurs run the following command,
+
+```
+kubectl delete internalmembercluster <cluster-name> -n fleet-member-<cluster-name>
+```
+
+This ensures the `MemberCluster` can be deleted so the on-prem cluster can successfully leave the Fleet hub cluster.
+
+# Clean up resources created by the join scripts
+
+We create all resources used for joining in a namespace called `connect-to-fleet`.
+Replace <cluster-name> with the name of your on-prem cluster.
+
+```
+kubectl config use-context hub
+kubectl delete secret <cluster-name>-hub-cluster-access-token -n connect-to-fleet
+kubectl delete serviceaccount <cluster-name>-hub-cluster-access -n connect-to-fleet
+kubectl config use-context <cluster-name>
+helm uninstall member-agent
+helm uninstall member-net-controller-manager
+helm uninstall mcs-controller-manager
+```

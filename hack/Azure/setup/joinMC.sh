@@ -10,11 +10,15 @@ export HUB_CLUSTER_ADDRESS=$(kubectl config view -o jsonpath="{.clusters[?(@.nam
 echo "Switching into hub cluster context..."
 kubectl config use-context $HUB_CLUSTER_CONTEXT
 
-echo "Delete existing namespace to host resources required to connect to fleet"
-kubectl delete namespace connect-to-fleet --ignore-not-found=true
+export NOT_FOUND="not found"
+export CONNECT_TO_FLEET=connect-to-fleet
 
 echo "Create namespace to host resources required to connect to fleet"
-kubectl create namespace connect-to-fleet
+if [[ $NOT_FOUND == *$(kubectl get namespace $CONNECT_TO_FLEET)* ]]; then
+  kubectl create namespace $CONNECT_TO_FLEET
+else
+  echo "namespace $CONNECT_TO_FLEET already exists"
+fi
 
 for MC in "${@:3}"; do
 
@@ -30,23 +34,32 @@ export SERVICE_ACCOUNT="$MEMBER_CLUSTER-hub-cluster-access"
 # Note that if you choose a different value, commands in some steps below need to be
 # modified accordingly.
 echo "Creating member service account..."
-kubectl create serviceaccount $SERVICE_ACCOUNT -n connect-to-fleet
+if [[ $NOT_FOUND == *$(kubectl get serviceaccount $SERVICE_ACCOUNT -n $CONNECT_TO_FLEET)* ]]; then
+  kubectl create serviceaccount $SERVICE_ACCOUNT -n $CONNECT_TO_FLEET
+else
+  echo "member service account $SERVICE_ACCOUNT already exists in namespace $CONNECT_TO_FLEET"
+fi
 
 echo "Creating member service account secret..."
 export SERVICE_ACCOUNT_SECRET="$MEMBER_CLUSTER-hub-cluster-access-token"
+if [[ $NOT_FOUND == *$(kubectl get secret $SERVICE_ACCOUNT_SECRET -n $CONNECT_TO_FLEET)* ]]; then
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Secret
 metadata:
     name: $SERVICE_ACCOUNT_SECRET
-    namespace: connect-to-fleet
+    namespace: $CONNECT_TO_FLEET
     annotations:
         kubernetes.io/service-account.name: $SERVICE_ACCOUNT
 type: kubernetes.io/service-account-token
 EOF
+else
+  echo "member service account secret $SERVICE_ACCOUNT_SECRET already exists in namespace $CONNECT_TO_FLEET"
+fi
 
 echo "Creating member cluster CR..."
-export TOKEN="$(kubectl get secret $SERVICE_ACCOUNT_SECRET -n connect-to-fleet -o jsonpath='{.data.token}' | base64 --decode)"
+export TOKEN="$(kubectl get secret $SERVICE_ACCOUNT_SECRET -n $CONNECT_TO_FLEET -o jsonpath='{.data.token}' | base64 --decode)"
+if [[ $NOT_FOUND == *$(kubectl get membercluster $MEMBER_CLUSTER)* ]]; then
 cat <<EOF | kubectl apply -f -
 apiVersion: cluster.kubernetes-fleet.io/v1beta1
 kind: MemberCluster
@@ -56,10 +69,13 @@ spec:
     identity:
         name: $MEMBER_CLUSTER-hub-cluster-access
         kind: ServiceAccount
-        namespace: connect-to-fleet
+        namespace: $CONNECT_TO_FLEET
         apiGroup: ""
     heartbeatPeriodSeconds: 15
 EOF
+else
+  echo "member cluster CR $MEMBER_CLUSTER already exists"
+fi
 
 # # Install the member agent helm chart on the member cluster.
 
