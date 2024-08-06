@@ -1,22 +1,23 @@
 # How can I debug when my CRP ClusterResourcePlacementApplied condition is set to false?
-> Note: In addition, it may be helpful to look into the logs for the [apply work controller](https://github.com/Azure/fleet/blob/main/pkg/controllers/work/apply_controller.go) to get more information on why the resources are not available
+The `ClusterResourcePlacementApplied` condition is set to `false` when the deployment fails.
+> Note: To get more information about why the resources are not applied, you can check the [apply work controller](https://github.com/Azure/fleet/blob/main/pkg/controllers/work/apply_controller.go) logs.
 
 ### Common scenarios:
-- When the CRP is unable to propagate resources to a selected cluster due to the resource already existing on the cluster and not being managed by the fleet controller. 
-To remedy, CRP can `AllowCoOwnership` within `ApplyStrategy` to allow the resource to be managed by the fleet controller.
-- When the CRP is unable to propagate resource to selected due to another CRP already managing the resource for selected cluster with a different apply strategy.
-- When the CRP is unable to propagate resource due to failing to apply manifest due to syntax errors (which can happen when a resource is being propagated through an envelope object) or invalid resource configurations.
+Instances where this condition may arise:
+- The resource already exists on the cluster and isn't managed by the fleet controller.
+- Another `ClusterResourcePlacement` deployment is already managing the resource for the selected cluster by using a different apply strategy.
+- The `ClusterResourcePlacement` deployment doesn't apply the manifest because of syntax errors or invalid resource configurations. This might also occur if a resource is propagated through an envelope object.
 
 ### Investigation steps:
 
 1. Check `placementStatuses`: In the `ClusterResourcePlacement` status section, inspect the `placementStatuses` to identify which clusters have the `ResourceApplied` condition set to `false` and note down their `clusterName`.
-2. Locate `Work` Object in Hub Cluster: Use the identified `clusterName` to locate the `Work` object associated with the member cluster. Please refer to this [section](#how-and-where-to-find-the-correct-work-resource) to learn how to get the correct `Work` resource.
+2. Locate the `Work` Object in Hub Cluster: Use the identified `clusterName` to locate the `Work` object associated with the member cluster. Please refer to this [section](README.md#how-can-i-find-the-correct-work-resource-thats-associated-with-clusterresourceplacement) to learn how to get the correct `Work` resource.
 3. Check `Work` object status: Inspect the status of the `Work` object to understand the specific issues preventing successful resource application.
 
-### Example Scenario:
-In this example, the `ClusterResourcePlacement` is attempting to propagate a namespace containing a deployment to two member clusters. However, the namespace already exists on one member cluster, specifically named `kind-cluster-1`.
+### Case Study:
+In the following example, `ClusterResourcePlacement` is trying to propagate a namespace that contains a deployment to two member clusters. However, the namespace already exists on one member cluster, specifically `kind-cluster-1`.
 
-### CRP spec:
+### ClusterResourcePlacement spec:
 ```
   policy:
     clusterNames:
@@ -33,7 +34,7 @@ In this example, the `ClusterResourcePlacement` is attempting to propagate a nam
     type: RollingUpdate
 ```
 
-### CRP status:
+### ClusterResourcePlacement status:
 ```
 status:
   conditions:
@@ -169,11 +170,11 @@ status:
 
 
 In the `ClusterResourcePlacement` status, within the `failedPlacements` section for `kind-cluster-1`, we get a clear message
-as to why the resource failed to apply on the member cluster. Immediately preceding this in the conditions section,
-the `Applied` condition for `kind-cluster-1` is flagged as false, citing the `NotAllWorkHaveBeenApplied` reason.
-This signifies that the Work object intended for the member cluster `kind-cluster-1` has not been applied.
+as to why the resource failed to apply on the member cluster. In the preceding `conditions` section,
+the `Applied` condition for `kind-cluster-1` is flagged as false and shows the `NotAllWorkHaveBeenApplied` reason.
+This indicates that the Work object intended for the member cluster `kind-cluster-1` has not been applied.
 
-To gain more insights also take a look at the `work` object, please check this [section](#how-and-where-to-find-the-correct-work-resource) for more details,
+For more information, see this [section](#how-and-where-to-find-the-correct-work-resource).
 
 ### Work status of kind-cluster-1:
 ```
@@ -235,7 +236,7 @@ To gain more insights also take a look at the `work` object, please check this [
       version: v1
 ```
 
-From looking at the `Work` status and specifically the `manifestConditions` section, we could see that the namespace could not be applied but the deployment within the namespace got propagated from hub to the member cluster.
+From looking at the `Work` status, specifically the `manifestConditions` section, you can see that the namespace could not be applied but the deployment within the namespace got propagated from the hub to the member cluster.
 
 ### Resolution:
-In this scenario, a potential solution is to delete the existing namespace on the member cluster. However, it's essential to note that this decision rests with the user, as the namespace might already contain resources.
+In this situation, a potential solution is to set the `AllowCoOwnership` to `true` in the ApplyStrategy policy. However, it's important to notice that this decision should be made by the user because the resources might not be shared.

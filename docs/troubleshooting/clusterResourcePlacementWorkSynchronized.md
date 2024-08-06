@@ -4,13 +4,14 @@ The `ClusterResourcePlacementWorkSynchronized` condition is false when the CRP h
 > Note: In addition, it may be helpful to look into the logs for the [work generator controller](https://github.com/Azure/fleet/blob/main/pkg/controllers/workgenerator/controller.go) to get more information on why the work synchronization failed.
 
 ## Common Scenarios:
-- If used, the `ClusterResourceOverride` or `ResourceOverride` is created with an invalid value for the resource.
-- The CRP is unable to propagate resources to a selected cluster due to the selected cluster being terminated.
+Instances where this condition may arise:
+- The controller encounters an error while trying to generate the corresponding `work` object.
+- The enveloped object is not well formated.
 
-### Example Scenario:
-The CRP is attempting to propagate a resource to a selected cluster, but the work object has not been updated to reflect the latest changes due to the selected cluster being terminated.
+### Case Study:
+The CRP is attempting to propagate a resource to a selected cluster, but the work object has not been updated to reflect the latest changes due to the selected cluster has been terminated.
 
-### CRP Spec:
+### ClusterResourcePlacement Spec:
 ```
 spec:
   resourceSelectors:
@@ -25,7 +26,7 @@ spec:
     type: RollingUpdate
  ```
 
-### CRP Status:
+### ClusterResourcePlacement Status:
 ```
 spec:
   policy:
@@ -103,13 +104,13 @@ status:
     name: test-ns
     version: v1
 ```
-The `ClusterResourcePlacementWorkSynchronized` condition in the CRP status is flagged as false. It is clear from the message
-that the work object `crp1-work` is prohibited from generating new content within the namespace `fleet-member-kind-cluster-1`
-as it's currently undergoing termination.
+In the `ClusterResourcePlacement` status, the `ClusterResourcePlacementWorkSynchronized` condition status shows as `False`. 
+The message for it indicates that the work object `crp1-work` is prohibited from generating new content within the namespace `fleet-member-kind-cluster-1` because it's currently terminating.
 
 ### Resolution:
 To address the issue at hand, there are several potential solutions:
-- One option is to modify the Cluster Resource Placement (CRP) with a newly selected cluster. 
-- Another option is to delete the CRP to remove work through garbage collection.
-- It's also worth noting that the namespace can only regenerate if the cluster is re-joined, so another potential solution is to re-join the member cluster. 
-- In other scenarios, you might opt to wait for the work to finish propagating.
+- Modify the `ClusterResourcePlacement` with a newly selected cluster. 
+- Delete the `ClusterResourcePlacement` to remove work through garbage collection.
+- Rejoin the member cluster. The namespace can only be regenerated after rejoining the cluster.
+
+In other situations, you might opt to wait for the work to finish propagating.

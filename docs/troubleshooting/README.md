@@ -2,7 +2,7 @@
 
 ## Overview:
 
-This TSG is meant to help you troubleshoot issues with the Fleet APIs.
+This TSG is meant to help you troubleshoot issues with the ClusterResourcePlacement API in Fleet.
 
 ## Cluster Resource Placement:
 
@@ -14,70 +14,83 @@ Internal Objects to keep in mind when troubleshooting CRP related errors on the 
 
 Please read the API reference for more details about each object https://github.com/Azure/fleet/blob/main/docs/api-references.md.
 ____
-The order in which the conditions are updated is important for understanding the status of a cluster resource placement and failures encountered. 
-The order is as follows: 
-1. `ClusterResourcePlacementScheduled` condition is updated to indicate that a resource has been scheduled for placement. 
+## Complete Progress of the ClusterResourcePlacement
+Understanding the progression and the status of the `ClusterResourcePlacement` custom resource is crucial for diagnosing and identifying failures. 
+You can view the status of the `ClusterResourcePlacement` custom resource by using the following command:
+```bash
+kubectl describe clusterresourceplacement <name>
+```
+
+The complete progression of `ClusterResourcePlacement` is as follows:
+1. `ClusterResourcePlacementScheduled`: Indicates a resource has been scheduled for placement.. 
     - If this condition is false, refer to [How can I debug when my CRP status is ClusterResourcePlacementScheduled condition status is set to false?](./clusterResourcePlacementScheduled.md). 
-2. `ClusterResourcePlacementRolloutStarted` condition is updated to indicate that the rollout process has begun. 
+2. `ClusterResourcePlacementRolloutStarted`: Indicates the rollout process has begun.
    - If this condition is false refer to [How can I debug when my CRP status is ClusterResourcePlacementRolloutStarted condition status is set to false?](./clusterResourcePlacementRolloutStarted.md)
-3. `ClusterResourcePlacementOverridden` condition is updated to indicate that the resource has been overridden. 
+3. `ClusterResourcePlacementOverridden`: Indicates the resource has been overridden.
    - If this condition is false, refer to [How can I debug when my CRP status is ClusterResourcePlacementOverridden condition status is set to false?](./clusterResourcePlacementOverridden.md)
-4. `ClusterResourcePlacementWorkSynchronized` condition is updated to indicate that the work objects have been synchronized. 
+4. `ClusterResourcePlacementWorkSynchronized`: Indicates the work objects have been synchronized.
    - If this condition is false, refer to [How can I debug when my CRP status is ClusterResourcePlacementWorkSynchronized condition status is set to false?](./clusterResourcePlacementWorkSynchronized.md)
-5. `ClusterResourcePlacementApplied` condition is updated to indicate that the resource has been applied. 
+5. `ClusterResourcePlacementApplied`: Indicates the resource has been applied.
    - If this condition is false, refer to [How can I debug when my CRP status is ClusterResourcePlacementApplied condition is set to false?](./clusterResourcePlacementApplied.md)
-6. `ClusterResourcePlacementAvailable` condition is updated to indicate that the resource is available. 
+6. `ClusterResourcePlacementAvailable`: Indicates the resource is available. 
    - If this condition is false, refer to [How can I debug when my CRP status is ClusterResourcePlacementAvailable condition status is set to false?](./clusterResourcePlacementAvailable.md)
 
 ___
-## How can I debug when some clusters are not selected as expected?
+## How can I debug if some clusters are not selected as expected?
 
 Check the status of the `ClusterSchedulingPolicySnapshot` to determine which clusters were selected along with the reason.
 
-## How can I debug when a selected cluster does not have the expected resources on it or if CRP doesn't pick up the latest changes?
+## How can I debug if a selected cluster does not have the expected resources on it or if CRP doesn't pick up the latest changes?
 
 Please check the following cases,
-- Check to see if `ClusterResourcePlacementRolloutStarted` condition in CRP status is set to `true` or `false`.
-- If it's set to `false` check this [question](#how-can-i-debug-when-my-crp-status-is-clusterresourceplacementrolloutstarted-condition-status-is-set-to-false).
-- If it's set to `true`,
-  - Check to see if `ClusterResourcePlacementApplied` condition is set to `unknown`, `false` or `true`.
-  - If it's set to `unknown`, please wait as the resources are still being applied to the member cluster (if it's stuck in unknown state for a while, please raise a github issue as it's an unexpected behavior).
-  - If it's set to `false`, check this [question](#how-can-i-debug-when-my-crp-clusterresourceplacementapplied-condition-is-set-to-false).
-  - If it's set to `true`, check to see if the resource exists on the hub cluster.
+- Check whether the `ClusterResourcePlacementRolloutStarted` condition in `ClusterResourcePlacement` status is set to **true** or **false**.
+- If `false`, see [How to debug ClusterResourcePlacementScheduled condition status set to false](#how-can-i-debug-when-my-crp-status-is-clusterresourceplacementrolloutstarted-condition-status-is-set-to-false).
+- If `true`,
+  - Check to see if `ClusterResourcePlacementApplied` condition is set to **unknown**, **false** or **true**.
+  - If `unknown`, wait for the process to finish, as the resources are still being applied to the member cluster. If the state remains unknown for a while, create a [issue](https://github.com/Azure/fleet/issues), as this is an unusual behavior.
+  - If `false`, refer to [How to debug ClusterResourcePlacementApplied condition status set to false](#how-can-i-debug-when-my-crp-clusterresourceplacementapplied-condition-is-set-to-false).
+  - If `true`, verify that the resource exists on the hub cluster.
 
 We can also take a look at the `placementStatuses` section in `ClusterResourcePlacement` status for that particular cluster. In `placementStatuses` we would find `failedPlacements` section which should have the reasons as to why resources failed to apply.
 
-## How to find & verify the latest ClusterSchedulingPolicySnapshot for a CRP?
+## How can I find and verify the latest ClusterSchedulingPolicySnapshot for a ClusterResourcePlacement?
 
-We need to have `ClusterResourcePlacement` name `{CRPName}`, replace `{CRPName}` in the command below,
+To find the latest `ClusterSchedulingPolicySnapshot` for a `ClusterResourcePlacement` resource, run the following command:
 
 ```
 kubectl get clusterschedulingpolicysnapshot -l kubernetes-fleet.io/is-latest-snapshot=true,kubernetes-fleet.io/parent-CRP={CRPName}
 ```
+> NOTE: In this command, replace `{CRPName}` with your `ClusterResourcePlacement` name.
 
-- Compare `ClusterSchedulingPolicySnapshot` with the `ClusterResourcePlacement` policy to ensure they match (excluding `numberOfClusters` field from `ClusterResourcePlacement` spec).
-- If placement type is `PickN`, check if the number of clusters requested in `ClusterResourcePlacment` placement policy matches the value for the label called `number-of-clusters`.
+Then, compare the `ClusterSchedulingPolicySnapshot` with the `ClusterResourcePlacement` policy to make sure that they match, excluding the `numberOfClusters` field from the `ClusterResourcePlacement` spec.
 
-## How to find the latest ClusterResourceBinding resource?
+If the placement type is `PickN`, check whether the number of clusters that's requested in the `ClusterResourcePlacement` policy matches the value of the number-of-clusters label.
+## How can I find the latest ClusterResourceBinding resource?
 
-We need to have `ClusterResourcePlacement` name `{CRPName}`, replace `{CRPName} `in the command below. The command below lists all `ClusterResourceBindings` associated with `ClusterResourcePlacement`,
-
+The following command lists all `ClusterResourceBindings` instances that are associated with `ClusterResourcePlacement`:
 ```
 kubectl get clusterresourcebinding -l kubernetes-fleet.io/parent-CRP={CRPName}
 ```
+> NOTE: In this command, replace `{CRPName}` with your `ClusterResourcePlacement` name.
 
 ### Example:
 
-In this case we have `ClusterResourcePlacement` called test-crp,
+In this case we have `ClusterResourcePlacement` called test-crp.
 
+1. List the `ClusterResourcePlacement` to get the name of the CRP,
 ```
 kubectl get crp test-crp
 NAME       GEN   SCHEDULED   SCHEDULEDGEN   APPLIED   APPLIEDGEN   AGE
 test-crp   1     True        1              True      1            15s
 ```
 
-From the `placementStatuses` section of the `test-crp` status, we can observe that it has propagated resources to two member clusters and hence has two `ClusterResourceBindings`,
+2. The following command is run to view the status of the `ClusterResourcePlacement` deployment.
+```bash
+kubectl describe clusterresourceplacement test-crp
+```
 
+3. Here's an example output. From the `placementStatuses` section of the `test-crp` status, notice that it has distributed 
+resources to two member clusters and, therefore, has two `ClusterResourceBindings` instances:
 ```
 status:
   conditions:
@@ -96,29 +109,38 @@ status:
       type: ResourceApplied
 ```
 
-Output we receive after running the command listed above to get the `ClusterResourceBindings`,
-
+3. To get the `ClusterResourceBindings` value, run the following command:
+```bash
+    kubectl get clusterresourcebinding -l kubernetes-fleet.io/parent-CRP=test-crp 
+```
+4. The output lists all `ClusterResourceBindings` instances that are associated with `test-crp`. 
 ```
 kubectl get clusterresourcebinding -l kubernetes-fleet.io/parent-CRP=test-crp 
 NAME                               WORKCREATED   RESOURCESAPPLIED   AGE
 test-crp-kind-cluster-1-be990c3e   True          True               33s
 test-crp-kind-cluster-2-ec4d953c   True          True               33s
 ```
+The `ClusterResourceBinding` resource name uses the following format: `{CRPName}-{clusterName}-{suffix}`. 
+Find the `ClusterResourceBinding` for the target cluster you are looking for based on the `clusterName`.
 
-The `ClusterResourceBinding` name follows this format `{CRPName}-{clusterName}-{suffix}`, so once we have all ClusterResourceBindings listed find the `ClusterResourceBinding` for the target cluster you are looking for based on the `clusterName`.
 
-## How to find the latest ClusterResourceSnapshot resource?
+## How can I find the latest ClusterResourceSnapshot resource?
 
-Replace `{CRPName}` in the command below with name of `ClusterResourcePlacement`,
+To find the latest ClusterResourceSnapshot resource, run the following command:
 
 ```
 kubectl get clusterresourcesnapshot -l kubernetes-fleet.io/is-latest-snapshot=true,kubernetes-fleet.io/parent-CRP={CRPName}
 ```
+> NOTE: In this command, replace `{CRPName}` with your `ClusterResourcePlacement` name.
 
-## How and where to find the correct Work resource?
+## How can I find the correct work resource that's associated with ClusterResourcePlacement?
 
-We need to have the member cluster's namespace which follow this format `fleet-member-{clusterName}` and `ClusterResourcePlacement` name `{CRPName}`.
+To find the correct work resource, follow these steps:
+
+1. Identify the member cluster namespace and the `ClusterResourcePlacement` name. The format for the namespace is `fleet-member-{clusterName}`.
+2. To get the work resource, run the following command:
 
 ```
 kubectl get work -n fleet-member-{clusterName} -l kubernetes-fleet.io/parent-CRP={CRPName}
 ```
+> NOTE: In this command, replace `{clusterName}` and `{CRPName}` with the names that you identified in the first step.
