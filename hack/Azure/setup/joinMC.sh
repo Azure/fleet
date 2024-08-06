@@ -10,28 +10,26 @@ fi
 
 export IMAGE_TAG="$1"
 if [[ $(curl "https://api.github.com/repos/Azure/fleet/tags") != *$1* ]] > /dev/null 2>&1; then
-  echo "Fleet image tag $1 does not exist"
+  echo "fleet image tag $1 does not exist"
   exit 1
 fi
 
 export NOT_FOUND="not found"
 export HUB_CLUSTER="$2"
-export HUB_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$HUB_CLUSTER\")].name}")
-if [[ $(kubectl config get-contexts $HUB_CLUSTER_CONTEXT) == *$NOT_FOUND* ]] > /dev/null 2>&1; then
-  echo "The context $HUB_CLUSTER_CONTEXT does not exist."
+if [[ ! $(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$HUB_CLUSTER\")]}") ]] > /dev/null 2>&1; then
+  echo "The cluster named $HUB_CLUSTER does not exist."
   exit 1
 fi
 
-for MC in "${@:3}"; do
-export MEMBER_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$MC\")].name}")
-if [[ $(kubectl config get-contexts $MEMBER_CLUSTER_CONTEXT) == *$NOT_FOUND* ]] > /dev/null 2>&1; then
-  echo "The context $MEMBER_CLUSTER_CONTEXT does not exist."
+for MEMBER_CLUSTER in "${@:3}"; do
+if [[ ! $(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$MEMBER_CLUSTER\")]}") ]] > /dev/null 2>&1; then
+  echo "The cluster named $MEMBER_CLUSTER does not exist."
   exit 1
 fi
 done
 
 # Steps to join the member clusters to the hub cluster.
-
+export HUB_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$HUB_CLUSTER\")].name}")
 export HUB_CLUSTER_ADDRESS=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$HUB_CLUSTER\")].cluster.server}")
 
 echo "Switching into hub cluster context..."
@@ -40,18 +38,13 @@ kubectl config use-context $HUB_CLUSTER_CONTEXT
 export CONNECT_TO_FLEET=connect-to-fleet
 
 echo "Create namespace to host resources required to connect to fleet"
-if [[ $(kubectl get namespace $CONNECT_TO_FLEET) == *$NOT_FOUND* ]] > /dev/null 2>&1; then
+if [[ $NOT_FOUND == *$(kubectl get namespace $CONNECT_TO_FLEET)* ]] > /dev/null 2>&1; then
   kubectl create namespace $CONNECT_TO_FLEET
 else
   echo "namespace $CONNECT_TO_FLEET already exists"
 fi
 
-for MC in "${@:3}"; do
-
-# Note that Fleet will recognize your cluster with this name once it joins.
-export MEMBER_CLUSTER=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$MC\")].name}")
-export MEMBER_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$MC\")].name}")
-
+for MEMBER_CLUSTER in "${@:3}"; do
 export SERVICE_ACCOUNT="$MEMBER_CLUSTER-hub-cluster-access"
 
 # The service account can, in theory, be created in any namespace; for simplicity reasons,
@@ -60,7 +53,7 @@ export SERVICE_ACCOUNT="$MEMBER_CLUSTER-hub-cluster-access"
 # Note that if you choose a different value, commands in some steps below need to be
 # modified accordingly.
 echo "Creating member service account..."
-if [[ $NOT_FOUND == *$(kubectl get serviceaccount $SERVICE_ACCOUNT -n $CONNECT_TO_FLEET)* ]]; then
+if [[ $NOT_FOUND == *$(kubectl get serviceaccount $SERVICE_ACCOUNT -n $CONNECT_TO_FLEET)* ]] > /dev/null 2>&1; then
   kubectl create serviceaccount $SERVICE_ACCOUNT -n $CONNECT_TO_FLEET
 else
   echo "member service account $SERVICE_ACCOUNT already exists in namespace $CONNECT_TO_FLEET"
@@ -68,7 +61,7 @@ fi
 
 echo "Creating member service account secret..."
 export SERVICE_ACCOUNT_SECRET="$MEMBER_CLUSTER-hub-cluster-access-token"
-if [[ $NOT_FOUND == *$(kubectl get secret $SERVICE_ACCOUNT_SECRET -n $CONNECT_TO_FLEET)* ]]; then
+if [[ $NOT_FOUND == *$(kubectl get secret $SERVICE_ACCOUNT_SECRET -n $CONNECT_TO_FLEET)* ]] > /dev/null 2>&1; then
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Secret
@@ -87,7 +80,7 @@ echo "Extracting token from member service account secret..."
 export TOKEN="$(kubectl get secret $SERVICE_ACCOUNT_SECRET -n $CONNECT_TO_FLEET -o jsonpath='{.data.token}' | base64 --decode)"
 
 echo "Creating member cluster CR..."
-if [[ $NOT_FOUND == *$(kubectl get membercluster $MEMBER_CLUSTER)* ]]; then
+if [[ $NOT_FOUND == *$(kubectl get membercluster $MEMBER_CLUSTER)* ]] > /dev/null 2>&1; then
 cat <<EOF | kubectl apply -f -
 apiVersion: cluster.kubernetes-fleet.io/v1beta1
 kind: MemberCluster
@@ -118,7 +111,9 @@ export MEMBER_AGENT_IMAGE="member-agent"
 export REFRESH_TOKEN_IMAGE="${REFRESH_TOKEN_NAME:-refresh-token}"
 export OUTPUT_TYPE="${OUTPUT_TYPE:-type=docker}"
 
-echo "Switching to member cluster context.."
+# Note that Fleet will recognize your cluster with this name once it joins.
+export MEMBER_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$MEMBER_CLUSTER\")].name}")
+echo "Switching to member cluster context..."
 kubectl config use-context $MEMBER_CLUSTER_CONTEXT
 
 # Create the secret with the token extracted previously for member agent to use.
