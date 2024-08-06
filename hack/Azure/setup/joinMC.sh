@@ -57,8 +57,10 @@ else
   echo "member service account secret $SERVICE_ACCOUNT_SECRET already exists in namespace $CONNECT_TO_FLEET"
 fi
 
-echo "Creating member cluster CR..."
+echo "Extracting token from member service account secret..."
 export TOKEN="$(kubectl get secret $SERVICE_ACCOUNT_SECRET -n $CONNECT_TO_FLEET -o jsonpath='{.data.token}' | base64 --decode)"
+
+echo "Creating member cluster CR..."
 if [[ $NOT_FOUND == *$(kubectl get membercluster $MEMBER_CLUSTER)* ]]; then
 cat <<EOF | kubectl apply -f -
 apiVersion: cluster.kubernetes-fleet.io/v1beta1

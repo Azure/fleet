@@ -19,11 +19,16 @@ Clone the [fleet repository](https://github.com/Azure/fleet) and navigate to the
 Run the following script which sets up the resources on the hub cluster and each on-prem cluster to allow
 the member agent installed by the script on each on-prem cluster to communicate with the hub cluster.
 
+> **Note:** The script creates resources on the hub cluster in a namespace called `connect-to-fleet` and also creates 
+> a secret on each on-prem cluster please don't update these resources.
+
 The latest fleet image tag could be found here in [fleet releases](https://github.com/Azure/fleet/releases).
 
 > **Note:** Please ensure kubectl can access the kube-config of the hub cluster and all the on-prem clusters.
 
-Ex: `./hack/Azure/setup/joinMC.sh v0.1.0 hub test-cluster-1 test-cluster-2`
+Ex: 
+- `./hack/Azure/setup/joinMC.sh v0.1.0 hub test-cluster-1`
+- `./hack/Azure/setup/joinMC.sh v0.1.0 hub test-cluster-1 test-cluster-2`
 
 ```shell
 ./hack/Azure/setup/joinMC.sh <FLEET-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
@@ -43,7 +48,8 @@ test-cluster-2     Unknown   2m30s   1            890m            3566856Ki
 We can confirm that the member agent was installed correctly when we see `NODE-COUNT`, `AVAILABLE-CPU`, and `AVAILABLE-MEMORY` columns are populated.
 The columns can take upto a minute to populate.
 
-> **Note:** The script in the fleet-networking repo should only be run once the script in the fleet repo has been run to ensure the member agents can communicate with the hub cluster.
+> **Note:** The script in the fleet-networking repo should only be run once the script in the fleet repo has been 
+> run to ensure the member agents can communicate with the hub cluster.
 
 Clone the [fleet-networking repository](https://github.com/Azure/fleet-networking) and navigate to the root directory of the repo.
 
@@ -51,7 +57,9 @@ Run the following script to install the fleet networking member agents on each o
 
 The latest fleet-networking image tag could be found here [fleet-networking releases](https://github.com/Azure/fleet-networking/releases).
 
-Ex: `./hack/Azure/joinMC.sh v0.1.0 v0.2.0 hub test-cluster-1 test-cluster-2`
+Ex: 
+- `./hack/membership/joinMC.sh v0.1.0 v0.2.0 hub test-cluster-1`
+- `./hack/membership/joinMC.sh v0.1.0 v0.2.0 hub test-cluster-1 test-cluster-2`
 
 ```shell
 ./hack/membership/joinMC.sh <FLEET-IMAGE-TAG> <FLEET-NETWORKING-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
@@ -73,7 +81,7 @@ The column is not meant for tracking each member agent's health status.
 
 > **Note:** Once all the on-prem clusters have joined, ensure you follow the steps below to make the clusters leave before re-running the script.
 
-# Steps to make on-prem cluster leave the Fleet hub cluster
+# Steps to make an on-prem cluster leave the Fleet hub cluster
 
 Delete the `MemberCluster` resource for a particular on-prem cluster in the hub cluster.
 
@@ -89,7 +97,7 @@ Once the above delete command completes the on-prem cluster has successfully lef
 But we still need to clean-up residual resources on the hub and on-prem clusters.
 
 > **Note:** There is a case where `MemberCluster` resource deletion is stuck, this occurs because we didn't install all the member agents required. 
-> If this case occurs run the following command,
+> If this case occurs, stop the delete member cluster command and then run the following command,
 
 ```
 kubectl delete internalmembercluster <cluster-name> -n fleet-member-<cluster-name>
@@ -99,15 +107,13 @@ This ensures the `MemberCluster` can be deleted so the on-prem cluster can succe
 
 # Clean up resources created by the join scripts
 
-We create all resources used for joining in a namespace called `connect-to-fleet`.
-Replace <cluster-name> with the name of your on-prem cluster.
+Run the following script which cleans up all the resources we set up on the hub cluster and each on-prem cluster 
+to allow the member agents to communicate with the hub cluster.
+
+Ex: 
+- `./hack/Azure/setup/cleanUp.sh hub test-cluster-1`
+- `./hack/Azure/setup/cleanUp.sh hub test-cluster-1 test-cluster-2`
 
 ```
-kubectl config use-context hub
-kubectl delete secret <cluster-name>-hub-cluster-access-token -n connect-to-fleet
-kubectl delete serviceaccount <cluster-name>-hub-cluster-access -n connect-to-fleet
-kubectl config use-context <cluster-name>
-helm uninstall member-agent
-helm uninstall member-net-controller-manager
-helm uninstall mcs-controller-manager
+./hack/Azure/setup/cleanUp.sh <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
 ```
