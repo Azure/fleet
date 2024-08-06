@@ -1,20 +1,46 @@
 # CAN ONLY BE RUN AFTER CREATING NEEDED AKS CLUSTERS AND HUB CLUSTER. This script creates member clusters for
 # AKS Clusters and joins them onto the hub cluster.
 
-export IMAGE_TAG="$1"
+# Perform validation to ensure the script can run correctly.
 
+if [ "$#" -lt 3 ]; then
+  echo "Usage: $0 <FLEET-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> [<MEMBER-CLUSTER-NAME-2> ...]"
+  exit 1
+fi
+
+export IMAGE_TAG="$1"
+if [[ $(curl "https://api.github.com/repos/Azure/fleet/tags") != *$1* ]] > /dev/null 2>&1; then
+  echo "Fleet image tag $1 does not exist"
+  exit 1
+fi
+
+export NOT_FOUND="not found"
 export HUB_CLUSTER="$2"
 export HUB_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$HUB_CLUSTER\")].name}")
+if [[ $(kubectl config get-contexts $HUB_CLUSTER_CONTEXT) == *$NOT_FOUND* ]] > /dev/null 2>&1; then
+  echo "The context $HUB_CLUSTER_CONTEXT does not exist."
+  exit 1
+fi
+
+for MC in "${@:3}"; do
+export MEMBER_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$MC\")].name}")
+if [[ $(kubectl config get-contexts $MEMBER_CLUSTER_CONTEXT) == *$NOT_FOUND* ]] > /dev/null 2>&1; then
+  echo "The context $MEMBER_CLUSTER_CONTEXT does not exist."
+  exit 1
+fi
+done
+
+# Steps to join the member clusters to the hub cluster.
+
 export HUB_CLUSTER_ADDRESS=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$HUB_CLUSTER\")].cluster.server}")
 
 echo "Switching into hub cluster context..."
 kubectl config use-context $HUB_CLUSTER_CONTEXT
 
-export NOT_FOUND="not found"
 export CONNECT_TO_FLEET=connect-to-fleet
 
 echo "Create namespace to host resources required to connect to fleet"
-if [[ $NOT_FOUND == *$(kubectl get namespace $CONNECT_TO_FLEET)* ]]; then
+if [[ $(kubectl get namespace $CONNECT_TO_FLEET) == *$NOT_FOUND* ]] > /dev/null 2>&1; then
   kubectl create namespace $CONNECT_TO_FLEET
 else
   echo "namespace $CONNECT_TO_FLEET already exists"

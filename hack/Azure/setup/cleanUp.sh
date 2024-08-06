@@ -1,3 +1,8 @@
+if [ "$#" -lt 2 ]; then
+  echo "Usage: $0 <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> [<MEMBER-CLUSTER-NAME-2> ...]"
+  exit 1
+fi
+
 export CONNECT_TO_FLEET=connect-to-fleet
 
 export HUB_CLUSTER="$1"
