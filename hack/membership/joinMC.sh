@@ -14,7 +14,6 @@ if [[ $(curl "https://api.github.com/repos/Azure/fleet/tags") != *$1* ]] > /dev/
   exit 1
 fi
 
-export NOT_FOUND="not found"
 export HUB_CLUSTER="$2"
 if [[ ! $(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$HUB_CLUSTER\")]}") ]] > /dev/null 2>&1; then
   echo "The cluster named $HUB_CLUSTER does not exist."
@@ -35,6 +34,7 @@ export HUB_CLUSTER_ADDRESS=$(kubectl config view -o jsonpath="{.clusters[?(@.nam
 echo "Switching into hub cluster context..."
 kubectl config use-context $HUB_CLUSTER_CONTEXT
 
+export NOT_FOUND="not found"
 export CONNECT_TO_FLEET=connect-to-fleet
 
 echo "Create namespace to host resources required to connect to fleet"
