@@ -21,7 +21,6 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
             - --leader-elect=true
-            - --enable-webhook={{ .Values.enableWebhook }}
             - --webhook-service-name={{ .Values.webhookServiceName }}
             - --enable-guard-rail={{ .Values.enableGuardRail }}
             - --whitelisted-users=system:serviceaccount:fleet-system:hub-agent-sa
