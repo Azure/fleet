@@ -1,3 +1,6 @@
+# This script should only be run after deleting the member cluster custom resources.
+# It cleans up the resources created during the join process.
+
 if [ "$#" -lt 2 ]; then
   echo "Usage: $0 <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> [<MEMBER-CLUSTER-NAME-2> ...]"
   exit 1

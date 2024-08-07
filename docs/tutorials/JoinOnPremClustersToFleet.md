@@ -3,8 +3,8 @@ This tutorial will guide you through the process of joining your on-prem cluster
 
 Follow these guides to setup your fleet and get access to your fleet hub cluster:
 
-- https://learn.microsoft.com/en-us/azure/kubernetes-fleet/quickstart-create-fleet-and-members?tabs=with-hub-cluster
-- https://learn.microsoft.com/en-us/azure/kubernetes-fleet/quickstart-access-fleet-kubernetes-api
+- [Quickstart: Create an Azure Kubernetes Fleet Manager resource and join member clusters using Azure CLI (With Hub Cluster)](https://learn.microsoft.com/en-us/azure/kubernetes-fleet/quickstart-create-fleet-and-members?tabs=with-hub-cluster)
+- [Quickstart: Access the Kubernetes API of the Fleet hub cluster](https://learn.microsoft.com/en-us/azure/kubernetes-fleet/quickstart-access-fleet-kubernetes-api)
 
 ## Prerequisites
 
@@ -29,11 +29,12 @@ The latest fleet image tag could be found here in [fleet releases](https://githu
 > **Note:** Please ensure kubectl can access the kube-config of the hub cluster and all the on-prem clusters.
 
 Ex: 
-- `./hack/Azure/setup/joinMC.sh v0.1.0 hub test-cluster-1`
-- `./hack/Azure/setup/joinMC.sh v0.1.0 hub test-cluster-1 test-cluster-2`
+- `./hack/membership/joinMC.sh v0.1.0 hub test-cluster-1`
+- `./hack/membership/joinMC.sh v0.1.0 hub test-cluster-1 test-cluster-2`
 
 ```shell
-./hack/Azure/setup/joinMC.sh <FLEET-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
+chmod +x ./hack/membership/joinMC.sh
+./hack/membership/joinMC.sh <FLEET-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
 ```
 
 The output should look like:
@@ -66,6 +67,7 @@ Ex:
 - `./hack/membership/joinMC.sh v0.1.0 v0.2.0 hub test-cluster-1 test-cluster-2`
 
 ```shell
+chmod +x ./hack/membership/joinMC.sh
 ./hack/membership/joinMC.sh <FLEET-IMAGE-TAG> <FLEET-NETWORKING-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
 ```
 
@@ -117,9 +119,10 @@ Run the following script which cleans up all the resources we set up on the hub 
 to allow the member agents to communicate with the hub cluster.
 
 Ex: 
-- `./hack/Azure/setup/cleanUp.sh hub test-cluster-1`
-- `./hack/Azure/setup/cleanUp.sh hub test-cluster-1 test-cluster-2`
+- `./hack/membership/cleanUp.sh hub test-cluster-1`
+- `./hack/membership/cleanUp.sh hub test-cluster-1 test-cluster-2`
 
 ```
-./hack/Azure/setup/cleanUp.sh <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
+chmod +x ./hack/membership/cleanUp.sh
+./hack/membership/cleanUp.sh <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
 ```
