@@ -3,6 +3,19 @@ if [ "$#" -lt 2 ]; then
   exit 1
 fi
 
+export HUB_CLUSTER="$1"
+if [[ ! $(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$HUB_CLUSTER\")]}") ]] > /dev/null 2>&1; then
+  echo "The cluster named $HUB_CLUSTER does not exist."
+  exit 1
+fi
+
+for MEMBER_CLUSTER in "${@:2}"; do
+if [[ ! $(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$MEMBER_CLUSTER\")]}") ]] > /dev/null 2>&1; then
+  echo "The cluster named $MEMBER_CLUSTER does not exist."
+  exit 1
+fi
+done
+
 export CONNECT_TO_FLEET=connect-to-fleet
 
 export HUB_CLUSTER="$1"
