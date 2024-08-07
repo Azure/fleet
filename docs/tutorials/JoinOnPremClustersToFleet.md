@@ -14,6 +14,8 @@ Follow these guides to setup your fleet and get access to your fleet hub cluster
 
 ## Steps to join on-prem clusters to Fleet hub cluster
 
+> **Note:** Please read through the entire document before running the scripts.
+
 ### Run the join script in the fleet repository
 
 Clone the [fleet repository](https://github.com/Azure/fleet) and navigate to the root directory of the repo.
@@ -100,16 +102,24 @@ kubectl delete membercluster <cluster-name>
 Once the above delete command completes the on-prem cluster has successfully left the Fleet hub cluster. 
 But we still need to clean-up residual resources on the hub and on-prem clusters.
 
-> **Note:** There is a case where `MemberCluster` resource deletion is stuck, this occurs because we didn't install all the member agents required. 
-> If this case occurs, stop the delete member cluster command and then run the following command,
+> **Note:** There is a case where `MemberCluster` resource deletion is stuck, this occurs because we didn't install
+> all the member agents required or some agents were uninstalled before the `MemberCluster` resource was deleted.
+> If this case occurs, we need to delete the `InternalMemberCluster` resource for the on-prem cluster in the hub cluster.
+> But this step is blocked by the **fleet-guard-rail** which is a validating webhook on the hub cluster.
+> So we need to delete the associated `ValidatingWebhookConfiguration`
+> (This is not advised, but to delete the `MemberCluster` we have to do this step)
 
 ```
+kubectl delete validatingwebhookconfiguration fleet-guard-rail-webhook-configuration
 kubectl delete internalmembercluster <cluster-name> -n fleet-member-<cluster-name>
 ```
 
-This ensures the `MemberCluster` can be deleted so the on-prem cluster can successfully leave the Fleet hub cluster.
+This ensures the `MemberCluster` can be deleted, so the on-prem cluster can successfully leave the Fleet hub cluster.
 
 # Clean up resources created by the join scripts
+
+> **Note:** Before running the below script to clean up resources for on-prem clusters, please ensure that each
+> on-prem cluster has left the Fleet hub cluster by manually deleting it's associated `MemberCluster` resource.
 
 Navigate to the root directory of the [fleet repository](https://github.com/Azure/fleet).
 
