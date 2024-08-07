@@ -25,11 +25,8 @@ export HUB_CLUSTER="$1"
 export HUB_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$HUB_CLUSTER\")].name}")
 export HUB_CLUSTER_ADDRESS=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$HUB_CLUSTER\")].cluster.server}")
 
-for MC in "${@:2}"; do
-
-# Note that Fleet will recognize your cluster with this name once it joins.
-export MEMBER_CLUSTER=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$MC\")].name}")
-export MEMBER_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$MC\")].name}")
+for MEMBER_CLUSTER in "${@:2}"; do
+export MEMBER_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$MEMBER_CLUSTER\")].name}")
 
 kubectl config use-context $HUB_CLUSTER_CONTEXT
 kubectl delete secret $MEMBER_CLUSTER-hub-cluster-access-token -n connect-to-fleet
