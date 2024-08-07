@@ -22,7 +22,7 @@ Run the following script which sets up the resources on the hub cluster and each
 the member agent installed by the script on each on-prem cluster to communicate with the hub cluster.
 
 > **Note:** The script creates resources on the hub cluster in a namespace called `connect-to-fleet` and also creates 
-> a secret on each on-prem cluster please don't update these resources.
+> a secret on each on-prem cluster please don't update/delete these resources.
 
 The latest fleet image tag could be found here in [fleet releases](https://github.com/Azure/fleet/releases).
 
@@ -48,8 +48,8 @@ test-cluster-2     Unknown   2m30s   1            890m            3566856Ki
 
 > **Note:** The `JOINED` column will be `Unknown` until the fleet networking member agent charts are installed on each on-prem cluster.
 
-We can confirm that the member agent was installed correctly when we see `NODE-COUNT`, `AVAILABLE-CPU`, and `AVAILABLE-MEMORY` columns are populated.
-The columns can take upto a minute to populate.
+We can confirm that the member agent was installed correctly when we see `NODE-COUNT`, `AVAILABLE-CPU`, and `AVAILABLE-MEMORY` columns populated.
+The columns mentioned can take upto a minute to populate.
 
 > **Note:** The script in the fleet-networking repo should only be run once the script in the fleet repo has been 
 > run to ensure the member agents can communicate with the hub cluster.
@@ -85,8 +85,6 @@ member agents are able to communicate with fleet hub cluster.
 The column can take upto a minute to populate. The `JOINED` column indicates that all three fleet member agents have all joined once.
 The column is not meant for tracking each member agent's health status.
 
-> **Note:** Once all the on-prem clusters have joined, ensure you follow the steps below to make the clusters leave before re-running the script.
-
 # Steps to make an on-prem cluster leave the Fleet hub cluster
 
 Delete the `MemberCluster` resource for a particular on-prem cluster in the hub cluster.
@@ -119,10 +117,10 @@ Run the following script which cleans up all the resources we set up on the hub 
 to allow the member agents to communicate with the hub cluster.
 
 Ex: 
-- `./hack/membership/cleanUp.sh hub test-cluster-1`
-- `./hack/membership/cleanUp.sh hub test-cluster-1 test-cluster-2`
+- `./hack/membership/cleanup.sh hub test-cluster-1`
+- `./hack/membership/cleanup.sh hub test-cluster-1 test-cluster-2`
 
 ```
-chmod +x ./hack/membership/cleanUp.sh
-./hack/membership/cleanUp.sh <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
+chmod +x ./hack/membership/cleanup.sh
+./hack/membership/cleanup.sh <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
 ```
