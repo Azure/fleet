@@ -13,11 +13,11 @@ import (
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 // +kubebuilder:resource:scope="Cluster",categories={fleet,fleet-placement}
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// StageRollout defines a group of override policies about how to override the selected cluster scope resources
-// to target clusters.
+// StageRollout defines a stage by stage rollout policy that is applied to the ClusterResourcePlacement of the same name.
 type StageRollout struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -27,15 +27,15 @@ type StageRollout struct {
 	Spec StageRolloutSpec `json:"spec"`
 
 	// The observed status of StageRollout.
-	// +required
-	Status StageRolloutStatus `json:"status"`
+	// +optional
+	Status StageRolloutStatus `json:"status,omitempty"`
 }
 
 // StageRolloutSpec defines the desired the rollout sequence stage by stage.
 type StageRolloutSpec struct {
 	// Stage rollout configurations for each rollout stage.
 	// +required
-	StageRollout []StageRolloutConfig `json:"stages"`
+	Stages []StageRolloutConfig `json:"stages"`
 
 	// The wait time between each stage is completed.
 	// +optional
@@ -63,7 +63,9 @@ type StageRolloutConfig struct {
 	// +optional
 	SortingLabelKey *string `json:"sortingLabelKey,omitempty"`
 
-	// The maximum number of clusters that can be updated simultaneously within this stage
+	// The maximum number of clusters that can be updated simultaneously within this stage.
+	// Note that an unsuccessful update cluster counts as one of the parallel updates which means
+	// the rollout will stuck if the number of failed clusters is equal to the MaxParallel.
 	// default is 1.
 	// +optional
 	MaxParallel *intstr.IntOrString `json:"maxParallel,omitempty"`
@@ -76,13 +78,28 @@ type StageRolloutConfig struct {
 
 // StageRolloutStatus defines the observed state of the StageRollout.
 type StageRolloutStatus struct {
-	// The stage that is in the middle of the rollout.
-	CurrentStage int `json:"stage"`
+	// CurrentStages list the name of the clusters in each stage.
+	// The clusters in each stage are ordered following its order to be rolled out.
+	// The rollout will restart from the first stage if the exact order of stages
+	// and the clusters in each stage are changed.
+	// +required
+	CurrentStages [][]string `json:"currentStages"`
 
-	// the clusters that are in the current stage.
-	ClustersInCurrentStage []string `json:"clustersInCurrentStage"`
+	// CurrentStageIndex is the index of the stage that is in the middle of the rollout.
+	// The index starts from 0. The index is -1 if the rollout is not started.
+	// The index is the size of the Stages if the rollout is completed.
+	// +required
+	CurrentStageIndex int `json:"currentStageIndex"`
 
-	// the clusters that are actively updating.
+	// ResourceSnapshotIndex is the resource index that is currently being rolled out.
+	// Resource index logically represents the generation of the selected resources.
+	// We take a new snapshot of the selected resources whenever the selection or their content change.
+	// Each snapshot has a different resource index.
+	// Each time the resource index is updated, the rollout will restart from the first stage.
+	// +optional
+	ResourceSnapshotIndex string `json:"resourceSnapshotIndex"`
+
+	// the clusters that are actively updating. It can be empty if the rollout is stopped.
 	// +optional
 	CurrentUpdatingClusters []string `json:"currentUpdatingClusters,omitempty"`
 
@@ -91,7 +108,7 @@ type StageRolloutStatus struct {
 	// +listType=map
 	// +listMapKey=type
 	//
-	// Conditions is an array of current observed conditions for ClusterResourceBinding.
+	// Conditions is an array of current observed conditions for StageRollout.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions"`
 }

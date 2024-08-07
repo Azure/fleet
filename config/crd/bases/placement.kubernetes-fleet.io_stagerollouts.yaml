@@ -20,9 +20,8 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: |-
-          StageRollout defines a group of override policies about how to override the selected cluster scope resources
-          to target clusters.
+        description: StageRollout defines a stage by stage rollout policy that is
+          applied to the ClusterResourcePlacement of the same name.
         properties:
           apiVersion:
             description: |-
@@ -103,7 +102,9 @@ spec:
                       - type: integer
                       - type: string
                       description: |-
-                        The maximum number of clusters that can be updated simultaneously within this stage
+                        The maximum number of clusters that can be updated simultaneously within this stage.
+                        Note that an unsuccessful update cluster counts as one of the parallel updates which means
+                        the rollout will stuck if the number of failed clusters is equal to the MaxParallel.
                         default is 1.
                       x-kubernetes-int-or-string: true
                     name:
@@ -136,14 +137,9 @@ spec:
           status:
             description: The observed status of StageRollout.
             properties:
-              clustersInCurrentStage:
-                description: the clusters that are in the current stage.
-                items:
-                  type: string
-                type: array
               conditions:
                 description: Conditions is an array of current observed conditions
-                  for ClusterResourceBinding.
+                  for StageRollout.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource.\n---\nThis struct is intended for
@@ -215,21 +211,45 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              currentStageIndex:
+                description: |-
+                  CurrentStageIndex is the index of the stage that is in the middle of the rollout.
+                  The index starts from 0. The index is -1 if the rollout is not started.
+                  The index is the size of the Stages if the rollout is completed.
+                type: integer
+              currentStages:
+                description: |-
+                  the name of the clusters that are in the each stage.
+                  The clusters in each stage are ordered following its order in the Stages.
+                  The rollout will be started from the first stage if the exact order of stages
+                  and the clusters in each stage are changed.
+                items:
+                  items:
+                    type: string
+                  type: array
+                type: array
               currentUpdatingClusters:
-                description: the clusters that are actively updating.
+                description: the clusters that are actively updating. It can be empty
+                  if the rollout is stopped.
                 items:
                   type: string
                 type: array
-              stage:
-                description: The stage that is in the middle of the rollout.
-                type: integer
+              resourceSnapshotIndex:
+                description: |-
+                  ResourceSnapshotIndex is the resource index that is currently being rolled out.
+                  Resource index logically represents the generation of the selected resources.
+                  We take a new snapshot of the selected resources whenever the selection or their content change.
+                  Each snapshot has a different resource index.
+                  Each time the resource index is updated, the rollout will be started from the first stage.
+                type: string
             required:
-            - clustersInCurrentStage
-            - stage
+            - currentStageIndex
+            - currentStages
             type: object
         required:
         - spec
-        - status
         type: object
     served: true
     storage: true
+    subresources:
+      status: {}
