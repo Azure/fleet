@@ -107,7 +107,8 @@ But we still need to clean-up residual resources on the hub and on-prem clusters
 > If this case occurs, we need to delete the `InternalMemberCluster` resource for the on-prem cluster in the hub cluster.
 > But this step is blocked by the **fleet-guard-rail** which is a validating webhook on the hub cluster.
 > So we need to delete the associated `ValidatingWebhookConfiguration`
-> (This is not advised, but to delete the `MemberCluster` we have to do this step)
+> (This is not advised, but to delete the `MemberCluster` we have to do this step). There is an upcoming feature which
+> will completely avoid this workaround.
 
 ```
 kubectl delete validatingwebhookconfiguration fleet-guard-rail-webhook-configuration
