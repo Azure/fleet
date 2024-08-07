@@ -14,6 +14,8 @@ Follow these guides to setup your fleet and get access to your fleet hub cluster
 
 ## Steps to join on-prem clusters to Fleet hub cluster
 
+### Run the join script in the fleet repository
+
 Clone the [fleet repository](https://github.com/Azure/fleet) and navigate to the root directory of the repo.
 
 Run the following script which sets up the resources on the hub cluster and each on-prem cluster to allow
@@ -50,6 +52,8 @@ The columns can take upto a minute to populate.
 
 > **Note:** The script in the fleet-networking repo should only be run once the script in the fleet repo has been 
 > run to ensure the member agents can communicate with the hub cluster.
+
+### Run the join script in the fleet networking repository
 
 Clone the [fleet-networking repository](https://github.com/Azure/fleet-networking) and navigate to the root directory of the repo.
 
@@ -106,6 +110,8 @@ kubectl delete internalmembercluster <cluster-name> -n fleet-member-<cluster-nam
 This ensures the `MemberCluster` can be deleted so the on-prem cluster can successfully leave the Fleet hub cluster.
 
 # Clean up resources created by the join scripts
+
+Navigate to the root directory of the [fleet repository](https://github.com/Azure/fleet).
 
 Run the following script which cleans up all the resources we set up on the hub cluster and each on-prem cluster 
 to allow the member agents to communicate with the hub cluster.
