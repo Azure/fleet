@@ -124,3 +124,10 @@ Ex:
 chmod +x ./hack/membership/cleanup.sh
 ./hack/membership/cleanup.sh <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
 ```
+
+All the resources created by the join scripts will be deleted except the namespace `connect-to-fleet` on the hub cluster.
+If you are sure that all the member clusters have left the Fleet hub cluster, you can delete the `connect-to-fleet` namespace.
+
+# Troubleshooting
+
+If at any point we need a clean slate to start over, we can run follow the steps from this [leave section](#steps-to-make-an-on-prem-cluster-leave-the-fleet-hub-cluster).

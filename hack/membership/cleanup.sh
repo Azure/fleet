@@ -19,9 +19,6 @@ if [[ ! $(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$ME
 fi
 done
 
-export CONNECT_TO_FLEET=connect-to-fleet
-
-export HUB_CLUSTER="$1"
 export HUB_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$HUB_CLUSTER\")].name}")
 export HUB_CLUSTER_ADDRESS=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$HUB_CLUSTER\")].cluster.server}")
 

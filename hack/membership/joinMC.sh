@@ -38,7 +38,7 @@ export NOT_FOUND="not found"
 export CONNECT_TO_FLEET=connect-to-fleet
 
 echo "Create namespace to host resources required to connect to fleet"
-if [[ $NOT_FOUND == *$(kubectl get namespace $CONNECT_TO_FLEET)* ]] > /dev/null 2>&1; then
+if [[ $NOT_FOUND == *$(kubectl get namespace $CONNECT_TO_FLEET)* ]]; then
   kubectl create namespace $CONNECT_TO_FLEET
 else
   echo "namespace $CONNECT_TO_FLEET already exists"
@@ -53,7 +53,7 @@ export SERVICE_ACCOUNT="$MEMBER_CLUSTER-hub-cluster-access"
 # Note that if you choose a different value, commands in some steps below need to be
 # modified accordingly.
 echo "Creating member service account..."
-if [[ $NOT_FOUND == *$(kubectl get serviceaccount $SERVICE_ACCOUNT -n $CONNECT_TO_FLEET)* ]] > /dev/null 2>&1; then
+if [[ $NOT_FOUND == *$(kubectl get serviceaccount $SERVICE_ACCOUNT -n $CONNECT_TO_FLEET)* ]]; then
   kubectl create serviceaccount $SERVICE_ACCOUNT -n $CONNECT_TO_FLEET
 else
   echo "member service account $SERVICE_ACCOUNT already exists in namespace $CONNECT_TO_FLEET"
@@ -61,7 +61,7 @@ fi
 
 echo "Creating member service account secret..."
 export SERVICE_ACCOUNT_SECRET="$MEMBER_CLUSTER-hub-cluster-access-token"
-if [[ $NOT_FOUND == *$(kubectl get secret $SERVICE_ACCOUNT_SECRET -n $CONNECT_TO_FLEET)* ]] > /dev/null 2>&1; then
+if [[ $NOT_FOUND == *$(kubectl get secret $SERVICE_ACCOUNT_SECRET -n $CONNECT_TO_FLEET)* ]]; then
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Secret
@@ -80,7 +80,7 @@ echo "Extracting token from member service account secret..."
 export TOKEN="$(kubectl get secret $SERVICE_ACCOUNT_SECRET -n $CONNECT_TO_FLEET -o jsonpath='{.data.token}' | base64 --decode)"
 
 echo "Creating member cluster CR..."
-if [[ $NOT_FOUND == *$(kubectl get membercluster $MEMBER_CLUSTER)* ]] > /dev/null 2>&1; then
+if [[ $NOT_FOUND == *$(kubectl get membercluster $MEMBER_CLUSTER)* ]]; then
 cat <<EOF | kubectl apply -f -
 apiVersion: cluster.kubernetes-fleet.io/v1beta1
 kind: MemberCluster
