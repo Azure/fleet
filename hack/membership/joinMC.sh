@@ -9,7 +9,7 @@ if [ "$#" -lt 3 ]; then
 fi
 
 export IMAGE_TAG="$1"
-if [[ $(curl "https://api.github.com/repos/Azure/fleet/tags") != *$1* ]] > /dev/null 2>&1; then
+if [[ $(curl "https://api.github.com/repos/Azure/fleet/tags") != *"$1"* ]] > /dev/null 2>&1; then
   echo "fleet image tag $1 does not exist"
   exit 1
 fi
