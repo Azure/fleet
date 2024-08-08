@@ -9,7 +9,7 @@ package rollout
 import (
 	"context"
 	"fmt"
-	"sort"
+	"math"
 	"strconv"
 	"time"
 
@@ -161,10 +161,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	// We need to requeue the request regardless if the binding updates succeed or not
 	// to avoid the case that the rollout process stalling because the time based binding readiness does not trigger any event.
 	// Wait the time we need to wait for the first applied but not ready binding to be ready
-	if waitTime != 0 {
-		return runtime.Result{RequeueAfter: waitTime}, r.updateBindings(ctx, toBeUpdatedBindings)
-	}
-	return runtime.Result{Requeue: true}, r.updateBindings(ctx, toBeUpdatedBindings)
+	return runtime.Result{Requeue: true, RequeueAfter: waitTime}, r.updateBindings(ctx, toBeUpdatedBindings)
 }
 
 func (r *Reconciler) checkAndUpdateStaleBindingsStatus(ctx context.Context, bindings []*fleetv1beta1.ClusterResourceBinding) error {
@@ -337,13 +334,13 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 	// classify the bindings into different categories
 	// Wait for the first applied but not ready binding to be ready.
 	// return wait time longer if the rollout is stuck on failed apply/available bindings
-	waitTimes := make([]time.Duration, 0)
+	minWaitTime := time.Duration(math.MaxInt64)
 	crpKObj := klog.KObj(crp)
 	for _, binding := range allBindings {
 		bindingKObj := klog.KObj(binding)
 		switch binding.Spec.State {
 		case fleetv1beta1.BindingStateUnscheduled:
-			if !checkReadyConditions(binding) {
+			if !isBindingAvailable(binding) {
 				klog.V(3).InfoS("Found a failed to be ready unscheduled binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 			} else {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
@@ -353,8 +350,8 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 				klog.V(3).InfoS("Found a ready unscheduled binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 				readyBindings = append(readyBindings, binding)
 			} else {
-				if waitTime >= 0 {
-					waitTimes = append(waitTimes, waitTime)
+				if waitTime >= 0 && waitTime < minWaitTime {
+					minWaitTime = waitTime
 				}
 			}
 			if binding.DeletionTimestamp.IsZero() {
@@ -369,26 +366,26 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 		case fleetv1beta1.BindingStateScheduled:
 			// the scheduler has picked a cluster for this binding
 			schedulerTargetedBinds = append(schedulerTargetedBinds, binding)
-			boundingCandidate, err := r.processScheduledBindings(ctx, binding, crp, latestResourceSnapshot, matchedCROs, matchedROs)
+			// this binding has not been bound yet, so it is an update candidate
+			// pickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
+			cro, ro, err := r.pickFromResourceMatchedOverridesForTargetCluster(ctx, binding, matchedCROs, matchedROs)
 			if err != nil {
-				return nil, nil, false, 0, err
+				return nil, nil, false, minWaitTime, err
 			}
-			if boundingCandidate.currentBinding != nil {
-				boundingCandidates = append(boundingCandidates, boundingCandidate)
-			}
+			boundingCandidates = append(boundingCandidates, createUpdateInfo(binding, crp, latestResourceSnapshot, cro, ro))
 		case fleetv1beta1.BindingStateBound:
 			schedulerTargetedBinds = append(schedulerTargetedBinds, binding)
 			if waitTime, bindingReady := isBindingReady(binding, readyTimeCutOff); bindingReady {
 				klog.V(3).InfoS("Found a ready bound binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 				readyBindings = append(readyBindings, binding)
 			} else {
-				if waitTime >= 0 {
-					waitTimes = append(waitTimes, waitTime)
+				if waitTime >= 0 && waitTime < minWaitTime {
+					minWaitTime = waitTime
 				}
 			}
 			// check if the binding is failed or still on going
 			bindingFailed := false
-			if checkReadyConditions(binding) {
+			if isBindingAvailable(binding) {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
 			} else {
 				bindingFailed = true
@@ -411,13 +408,8 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			}
 		}
 	}
-	minWaitTime := time.Duration(0)
-	if len(waitTimes) > 0 {
-		// Sort the wait times in ascending order
-		sort.Slice(waitTimes, func(i, j int) bool {
-			return waitTimes[i] < waitTimes[j]
-		})
-		minWaitTime = waitTimes[0]
+	if minWaitTime == time.Duration(math.MaxInt64) {
+		minWaitTime = 0
 	}
 
 	// Calculate target number
@@ -439,7 +431,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 	return toBeUpdatedBindingList, staleUnselectedBinding, true, minWaitTime, nil
 }
 
-func checkReadyConditions(binding *fleetv1beta1.ClusterResourceBinding) bool {
+func isBindingAvailable(binding *fleetv1beta1.ClusterResourceBinding) bool {
 	appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
 	availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
 	if condition.IsConditionStatusFalse(appliedCondition, binding.Generation) || condition.IsConditionStatusFalse(availableCondition, binding.Generation) {
@@ -472,9 +464,7 @@ func determineBindingsToUpdate(
 	removeCandidates, updateCandidates, boundingCandidates, applyFailedUpdateCandidates []toBeUpdatedBinding,
 	targetNumber int,
 	readyBindings, canBeReadyBindings, canBeUnavailableBindings []*fleetv1beta1.ClusterResourceBinding,
-) (
-	[]toBeUpdatedBinding, []toBeUpdatedBinding,
-) {
+) ([]toBeUpdatedBinding, []toBeUpdatedBinding) {
 	toBeUpdatedBindingList := make([]toBeUpdatedBinding, 0)
 	// calculate the max number of bindings that can be unavailable according to user specified maxUnavailable
 	maxNumberToRemove := calculateMaxToRemove(crp, targetNumber, readyBindings, canBeUnavailableBindings)
