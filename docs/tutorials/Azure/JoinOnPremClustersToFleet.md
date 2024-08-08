@@ -31,12 +31,12 @@ The latest fleet image tag could be found here in [fleet releases](https://githu
 > **Note:** Please ensure kubectl can access the kube-config of the hub cluster and all the on-prem clusters.
 
 Ex: 
-- `./hack/Azure/membership/joinMC.sh v0.1.0 hub test-cluster-1`
-- `./hack/Azure/membership/joinMC.sh v0.1.0 hub test-cluster-1 test-cluster-2`
+- `./hack/membership/joinMC.sh v0.1.0 hub test-cluster-1`
+- `./hack/membership/joinMC.sh v0.1.0 hub test-cluster-1 test-cluster-2`
 
 ```shell
-chmod +x ./hack/Azure/membership/joinMC.sh
-./hack/Azure/membership/joinMC.sh <FLEET-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
+chmod +x ./hack/membership/joinMC.sh
+./hack/membership/joinMC.sh <FLEET-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
 ```
 
 The output should look like:
@@ -102,19 +102,6 @@ kubectl delete membercluster <cluster-name>
 Once the above delete command completes the on-prem cluster has successfully left the Fleet hub cluster. 
 But we still need to clean-up residual resources on the hub and on-prem clusters.
 
-> **Note:** There is a case where `MemberCluster` resource deletion is stuck, this occurs because we didn't install
-> all the member agents required or some agents were uninstalled before the `MemberCluster` resource was deleted.
-> If this case occurs, we need to delete the `InternalMemberCluster` resource for the on-prem cluster in the hub cluster.
-> But this step is blocked by the **fleet-guard-rail** which is a validating webhook on the hub cluster.
-> So we need to delete the associated `ValidatingWebhookConfiguration`
-> (This is not advised, but to delete the `MemberCluster` we have to do this step). There is an upcoming feature which
-> will completely avoid this workaround.
-
-```
-kubectl delete validatingwebhookconfiguration fleet-guard-rail-webhook-configuration
-kubectl delete internalmembercluster <cluster-name> -n fleet-member-<cluster-name>
-```
-
 This ensures the `MemberCluster` can be deleted, so the on-prem cluster can successfully leave the Fleet hub cluster.
 
 # Clean up resources created by the join scripts
@@ -128,12 +115,12 @@ Run the following script which cleans up all the resources we set up on the hub 
 to allow the member agents to communicate with the hub cluster.
 
 Ex: 
-- `./hack/Azure/membership/cleanup.sh hub test-cluster-1`
-- `./hack/Azure/membership/cleanup.sh hub test-cluster-1 test-cluster-2`
+- `./hack/membership/cleanup.sh hub test-cluster-1`
+- `./hack/membership/cleanup.sh hub test-cluster-1 test-cluster-2`
 
 ```
-chmod +x ./hack/Azure/membership/cleanup.sh
-./hack/Azure/membership/cleanup.sh <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
+chmod +x ./hack/membership/cleanup.sh
+./hack/membership/cleanup.sh <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
 ```
 
 All the resources created by the join scripts will be deleted except the namespace `connect-to-fleet` on the hub cluster.
