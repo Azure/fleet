@@ -32,4 +32,11 @@ kubectl config use-context $MEMBER_CLUSTER_CONTEXT
 helm uninstall member-agent
 helm uninstall member-net-controller-manager
 helm uninstall mcs-controller-manager
+kubectl delete crd endpointsliceexports.networking.fleet.azure.com
+kubectl delete crd endpointsliceimports.networking.fleet.azure.com
+kubectl delete crd internalserviceexports.networking.fleet.azure.com
+kubectl delete crd internalserviceimports.networking.fleet.azure.com
+kubectl delete crd multiclusterservices.networking.fleet.azure.com
+kubectl delete crd serviceexports.networking.fleet.azure.com
+kubectl delete crd serviceimports.networking.fleet.azure.com
 done

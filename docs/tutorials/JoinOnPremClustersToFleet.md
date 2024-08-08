@@ -31,26 +31,26 @@ The latest fleet image tag could be found here in [fleet releases](https://githu
 > **Note:** Please ensure kubectl can access the kube-config of the hub cluster and all the on-prem clusters.
 
 Ex: 
-- `./hack/membership/joinMC.sh v0.1.0 hub test-cluster-1`
-- `./hack/membership/joinMC.sh v0.1.0 hub test-cluster-1 test-cluster-2`
+- `./hack/Azure/membership/joinMC.sh v0.1.0 hub test-cluster-1`
+- `./hack/Azure/membership/joinMC.sh v0.1.0 hub test-cluster-1 test-cluster-2`
 
 ```shell
-chmod +x ./hack/membership/joinMC.sh
-./hack/membership/joinMC.sh <FLEET-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
+chmod +x ./hack/Azure/membership/joinMC.sh
+./hack/Azure/membership/joinMC.sh <FLEET-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
 ```
 
 The output should look like:
 
 ```
 % kubeclt get membercluster -A
-NAME               JOINED    AGE     NODE-COUNT   AVAILABLE-CPU   AVAILABLE-MEMORY
-test-cluster-1     Unknown   2m40s   1            530m            2678020Ki
-test-cluster-2     Unknown   2m30s   1            890m            3566856Ki
+NAME               JOINED    AGE     MEMBER-AGENT-LAST-SEEN   NODE-COUNT   AVAILABLE-CPU   AVAILABLE-MEMORY
+test-cluster-1     Unknown   3m33s   5s                       1            890m            4074756Ki
+test-cluster-2     Unknown   3m16s   4s                       1            890m            4074756Ki
 ```
 
 > **Note:** The `JOINED` column will be `Unknown` until the fleet networking member agent charts are installed on each on-prem cluster.
 
-We can confirm that the member agent was installed correctly when we see `NODE-COUNT`, `AVAILABLE-CPU`, and `AVAILABLE-MEMORY` columns populated.
+We can confirm that the member agent was installed correctly when we see `MEMBER-AGENT-LAST-SEEN`, `NODE-COUNT`, `AVAILABLE-CPU`, and `AVAILABLE-MEMORY` columns populated.
 The columns mentioned can take upto a minute to populate.
 
 > **Note:** The script in the fleet-networking repo should only be run once the script in the fleet repo has been 
@@ -77,9 +77,9 @@ The output should look like:
 
 ```
 % kubectl get membercluster -A
-NAME               JOINED   AGE     NODE-COUNT   AVAILABLE-CPU   AVAILABLE-MEMORY
-test-cluster-1     True     3m17s   1            130m            2153732Ki
-test-cluster-2     True     3m7s    1            690m            3304712Ki
+NAME               JOINED   AGE     MEMBER-AGENT-LAST-SEEN   NODE-COUNT   AVAILABLE-CPU   AVAILABLE-MEMORY
+test-cluster-1     True     6m49s   6s                       1            490m            3550468Ki
+test-cluster-2     True     6m32s   4s                       1            490m            3550468Ki
 ```
 
 The `JOINED` column will be `True` once both fleet networking member agent charts are installed on each on-prem cluster and the networking
@@ -128,12 +128,12 @@ Run the following script which cleans up all the resources we set up on the hub 
 to allow the member agents to communicate with the hub cluster.
 
 Ex: 
-- `./hack/membership/cleanup.sh hub test-cluster-1`
-- `./hack/membership/cleanup.sh hub test-cluster-1 test-cluster-2`
+- `./hack/Azure/membership/cleanup.sh hub test-cluster-1`
+- `./hack/Azure/membership/cleanup.sh hub test-cluster-1 test-cluster-2`
 
 ```
-chmod +x ./hack/membership/cleanup.sh
-./hack/membership/cleanup.sh <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
+chmod +x ./hack/Azure/membership/cleanup.sh
+./hack/Azure/membership/cleanup.sh <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
 ```
 
 All the resources created by the join scripts will be deleted except the namespace `connect-to-fleet` on the hub cluster.
