@@ -47,7 +47,8 @@ var (
 	validResourceOverrideSnapshot          placementv1alpha1.ResourceOverrideSnapshot
 	invalidClusterResourceOverrideSnapshot placementv1alpha1.ClusterResourceOverrideSnapshot
 
-	cmpConditionOption = cmp.Options{cmpopts.SortSlices(utils.LessFuncFailedResourcePlacements), utils.IgnoreConditionLTTAndMessageFields, cmpopts.EquateEmpty()}
+	cmpConditionOption        = cmp.Options{cmpopts.SortSlices(utils.LessFuncFailedResourcePlacements), utils.IgnoreConditionLTTAndMessageFields, cmpopts.EquateEmpty()}
+	cmpConditionOptionWithLTT = cmp.Options{cmpopts.SortSlices(utils.LessFuncFailedResourcePlacements), cmpopts.EquateEmpty()}
 
 	fakeFailedAppliedReason  = "fakeApplyFailureReason"
 	fakeFailedAppliedMessage = "fake apply failure message"
@@ -1308,6 +1309,124 @@ var _ = Describe("Test Work Generator Controller", func() {
 				}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
 			})
 		})
+
+		Context("Should not touch/reset RolloutStarted condition when the binding is updated", func() {
+			var masterSnapshot *placementv1beta1.ClusterResourceSnapshot
+
+			BeforeEach(func() {
+				masterSnapshot = generateResourceSnapshot(1, 1, 0, [][]byte{
+					testResourceCRD, testNameSpace, testResource,
+				})
+				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
+				By(fmt.Sprintf("master resource snapshot  %s created", masterSnapshot.Name))
+				spec := placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					ResourceSnapshotName: masterSnapshot.Name,
+					TargetCluster:        memberClusterName,
+				}
+				binding = generateClusterResourceBinding(spec)
+				Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
+				By(fmt.Sprintf("resource binding  %s created", binding.Name))
+			})
+
+			AfterEach(func() {
+				By("Deleting master clusterResourceSnapshot")
+				Expect(k8sClient.Delete(ctx, masterSnapshot)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
+			})
+
+			It("Should create all the work in the target namespace after the resource snapshot is created", func() {
+				// check the binding status till the bound condition is true
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding); err != nil {
+						return false
+					}
+					// only check the work created status as the applied status reason changes depends on where the reconcile logic is
+					return condition.IsConditionStatusTrue(
+						meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingWorkSynchronized)), binding.GetGeneration())
+				}, timeout, interval).Should(BeTrue(), fmt.Sprintf("binding(%s) condition should be true", binding.Name))
+				// check the work is created by now
+				work := placementv1beta1.Work{}
+				Eventually(func() error {
+					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName), Namespace: memberClusterNamespaceName}, &work)
+				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
+				By(fmt.Sprintf("work %s is created in %s", work.Name, work.Namespace))
+				//inspect the work
+				wantWork := placementv1beta1.Work{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName),
+						Namespace: memberClusterNamespaceName,
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion:         placementv1beta1.GroupVersion.String(),
+								Kind:               "ClusterResourceBinding",
+								Name:               binding.Name,
+								UID:                binding.UID,
+								BlockOwnerDeletion: ptr.To(true),
+							},
+						},
+						Labels: map[string]string{
+							placementv1beta1.CRPTrackingLabel:                 testCRPName,
+							placementv1beta1.ParentBindingLabel:               binding.Name,
+							placementv1beta1.ParentResourceSnapshotIndexLabel: "1",
+						},
+					},
+					Spec: placementv1beta1.WorkSpec{
+						Workload: placementv1beta1.WorkloadTemplate{
+							Manifests: []placementv1beta1.Manifest{
+								{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
+								{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
+								{RawExtension: runtime.RawExtension{Raw: testResource}},
+							},
+						},
+					},
+				}
+				diff := cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
+				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
+				// check the binding status that it should be marked as work not applied eventually
+				verifyBindingStatusSyncedNotApplied(binding, false, true)
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
+				rolloutCond := binding.GetCondition(string(placementv1beta1.ResourceBindingRolloutStarted))
+				// mark the work applied
+				markWorkApplied(&work)
+				// check the binding status that it should be marked as applied true eventually
+				verifyBindStatusAppliedNotAvailable(binding, false)
+				checkRolloutStartedNotUpdated(rolloutCond, binding)
+				// mark the work available
+				markWorkAvailable(&work)
+				// check the binding status that it should be marked as available true eventually
+				verifyBindStatusAvail(binding, false)
+				checkRolloutStartedNotUpdated(rolloutCond, binding)
+			})
+
+			It("Should treat the unscheduled binding as bound and not remove work", func() {
+				// check the work is created
+				work := placementv1beta1.Work{}
+				Eventually(func() error {
+					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName), Namespace: memberClusterNamespaceName}, &work)
+				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
+				By(fmt.Sprintf("work %s is created in %s", work.Name, work.Namespace))
+				// update binding to be unscheduled
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
+				rolloutCond := binding.GetCondition(string(placementv1beta1.ResourceBindingRolloutStarted))
+				binding.Spec.State = placementv1beta1.BindingStateUnscheduled
+				Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
+				By(fmt.Sprintf("resource binding  %s updated to be unscheduled", binding.Name))
+				Consistently(func() error {
+					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName), Namespace: memberClusterNamespaceName}, &work)
+				}, duration, interval).Should(Succeed(), "controller should not remove work in hub cluster for unscheduled binding")
+				//inspect the work manifest to make sure it still has the same content
+				expectedManifest := []placementv1beta1.Manifest{
+					{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
+					{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
+					{RawExtension: runtime.RawExtension{Raw: testResource}},
+				}
+				diff := cmp.Diff(expectedManifest, work.Spec.Workload.Manifests)
+				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work manifest(%s) mismatch (-want +got):\n%s", work.Name, diff))
+				// check the binding status
+				verifyBindingStatusSyncedNotApplied(binding, false, false)
+				checkRolloutStartedNotUpdated(rolloutCond, binding)
+			})
+		})
 	})
 
 	Context("Test Bound ClusterResourceBinding with not found cluster", func() {
@@ -1945,4 +2064,10 @@ func markOneManifestAvailable(work *placementv1beta1.Work) {
 	}
 	Expect(k8sClient.Status().Update(ctx, work)).Should(Succeed())
 	By(fmt.Sprintf("resource work `%s` is marked as available", work.Name))
+}
+
+func checkRolloutStartedNotUpdated(rolloutCond *metav1.Condition, binding *placementv1beta1.ClusterResourceBinding) {
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
+	diff := cmp.Diff(rolloutCond, binding.GetCondition(string(placementv1beta1.ResourceBindingRolloutStarted)), cmpConditionOptionWithLTT)
+	Expect(diff).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name), diff)
 }

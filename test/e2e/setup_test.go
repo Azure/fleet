@@ -35,6 +35,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 	"go.goms.io/fleet/pkg/utils"
+	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
@@ -226,8 +227,8 @@ func TestMain(m *testing.M) {
 	if err := fleetnetworkingv1alpha1.AddToScheme(scheme); err != nil {
 		log.Fatalf("failed to add custom APIs (networking) to the runtime scheme: %v", err)
 	}
-	if err := placementv1alpha1.AddToScheme(scheme); err != nil {
-		log.Fatalf("failed to add custom APIs (placement) to the runtime scheme: %v", err)
+	if err := testv1alpha1.AddToScheme(scheme); err != nil {
+		log.Fatalf("failed to add custom APIs (test) to the runtime scheme: %v", err)
 	}
 
 	// Add built-in APIs and extensions to the scheme.
@@ -321,12 +322,14 @@ func beforeSuiteForProcess1() {
 	// Note that these clusters are not real kind clusters.
 	setupInvalidClusters()
 	createResourcesForFleetGuardRail()
+	createTestResourceCRD()
 }
 
 var _ = SynchronizedBeforeSuite(beforeSuiteForProcess1, beforeSuiteForAllProcesses)
 
 var _ = SynchronizedAfterSuite(func() {}, func() {
 	deleteResourcesForFleetGuardRail()
+	deleteTestResourceCRD()
 	setAllMemberClustersToLeave()
 	checkIfAllMemberClustersHaveLeft()
 	cleanupInvalidClusters()
