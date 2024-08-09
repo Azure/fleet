@@ -96,7 +96,7 @@ Replace <cluster-name> with the name of your on-prem cluster.
 
 ```
 kubectl config use-context hub
-kubectl delete membercluster <cluster-name>
+kubectl delete membercluster <cluster-name> --wait
 ```
 
 Once the above delete command completes the on-prem cluster has successfully left the Fleet hub cluster. 
