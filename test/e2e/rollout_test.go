@@ -15,7 +15,9 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
@@ -23,6 +25,7 @@ import (
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
+	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
 	"go.goms.io/fleet/test/e2e/framework"
 	"go.goms.io/fleet/test/utils/controller"
 )
@@ -542,6 +545,148 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 		})
 	})
+
+	Context("Test a CRP place custom resource successfully, updates binding transition time", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		workNamespace := appNamespace()
+		var wantSelectedResources []placementv1beta1.ResourceIdentifier
+		var crd apiextensionsv1.CustomResourceDefinition
+		var testCustomResource testv1alpha1.TestResource
+		var previousAvailableTransitionTime metav1.Time
+
+		BeforeAll(func() {
+			// Create the test resources.
+			readTestCustomResourceDefinition(&crd)
+			readTestCustomResource(&testCustomResource)
+			testCustomResource.Namespace = workNamespace.Name
+			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
+				{
+					Kind:    utils.NamespaceKind,
+					Name:    workNamespace.Name,
+					Version: corev1.SchemeGroupVersion.Version,
+				},
+				{
+					Group:     testv1alpha1.GroupVersion.Group,
+					Kind:      testCustomResource.Kind,
+					Name:      testCustomResource.Name,
+					Version:   testv1alpha1.GroupVersion.Version,
+					Namespace: workNamespace.Name,
+				},
+				{
+					Group:   utils.CRDMetaGVK.Group,
+					Kind:    utils.CRDMetaGVK.Kind,
+					Name:    crd.Name,
+					Version: utils.CRDMetaGVK.Version,
+				},
+			}
+			Expect(hubClient.Create(ctx, &crd)).To(Succeed(), "Failed to create test custom resource  definition %s", crd.Name)
+			Eventually(func() error { // wait for CRD to be created
+				return hubClient.Get(ctx, types.NamespacedName{Name: crd.Name}, &apiextensionsv1.CustomResourceDefinition{})
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create CRD %s", crd.Name)
+			Expect(hubClient.Create(ctx, &workNamespace)).To(Succeed(), "Failed to create namespace %s", workNamespace.Name)
+		})
+
+		It("create the resources", func() {
+			Expect(hubClient.Create(ctx, &testCustomResource)).To(Succeed(), "Failed to create test custom resource %s", testCustomResource.GetName())
+		})
+
+		It("create the CRP that select the namespace and CRD", func() {
+			crp := buildCRPForSafeRollout()
+			crdClusterResourceSelector := placementv1beta1.ClusterResourceSelector{
+				Group:   utils.CRDMetaGVK.Group,
+				Kind:    utils.CRDMetaGVK.Kind,
+				Version: utils.CRDMetaGVK.Version,
+				Name:    crd.Name,
+			}
+			crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, crdClusterResourceSelector)
+			crp.Spec.Policy = &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickFixedPlacementType,
+				ClusterNames: []string{
+					memberCluster1EastProdName,
+				},
+			}
+			crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds = ptr.To(60)
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
+
+		It("should update CRP status as expected", func() {
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, []string{memberCluster1EastProdName}, nil, "1", false)
+			Eventually(crpStatusUpdatedActual, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+
+			Eventually(func() error {
+				// List all bindings associated with the given CRP.
+				bindingList := &placementv1beta1.ClusterResourceBindingList{}
+				labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
+				listOptions := &client.ListOptions{LabelSelector: labelSelector}
+				if err := hubClient.List(ctx, bindingList, listOptions); err != nil {
+					return err
+				}
+				// Check that the returned list is empty.
+				if bindingCount := len(bindingList.Items); bindingCount == 0 {
+					return fmt.Errorf("%d bindings have been created", bindingCount)
+				}
+				for i := range bindingList.Items {
+					binding := bindingList.Items[i]
+					previousAvailableTransitionTime = binding.GetCondition(string(placementv1beta1.ResourceBindingAvailable)).LastTransitionTime
+					By(fmt.Sprintf("Resource Binding %s Last Transition Time: %s", binding.Name, previousAvailableTransitionTime.String()))
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to retrieve transition time for binding condition Available")
+		})
+
+		It("should place the resources on member clusters", func() {
+			workResourcesPlacedActual := waitForTestResourceToBePlaced(memberCluster1EastProd, &testCustomResource)
+			Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster1EastProd.ClusterName)
+		})
+
+		It("should update custom resource", func() {
+			Eventually(func() error {
+				var cr testv1alpha1.TestResource
+				err := hubClient.Get(ctx, types.NamespacedName{Name: testCustomResource.Name, Namespace: workNamespace.Name}, &cr)
+				if err != nil {
+					return err
+				}
+				cr.Spec.Foo = "bar"
+				return hubClient.Update(ctx, &cr)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update custom resource")
+		})
+
+		It("should update CRP status as expected", func() {
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, []string{memberCluster1EastProdName}, nil, "2", false)
+			Eventually(crpStatusUpdatedActual, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should update binding transition time", func() {
+			Eventually(func() error {
+				// List all bindings associated with the given CRP.
+				bindingList := &placementv1beta1.ClusterResourceBindingList{}
+				labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
+				listOptions := &client.ListOptions{LabelSelector: labelSelector}
+				if err := hubClient.List(ctx, bindingList, listOptions); err != nil {
+					return err
+				}
+				// Check that the returned list is empty.
+				if bindingCount := len(bindingList.Items); bindingCount == 0 {
+					return fmt.Errorf("%d bindings have been created", bindingCount)
+				}
+				for i := range bindingList.Items {
+					binding := bindingList.Items[i]
+					available := binding.GetCondition(string(placementv1beta1.ResourceBindingAvailable))
+					By(fmt.Sprintf("Resource Binding %s Last Transition Time: %s", binding.Name, available.LastTransitionTime.String()))
+					if previousAvailableTransitionTime == available.LastTransitionTime {
+						return fmt.Errorf("the previous and updated Available transition times are the same for binding %s", binding.Name)
+					}
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update transition time for binding condition Available ")
+		})
+
+		AfterAll(func() {
+			// Remove the custom deletion blocker finalizer from the CRP.
+			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd})
+			Expect(hubClient.Delete(ctx, &crd)).To(Succeed(), "Failed to delete test custom resource definition %s", crd.Name)
+		})
+	})
 })
 
 // createWrappedResourcesForRollout creates an enveloped resource on the hub cluster with a workload object for testing purposes.
@@ -642,6 +787,16 @@ func waitForJobToBePlaced(memberCluster *framework.Cluster, testJob *batchv1.Job
 		}
 		By("check the placedJob")
 		return memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: testJob.Namespace, Name: testJob.Name}, &batchv1.Job{})
+	}
+}
+
+func waitForTestResourceToBePlaced(memberCluster *framework.Cluster, testResource *testv1alpha1.TestResource) func() error {
+	return func() error {
+		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: testResource.Namespace}); err != nil {
+			return err
+		}
+		By("check the placedTestResource")
+		return memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: testResource.Namespace, Name: testResource.Name}, &testv1alpha1.TestResource{})
 	}
 }
 

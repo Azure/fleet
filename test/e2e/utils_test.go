@@ -20,6 +20,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -39,6 +40,7 @@ import (
 	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
+	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
@@ -1111,6 +1113,18 @@ func checkIfOverrideAnnotationsOnAllMemberClusters(includeNamespace bool, wantAn
 		}
 		Expect(validateOverrideAnnotationOfConfigMapOnCluster(memberCluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of config map on %s", memberCluster.ClusterName)
 	}
+}
+
+func readTestCustomResource(customResource *testv1alpha1.TestResource) {
+	By("Read the custom resource")
+	err := utils.GetObjectFromManifest("../manifests/test-resource.yaml", customResource)
+	Expect(err).Should(Succeed())
+}
+
+func readTestCustomResourceDefinition(crd *apiextensionsv1.CustomResourceDefinition) {
+	By("Read the custom resource definition")
+	err := utils.GetObjectFromManifest("../manifests/test_testresources_crd.yaml", crd)
+	Expect(err).Should(Succeed())
 }
 
 func readDeploymentTestManifest(testDeployment *appsv1.Deployment) {

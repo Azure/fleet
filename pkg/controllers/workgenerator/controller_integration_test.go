@@ -1380,6 +1380,15 @@ func verifyBindingStatusSyncedNotApplied(binding *placementv1beta1.ClusterResour
 			},
 			FailedPlacements: nil,
 		}
+
+		if workSync {
+			wantStatus.Conditions = append(wantStatus.Conditions, metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(placementv1beta1.ResourceBindingAvailable),
+				Reason:             condition.WorkNeedSyncedReason,
+				ObservedGeneration: binding.Generation,
+			})
+		}
 		return cmp.Diff(wantStatus, binding.Status, cmpConditionOption)
 	}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
 }
