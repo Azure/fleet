@@ -86,7 +86,7 @@ jobs:
           HUB_SERVER_URL: 'https://172.19.0.2:6443'
   
   e2e-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: [
       detect-noop,
     ]
