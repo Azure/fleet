@@ -54,7 +54,8 @@ var _ = Describe("Test MemberCluster Controller", func() {
 
 			By("create the member cluster reconciler")
 			r = &Reconciler{
-				Client: k8sClient,
+				Client:              k8sClient,
+				ForceDeleteWaitTime: 15 * time.Minute,
 			}
 			err := r.SetupWithManager(mgr)
 			Expect(err).Should(Succeed())
@@ -229,7 +230,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			result, err := r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: 15 * time.Minute}))
 			Expect(err).Should(Succeed())
 
 			var imc clusterv1beta1.InternalMemberCluster
@@ -291,7 +292,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 
 			By("trigger reconcile again to initiate leave workflow")
 			result, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: memberClusterNamespacedName})
-			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: 15 * time.Minute}))
 			Expect(err).Should(Succeed())
 
 			var imc clusterv1beta1.InternalMemberCluster
@@ -364,6 +365,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			r = &Reconciler{
 				Client:                  k8sClient,
 				NetworkingAgentsEnabled: true,
+				ForceDeleteWaitTime:     15 * time.Minute,
 			}
 			err := r.SetupWithManager(mgr)
 			Expect(err).Should(Succeed())
@@ -692,7 +694,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			result, err := r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: 15 * time.Minute}))
 			Expect(err).Should(Succeed())
 
 			By("getting imc status")
@@ -708,13 +710,17 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				ObservedGeneration: imc.GetGeneration(),
 			}
 			imc.SetConditionsWithType(clusterv1beta1.MemberAgent, imcLeftCondition)
+			// Need to set heartbeat to ensure we don't force delete.
+			desiredAgentStatus := imc.GetAgentStatus(clusterv1beta1.MemberAgent)
+			desiredAgentStatus.LastReceivedHeartbeat = metav1.Now()
+
 			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 			By("trigger reconcile again to initiate leave workflow")
 			result, err = r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: 15 * time.Minute}))
 			Expect(err).Should(Succeed())
 
 			By("checking mc status")
@@ -763,13 +769,16 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				ObservedGeneration: imc.GetGeneration(),
 			}
 			imc.SetConditionsWithType(clusterv1beta1.MultiClusterServiceAgent, imcLeftCondition)
+			// Need to set heartbeat to ensure we don't force delete.
+			desiredAgentStatus = imc.GetAgentStatus(clusterv1beta1.MemberAgent)
+			desiredAgentStatus.LastReceivedHeartbeat = metav1.Now()
 			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 			By("trigger reconcile again to initiate leave workflow")
 			result, err = r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: 15 * time.Minute}))
 			Expect(err).Should(Succeed())
 
 			By("checking mc status")
@@ -819,6 +828,9 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				ObservedGeneration: imc.GetGeneration(),
 			}
 			imc.SetConditionsWithType(clusterv1beta1.MultiClusterServiceAgent, imcLeftCondition)
+			// Need to set heartbeat to ensure we don't force delete.
+			desiredAgentStatus = imc.GetAgentStatus(clusterv1beta1.MemberAgent)
+			desiredAgentStatus.LastReceivedHeartbeat = metav1.Now()
 
 			imcLeftCondition = metav1.Condition{
 				Type:               string(clusterv1beta1.AgentJoined),
@@ -838,6 +850,256 @@ var _ = Describe("Test MemberCluster Controller", func() {
 
 			// check the cluster namespace is being deleted. There is no namespace controller so it won't be removed
 			By("checking namespace is deleting")
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &ns)).Should(Succeed())
+			Expect(ns.DeletionTimestamp != nil).Should(BeTrue())
+		})
+	})
+
+	Context("Test membercluster controller force delete with enabling networking agents", func() {
+		BeforeEach(func() {
+			ctx = context.Background()
+			memberClusterName = utils.RandStr()
+			namespaceName = fmt.Sprintf(utils.NamespaceNameFormat, memberClusterName)
+			memberClusterNamespacedName = types.NamespacedName{
+				Name: memberClusterName,
+			}
+
+			By("create the member cluster reconciler")
+			r = &Reconciler{
+				Client:                  k8sClient,
+				NetworkingAgentsEnabled: true,
+				ForceDeleteWaitTime:     15 * time.Minute,
+			}
+			err := r.SetupWithManager(mgr)
+			Expect(err).Should(Succeed())
+
+			By("create member cluster for join")
+			mc := &clusterv1beta1.MemberCluster{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "MemberCluster",
+					APIVersion: clusterv1beta1.GroupVersion.Version,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: memberClusterName,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Identity: rbacv1.Subject{
+						Kind: rbacv1.ServiceAccountKind,
+						Name: "hub-access",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, mc)).Should(Succeed())
+
+			By("trigger reconcile to initiate the join workflow")
+			result, err := r.Reconcile(ctx, ctrl.Request{
+				NamespacedName: memberClusterNamespacedName,
+			})
+			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(err).Should(Succeed())
+
+			var ns corev1.Namespace
+			var role rbacv1.Role
+			var roleBinding rbacv1.RoleBinding
+			var imc clusterv1beta1.InternalMemberCluster
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &ns)).Should(Succeed())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(utils.RoleNameFormat, memberClusterName), Namespace: namespaceName}, &role)).Should(Succeed())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(utils.RoleBindingNameFormat, memberClusterName), Namespace: namespaceName}, &roleBinding)).Should(Succeed())
+
+			By("simulate member agent updating internal member cluster status")
+			now := metav1.Now()
+			// Update the resource usage.
+			imc.Status.ResourceUsage = clusterv1beta1.ResourceUsage{
+				Capacity:        utils.NewResourceList(),
+				Allocatable:     utils.NewResourceList(),
+				Available:       utils.NewResourceList(),
+				ObservationTime: now,
+			}
+			// Update the agent status.
+			joinedCondition := metav1.Condition{
+				Type:               string(clusterv1beta1.AgentJoined),
+				Status:             metav1.ConditionTrue,
+				Reason:             reasonMemberClusterJoined,
+				ObservedGeneration: imc.GetGeneration(),
+			}
+			imc.SetConditionsWithType(clusterv1beta1.MemberAgent, joinedCondition)
+
+			By("simulate multiClusterService agent updating internal member cluster status as joined")
+			joinedCondition = metav1.Condition{
+				Type:               string(clusterv1beta1.AgentJoined),
+				Status:             metav1.ConditionTrue,
+				Reason:             reasonMemberClusterJoined,
+				ObservedGeneration: imc.GetGeneration(),
+			}
+			imc.SetConditionsWithType(clusterv1beta1.MultiClusterServiceAgent, joinedCondition)
+
+			By("simulate serviceExportImport agent updating internal member cluster status as joined")
+			joinedCondition = metav1.Condition{
+				Type:               string(clusterv1beta1.AgentJoined),
+				Status:             metav1.ConditionTrue,
+				Reason:             reasonMemberClusterJoined,
+				ObservedGeneration: imc.GetGeneration(),
+			}
+			imc.SetConditionsWithType(clusterv1beta1.ServiceExportImportAgent, joinedCondition)
+
+			// Update the cluster properties.
+			imc.Status.Properties = map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+				clusterPropertyName1: {
+					Value:           clusterPropertyValue1,
+					ObservationTime: now,
+				},
+				clusterPropertyName2: {
+					Value:           clusterPropertyValue2,
+					ObservationTime: now,
+				},
+			}
+			// Add conditions reported by the property provider.
+			meta.SetStatusCondition(&imc.Status.Conditions, metav1.Condition{
+				Type:    propertyProviderConditionType1,
+				Status:  propertyProviderConditionStatus1,
+				Reason:  propertyProviderConditionReason1,
+				Message: propertyProviderConditionMessage1,
+			})
+			meta.SetStatusCondition(&imc.Status.Conditions, metav1.Condition{
+				Type:    propertyProviderConditionType2,
+				Status:  propertyProviderConditionStatus2,
+				Reason:  propertyProviderConditionReason2,
+				Message: propertyProviderConditionMessage2,
+			})
+			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
+
+			By("trigger reconcile again to update member cluster status to joined")
+			result, err = r.Reconcile(ctx, ctrl.Request{
+				NamespacedName: memberClusterNamespacedName,
+			})
+			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(err).Should(Succeed())
+
+			By("getting imc status")
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
+
+			By("checking mc status")
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, mc)).Should(Succeed())
+
+			wantMC := clusterv1beta1.MemberClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(clusterv1beta1.ConditionTypeMemberClusterReadyToJoin),
+						Status:             metav1.ConditionTrue,
+						Reason:             reasonMemberClusterReadyToJoin,
+						ObservedGeneration: mc.GetGeneration(),
+					},
+					{
+						Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
+						Status:             metav1.ConditionTrue,
+						Reason:             reasonMemberClusterJoined,
+						ObservedGeneration: mc.GetGeneration(),
+					},
+					{
+						Type:               propertyProviderConditionType1,
+						Status:             propertyProviderConditionStatus1,
+						Reason:             propertyProviderConditionReason1,
+						Message:            propertyProviderConditionMessage1,
+						ObservedGeneration: mc.GetGeneration(),
+					},
+					{
+						Type:               propertyProviderConditionType2,
+						Status:             propertyProviderConditionStatus2,
+						Reason:             propertyProviderConditionReason2,
+						Message:            propertyProviderConditionMessage2,
+						ObservedGeneration: mc.GetGeneration(),
+					},
+				},
+				Properties:    imc.Status.Properties,
+				ResourceUsage: imc.Status.ResourceUsage,
+				AgentStatus:   imc.Status.AgentStatus,
+			}
+			Expect(cmp.Diff(wantMC, mc.Status, ignoreOption)).Should(BeEmpty())
+		})
+
+		AfterEach(func() {
+			var ns corev1.Namespace
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &ns)).Should(Succeed())
+			By("Deleting the namespace")
+			Eventually(func() error {
+				return k8sClient.Delete(ctx, &ns)
+			}, timeout, interval).Should(SatisfyAny(Succeed(), &utils.NotFoundMatcher{}))
+		})
+
+		It("force delete where member agent never updates Internal Member Cluster", func() {
+			By("simulate member agent sending a heartbeat 15 minutes before now to trigger force delete")
+			var imc clusterv1beta1.InternalMemberCluster
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
+			desiredAgentStatus := imc.GetAgentStatus(clusterv1beta1.MemberAgent)
+			desiredAgentStatus.LastReceivedHeartbeat = metav1.NewTime(time.Now().Add(-15 * time.Minute))
+			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
+
+			By("trigger reconcile to update member cluster status to reflect heartbeat from member agent")
+			result, err := r.Reconcile(ctx, ctrl.Request{
+				NamespacedName: memberClusterNamespacedName,
+			})
+			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(err).Should(Succeed())
+
+			By("checking mc status")
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, mc)).Should(Succeed())
+
+			wantMC := clusterv1beta1.MemberClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(clusterv1beta1.ConditionTypeMemberClusterReadyToJoin),
+						Status:             metav1.ConditionTrue,
+						Reason:             reasonMemberClusterReadyToJoin,
+						ObservedGeneration: mc.GetGeneration(),
+					},
+					{
+						Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
+						Status:             metav1.ConditionTrue,
+						Reason:             reasonMemberClusterJoined,
+						ObservedGeneration: mc.GetGeneration(),
+					},
+					{
+						Type:               propertyProviderConditionType1,
+						Status:             propertyProviderConditionStatus1,
+						Reason:             propertyProviderConditionReason1,
+						Message:            propertyProviderConditionMessage1,
+						ObservedGeneration: mc.GetGeneration(),
+					},
+					{
+						Type:               propertyProviderConditionType2,
+						Status:             propertyProviderConditionStatus2,
+						Reason:             propertyProviderConditionReason2,
+						Message:            propertyProviderConditionMessage2,
+						ObservedGeneration: mc.GetGeneration(),
+					},
+				},
+				Properties:    imc.Status.Properties,
+				ResourceUsage: imc.Status.ResourceUsage,
+				AgentStatus:   imc.Status.AgentStatus,
+			}
+			Expect(cmp.Diff(wantMC, mc.Status, ignoreOption)).Should(BeEmpty())
+
+			By("delete member cluster")
+			var mc clusterv1beta1.MemberCluster
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, &mc)).Should(Succeed())
+
+			By("trigger reconcile to initiate leave workflow")
+			result, err = r.Reconcile(ctx, ctrl.Request{
+				NamespacedName: memberClusterNamespacedName,
+			})
+			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: r.ForceDeleteWaitTime}))
+			Expect(err).Should(Succeed())
+
+			By("trigger reconcile to initiate force delete workflow and garbage collect fleet member namespace")
+			result, err = r.Reconcile(ctx, ctrl.Request{
+				NamespacedName: memberClusterNamespacedName,
+			})
+			Expect(result).Should(Equal(ctrl.Result{Requeue: true}))
+			Expect(err).Should(Succeed())
+
+			// check the member cluster namespace is being deleted. There is no namespace controller, so it won't be removed
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &ns)).Should(Succeed())
 			Expect(ns.DeletionTimestamp != nil).Should(BeTrue())
 		})
