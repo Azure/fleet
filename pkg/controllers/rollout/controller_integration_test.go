@@ -12,7 +12,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -439,7 +438,7 @@ var _ = Describe("Test the rollout Controller", func() {
 			return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: secondDeleteBinding.GetName()}, secondDeleteBinding))
 		}, timeout, interval).Should(BeTrue(), "the second deleting binding should now be deleted")
 		By("Verified that the second deleting binding is deleted")
-		// check that the bindings are rolledout
+		// check that the bindings are rolled out
 		Eventually(func() bool {
 			for _, binding := range bindings {
 				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)
