@@ -488,6 +488,10 @@ const (
 	// RollingUpdateRolloutStrategyType replaces the old placed resource using rolling update
 	// i.e. gradually create the new one while replace the old ones.
 	RollingUpdateRolloutStrategyType RolloutStrategyType = "RollingUpdate"
+
+	// StageRollingUpdateRolloutStrategyType replaces the old placed resource stage by stage
+	// i.e. update the resources in the testing clusters first, then the staging clusters, and finally the production clusters.
+	StageRollingUpdateRolloutStrategyType RolloutStrategyType = "StageRollingUpdate"
 )
 
 // RollingUpdateConfig contains the config to control the desired behavior of rolling update.
