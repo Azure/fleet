@@ -42,7 +42,7 @@ chmod +x ./hack/membership/joinMC.sh
 The output should look like:
 
 ```
-% kubeclt get membercluster -A
+% kubectl get membercluster -A
 NAME               JOINED    AGE     MEMBER-AGENT-LAST-SEEN   NODE-COUNT   AVAILABLE-CPU   AVAILABLE-MEMORY
 test-cluster-1     Unknown   3m33s   5s                       1            890m            4074756Ki
 test-cluster-2     Unknown   3m16s   4s                       1            890m            4074756Ki
