@@ -327,7 +327,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 						return err
 					}
 					for i := range pod.Items {
-						By(fmt.Sprintf("Get pod details: %+v", pod.Items[i]))
+						By(fmt.Sprintf("Get pod details: %+v", pod.Items[i].Status))
 					}
 					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 				}
