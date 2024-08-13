@@ -20,6 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/work"
@@ -316,6 +317,18 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 				}
 
 				if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
+					By(fmt.Sprintf("CRP status diff (-got, +want): %s", diff))
+					var pod corev1.PodList
+					listOpts := []client.ListOption{
+						client.InNamespace(workNamespace.Name),
+					}
+					if err := allMemberClusters[0].KubeClient.List(ctx, &pod, listOpts...); err != nil {
+						By(fmt.Sprintf("Failed to list the pod: %s", err))
+						return err
+					}
+					for i := range pod.Items {
+						By(fmt.Sprintf("Get pod details: %+v", pod.Items[i]))
+					}
 					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 				}
 				return nil

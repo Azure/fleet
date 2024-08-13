@@ -211,7 +211,7 @@ e2e-tests-v1alpha1: create-kind-cluster run-e2e-v1alpha1
 
 .PHONY: e2e-tests
 e2e-tests: setup-clusters
-	cd ./test/e2e && ginkgo -v -p .
+	cd ./test/e2e && ginkgo -v -procs=2 .
 
 .PHONY: setup-clusters
 setup-clusters:
