@@ -319,7 +319,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {

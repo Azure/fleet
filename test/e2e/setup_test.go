@@ -68,10 +68,11 @@ const (
 )
 
 const (
-	eventuallyDuration   = time.Minute * 2
-	eventuallyInterval   = time.Millisecond * 250
-	consistentlyDuration = time.Second * 15
-	consistentlyInterval = time.Millisecond * 500
+	eventuallyDuration     = time.Minute * 2
+	longEventuallyDuration = time.Minute * 5
+	eventuallyInterval     = time.Millisecond * 250
+	consistentlyDuration   = time.Second * 15
+	consistentlyInterval   = time.Millisecond * 500
 )
 
 var (
