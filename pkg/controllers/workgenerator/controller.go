@@ -687,7 +687,7 @@ func buildAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding
 		}
 	}
 	if allAvailable {
-		klog.V(2).InfoS("All works associated with the binding are available", "binding", klog.KObj(binding))
+		klog.V(2).InfoS("All works associated with the binding are available", "binding", klog.KObj(binding), "notTrackableWork", notTrackableWork)
 		reason := condition.AllWorkAvailableReason
 		message := "All corresponding work objects are available"
 		if len(notTrackableWork) > 0 {
