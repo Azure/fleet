@@ -6,7 +6,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.11.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.6.0
 	github.com/Azure/karpenter v0.2.0
-	github.com/crossplane/crossplane-runtime v0.20.1
+	github.com/crossplane/crossplane-runtime v1.16.0
 	github.com/evanphx/json-patch/v5 v5.9.0
 	github.com/go-logr/logr v1.4.2
 	github.com/google/go-cmp v0.6.0
