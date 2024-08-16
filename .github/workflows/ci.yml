@@ -44,7 +44,7 @@ jobs:
               
       - name: Set up Ginkgo CLI
         run: |
-          go install github.com/onsi/ginkgo/v2/ginkgo@v2.9.5
+          go install github.com/onsi/ginkgo/v2/ginkgo@v2.19.1
 
       - name: Run unit tests & Generate coverage
         run: make test
@@ -109,13 +109,13 @@ jobs:
       
       - name: Install Ginkgo CLI
         run: |
-          go install github.com/onsi/ginkgo/v2/ginkgo@v2.13.0
+          go install github.com/onsi/ginkgo/v2/ginkgo@v2.19.1
       
       - name: Install Kind
         # Before updating the kind version to use, verify that the current kind image
         # is still supported by the version.
         run: |
-          go install sigs.k8s.io/kind@v0.20.0
+          go install sigs.k8s.io/kind@v0.22.0
 
       - name: Run e2e tests
         run: |
