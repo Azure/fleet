@@ -169,7 +169,6 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 		}
 		return runtime.Result{Requeue: true}, controller.NewUpdateIgnoreConflictError(r.updateMemberClusterStatus(ctx, mc))
 	}
-	// check to see if we can force delete the member cluster.
 	if r.canForceDelete(mc, currentImc) {
 		klog.V(2).InfoS("Force delete the member cluster, by garbage collecting owned resources", "memberCluster", mcObjRef)
 		return runtime.Result{Requeue: true}, r.garbageCollect(ctx, mc)
@@ -187,12 +186,12 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 }
 
 func (r *Reconciler) canForceDelete(mc *clusterv1beta1.MemberCluster, imc *clusterv1beta1.InternalMemberCluster) bool {
-	// we only force delete if member agents cannot reconcile an InternalMemberCluster in Leave state
+	// we only force delete if member agent cannot reconcile an InternalMemberCluster in Leave state
 	// before the force delete wait time.
 	if imc.Spec.State != clusterv1beta1.ClusterStateLeave {
 		return false
 	}
-	if time.Since(mc.DeletionTimestamp.Time) < r.ForceDeleteWaitTime {
+	if mc.DeletionTimestamp != nil && time.Since(mc.DeletionTimestamp.Time) < r.ForceDeleteWaitTime {
 		return false
 	}
 	return true
