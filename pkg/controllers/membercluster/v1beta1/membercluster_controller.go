@@ -191,7 +191,7 @@ func (r *Reconciler) canForceDelete(mc *clusterv1beta1.MemberCluster, imc *clust
 	if imc.Spec.State != clusterv1beta1.ClusterStateLeave {
 		return false
 	}
-	if mc.DeletionTimestamp != nil && time.Since(mc.DeletionTimestamp.Time) < r.ForceDeleteWaitTime {
+	if time.Since(mc.DeletionTimestamp.Time) < r.ForceDeleteWaitTime {
 		return false
 	}
 	return true
