@@ -770,9 +770,6 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				ObservedGeneration: imc.GetGeneration(),
 			}
 			imc.SetConditionsWithType(clusterv1beta1.MultiClusterServiceAgent, imcLeftCondition)
-			// Need to set heartbeat to ensure we don't force delete.
-			desiredAgentStatus = imc.GetAgentStatus(clusterv1beta1.MemberAgent)
-			desiredAgentStatus.LastReceivedHeartbeat = metav1.Now()
 			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 			By("trigger reconcile again to initiate leave workflow")
@@ -829,9 +826,6 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				ObservedGeneration: imc.GetGeneration(),
 			}
 			imc.SetConditionsWithType(clusterv1beta1.MultiClusterServiceAgent, imcLeftCondition)
-			// Need to set heartbeat to ensure we don't force delete.
-			desiredAgentStatus = imc.GetAgentStatus(clusterv1beta1.MemberAgent)
-			desiredAgentStatus.LastReceivedHeartbeat = metav1.Now()
 
 			imcLeftCondition = metav1.Condition{
 				Type:               string(clusterv1beta1.AgentJoined),
