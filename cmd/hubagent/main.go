@@ -11,7 +11,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -136,7 +135,7 @@ func main() {
 			Client:                  mgr.GetClient(),
 			NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
 			MaxConcurrentReconciles: int(math.Ceil(float64(opts.MaxFleetSizeSupported) / 100)), //one member cluster reconciler routine per 100 member clusters
-			ForceDeleteWaitTime:     15 * time.Minute,
+			ForceDeleteWaitTime:     opts.ForceDeleteWaitTime.Duration,
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "unable to create v1beta1 controller", "controller", "MemberCluster")
 			exitWithErrorFunc()
