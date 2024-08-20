@@ -187,16 +187,13 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 }
 
 func (r *Reconciler) canForceDelete(mc *clusterv1beta1.MemberCluster, imc *clusterv1beta1.InternalMemberCluster) bool {
-	// we only force delete if member agents cannot reconcile an InternalMemberCluster in Leave state.
+	// we only force delete if member agents cannot reconcile an InternalMemberCluster in Leave state
+	// before the force delete wait time.
 	if imc.Spec.State != clusterv1beta1.ClusterStateLeave {
 		return false
 	}
-	for i := range mc.Status.AgentStatus {
-		lastReceivedHB := mc.Status.AgentStatus[i].LastReceivedHeartbeat
-		// we don't set the LastReceivedHeartbeat field in the AgentStatus for networking agents.
-		if !reflect.DeepEqual(lastReceivedHB, metav1.Time{}) && time.Since(lastReceivedHB.Time) < r.ForceDeleteWaitTime {
-			return false
-		}
+	if time.Since(mc.DeletionTimestamp.Time) < r.ForceDeleteWaitTime {
+		return false
 	}
 	return true
 }

@@ -6,6 +6,7 @@ package v1beta1
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -868,7 +869,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			r = &Reconciler{
 				Client:                  k8sClient,
 				NetworkingAgentsEnabled: true,
-				ForceDeleteWaitTime:     15 * time.Minute,
+				ForceDeleteWaitTime:     1 * time.Minute,
 			}
 			err := r.SetupWithManager(mgr)
 			Expect(err).Should(Succeed())
@@ -1028,69 +1029,30 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		})
 
 		It("force delete where member agent never updates Internal Member Cluster", func() {
-			By("simulate member agent sending a heartbeat 15 minutes before now to trigger force delete")
-			var imc clusterv1beta1.InternalMemberCluster
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
-			desiredAgentStatus := imc.GetAgentStatus(clusterv1beta1.MemberAgent)
-			desiredAgentStatus.LastReceivedHeartbeat = metav1.NewTime(time.Now().Add(-15 * time.Minute))
-			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
-
-			By("trigger reconcile to update member cluster status to reflect heartbeat from member agent")
-			result, err := r.Reconcile(ctx, ctrl.Request{
-				NamespacedName: memberClusterNamespacedName,
-			})
-			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Succeed())
-
-			By("checking mc status")
-			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, mc)).Should(Succeed())
-
-			wantMC := clusterv1beta1.MemberClusterStatus{
-				Conditions: []metav1.Condition{
-					{
-						Type:               string(clusterv1beta1.ConditionTypeMemberClusterReadyToJoin),
-						Status:             metav1.ConditionTrue,
-						Reason:             reasonMemberClusterReadyToJoin,
-						ObservedGeneration: mc.GetGeneration(),
-					},
-					{
-						Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
-						Status:             metav1.ConditionTrue,
-						Reason:             reasonMemberClusterJoined,
-						ObservedGeneration: mc.GetGeneration(),
-					},
-					{
-						Type:               propertyProviderConditionType1,
-						Status:             propertyProviderConditionStatus1,
-						Reason:             propertyProviderConditionReason1,
-						Message:            propertyProviderConditionMessage1,
-						ObservedGeneration: mc.GetGeneration(),
-					},
-					{
-						Type:               propertyProviderConditionType2,
-						Status:             propertyProviderConditionStatus2,
-						Reason:             propertyProviderConditionReason2,
-						Message:            propertyProviderConditionMessage2,
-						ObservedGeneration: mc.GetGeneration(),
-					},
-				},
-				Properties:    imc.Status.Properties,
-				ResourceUsage: imc.Status.ResourceUsage,
-				AgentStatus:   imc.Status.AgentStatus,
-			}
-			Expect(cmp.Diff(wantMC, mc.Status, ignoreOption)).Should(BeEmpty())
-
-			By("delete member cluster")
+			By("simulate delete member cluster")
 			var mc clusterv1beta1.MemberCluster
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, &mc)).Should(Succeed())
 
 			By("trigger reconcile to initiate leave workflow")
-			result, err = r.Reconcile(ctx, ctrl.Request{
+			result, err := r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
 			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: r.ForceDeleteWaitTime}))
 			Expect(err).Should(Succeed())
+
+			By("wait until force delete wait time has crossed")
+			Eventually(func() error {
+				err := k8sClient.Get(ctx, memberClusterNamespacedName, &mc)
+				if err != nil {
+					return err
+				}
+				if time.Since(mc.GetDeletionTimestamp().Time) > r.ForceDeleteWaitTime {
+					return nil
+				}
+				By(fmt.Sprintf("time since: %s", time.Since(mc.GetDeletionTimestamp().Time)))
+				return errors.New("force delete wait time has not crossed")
+			}, 2*time.Minute, 10*time.Second).Should(Succeed())
 
 			By("trigger reconcile to initiate force delete workflow and garbage collect fleet member namespace")
 			result, err = r.Reconcile(ctx, ctrl.Request{
