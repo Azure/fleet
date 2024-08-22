@@ -336,11 +336,12 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 	minWaitTime := time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second
 	allReady := true
 	crpKObj := klog.KObj(crp)
-	for _, binding := range allBindings {
+	for idx := range allBindings {
+		binding := allBindings[idx]
 		bindingKObj := klog.KObj(binding)
 		switch binding.Spec.State {
 		case fleetv1beta1.BindingStateUnscheduled:
-			if !isBindingAvailable(binding) {
+			if hasBindingFailed(binding) {
 				klog.V(3).InfoS("Found a failed to be ready unscheduled binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 			} else {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
@@ -351,7 +352,6 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 				readyBindings = append(readyBindings, binding)
 			} else {
 				allReady = false
-				klog.Info("Binding WaitTime:", waitTime)
 				if waitTime >= 0 && waitTime < minWaitTime {
 					minWaitTime = waitTime
 				}
@@ -376,6 +376,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			}
 			boundingCandidates = append(boundingCandidates, createUpdateInfo(binding, crp, latestResourceSnapshot, cro, ro))
 		case fleetv1beta1.BindingStateBound:
+			bindingFailed := false
 			schedulerTargetedBinds = append(schedulerTargetedBinds, binding)
 			if waitTime, bindingReady := isBindingReady(binding, readyTimeCutOff); bindingReady {
 				klog.V(3).InfoS("Found a ready bound binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
@@ -387,12 +388,11 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 				}
 			}
 			// check if the binding is failed or still on going
-			bindingFailed := false
-			if isBindingAvailable(binding) {
-				canBeReadyBindings = append(canBeReadyBindings, binding)
-			} else {
-				bindingFailed = true
+			if hasBindingFailed(binding) {
 				klog.V(3).InfoS("Found a failed to be ready bound binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
+				bindingFailed = true
+			} else {
+				canBeReadyBindings = append(canBeReadyBindings, binding)
 			}
 			// pickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
 			cro, ro, err := r.pickFromResourceMatchedOverridesForTargetCluster(ctx, binding, matchedCROs, matchedROs)
@@ -414,7 +414,6 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 	if minWaitTime == time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds)*time.Second && allReady {
 		minWaitTime = 0
 	}
-	klog.Info("MinWaitTime:", minWaitTime)
 
 	// Calculate target number
 	targetNumber := r.calculateRealTarget(crp, schedulerTargetedBinds)
@@ -435,16 +434,17 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 	return toBeUpdatedBindingList, staleUnselectedBinding, true, minWaitTime, nil
 }
 
-func isBindingAvailable(binding *fleetv1beta1.ClusterResourceBinding) bool {
+// hasBindingFailed checks if ClusterResourceBinding has failed based on its applied and available conditions.
+func hasBindingFailed(binding *fleetv1beta1.ClusterResourceBinding) bool {
 	appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
 	availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
 	if condition.IsConditionStatusFalse(appliedCondition, binding.Generation) || condition.IsConditionStatusFalse(availableCondition, binding.Generation) {
-		return false
+		return true
 	}
-	return true
+	return false
 }
 
-// Determine bindings to update
+// determineBindingsToUpdate determines which bindings to update
 func determineBindingsToUpdate(
 	crp *fleetv1beta1.ClusterResourcePlacement,
 	removeCandidates, updateCandidates, boundingCandidates, applyFailedUpdateCandidates []toBeUpdatedBinding,
@@ -521,6 +521,7 @@ func calculateMaxToAdd(crp *fleetv1beta1.ClusterResourcePlacement, targetNumber 
 	return maxNumberToAdd
 }
 func (r *Reconciler) calculateRealTarget(crp *fleetv1beta1.ClusterResourcePlacement, schedulerTargetedBinds []*fleetv1beta1.ClusterResourceBinding) int {
+	crpKObj := klog.KObj(crp)
 	// calculate the target number of bindings
 	targetNumber := 0
 
@@ -538,7 +539,7 @@ func (r *Reconciler) calculateRealTarget(crp *fleetv1beta1.ClusterResourcePlacem
 	default:
 		// should never happen
 		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("unknown placement type")),
-			"Encountered an invalid placementType", "clusterResourcePlacement", klog.KObj(crp))
+			"Encountered an invalid placementType", "clusterResourcePlacement", crpKObj)
 		targetNumber = 0
 	}
 	return targetNumber
