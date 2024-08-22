@@ -121,6 +121,7 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set logVerbosity=5 \
     --set enableWebhook=true \
     --set webhookClientConnectionType=service \
+    --set forceDeleteWaitTime="2m0s" \
     --set logFileMaxSize=1000000
 
 # Download CRDs from Fleet networking repo
