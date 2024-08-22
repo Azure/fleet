@@ -179,6 +179,14 @@ func setAllMemberClustersToJoin() {
 // checkIfAllMemberClustersHaveJoined verifies if all member clusters have connected to the hub
 // cluster, i.e., updated the MemberCluster object status as expected.
 func checkIfAllMemberClustersHaveJoined() {
+	for idx := range allMemberClusters {
+		checkIfMemberClusterHasJoined(allMemberClusters[idx])
+	}
+}
+
+// checkIfMemberClusterHasJoined verifies if the specified member cluster has connected to the hub
+// cluster, i.e., updated the MemberCluster object status as expected.
+func checkIfMemberClusterHasJoined(memberCluster *framework.Cluster) {
 	wantAgentStatus := []clusterv1beta1.AgentStatus{
 		{
 			Type: clusterv1beta1.MemberAgent,
@@ -197,30 +205,26 @@ func checkIfAllMemberClustersHaveJoined() {
 		},
 	}
 
-	for idx := range allMemberClusters {
-		memberCluster := allMemberClusters[idx]
+	Eventually(func() error {
+		mcObj := &clusterv1beta1.MemberCluster{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster.ClusterName}, mcObj); err != nil {
+			By(fmt.Sprintf("Failed to get member cluster object %s", memberCluster.ClusterName))
+			return err
+		}
 
-		Eventually(func() error {
-			mcObj := &clusterv1beta1.MemberCluster{}
-			if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster.ClusterName}, mcObj); err != nil {
-				By(fmt.Sprintf("Failed to get member cluster object %s", memberCluster.ClusterName))
-				return err
-			}
+		if diff := cmp.Diff(
+			mcObj.Status.AgentStatus,
+			wantAgentStatus,
+			cmpopts.SortSlices(lessFuncCondition),
+			ignoreConditionObservedGenerationField,
+			utils.IgnoreConditionLTTAndMessageFields,
+			ignoreAgentStatusHeartbeatField,
+		); diff != "" {
+			return fmt.Errorf("agent status diff (-got, +want): %s", diff)
+		}
 
-			if diff := cmp.Diff(
-				mcObj.Status.AgentStatus,
-				wantAgentStatus,
-				cmpopts.SortSlices(lessFuncCondition),
-				ignoreConditionObservedGenerationField,
-				utils.IgnoreConditionLTTAndMessageFields,
-				ignoreAgentStatusHeartbeatField,
-			); diff != "" {
-				return fmt.Errorf("agent status diff (-got, +want): %s", diff)
-			}
-
-			return nil
-		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Member cluster has not joined yet")
-	}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Member cluster has not joined yet")
 }
 
 // checkIfAzurePropertyProviderIsWorking verifies if all member clusters have the Azure property

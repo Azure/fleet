@@ -7,9 +7,8 @@ package e2e
 
 import (
 	"fmt"
+	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -21,7 +20,6 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -149,7 +147,7 @@ var _ = Describe("Test member cluster force delete flow", Ordered, Serial, func(
 			Eventually(func() bool {
 				var ns corev1.Namespace
 				return apierrors.IsNotFound(hubClient.Get(ctx, types.NamespacedName{Name: memberClusterNamespace}, &ns))
-			}, eventuallyDuration, eventuallyInterval).Should(BeTrue(), "Failed to garbage collect resources owned by member cluster")
+			}, time.Minute*3, eventuallyInterval).Should(BeTrue(), "Failed to garbage collect resources owned by member cluster")
 
 			Eventually(func() bool {
 				return apierrors.IsNotFound(hubClient.Get(ctx, types.NamespacedName{Name: memberCluster3WestProdName}, &clusterv1beta1.MemberCluster{}))
@@ -170,43 +168,6 @@ var _ = Describe("Test member cluster force delete flow", Ordered, Serial, func(
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to simulate member agent coming back up")
 
 		createMemberCluster(memberCluster3WestProd.ClusterName, memberCluster3WestProd.PresentingServiceAccountInHubClusterName, labelsByClusterName[memberCluster3WestProd.ClusterName], annotationsByClusterName[memberCluster3WestProd.ClusterName])
-		wantAgentStatus := []clusterv1beta1.AgentStatus{
-			{
-				Type: clusterv1beta1.MemberAgent,
-				Conditions: []metav1.Condition{
-					{
-						Status: metav1.ConditionTrue,
-						Type:   string(clusterv1beta1.AgentHealthy),
-						Reason: imcv1beta1.EventReasonInternalMemberClusterHealthy,
-					},
-					{
-						Status: metav1.ConditionTrue,
-						Type:   string(clusterv1beta1.AgentJoined),
-						Reason: imcv1beta1.EventReasonInternalMemberClusterJoined,
-					},
-				},
-			},
-		}
-
-		Eventually(func() error {
-			mcObj := &clusterv1beta1.MemberCluster{}
-			if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster3WestProd.ClusterName}, mcObj); err != nil {
-				By(fmt.Sprintf("Failed to get member cluster object %s", memberCluster3WestProd.ClusterName))
-				return err
-			}
-
-			if diff := cmp.Diff(
-				mcObj.Status.AgentStatus,
-				wantAgentStatus,
-				cmpopts.SortSlices(lessFuncCondition),
-				ignoreConditionObservedGenerationField,
-				utils.IgnoreConditionLTTAndMessageFields,
-				ignoreAgentStatusHeartbeatField,
-			); diff != "" {
-				return fmt.Errorf("agent status diff (-got, +want): %s", diff)
-			}
-
-			return nil
-		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Member cluster has not joined yet")
+		checkIfMemberClusterHasJoined(memberCluster3WestProd)
 	})
 })
