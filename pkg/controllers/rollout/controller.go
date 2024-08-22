@@ -411,13 +411,13 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			}
 		}
 	}
-	if minWaitTime == time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds)*time.Second && allReady {
+	if allReady {
 		minWaitTime = 0
 	}
 
 	// Calculate target number
 	targetNumber := r.calculateRealTarget(crp, schedulerTargetedBinds)
-	klog.V(2).InfoS("Calculated the targetNumber", "clusterResourcePlacement", klog.KObj(crp),
+	klog.V(2).InfoS("Calculated the targetNumber", "clusterResourcePlacement", crpKObj,
 		"targetNumber", targetNumber, "readyBindingNumber", len(readyBindings), "canBeUnavailableBindingNumber", len(canBeUnavailableBindings),
 		"canBeReadyBindingNumber", len(canBeReadyBindings), "boundingCandidateNumber", len(boundingCandidates),
 		"removeCandidateNumber", len(removeCandidates), "updateCandidateNumber", len(updateCandidates), "applyFailedUpdateCandidateNumber", len(applyFailedUpdateCandidates))
