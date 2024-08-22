@@ -87,7 +87,7 @@ then
             k=$(( RANDOM % AKS_SKU_COUNT ))
             kubectl label node "${NODES[$j]}" beta.kubernetes.io/instance-type=${AKS_NODE_SKUS[$k]}
         done
-    done
+    done 
 fi
 
 # Build the Fleet agent images
@@ -202,3 +202,4 @@ do
             --set propertyProvider=$PROPERTY_PROVIDER
     fi
 done
+
