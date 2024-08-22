@@ -182,10 +182,9 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		klog.ErrorS(err, "Failed to select resources for placement", "clusterResourcePlacement", crpKObj)
 		return ctrl.Result{}, err
 	}
-	resourceSnapshotSpec := fleetv1beta1.ResourceSnapshotSpec{
-		SelectedResources: selectedResources,
-	}
-	latestResourceSnapshot, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, envelopeObjCount, &resourceSnapshotSpec, int(revisionLimit))
+
+	latestResourceSnapshot, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, envelopeObjCount,
+		&fleetv1beta1.ResourceSnapshotSpec{SelectedResources: selectedResources}, int(revisionLimit))
 	if err != nil {
 		return ctrl.Result{}, err
 	}
