@@ -126,13 +126,7 @@ var _ = Describe("Test member cluster force delete flow", Ordered, Serial, func(
 	Context("Test cluster join and leave flow with member agent down and force delete member cluster", Ordered, Serial, func() {
 		It("Simulate the member agent going down in member cluster", func() {
 			Eventually(func() error {
-				var d appsv1.Deployment
-				err := memberCluster3WestProdClient.Get(ctx, types.NamespacedName{Name: "member-agent", Namespace: fleetSystemNS}, &d)
-				if err != nil {
-					return err
-				}
-				d.Spec.Replicas = ptr.To(int32(0))
-				return memberCluster3WestProdClient.Update(ctx, &d)
+				return updateMemberAgentDeploymentReplicas(0)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to simulate member agent going down")
 		})
 
@@ -156,18 +150,22 @@ var _ = Describe("Test member cluster force delete flow", Ordered, Serial, func(
 	})
 
 	AfterAll(func() {
-		By(fmt.Sprintf("Simulate the member agent comming back up"))
+		By("Simulate the member agent coming back up")
 		Eventually(func() error {
-			var d appsv1.Deployment
-			err := memberCluster3WestProdClient.Get(ctx, types.NamespacedName{Name: "member-agent", Namespace: fleetSystemNS}, &d)
-			if err != nil {
-				return err
-			}
-			d.Spec.Replicas = ptr.To(int32(1))
-			return memberCluster3WestProdClient.Update(ctx, &d)
+			return updateMemberAgentDeploymentReplicas(1)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to simulate member agent coming back up")
 
 		createMemberCluster(memberCluster3WestProd.ClusterName, memberCluster3WestProd.PresentingServiceAccountInHubClusterName, labelsByClusterName[memberCluster3WestProd.ClusterName], annotationsByClusterName[memberCluster3WestProd.ClusterName])
 		checkIfMemberClusterHasJoined(memberCluster3WestProd)
 	})
 })
+
+func updateMemberAgentDeploymentReplicas(replicas int32) error {
+	var d appsv1.Deployment
+	err := memberCluster3WestProdClient.Get(ctx, types.NamespacedName{Name: "member-agent", Namespace: fleetSystemNS}, &d)
+	if err != nil {
+		return err
+	}
+	d.Spec.Replicas = ptr.To(replicas)
+	return memberCluster3WestProdClient.Update(ctx, &d)
+}
