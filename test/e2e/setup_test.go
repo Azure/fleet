@@ -237,6 +237,7 @@ func TestMain(m *testing.M) {
 	if err := apiextensionsv1.AddToScheme(scheme); err != nil {
 		log.Fatalf("failed to add API extensions to the runtime scheme: %v", err)
 	}
+
 	os.Exit(m.Run())
 }
 
