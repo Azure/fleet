@@ -167,5 +167,5 @@ func updateMemberAgentDeploymentReplicas(clusterClient client.Client, replicas i
 		return err
 	}
 	d.Spec.Replicas = ptr.To(replicas)
-	return memberCluster3WestProdClient.Update(ctx, &d)
+	return clusterClient.Update(ctx, &d)
 }
