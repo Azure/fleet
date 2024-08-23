@@ -122,7 +122,7 @@ func sortResources(resources []runtime.Object) {
 		if gvkComp == 0 {
 			// same gvk, compare namespace/name
 			return strings.Compare(fmt.Sprintf("%s/%s", obj1.GetNamespace(), obj1.GetName()),
-				fmt.Sprintf("%s/%s", obj2.GetNamespace(), obj2.GetName())) < 0
+				fmt.Sprintf("%s/%s", obj2.GetNamespace(), obj2.GetName())) > 0
 		}
 		return gvkComp > 0
 	})

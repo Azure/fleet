@@ -868,20 +868,20 @@ func TestSortResource(t *testing.T) {
 		want      []runtime.Object
 	}{
 		"should gather selected resources with Namespace in front with order": {
-			resources: []runtime.Object{deployment, namespace2, namespace1},
-			want:      []runtime.Object{namespace1, namespace2, deployment},
+			resources: []runtime.Object{deployment, namespace1, namespace2},
+			want:      []runtime.Object{namespace2, namespace1, deployment},
 		},
 		"should gather selected resources with CRD in front with order": {
-			resources: []runtime.Object{clusterRole, crd2, crd1},
-			want:      []runtime.Object{crd1, crd2, clusterRole},
+			resources: []runtime.Object{clusterRole, crd1, crd2},
+			want:      []runtime.Object{crd2, crd1, clusterRole},
 		},
 		"should gather selected resources with CRD or Namespace in front  with order": {
-			resources: []runtime.Object{deployment, crd2, namespace2, clusterRole, crd1, namespace1},
-			want:      []runtime.Object{namespace1, namespace2, crd1, crd2, clusterRole, deployment},
+			resources: []runtime.Object{deployment, namespace1, namespace2, clusterRole, crd1, crd2},
+			want:      []runtime.Object{namespace2, namespace1, crd2, crd1, clusterRole, deployment},
 		},
 		"should gather selected resources with CRD or Namespace in front  with order, second case": {
-			resources: []runtime.Object{crd2, crd1, deployment, namespace2, clusterRole},
-			want:      []runtime.Object{namespace2, crd1, crd2, clusterRole, deployment},
+			resources: []runtime.Object{crd1, crd2, deployment, namespace2, clusterRole},
+			want:      []runtime.Object{namespace2, crd2, crd1, clusterRole, deployment},
 		},
 	}
 
