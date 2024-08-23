@@ -796,13 +796,24 @@ func createResourceContentForTest(t *testing.T, obj interface{}) *fleetv1beta1.R
 }
 
 func TestSortResource(t *testing.T) {
-	// Create the Namespace object
-	namespace := &unstructured.Unstructured{
+	// Create the first Namespace object
+	namespace1 := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "v1",
 			"kind":       "Namespace",
 			"metadata": map[string]interface{}{
-				"name": "test",
+				"name": "test1",
+			},
+		},
+	}
+
+	// Create the second Namespace object
+	namespace2 := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Namespace",
+			"metadata": map[string]interface{}{
+				"name": "test2",
 			},
 		},
 	}
@@ -819,13 +830,24 @@ func TestSortResource(t *testing.T) {
 		},
 	}
 
-	// Create the CustomResourceDefinition object
-	crd := &unstructured.Unstructured{
+	// Create the first CustomResourceDefinition object
+	crd1 := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "apiextensions.k8s.io/v1",
 			"kind":       "CustomResourceDefinition",
 			"metadata": map[string]interface{}{
-				"name": "test-crd",
+				"name": "test-crd1",
+			},
+		},
+	}
+
+	// Create the second CustomResourceDefinition object
+	crd2 := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apiextensions.k8s.io/v1",
+			"kind":       "CustomResourceDefinition",
+			"metadata": map[string]interface{}{
+				"name": "test-crd2",
 			},
 		},
 	}
@@ -845,17 +867,21 @@ func TestSortResource(t *testing.T) {
 		resources []runtime.Object
 		want      []runtime.Object
 	}{
-		"should gather selected resources with Namespace in front": {
-			resources: []runtime.Object{deployment, namespace},
-			want:      []runtime.Object{namespace, deployment},
+		"should gather selected resources with Namespace in front with order": {
+			resources: []runtime.Object{deployment, namespace1, namespace2},
+			want:      []runtime.Object{namespace2, namespace1, deployment},
 		},
-		"should gather selected resources with CRD in front": {
-			resources: []runtime.Object{clusterRole, crd},
-			want:      []runtime.Object{crd, clusterRole},
+		"should gather selected resources with CRD in front with order": {
+			resources: []runtime.Object{clusterRole, crd1, crd2},
+			want:      []runtime.Object{crd2, crd1, clusterRole},
 		},
-		"should gather selected resources with CRD or Namespace in front": {
-			resources: []runtime.Object{deployment, clusterRole, crd, namespace},
-			want:      []runtime.Object{namespace, crd, clusterRole, deployment},
+		"should gather selected resources with CRD or Namespace in front  with order": {
+			resources: []runtime.Object{deployment, namespace1, namespace2, clusterRole, crd1, crd2},
+			want:      []runtime.Object{namespace2, namespace1, crd2, crd1, clusterRole, deployment},
+		},
+		"should gather selected resources with CRD or Namespace in front  with order, second case": {
+			resources: []runtime.Object{crd1, crd2, deployment, namespace2, clusterRole},
+			want:      []runtime.Object{namespace2, crd2, crd1, clusterRole, deployment},
 		},
 	}
 
