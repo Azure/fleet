@@ -336,6 +336,15 @@ spec:
                   ApplyStrategy describes how to resolve the conflict if the resource to be placed already exists in the target cluster
                   and is owned by other appliers.
                 properties:
+                  actionType:
+                    default: AlwaysApply
+                    description: TakeoverAction describes the action to take when
+                      we place the selected resources on the target cluster the first
+                      time.
+                    enum:
+                    - AlwaysApply
+                    - ApplyIfNoDiff
+                    type: string
                   allowCoOwnership:
                     description: |-
                       AllowCoOwnership defines whether to apply the resource if it already exists in the target cluster and is not
@@ -363,11 +372,17 @@ spec:
                     default: ClientSideApply
                     description: |-
                       Type defines the type of strategy to use. Default to ClientSideApply.
-                      Server-side apply is a safer choice. Read more about the differences between server-side apply and client-side
-                      apply: https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply.
+                      Server-side apply is more powerful and flexible than client-side apply.
+                      You SHOULD use server-side apply to safely resolve any potential drift between the
+                      original applied resource version and the current resource on the member cluster.
+                      Read more about the differences between server-side apply and client-side apply:
+                      https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply.
+                      You can also use ReportDiff to only report the difference between the resource on the member cluster
+                      and the resource to be applied from the hub on all the selected clusters.
                     enum:
                     - ClientSideApply
                     - ServerSideApply
+                    - ReportDiff
                     type: string
                 type: object
               workload:

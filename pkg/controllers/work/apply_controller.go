@@ -265,6 +265,7 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
+	// TODO: do not retry on errors if the apply action is reportDiff, report the diff every 1 min instead
 	if err = utilerrors.NewAggregate(errs); err != nil {
 		klog.ErrorS(err, "Manifest apply incomplete; the message is queued again for reconciliation",
 			"work", logObjRef)
@@ -412,6 +413,7 @@ func (r *ApplyWorkReconciler) decodeManifest(manifest fleetv1beta1.Manifest) (sc
 // and then creates/updates the resource on the cluster using server side apply instead of three-way merge patch.
 func (r *ApplyWorkReconciler) applyUnstructuredAndTrackAvailability(ctx context.Context, gvr schema.GroupVersionResource,
 	manifestObj *unstructured.Unstructured, applyStrategy *fleetv1beta1.ApplyStrategy) (*unstructured.Unstructured, ApplyAction, error) {
+	// TODO: determine action based on conflict resolution action
 	objManifest := klog.KObj(manifestObj)
 	applier := r.appliers[applyStrategy.Type]
 	if applier == nil {
@@ -572,6 +574,7 @@ func isDataResource(gvr schema.GroupVersionResource) bool {
 
 // constructWorkCondition constructs the work condition based on the apply result
 // TODO: special handle no results
+// TODO: special handle the apply error of type "report" drift.
 func constructWorkCondition(results []applyResult, work *fleetv1beta1.Work) []error {
 	var errs []error
 	// Update manifestCondition based on the results.
@@ -790,6 +793,7 @@ func buildManifestCondition(err error, action ApplyAction, observedGeneration in
 		default:
 			applyCondition.Reason = ManifestApplyFailedReason
 		}
+		// TODO: handle the max length (32768) of the message field
 		applyCondition.Message = fmt.Sprintf("Failed to apply manifest: %v", err)
 		availableCondition.Status = metav1.ConditionUnknown
 		availableCondition.Reason = ManifestApplyFailedReason
