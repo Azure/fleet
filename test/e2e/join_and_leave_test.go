@@ -17,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -126,7 +127,7 @@ var _ = Describe("Test member cluster force delete flow", Ordered, Serial, func(
 	Context("Test cluster join and leave flow with member agent down and force delete member cluster", Ordered, Serial, func() {
 		It("Simulate the member agent going down in member cluster", func() {
 			Eventually(func() error {
-				return updateMemberAgentDeploymentReplicas(0)
+				return updateMemberAgentDeploymentReplicas(memberCluster3WestProdClient, 0)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to simulate member agent going down")
 		})
 
@@ -152,7 +153,7 @@ var _ = Describe("Test member cluster force delete flow", Ordered, Serial, func(
 	AfterAll(func() {
 		By("Simulate the member agent coming back up")
 		Eventually(func() error {
-			return updateMemberAgentDeploymentReplicas(1)
+			return updateMemberAgentDeploymentReplicas(memberCluster3WestProdClient, 1)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to simulate member agent coming back up")
 
 		createMemberCluster(memberCluster3WestProd.ClusterName, memberCluster3WestProd.PresentingServiceAccountInHubClusterName, labelsByClusterName[memberCluster3WestProd.ClusterName], annotationsByClusterName[memberCluster3WestProd.ClusterName])
@@ -160,9 +161,9 @@ var _ = Describe("Test member cluster force delete flow", Ordered, Serial, func(
 	})
 })
 
-func updateMemberAgentDeploymentReplicas(replicas int32) error {
+func updateMemberAgentDeploymentReplicas(clusterClient client.Client, replicas int32) error {
 	var d appsv1.Deployment
-	err := memberCluster3WestProdClient.Get(ctx, types.NamespacedName{Name: "member-agent", Namespace: fleetSystemNS}, &d)
+	err := clusterClient.Get(ctx, types.NamespacedName{Name: "member-agent", Namespace: fleetSystemNS}, &d)
 	if err != nil {
 		return err
 	}
