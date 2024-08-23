@@ -62,6 +62,8 @@ type Reconciler struct {
 	NetworkingAgentsEnabled bool
 	// the max number of concurrent reconciles per controller.
 	MaxConcurrentReconciles int
+	// the wait time in minutes before we force delete a member cluster.
+	ForceDeleteWaitTime time.Duration
 	// agents are used as hashset to query the expected agent type, so the value will be ignored.
 	agents map[clusterv1beta1.AgentType]bool
 }
@@ -158,8 +160,6 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 	}
 	// calculate the current status of the member cluster from imc status
 	r.syncInternalMemberClusterStatus(currentImc, mc)
-	// TODO: check the last heartbeat time from all agents and assume the member cluster is left if they haven't sent heartbeat
-	//       beyond a pre-agreed threshold.
 	// check if the cluster is already left
 	mcJoinedCondition := meta.FindStatusCondition(mc.Status.Conditions, string(clusterv1beta1.ConditionTypeMemberClusterJoined))
 	if condition.IsConditionStatusFalse(mcJoinedCondition, mc.GetGeneration()) {
@@ -169,6 +169,11 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 		}
 		return runtime.Result{Requeue: true}, controller.NewUpdateIgnoreConflictError(r.updateMemberClusterStatus(ctx, mc))
 	}
+	// check to see if we can force delete member cluster.
+	if currentImc.Spec.State == clusterv1beta1.ClusterStateLeave && time.Since(mc.DeletionTimestamp.Time) >= r.ForceDeleteWaitTime {
+		klog.V(2).InfoS("Force delete the member cluster, by garbage collecting owned resources", "memberCluster", mcObjRef)
+		return runtime.Result{Requeue: true}, r.garbageCollect(ctx, mc)
+	}
 	klog.V(2).InfoS("Need to wait for the agent to leave", "memberCluster", mcObjRef, "joinedCondition", mcJoinedCondition)
 	// mark the imc as left to make sure the agent is leaving the fleet
 	if err := r.leave(ctx, mc, currentImc); err != nil {
@@ -176,8 +181,9 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 		return runtime.Result{}, err
 	}
 	// update the mc status to track the leaving status while we wait for all the agents to leave.
-	// once the imc is updated, the mc controller will reconcile again.
-	return runtime.Result{}, controller.NewUpdateIgnoreConflictError(r.updateMemberClusterStatus(ctx, mc))
+	// once the imc is updated, the mc controller will reconcile again ,or we reconcile to force delete
+	// the member cluster after force delete wait time.
+	return runtime.Result{RequeueAfter: r.ForceDeleteWaitTime}, controller.NewUpdateIgnoreConflictError(r.updateMemberClusterStatus(ctx, mc))
 }
 
 func (r *Reconciler) getInternalMemberCluster(ctx context.Context, name string) (*clusterv1beta1.InternalMemberCluster, error) {

@@ -135,6 +135,7 @@ func main() {
 			Client:                  mgr.GetClient(),
 			NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
 			MaxConcurrentReconciles: int(math.Ceil(float64(opts.MaxFleetSizeSupported) / 100)), //one member cluster reconciler routine per 100 member clusters
+			ForceDeleteWaitTime:     opts.ForceDeleteWaitTime.Duration,
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "unable to create v1beta1 controller", "controller", "MemberCluster")
 			exitWithErrorFunc()

@@ -36,6 +36,7 @@ spec:
             - --max-fleet-size={{ .Values.MaxFleetSizeSupported }}
             - --hub-api-qps={{ .Values.hubAPIQPS }}
             - --hub-api-burst={{ .Values.hubAPIBurst }}
+            - --force-delete-wait-time={{ .Values.forceDeleteWaitTime }}
           ports:
             - name: metrics
               containerPort: 8080

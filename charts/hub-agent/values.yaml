@@ -16,6 +16,7 @@ enableWebhook: true
 webhookServiceName: fleetwebhook
 enableGuardRail: true
 webhookClientConnectionType: service
+forceDeleteWaitTime: 15m0s
 
 namespace:
   fleet-system
