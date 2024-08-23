@@ -7,7 +7,6 @@ package e2e
 
 import (
 	"fmt"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -142,7 +141,7 @@ var _ = Describe("Test member cluster force delete flow", Ordered, Serial, func(
 			Eventually(func() bool {
 				var ns corev1.Namespace
 				return apierrors.IsNotFound(hubClient.Get(ctx, types.NamespacedName{Name: memberClusterNamespace}, &ns))
-			}, time.Minute*3, eventuallyInterval).Should(BeTrue(), "Failed to garbage collect resources owned by member cluster")
+			}, eventuallyDuration, eventuallyInterval).Should(BeTrue(), "Failed to garbage collect resources owned by member cluster")
 
 			Eventually(func() bool {
 				return apierrors.IsNotFound(hubClient.Get(ctx, types.NamespacedName{Name: memberCluster3WestProdName}, &clusterv1beta1.MemberCluster{}))
