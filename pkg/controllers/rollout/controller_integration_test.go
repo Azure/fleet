@@ -12,6 +12,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/utils/ptr"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -520,6 +521,90 @@ var _ = Describe("Test the rollout Controller", func() {
 			}
 			return allMatch
 		}, timeout, interval).Should(BeTrue(), "rollout controller should roll all the bindings to use the latest resource snapshot")
+	})
+
+	It("Should wait designated time before rolling out ", func() {
+		// create CRP
+		var targetCluster int32 = 11
+		rolloutCRP = clusterResourcePlacementForTest(testCRPName, createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, targetCluster))
+		// remove the strategy
+		rolloutCRP.Spec.Strategy = fleetv1beta1.RolloutStrategy{RollingUpdate: &fleetv1beta1.RollingUpdateConfig{UnavailablePeriodSeconds: ptr.To(60)}}
+		Expect(k8sClient.Create(ctx, rolloutCRP)).Should(Succeed())
+		// create master resource snapshot that is latest
+		masterSnapshot := generateResourceSnapshot(rolloutCRP.Name, 0, true)
+		Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
+		By(fmt.Sprintf("master resource snapshot %s created", masterSnapshot.Name))
+		// create scheduled bindings for master snapshot on target clusters
+		clusters := make([]string, targetCluster)
+		for i := 0; i < int(targetCluster); i++ {
+			clusters[i] = "cluster-" + utils.RandStr()
+			binding := generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, masterSnapshot.Name, clusters[i])
+			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
+			By(fmt.Sprintf("resource binding  %s created", binding.Name))
+			bindings = append(bindings, binding)
+		}
+		// check that all bindings are scheduled
+		Eventually(func() bool {
+			for _, binding := range bindings {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)
+				if err != nil {
+					return false
+				}
+				if binding.Spec.State != fleetv1beta1.BindingStateBound || binding.Spec.ResourceSnapshotName != masterSnapshot.Name {
+					return false
+				}
+			}
+			return true
+		}, timeout, interval).Should(BeTrue(), "rollout controller should roll all the bindings to Bound state")
+
+		// simulate that some of the bindings are available successfully
+		applySuccessfully := 3
+		for i := 0; i < applySuccessfully; i++ {
+			markBindingAvailable(bindings[i], true)
+		}
+		// simulate that some of the bindings fail to apply
+		for i := applySuccessfully; i < int(targetCluster); i++ {
+			markBindingApplied(bindings[i], false)
+		}
+		// mark the master snapshot as not latest
+		masterSnapshot.SetLabels(map[string]string{
+			fleetv1beta1.CRPTrackingLabel:      testCRPName,
+			fleetv1beta1.IsLatestSnapshotLabel: "false"},
+		)
+		Expect(k8sClient.Update(ctx, masterSnapshot)).Should(Succeed())
+		// create a new master resource snapshot
+		newMasterSnapshot := generateResourceSnapshot(rolloutCRP.Name, 1, true)
+		Expect(k8sClient.Create(ctx, newMasterSnapshot)).Should(Succeed())
+		Consistently(func() bool {
+			allMatch := true
+			for _, binding := range bindings {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)
+				if err != nil {
+					allMatch = false
+				}
+				if binding.Spec.ResourceSnapshotName != newMasterSnapshot.Name {
+					return true
+				}
+			}
+			return allMatch
+		}, consistentTimeout, consistentInterval).Should(BeTrue(), "rollout controller should not roll all the bindings to use the latest resource snapshot")
+
+		Eventually(func() bool {
+			allMatch := true
+			for _, binding := range bindings {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)
+				if err != nil {
+					allMatch = false
+				}
+				if binding.Spec.ResourceSnapshotName == newMasterSnapshot.Name {
+					// simulate the work generator to make the newly updated bindings to be available
+					markBindingAvailable(binding, true)
+				} else {
+					allMatch = false
+				}
+			}
+			return allMatch
+		}, 5*time.Minute, interval).Should(BeTrue(), "rollout controller should roll all the bindings to use the latest resource snapshot")
 	})
 
 	// TODO: should update scheduled bindings to the latest snapshot when it is updated to bound state.
