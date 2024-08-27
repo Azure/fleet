@@ -117,6 +117,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 	if err := r.ensureFinalizer(ctx, &resourceBinding); err != nil {
 		return controllerruntime.Result{}, err
 	}
+
 	workUpdated := false
 	overrideSucceeded := false
 	// list all the corresponding works
@@ -181,20 +182,22 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		if workUpdated {
 			// revert the applied condition, available condition, and failedPlacement if we made any changes to the work
 			resourceBinding.Status.FailedPlacements = nil
-			resourceBinding.SetConditions(metav1.Condition{
-				Status:             metav1.ConditionFalse,
-				Type:               string(fleetv1beta1.ResourceBindingApplied),
-				Reason:             condition.WorkNeedSyncedReason,
-				Message:            "In the processing of synchronizing the work to the member cluster",
-				ObservedGeneration: resourceBinding.Generation,
-			})
-			resourceBinding.SetConditions(metav1.Condition{
-				Status:             metav1.ConditionFalse,
-				Type:               string(fleetv1beta1.ResourceBindingAvailable),
-				Reason:             condition.WorkNeedSyncedReason,
-				Message:            "In the processing of synchronizing the work to the member cluster",
-				ObservedGeneration: resourceBinding.Generation,
-			})
+			//resourceBinding.SetConditions(metav1.Condition{
+			//	Status:             metav1.ConditionFalse,
+			//	Type:               string(fleetv1beta1.ResourceBindingApplied),
+			//	Reason:             condition.WorkNeedSyncedReason,
+			//	Message:            "In the processing of synchronizing the work to the member cluster",
+			//	ObservedGeneration: resourceBinding.Generation,
+			//})
+			//resourceBinding.SetConditions(metav1.Condition{
+			//	Status:             metav1.ConditionFalse,
+			//	Type:               string(fleetv1beta1.ResourceBindingAvailable),
+			//	Reason:             condition.WorkNeedSyncedReason,
+			//	Message:            "In the processing of synchronizing the work to the member cluster",
+			//	ObservedGeneration: resourceBinding.Generation,
+			//})
+			resourceBinding.RemoveCondition(string(fleetv1beta1.ResourceBindingApplied))
+			resourceBinding.RemoveCondition(string(fleetv1beta1.ResourceBindingAvailable))
 			klog.V(2).InfoS("Work Updated. Updating the resourceBinding", "resourceBinding", klog.KObj(&resourceBinding), "resourceBindingStatus", resourceBinding.Status)
 		} else {
 			setBindingStatus(works, &resourceBinding)
@@ -206,7 +209,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		klog.Error("Failed to update the resourceBinding status", "resourceBinding", bindingRef, "error", updateErr)
 		return controllerruntime.Result{}, controller.NewUpdateIgnoreConflictError(updateErr)
 	}
-
 	if errors.Is(syncErr, controller.ErrUserError) {
 		// Stop retry when the error is caused by user error
 		// For example, user provides an invalid overrides or cannot extract the resources from config map.
