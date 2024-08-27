@@ -420,22 +420,25 @@ type RolloutStrategy struct {
 	// +optional
 	RollingUpdate *RollingUpdateConfig `json:"rollingUpdate,omitempty"`
 
-	// ApplyStrategy describes how to resolve the conflict if the resource to be placed already exists in the target cluster
-	// and is owned by other appliers.
+	// ApplyStrategy describes when and how to apply the selected resources to the target cluster.
 	// +optional
 	ApplyStrategy *ApplyStrategy `json:"applyStrategy,omitempty"`
 }
 
-// ApplyStrategy describes how to resolve the conflict if the resource to be placed already exists in the target cluster
-// and whether it's allowed to be co-owned by other non-fleet appliers.
+// ApplyStrategy describes when and how to apply the selected resource to the target cluster.
 // Note: If multiple CRPs try to place the same resource with different apply strategy, the later ones will fail with the
 // reason ApplyConflictBetweenPlacements.
 type ApplyStrategy struct {
 	// Type defines the type of strategy to use. Default to ClientSideApply.
-	// Server-side apply is a safer choice. Read more about the differences between server-side apply and client-side
-	// apply: https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply.
+	// Server-side apply is more powerful and flexible than client-side apply.
+	// You SHOULD use server-side apply to safely resolve any potential drift between the
+	// original applied resource version and the current resource on the member cluster.
+	// Read more about the differences between server-side apply and client-side apply:
+	// https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply.
+	// You can also use ReportDiff to only report the difference between the resource on the member cluster
+	// and the resource to be applied from the hub on all the selected clusters.
 	// +kubebuilder:default=ClientSideApply
-	// +kubebuilder:validation:Enum=ClientSideApply;ServerSideApply
+	// +kubebuilder:validation:Enum=ClientSideApply;ServerSideApply;ReportDiff
 	// +optional
 	Type ApplyStrategyType `json:"type,omitempty"`
 
@@ -448,10 +451,15 @@ type ApplyStrategy struct {
 	// ServerSideApplyConfig defines the configuration for server side apply. It is honored only when type is ServerSideApply.
 	// +optional
 	ServerSideApplyConfig *ServerSideApplyConfig `json:"serverSideApplyConfig,omitempty"`
+
+	// TakeoverAction describes the action to take when we place the selected resources on the target cluster the first time.
+	// +kubebuilder:default=AlwaysApply
+	// +kubebuilder:validation:Enum=AlwaysApply;ApplyIfNoDiff
+	// +optional
+	TakeoverAction TakeOverActionType `json:"actionType,omitempty"`
 }
 
-// ApplyStrategyType describes the type of the strategy used to resolve the conflict if the resource to be placed already
-// exists in the target cluster and is owned by other appliers.
+// ApplyStrategyType describes the type of the strategy used to apply the resource to the target cluster.
 // +enum
 type ApplyStrategyType string
 
@@ -465,6 +473,10 @@ const (
 	// and the existing resource in the target cluster.
 	// Details: https://kubernetes.io/docs/reference/using-api/server-side-apply
 	ApplyStrategyTypeServerSideApply ApplyStrategyType = "ServerSideApply"
+
+	// ApplyStrategyTypeReportDiff will generate a report of the difference between
+	// the resource on the member cluster and to be placed resource snapshot from the hub periodically.
+	ApplyStrategyTypeReportDiff ApplyStrategyType = "ReportDiff"
 )
 
 // ServerSideApplyConfig defines the configuration for server side apply.
@@ -480,6 +492,21 @@ type ServerSideApplyConfig struct {
 	// +optional
 	ForceConflicts bool `json:"force"`
 }
+
+// TakeOverActionType describes the type of the action to take when we first apply the resources to the member cluster.
+// +enum
+type TakeOverActionType string
+
+const (
+	// TakeOverActionTypeApplyIfNoDiff will apply the yaml from hub cluster only if there is no difference
+	// between the current resource snapshot version on the hub cluster and the existing resources on the member cluster.
+	// Otherwise, we will report the difference.
+	TakeOverActionTypeApplyIfNoDiff TakeOverActionType = "ApplyIfNoDiff"
+
+	// TakeOverActionTypeAlwaysApply will always apply the resource to the member cluster regardless
+	// if there are differences between the resource on the hub cluster and the existing resources on the member cluster.
+	TakeOverActionTypeAlwaysApply TakeOverActionType = "AlwaysApply"
+)
 
 // +enum
 type RolloutStrategyType string
