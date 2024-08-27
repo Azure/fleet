@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
@@ -435,7 +436,7 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 		work := generateSnapshotWorkObj(workNamePrefix, resourceBinding, snapshot, simpleManifests)
 		activeWork[work.Name] = work
 		newWork = append(newWork, work)
-		klog.V(2).InfoS("Successfully generated the work objects for the resource snapshot", "resourceSnapshot", klog.KObj(snapshot), "work status", work.Status)
+		klog.V(2).InfoS("Successfully generated the work objects for the resource snapshot", "resourceSnapshot", klog.KObj(snapshot))
 
 		// issue all the create/update requests for the corresponding works for each snapshot in parallel
 		for ni := range newWork {
@@ -672,8 +673,8 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 	if appliedCond.Status == metav1.ConditionTrue {
 		availableCond = buildAllWorkAvailableCondition(works, resourceBinding)
 		resourceBinding.SetConditions(availableCond)
-		//} else {
-		//	resourceBinding.RemoveCondition(string(fleetv1beta1.ResourceBindingAvailable))
+	} else {
+		resourceBinding.RemoveCondition(string(fleetv1beta1.ResourceBindingAvailable))
 	}
 	resourceBinding.Status.FailedPlacements = nil
 	// collect and set the failed resource placements to the binding if not all the works are available
@@ -924,7 +925,7 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 						"Failed to process an update event for work object")
 					return
 				}
-				klog.V(2).InfoS("Received a old work update event", "work", klog.KObj(evt.ObjectNew), "parentBindingName", parentBindingName, "work status", oldWork.Status)
+				klog.V(2).InfoS("Received a old work update event", "work", klog.KObj(evt.ObjectOld), "parentBindingName", parentBindingName, "work status", oldWork.Status)
 				newWork, ok := evt.ObjectNew.(*fleetv1beta1.Work)
 				if !ok {
 					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("received new object %v not a work object", evt.ObjectNew)),
