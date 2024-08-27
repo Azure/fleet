@@ -182,22 +182,20 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		if workUpdated {
 			// revert the applied condition, available condition, and failedPlacement if we made any changes to the work
 			resourceBinding.Status.FailedPlacements = nil
-			//resourceBinding.SetConditions(metav1.Condition{
-			//	Status:             metav1.ConditionFalse,
-			//	Type:               string(fleetv1beta1.ResourceBindingApplied),
-			//	Reason:             condition.WorkNeedSyncedReason,
-			//	Message:            "In the processing of synchronizing the work to the member cluster",
-			//	ObservedGeneration: resourceBinding.Generation,
-			//})
-			//resourceBinding.SetConditions(metav1.Condition{
-			//	Status:             metav1.ConditionFalse,
-			//	Type:               string(fleetv1beta1.ResourceBindingAvailable),
-			//	Reason:             condition.WorkNeedSyncedReason,
-			//	Message:            "In the processing of synchronizing the work to the member cluster",
-			//	ObservedGeneration: resourceBinding.Generation,
-			//})
-			resourceBinding.RemoveCondition(string(fleetv1beta1.ResourceBindingApplied))
-			resourceBinding.RemoveCondition(string(fleetv1beta1.ResourceBindingAvailable))
+			resourceBinding.SetConditions(metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingApplied),
+				Reason:             condition.WorkNeedSyncedReason,
+				Message:            "In the processing of synchronizing the work to the member cluster",
+				ObservedGeneration: resourceBinding.Generation,
+			})
+			resourceBinding.SetConditions(metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingAvailable),
+				Reason:             condition.WorkNeedSyncedReason,
+				Message:            "In the processing of synchronizing the work to the member cluster",
+				ObservedGeneration: resourceBinding.Generation,
+			})
 			klog.V(2).InfoS("Work Updated. Updating the resourceBinding", "resourceBinding", klog.KObj(&resourceBinding), "resourceBindingStatus", resourceBinding.Status)
 		} else {
 			setBindingStatus(works, &resourceBinding)
