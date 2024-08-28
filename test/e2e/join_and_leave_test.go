@@ -128,7 +128,7 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 })
 
 var _ = Describe("Test member cluster force delete flow", Ordered, Serial, func() {
-	FContext("Test cluster join and leave flow with member agent down and force delete member cluster", Ordered, Serial, func() {
+	Context("Test cluster join and leave flow with member agent down and force delete member cluster", Ordered, Serial, func() {
 		It("Simulate the member agent going down in member cluster", func() {
 			Eventually(func() error {
 				return updateMemberAgentDeploymentReplicas(memberCluster3WestProdClient, 0)
@@ -180,11 +180,7 @@ func updateMemberAgentDeploymentReplicas(clusterClient client.Client, replicas i
 		var podList corev1.PodList
 		listOpts := []client.ListOption{
 			client.InNamespace(fleetSystemNS),
-			client.MatchingLabels(
-				map[string]string{
-					"app.kubernetes.io/name": memberAgentName,
-				},
-			),
+			client.MatchingLabels(map[string]string{"app.kubernetes.io/name": memberAgentName}),
 		}
 		err = clusterClient.List(ctx, &podList, listOpts...)
 		if err != nil {
