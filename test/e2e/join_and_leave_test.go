@@ -6,6 +6,7 @@ Licensed under the MIT license.
 package e2e
 
 import (
+	"errors"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -21,6 +22,10 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
+)
+
+const (
+	memberAgentName = "member-agent"
 )
 
 // Note that this container cannot run in parallel with other containers.
@@ -123,7 +128,7 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 })
 
 var _ = Describe("Test member cluster force delete flow", Ordered, Serial, func() {
-	Context("Test cluster join and leave flow with member agent down and force delete member cluster", Ordered, Serial, func() {
+	FContext("Test cluster join and leave flow with member agent down and force delete member cluster", Ordered, Serial, func() {
 		It("Simulate the member agent going down in member cluster", func() {
 			Eventually(func() error {
 				return updateMemberAgentDeploymentReplicas(memberCluster3WestProdClient, 0)
@@ -160,12 +165,35 @@ var _ = Describe("Test member cluster force delete flow", Ordered, Serial, func(
 	})
 })
 
-func updateMemberAgentDeploymentReplicas(clusterClient client.Client, replicas int32) error {
+func updateMemberAgentDeploymentReplicas(clusterClient client.Client, replicas int) error {
 	var d appsv1.Deployment
-	err := clusterClient.Get(ctx, types.NamespacedName{Name: "member-agent", Namespace: fleetSystemNS}, &d)
+	err := clusterClient.Get(ctx, types.NamespacedName{Name: memberAgentName, Namespace: fleetSystemNS}, &d)
 	if err != nil {
 		return err
 	}
-	d.Spec.Replicas = ptr.To(replicas)
-	return clusterClient.Update(ctx, &d)
+	d.Spec.Replicas = ptr.To(int32(replicas))
+	err = clusterClient.Update(ctx, &d)
+	if err != nil {
+		return err
+	}
+	Eventually(func() error {
+		var podList corev1.PodList
+		listOpts := []client.ListOption{
+			client.InNamespace(fleetSystemNS),
+			client.MatchingLabels(
+				map[string]string{
+					"app.kubernetes.io/name": memberAgentName,
+				},
+			),
+		}
+		err = clusterClient.List(ctx, &podList, listOpts...)
+		if err != nil {
+			return err
+		}
+		if len(podList.Items) != replicas {
+			return errors.New(fmt.Sprintf("member agent pods %d doesn't match replicas specified %d", len(podList.Items), replicas))
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	return nil
 }
