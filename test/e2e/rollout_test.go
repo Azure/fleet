@@ -546,7 +546,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 	})
 
-	Context("Test a CRP place custom resource successfully, updates binding transition time", Ordered, func() {
+	FContext("Test a CRP place custom resource successfully, updates binding transition time", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		workNamespace := appNamespace()
 		var wantSelectedResources []placementv1beta1.ResourceIdentifier

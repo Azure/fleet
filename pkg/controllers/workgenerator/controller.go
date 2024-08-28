@@ -120,6 +120,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 
 	workUpdated := false
 	overrideSucceeded := false
+	// Reset the conditions and failed placements.
+	for i := condition.OverriddenCondition; i < condition.TotalCondition; i++ {
+		resourceBinding.RemoveCondition(string(i.ResourceBindingConditionType()))
+	}
+	resourceBinding.Status.FailedPlacements = nil
 	// list all the corresponding works
 	works, syncErr := r.listAllWorksAssociated(ctx, &resourceBinding)
 	if syncErr == nil {
@@ -152,8 +157,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		if err := errors.Unwrap(syncErr); err != nil && len(err.Error()) > 2 {
 			errorMessage = errorMessage[len(err.Error())+2:]
 		}
-		// remove all the failedPlacement as it does not reflect the latest status
-		resourceBinding.Status.FailedPlacements = nil
 		if !overrideSucceeded {
 			resourceBinding.SetConditions(metav1.Condition{
 				Status:             metav1.ConditionFalse,
@@ -180,32 +183,23 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 			Message:            "All of the works are synchronized to the latest",
 		})
 		if workUpdated {
-			// revert the applied condition, available condition, and failedPlacement if we made any changes to the work
-			resourceBinding.Status.FailedPlacements = nil
+			// revert the applied condition if we made any changes to the work
 			resourceBinding.SetConditions(metav1.Condition{
-				Status:             metav1.ConditionUnknown,
+				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
 				Reason:             condition.WorkNeedSyncedReason,
 				Message:            "In the processing of synchronizing the work to the member cluster",
 				ObservedGeneration: resourceBinding.Generation,
 			})
-			resourceBinding.SetConditions(metav1.Condition{
-				Status:             metav1.ConditionUnknown,
-				Type:               string(fleetv1beta1.ResourceBindingAvailable),
-				Reason:             condition.WorkNeedSyncedReason,
-				Message:            "In the processing of synchronizing the work to the member cluster",
-				ObservedGeneration: resourceBinding.Generation,
-			})
-			klog.V(2).InfoS("Work Updated. Updating the resourceBinding", "resourceBinding", klog.KObj(&resourceBinding), "resourceBindingStatus", resourceBinding.Status)
+			klog.V(2).InfoS("Work Updated. Need to update the resourceBinding", "resourceBinding", klog.KObj(&resourceBinding), "resourceBindingStatus", resourceBinding.Status)
 		} else {
 			setBindingStatus(works, &resourceBinding)
 		}
 	}
 
 	// update the resource binding status
-	if updateErr := r.updateBinding(ctx, &resourceBinding); updateErr != nil {
-		klog.Error("Failed to update the resourceBinding status", "resourceBinding", bindingRef, "error", updateErr)
-		return controllerruntime.Result{}, controller.NewUpdateIgnoreConflictError(updateErr)
+	if updateErr := r.updateBindingStatusWithRetry(ctx, &resourceBinding); updateErr != nil {
+		return controllerruntime.Result{}, updateErr
 	}
 	if errors.Is(syncErr, controller.ErrUserError) {
 		// Stop retry when the error is caused by user error
@@ -228,32 +222,24 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 	return controllerruntime.Result{}, syncErr
 }
 
-func (r *Reconciler) updateBinding(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding) error {
+// updateBindingStatusWIthRetry sends the update request to API server with retry.
+func (r *Reconciler) updateBindingStatusWithRetry(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding) error {
 	// Retry only for specific errors or conditions
 	errAfterRetries := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var latestBinding fleetv1beta1.ClusterResourceBinding
 		if err := r.Client.Get(ctx, client.ObjectKeyFromObject(resourceBinding), &latestBinding); err != nil {
 			return err
 		}
-		if overrideCond := resourceBinding.GetCondition(string(fleetv1beta1.ResourceBindingOverridden)); overrideCond != nil {
-			latestBinding.SetConditions(*overrideCond)
+		// Work generator is the only controller that updates conditions excluding rollout started which is updated by rollout controller.
+		if rolloutCond := latestBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted)); rolloutCond != nil {
+			resourceBinding.SetConditions(*rolloutCond)
 		}
-		if workSynCond := resourceBinding.GetCondition(string(fleetv1beta1.ResourceBindingWorkSynchronized)); workSynCond != nil {
-			latestBinding.SetConditions(*workSynCond)
-		}
-		if appliedCond := resourceBinding.GetCondition(string(fleetv1beta1.ResourceBindingApplied)); appliedCond != nil {
-			latestBinding.SetConditions(*appliedCond)
-		}
-		latestBinding.Status.FailedPlacements = resourceBinding.Status.FailedPlacements
-		if availableCond := resourceBinding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable)); availableCond != nil {
-			latestBinding.SetConditions(*availableCond)
-		}
-		// Attempt to update the resourceBinding status
-		if err := r.Client.Status().Update(ctx, &latestBinding); err != nil {
-			klog.ErrorS(err, "Failed to update the resourceBinding status on retry", "resourceBinding", klog.KObj(&latestBinding), "resourceBindingStatus", latestBinding.Status)
+
+		if err := r.Client.Status().Update(ctx, resourceBinding); err != nil {
+			klog.ErrorS(err, "Failed to update the resourceBinding status on retry", "resourceBinding", klog.KObj(resourceBinding), "resourceBindingStatus", resourceBinding.Status)
 			return err
 		}
-		klog.V(2).InfoS("Successfully updated the resourceBinding status", "resourceBinding", klog.KObj(&latestBinding), "resourceBindingStatus", latestBinding.Status)
+		klog.V(2).InfoS("Successfully updated the resourceBinding status", "resourceBinding", klog.KObj(resourceBinding), "resourceBindingStatus", resourceBinding.Status)
 		return nil
 	})
 	if errAfterRetries != nil {
@@ -425,7 +411,6 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 		work := generateSnapshotWorkObj(workNamePrefix, resourceBinding, snapshot, simpleManifests)
 		activeWork[work.Name] = work
 		newWork = append(newWork, work)
-		klog.V(2).InfoS("Successfully generated the work objects for the resource snapshot", "resourceSnapshot", klog.KObj(snapshot))
 
 		// issue all the create/update requests for the corresponding works for each snapshot in parallel
 		for ni := range newWork {
@@ -662,14 +647,6 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 	if appliedCond.Status == metav1.ConditionTrue {
 		availableCond = buildAllWorkAvailableCondition(works, resourceBinding)
 		resourceBinding.SetConditions(availableCond)
-	} else {
-		resourceBinding.SetConditions(metav1.Condition{
-			Status:             metav1.ConditionFalse,
-			Type:               string(fleetv1beta1.ResourceBindingAvailable),
-			Reason:             condition.WorkNotAppliedReason,
-			Message:            "Work object is not applied",
-			ObservedGeneration: resourceBinding.Generation,
-		})
 	}
 	resourceBinding.Status.FailedPlacements = nil
 	// collect and set the failed resource placements to the binding if not all the works are available
@@ -920,14 +897,12 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 						"Failed to process an update event for work object")
 					return
 				}
-				klog.V(2).InfoS("Received a old work update event", "work", klog.KObj(evt.ObjectOld), "parentBindingName", parentBindingName, "work status", oldWork.Status)
 				newWork, ok := evt.ObjectNew.(*fleetv1beta1.Work)
 				if !ok {
 					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("received new object %v not a work object", evt.ObjectNew)),
 						"Failed to process an update event for work object")
 					return
 				}
-				klog.V(2).InfoS("Received a new work update event", "work", klog.KObj(evt.ObjectNew), "parentBindingName", parentBindingName, "work status", newWork.Status)
 				oldAppliedCondition := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 				newAppliedCondition := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 				oldAvailableCondition := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
