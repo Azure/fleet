@@ -1384,7 +1384,6 @@ func verifyBindingStatusSyncedNotApplied(binding *placementv1beta1.ClusterResour
 				Reason:             condition.WorkNeedSyncedReason,
 				ObservedGeneration: binding.Generation,
 			})
-
 		} else {
 			wantStatus.Conditions = append(wantStatus.Conditions, metav1.Condition{
 				Status:             metav1.ConditionFalse,
