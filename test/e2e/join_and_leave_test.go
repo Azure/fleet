@@ -6,7 +6,6 @@ Licensed under the MIT license.
 package e2e
 
 import (
-	"errors"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -187,7 +186,7 @@ func updateMemberAgentDeploymentReplicas(clusterClient client.Client, replicas i
 			return err
 		}
 		if len(podList.Items) != replicas {
-			return errors.New(fmt.Sprintf("member agent pods %d doesn't match replicas specified %d", len(podList.Items), replicas))
+			return fmt.Errorf("member agent pods %d doesn't match replicas specified %d", len(podList.Items), replicas)
 		}
 		return nil
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
