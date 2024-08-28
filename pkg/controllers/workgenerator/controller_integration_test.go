@@ -1348,10 +1348,6 @@ var _ = Describe("Test Work Generator Controller", func() {
 func verifyBindingStatusSyncedNotApplied(binding *placementv1beta1.ClusterResourceBinding, hasOverride, workSync bool) {
 	Eventually(func() string {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
-		appliedReason := condition.WorkNotAppliedReason
-		if workSync {
-			appliedReason = condition.WorkNeedSyncedReason
-		}
 		overrideReason := condition.OverrideNotSpecifiedReason
 		if hasOverride {
 			overrideReason = condition.OverriddenSucceededReason
@@ -1371,21 +1367,35 @@ func verifyBindingStatusSyncedNotApplied(binding *placementv1beta1.ClusterResour
 					Reason:             condition.AllWorkSyncedReason,
 					ObservedGeneration: binding.GetGeneration(),
 				},
-				{
-					Status:             metav1.ConditionFalse,
-					Type:               string(placementv1beta1.ResourceBindingApplied),
-					Reason:             appliedReason,
-					ObservedGeneration: binding.Generation,
-				},
 			},
 			FailedPlacements: nil,
 		}
 
 		if workSync {
 			wantStatus.Conditions = append(wantStatus.Conditions, metav1.Condition{
-				Status:             metav1.ConditionFalse,
+				Status:             metav1.ConditionUnknown,
+				Type:               string(placementv1beta1.ResourceBindingApplied),
+				Reason:             condition.WorkNeedSyncedReason,
+				ObservedGeneration: binding.Generation,
+			})
+			wantStatus.Conditions = append(wantStatus.Conditions, metav1.Condition{
+				Status:             metav1.ConditionUnknown,
 				Type:               string(placementv1beta1.ResourceBindingAvailable),
 				Reason:             condition.WorkNeedSyncedReason,
+				ObservedGeneration: binding.Generation,
+			})
+
+		} else {
+			wantStatus.Conditions = append(wantStatus.Conditions, metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(placementv1beta1.ResourceBindingApplied),
+				Reason:             condition.WorkNotAppliedReason,
+				ObservedGeneration: binding.Generation,
+			})
+			wantStatus.Conditions = append(wantStatus.Conditions, metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(placementv1beta1.ResourceBindingAvailable),
+				Reason:             condition.WorkNotAppliedReason,
 				ObservedGeneration: binding.Generation,
 			})
 		}
@@ -1528,6 +1538,12 @@ func verifyBindStatusNotAppliedWithFailedPlacement(binding *placementv1beta1.Clu
 				},
 				{
 					Type:               string(placementv1beta1.ResourceBindingApplied),
+					Status:             metav1.ConditionFalse,
+					Reason:             condition.WorkNotAppliedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Type:               string(placementv1beta1.ResourceBindingAvailable),
 					Status:             metav1.ConditionFalse,
 					Reason:             condition.WorkNotAppliedReason,
 					ObservedGeneration: binding.GetGeneration(),
