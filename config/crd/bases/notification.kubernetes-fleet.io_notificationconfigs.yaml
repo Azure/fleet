@@ -1,0 +1,410 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.15.0
+  name: notificationconfigs.notification.kubernetes-fleet.io
+spec:
+  group: notification.kubernetes-fleet.io
+  names:
+    categories:
+    - fleet
+    - fleet-notification
+    kind: NotificationConfig
+    listKind: NotificationConfigList
+    plural: notificationconfigs
+    shortNames:
+    - nc
+    singular: notificationconfig
+  scope: Cluster
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: NotificationConfig is a notification setup specification in Fleet.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: Spec is the desired state of the NotificationConfig.
+            properties:
+              notificationAttemptHistoryLimit:
+                default: 10
+                description: |-
+                  NotificationAttemptHistoryLimit is the maximum number of notification attempt objects
+                  to keep in the system for auditing purposes.
+
+
+                  Defaults to 10; the minimum and maximum values are 1 and 100 respectively. Note that Fleet
+                  will honor this limit only in a best-effort manner.
+                format: int32
+                maximum: 100
+                minimum: 1
+                type: integer
+              notificationMessageTemplate:
+                description: |-
+                  NotificationMessageTemplate is an object reference to a ConfigMap object that contains the
+                  template (Go HTML template) used for preparing the notification message.
+
+
+                  See the Fleet documentation for more information on how to specify a notification message
+                  template.
+
+
+                  Note that Fleet provides a number of built-in templates that might be of use. Also, this is
+                  an optional field; if no reference is provided, a default template will be used.
+                properties:
+                  apiVersion:
+                    description: API version of the referent.
+                    type: string
+                  fieldPath:
+                    description: |-
+                      If referring to a piece of an object instead of an entire object, this string
+                      should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                      For example, if the object reference is to a container within a pod, this would take on a value like:
+                      "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                      the event) or if no container name is specified "spec.containers[2]" (container with
+                      index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                      referencing a part of an object.
+                      TODO: this design is not final and this field is subject to change in the future.
+                    type: string
+                  kind:
+                    description: |-
+                      Kind of the referent.
+                      More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                    type: string
+                  name:
+                    description: |-
+                      Name of the referent.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace of the referent.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                    type: string
+                  resourceVersion:
+                    description: |-
+                      Specific resourceVersion to which this reference is made, if any.
+                      More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                    type: string
+                  uid:
+                    description: |-
+                      UID of the referent.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              notificationProviderClass:
+                description: |-
+                  NotificationProviderClass is an object reference to a NotificationProviderClass object that
+                  specifies the notification provider to use for sending notifications.
+
+
+                  For more information, see the comments on the NotificationProviderClass type and the Fleet
+                  documentation.
+                properties:
+                  apiVersion:
+                    description: API version of the referent.
+                    type: string
+                  fieldPath:
+                    description: |-
+                      If referring to a piece of an object instead of an entire object, this string
+                      should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                      For example, if the object reference is to a container within a pod, this would take on a value like:
+                      "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                      the event) or if no container name is specified "spec.containers[2]" (container with
+                      index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                      referencing a part of an object.
+                      TODO: this design is not final and this field is subject to change in the future.
+                    type: string
+                  kind:
+                    description: |-
+                      Kind of the referent.
+                      More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                    type: string
+                  name:
+                    description: |-
+                      Name of the referent.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace of the referent.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                    type: string
+                  resourceVersion:
+                    description: |-
+                      Specific resourceVersion to which this reference is made, if any.
+                      More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                    type: string
+                  uid:
+                    description: |-
+                      UID of the referent.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              onceEveryMinutes:
+                default: 60
+                description: |-
+                  OnceEveryMinutes is the interval between two consecutive notifications on the same target
+                  resource. Defaults to 60 minutes; the minimum and maximum values are 15 and 1440 minutes
+                  respectively.
+
+
+                  It is recommended that a proper value be set for this field to avoid notification flooding.
+                format: int32
+                maximum: 1440
+                minimum: 15
+                type: integer
+              periodSeconds:
+                default: 60
+                description: |-
+                  PeriodSeconds is the time period in seconds between attempts to evaluate the trigger
+                  condition; i.e., how often Fleet will check the trigger condition on the target resources.
+                  Defaults to 60 seconds; the minimum and maximum values are 15 and 600 seconds respectively.
+
+
+                  Use this field in combination with the triggerThreshold field to avoid sending
+                  notifications in a premature manner.
+                format: int32
+                maximum: 600
+                minimum: 15
+                type: integer
+              targetSelector:
+                description: |-
+                  TargetSelector is a selector that specifies the Fleet resources that this notification setup
+                  should target at.
+                properties:
+                  kind:
+                    description: |-
+                      Kind is the kind of the Fleet resource that this notification setup targets at.
+
+
+                      Currently the following kinds are supported:
+                      * MemberCluster
+                      * ClusterResourcePlacement
+                      * StagedUpdateRun
+                    enum:
+                    - MemberCluster
+                    - ClusterResourcePlacement
+                    - StagedUpdateRun
+                    type: string
+                  labelSelector:
+                    description: |-
+                      LabelSelector is a label query over all resources of the specified kind. Any resource
+                      that matches this label selector will be targeted by the notification setup.
+
+
+                      If this field is not specified, and no name is present either, all resources of the
+                      specified kind will be targeted.
+
+
+                      Also, this field is mutually exclusive with the name field; only one of them can be set.
+                    properties:
+                      matchExpressions:
+                        description: matchExpressions is a list of label selector
+                          requirements. The requirements are ANDed.
+                        items:
+                          description: |-
+                            A label selector requirement is a selector that contains values, a key, and an operator that
+                            relates the key and values.
+                          properties:
+                            key:
+                              description: key is the label key that the selector
+                                applies to.
+                              type: string
+                            operator:
+                              description: |-
+                                operator represents a key's relationship to a set of values.
+                                Valid operators are In, NotIn, Exists and DoesNotExist.
+                              type: string
+                            values:
+                              description: |-
+                                values is an array of string values. If the operator is In or NotIn,
+                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                the values array must be empty. This array is replaced during a strategic
+                                merge patch.
+                              items:
+                                type: string
+                              type: array
+                              x-kubernetes-list-type: atomic
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        type: array
+                        x-kubernetes-list-type: atomic
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                          map is equivalent to an element of matchExpressions, whose key field is "key", the
+                          operator is "In", and the values array contains only "value". The requirements are ANDed.
+                        type: object
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  name:
+                    description: |-
+                      Name is the name of the Fleet resource that this notification setup targets at.
+
+
+                      If this field is not specified, and no label selector is present either,
+                      all resources of the specified kind will be targeted.
+
+
+                      Also, this field is mutually exclusive with the label selector field; only one of them
+                      can be set.
+                    type: string
+                required:
+                - kind
+                type: object
+              trigger:
+                description: |-
+                  Trigger is a condition of a targeted resource that will trigger a notification once the
+                  condition is observed.
+
+
+                  A trigger can be either a CEL expression or a name that describes a pre-defined expression,
+                  e.g.,
+
+
+                  * "object.status.conditions.filter(x, x.type == "Available").exists(x, x.status != "True")"
+                    This expression evaluates to true if the targeted resource has a condition of type
+                    "Available" but is not of the status "True".
+
+
+                  * "staged-run-stuck"
+                    This is a pre-defined trigger that detects if a staged update run has been stuck for
+                    some reason.
+
+
+                  Note that updating this field will reset track records kept by Fleet for notification
+                  purposes, i.e., past triggerings will be forgotten.
+
+
+                  For more information, see the Fleet documentation.
+                type: string
+              triggerThreshold:
+                default: 1
+                description: |-
+                  TriggerThreshold is the number of consecutive times the trigger condition must be observed
+                  before a notification is sent.
+                  Defaults to 1; the minimum and maximum values are 1 and 10 respectively.
+
+
+                  Use this field in combination with the periodSeconds field to avoid sending notifications
+                  in a premature manner.
+                format: int32
+                maximum: 10
+                minimum: 1
+                type: integer
+            required:
+            - notificationProviderClass
+            - targetSelector
+            - trigger
+            type: object
+          status:
+            description: Status is the observed state of the NotificationConfig.
+            properties:
+              conditions:
+                description: |-
+                  Conditions is an array of currently observed conditions for this NotificationConfig object.
+
+
+                  Available condition types include:
+                  * Valid: reports whether the NotificationConfig is valid.
+                items:
+                  description: "Condition contains details for one aspect of the current
+                    state of this API Resource.\n---\nThis struct is intended for
+                    direct use as an array at the field path .status.conditions.  For
+                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
+                    observations of a foo's current state.\n\t    // Known .status.conditions.type
+                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
+                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
+                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
+                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
+                    \   // other fields\n\t}"
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: |-
+                        type of condition in CamelCase or in foo.example.com/CamelCase.
+                        ---
+                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
+                        useful (see .node.status.conditions), the ability to deconflict is important.
+                        The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
