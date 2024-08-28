@@ -129,9 +129,7 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 var _ = Describe("Test member cluster force delete flow", Ordered, Serial, func() {
 	Context("Test cluster join and leave flow with member agent down and force delete member cluster", Ordered, Serial, func() {
 		It("Simulate the member agent going down in member cluster", func() {
-			Eventually(func() error {
-				return updateMemberAgentDeploymentReplicas(memberCluster3WestProdClient, 0)
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to simulate member agent going down")
+			updateMemberAgentDeploymentReplicas(memberCluster3WestProdClient, 0)
 		})
 
 		It("Delete member cluster CR associated to the member cluster with member agent down", func() {
@@ -155,33 +153,31 @@ var _ = Describe("Test member cluster force delete flow", Ordered, Serial, func(
 
 	AfterAll(func() {
 		By("Simulate the member agent coming back up")
-		Eventually(func() error {
-			return updateMemberAgentDeploymentReplicas(memberCluster3WestProdClient, 1)
-		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to simulate member agent coming back up")
+		updateMemberAgentDeploymentReplicas(memberCluster3WestProdClient, 1)
 
 		createMemberCluster(memberCluster3WestProd.ClusterName, memberCluster3WestProd.PresentingServiceAccountInHubClusterName, labelsByClusterName[memberCluster3WestProd.ClusterName], annotationsByClusterName[memberCluster3WestProd.ClusterName])
 		checkIfMemberClusterHasJoined(memberCluster3WestProd)
 	})
 })
 
-func updateMemberAgentDeploymentReplicas(clusterClient client.Client, replicas int) error {
-	var d appsv1.Deployment
-	err := clusterClient.Get(ctx, types.NamespacedName{Name: memberAgentName, Namespace: fleetSystemNS}, &d)
-	if err != nil {
-		return err
-	}
-	d.Spec.Replicas = ptr.To(int32(replicas))
-	err = clusterClient.Update(ctx, &d)
-	if err != nil {
-		return err
-	}
+func updateMemberAgentDeploymentReplicas(clusterClient client.Client, replicas int) {
+	Eventually(func() error {
+		var d appsv1.Deployment
+		err := clusterClient.Get(ctx, types.NamespacedName{Name: memberAgentName, Namespace: fleetSystemNS}, &d)
+		if err != nil {
+			return err
+		}
+		d.Spec.Replicas = ptr.To(int32(replicas))
+		return clusterClient.Update(ctx, &d)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
 	Eventually(func() error {
 		var podList corev1.PodList
 		listOpts := []client.ListOption{
 			client.InNamespace(fleetSystemNS),
 			client.MatchingLabels(map[string]string{"app.kubernetes.io/name": memberAgentName}),
 		}
-		err = clusterClient.List(ctx, &podList, listOpts...)
+		err := clusterClient.List(ctx, &podList, listOpts...)
 		if err != nil {
 			return err
 		}
@@ -190,5 +186,4 @@ func updateMemberAgentDeploymentReplicas(clusterClient client.Client, replicas i
 		}
 		return nil
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
-	return nil
 }
