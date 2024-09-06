@@ -1765,7 +1765,7 @@ type conflictStatusWriter struct {
 	conflictClient *conflictClient
 }
 
-func (s *conflictStatusWriter) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+func (s *conflictStatusWriter) Update(_ context.Context, _ client.Object, _ ...client.SubResourceUpdateOption) error {
 	if s.conflictClient.conflictCount > 0 {
 		s.conflictClient.conflictCount--
 		return k8serrors.NewConflict(schema.GroupResource{Resource: "ClusterResourceBinding"}, "test-binding", errors.New("conflict"))
