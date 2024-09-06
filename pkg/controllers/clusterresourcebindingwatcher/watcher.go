@@ -115,7 +115,7 @@ func isBindingStatusUpdated(oldBinding, newBinding *fleetv1beta1.ClusterResource
 		oldCond := oldBinding.GetCondition(string(i.ResourceBindingConditionType()))
 		newCond := newBinding.GetCondition(string(i.ResourceBindingConditionType()))
 		if !condition.EqualCondition(oldCond, newCond) {
-			klog.V(2).InfoS("The binding condition has changed, need to update the corresponding CRP", "oldBinding", klog.KObj(oldBinding), "newBinding", klog.KObj(newBinding))
+			klog.V(2).InfoS("The binding condition has changed, need to update the corresponding CRP", "oldBinding", klog.KObj(oldBinding), "newBinding", klog.KObj(newBinding), "type", i.ResourceBindingConditionType())
 			return true
 		}
 	}

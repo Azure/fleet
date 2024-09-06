@@ -36,6 +36,9 @@ func serviceScheme(t *testing.T) *runtime.Scheme {
 	if err := placementv1alpha1.AddToScheme(scheme); err != nil {
 		t.Fatalf("Failed to add v1alpha1 scheme: %v", err)
 	}
+	if err := placementv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("Failed to add v1beta1 scheme: %v", err)
+	}
 	return scheme
 }
 

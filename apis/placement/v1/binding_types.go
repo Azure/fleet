@@ -164,6 +164,11 @@ func (m *ClusterResourceBinding) SetConditions(conditions ...metav1.Condition) {
 	}
 }
 
+// RemoveCondition removes the condition of the given ClusterResourceBinding.
+func (m *ClusterResourceBinding) RemoveCondition(conditionType string) {
+	meta.RemoveStatusCondition(&m.Status.Conditions, conditionType)
+}
+
 // GetCondition returns the condition of the given ClusterResourceBinding.
 func (m *ClusterResourceBinding) GetCondition(conditionType string) *metav1.Condition {
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
