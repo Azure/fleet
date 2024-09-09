@@ -1496,7 +1496,7 @@ func TestExtractFailedResourcePlacementsFromWork(t *testing.T) {
 	}
 }
 
-func TestUpdateBindingStatusWithRetry(t *testing.T) {
+func TestPatchBindingStatusWithRetry(t *testing.T) {
 	bindingName := "test-binding"
 	lastTransitionTime := metav1.NewTime(time.Now())
 	tests := []struct {
@@ -1507,11 +1507,11 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 		expectError     bool
 	}{
 		{
-			name: "updates status successfully",
+			name: "patch status successfully with no conflict",
 			latestBinding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       bindingName,
-					Generation: 1,
+					Generation: 4,
 				},
 				Spec: fleetv1beta1.ResourceBindingSpec{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1523,7 +1523,7 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 						{
 							Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
 							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 1,
+							ObservedGeneration: 4,
 							Reason:             condition.RolloutStartedReason,
 							LastTransitionTime: lastTransitionTime,
 						},
@@ -1533,7 +1533,7 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       bindingName,
-					Generation: 1,
+					Generation: 4,
 				},
 				Spec: fleetv1beta1.ResourceBindingSpec{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1545,25 +1545,25 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 						{
 							Type:               string(fleetv1beta1.ResourceBindingOverridden),
 							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 1,
+							ObservedGeneration: 4,
 							Reason:             condition.OverriddenSucceededReason,
 						},
 						{
 							Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
 							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 1,
+							ObservedGeneration: 4,
 							Reason:             condition.AllWorkSyncedReason,
 						},
 						{
 							Type:               string(fleetv1beta1.ResourceBindingApplied),
 							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 1,
+							ObservedGeneration: 4,
 							Reason:             condition.AllWorkAppliedReason,
 						},
 						{
 							Type:               string(fleetv1beta1.ResourceBindingAvailable),
 							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 1,
+							ObservedGeneration: 4,
 							Reason:             condition.AllWorkAvailableReason,
 						},
 					},
@@ -1573,11 +1573,11 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 			expectError:   false,
 		},
 		{
-			name: "updates status after conflict",
+			name: "patch status after conflict",
 			latestBinding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       bindingName,
-					Generation: 1,
+					Generation: 3,
 				},
 				Spec: fleetv1beta1.ResourceBindingSpec{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1589,7 +1589,7 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 						{
 							Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
 							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 1,
+							ObservedGeneration: 3,
 							Reason:             condition.RolloutStartedReason,
 							LastTransitionTime: lastTransitionTime,
 						},
@@ -1599,7 +1599,7 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       bindingName,
-					Generation: 1,
+					Generation: 3,
 				},
 				Spec: fleetv1beta1.ResourceBindingSpec{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1611,25 +1611,25 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 						{
 							Type:               string(fleetv1beta1.ResourceBindingOverridden),
 							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 1,
+							ObservedGeneration: 3,
 							Reason:             condition.OverriddenSucceededReason,
 						},
 						{
 							Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
 							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 1,
+							ObservedGeneration: 3,
 							Reason:             condition.AllWorkSyncedReason,
 						},
 						{
 							Type:               string(fleetv1beta1.ResourceBindingApplied),
 							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 1,
+							ObservedGeneration: 3,
 							Reason:             condition.AllWorkAppliedReason,
 						},
 						{
 							Type:               string(fleetv1beta1.ResourceBindingAvailable),
 							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 1,
+							ObservedGeneration: 3,
 							Reason:             condition.AllWorkAvailableReason,
 						},
 					},
@@ -1639,11 +1639,11 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 			expectError:   false,
 		},
 		{
-			name: "does not update status",
+			name: "does not patch status because of conflict",
 			latestBinding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       bindingName,
-					Generation: 1,
+					Generation: 2,
 				},
 				Spec: fleetv1beta1.ResourceBindingSpec{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1655,7 +1655,7 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 						{
 							Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
 							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 1,
+							ObservedGeneration: 2,
 							Reason:             condition.RolloutStartedReason,
 							LastTransitionTime: lastTransitionTime,
 						},
@@ -1665,7 +1665,7 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       bindingName,
-					Generation: 1,
+					Generation: 2,
 				},
 				Spec: fleetv1beta1.ResourceBindingSpec{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1677,26 +1677,20 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 						{
 							Type:               string(fleetv1beta1.ResourceBindingOverridden),
 							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 1,
+							ObservedGeneration: 2,
 							Reason:             condition.OverriddenSucceededReason,
 						},
 						{
 							Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
 							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 1,
+							ObservedGeneration: 2,
 							Reason:             condition.AllWorkSyncedReason,
 						},
 						{
 							Type:               string(fleetv1beta1.ResourceBindingApplied),
-							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 1,
-							Reason:             condition.AllWorkAppliedReason,
-						},
-						{
-							Type:               string(fleetv1beta1.ResourceBindingAvailable),
-							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 1,
-							Reason:             condition.AllWorkAvailableReason,
+							Status:             metav1.ConditionFalse,
+							ObservedGeneration: 2,
+							Reason:             condition.WorkNeedSyncedReason,
 						},
 					},
 				},
@@ -1727,7 +1721,7 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 				recorder:        record.NewFakeRecorder(10),
 				InformerManager: &informer.FakeManager{},
 			}
-			err := r.updateBindingStatusWithRetry(ctx, tt.resourceBinding)
+			err := r.patchBindingStatusWithRetry(ctx, tt.resourceBinding)
 			if (err != nil) != tt.expectError {
 				t.Errorf("updateBindingStatusWithRetry() error = %v, wantErr %v", err, tt.expectError)
 			}
@@ -1736,16 +1730,29 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 			if err := r.Client.Get(ctx, client.ObjectKeyFromObject(tt.resourceBinding), binding); err != nil {
 				t.Errorf("updateBindingStatusWithRetry() error = %v, wantErr %v", err, nil)
 			}
-
-			if tt.conflictCount > 0 {
-				latestRollout := tt.latestBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted))
-				rollout := tt.resourceBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted))
-				if diff := cmp.Diff(latestRollout, rollout, ignoreOption); diff != "" {
-					t.Errorf("updateBindingStatusWithRetry() ResourceBindingRolloutStarted Condition got = %v, want %v", rollout, latestRollout)
+			latestRollout := tt.latestBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted))
+			rollout := binding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted))
+			if diff := cmp.Diff(latestRollout, rollout, ignoreOption); diff != "" {
+				t.Errorf("updateBindingStatusWithRetry() ResourceBindingRolloutStarted Condition got = %v, want %v", rollout, latestRollout)
+			} else {
+				// A tolerance is used when comparing timestamps to account for precision differences
+				if !CompareTimeWithTolerance(rollout.LastTransitionTime, latestRollout.LastTransitionTime, 1*time.Second) {
+					t.Errorf("updateBindingStatusWithRetry() ResourceBindingRolloutStarted LastTransitionTime got = %v, want %v", rollout.LastTransitionTime, latestRollout.LastTransitionTime)
 				}
 			}
 		})
 	}
+}
+
+func CompareTimeWithTolerance(t1, t2 metav1.Time, tolerance time.Duration) bool {
+	t1Time := t1.Time
+	t2Time := t2.Time
+	// Ensure the timestamps are rounded to seconds for comparison
+	t1Rounded := t1Time.Round(time.Second)
+	t2Rounded := t2Time.Round(time.Second)
+
+	// Compare the timestamps with a tolerance
+	return t2Rounded.Sub(t1Rounded) <= tolerance
 }
 
 type conflictClient struct {
@@ -1765,10 +1772,11 @@ type conflictStatusWriter struct {
 	conflictClient *conflictClient
 }
 
-func (s *conflictStatusWriter) Update(_ context.Context, _ client.Object, _ ...client.SubResourceUpdateOption) error {
+func (s *conflictStatusWriter) Patch(_ context.Context, obj client.Object, patch client.Patch, opt ...client.SubResourcePatchOption) error {
 	if s.conflictClient.conflictCount > 0 {
 		s.conflictClient.conflictCount--
-		return k8serrors.NewConflict(schema.GroupResource{Resource: "ClusterResourceBinding"}, "test-binding", errors.New("conflict"))
+		// Simulate conflict error
+		return k8serrors.NewConflict(schema.GroupResource{Resource: "ClusterResourceBinding"}, obj.GetName(), errors.New("the object has been modified; please apply your changes to the latest version and try again"))
 	}
-	return nil
+	return s.StatusWriter.Patch(context.Background(), obj, patch, opt...)
 }
