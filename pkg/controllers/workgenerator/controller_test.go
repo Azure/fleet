@@ -17,7 +17,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -1654,7 +1653,7 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 					},
 				},
 			},
-			conflictCount: 1,
+			conflictCount: 2,
 			expectError:   false,
 		},
 		{
@@ -1781,7 +1780,7 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 					},
 				},
 			},
-			conflictCount: 0,
+			conflictCount: 1,
 			expectError:   true,
 		},
 	}
@@ -1815,7 +1814,6 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 				latestRollout := tt.latestBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted))
 				rollout := tt.resourceBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted))
 				// Check that the rolloutStarted condition is updated with the same values from tt.latestBinding
-				klog.Info("conditions: ", tt.resourceBinding.Status.Conditions)
 				if diff := cmp.Diff(latestRollout, rollout, statusCmpOptions...); diff != "" {
 					t.Errorf("updateBindingStatusWithRetry() ResourceBindingRolloutStarted Condition got = %v, want %v", rollout, latestRollout)
 				}

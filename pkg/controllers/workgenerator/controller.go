@@ -232,7 +232,6 @@ func (r *Reconciler) updateBindingStatusWithRetry(ctx context.Context, resourceB
 			if err := r.Client.Get(ctx, client.ObjectKeyFromObject(resourceBinding), &latestBinding); err != nil {
 				return err
 			}
-
 			// Work generator is the only controller that updates conditions excluding rollout started which is updated by rollout controller.
 			if rolloutCond := latestBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted)); rolloutCond != nil {
 				found := false
