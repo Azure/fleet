@@ -124,10 +124,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 	for i := condition.OverriddenCondition; i < condition.TotalCondition; i++ {
 		resourceBinding.RemoveCondition(string(i.ResourceBindingConditionType()))
 	}
-	klog.V(2).Info("Check RolloutStartedCondition", "resourceBinding", bindingRef, "conditions", resourceBinding.Status.Conditions)
-	if cond := resourceBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted)); cond != nil {
-		klog.V(2).InfoS("Has RolloutStartedCondition", "resourceBinding", bindingRef, "condition", cond)
-	}
 	resourceBinding.Status.FailedPlacements = nil
 	// list all the corresponding works
 	works, syncErr := r.listAllWorksAssociated(ctx, &resourceBinding)
@@ -201,7 +197,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 	}
 
 	// update the resource binding status
-	if updateErr := r.patchBindingStatusWithRetry(ctx, &resourceBinding); updateErr != nil {
+	if updateErr := r.updateBindingStatusWithRetry(ctx, &resourceBinding); updateErr != nil {
 		return controllerruntime.Result{}, updateErr
 	}
 	if errors.Is(syncErr, controller.ErrUserError) {
@@ -225,22 +221,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 	return controllerruntime.Result{}, syncErr
 }
 
-// patchBindingStatusWIthRetry sends the update request to API server with retry.
-func (r *Reconciler) patchBindingStatusWithRetry(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding) error {
-	// TODO: Check the latest binding state and handle it
+// updateBindingStatusWithRetry sends the update request to API server with retry.
+func (r *Reconciler) updateBindingStatusWithRetry(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding) error {
 	errAfterRetries := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		var latestBinding fleetv1beta1.ClusterResourceBinding
 		if err := r.Client.Get(ctx, client.ObjectKeyFromObject(resourceBinding), &latestBinding); err != nil {
 			return err
 		}
-		klog.V(2).Info("Check latest binding Conditions", "latestResourceBinding", klog.KObj(&latestBinding), "conditions", latestBinding.Status.Conditions)
-		klog.V(2).Info("Check Conditions", "resourceBinding", klog.KObj(resourceBinding), "conditions", resourceBinding.Status.Conditions)
-		if cond := resourceBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted)); cond != nil {
-			klog.V(2).InfoS("Has RolloutStartedCondition", "resourceBinding", klog.KObj(resourceBinding), "condition", cond)
-		}
-		if cond := resourceBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted)); cond != nil {
-			klog.V(2).InfoS("Has RolloutStartedCondition", "resourceBinding", klog.KObj(resourceBinding), "condition", cond)
-		}
+
 		if rolloutCond := latestBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted)); rolloutCond != nil {
 			found := false
 			for i := range resourceBinding.Status.Conditions {
@@ -252,20 +240,19 @@ func (r *Reconciler) patchBindingStatusWithRetry(ctx context.Context, resourceBi
 				}
 			}
 			if !found {
-				// Prepend the new condition if it wasn't found
-				resourceBinding.Status.Conditions = append([]metav1.Condition{*rolloutCond}, resourceBinding.Status.Conditions...)
+				return controller.NewUnexpectedBehaviorError(fmt.Errorf("found a resourceBinding %v without RolloutStarted condition", klog.KObj(resourceBinding)))
 			}
 		}
 
-		if err := r.Client.Status().Patch(ctx, resourceBinding.DeepCopy(), client.MergeFromWithOptions(&latestBinding, client.MergeFromWithOptimisticLock{})); err != nil {
-			klog.ErrorS(err, "Failed to patch the resourceBinding status", "resourceBinding", klog.KObj(resourceBinding), "resourceBindingStatus", resourceBinding.Status)
+		if err := r.Client.Status().Update(ctx, resourceBinding); err != nil {
+			klog.ErrorS(err, "Failed to update the resourceBinding status", "resourceBinding", klog.KObj(resourceBinding), "resourceBindingStatus", resourceBinding.Status)
 			return err
 		}
 		klog.V(2).InfoS("Successfully updated the resourceBinding status", "resourceBinding", klog.KObj(resourceBinding), "resourceBindingStatus", resourceBinding.Status)
 		return nil
 	})
 	if errAfterRetries != nil {
-		klog.ErrorS(errAfterRetries, "Failed to patch resourceBinding status after retries", "resourceBinding", klog.KObj(resourceBinding))
+		klog.ErrorS(errAfterRetries, "Failed to update resourceBinding status after retries", "resourceBinding", klog.KObj(resourceBinding))
 		return errAfterRetries
 	}
 	return nil
