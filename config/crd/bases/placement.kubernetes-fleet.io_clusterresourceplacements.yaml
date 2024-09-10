@@ -2091,11 +2091,6 @@ spec:
                         description: DriftedResourcePlacement contains the drifted
                           resource details.
                         properties:
-                          driftDetail:
-                            description: |-
-                              The details of difference between the resource on the target cluster and the resource to be applied from the hub.
-                              We will also emit an event with the difference details.
-                            type: string
                           envelope:
                             description: Envelope identifies the envelope object that
                               contains this resource.
@@ -2117,6 +2112,12 @@ spec:
                             required:
                             - name
                             type: object
+                          firstDriftObservedTime:
+                            description: |-
+                              FirstDriftObservedTime is the first time the resource on the target cluster is observed to have
+                              been different from the resource to be applied from the hub.
+                            format: date-time
+                            type: string
                           group:
                             description: Group is the group name of the selected resource.
                             type: string
@@ -2131,18 +2132,32 @@ spec:
                             description: Namespace is the namespace of the resource.
                               Empty if the resource is cluster scoped.
                             type: string
-                          observedGeneration:
-                            description: The ObservedGeneration of the resource on
-                              the target cluster that caused this drift.
+                          observationTime:
+                            description: ObservationTime is the time we observe the
+                              drift that is described in the observedDifferences field.
+                            format: date-time
+                            type: string
+                          observedDifferences:
+                            description: |-
+                              ObservedDifferences contains the details of difference between the resource on the target cluster and
+                              the resource to be applied from the hub. We will truncate the difference details if it exceeds 8192 bytes.
+                              We will also emit an event with the difference details.
+                            type: string
+                          targetClusterObservedGeneration:
+                            description: |-
+                              TargetClusterObservedGeneration is the generation of the resource on the target cluster
+                              that contains this drift.
                             format: int64
                             type: integer
                           version:
                             description: Version is the version of the selected resource.
                             type: string
                         required:
+                        - firstDriftObservedTime
                         - kind
                         - name
-                        - observedGeneration
+                        - observationTime
+                        - targetClusterObservedGeneration
                         - version
                         type: object
                       maxItems: 100

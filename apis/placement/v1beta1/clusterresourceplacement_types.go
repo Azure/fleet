@@ -712,15 +712,30 @@ type DriftedResourcePlacement struct {
 	// +kubebuilder:validation:Required
 	ResourceIdentifier `json:",inline"`
 
-	// The ObservedGeneration of the resource on the target cluster that caused this drift.
+	// ObservationTime is the time we observe the drift that is described in the observedDifferences field.
 	// +kubebuilder:validation:Required
-	ObservedGeneration int64 `json:"observedGeneration"`
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	ObservationTime metav1.Time `json:"observationTime"`
 
-	// The details of difference between the resource on the target cluster and the resource to be applied from the hub.
+	// TargetClusterObservedGeneration is the generation of the resource on the target cluster
+	// that contains this drift.
+	// +kubebuilder:validation:Required
+	TargetClusterObservedGeneration int64 `json:"targetClusterObservedGeneration"`
+
+	// FirstDriftObservedTime is the first time the resource on the target cluster is observed to have
+	// been different from the resource to be applied from the hub.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	FirstDriftObservedTime metav1.Time `json:"firstDriftObservedTime"`
+
+	// ObservedDifferences contains the details of difference between the resource on the target cluster and
+	// the resource to be applied from the hub. We will truncate the difference details if it exceeds 8192 bytes.
 	// We will also emit an event with the difference details.
 	// +kubebuilder:validation:maxLength=8192
 	// +kubebuilder:validation:Optional
-	DriftDetail string `json:"driftDetail,omitempty"`
+	ObservedDifferences string `json:"observedDifferences,omitempty"`
 }
 
 // Toleration allows ClusterResourcePlacement to tolerate any taint that matches
