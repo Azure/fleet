@@ -223,37 +223,43 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 
 // updateBindingStatusWithRetry sends the update request to API server with retry.
 func (r *Reconciler) updateBindingStatusWithRetry(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding) error {
-	errAfterRetries := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		var latestBinding fleetv1beta1.ClusterResourceBinding
-		if err := r.Client.Get(ctx, client.ObjectKeyFromObject(resourceBinding), &latestBinding); err != nil {
-			return err
-		}
+	// Retry only for specific errors or conditions
+	err := r.Client.Status().Update(ctx, resourceBinding)
+	if err != nil {
+		klog.ErrorS(err, "Failed to update the resourceBinding status, will retry", "resourceBinding", klog.KObj(resourceBinding), "resourceBindingStatus", resourceBinding.Status)
+		errAfterRetries := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+			var latestBinding fleetv1beta1.ClusterResourceBinding
+			if err := r.Client.Get(ctx, client.ObjectKeyFromObject(resourceBinding), &latestBinding); err != nil {
+				return err
+			}
 
-		if rolloutCond := latestBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted)); rolloutCond != nil {
-			found := false
-			for i := range resourceBinding.Status.Conditions {
-				if resourceBinding.Status.Conditions[i].Type == rolloutCond.Type {
-					// Replace the existing condition
-					resourceBinding.Status.Conditions[i] = *rolloutCond
-					found = true
-					break
+			// Work generator is the only controller that updates conditions excluding rollout started which is updated by rollout controller.
+			if rolloutCond := latestBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted)); rolloutCond != nil {
+				found := false
+				for i := range resourceBinding.Status.Conditions {
+					if resourceBinding.Status.Conditions[i].Type == rolloutCond.Type {
+						// Replace the existing condition
+						resourceBinding.Status.Conditions[i] = *rolloutCond
+						found = true
+						break
+					}
+				}
+				if !found {
+					return controller.NewUnexpectedBehaviorError(fmt.Errorf("found a resourceBinding %v without RolloutStarted condition", klog.KObj(resourceBinding)))
 				}
 			}
-			if !found {
-				return controller.NewUnexpectedBehaviorError(fmt.Errorf("found a resourceBinding %v without RolloutStarted condition", klog.KObj(resourceBinding)))
-			}
-		}
 
-		if err := r.Client.Status().Update(ctx, resourceBinding); err != nil {
-			klog.ErrorS(err, "Failed to update the resourceBinding status", "resourceBinding", klog.KObj(resourceBinding), "resourceBindingStatus", resourceBinding.Status)
-			return err
+			if err := r.Client.Status().Update(ctx, resourceBinding); err != nil {
+				klog.ErrorS(err, "Failed to update the resourceBinding status", "resourceBinding", klog.KObj(resourceBinding), "resourceBindingStatus", resourceBinding.Status)
+				return err
+			}
+			klog.V(2).InfoS("Successfully updated the resourceBinding status", "resourceBinding", klog.KObj(resourceBinding), "resourceBindingStatus", resourceBinding.Status)
+			return nil
+		})
+		if errAfterRetries != nil {
+			klog.ErrorS(errAfterRetries, "Failed to update resourceBinding status after retries", "resourceBinding", klog.KObj(resourceBinding))
+			return errAfterRetries
 		}
-		klog.V(2).InfoS("Successfully updated the resourceBinding status", "resourceBinding", klog.KObj(resourceBinding), "resourceBindingStatus", resourceBinding.Status)
-		return nil
-	})
-	if errAfterRetries != nil {
-		klog.ErrorS(errAfterRetries, "Failed to update resourceBinding status after retries", "resourceBinding", klog.KObj(resourceBinding))
-		return errAfterRetries
 	}
 	return nil
 }
