@@ -2082,6 +2082,86 @@ spec:
                         - type
                         type: object
                       type: array
+                    driftedPlacements:
+                      description: |-
+                        DriftedPlacements is a list of all the resources whose label/annotation and spec fields have changed on the
+                        target cluster after it is successfully applied.
+                        This field is only meaningful if the `ClusterName` is not empty.
+                      items:
+                        description: DriftedResourcePlacement contains the drifted
+                          resource details.
+                        properties:
+                          envelope:
+                            description: Envelope identifies the envelope object that
+                              contains this resource.
+                            properties:
+                              name:
+                                description: Name of the envelope object.
+                                type: string
+                              namespace:
+                                description: Namespace is the namespace of the envelope
+                                  object. Empty if the envelope object is cluster
+                                  scoped.
+                                type: string
+                              type:
+                                default: ConfigMap
+                                description: Type of the envelope object.
+                                enum:
+                                - ConfigMap
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          firstDriftObservedTime:
+                            description: |-
+                              FirstDriftObservedTime is the first time the resource on the target cluster is observed to have
+                              been different from the resource to be applied from the hub.
+                            format: date-time
+                            type: string
+                          group:
+                            description: Group is the group name of the selected resource.
+                            type: string
+                          kind:
+                            description: Kind represents the Kind of the selected
+                              resources.
+                            type: string
+                          name:
+                            description: Name of the target resource.
+                            type: string
+                          namespace:
+                            description: Namespace is the namespace of the resource.
+                              Empty if the resource is cluster scoped.
+                            type: string
+                          observationTime:
+                            description: ObservationTime is the time we observe the
+                              drift that is described in the observedDifferences field.
+                            format: date-time
+                            type: string
+                          observedDifferences:
+                            description: |-
+                              ObservedDifferences contains the details of difference between the resource on the target cluster and
+                              the resource to be applied from the hub. We will truncate the difference details if it exceeds 8192 bytes.
+                              We will also emit an event with the difference details.
+                            type: string
+                          targetClusterObservedGeneration:
+                            description: |-
+                              TargetClusterObservedGeneration is the generation of the resource on the target cluster
+                              that contains this drift.
+                            format: int64
+                            type: integer
+                          version:
+                            description: Version is the version of the selected resource.
+                            type: string
+                        required:
+                        - firstDriftObservedTime
+                        - kind
+                        - name
+                        - observationTime
+                        - targetClusterObservedGeneration
+                        - version
+                        type: object
+                      maxItems: 100
+                      type: array
                     failedPlacements:
                       description: |-
                         FailedPlacements is a list of all the resources failed to be placed to the given cluster or the resource is unavailable.

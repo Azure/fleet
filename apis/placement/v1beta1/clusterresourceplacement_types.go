@@ -56,11 +56,11 @@ type ClusterResourcePlacement struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// The desired state of ClusterResourcePlacement.
-	// +required
+	// +kubebuilder:validation:Required
 	Spec ClusterResourcePlacementSpec `json:"spec"`
 
 	// The observed status of ClusterResourcePlacement.
-	// +optional
+	// +kubebuilder:validation:Optional
 	Status ClusterResourcePlacementStatus `json:"status,omitempty"`
 }
 
@@ -71,16 +71,16 @@ type ClusterResourcePlacementSpec struct {
 
 	// ResourceSelectors is an array of selectors used to select cluster scoped resources. The selectors are `ORed`.
 	// You can have 1-100 selectors.
-	// +required
+	// +kubebuilder:validation:Required
 	ResourceSelectors []ClusterResourceSelector `json:"resourceSelectors"`
 
 	// Policy defines how to select member clusters to place the selected resources.
 	// If unspecified, all the joined member clusters are selected.
-	// +optional
+	// +kubebuilder:validation:Optional
 	Policy *PlacementPolicy `json:"policy,omitempty"`
 
 	// The rollout strategy to use to replace existing placement with new ones.
-	// +optional
+	// +kubebuilder:validation:Optional
 	// +patchStrategy=retainKeys
 	Strategy RolloutStrategy `json:"strategy,omitempty"`
 
@@ -90,7 +90,7 @@ type ClusterResourcePlacementSpec struct {
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=1000
 	// +kubebuilder:default=10
-	// +optional
+	// +kubebuilder:validation:Optional
 	RevisionHistoryLimit *int32 `json:"revisionHistoryLimit,omitempty"`
 }
 
@@ -100,28 +100,28 @@ type ClusterResourcePlacementSpec struct {
 type ClusterResourceSelector struct {
 	// Group name of the cluster-scoped resource.
 	// Use an empty string to select resources under the core API group (e.g., namespaces).
-	// +required
+	// +kubebuilder:validation:Required
 	Group string `json:"group"`
 
 	// Version of the cluster-scoped resource.
-	// +required
+	// +kubebuilder:validation:Required
 	Version string `json:"version"`
 
 	// Kind of the cluster-scoped resource.
 	// Note: When `Kind` is `namespace`, ALL the resources under the selected namespaces are selected.
-	// +required
+	// +kubebuilder:validation:Required
 	Kind string `json:"kind"`
 
 	// You can only specify at most one of the following two fields: Name and LabelSelector.
 	// If none is specified, all the cluster-scoped resources with the given group, version and kind are selected.
 
 	// Name of the cluster-scoped resource.
-	// +optional
+	// +kubebuilder:validation:Optional
 	Name string `json:"name,omitempty"`
 
 	// A label query over all the cluster-scoped resources. Resources matching the query are selected.
 	// Note that namespace-scoped resources can't be selected even if they match the query.
-	// +optional
+	// +kubebuilder:validation:Optional
 	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
 }
 
@@ -134,30 +134,30 @@ type PlacementPolicy struct {
 	// Type of placement. Can be "PickAll", "PickN" or "PickFixed". Default is PickAll.
 	// +kubebuilder:validation:Enum=PickAll;PickN;PickFixed
 	// +kubebuilder:default=PickAll
-	// +optional
+	// +kubebuilder:validation:Optional
 	PlacementType PlacementType `json:"placementType,omitempty"`
 
 	// +kubebuilder:validation:MaxItems=100
 	// ClusterNames contains a list of names of MemberCluster to place the selected resources.
 	// Only valid if the placement type is "PickFixed"
-	// +optional
+	// +kubebuilder:validation:Optional
 	ClusterNames []string `json:"clusterNames,omitempty"`
 
 	// NumberOfClusters of placement. Only valid if the placement type is "PickN".
 	// +kubebuilder:validation:Minimum=0
-	// +optional
+	// +kubebuilder:validation:Optional
 	NumberOfClusters *int32 `json:"numberOfClusters,omitempty"`
 
 	// Affinity contains cluster affinity scheduling rules. Defines which member clusters to place the selected resources.
 	// Only valid if the placement type is "PickAll" or "PickN".
-	// +optional
+	// +kubebuilder:validation:Optional
 	Affinity *Affinity `json:"affinity,omitempty"`
 
 	// TopologySpreadConstraints describes how a group of resources ought to spread across multiple topology
 	// domains. Scheduler will schedule resources in a way which abides by the constraints.
 	// All topologySpreadConstraints are ANDed.
 	// Only valid if the placement type is "PickN".
-	// +optional
+	// +kubebuilder:validation:Optional
 	// +patchMergeKey=topologyKey
 	// +patchStrategy=merge
 	TopologySpreadConstraints []TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty" patchStrategy:"merge" patchMergeKey:"topologyKey"`
@@ -167,14 +167,14 @@ type PlacementPolicy struct {
 	//
 	// This field is beta-level and is for the taints and tolerations feature.
 	// +kubebuilder:validation:MaxItems=100
-	// +optional
+	// +kubebuilder:validation:Optional
 	Tolerations []Toleration `json:"tolerations,omitempty"`
 }
 
 // Affinity is a group of cluster affinity scheduling rules. More to be added.
 type Affinity struct {
 	// ClusterAffinity contains cluster affinity scheduling rules for the selected resources.
-	// +optional
+	// +kubebuilder:validation:Optional
 	ClusterAffinity *ClusterAffinity `json:"clusterAffinity,omitempty"`
 }
 
@@ -185,7 +185,7 @@ type ClusterAffinity struct {
 	// If the affinity requirements specified by this field cease to be met
 	// at some point after the placement (e.g. due to an update), the system
 	// may or may not try to eventually remove the resource from the cluster.
-	// +optional
+	// +kubebuilder:validation:Optional
 	RequiredDuringSchedulingIgnoredDuringExecution *ClusterSelector `json:"requiredDuringSchedulingIgnoredDuringExecution,omitempty"`
 
 	// The scheduler computes a score for each cluster at schedule time by iterating
@@ -196,26 +196,26 @@ type ClusterAffinity struct {
 	// If the cluster score changes at some point after the placement (e.g. due to an update),
 	// the system may or may not try to eventually move the resource from a cluster with a lower score
 	// to a cluster with higher score.
-	// +optional
+	// +kubebuilder:validation:Optional
 	PreferredDuringSchedulingIgnoredDuringExecution []PreferredClusterSelector `json:"preferredDuringSchedulingIgnoredDuringExecution,omitempty"`
 }
 
 type ClusterSelector struct {
 	// +kubebuilder:validation:MaxItems=10
 	// ClusterSelectorTerms is a list of cluster selector terms. The terms are `ORed`.
-	// +required
+	// +kubebuilder:validation:Required
 	ClusterSelectorTerms []ClusterSelectorTerm `json:"clusterSelectorTerms"`
 }
 
 type PreferredClusterSelector struct {
 	// Weight associated with matching the corresponding clusterSelectorTerm, in the range [-100, 100].
-	// +required
+	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Minimum=-100
 	// +kubebuilder:validation:Maximum=100
 	Weight int32 `json:"weight"`
 
 	// A cluster selector term, associated with the corresponding weight.
-	// +required
+	// +kubebuilder:validation:Required
 	Preference ClusterSelectorTerm `json:"preference"`
 }
 
@@ -285,12 +285,12 @@ const (
 // resource placement.
 type PropertySelectorRequirement struct {
 	// Name is the name of the property; it should be a Kubernetes label name.
-	// +required
+	// +kubebuilder:validation:Required
 	Name string `json:"name"`
 
 	// Operator specifies the relationship between a cluster's observed value of the specified
 	// property and the values given in the requirement.
-	// +required
+	// +kubebuilder:validation:Required
 	Operator PropertySelectorOperator `json:"operator"`
 
 	// Values are a list of values of the specified property which Fleet will compare against
@@ -305,7 +305,7 @@ type PropertySelectorRequirement struct {
 	// specified in the list.
 	//
 	// +kubebuilder:validation:MaxItems=1
-	// +required
+	// +kubebuilder:validation:Required
 	Values []string `json:"values"`
 }
 
@@ -313,19 +313,19 @@ type PropertySelectorRequirement struct {
 // placement.
 type PropertySelector struct {
 	// MatchExpressions is an array of PropertySelectorRequirements. The requirements are AND'd.
-	// +required
+	// +kubebuilder:validation:Required
 	MatchExpressions []PropertySelectorRequirement `json:"matchExpressions"`
 }
 
 // PropertySorter helps user specify how to sort clusters based on a specific property.
 type PropertySorter struct {
 	// Name is the name of the property which Fleet sorts clusters by.
-	// +required
+	// +kubebuilder:validation:Required
 	Name string `json:"name"`
 
 	// SortOrder explains how Fleet should perform the sort; specifically, whether Fleet should
 	// sort in ascending or descending order.
-	// +required
+	// +kubebuilder:validation:Required
 	SortOrder PropertySortOrder `json:"sortOrder"`
 }
 
@@ -334,7 +334,7 @@ type ClusterSelectorTerm struct {
 	// the query are selected.
 	//
 	// If you specify both label and property selectors in the same term, the results are AND'd.
-	// +optional
+	// +kubebuilder:validation:Optional
 	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
 
 	// PropertySelector is a property query over all joined member clusters. Clusters matching
@@ -347,7 +347,7 @@ type ClusterSelectorTerm struct {
 	//
 	// This field is beta-level; it is for the property-based scheduling feature and is only
 	// functional when a property provider is enabled in the deployment.
-	// +optional
+	// +kubebuilder:validation:Optional
 	PropertySelector *PropertySelector `json:"propertySelector,omitempty"`
 
 	// PropertySorter sorts all matching clusters by a specific property and assigns different weights
@@ -358,7 +358,7 @@ type ClusterSelectorTerm struct {
 	//
 	// This field is beta-level; it is for the property-based scheduling feature and is only
 	// functional when a property provider is enabled in the deployment.
-	// +optional
+	// +kubebuilder:validation:Optional
 	PropertySorter *PropertySorter `json:"propertySorter,omitempty"`
 }
 
@@ -373,7 +373,7 @@ type TopologySpreadConstraint struct {
 	// It's an optional field. Default value is 1 and 0 is not allowed.
 	// +kubebuilder:default=1
 	// +kubebuilder:validation:Minimum=1
-	// +optional
+	// +kubebuilder:validation:Optional
 	MaxSkew *int32 `json:"maxSkew,omitempty"`
 
 	// TopologyKey is the key of cluster labels. Clusters that have a label with this key
@@ -381,7 +381,7 @@ type TopologySpreadConstraint struct {
 	// We consider each <key, value> as a "bucket", and try to put balanced number
 	// of replicas of the resource into each bucket honor the `MaxSkew` value.
 	// It's a required field.
-	// +required
+	// +kubebuilder:validation:Required
 	TopologyKey string `json:"topologyKey"`
 
 	// WhenUnsatisfiable indicates how to deal with the resource if it doesn't satisfy
@@ -390,7 +390,7 @@ type TopologySpreadConstraint struct {
 	// - ScheduleAnyway tells the scheduler to schedule the resource in any cluster,
 	//   but giving higher precedence to topologies that would help reduce the skew.
 	// It's an optional field.
-	// +optional
+	// +kubebuilder:validation:Optional
 	WhenUnsatisfiable UnsatisfiableConstraintAction `json:"whenUnsatisfiable,omitempty"`
 }
 
@@ -411,17 +411,17 @@ const (
 // RolloutStrategy describes how to roll out a new change in selected resources to target clusters.
 type RolloutStrategy struct {
 	// Type of rollout. The only supported type is "RollingUpdate". Default is "RollingUpdate".
-	// +optional
+	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Enum=RollingUpdate
 	// +kubebuilder:default=RollingUpdate
 	Type RolloutStrategyType `json:"type,omitempty"`
 
 	// Rolling update config params. Present only if RolloutStrategyType = RollingUpdate.
-	// +optional
+	// +kubebuilder:validation:Optional
 	RollingUpdate *RollingUpdateConfig `json:"rollingUpdate,omitempty"`
 
 	// ApplyStrategy describes when and how to apply the selected resources to the target cluster.
-	// +optional
+	// +kubebuilder:validation:Optional
 	ApplyStrategy *ApplyStrategy `json:"applyStrategy,omitempty"`
 }
 
@@ -439,7 +439,7 @@ type ApplyStrategy struct {
 	// and the resource to be applied from the hub on all the selected clusters.
 	// +kubebuilder:default=ClientSideApply
 	// +kubebuilder:validation:Enum=ClientSideApply;ServerSideApply;ReportDiff
-	// +optional
+	// +kubebuilder:validation:Optional
 	Type ApplyStrategyType `json:"type,omitempty"`
 
 	// AllowCoOwnership defines whether to apply the resource if it already exists in the target cluster and is not
@@ -449,13 +449,13 @@ type ApplyStrategy struct {
 	AllowCoOwnership bool `json:"allowCoOwnership,omitempty"`
 
 	// ServerSideApplyConfig defines the configuration for server side apply. It is honored only when type is ServerSideApply.
-	// +optional
+	// +kubebuilder:validation:Optional
 	ServerSideApplyConfig *ServerSideApplyConfig `json:"serverSideApplyConfig,omitempty"`
 
 	// TakeoverAction describes the action to take when we place the selected resources on the target cluster the first time.
 	// +kubebuilder:default=AlwaysApply
 	// +kubebuilder:validation:Enum=AlwaysApply;ApplyIfNoDiff
-	// +optional
+	// +kubebuilder:validation:Optional
 	TakeoverAction TakeOverActionType `json:"actionType,omitempty"`
 }
 
@@ -489,7 +489,7 @@ type ServerSideApplyConfig struct {
 	// - If false, apply will fail with the reason ApplyConflictWithOtherApplier.
 	//
 	// For non-conflicting fields, values stay unchanged and ownership are shared between appliers.
-	// +optional
+	// +kubebuilder:validation:Optional
 	ForceConflicts bool `json:"force"`
 }
 
@@ -532,7 +532,7 @@ type RollingUpdateConfig struct {
 	// +kubebuilder:default="25%"
 	// +kubebuilder:validation:XIntOrString
 	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]+)$"
-	// +optional
+	// +kubebuilder:validation:Optional
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 
 	// The maximum number of clusters that can be scheduled above the desired number of clusters.
@@ -546,7 +546,7 @@ type RollingUpdateConfig struct {
 	// +kubebuilder:default="25%"
 	// +kubebuilder:validation:XIntOrString
 	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]+)$"
-	// +optional
+	// +kubebuilder:validation:Optional
 	MaxSurge *intstr.IntOrString `json:"maxSurge,omitempty"`
 
 	// UnavailablePeriodSeconds is used to configure the waiting time between rollout phases when we
@@ -559,14 +559,14 @@ type RollingUpdateConfig struct {
 	// have passed since they were successfully applied to the target cluster.
 	// Default is 60.
 	// +kubebuilder:default=60
-	// +optional
+	// +kubebuilder:validation:Optional
 	UnavailablePeriodSeconds *int `json:"unavailablePeriodSeconds,omitempty"`
 }
 
 // ClusterResourcePlacementStatus defines the observed state of the ClusterResourcePlacement object.
 type ClusterResourcePlacementStatus struct {
 	// SelectedResources contains a list of resources selected by ResourceSelectors.
-	// +optional
+	// +kubebuilder:validation:Optional
 	SelectedResources []ResourceIdentifier `json:"selectedResources,omitempty"`
 
 	// Resource index logically represents the generation of the selected resources.
@@ -578,7 +578,7 @@ type ClusterResourcePlacementStatus struct {
 	// ObservedResourceIndex is the resource index that the conditions in the ClusterResourcePlacementStatus observe.
 	// For example, a condition of `ClusterResourcePlacementWorkSynchronized` type
 	// is observing the synchronization status of the resource snapshot with the resource index $ObservedResourceIndex.
-	// +optional
+	// +kubebuilder:validation:Optional
 	ObservedResourceIndex string `json:"observedResourceIndex,omitempty"`
 
 	// PlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
@@ -587,7 +587,7 @@ type ClusterResourcePlacementStatus struct {
 	// N placement statuses where N = ClusterNames.
 	// In these cases, some of them may not have assigned clusters when we cannot fill the required number of clusters.
 	// TODO, For pickAll type, considering providing unselected clusters info.
-	// +optional
+	// +kubebuilder:validation:Optional
 	PlacementStatuses []ResourcePlacementStatus `json:"placementStatuses,omitempty"`
 
 	// +patchMergeKey=type
@@ -596,51 +596,51 @@ type ClusterResourcePlacementStatus struct {
 	// +listMapKey=type
 
 	// Conditions is an array of current observed conditions for ClusterResourcePlacement.
-	// +optional
+	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // ResourceIdentifier identifies one Kubernetes resource.
 type ResourceIdentifier struct {
 	// Group is the group name of the selected resource.
-	// +optional
+	// +kubebuilder:validation:Optional
 	Group string `json:"group,omitempty"`
 
 	// Version is the version of the selected resource.
-	// +required
+	// +kubebuilder:validation:Required
 	Version string `json:"version"`
 
 	// Kind represents the Kind of the selected resources.
-	// +required
+	// +kubebuilder:validation:Required
 	Kind string `json:"kind"`
 
 	// Name of the target resource.
-	// +required
+	// +kubebuilder:validation:Required
 	Name string `json:"name"`
 
 	// Namespace is the namespace of the resource. Empty if the resource is cluster scoped.
-	// +optional
+	// +kubebuilder:validation:Optional
 	Namespace string `json:"namespace,omitempty"`
 
 	// Envelope identifies the envelope object that contains this resource.
-	// +optional
+	// +kubebuilder:validation:Optional
 	Envelope *EnvelopeIdentifier `json:"envelope,omitempty"`
 }
 
 // EnvelopeIdentifier identifies the envelope object that contains the selected resource.
 type EnvelopeIdentifier struct {
 	// Name of the envelope object.
-	// +required
+	// +kubebuilder:validation:Required
 	Name string `json:"name"`
 
 	// Namespace is the namespace of the envelope object. Empty if the envelope object is cluster scoped.
-	// +optional
+	// +kubebuilder:validation:Optional
 	Namespace string `json:"namespace,omitempty"`
 
 	// Type of the envelope object.
 	// +kubebuilder:validation:Enum=ConfigMap
 	// +kubebuilder:default=ConfigMap
-	// +optional
+	// +kubebuilder:validation:Optional
 	Type EnvelopeType `json:"type"`
 }
 
@@ -657,21 +657,21 @@ const (
 type ResourcePlacementStatus struct {
 	// ClusterName is the name of the cluster this resource is assigned to.
 	// If it is not empty, its value should be unique cross all placement decisions for the Placement.
-	// +optional
+	// +kubebuilder:validation:Optional
 	ClusterName string `json:"clusterName,omitempty"`
 
 	// ApplicableResourceOverrides contains a list of applicable ResourceOverride snapshots associated with the selected
 	// resources.
 	//
 	// This field is alpha-level and is for the override policy feature.
-	// +optional
+	// +kubebuilder:validation:Optional
 	ApplicableResourceOverrides []NamespacedName `json:"applicableResourceOverrides,omitempty"`
 
 	// ApplicableClusterResourceOverrides contains a list of applicable ClusterResourceOverride snapshots associated with
 	// the selected resources.
 	//
 	// This field is alpha-level and is for the override policy feature.
-	// +optional
+	// +kubebuilder:validation:Optional
 	ApplicableClusterResourceOverrides []string `json:"applicableClusterResourceOverrides,omitempty"`
 
 	// +kubebuilder:validation:MaxItems=100
@@ -679,23 +679,63 @@ type ResourcePlacementStatus struct {
 	// FailedPlacements is a list of all the resources failed to be placed to the given cluster or the resource is unavailable.
 	// Note that we only include 100 failed resource placements even if there are more than 100.
 	// This field is only meaningful if the `ClusterName` is not empty.
-	// +optional
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxItems=100
 	FailedPlacements []FailedResourcePlacement `json:"failedPlacements,omitempty"`
 
+	// DriftedPlacements is a list of all the resources whose label/annotation and spec fields have changed on the
+	// target cluster after it is successfully applied.
+	// This field is only meaningful if the `ClusterName` is not empty.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxItems=100
+	DriftedPlacements []DriftedResourcePlacement `json:"driftedPlacements,omitempty"`
+
 	// Conditions is an array of current observed conditions for ResourcePlacementStatus.
-	// +optional
+	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // FailedResourcePlacement contains the failure details of a failed resource placement.
 type FailedResourcePlacement struct {
 	// The resource failed to be placed.
-	// +required
+	// +kubebuilder:validation:Required
 	ResourceIdentifier `json:",inline"`
 
 	// The failed condition status.
-	// +required
+	// +kubebuilder:validation:Required
 	Condition metav1.Condition `json:"condition"`
+}
+
+// DriftedResourcePlacement contains the drifted resource details.
+type DriftedResourcePlacement struct {
+	// The resource that has drifted.
+	// +kubebuilder:validation:Required
+	ResourceIdentifier `json:",inline"`
+
+	// ObservationTime is the time we observe the drift that is described in the observedDifferences field.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	ObservationTime metav1.Time `json:"observationTime"`
+
+	// TargetClusterObservedGeneration is the generation of the resource on the target cluster
+	// that contains this drift.
+	// +kubebuilder:validation:Required
+	TargetClusterObservedGeneration int64 `json:"targetClusterObservedGeneration"`
+
+	// FirstDriftObservedTime is the first time the resource on the target cluster is observed to have
+	// been different from the resource to be applied from the hub.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	FirstDriftObservedTime metav1.Time `json:"firstDriftObservedTime"`
+
+	// ObservedDifferences contains the details of difference between the resource on the target cluster and
+	// the resource to be applied from the hub. We will truncate the difference details if it exceeds 8192 bytes.
+	// We will also emit an event with the difference details.
+	// +kubebuilder:validation:maxLength=8192
+	// +kubebuilder:validation:Optional
+	ObservedDifferences string `json:"observedDifferences,omitempty"`
 }
 
 // Toleration allows ClusterResourcePlacement to tolerate any taint that matches
@@ -703,7 +743,7 @@ type FailedResourcePlacement struct {
 type Toleration struct {
 	// Key is the taint key that the toleration applies to. Empty means match all taint keys.
 	// If the key is empty, operator must be Exists; this combination means to match all values and all keys.
-	// +optional
+	// +kubebuilder:validation:Optional
 	Key string `json:"key,omitempty"`
 
 	// Operator represents a key's relationship to the value.
@@ -712,18 +752,18 @@ type Toleration struct {
 	// ClusterResourcePlacement can tolerate all taints of a particular category.
 	// +kubebuilder:default=Equal
 	// +kubebuilder:validation:Enum=Equal;Exists
-	// +optional
+	// +kubebuilder:validation:Optional
 	Operator corev1.TolerationOperator `json:"operator,omitempty"`
 
 	// Value is the taint value the toleration matches to.
 	// If the operator is Exists, the value should be empty, otherwise just a regular string.
-	// +optional
+	// +kubebuilder:validation:Optional
 	Value string `json:"value,omitempty"`
 
 	// Effect indicates the taint effect to match. Empty means match all taint effects.
 	// When specified, only allowed value is NoSchedule.
 	// +kubebuilder:validation:Enum=NoSchedule
-	// +optional
+	// +kubebuilder:validation:Optional
 	Effect corev1.TaintEffect `json:"effect,omitempty"`
 }
 
