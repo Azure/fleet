@@ -22,7 +22,6 @@ import (
 )
 
 var (
-	unavailablePeriodSeconds       = -10
 	positiveNumberOfClusters int32 = 1
 	negativeNumberOfClusters int32 = -1
 	resourceSelector               = placementv1beta1.ClusterResourceSelector{
@@ -341,6 +340,8 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 }
 
 func TestValidateClusterResourcePlacement_RolloutStrategy(t *testing.T) {
+	var unavailablePeriodSeconds = -10
+
 	tests := map[string]struct {
 		strategy   placementv1beta1.RolloutStrategy
 		wantErr    bool
@@ -348,6 +349,22 @@ func TestValidateClusterResourcePlacement_RolloutStrategy(t *testing.T) {
 	}{
 		"empty rollout strategy": {
 			wantErr: false,
+		},
+		"valid rollout strategy - External": {
+			strategy: placementv1beta1.RolloutStrategy{
+				Type: placementv1beta1.ExternalRolloutStrategyType,
+			},
+			wantErr: false,
+		},
+		"invalid rollout strategy - External strategy with rollingUpdate config": {
+			strategy: placementv1beta1.RolloutStrategy{
+				Type: placementv1beta1.ExternalRolloutStrategyType,
+				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+					UnavailablePeriodSeconds: &unavailablePeriodSeconds,
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "rollingUpdateConifg is not valid for ExternalRollout strategy type",
 		},
 		"invalid rollout strategy": {
 			strategy: placementv1beta1.RolloutStrategy{

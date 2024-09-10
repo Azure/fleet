@@ -28,8 +28,8 @@ test suites, follow the steps below:
 3. Run the command below to start running the tests:
 
     ```sh
-    go test .
-    ```
+   ginkgo -v -p .
+   ```
 
 ## Access the `Kind` clusters
 

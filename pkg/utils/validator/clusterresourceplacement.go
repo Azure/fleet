@@ -371,11 +371,15 @@ func validateLabelSelector(labelSelector *metav1.LabelSelector, parent string) e
 func validateRolloutStrategy(rolloutStrategy placementv1beta1.RolloutStrategy) error {
 	allErr := make([]error, 0)
 
-	if rolloutStrategy.Type != "" && rolloutStrategy.Type != placementv1beta1.RollingUpdateRolloutStrategyType {
+	if rolloutStrategy.Type != "" && rolloutStrategy.Type != placementv1beta1.RollingUpdateRolloutStrategyType &&
+		rolloutStrategy.Type != placementv1beta1.ExternalRolloutStrategyType {
 		allErr = append(allErr, fmt.Errorf("unsupported rollout strategy type `%s`", rolloutStrategy.Type))
 	}
 
 	if rolloutStrategy.RollingUpdate != nil {
+		if rolloutStrategy.Type == placementv1beta1.ExternalRolloutStrategyType {
+			allErr = append(allErr, fmt.Errorf("rollingUpdateConifg is not valid for ExternalRollout strategy type"))
+		}
 		if rolloutStrategy.RollingUpdate.UnavailablePeriodSeconds != nil && *rolloutStrategy.RollingUpdate.UnavailablePeriodSeconds < 0 {
 			allErr = append(allErr, fmt.Errorf("unavailablePeriodSeconds must be greater than or equal to 0, got %d", *rolloutStrategy.RollingUpdate.UnavailablePeriodSeconds))
 		}
