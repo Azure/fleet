@@ -59,6 +59,9 @@ spec:
             - parentStageRollout
             - targetStage
             type: object
+            x-kubernetes-validations:
+            - message: The spec field is immutable
+              rule: self == oldSelf
           status:
             description: The desired state of ApprovalRequest.
             properties:

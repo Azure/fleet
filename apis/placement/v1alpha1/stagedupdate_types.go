@@ -172,16 +172,16 @@ type StagedUpdateRunStatus struct {
 	// +kubebuilder:validation:Optional
 	StagedUpdateStrategySnapshot StagedUpdateStrategySpec `json:"stagedUpdateStrategySnapshot,omitempty"`
 
-	// Stages list the current status of each stage.
+	// StagesStatus list the current updating status of each stage.
 	// The list is empty if the update run is not started or failed to initialize.
 	// +kubebuilder:validation:Optional
-	StagesStatus []StageStatus `json:"stagesStatus,omitempty"`
+	StagesStatus []StageUpdatingStatus `json:"stagesStatus,omitempty"`
 
 	// DeletionStageStatus list the current status of the deletion stage. The deletion stage is
 	// the stage that removes all the resources from the clusters that are not selected by the
 	// current policy after all the update stages are completed.
 	// +kubebuilder:validation:Optional
-	DeletionStageStatus StageStatus `json:"deletionStageStatus,omitempty"`
+	DeletionStageStatus StageUpdatingStatus `json:"deletionStageStatus,omitempty"`
 
 	// CurrentUpdatingStage is the name of the stage that is in the middle of the update.
 	// If the update run is not started, the value is an empty string.
@@ -195,33 +195,90 @@ type StagedUpdateRunStatus struct {
 	// +listMapKey=type
 	//
 	// Conditions is an array of current observed conditions for StagedUpdateRun.
-	// Known conditions are "Initialized", "Running", "WaitingBetweenStage", "Completed".
+	// Known conditions are "Initialized", "Progressing", "Succeeded".
 	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// StageStatus defines the status of the update run in a stage.
-type StageStatus struct {
+// StagedUpdateRunConditionType identifies a specific condition of the StagedUpdateRun.
+// +enum
+type StagedUpdateRunConditionType string
+
+const (
+	// StagedUpdateRunConditionInitialized indicates whether the staged update run is initialized which means it
+	// has computed all the stages according to the referenced strategy and is ready to start the update.
+	// Its condition status can be one of the following:
+	// - "True" means the staged update run is initialized.
+	// - "False" means the staged update run encountered an error during initialization.
+	StagedUpdateRunConditionInitialized StagedUpdateRunConditionType = "Initialized"
+
+	// StagedUpdateRunConditionProgressing indicates whether the staged update run is making progress.
+	// Its condition status can be one of the following:
+	// - "True" means the staged update run is making progress.
+	// - "False" means the staged update run is waiting/paused.
+	// - "Unknown" means it is unknown.
+	StagedUpdateRunConditionProgressing StagedUpdateRunConditionType = "Progressing"
+
+	// StagedUpdateRunConditionSucceeded indicates whether the staged update run is completed successfully.
+	// Its condition status can be one of the following:
+	// - "True" means the staged update run is completed successfully.
+	// - "False" means the staged update run encountered an error and stopped.
+	StagedUpdateRunConditionSucceeded StagedUpdateRunConditionType = "Succeeded"
+)
+
+// StageUpdatingStatus defines the status of the update run in a stage.
+type StageUpdatingStatus struct {
 	// The name of the stage.
 	// +kubebuilder:validation:Required
 	StageName string `json:"stageName"`
 
-	// The status of the update run in the stage.
+	// The list of each cluster's updating status in this stage.
 	// +kubebuilder:validation:Required
-	Status UpdateStatus `json:"status"`
-
-	// The list of each cluster's update status in this stage.
-	// +kubebuilder:validation:Required
-	Clusters []ClusterUpdateStatus `json:"clusters"`
+	Clusters []ClusterUpdatingStatus `json:"clusters"`
 
 	// The status of the post update tasks that are associated with current stage.
+	// Empty if the stage has not finished updating all the clusters.
 	// +kubebuilder:validation:MaxItems=2
 	// +kubebuilder:validation:Optional
 	AfterStageTaskStatus []AfterStageTaskStatus `json:"afterStageTaskStatus ,omitempty"`
+
+	// The time when the update started on the stage. Empty if the stage has not started updating.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	StartTime *metav1.Time `json:"startTime,omitempty"`
+
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	//
+	// Conditions is an array of current observed updating conditions for the stage. Empty if the stage has not started updating.
+	// Known conditions are "Progressing", "Succeeded".
+	// +kubebuilder:validation:Optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// ClusterUpdateStatus defines the status of the update run on a cluster.
-type ClusterUpdateStatus struct {
+// StageUpdatingConditionType identifies a specific condition of the stage that is being updated.
+// +enum
+type StageUpdatingConditionType string
+
+const (
+	// StageUpdatingConditionProgressing indicates whether the stage updating is making progress.
+	// Its condition status can be one of the following:
+	// - "True" means the stage updating is making progress.
+	// - "False" means the stage updating is waiting/pausing.
+	StageUpdatingConditionProgressing StageUpdatingConditionType = "Progressing"
+
+	// ClusterUpdatingStatusConditionSucceeded indicates whether the stage updating is completed successfully.
+	// Its condition status can be one of the following:
+	// - "True" means the stage updating is completed successfully.
+	// - "False" means the stage updating encountered an error and stopped.
+	ClusterUpdatingStatusConditionSucceeded StageUpdatingConditionType = "Succeeded"
+)
+
+// ClusterUpdatingStatus defines the status of the update run on a cluster.
+type ClusterUpdatingStatus struct {
 	// The name of the cluster.
 	// +kubebuilder:validation:Required
 	ClusterName string `json:"clusterName"`
@@ -239,61 +296,33 @@ type ClusterUpdateStatus struct {
 	// +kubebuilder:validation:Optional
 	ClusterResourceOverrideSnapshots []string `json:"clusterResourceOverrideSnapshots,omitempty"`
 
-	// The status of the update run in the stage.
-	// +kubebuilder:validation:Required
-	Status UpdateStatus `json:"status"`
-}
-
-// UpdateStatus defines the status of a resource in an update run.
-type UpdateStatus struct {
-	// The status of the update on the cluster.
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=NotStarted;Running;Completed;Failed;Waiting
-	State UpdateState `json:"state"`
-
-	// Message is a human readable message containing details about the update status.
+	// The time when the update started on the cluster. Empty if the cluster has not started updating.
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:MaxLength=1024
-	Message string `json:"message,omitempty"`
-
-	// The time when the update started on the resource.
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:Pattern="^0|([0-9]+(\\.[0-9]+)?(s|m|h))+$"
 	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
 	StartTime *metav1.Time `json:"startTime,omitempty"`
 
-	// The time when the update completed on the resource.
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	//
+	// Conditions is an array of current observed conditions for clusters. Empty if the cluster has not started updating.
+	// Known condition is "Succeeded".
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:Pattern="^0|([0-9]+(\\.[0-9]+)?(s|m|h))+$"
-	// +kubebuilder:validation:Type=string
-	CompletedTime *metav1.Time `json:"completedTime,omitempty"`
-
-	// The error detail if the update failed on the resource.
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:MaxLength=4096
-	ErrorDetail string `json:"errorDetail,omitempty"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// UpdateState identifies the state of resource in an update run.
+// ClusterUpdatingStatusConditionType identifies a specific condition of the UpdatingStatus of the cluster.
 // +enum
-type UpdateState string
+type ClusterUpdatingStatusConditionType string
 
 const (
-	// UpdateStateNotStarted indicates the update run is not started on this resource.
-	UpdateStateNotStarted UpdateState = "NotStarted"
-
-	// UpdateStateRunning indicates the update run is running on this resource.
-	UpdateStateRunning UpdateState = "Running"
-
-	// UpdateStateCompleted indicates the update run is completed on this resource.
-	UpdateStateCompleted UpdateState = "Completed"
-
-	// UpdateStateFailed indicates the update run is failed on this resource.
-	UpdateStateFailed UpdateState = "Failed"
-
-	// UpdateStateWaiting indicates the update run is waiting for approval or
-	// wait for the wait time to elapse on this resource.
-	UpdateStateWaiting UpdateState = "Waiting"
+	// UpdatingStatusConditionTypeSucceeded indicates whether the cluster updating is completed successfully.
+	// Its condition status can be one of the following:
+	// - "True" means the cluster updating is completed successfully.
+	// - "False" means the  cluster updating encountered an error and stopped.
+	UpdatingStatusConditionTypeSucceeded ClusterUpdatingStatusConditionType = "Succeeded"
 )
 
 type AfterStageTaskStatus struct {
@@ -355,39 +384,6 @@ const (
 	AfterStageTaskConditionApprovalWaitTimeElapsed AfterStageTaskConditionType = "WaitTimeElapsed"
 )
 
-// StagedUpdateRunConditionType identifies a specific condition of the StagedUpdateRun.
-// +enum
-type StagedUpdateRunConditionType string
-
-const (
-	// StagedUpdateRunConditionInitialized indicates whether the staged update run is initialized which means it
-	// has computed all the stages according to the referenced strategy and is ready to start the update.
-	// Its condition status can be one of the following:
-	// - "True" means the staged update run is initialized.
-	// - "False" means the staged update run encountered an error during initialization.
-	StagedUpdateRunConditionInitialized StagedUpdateRunConditionType = "Initialized"
-
-	// StagedUpdateRunConditionRunning indicates whether the staged update run is proceeding normally.
-	// Its condition status can be one of the following:
-	// - "True" means the staged update run is proceeding normally.
-	// - "False" means the staged update run is not proceeding normally.
-	// - "Unknown" means it is unknown.
-	StagedUpdateRunConditionRunning StagedUpdateRunConditionType = "Running"
-
-	// StagedUpdateRunConditionWaitingBetweenStage indicates whether the staged update run is waiting between stages.
-	// Its condition status can be one of the following:
-	// - "True" means the staged update run is waiting between stages.
-	// - "False" means the staged update run is not waiting between stages.
-	// - "Unknown" means it is unknown.
-	StagedUpdateRunConditionWaitingBetweenStage StagedUpdateRunConditionType = "WaitingBetweenStage"
-
-	// StagedUpdateRunConditionCompleted indicates whether the staged update run is completed.
-	// Its condition status can be one of the following:
-	// - "True" means the staged update run is completed successfully.
-	// - "False" means the staged update run encountered an error during running.
-	StagedUpdateRunConditionCompleted StagedUpdateRunConditionType = "Completed"
-)
-
 // StagedUpdateRunList contains a list of StagedUpdateRun.
 // +kubebuilder:resource:scope="Namespaced"
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -414,6 +410,7 @@ type ApprovalRequest struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// The desired state of ApprovalRequest.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="The spec field is immutable"
 	// +kubebuilder:validation:Required
 	Spec ApprovalRequestSpec `json:"spec"`
 
@@ -422,7 +419,7 @@ type ApprovalRequest struct {
 	Status ApprovalRequestStatus `json:"status,omitempty"`
 }
 
-// ApprovalRequestSpec defines the desired the update approval request.
+// ApprovalRequestSpec defines the desired the update run approval request state.
 // The entire spec is immutable.
 type ApprovalRequestSpec struct {
 	// The name of the staged update run that this approval request is for.

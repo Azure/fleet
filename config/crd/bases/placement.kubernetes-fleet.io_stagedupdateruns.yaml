@@ -151,7 +151,7 @@ spec:
               conditions:
                 description: |-
                   Conditions is an array of current observed conditions for StagedUpdateRun.
-                  Known conditions are "Initialized", "Running", "WaitingBetweenStage", "Completed".
+                  Known conditions are "Initialized", "Progressing", "Succeeded".
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource.\n---\nThis struct is intended for
@@ -236,8 +236,9 @@ spec:
                   current policy after all the update stages are completed.
                 properties:
                   'afterStageTaskStatus ':
-                    description: The status of the post update tasks that are associated
-                      with current stage.
+                    description: |-
+                      The status of the post update tasks that are associated with current stage.
+                      Empty if the stage has not finished updating all the clusters.
                     items:
                       properties:
                         approvalRequestName:
@@ -335,11 +336,11 @@ spec:
                     maxItems: 2
                     type: array
                   clusters:
-                    description: The list of each cluster's update status in this
+                    description: The list of each cluster's updating status in this
                       stage.
                     items:
-                      description: ClusterUpdateStatus defines the status of the update
-                        run on a cluster.
+                      description: ClusterUpdatingStatus defines the status of the
+                        update run on a cluster.
                       properties:
                         clusterName:
                           description: The name of the cluster.
@@ -353,6 +354,84 @@ spec:
                           items:
                             type: string
                           type: array
+                        conditions:
+                          description: |-
+                            Conditions is an array of current observed conditions for clusters. Empty if the cluster has not started updating.
+                            Known condition is "Succeeded".
+                          items:
+                            description: "Condition contains details for one aspect
+                              of the current state of this API Resource.\n---\nThis
+                              struct is intended for direct use as an array at the
+                              field path .status.conditions.  For example,\n\n\n\ttype
+                              FooStatus struct{\n\t    // Represents the observations
+                              of a foo's current state.\n\t    // Known .status.conditions.type
+                              are: \"Available\", \"Progressing\", and \"Degraded\"\n\t
+                              \   // +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t
+                              \   // +listType=map\n\t    // +listMapKey=type\n\t
+                              \   Conditions []metav1.Condition `json:\"conditions,omitempty\"
+                              patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
+                              \   // other fields\n\t}"
+                            properties:
+                              lastTransitionTime:
+                                description: |-
+                                  lastTransitionTime is the last time the condition transitioned from one status to another.
+                                  This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                                format: date-time
+                                type: string
+                              message:
+                                description: |-
+                                  message is a human readable message indicating details about the transition.
+                                  This may be an empty string.
+                                maxLength: 32768
+                                type: string
+                              observedGeneration:
+                                description: |-
+                                  observedGeneration represents the .metadata.generation that the condition was set based upon.
+                                  For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                                  with respect to the current state of the instance.
+                                format: int64
+                                minimum: 0
+                                type: integer
+                              reason:
+                                description: |-
+                                  reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                                  Producers of specific condition types may define expected values and meanings for this field,
+                                  and whether the values are considered a guaranteed API.
+                                  The value should be a CamelCase string.
+                                  This field may not be empty.
+                                maxLength: 1024
+                                minLength: 1
+                                pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                                type: string
+                              status:
+                                description: status of the condition, one of True,
+                                  False, Unknown.
+                                enum:
+                                - "True"
+                                - "False"
+                                - Unknown
+                                type: string
+                              type:
+                                description: |-
+                                  type of condition in CamelCase or in foo.example.com/CamelCase.
+                                  ---
+                                  Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
+                                  useful (see .node.status.conditions), the ability to deconflict is important.
+                                  The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                                maxLength: 316
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                                type: string
+                            required:
+                            - lastTransitionTime
+                            - message
+                            - reason
+                            - status
+                            - type
+                            type: object
+                          type: array
+                          x-kubernetes-list-map-keys:
+                          - type
+                          x-kubernetes-list-type: map
                         resourceOverrideSnapshots:
                           description: |-
                             ResourceOverrideSnapshots is a list of ResourceOverride snapshots associated with the cluster.
@@ -375,90 +454,103 @@ spec:
                             - namespace
                             type: object
                           type: array
-                        status:
-                          description: The status of the update run in the stage.
-                          properties:
-                            completedTime:
-                              description: The time when the update completed on the
-                                resource.
-                              format: date-time
-                              pattern: ^0|([0-9]+(\.[0-9]+)?(s|m|h))+$
-                              type: string
-                            errorDetail:
-                              description: The error detail if the update failed on
-                                the resource.
-                              maxLength: 4096
-                              type: string
-                            message:
-                              description: Message is a human readable message containing
-                                details about the update status.
-                              maxLength: 1024
-                              type: string
-                            startTime:
-                              description: The time when the update started on the
-                                resource.
-                              format: date-time
-                              pattern: ^0|([0-9]+(\.[0-9]+)?(s|m|h))+$
-                              type: string
-                            state:
-                              description: The status of the update on the cluster.
-                              enum:
-                              - NotStarted
-                              - Running
-                              - Completed
-                              - Failed
-                              - Waiting
-                              type: string
-                          required:
-                          - state
-                          type: object
+                        startTime:
+                          description: The time when the update started on the cluster.
+                            Empty if the cluster has not started updating.
+                          format: date-time
+                          type: string
                       required:
                       - clusterName
-                      - status
                       type: object
                     type: array
+                  conditions:
+                    description: |-
+                      Conditions is an array of current observed updating conditions for the stage. Empty if the stage has not started updating.
+                      Known conditions are "Progressing", "Succeeded".
+                    items:
+                      description: "Condition contains details for one aspect of the
+                        current state of this API Resource.\n---\nThis struct is intended
+                        for direct use as an array at the field path .status.conditions.
+                        \ For example,\n\n\n\ttype FooStatus struct{\n\t    // Represents
+                        the observations of a foo's current state.\n\t    // Known
+                        .status.conditions.type are: \"Available\", \"Progressing\",
+                        and \"Degraded\"\n\t    // +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t
+                        \   // +listType=map\n\t    // +listMapKey=type\n\t    Conditions
+                        []metav1.Condition `json:\"conditions,omitempty\" patchStrategy:\"merge\"
+                        patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
+                        \   // other fields\n\t}"
+                      properties:
+                        lastTransitionTime:
+                          description: |-
+                            lastTransitionTime is the last time the condition transitioned from one status to another.
+                            This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                          format: date-time
+                          type: string
+                        message:
+                          description: |-
+                            message is a human readable message indicating details about the transition.
+                            This may be an empty string.
+                          maxLength: 32768
+                          type: string
+                        observedGeneration:
+                          description: |-
+                            observedGeneration represents the .metadata.generation that the condition was set based upon.
+                            For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                            with respect to the current state of the instance.
+                          format: int64
+                          minimum: 0
+                          type: integer
+                        reason:
+                          description: |-
+                            reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                            Producers of specific condition types may define expected values and meanings for this field,
+                            and whether the values are considered a guaranteed API.
+                            The value should be a CamelCase string.
+                            This field may not be empty.
+                          maxLength: 1024
+                          minLength: 1
+                          pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                          type: string
+                        status:
+                          description: status of the condition, one of True, False,
+                            Unknown.
+                          enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                          type: string
+                        type:
+                          description: |-
+                            type of condition in CamelCase or in foo.example.com/CamelCase.
+                            ---
+                            Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
+                            useful (see .node.status.conditions), the ability to deconflict is important.
+                            The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                          maxLength: 316
+                          pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                          type: string
+                      required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - type
+                    x-kubernetes-list-type: map
                   stageName:
                     description: The name of the stage.
                     type: string
-                  status:
-                    description: The status of the update run in the stage.
-                    properties:
-                      completedTime:
-                        description: The time when the update completed on the resource.
-                        format: date-time
-                        pattern: ^0|([0-9]+(\.[0-9]+)?(s|m|h))+$
-                        type: string
-                      errorDetail:
-                        description: The error detail if the update failed on the
-                          resource.
-                        maxLength: 4096
-                        type: string
-                      message:
-                        description: Message is a human readable message containing
-                          details about the update status.
-                        maxLength: 1024
-                        type: string
-                      startTime:
-                        description: The time when the update started on the resource.
-                        format: date-time
-                        pattern: ^0|([0-9]+(\.[0-9]+)?(s|m|h))+$
-                        type: string
-                      state:
-                        description: The status of the update on the cluster.
-                        enum:
-                        - NotStarted
-                        - Running
-                        - Completed
-                        - Failed
-                        - Waiting
-                        type: string
-                    required:
-                    - state
-                    type: object
+                  startTime:
+                    description: The time when the update started on the stage. Empty
+                      if the stage has not started updating.
+                    format: date-time
+                    type: string
                 required:
                 - clusters
                 - stageName
-                - status
                 type: object
               policySnapshotIndexUsed:
                 description: |-
@@ -585,15 +677,16 @@ spec:
                 type: object
               stagesStatus:
                 description: |-
-                  Stages list the current status of each stage.
+                  StagesStatus list the current updating status of each stage.
                   The list is empty if the update run is not started or failed to initialize.
                 items:
-                  description: StageStatus defines the status of the update run in
-                    a stage.
+                  description: StageUpdatingStatus defines the status of the update
+                    run in a stage.
                   properties:
                     'afterStageTaskStatus ':
-                      description: The status of the post update tasks that are associated
-                        with current stage.
+                      description: |-
+                        The status of the post update tasks that are associated with current stage.
+                        Empty if the stage has not finished updating all the clusters.
                       items:
                         properties:
                           approvalRequestName:
@@ -691,10 +784,10 @@ spec:
                       maxItems: 2
                       type: array
                     clusters:
-                      description: The list of each cluster's update status in this
+                      description: The list of each cluster's updating status in this
                         stage.
                       items:
-                        description: ClusterUpdateStatus defines the status of the
+                        description: ClusterUpdatingStatus defines the status of the
                           update run on a cluster.
                         properties:
                           clusterName:
@@ -709,6 +802,84 @@ spec:
                             items:
                               type: string
                             type: array
+                          conditions:
+                            description: |-
+                              Conditions is an array of current observed conditions for clusters. Empty if the cluster has not started updating.
+                              Known condition is "Succeeded".
+                            items:
+                              description: "Condition contains details for one aspect
+                                of the current state of this API Resource.\n---\nThis
+                                struct is intended for direct use as an array at the
+                                field path .status.conditions.  For example,\n\n\n\ttype
+                                FooStatus struct{\n\t    // Represents the observations
+                                of a foo's current state.\n\t    // Known .status.conditions.type
+                                are: \"Available\", \"Progressing\", and \"Degraded\"\n\t
+                                \   // +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t
+                                \   // +listType=map\n\t    // +listMapKey=type\n\t
+                                \   Conditions []metav1.Condition `json:\"conditions,omitempty\"
+                                patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
+                                \   // other fields\n\t}"
+                              properties:
+                                lastTransitionTime:
+                                  description: |-
+                                    lastTransitionTime is the last time the condition transitioned from one status to another.
+                                    This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                                  format: date-time
+                                  type: string
+                                message:
+                                  description: |-
+                                    message is a human readable message indicating details about the transition.
+                                    This may be an empty string.
+                                  maxLength: 32768
+                                  type: string
+                                observedGeneration:
+                                  description: |-
+                                    observedGeneration represents the .metadata.generation that the condition was set based upon.
+                                    For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                                    with respect to the current state of the instance.
+                                  format: int64
+                                  minimum: 0
+                                  type: integer
+                                reason:
+                                  description: |-
+                                    reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                                    Producers of specific condition types may define expected values and meanings for this field,
+                                    and whether the values are considered a guaranteed API.
+                                    The value should be a CamelCase string.
+                                    This field may not be empty.
+                                  maxLength: 1024
+                                  minLength: 1
+                                  pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                                  type: string
+                                status:
+                                  description: status of the condition, one of True,
+                                    False, Unknown.
+                                  enum:
+                                  - "True"
+                                  - "False"
+                                  - Unknown
+                                  type: string
+                                type:
+                                  description: |-
+                                    type of condition in CamelCase or in foo.example.com/CamelCase.
+                                    ---
+                                    Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
+                                    useful (see .node.status.conditions), the ability to deconflict is important.
+                                    The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                                  maxLength: 316
+                                  pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                                  type: string
+                              required:
+                              - lastTransitionTime
+                              - message
+                              - reason
+                              - status
+                              - type
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - type
+                            x-kubernetes-list-type: map
                           resourceOverrideSnapshots:
                             description: |-
                               ResourceOverrideSnapshots is a list of ResourceOverride snapshots associated with the cluster.
@@ -731,90 +902,104 @@ spec:
                               - namespace
                               type: object
                             type: array
-                          status:
-                            description: The status of the update run in the stage.
-                            properties:
-                              completedTime:
-                                description: The time when the update completed on
-                                  the resource.
-                                format: date-time
-                                pattern: ^0|([0-9]+(\.[0-9]+)?(s|m|h))+$
-                                type: string
-                              errorDetail:
-                                description: The error detail if the update failed
-                                  on the resource.
-                                maxLength: 4096
-                                type: string
-                              message:
-                                description: Message is a human readable message containing
-                                  details about the update status.
-                                maxLength: 1024
-                                type: string
-                              startTime:
-                                description: The time when the update started on the
-                                  resource.
-                                format: date-time
-                                pattern: ^0|([0-9]+(\.[0-9]+)?(s|m|h))+$
-                                type: string
-                              state:
-                                description: The status of the update on the cluster.
-                                enum:
-                                - NotStarted
-                                - Running
-                                - Completed
-                                - Failed
-                                - Waiting
-                                type: string
-                            required:
-                            - state
-                            type: object
+                          startTime:
+                            description: The time when the update started on the cluster.
+                              Empty if the cluster has not started updating.
+                            format: date-time
+                            type: string
                         required:
                         - clusterName
-                        - status
                         type: object
                       type: array
+                    conditions:
+                      description: |-
+                        Conditions is an array of current observed updating conditions for the stage. Empty if the stage has not started updating.
+                        Known conditions are "Progressing", "Succeeded".
+                      items:
+                        description: "Condition contains details for one aspect of
+                          the current state of this API Resource.\n---\nThis struct
+                          is intended for direct use as an array at the field path
+                          .status.conditions.  For example,\n\n\n\ttype FooStatus
+                          struct{\n\t    // Represents the observations of a foo's
+                          current state.\n\t    // Known .status.conditions.type are:
+                          \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
+                          +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    //
+                          +listType=map\n\t    // +listMapKey=type\n\t    Conditions
+                          []metav1.Condition `json:\"conditions,omitempty\" patchStrategy:\"merge\"
+                          patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
+                          \   // other fields\n\t}"
+                        properties:
+                          lastTransitionTime:
+                            description: |-
+                              lastTransitionTime is the last time the condition transitioned from one status to another.
+                              This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                            format: date-time
+                            type: string
+                          message:
+                            description: |-
+                              message is a human readable message indicating details about the transition.
+                              This may be an empty string.
+                            maxLength: 32768
+                            type: string
+                          observedGeneration:
+                            description: |-
+                              observedGeneration represents the .metadata.generation that the condition was set based upon.
+                              For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                              with respect to the current state of the instance.
+                            format: int64
+                            minimum: 0
+                            type: integer
+                          reason:
+                            description: |-
+                              reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                              Producers of specific condition types may define expected values and meanings for this field,
+                              and whether the values are considered a guaranteed API.
+                              The value should be a CamelCase string.
+                              This field may not be empty.
+                            maxLength: 1024
+                            minLength: 1
+                            pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                            type: string
+                          status:
+                            description: status of the condition, one of True, False,
+                              Unknown.
+                            enum:
+                            - "True"
+                            - "False"
+                            - Unknown
+                            type: string
+                          type:
+                            description: |-
+                              type of condition in CamelCase or in foo.example.com/CamelCase.
+                              ---
+                              Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
+                              useful (see .node.status.conditions), the ability to deconflict is important.
+                              The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                            maxLength: 316
+                            pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                            type: string
+                        required:
+                        - lastTransitionTime
+                        - message
+                        - reason
+                        - status
+                        - type
+                        type: object
+                      type: array
+                      x-kubernetes-list-map-keys:
+                      - type
+                      x-kubernetes-list-type: map
                     stageName:
                       description: The name of the stage.
                       type: string
-                    status:
-                      description: The status of the update run in the stage.
-                      properties:
-                        completedTime:
-                          description: The time when the update completed on the resource.
-                          format: date-time
-                          pattern: ^0|([0-9]+(\.[0-9]+)?(s|m|h))+$
-                          type: string
-                        errorDetail:
-                          description: The error detail if the update failed on the
-                            resource.
-                          maxLength: 4096
-                          type: string
-                        message:
-                          description: Message is a human readable message containing
-                            details about the update status.
-                          maxLength: 1024
-                          type: string
-                        startTime:
-                          description: The time when the update started on the resource.
-                          format: date-time
-                          pattern: ^0|([0-9]+(\.[0-9]+)?(s|m|h))+$
-                          type: string
-                        state:
-                          description: The status of the update on the cluster.
-                          enum:
-                          - NotStarted
-                          - Running
-                          - Completed
-                          - Failed
-                          - Waiting
-                          type: string
-                      required:
-                      - state
-                      type: object
+                    startTime:
+                      description: The time when the update started on the stage.
+                        Empty if the stage has not started updating.
+                      format: date-time
+                      type: string
                   required:
                   - clusters
                   - stageName
-                  - status
                   type: object
                 type: array
             type: object
