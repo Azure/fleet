@@ -449,6 +449,11 @@ type ApplyStrategy struct {
 	//   information, please refer to the Kubernetes documentation
 	//   (https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply).
 	//
+	//   Note that with this strategy, any change made to the managed fields by agents other than
+	//   Fleet in the member cluster will be overwritten periodically. If you would like Fleet
+	//   to detect such changes and report them rather than overwritting values as soon as Fleet
+	//   finds the inconsistencies, consider using the ReportApplyDiff or ReportAnyDiff strategies.
+	//
 	// * ReportApplyDiff: Fleet uses server-side apply to apply manifests, and will report
 	//   that an object has drifted from its desired state if (and only if) fields managed by Fleet
 	//   have been overwritten by another agent (i.e., the field values have deviated from the
