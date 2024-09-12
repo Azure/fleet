@@ -8,14 +8,14 @@ package workgenerator
 import (
 	"context"
 	"errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -1510,12 +1510,18 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 		conflictCount   int
 		expectError     bool
 	}{
+		// fakeClient checks to see ResourceVersion is set and the same in order to update.
+		// (https://github.com/kubernetes-sigs/controller-runtime/blob/b901db121e1f53c47ec9f9683fad90a546688c3e/pkg/client/fake/client.go#L478)
+		// If not set, fake client sets ResourceVersion to "999", so it leads them to not having the same resource version.
+		// (https://github.com/kubernetes-sigs/controller-runtime/blob/b901db121e1f53c47ec9f9683fad90a546688c3e/pkg/client/fake/client.go#L289)
+
 		{
 			name: "update status successfully with no conflict",
 			latestBinding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-binding-1",
-					Generation: 4,
+					Name:            "test-binding-1",
+					Generation:      4,
+					ResourceVersion: "4",
 				},
 				Spec: fleetv1beta1.ResourceBindingSpec{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1536,8 +1542,9 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 			},
 			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-binding-1",
-					Generation: 4,
+					Name:            "test-binding-1",
+					Generation:      4,
+					ResourceVersion: "4",
 				},
 				Spec: fleetv1beta1.ResourceBindingSpec{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1587,8 +1594,9 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 			name: "update status after conflict",
 			latestBinding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-binding-2",
-					Generation: 3,
+					Name:            "test-binding-2",
+					Generation:      3,
+					ResourceVersion: "3",
 				},
 				Spec: fleetv1beta1.ResourceBindingSpec{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1599,9 +1607,9 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 					Conditions: []metav1.Condition{
 						{
 							Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
-							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 3,
-							Reason:             condition.RolloutStartedReason,
+							Status:             metav1.ConditionFalse,
+							ObservedGeneration: 2,
+							Reason:             condition.RolloutNotStartedYetReason,
 							LastTransitionTime: lastTransitionTime,
 						},
 					},
@@ -1609,8 +1617,9 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 			},
 			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-binding-2",
-					Generation: 3,
+					Name:            "test-binding-2",
+					Generation:      3,
+					ResourceVersion: "3",
 				},
 				Spec: fleetv1beta1.ResourceBindingSpec{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1660,8 +1669,9 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 			name: "does not update status because of conflict",
 			latestBinding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-binding-3",
-					Generation: 3,
+					Name:            "test-binding-3",
+					Generation:      3,
+					ResourceVersion: "3",
 				},
 				Spec: fleetv1beta1.ResourceBindingSpec{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1671,7 +1681,6 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 				Status: fleetv1beta1.ResourceBindingStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
 							Status:             metav1.ConditionFalse,
 							ObservedGeneration: 3,
 							Reason:             condition.RolloutNotStartedYetReason,
@@ -1682,8 +1691,9 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 			},
 			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-binding-3",
-					Generation: 3,
+					Name:            "test-binding-3",
+					Generation:      3,
+					ResourceVersion: "3",
 				},
 				Spec: fleetv1beta1.ResourceBindingSpec{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1702,19 +1712,19 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 						{
 							Type:               string(fleetv1beta1.ResourceBindingOverridden),
 							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 2,
+							ObservedGeneration: 3,
 							Reason:             condition.OverriddenSucceededReason,
 						},
 						{
 							Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
 							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 2,
+							ObservedGeneration: 3,
 							Reason:             condition.AllWorkSyncedReason,
 						},
 						{
 							Type:               string(fleetv1beta1.ResourceBindingApplied),
 							Status:             metav1.ConditionFalse,
-							ObservedGeneration: 2,
+							ObservedGeneration: 3,
 							Reason:             condition.WorkNeedSyncedReason,
 						},
 					},
@@ -1727,8 +1737,9 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 			name: "does not update status because RolloutStarted not found",
 			latestBinding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-binding-4",
-					Generation: 3,
+					Name:            "test-binding-4",
+					Generation:      3,
+					ResourceVersion: "3",
 				},
 				Spec: fleetv1beta1.ResourceBindingSpec{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1749,8 +1760,9 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 			},
 			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-binding-4",
-					Generation: 3,
+					Name:            "test-binding-4",
+					Generation:      3,
+					ResourceVersion: "3",
 				},
 				Spec: fleetv1beta1.ResourceBindingSpec{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1799,7 +1811,6 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 				Client:        fakeClient,
 				conflictCount: tt.conflictCount,
 			}
-
 			// Create reconciler with custom client
 			r := &Reconciler{
 				Client:          conflictClient,
@@ -1810,9 +1821,16 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 			if (err != nil) != tt.expectError {
 				t.Errorf("updateBindingStatusWithRetry() error = %v, wantErr %v", err, tt.expectError)
 			}
-			if !tt.expectError {
+			binding := &fleetv1beta1.ClusterResourceBinding{}
+			if err := r.Client.Get(ctx, client.ObjectKeyFromObject(tt.resourceBinding), binding); err != nil {
+				t.Errorf("updateBindingStatusWithRetry() error = %v, wantErr %v", err, nil)
+			}
+			if tt.expectError == false {
+				if len(binding.Status.Conditions) < 1 {
+					t.Errorf("updateBindingStatusWithRetry() did not update update")
+				}
 				latestRollout := tt.latestBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted))
-				rollout := tt.resourceBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted))
+				rollout := binding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted))
 				// Check that the rolloutStarted condition is updated with the same values from tt.latestBinding
 				if diff := cmp.Diff(latestRollout, rollout, statusCmpOptions...); diff != "" {
 					t.Errorf("updateBindingStatusWithRetry() ResourceBindingRolloutStarted Condition got = %v, want %v", rollout, latestRollout)
@@ -1845,5 +1863,5 @@ func (s *conflictStatusWriter) Update(_ context.Context, obj client.Object, _ ..
 		// Simulate a conflict error
 		return k8serrors.NewConflict(schema.GroupResource{Resource: "ClusterResourceBinding"}, obj.GetName(), errors.New("the object has been modified; please apply your changes to the latest version and try again"))
 	}
-	return nil
+	return s.StatusWriter.Update(ctx, obj)
 }
