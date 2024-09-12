@@ -371,18 +371,82 @@ spec:
                   type:
                     default: ClientSideApply
                     description: |-
-                      Type defines the type of strategy to use. Default to ClientSideApply.
-                      Server-side apply is more powerful and flexible than client-side apply.
-                      You SHOULD use server-side apply to safely resolve any potential drift between the
-                      original applied resource version and the current resource on the member cluster.
-                      Read more about the differences between server-side apply and client-side apply:
-                      https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply.
-                      You can also use ReportDiff to only report the difference between the resource on the member cluster
-                      and the resource to be applied from the hub on all the selected clusters.
+                      Type is the apply strategy to use; it determines how Fleet applies manifests from the
+                      hub cluster to a member cluster.
+
+
+                      Available options are:
+
+
+                      * ClientSideApply: Fleet uses three-way merge to apply manifests, similar to how kubectl
+                        performs a client-side apply. This is the default option.
+
+
+                        Note that this strategy requires that Fleet keep the last applied configuration in the
+                        annoation of an applied resource. If the object gets so large that apply ops can no longer
+                        be executed, Fleet will switch to server-side apply.
+
+
+                      * ServerSideApply: Fleet uses server-side apply to apply manifests; Fleet itself will
+                        become the field manager for specified fields in the manifests. Specify
+                        ServerSideApplyConfig as appropriate if you would like Fleet to take over field
+                        ownership upon conflicts. This is the recommended option for most scenarios; it might
+                        help reduce object size and safely resolve conflicts between field values. For more
+                        information, please refer to the Kubernetes documentation
+                        (https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply).
+
+
+                      * ReportApplyDiff: Fleet uses server-side apply to apply manifests, and will report
+                        that an object has drifted from its desired state if (and only if) fields managed by Fleet
+                        have been overwritten by another agent (i.e., the field values have deviated from the
+                        desired ones kept in the hub cluster). This is helpful in drift detection scenarios, where
+                        you would like to make sure that no one should manipulate the placed objects in the member
+                        clusters directly without going through the Fleet hub cluster.
+
+
+                        To fix the drifts, you may:
+                        * Revert the changes made to the affected objects in the member cluster; or
+                        * Update the desired state in the hub cluster and let Fleet apply the latest manifests,
+                          ideally it should overwrite the drifted fields; or
+                        * Switch to the ServerSideApply strategy, which will trigger Fleet to reapply the current
+                          manifest revision and overwrite the drifted fields.
+
+
+                        Note that with this strategy, Fleet will not attempt to detect changes in fields that
+                        are not managed by Fleet: if an agent adds/edits a field that are absent in the hub
+                        cluster manifest, it will not be considered as a drift. As an exception, Fleet will
+                        always check for inconsistencies in the object labels and annoations, that is, editing
+                        the labels/annotations in a placed object will always trigger the drift detection, even
+                        if the affected label/annotation key is absent in the hub cluster manifest.
+
+
+                      * ReportAnyDiff: Fleet uses server-side apply to apply manifests, and will report that
+                        an object has drifted from its desired state if any field has been added, removed, or
+                        edited by another agent, even if the field itself is not managed by Fleet. This is mostly
+                        helpful if you would like to guard against drifts and make sure that objects are
+                        exactly the same between the hub cluster and the member clusters.
+
+
+                        To fix the drifts, you may:
+                        * Revert the edits made to the affected objects in the member cluster; or
+                        * Update the desired state in the hub cluster, which should include all the affected fields,
+                          and let Fleet apply the latest manifests.
+
+
+                        Please note that with this strategy, it is recommended that you:
+                        * Specify all the fields of interest explicitly (even if you are OK with using the
+                          default values) in the hub cluster manifests; and
+                        * Make sure that no fields are managed by agents other than Fleet, such as HPAs, VPAs,
+                          custom controllers, etc.
+
+
+                      For a comparison between the different strategies and some examples, please refer to the
+                      Fleet documentation.
                     enum:
                     - ClientSideApply
                     - ServerSideApply
-                    - ReportDiff
+                    - ReportApplyDiff
+                    - ReportAnyDiff
                     type: string
                 type: object
               workload:
