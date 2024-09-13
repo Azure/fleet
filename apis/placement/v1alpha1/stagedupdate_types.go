@@ -183,12 +183,6 @@ type StagedUpdateRunStatus struct {
 	// +kubebuilder:validation:Optional
 	DeletionStageStatus StageUpdatingStatus `json:"deletionStageStatus,omitempty"`
 
-	// CurrentUpdatingStage is the name of the stage that is in the middle of the update.
-	// If the update run is not started, the value is an empty string.
-	// If we are in the DeletionStage, the name is called "deletionStage".
-	// +kubebuilder:validation:Optional
-	CurrentUpdatingStage string `json:"currentUpdatingStage,omitempty"`
-
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map
@@ -248,6 +242,12 @@ type StageUpdatingStatus struct {
 	// +kubebuilder:validation:Format=date-time
 	StartTime *metav1.Time `json:"startTime,omitempty"`
 
+	// The time when the update finished on the stage. Empty if the stage has not started updating.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	EndTime *metav1.Time `json:"endTime,omitempty"`
+
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map
@@ -296,19 +296,13 @@ type ClusterUpdatingStatus struct {
 	// +kubebuilder:validation:Optional
 	ClusterResourceOverrideSnapshots []string `json:"clusterResourceOverrideSnapshots,omitempty"`
 
-	// The time when the update started on the cluster. Empty if the cluster has not started updating.
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:Format=date-time
-	StartTime *metav1.Time `json:"startTime,omitempty"`
-
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map
 	// +listMapKey=type
 	//
 	// Conditions is an array of current observed conditions for clusters. Empty if the cluster has not started updating.
-	// Known condition is "Succeeded".
+	// Known conditions are "Started,"Succeeded".
 	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
@@ -318,6 +312,12 @@ type ClusterUpdatingStatus struct {
 type ClusterUpdatingStatusConditionType string
 
 const (
+	// UpdatingStatusConditionTypeStarted indicates whether the cluster updating has started.
+	// Its condition status can be one of the following:
+	// - "True" means the cluster updating has started.
+	// - "False" means the stage updating has not started.
+	UpdatingStatusConditionTypeStarted ClusterUpdatingStatusConditionType = "Started"
+
 	// UpdatingStatusConditionTypeSucceeded indicates whether the cluster updating is completed successfully.
 	// Its condition status can be one of the following:
 	// - "True" means the cluster updating is completed successfully.
@@ -401,7 +401,7 @@ type StagedUpdateRunList struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ApprovalRequest defines a request for the approval from the user.
-// Each snapshot MUST have the following labels:
+// The request object MUST have the following labels:
 //   - `TargetUpdateRun` which points to the update run that this approval request is for.
 //   - `TargetStage` which is the name of the stage that this approval request is for.
 //   - `IsLatestUpdateRunApproval` which indicates whether this approval request is the latest one related to this update run.

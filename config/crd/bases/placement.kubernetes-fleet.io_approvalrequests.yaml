@@ -22,7 +22,7 @@ spec:
       openAPIV3Schema:
         description: |-
           ApprovalRequest defines a request for the approval from the user.
-          Each snapshot MUST have the following labels:
+          The request object MUST have the following labels:
             - `TargetUpdateRun` which points to the update run that this approval request is for.
             - `TargetStage` which is the name of the stage that this approval request is for.
             - `IsLatestUpdateRunApproval` which indicates whether this approval request is the latest one related to this update run.

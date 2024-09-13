@@ -223,12 +223,6 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
-              currentUpdatingStage:
-                description: |-
-                  CurrentUpdatingStage is the name of the stage that is in the middle of the update.
-                  If the update run is not started, the value is an empty string.
-                  If we are in the DeletionStage, the name is called "deletionStage".
-                type: string
               deletionStageStatus:
                 description: |-
                   DeletionStageStatus list the current status of the deletion stage. The deletion stage is
@@ -357,7 +351,7 @@ spec:
                         conditions:
                           description: |-
                             Conditions is an array of current observed conditions for clusters. Empty if the cluster has not started updating.
-                            Known condition is "Succeeded".
+                            Known conditions are "Started,"Succeeded".
                           items:
                             description: "Condition contains details for one aspect
                               of the current state of this API Resource.\n---\nThis
@@ -454,11 +448,6 @@ spec:
                             - namespace
                             type: object
                           type: array
-                        startTime:
-                          description: The time when the update started on the cluster.
-                            Empty if the cluster has not started updating.
-                          format: date-time
-                          type: string
                       required:
                       - clusterName
                       type: object
@@ -540,6 +529,11 @@ spec:
                     x-kubernetes-list-map-keys:
                     - type
                     x-kubernetes-list-type: map
+                  endTime:
+                    description: The time when the update finished on the stage. Empty
+                      if the stage has not started updating.
+                    format: date-time
+                    type: string
                   stageName:
                     description: The name of the stage.
                     type: string
@@ -805,7 +799,7 @@ spec:
                           conditions:
                             description: |-
                               Conditions is an array of current observed conditions for clusters. Empty if the cluster has not started updating.
-                              Known condition is "Succeeded".
+                              Known conditions are "Started,"Succeeded".
                             items:
                               description: "Condition contains details for one aspect
                                 of the current state of this API Resource.\n---\nThis
@@ -902,11 +896,6 @@ spec:
                               - namespace
                               type: object
                             type: array
-                          startTime:
-                            description: The time when the update started on the cluster.
-                              Empty if the cluster has not started updating.
-                            format: date-time
-                            type: string
                         required:
                         - clusterName
                         type: object
@@ -989,6 +978,11 @@ spec:
                       x-kubernetes-list-map-keys:
                       - type
                       x-kubernetes-list-type: map
+                    endTime:
+                      description: The time when the update finished on the stage.
+                        Empty if the stage has not started updating.
+                      format: date-time
+                      type: string
                     stageName:
                       description: The name of the stage.
                       type: string
