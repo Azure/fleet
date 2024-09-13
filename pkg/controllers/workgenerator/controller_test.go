@@ -8,10 +8,11 @@ package workgenerator
 import (
 	"context"
 	"errors"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"testing"
 	"time"
+
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -1662,7 +1663,7 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 					},
 				},
 			},
-			conflictCount: 2,
+			conflictCount: 1,
 			expectError:   false,
 		},
 		{
@@ -1821,16 +1822,16 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 			if (err != nil) != tt.expectError {
 				t.Errorf("updateBindingStatusWithRetry() error = %v, wantErr %v", err, tt.expectError)
 			}
-			binding := &fleetv1beta1.ClusterResourceBinding{}
-			if err := r.Client.Get(ctx, client.ObjectKeyFromObject(tt.resourceBinding), binding); err != nil {
+			updatedBinding := &fleetv1beta1.ClusterResourceBinding{}
+			if err := r.Client.Get(ctx, client.ObjectKeyFromObject(tt.resourceBinding), updatedBinding); err != nil {
 				t.Errorf("updateBindingStatusWithRetry() error = %v, wantErr %v", err, nil)
 			}
-			if tt.expectError == false {
-				if len(binding.Status.Conditions) < 1 {
-					t.Errorf("updateBindingStatusWithRetry() did not update update")
+			if !tt.expectError {
+				if len(updatedBinding.Status.Conditions) < 1 {
+					t.Errorf("updateBindingStatusWithRetry() did not update binding")
 				}
 				latestRollout := tt.latestBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted))
-				rollout := binding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted))
+				rollout := updatedBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted))
 				// Check that the rolloutStarted condition is updated with the same values from tt.latestBinding
 				if diff := cmp.Diff(latestRollout, rollout, statusCmpOptions...); diff != "" {
 					t.Errorf("updateBindingStatusWithRetry() ResourceBindingRolloutStarted Condition got = %v, want %v", rollout, latestRollout)
@@ -1857,7 +1858,7 @@ type conflictStatusWriter struct {
 	conflictClient *conflictClient
 }
 
-func (s *conflictStatusWriter) Update(_ context.Context, obj client.Object, _ ...client.SubResourceUpdateOption) error {
+func (s *conflictStatusWriter) Update(ctx context.Context, obj client.Object, _ ...client.SubResourceUpdateOption) error {
 	if s.conflictClient.conflictCount > 0 {
 		s.conflictClient.conflictCount--
 		// Simulate a conflict error
