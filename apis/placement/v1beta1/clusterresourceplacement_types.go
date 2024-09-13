@@ -452,9 +452,9 @@ type ApplyStrategy struct {
 	//   Note that with this strategy, any change made to the managed fields by agents other than
 	//   Fleet in the member cluster will be overwritten periodically. If you would like Fleet
 	//   to detect such changes and report them rather than overwritting values as soon as Fleet
-	//   finds the inconsistencies, consider using the ReportIfDiff strategies.
+	//   finds the inconsistencies, consider using the ReportDiff strategies.
 	//
-	// * ReportIfDiff: Fleet uses server-side apply to apply manifests, and will report
+	// * ReportDiff: Fleet uses server-side apply to apply manifests, and will report
 	//   that an object has drifted from its desired state if an inconsistency has been found
 	//   in accordance with the DiffMode setting. This is helpful in drift detection scenarios,
 	//   where you would like to identify ad-hoc changes made to placed objects in
@@ -482,7 +482,7 @@ type ApplyStrategy struct {
 	// Fleet documentation.
 	//
 	// +kubebuilder:default=ClientSideApply
-	// +kubebuilder:validation:Enum=ClientSideApply;ServerSideApply;ReportIfDiff
+	// +kubebuilder:validation:Enum=ClientSideApply;ServerSideApply;ReportDiff
 	// +kubebuilder:validation:Optional
 	Type ApplyStrategyType `json:"type,omitempty"`
 
@@ -490,7 +490,7 @@ type ApplyStrategy struct {
 	// as kept in the Fleet hub cluster and its current state.
 	//
 	// This field is in effect when the ClusterResourcePlacement is configured to use the
-	// ReportIfDiff apply strategy and/or the ApplyIfNoDiff takeover action.
+	// ReportDiff apply strategy and/or the ApplyIfNoDiff takeover action.
 	//
 	// Available options include:
 	//
