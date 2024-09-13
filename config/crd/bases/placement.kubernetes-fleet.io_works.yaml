@@ -338,9 +338,56 @@ spec:
                 properties:
                   actionType:
                     default: AlwaysApply
-                    description: TakeoverAction describes the action to take when
-                      we place the selected resources on the target cluster the first
-                      time.
+                    description: |-
+                      TakeoverAction determines the action to take when Fleet applies resources to a member
+                      cluster for the first time and finds out that the resource already exists in the cluster.
+
+
+                      This setting is most relevant in cases where you would like Fleet to manage pre-existing
+                      resources on a member cluster.
+
+
+                      Available options include:
+
+
+                      * AlwaysApply: with this action, Fleet will apply the hub cluster manifests to the member
+                        clusters even if the affected resources already exist. This is the default action.
+
+
+                        Note that this might lead to some fields being overwritten on the member clusters.
+
+
+                      * ApplyIfNoDiff: with this action, Fleet will apply the hub cluster manifests to the member
+                        clusters if (and only if) pre-existing resources look the same as the hub cluster manifests.
+                        This is a safer option as pre-existing resources that are inconsistent with the hub cluster
+                        manifests will not be overwritten; in fact, Fleet will ignore them until the inconsistencies
+                        are resolved properly: any change you make to the hub cluster manifests would not be
+                        applied, and if you delete the manifests or even the ClusterResourcePlacement itself
+                        from the hub cluster, these pre-existing resources would still remain.
+
+
+                        Fleet will check for inconsistencies in accordance with the DiffMode setting. See also
+                        the comments on the DiffMode field for more information.
+
+
+                        If a diff has been found in a field that is managed by Fleet (i.e., the field is specified
+                        in the hub cluster manifest), consider one of the following actions:
+                        * set the field in the member cluster to be of the same value as that in the hub cluster
+                          manifest.
+                        * update the hub cluster manifest so that its field value matches with that in the member
+                          cluster.
+                        * switch to the AlwaysApply action, which will allow Fleet to overwrite the field with the
+                          value in the hub cluster manifest.
+
+
+                        If a diff has been found in a field that is not managed by Fleet (i.e., the field is not
+                        specified in the hub cluster manifest), consider one of the following actions:
+                        * remove the field from the member cluster.
+                        * update the hub cluster manifest so that the field is included in the hub cluster manifest.
+
+
+                        If appropriate, you may also delete the object from the member cluster; Fleet will recreate
+                        it using the hub cluster manifest.
                     enum:
                     - AlwaysApply
                     - ApplyIfNoDiff
@@ -352,6 +399,47 @@ spec:
                       If true, apply the resource and add fleet as a co-owner.
                       If false, leave the resource unchanged and fail the apply.
                     type: boolean
+                  diffMode:
+                    default: ApplyDiff
+                    description: |-
+                      DiffMode controls the way Fleet detects inconsistencies between a resource's desired state
+                      as kept in the Fleet hub cluster and its current state.
+
+
+                      This field is in effect when the ClusterResourcePlacement is configured to use the
+                      ReportIfDiff apply strategy and/or the ApplyIfNoDiff takeover action.
+
+
+                      Available options include:
+
+
+                      * ApplyDiff: with this mode, Fleet considers that a placed object has drifted from its
+                        desired state if (and only if) there are value differences in fields that are managed
+                        by Fleet (i.e., the fields that are specified explicitly in the hub cluster manifests).
+                        Differences in unmanaged fields will be ignored. This is the default mode.
+
+
+                        Note that as an exception, Fleet will always check for differences in the object
+                        labels and annotations, even if the affected label/annotation keys are absent in the hub
+                        cluster manifests.
+
+
+                      * FullDiff: with this mode, Fleet considers that a placed object has drifted from its
+                        desired state if there are values differences in any object field, even if the field is
+                        not managed by Fleet (i.e., the field is not specified in the hub cluster manifest). This
+                        effectively assumes that an object must look exactly the same in the hub cluster and the
+                        member clusters.
+
+
+                        If you prefer using this mode, it is recommended that you
+                        * specify all the fields of interest explicitly in the hub cluster manifests, even if
+                          you are OK with using default values for some fields; and
+                        * make sure that no fields are managed by agents other than Fleet in the member clusters,
+                          such as HPAs, VPAs, or other controllers.
+                    enum:
+                    - ApplyDiff
+                    - FullDiff
+                    type: string
                   serverSideApplyConfig:
                     description: ServerSideApplyConfig defines the configuration for
                       server side apply. It is honored only when type is ServerSideApply.
@@ -402,48 +490,34 @@ spec:
                         finds the inconsistencies, consider using the ReportApplyDiff or ReportAnyDiff strategies.
 
 
-                      * ReportApplyDiff: Fleet uses server-side apply to apply manifests, and will report
-                        that an object has drifted from its desired state if (and only if) fields managed by Fleet
-                        have been overwritten by another agent (i.e., the field values have deviated from the
-                        desired ones kept in the hub cluster). This is helpful in drift detection scenarios, where
-                        you would like to make sure that no one should manipulate the placed objects in the member
-                        clusters directly without going through the Fleet hub cluster.
+                      * ReportIfDiff: Fleet uses server-side apply to apply manifests, and will report
+                        that an object has drifted from its desired state if an inconsistency has been found
+                        in accordance with the DiffMode setting. This is helpful in drift detection scenarios,
+                        where you would like to identify ad-hoc changes made to placed objects in
+                        the member clusters.
 
 
-                        To fix the drifts, you may:
-                        * Revert the changes made to the affected objects in the member cluster; or
-                        * Update the desired state in the hub cluster and let Fleet apply the latest manifests,
-                          ideally it should overwrite the drifted fields; or
-                        * Switch to the ServerSideApply strategy, which will trigger Fleet to reapply the current
-                          manifest revision and overwrite the drifted fields.
+                        See also the comments on the DiffMode field for more information.
 
 
-                        Note that with this strategy, Fleet will not attempt to detect changes in fields that
-                        are not managed by Fleet: if an agent adds/edits a field that are absent in the hub
-                        cluster manifest, it will not be considered as a drift. As an exception, Fleet will
-                        always check for inconsistencies in the object labels and annoations, that is, editing
-                        the labels/annotations in a placed object will always trigger the drift detection, even
-                        if the affected label/annotation key is absent in the hub cluster manifest.
+                        If a diff has been found in a field that is managed by Fleet (i.e., the field is specified
+                        in the hub cluster manifest), consider one of the following actions:
 
 
-                      * ReportAnyDiff: Fleet uses server-side apply to apply manifests, and will report that
-                        an object has drifted from its desired state if any field has been added, removed, or
-                        edited by another agent, even if the field itself is not managed by Fleet. This is mostly
-                        helpful if you would like to guard against drifts and make sure that objects are
-                        exactly the same between the hub cluster and the member clusters.
+                        * revert the field change in all drifted member clusters.
+                        * update the hub cluster manifest; this will trigger Fleet to apply the latest revision
+                          of the manifests, which will overwrite the drifted field.
+                        * switch to the ServerSideApply strategy, which will allow Fleet to overwrite the drifted
+                          field with the current revision of manifests.
 
 
-                        To fix the drifts, you may:
-                        * Revert the edits made to the affected objects in the member cluster; or
-                        * Update the desired state in the hub cluster, which should include all the affected fields,
-                          and let Fleet apply the latest manifests.
+                        If a diff has been found in a field that is not managed by Fleet (i.e., the field is not
+                        specified in the hub cluster manifest), consider one of the following actions:
 
 
-                        Please note that with this strategy, it is recommended that you:
-                        * Specify all the fields of interest explicitly (even if you are OK with using the
-                          default values) in the hub cluster manifests; and
-                        * Make sure that no fields are managed by agents other than Fleet, such as HPAs, VPAs,
-                          custom controllers, etc.
+                        * remove the field from all drifted member clusters.
+                        * update the hub cluster manifest so that the field is included in the hub cluster
+                          manifest.
 
 
                       For a comparison between the different strategies and some examples, please refer to the
@@ -451,8 +525,7 @@ spec:
                     enum:
                     - ClientSideApply
                     - ServerSideApply
-                    - ReportApplyDiff
-                    - ReportAnyDiff
+                    - ReportIfDiff
                     type: string
                 type: object
               workload:
