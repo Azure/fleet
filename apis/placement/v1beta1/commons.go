@@ -82,9 +82,10 @@ const (
 // NamespacedName comprises a resource name, with a mandatory namespace.
 type NamespacedName struct {
 	// Name is the name of the namespaced scope resource.
-	// +required
+	// +kubebuilder:validation:Required
 	Name string `json:"name"`
+
 	// Namespace is namespace of the namespaced scope resource.
-	// +required
+	// +kubebuilder:validation:Required
 	Namespace string `json:"namespace"`
 }

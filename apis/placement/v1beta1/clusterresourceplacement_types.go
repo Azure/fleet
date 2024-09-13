@@ -410,10 +410,11 @@ const (
 
 // RolloutStrategy describes how to roll out a new change in selected resources to target clusters.
 type RolloutStrategy struct {
-	// Type of rollout. The only supported type is "RollingUpdate". Default is "RollingUpdate".
+	// Type of rollout. The only supported types are "RollingUpdate" and "External".
+	// Default is "RollingUpdate".
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:Enum=RollingUpdate
 	// +kubebuilder:default=RollingUpdate
+	// +kubebuilder:validation:Enum=RollingUpdate;External
 	Type RolloutStrategyType `json:"type,omitempty"`
 
 	// Rolling update config params. Present only if RolloutStrategyType = RollingUpdate.
@@ -515,6 +516,10 @@ const (
 	// RollingUpdateRolloutStrategyType replaces the old placed resource using rolling update
 	// i.e. gradually create the new one while replace the old ones.
 	RollingUpdateRolloutStrategyType RolloutStrategyType = "RollingUpdate"
+
+	// ExternalRolloutStrategyType means there is an external rollout controller that will
+	// handle the rollout of the resources.
+	ExternalRolloutStrategyType RolloutStrategyType = "External"
 )
 
 // RollingUpdateConfig contains the config to control the desired behavior of rolling update.

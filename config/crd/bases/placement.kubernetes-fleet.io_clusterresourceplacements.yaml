@@ -1859,10 +1859,12 @@ spec:
                     type: object
                   type:
                     default: RollingUpdate
-                    description: Type of rollout. The only supported type is "RollingUpdate".
+                    description: |-
+                      Type of rollout. The only supported types are "RollingUpdate" and "External".
                       Default is "RollingUpdate".
                     enum:
                     - RollingUpdate
+                    - External
                     type: string
                 type: object
             required:
