@@ -452,7 +452,7 @@ type ApplyStrategy struct {
 	//   Note that with this strategy, any change made to the managed fields by agents other than
 	//   Fleet in the member cluster will be overwritten periodically. If you would like Fleet
 	//   to detect such changes and report them rather than overwritting values as soon as Fleet
-	//   finds the inconsistencies, consider using the ReportApplyDiff or ReportAnyDiff strategies.
+	//   finds the inconsistencies, consider using the ReportIfDiff strategies.
 	//
 	// * ReportIfDiff: Fleet uses server-side apply to apply manifests, and will report
 	//   that an object has drifted from its desired state if an inconsistency has been found
@@ -549,7 +549,7 @@ type ApplyStrategy struct {
 	//   manifests will not be overwritten; in fact, Fleet will ignore them until the inconsistencies
 	//   are resolved properly: any change you make to the hub cluster manifests would not be
 	//   applied, and if you delete the manifests or even the ClusterResourcePlacement itself
-	//   from the hub cluster, these pre-existing resources would still remain.
+	//   from the hub cluster, these pre-existing resources would not be taken away.
 	//
 	//   Fleet will check for inconsistencies in accordance with the DiffMode setting. See also
 	//   the comments on the DiffMode field for more information.
