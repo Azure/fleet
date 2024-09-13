@@ -221,7 +221,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 	return controllerruntime.Result{}, syncErr
 }
 
-// updateBindingStatusWIthRetry sends the update request to API server with retry.
+// updateBindingStatusWithRetry sends the update request to API server with retry.
 func (r *Reconciler) updateBindingStatusWithRetry(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding) error {
 	// Retry only for specific errors or conditions
 	err := r.Client.Status().Update(ctx, resourceBinding)
@@ -244,20 +244,19 @@ func (r *Reconciler) updateBindingStatusWithRetry(ctx context.Context, resourceB
 					}
 				}
 				if !found {
-					// Prepend the new condition if it wasn't found
-					resourceBinding.Status.Conditions = append([]metav1.Condition{*rolloutCond}, resourceBinding.Status.Conditions...)
+					return controller.NewUnexpectedBehaviorError(fmt.Errorf("found a resourceBinding %v without RolloutStarted condition", klog.KObj(resourceBinding)))
 				}
 			}
 
 			if err := r.Client.Status().Update(ctx, resourceBinding); err != nil {
-				klog.ErrorS(err, "Failed to update the resourceBinding status on retry", "resourceBinding", klog.KObj(resourceBinding), "resourceBindingStatus", resourceBinding.Status)
+				klog.ErrorS(err, "Failed to update the resourceBinding status", "resourceBinding", klog.KObj(resourceBinding), "resourceBindingStatus", resourceBinding.Status)
 				return err
 			}
 			klog.V(2).InfoS("Successfully updated the resourceBinding status", "resourceBinding", klog.KObj(resourceBinding), "resourceBindingStatus", resourceBinding.Status)
 			return nil
 		})
 		if errAfterRetries != nil {
-			klog.ErrorS(errAfterRetries, "Failed to update binding status after retries", "resourceBinding", klog.KObj(resourceBinding))
+			klog.ErrorS(errAfterRetries, "Failed to update resourceBinding status after retries", "resourceBinding", klog.KObj(resourceBinding))
 			return errAfterRetries
 		}
 		return nil
