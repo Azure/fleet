@@ -486,8 +486,8 @@ type ApplyStrategy struct {
 	// +kubebuilder:validation:Optional
 	Type ApplyStrategyType `json:"type,omitempty"`
 
-	// DiffMode controls the way Fleet detects inconsistencies between a resource's desired state
-	// as kept in the Fleet hub cluster and its current state.
+	// DiffMode controls the way Fleet calculates inconsistencies between a resource's desired state
+	// as kept in the Fleet hub cluster and its current state on the target member cluster.
 	//
 	// This field is in effect when the ClusterResourcePlacement is configured to use the
 	// ReportDiff apply strategy and/or the ApplyIfNoDiff takeover action.
@@ -498,10 +498,6 @@ type ApplyStrategy struct {
 	//   desired state if (and only if) there are value differences in fields that are managed
 	//   by Fleet (i.e., the fields that are specified explicitly in the hub cluster manifests).
 	//   Differences in unmanaged fields will be ignored. This is the default mode.
-	//
-	//   Note that as an exception, Fleet will always check for differences in the object
-	//   labels and annotations, even if the affected label/annotation keys are absent in the hub
-	//   cluster manifests.
 	//
 	// * FullDiff: with this mode, Fleet considers that a placed object has drifted from its
 	//   desired state if there are values differences in any object field, even if the field is
@@ -554,8 +550,8 @@ type ApplyStrategy struct {
 	//   Fleet will check for inconsistencies in accordance with the DiffMode setting. See also
 	//   the comments on the DiffMode field for more information.
 	//
-	//   If a diff has been found in a field that is managed by Fleet (i.e., the field is specified
-	//   in the hub cluster manifest), consider one of the following actions:
+	//   If a diff has been found in a field that is **managed** by Fleet (i.e., the field
+	//   **is specified ** in the hub cluster manifest), consider one of the following actions:
 	//   * set the field in the member cluster to be of the same value as that in the hub cluster
 	//     manifest.
 	//   * update the hub cluster manifest so that its field value matches with that in the member
@@ -563,8 +559,8 @@ type ApplyStrategy struct {
 	//   * switch to the AlwaysApply action, which will allow Fleet to overwrite the field with the
 	//     value in the hub cluster manifest.
 	//
-	//   If a diff has been found in a field that is not managed by Fleet (i.e., the field is not
-	//   specified in the hub cluster manifest), consider one of the following actions:
+	//   If a diff has been found in a field that is **not managed** by Fleet (i.e., the field
+	//   **is not specified** in the hub cluster manifest), consider one of the following actions:
 	//   * remove the field from the member cluster.
 	//   * update the hub cluster manifest so that the field is included in the hub cluster manifest.
 	//
@@ -592,15 +588,9 @@ const (
 	// Details: https://kubernetes.io/docs/reference/using-api/server-side-apply
 	ApplyStrategyTypeServerSideApply ApplyStrategyType = "ServerSideApply"
 
-	// ApplyStrategyTypeReportApplyDiff will use server-side apply to apply manifests and report
-	// that a drift has occurred if fields managed by Fleet have been overwritten by agents
-	// other than Fleet.
-	ApplyStrategyTypeReportApplyDiff ApplyStrategyType = "ReportApplyDiff"
-
-	// ApplyStrategyTypeReportAnyDiff will use server-side apply to apply manifests and report
-	// that a drift has occurred if any field has been added, removed, or edited by agents
-	// other than Fleet, even if the field is not under Fleet's management.
-	ApplyStrategyTypeReportAnyDiff ApplyStrategyType = "ReportAnyDiff"
+	// ApplyStrategyTypeReportDiff will use server-side apply to apply manifests and report
+	// drifts found in resources using the diff mode specified.
+	ApplyStrategyTypeReportDiff ApplyStrategyType = "ReportDiff"
 )
 
 // ServerSideApplyConfig defines the configuration for server side apply.
