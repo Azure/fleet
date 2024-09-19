@@ -429,6 +429,82 @@ type RolloutStrategy struct {
 // Note: If multiple CRPs try to place the same resource with different apply strategy, the later ones will fail with the
 // reason ApplyConflictBetweenPlacements.
 type ApplyStrategy struct {
+	// CompareOption controls how Fleet compares the desired state of a resource, as kept in
+	// a hub cluster manifest, with the current state of the resource (if applicable) in the
+	// member cluster.
+	//
+	// Available options are:
+	//
+	// * PartialDiff: with this option, Fleet will compare only fields that are managed by Fleet, i.e.,
+	//   the fields that are specified explicitly in the hub cluster manifest. Unmanaged fields
+	//   are ignored. This is the default option.
+	//
+	// * FullDiff: with this option, Fleet will compare all fields of the resource, even if the
+	//   fields are absent from the hub cluster manifest.
+	//
+	// Consider using the PartialDiff option if you would like to:
+	//
+	// * use the default values for certain fields; or
+	// * let another agent, e.g., HPAs, VPAs, etc., on the member cluster side manage some fields; or
+	// * allow ad-hoc or cluster-specific settings on the member cluster side.
+	//
+	// To use the FullDiff option, it is recommended that you:
+	//
+	// * specify all fields as appropriate in the hub cluster, even if you are OK with using default
+	//   values;
+	// * make sure that no fields are managed by agents other than Fleet on the member cluster
+	//   side, such as HPAs, VPAs, or other controllers.
+	//
+	// See the Fleet documentation for further explanations and usage examples.
+	//
+	// +kubebuilder:default=PartialDiff
+	// +kubebuilder:validation:Enum=PartialDiff;FullDiff
+	// +kubebuilder:validation:Optional
+	CompareOption CompareOptionType `json:"compareOption,omitempty"`
+
+	// WhenToApply controls when Fleet would apply the manifests on the hub cluster to the member
+	// clusters.
+	//
+	// Available options are:
+	//
+	// * AlwaysApply: with this option, Fleet will periodically apply hub cluster manifests
+	//   on the member cluster side; this will effectively overwrite any change in the fields
+	//   managed by Fleet (i.e., specified in the hub cluster manifest). This is the default
+	//   option.
+	//
+	//   Note that this option would revert any ad-hoc changes made on the member cluster side in
+	//   the managed fields; if you would like to make temporary edits on the member cluster side
+	//   in the managed fields, switch to IfNotDrifted option. Note that changes in unmanaged
+	//   fields will be left alone; if you use the FullDiff compare option, such changes will
+	//   be reported as drifts.
+	//
+	// * IfNotDrifted: with this option, Fleet will stop applying hub cluster manifests on
+	//   clusters that have drifted from the desired state; apply ops would still continue on
+	//   the rest of the clusters. Drifts are calculated using the CompareOptions,
+	//   as explained in the corresponding field.
+	//
+	//   Use this option if you would like Fleet to detect drifts in your multi-cluster setup.
+	//   A drift occurs when an agent makes an ad-hoc change on the member cluster side that
+	//   makes affected resources deviate from its desired state as kept in the hub cluster;
+	//   and this option grants you an opportunity to view the drift details and take actions
+	//   accordingly. The drift details will be reported in the CRP status.
+	//
+	//   To fix a drift, you may:
+	//
+	//   * revert the changes manually on the member cluster side
+	//   * update the hub cluster manifest; this will trigger Fleet to apply the latest revision
+	//     of the manifests, which will overwrite the drifted fields
+	//     (if they are managed by Fleet)
+	//   * switch to the AlwaysApply option; this will trigger Fleet to apply the current revision
+	//     of the manifests, which will overwrite the drifted fields (if they are managed by Fleet).
+	//   * if applicable and necessary, delete the drifted resources on the member cluster side; Fleet
+	//     will attempt to re-create them using the hub cluster manifests
+	//
+	// +kubebuilder:default=AlwaysApply
+	// +kubebuilder:validation:Enum=AlwaysApply;IfNotDrifted
+	// +kubebuilder:validation:Optional
+	WhenToApply WhenToApplyType `json:"whenToApply,omitempty"`
+
 	// Type is the apply strategy to use; it determines how Fleet applies manifests from the
 	// hub cluster to a member cluster.
 	//
@@ -441,6 +517,8 @@ type ApplyStrategy struct {
 	//   annoation of an applied resource. If the object gets so large that apply ops can no longer
 	//   be executed, Fleet will switch to server-side apply.
 	//
+	//   Use CompareOptions and WhenToApply settings to control when an apply op can be executed.
+	//
 	// * ServerSideApply: Fleet uses server-side apply to apply manifests; Fleet itself will
 	//   become the field manager for specified fields in the manifests. Specify
 	//   ServerSideApplyConfig as appropriate if you would like Fleet to take over field
@@ -449,72 +527,22 @@ type ApplyStrategy struct {
 	//   information, please refer to the Kubernetes documentation
 	//   (https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply).
 	//
-	//   Note that with this strategy, any change made to the managed fields by agents other than
-	//   Fleet in the member cluster will be overwritten periodically. If you would like Fleet
-	//   to detect such changes and report them rather than overwritting values as soon as Fleet
-	//   finds the inconsistencies, consider using the ReportDiff strategies.
+	//   Use CompareOptions and WhenToApply settings to control when an apply op can be executed.
 	//
-	// * ReportDiff: Fleet uses server-side apply to apply manifests, and will report
-	//   that an object has drifted from its desired state if an inconsistency has been found
-	//   in accordance with the DiffMode setting. This is helpful in drift detection scenarios,
-	//   where you would like to identify ad-hoc changes made to placed objects in
-	//   the member clusters.
+	// * ReportDiff: Fleet will compare the desired state of a resource as kept in the hub cluster
+	//   with its current state (if appliable) on the member cluster side, and report any
+	//   differences. No actual apply ops would be executed, and resources will be left alone as they
+	//   are on the member clusters.
 	//
-	//   See also the comments on the DiffMode field for more information.
+	//   Use CompareOptions setting to control how the difference is calculated.
 	//
-	//   If a diff has been found in a field that is managed by Fleet (i.e., the field is specified
-	//   in the hub cluster manifest), consider one of the following actions:
-	//
-	//   * revert the field change in all drifted member clusters.
-	//   * update the hub cluster manifest; this will trigger Fleet to apply the latest revision
-	//     of the manifests, which will overwrite the drifted field.
-	//   * switch to the ServerSideApply strategy, which will allow Fleet to overwrite the drifted
-	//     field with the current revision of manifests.
-	//
-	//   If a diff has been found in a field that is not managed by Fleet (i.e., the field is not
-	//   specified in the hub cluster manifest), consider one of the following actions:
-	//
-	//   * remove the field from all drifted member clusters.
-	//   * update the hub cluster manifest so that the field is included in the hub cluster
-	//     manifest.
-	//
-	// For a comparison between the different strategies and some examples, please refer to the
+	// For a comparison between the different strategies and usage examples, refer to the
 	// Fleet documentation.
 	//
 	// +kubebuilder:default=ClientSideApply
 	// +kubebuilder:validation:Enum=ClientSideApply;ServerSideApply;ReportDiff
 	// +kubebuilder:validation:Optional
 	Type ApplyStrategyType `json:"type,omitempty"`
-
-	// DiffMode controls the way Fleet calculates inconsistencies between a resource's desired state
-	// as kept in the Fleet hub cluster and its current state on the target member cluster.
-	//
-	// This field is in effect when the ClusterResourcePlacement is configured to use the
-	// ReportDiff apply strategy and/or the ApplyIfNoDiff takeover action.
-	//
-	// Available options include:
-	//
-	// * ApplyDiff: with this mode, Fleet considers that a placed object has drifted from its
-	//   desired state if (and only if) there are value differences in fields that are managed
-	//   by Fleet (i.e., the fields that are specified explicitly in the hub cluster manifests).
-	//   Differences in unmanaged fields will be ignored. This is the default mode.
-	//
-	// * FullDiff: with this mode, Fleet considers that a placed object has drifted from its
-	//   desired state if there are values differences in any object field, even if the field is
-	//   not managed by Fleet (i.e., the field is not specified in the hub cluster manifest). This
-	//   effectively assumes that an object must look exactly the same in the hub cluster and the
-	//   member clusters.
-	//
-	//   If you prefer using this mode, it is recommended that you
-	//   * specify all the fields of interest explicitly in the hub cluster manifests, even if
-	//     you are OK with using default values for some fields; and
-	//   * make sure that no fields are managed by agents other than Fleet in the member clusters,
-	//     such as HPAs, VPAs, or other controllers.
-	//
-	// +kubebuilder:default=ApplyDiff
-	// +kubebuilder:validation:Enum=ApplyDiff;FullDiff
-	// +kubebuilder:validation:Optional
-	DiffMode DiffModeType `json:"diffMode,omitempty"`
 
 	// AllowCoOwnership defines whether to apply the resource if it already exists in the target cluster and is not
 	// solely owned by fleet (i.e., metadata.ownerReferences contains only fleet custom resources).
@@ -537,7 +565,8 @@ type ApplyStrategy struct {
 	// * AlwaysApply: with this action, Fleet will apply the hub cluster manifests to the member
 	//   clusters even if the affected resources already exist. This is the default action.
 	//
-	//   Note that this might lead to some fields being overwritten on the member clusters.
+	//   Note that this might lead to fields being overwritten on the member clusters, if they
+	//   are specified in the hub cluster manifests.
 	//
 	// * ApplyIfNoDiff: with this action, Fleet will apply the hub cluster manifests to the member
 	//   clusters if (and only if) pre-existing resources look the same as the hub cluster manifests.
@@ -547,8 +576,8 @@ type ApplyStrategy struct {
 	//   applied, and if you delete the manifests or even the ClusterResourcePlacement itself
 	//   from the hub cluster, these pre-existing resources would not be taken away.
 	//
-	//   Fleet will check for inconsistencies in accordance with the DiffMode setting. See also
-	//   the comments on the DiffMode field for more information.
+	//   Fleet will check for inconsistencies in accordance with the CompareOption setting. See also
+	//   the comments on the CompareOption field for more information.
 	//
 	//   If a diff has been found in a field that is **managed** by Fleet (i.e., the field
 	//   **is specified ** in the hub cluster manifest), consider one of the following actions:
@@ -573,6 +602,38 @@ type ApplyStrategy struct {
 	TakeoverAction TakeOverActionType `json:"actionType,omitempty"`
 }
 
+// CompareOptionType describes the compare option that Fleet uses to detect drifts and/or
+// calculate differences.
+// +enum
+type CompareOptionType string
+
+const (
+	// CompareOptionTypePartialDiff will compare only fields that are managed by Fleet, i.e.,
+	// fields that are specified explicitly in the hub cluster manifest. Unmanaged fields
+	// are ignored.
+	CompareOptionTypePartialDiff CompareOptionType = "PartialDiff"
+
+	// CompareOptionTypeFullDiff will compare all fields of the resource, even if the fields
+	// are absent from the hub cluster manifest.
+	CompareOptionTypeFullDiff CompareOptionType = "FullDiff"
+)
+
+// WhenToApplyType describes when Fleet would apply the manifests on the hub cluster to
+// the member clusters.
+type WhenToApplyType string
+
+const (
+	// WhenToApplyTypeAlwaysApply instructs Fleet to periodically apply hub cluster manifests
+	// on the member cluster side; this will effectively overwrite any change in the fields
+	// managed by Fleet (i.e., specified in the hub cluster manifest).
+	WhenToApplyTypeAlwaysApply WhenToApplyType = "AlwaysApply"
+
+	// WhenToApplyTypeIfNotDrifted instructs Fleet to stop applying hub cluster manifests on
+	// clusters that have drifted from the desired state; apply ops would still continue on
+	// the rest of the clusters.
+	WhenToApplyTypeIfNotDrifted WhenToApplyType = "IfNotDrifted"
+)
+
 // ApplyStrategyType describes the type of the strategy used to apply the resource to the target cluster.
 // +enum
 type ApplyStrategyType string
@@ -588,8 +649,9 @@ const (
 	// Details: https://kubernetes.io/docs/reference/using-api/server-side-apply
 	ApplyStrategyTypeServerSideApply ApplyStrategyType = "ServerSideApply"
 
-	// ApplyStrategyTypeReportDiff will use server-side apply to apply manifests and report
-	// drifts found in resources using the diff mode specified.
+	// ApplyStrategyTypeReportDiff will report differences between the desired state of a
+	// resource as kept in the hub cluster and its current state (if applicable) on the member
+	// cluster side. No actual apply ops would be executed.
 	ApplyStrategyTypeReportDiff ApplyStrategyType = "ReportDiff"
 )
 
