@@ -684,23 +684,6 @@ const (
 	TakeOverActionTypeAlwaysApply TakeOverActionType = "AlwaysApply"
 )
 
-// DiffModeType describes the diff mode to use when Fleet is set to detect inconsistencies between
-// a resource's desired state as kept in the Fleet hub cluster and its current state.
-// +enum
-type DiffModeType string
-
-const (
-	// DiffModeTypeApplyDiff will consider that a placed object has become inconsistent with its
-	// hub cluster manifest if (and only if) there are value differences in fields that are
-	// managed by Fleet (i.e., the fields that are specified explicitly in the hub cluster manifests).
-	DiffModeTypeApplyDiff DiffModeType = "ApplyDiff"
-
-	// DiffModeTypeFullDiff will consider that a placed object has become inconsistent with its
-	// hub cluster manifest if there are value differences in any object field, even if the field
-	// is not managed by Fleet (i.e., the field is not specified in the hub cluster manifest).
-	DiffModeTypeFullDiff DiffModeType = "FullDiff"
-)
-
 // +enum
 type RolloutStrategyType string
 
