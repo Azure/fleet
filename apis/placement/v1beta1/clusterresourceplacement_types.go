@@ -429,26 +429,26 @@ type RolloutStrategy struct {
 // Note: If multiple CRPs try to place the same resource with different apply strategy, the later ones will fail with the
 // reason ApplyConflictBetweenPlacements.
 type ApplyStrategy struct {
-	// CompareOption controls how Fleet compares the desired state of a resource, as kept in
+	// ComparisonOption controls how Fleet compares the desired state of a resource, as kept in
 	// a hub cluster manifest, with the current state of the resource (if applicable) in the
 	// member cluster.
 	//
 	// Available options are:
 	//
-	// * PartialDiff: with this option, Fleet will compare only fields that are managed by Fleet, i.e.,
-	//   the fields that are specified explicitly in the hub cluster manifest. Unmanaged fields
-	//   are ignored. This is the default option.
+	// * PartialComparison: with this option, Fleet will compare only fields that are managed by
+	//   Fleet, i.e., the fields that are specified explicitly in the hub cluster manifest.
+	//   Unmanaged fields are ignored. This is the default option.
 	//
-	// * FullDiff: with this option, Fleet will compare all fields of the resource, even if the
-	//   fields are absent from the hub cluster manifest.
+	// * FullComparison: with this option, Fleet will compare all fields of the resource,
+	//   even if the fields are absent from the hub cluster manifest.
 	//
-	// Consider using the PartialDiff option if you would like to:
+	// Consider using the PartialComparison option if you would like to:
 	//
 	// * use the default values for certain fields; or
 	// * let another agent, e.g., HPAs, VPAs, etc., on the member cluster side manage some fields; or
 	// * allow ad-hoc or cluster-specific settings on the member cluster side.
 	//
-	// To use the FullDiff option, it is recommended that you:
+	// To use the FullComparison option, it is recommended that you:
 	//
 	// * specify all fields as appropriate in the hub cluster, even if you are OK with using default
 	//   values;
@@ -457,17 +457,17 @@ type ApplyStrategy struct {
 	//
 	// See the Fleet documentation for further explanations and usage examples.
 	//
-	// +kubebuilder:default=PartialDiff
-	// +kubebuilder:validation:Enum=PartialDiff;FullDiff
+	// +kubebuilder:default=PartialComparison
+	// +kubebuilder:validation:Enum=PartialComparison;FullComparison
 	// +kubebuilder:validation:Optional
-	CompareOption CompareOptionType `json:"compareOption,omitempty"`
+	ComparisonOption ComparisonOptionType `json:"compareOption,omitempty"`
 
 	// WhenToApply controls when Fleet would apply the manifests on the hub cluster to the member
 	// clusters.
 	//
 	// Available options are:
 	//
-	// * AlwaysApply: with this option, Fleet will periodically apply hub cluster manifests
+	// * Always: with this option, Fleet will periodically apply hub cluster manifests
 	//   on the member cluster side; this will effectively overwrite any change in the fields
 	//   managed by Fleet (i.e., specified in the hub cluster manifest). This is the default
 	//   option.
@@ -480,7 +480,7 @@ type ApplyStrategy struct {
 	//
 	// * IfNotDrifted: with this option, Fleet will stop applying hub cluster manifests on
 	//   clusters that have drifted from the desired state; apply ops would still continue on
-	//   the rest of the clusters. Drifts are calculated using the CompareOptions,
+	//   the rest of the clusters. Drifts are calculated using the ComparisonOption,
 	//   as explained in the corresponding field.
 	//
 	//   Use this option if you would like Fleet to detect drifts in your multi-cluster setup.
@@ -495,13 +495,13 @@ type ApplyStrategy struct {
 	//   * update the hub cluster manifest; this will trigger Fleet to apply the latest revision
 	//     of the manifests, which will overwrite the drifted fields
 	//     (if they are managed by Fleet)
-	//   * switch to the AlwaysApply option; this will trigger Fleet to apply the current revision
+	//   * switch to the Always option; this will trigger Fleet to apply the current revision
 	//     of the manifests, which will overwrite the drifted fields (if they are managed by Fleet).
 	//   * if applicable and necessary, delete the drifted resources on the member cluster side; Fleet
 	//     will attempt to re-create them using the hub cluster manifests
 	//
-	// +kubebuilder:default=AlwaysApply
-	// +kubebuilder:validation:Enum=AlwaysApply;IfNotDrifted
+	// +kubebuilder:default=Always
+	// +kubebuilder:validation:Enum=Always;IfNotDrifted
 	// +kubebuilder:validation:Optional
 	WhenToApply WhenToApplyType `json:"whenToApply,omitempty"`
 
@@ -517,7 +517,7 @@ type ApplyStrategy struct {
 	//   annoation of an applied resource. If the object gets so large that apply ops can no longer
 	//   be executed, Fleet will switch to server-side apply.
 	//
-	//   Use CompareOptions and WhenToApply settings to control when an apply op can be executed.
+	//   Use ComparisonOption and WhenToApply settings to control when an apply op can be executed.
 	//
 	// * ServerSideApply: Fleet uses server-side apply to apply manifests; Fleet itself will
 	//   become the field manager for specified fields in the manifests. Specify
@@ -527,14 +527,14 @@ type ApplyStrategy struct {
 	//   information, please refer to the Kubernetes documentation
 	//   (https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply).
 	//
-	//   Use CompareOptions and WhenToApply settings to control when an apply op can be executed.
+	//   Use ComparisonOption and WhenToApply settings to control when an apply op can be executed.
 	//
 	// * ReportDiff: Fleet will compare the desired state of a resource as kept in the hub cluster
 	//   with its current state (if appliable) on the member cluster side, and report any
 	//   differences. No actual apply ops would be executed, and resources will be left alone as they
 	//   are on the member clusters.
 	//
-	//   Use CompareOptions setting to control how the difference is calculated.
+	//   Use ComparisonOption setting to control how the difference is calculated.
 	//
 	// For a comparison between the different strategies and usage examples, refer to the
 	// Fleet documentation.
@@ -554,7 +554,7 @@ type ApplyStrategy struct {
 	// +kubebuilder:validation:Optional
 	ServerSideApplyConfig *ServerSideApplyConfig `json:"serverSideApplyConfig,omitempty"`
 
-	// TakeoverAction determines the action to take when Fleet applies resources to a member
+	// WhenToTakeOver determines the action to take when Fleet applies resources to a member
 	// cluster for the first time and finds out that the resource already exists in the cluster.
 	//
 	// This setting is most relevant in cases where you would like Fleet to manage pre-existing
@@ -562,13 +562,13 @@ type ApplyStrategy struct {
 	//
 	// Available options include:
 	//
-	// * AlwaysApply: with this action, Fleet will apply the hub cluster manifests to the member
+	// * Always: with this action, Fleet will apply the hub cluster manifests to the member
 	//   clusters even if the affected resources already exist. This is the default action.
 	//
 	//   Note that this might lead to fields being overwritten on the member clusters, if they
 	//   are specified in the hub cluster manifests.
 	//
-	// * ApplyIfNoDiff: with this action, Fleet will apply the hub cluster manifests to the member
+	// * IfNoDiff: with this action, Fleet will apply the hub cluster manifests to the member
 	//   clusters if (and only if) pre-existing resources look the same as the hub cluster manifests.
 	//   This is a safer option as pre-existing resources that are inconsistent with the hub cluster
 	//   manifests will not be overwritten; in fact, Fleet will ignore them until the inconsistencies
@@ -576,8 +576,8 @@ type ApplyStrategy struct {
 	//   applied, and if you delete the manifests or even the ClusterResourcePlacement itself
 	//   from the hub cluster, these pre-existing resources would not be taken away.
 	//
-	//   Fleet will check for inconsistencies in accordance with the CompareOption setting. See also
-	//   the comments on the CompareOption field for more information.
+	//   Fleet will check for inconsistencies in accordance with the ComparisonOption setting. See also
+	//   the comments on the ComparisonOption field for more information.
 	//
 	//   If a diff has been found in a field that is **managed** by Fleet (i.e., the field
 	//   **is specified ** in the hub cluster manifest), consider one of the following actions:
@@ -585,7 +585,7 @@ type ApplyStrategy struct {
 	//     manifest.
 	//   * update the hub cluster manifest so that its field value matches with that in the member
 	//     cluster.
-	//   * switch to the AlwaysApply action, which will allow Fleet to overwrite the field with the
+	//   * switch to the Always action, which will allow Fleet to overwrite the field with the
 	//     value in the hub cluster manifest.
 	//
 	//   If a diff has been found in a field that is **not managed** by Fleet (i.e., the field
@@ -596,26 +596,26 @@ type ApplyStrategy struct {
 	//   If appropriate, you may also delete the object from the member cluster; Fleet will recreate
 	//   it using the hub cluster manifest.
 	//
-	// +kubebuilder:default=AlwaysApply
-	// +kubebuilder:validation:Enum=AlwaysApply;ApplyIfNoDiff
+	// +kubebuilder:default=Always
+	// +kubebuilder:validation:Enum=Always;IfNoDiff
 	// +kubebuilder:validation:Optional
-	TakeoverAction TakeOverActionType `json:"actionType,omitempty"`
+	WhenToTakeOver WhenToTakeOverType `json:"actionType,omitempty"`
 }
 
-// CompareOptionType describes the compare option that Fleet uses to detect drifts and/or
+// ComparisonOptionType describes the compare option that Fleet uses to detect drifts and/or
 // calculate differences.
 // +enum
-type CompareOptionType string
+type ComparisonOptionType string
 
 const (
-	// CompareOptionTypePartialDiff will compare only fields that are managed by Fleet, i.e.,
+	// ComparisonOptionTypePartialComparison will compare only fields that are managed by Fleet, i.e.,
 	// fields that are specified explicitly in the hub cluster manifest. Unmanaged fields
 	// are ignored.
-	CompareOptionTypePartialDiff CompareOptionType = "PartialDiff"
+	ComparisonOptionTypePartialComparison ComparisonOptionType = "PartialDiff"
 
-	// CompareOptionTypeFullDiff will compare all fields of the resource, even if the fields
+	// ComparisonOptionTypeFullDiff will compare all fields of the resource, even if the fields
 	// are absent from the hub cluster manifest.
-	CompareOptionTypeFullDiff CompareOptionType = "FullDiff"
+	ComparisonOptionTypeFullComparison ComparisonOptionType = "FullDiff"
 )
 
 // WhenToApplyType describes when Fleet would apply the manifests on the hub cluster to
@@ -623,10 +623,10 @@ const (
 type WhenToApplyType string
 
 const (
-	// WhenToApplyTypeAlwaysApply instructs Fleet to periodically apply hub cluster manifests
+	// WhenToApplyTypeAlways instructs Fleet to periodically apply hub cluster manifests
 	// on the member cluster side; this will effectively overwrite any change in the fields
 	// managed by Fleet (i.e., specified in the hub cluster manifest).
-	WhenToApplyTypeAlwaysApply WhenToApplyType = "AlwaysApply"
+	WhenToApplyTypeAlways WhenToApplyType = "Always"
 
 	// WhenToApplyTypeIfNotDrifted instructs Fleet to stop applying hub cluster manifests on
 	// clusters that have drifted from the desired state; apply ops would still continue on
@@ -669,19 +669,20 @@ type ServerSideApplyConfig struct {
 	ForceConflicts bool `json:"force"`
 }
 
-// TakeOverActionType describes the type of the action to take when we first apply the resources to the member cluster.
+// WhenToTakeOverType describes the type of the action to take when we first apply the
+// resources to the member cluster.
 // +enum
-type TakeOverActionType string
+type WhenToTakeOverType string
 
 const (
-	// TakeOverActionTypeApplyIfNoDiff will apply the yaml from hub cluster only if there is no difference
-	// between the current resource snapshot version on the hub cluster and the existing resources on the member cluster.
-	// Otherwise, we will report the difference.
-	TakeOverActionTypeApplyIfNoDiff TakeOverActionType = "ApplyIfNoDiff"
+	// WhenToTakeOverTypeIfNoDiff will apply manifests from the hub cluster only if there is no difference
+	// between the current resource snapshot version on the hub cluster and the existing
+	// resources on the member cluster. Otherwise, we will report the difference.
+	WhenToTakeOverTypeIfNoDiff WhenToTakeOverType = "IfNoDiff"
 
-	// TakeOverActionTypeAlwaysApply will always apply the resource to the member cluster regardless
+	// WhenToTakeOverTypeAlways will always apply the resource to the member cluster regardless
 	// if there are differences between the resource on the hub cluster and the existing resources on the member cluster.
-	TakeOverActionTypeAlwaysApply TakeOverActionType = "AlwaysApply"
+	WhenToTakeOverTypeAlways WhenToTakeOverType = "Always"
 )
 
 // +enum
