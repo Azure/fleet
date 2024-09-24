@@ -9,6 +9,7 @@ package rollout
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 
@@ -453,7 +454,7 @@ func determineBindingsToUpdate(
 ) ([]toBeUpdatedBinding, []toBeUpdatedBinding) {
 	toBeUpdatedBindingList := make([]toBeUpdatedBinding, 0)
 	// calculate the max number of bindings that can be unavailable according to user specified maxUnavailable
-	maxNumberToRemove := calculateMaxToRemove(crp, targetNumber, readyBindings, canBeUnavailableBindings)
+	maxNumberToRemove := calculateMaxToRemove(crp, targetNumber, len(removeCandidates), readyBindings, canBeUnavailableBindings)
 	// we can still update the bindings that are failed to apply already regardless of the maxNumberToRemove
 	toBeUpdatedBindingList = append(toBeUpdatedBindingList, applyFailedUpdateCandidates...)
 
@@ -494,13 +495,13 @@ func determineBindingsToUpdate(
 	return toBeUpdatedBindingList, staleUnselectedBinding
 }
 
-func calculateMaxToRemove(crp *fleetv1beta1.ClusterResourcePlacement, targetNumber int, readyBindings, canBeUnavailableBindings []*fleetv1beta1.ClusterResourceBinding) int {
+func calculateMaxToRemove(crp *fleetv1beta1.ClusterResourcePlacement, targetNumber, maxNumberToRemove int, readyBindings, canBeUnavailableBindings []*fleetv1beta1.ClusterResourceBinding) int {
 	maxUnavailableNumber, _ := intstr.GetScaledValueFromIntOrPercent(crp.Spec.Strategy.RollingUpdate.MaxUnavailable, targetNumber, true)
 	minAvailableNumber := targetNumber - maxUnavailableNumber
 	// This is the lower bound of the number of bindings that can be available during the rolling update
 	// Since we can't predict the number of bindings that can be unavailable after they are applied, we don't take them into account
 	lowerBoundAvailableNumber := len(readyBindings) - len(canBeUnavailableBindings)
-	maxNumberToRemove := lowerBoundAvailableNumber - minAvailableNumber
+	maxNumberToRemove = int(math.Max(float64(lowerBoundAvailableNumber-minAvailableNumber), float64(maxNumberToRemove)))
 	klog.V(2).InfoS("Calculated the max number of bindings to remove", "clusterResourcePlacement", klog.KObj(crp),
 		"maxUnavailableNumber", maxUnavailableNumber, "minAvailableNumber", minAvailableNumber,
 		"lowerBoundAvailableBindings", lowerBoundAvailableNumber, "maxNumberOfBindingsToRemove", maxNumberToRemove)
