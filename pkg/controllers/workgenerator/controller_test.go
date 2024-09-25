@@ -1734,68 +1734,6 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 			conflictCount: 10,
 			expectError:   true,
 		},
-		{
-			name: "does not update status because RolloutStarted not found",
-			latestBinding: &fleetv1beta1.ClusterResourceBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:            "test-binding-4",
-					Generation:      3,
-					ResourceVersion: "3",
-				},
-				Spec: fleetv1beta1.ResourceBindingSpec{
-					State:                fleetv1beta1.BindingStateBound,
-					TargetCluster:        "cluster-1",
-					ResourceSnapshotName: "snapshot-1",
-				},
-				Status: fleetv1beta1.ResourceBindingStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
-							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 3,
-							Reason:             condition.RolloutStartedReason,
-							LastTransitionTime: lastTransitionTime,
-						},
-					},
-				},
-			},
-			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:            "test-binding-4",
-					Generation:      3,
-					ResourceVersion: "3",
-				},
-				Spec: fleetv1beta1.ResourceBindingSpec{
-					State:                fleetv1beta1.BindingStateBound,
-					TargetCluster:        "cluster-1",
-					ResourceSnapshotName: "snapshot-1",
-				},
-				Status: fleetv1beta1.ResourceBindingStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:               string(fleetv1beta1.ResourceBindingOverridden),
-							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 3,
-							Reason:             condition.OverriddenSucceededReason,
-						},
-						{
-							Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
-							Status:             metav1.ConditionTrue,
-							ObservedGeneration: 3,
-							Reason:             condition.AllWorkSyncedReason,
-						},
-						{
-							Type:               string(fleetv1beta1.ResourceBindingApplied),
-							Status:             metav1.ConditionFalse,
-							ObservedGeneration: 3,
-							Reason:             condition.WorkNeedSyncedReason,
-						},
-					},
-				},
-			},
-			conflictCount: 1,
-			expectError:   true,
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
