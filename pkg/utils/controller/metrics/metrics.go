@@ -49,6 +49,13 @@ var (
 		Name: "fleet_workload_active_workers",
 		Help: "Number of currently used workers per controller",
 	}, []string{"controller"})
+
+	// GuardRailRejectionCount is a prometheus counter metrics which holds the total
+	// number of rejections performed by the fleet guard rail.
+	GuardRailRejectionCount = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "fleet_guard_rail_rejection_count",
+		Help: "Total number of rejection performed by fleet guard rail",
+	}, []string{"controller"})
 )
 
 func init() {
@@ -58,5 +65,6 @@ func init() {
 		FleetReconcileTime,
 		FleetWorkerCount,
 		FleetActiveWorkers,
+		GuardRailRejectionCount,
 	)
 }

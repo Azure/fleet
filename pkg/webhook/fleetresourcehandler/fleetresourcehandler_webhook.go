@@ -81,7 +81,7 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 			response = v.handleEvent(ctx, req)
 		case req.Namespace != "":
 			klog.V(2).InfoS("handling namespaced resource in fleet reserved namespaces", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
-			response = validation.ValidateUserForResource(req, v.whiteListedUsers)
+			response = validation.ValidateUserForResource(req, v.whiteListedUsers, true)
 		default:
 			klog.V(3).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify resource with GVK: %s", req.UserInfo.Username, req.UserInfo.Groups, req.Kind.String()))
@@ -114,7 +114,7 @@ func (v *fleetResourceValidator) handleV1Alpha1MemberCluster(req admission.Reque
 		}
 		return validation.ValidateV1Alpha1MemberClusterUpdate(currentMC, oldMC, req, v.whiteListedUsers)
 	}
-	return validation.ValidateUserForResource(req, v.whiteListedUsers)
+	return validation.ValidateUserForResource(req, v.whiteListedUsers, true)
 }
 
 // handleMemberCluster allows/denies the request to modify member cluster object after validation.
@@ -136,7 +136,7 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 	}
 	isFleetMC := utils.IsFleetAnnotationPresent(currentMC.Annotations)
 	if isFleetMC {
-		return validation.ValidateUserForResource(req, v.whiteListedUsers)
+		return validation.ValidateUserForResource(req, v.whiteListedUsers, true)
 	}
 	klog.V(3).InfoS("upstream member cluster resource is allowed to be created/deleted by any user",
 		"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "kind", req.RequestKind.Kind, "subResource", req.SubResource, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
@@ -148,7 +148,7 @@ func (v *fleetResourceValidator) handleFleetReservedNamespacedResource(ctx conte
 	var response admission.Response
 	if strings.HasPrefix(req.Namespace, fleetMemberNamespacePrefix) {
 		// check to see if valid users other than member agent is making the request.
-		response = validation.ValidateUserForResource(req, v.whiteListedUsers)
+		response = validation.ValidateUserForResource(req, v.whiteListedUsers, false)
 		// check to see if member agent is making the request only on Update.
 		if !response.Allowed {
 			// if namespace name is just "fleet-member", mcName variable becomes empty and the request is allowed since that namespaces is not watched by member agents.
@@ -157,7 +157,7 @@ func (v *fleetResourceValidator) handleFleetReservedNamespacedResource(ctx conte
 		}
 		return response
 	} else if strings.HasPrefix(req.Namespace, fleetNamespacePrefix) || strings.HasPrefix(req.Namespace, kubeNamespacePrefix) {
-		return validation.ValidateUserForResource(req, v.whiteListedUsers)
+		return validation.ValidateUserForResource(req, v.whiteListedUsers, true)
 	}
 	klog.V(3).InfoS("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces",
 		"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "kind", req.RequestKind.Kind, "subResource", req.SubResource, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
@@ -175,7 +175,7 @@ func (v *fleetResourceValidator) handleNamespace(req admission.Request) admissio
 	fleetMatchResult := strings.HasPrefix(req.Name, fleetNamespacePrefix)
 	kubeMatchResult := strings.HasPrefix(req.Name, kubeNamespacePrefix)
 	if fleetMatchResult || kubeMatchResult {
-		return validation.ValidateUserForResource(req, v.whiteListedUsers)
+		return validation.ValidateUserForResource(req, v.whiteListedUsers, true)
 	}
 	// only handling reserved namespaces with prefix fleet/kube.
 	return admission.Allowed("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces")

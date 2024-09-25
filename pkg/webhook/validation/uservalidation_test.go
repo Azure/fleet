@@ -148,7 +148,7 @@ func TestValidateUserForResource(t *testing.T) {
 
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			gotResult := ValidateUserForResource(testCase.req, testCase.whiteListedUsers)
+			gotResult := ValidateUserForResource(testCase.req, testCase.whiteListedUsers, true)
 			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
 		})
 	}

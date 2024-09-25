@@ -20,6 +20,7 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/controller/metrics"
 )
 
 const (
@@ -49,6 +50,7 @@ func ValidateUserForFleetCRD(req admission.Request, whiteListedUsers []string, g
 	namespacedName := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
 	userInfo := req.UserInfo
 	if checkCRDGroup(group) && !isMasterGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) {
+		metrics.GuardRailRejectionCount.WithLabelValues("fleet-guard-rail").Inc()
 		klog.V(2).InfoS(deniedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		return admission.Denied(fmt.Sprintf(ResourceDeniedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
 	}
@@ -57,12 +59,15 @@ func ValidateUserForFleetCRD(req admission.Request, whiteListedUsers []string, g
 }
 
 // ValidateUserForResource checks to see if user is allowed to modify argued resource modified by request.
-func ValidateUserForResource(req admission.Request, whiteListedUsers []string) admission.Response {
+func ValidateUserForResource(req admission.Request, whiteListedUsers []string, isTerminalCall bool) admission.Response {
 	namespacedName := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
 	userInfo := req.UserInfo
 	if isMasterGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) || isUserAuthenticatedServiceAccount(userInfo) || isUserKubeScheduler(userInfo) || isUserKubeControllerManager(userInfo) || isNodeGroupUser(userInfo) {
 		klog.V(3).InfoS(allowedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		return admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
+	}
+	if isTerminalCall {
+		metrics.GuardRailRejectionCount.WithLabelValues("fleet-guard-rail").Inc()
 	}
 	klog.V(2).InfoS(deniedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 	return admission.Denied(fmt.Sprintf(ResourceDeniedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
@@ -77,6 +82,7 @@ func ValidateV1Alpha1MemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCl
 	isAnnotationUpdated := isMapFieldUpdated(currentMC.GetAnnotations(), oldMC.GetAnnotations())
 	isObjUpdated, err := isMemberClusterUpdated(&currentMC, &oldMC)
 	if err != nil {
+		metrics.GuardRailRejectionCount.WithLabelValues("fleet-guard-rail").Inc()
 		return admission.Denied(err.Error())
 	}
 	if (isLabelUpdated || isAnnotationUpdated) && !isObjUpdated {
@@ -85,7 +91,7 @@ func ValidateV1Alpha1MemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCl
 		response = admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
 	}
 	if isObjUpdated {
-		response = ValidateUserForResource(req, whiteListedUsers)
+		response = ValidateUserForResource(req, whiteListedUsers, true)
 	}
 	return response
 }
@@ -95,6 +101,7 @@ func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberClus
 	namespacedName := types.NamespacedName{Name: currentMC.GetName()}
 	userInfo := req.UserInfo
 	if areAllFleetAnnotationsRemoved(currentMC.Annotations, oldMC.Annotations) {
+		metrics.GuardRailRejectionCount.WithLabelValues("fleet-guard-rail").Inc()
 		klog.V(2).InfoS(deniedRemoveFleetAnnotation, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		return admission.Denied(deniedRemoveFleetAnnotation)
 	}
@@ -103,11 +110,12 @@ func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberClus
 	oldMC.Spec.Taints = nil
 	isObjUpdated, err := isMemberClusterUpdated(currentMC.DeepCopy(), oldMC.DeepCopy())
 	if err != nil {
+		metrics.GuardRailRejectionCount.WithLabelValues("fleet-guard-rail").Inc()
 		return admission.Denied(err.Error())
 	}
 	isAnnotationUpdated := isFleetAnnotationUpdated(currentMC.Annotations, oldMC.Annotations)
 	if isObjUpdated || isAnnotationUpdated {
-		return ValidateUserForResource(req, whiteListedUsers)
+		return ValidateUserForResource(req, whiteListedUsers, true)
 	}
 	// any user is allowed to modify labels, annotations, taints on fleet MC except fleet pre-fixed annotations.
 	klog.V(3).InfoS(allowedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
@@ -119,12 +127,13 @@ func ValidatedUpstreamMemberClusterUpdate(currentMC, oldMC clusterv1beta1.Member
 	namespacedName := types.NamespacedName{Name: currentMC.GetName()}
 	userInfo := req.UserInfo
 	if isFleetAnnotationAdded(currentMC.Annotations, oldMC.Annotations) {
+		metrics.GuardRailRejectionCount.WithLabelValues("fleet-guard-rail").Inc()
 		klog.V(2).InfoS(deniedAddFleetAnnotation, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		return admission.Denied(deniedAddFleetAnnotation)
 	}
 	// any user is allowed to modify MC spec for upstream MC.
 	if !equality.Semantic.DeepEqual(currentMC.Status, oldMC.Status) {
-		return ValidateUserForResource(req, whiteListedUsers)
+		return ValidateUserForResource(req, whiteListedUsers, true)
 	}
 	klog.V(3).InfoS(allowedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 	return admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
@@ -268,6 +277,7 @@ func ValidateMCIdentity(ctx context.Context, client client.Client, req admission
 		klog.V(3).InfoS(allowedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		return admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
 	}
+	metrics.GuardRailRejectionCount.WithLabelValues("fleet-guard-rail").Inc()
 	klog.V(2).InfoS(deniedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 	return admission.Denied(fmt.Sprintf(ResourceDeniedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
 }
