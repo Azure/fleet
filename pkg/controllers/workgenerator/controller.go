@@ -10,6 +10,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,13 +34,11 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 	controllerruntime "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
@@ -950,8 +950,23 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 							return
 						}
 					} else {
-						klog.V(2).InfoS("The work applied or available condition stayed as true, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
-						return
+						oldResourceSnapshot := oldWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
+						newResourceSnapshot := newWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
+						if oldResourceSnapshot == "" || newResourceSnapshot == "" {
+							klog.ErrorS(controller.NewUnexpectedBehaviorError(errors.New("found an invalid work without parent-resource-snapshot-index")),
+								"Could not find the parent resource snapshot index label", "oldWork", klog.KObj(oldWork), "oldResourceSnapshotLabelValue", oldResourceSnapshot,
+								"newWork", klog.KObj(newWork), "newResourceSnapshotLabelValue", newResourceSnapshot)
+							return
+						}
+						// There is an edge case that, the work spec is the same but from different resourceSnapshots.
+						// WorkGenerator will update the work because of the label changes, but the generation is the same.
+						// When the normal update happens, the controller will set the applied condition as false and wait
+						// until the work condition has been changed.
+						// In this edge case, we need to requeue the binding to update the binding status.
+						if oldResourceSnapshot == newResourceSnapshot {
+							klog.V(2).InfoS("The work applied or available condition stayed as true, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
+							return
+						}
 					}
 				}
 				// We need to update the binding status in this case
