@@ -118,6 +118,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		return controllerruntime.Result{}, err
 	}
 
+	// When the binding is in the unscheduled state, rollout controller won't update the condition anymore.
+	// We treat the unscheduled binding as bound until the rollout controller deletes the binding and here controller still
+	// updates the status for troubleshooting purpose.
+	// Requeue until the rollout controller finishes processing the binding.
+	if resourceBinding.Spec.State == fleetv1beta1.BindingStateBound {
+		rolloutStartedCondition := resourceBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted))
+		// Though the bounded binding is not taking the latest resourceSnapshot, we still needs to reconcile the works.
+		if !condition.IsConditionStatusFalse(rolloutStartedCondition, resourceBinding.Generation) &&
+			!condition.IsConditionStatusTrue(rolloutStartedCondition, resourceBinding.Generation) {
+			// The rollout controller is still in the processing of updating the condition
+			klog.V(2).InfoS("Requeue the resource binding until the rollout controller finishes updating the status", "resourceBinding", bindingRef, "generation", resourceBinding.Generation, "rolloutStartedCondition", rolloutStartedCondition)
+			return controllerruntime.Result{Requeue: true}, nil
+		}
+	}
+
 	workUpdated := false
 	overrideSucceeded := false
 	// Reset the conditions and failed placements.
@@ -224,9 +239,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 // updateBindingStatusWithRetry sends the update request to API server with retry.
 func (r *Reconciler) updateBindingStatusWithRetry(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding) error {
 	// Retry only for specific errors or conditions
+	bindingRef := klog.KObj(resourceBinding)
 	err := r.Client.Status().Update(ctx, resourceBinding)
 	if err != nil {
-		klog.ErrorS(err, "Failed to update the resourceBinding status, will retry", "resourceBinding", klog.KObj(resourceBinding), "resourceBindingStatus", resourceBinding.Status)
+		klog.ErrorS(err, "Failed to update the resourceBinding status, will retry", "resourceBinding", bindingRef, "resourceBindingStatus", resourceBinding.Status)
 		errAfterRetries := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 			var latestBinding fleetv1beta1.ClusterResourceBinding
 			if err := r.Client.Get(ctx, client.ObjectKeyFromObject(resourceBinding), &latestBinding); err != nil {
@@ -234,29 +250,28 @@ func (r *Reconciler) updateBindingStatusWithRetry(ctx context.Context, resourceB
 			}
 			// Work generator is the only controller that updates conditions excluding rollout started which is updated by rollout controller.
 			if rolloutCond := latestBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted)); rolloutCond != nil {
-				found := false
 				for i := range resourceBinding.Status.Conditions {
 					if resourceBinding.Status.Conditions[i].Type == rolloutCond.Type {
 						// Replace the existing condition
 						resourceBinding.Status.Conditions[i] = *rolloutCond
-						found = true
 						break
 					}
 				}
-				if !found {
-					return controller.NewUnexpectedBehaviorError(fmt.Errorf("found a resourceBinding %v without RolloutStarted condition", klog.KObj(resourceBinding)))
-				}
+			} else {
+				// At least the RolloutStarted condition for the old generation should be set.
+				// RolloutStarted condition won't be removed by the rollout controller.
+				klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("found an invalid resourceBinding")), "RolloutStarted condition is not set", "resourceBinding", bindingRef)
 			}
-
-			if err := r.Client.Status().Update(ctx, resourceBinding); err != nil {
-				klog.ErrorS(err, "Failed to update the resourceBinding status", "resourceBinding", klog.KObj(resourceBinding), "resourceBindingStatus", resourceBinding.Status)
+			latestBinding.Status = resourceBinding.Status
+			if err := r.Client.Status().Update(ctx, &latestBinding); err != nil {
+				klog.ErrorS(err, "Failed to update the resourceBinding status", "resourceBinding", bindingRef, "resourceBindingStatus", latestBinding.Status)
 				return err
 			}
-			klog.V(2).InfoS("Successfully updated the resourceBinding status", "resourceBinding", klog.KObj(resourceBinding), "resourceBindingStatus", resourceBinding.Status)
+			klog.V(2).InfoS("Successfully updated the resourceBinding status", "resourceBinding", bindingRef, "resourceBindingStatus", latestBinding.Status)
 			return nil
 		})
 		if errAfterRetries != nil {
-			klog.ErrorS(errAfterRetries, "Failed to update resourceBinding status after retries", "resourceBinding", klog.KObj(resourceBinding))
+			klog.ErrorS(errAfterRetries, "Failed to update resourceBinding status after retries", "resourceBinding", bindingRef)
 			return errAfterRetries
 		}
 		return nil
@@ -935,8 +950,23 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 							return
 						}
 					} else {
-						klog.V(2).InfoS("The work applied or available condition stayed as true, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
-						return
+						oldResourceSnapshot := oldWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
+						newResourceSnapshot := newWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
+						if oldResourceSnapshot == "" || newResourceSnapshot == "" {
+							klog.ErrorS(controller.NewUnexpectedBehaviorError(errors.New("found an invalid work without parent-resource-snapshot-index")),
+								"Could not find the parent resource snapshot index label", "oldWork", klog.KObj(oldWork), "oldResourceSnapshotLabelValue", oldResourceSnapshot,
+								"newWork", klog.KObj(newWork), "newResourceSnapshotLabelValue", newResourceSnapshot)
+							return
+						}
+						// There is an edge case that, the work spec is the same but from different resourceSnapshots.
+						// WorkGenerator will update the work because of the label changes, but the generation is the same.
+						// When the normal update happens, the controller will set the applied condition as false and wait
+						// until the work condition has been changed.
+						// In this edge case, we need to requeue the binding to update the binding status.
+						if oldResourceSnapshot == newResourceSnapshot {
+							klog.V(2).InfoS("The work applied or available condition stayed as true, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
+							return
+						}
 					}
 				}
 				// We need to update the binding status in this case

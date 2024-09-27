@@ -131,9 +131,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				ResourceSnapshotName: masterSnapshot.Name,
 				TargetCluster:        memberClusterName,
 			}
-			binding = generateClusterResourceBinding(spec)
-			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
-			By(fmt.Sprintf("resource binding  %s created", binding.Name))
+			createClusterResourceBinding(&binding, spec)
 			// check the work is not created since the binding state is not bound
 			work := placementv1beta1.Work{}
 			Consistently(func() bool {
@@ -146,6 +144,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			// flip the binding state to bound and check the work is created
 			binding.Spec.State = placementv1beta1.BindingStateBound
 			Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
+			updateRolloutStartedGeneration(&binding)
 			// check the work is created
 			Eventually(func() error {
 				return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName), Namespace: memberClusterNamespaceName}, &work)
@@ -155,7 +154,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			verifyBindingStatusSyncedNotApplied(binding, false, true)
 		})
 
-		It("Should only creat work after all the resource snapshots are created", func() {
+		It("Should only create work after all the resource snapshots are created", func() {
 			// create master resource snapshot with 1 number of resources
 			masterSnapshot := generateResourceSnapshot(1, 2, 0, [][]byte{
 				testResourceCRD, testNameSpace, testResource,
@@ -168,9 +167,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				ResourceSnapshotName: masterSnapshot.Name,
 				TargetCluster:        memberClusterName,
 			}
-			binding = generateClusterResourceBinding(spec)
-			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
-			By(fmt.Sprintf("resource binding `%s` created", binding.Name))
+			createClusterResourceBinding(&binding, spec)
 			// check the work is not created since we have more resource snapshot to create
 			work := placementv1beta1.Work{}
 			Consistently(func() bool {
@@ -181,6 +178,12 @@ var _ = Describe("Test Work Generator Controller", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 			wantStatus := placementv1beta1.ResourceBindingStatus{
 				Conditions: []metav1.Condition{
+					{
+						Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
+						Status:             metav1.ConditionTrue,
+						Reason:             condition.RolloutStartedReason,
+						ObservedGeneration: binding.GetGeneration(),
+					},
 					{
 						Type:               string(placementv1beta1.ResourceBindingOverridden),
 						Status:             metav1.ConditionFalse,
@@ -221,9 +224,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				ResourceSnapshotName: masterSnapshot.Name,
 				TargetCluster:        memberClusterName,
 			}
-			binding = generateClusterResourceBinding(spec)
-			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
-			By(fmt.Sprintf("resource binding  %s created", binding.Name))
+			createClusterResourceBinding(&binding, spec)
 			// check the work is created
 			work := placementv1beta1.Work{}
 			Eventually(func() error {
@@ -262,9 +263,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 					ResourceSnapshotName: masterSnapshot.Name,
 					TargetCluster:        memberClusterName,
 				}
-				binding = generateClusterResourceBinding(spec)
-				Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
-				By(fmt.Sprintf("resource binding  %s created", binding.Name))
+				createClusterResourceBinding(&binding, spec)
 			})
 
 			AfterEach(func() {
@@ -344,6 +343,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				binding.Spec.State = placementv1beta1.BindingStateUnscheduled
 				Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
 				By(fmt.Sprintf("resource binding  %s updated to be unscheduled", binding.Name))
+				updateRolloutStartedGeneration(&binding)
 				Consistently(func() error {
 					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName), Namespace: memberClusterNamespaceName}, &work)
 				}, duration, interval).Should(Succeed(), "controller should not remove work in hub cluster for unscheduled binding")
@@ -458,9 +458,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 					ResourceSnapshotName: masterSnapshot.Name,
 					TargetCluster:        memberClusterName,
 				}
-				binding = generateClusterResourceBinding(spec)
-				Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
-				By(fmt.Sprintf("resource binding  %s created", binding.Name))
+				createClusterResourceBinding(&binding, spec)
 			})
 
 			AfterEach(func() {
@@ -572,6 +570,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				binding.Spec.ResourceSnapshotName = masterSnapshot.Name
 				Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
 				By(fmt.Sprintf("resource binding  %s updated", binding.Name))
+				updateRolloutStartedGeneration(&binding)
 				// check the binding status till the bound condition is true for the second generation
 				Eventually(func() bool {
 					if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding); err != nil {
@@ -677,6 +676,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				binding.Spec.ResourceSnapshotName = masterSnapshot.Name
 				Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
 				By(fmt.Sprintf("resource binding  %s updated", binding.Name))
+				updateRolloutStartedGeneration(&binding)
 				// check the binding status till the bound condition is true for the second binding generation
 				Eventually(func() bool {
 					if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding); err != nil {
@@ -726,9 +726,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 					ResourceSnapshotName: masterSnapshot.Name,
 					TargetCluster:        memberClusterName,
 				}
-				binding = generateClusterResourceBinding(spec)
-				Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
-				By(fmt.Sprintf("resource binding  %s created", binding.Name))
+				createClusterResourceBinding(&binding, spec)
 				// Now create the second resource snapshot
 				secondSnapshot = generateResourceSnapshot(2, 2, 1, [][]byte{
 					testConfigMap, testPdb,
@@ -909,6 +907,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 				binding.Spec.ResourceSnapshotName = masterSnapshot.Name
 				Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
+				updateRolloutStartedGeneration(&binding)
 				By(fmt.Sprintf("resource binding  %s updated", binding.Name))
 				// Now create the second resource snapshot
 				secondSnapshot = generateResourceSnapshot(3, 3, 1, [][]byte{
@@ -1000,6 +999,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 				binding.Spec.ResourceSnapshotName = masterSnapshot.Name
 				Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
+				updateRolloutStartedGeneration(&binding)
 				By(fmt.Sprintf("resource binding  %s updated", binding.Name))
 				//inspect the work manifest that should have been updated to contain all
 				expectedManifest := []placementv1beta1.Manifest{
@@ -1103,9 +1103,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 						},
 					},
 				}
-				binding = generateClusterResourceBinding(spec)
-				Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
-				By(fmt.Sprintf("resource binding  %s created", binding.Name))
+				createClusterResourceBinding(&binding, spec)
 			})
 
 			AfterEach(func() {
@@ -1185,6 +1183,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				binding.Spec.State = placementv1beta1.BindingStateUnscheduled
 				Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
 				By(fmt.Sprintf("resource binding  %s updated to be unscheduled", binding.Name))
+				updateRolloutStartedGeneration(&binding)
 				Consistently(func() error {
 					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName), Namespace: memberClusterNamespaceName}, &work)
 				}, duration, interval).Should(Succeed(), "controller should not remove work in hub cluster for unscheduled binding")
@@ -1218,9 +1217,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 						invalidClusterResourceOverrideSnapshotName,
 					},
 				}
-				binding = generateClusterResourceBinding(spec)
-				Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
-				By(fmt.Sprintf("resource binding  %s created", binding.Name))
+				createClusterResourceBinding(&binding, spec)
 			})
 
 			AfterEach(func() {
@@ -1242,6 +1239,12 @@ var _ = Describe("Test Work Generator Controller", func() {
 					Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 					wantStatus := placementv1beta1.ResourceBindingStatus{
 						Conditions: []metav1.Condition{
+							{
+								Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
+								Status:             metav1.ConditionTrue,
+								Reason:             condition.RolloutStartedReason,
+								ObservedGeneration: binding.GetGeneration(),
+							},
 							{
 								Type:               string(placementv1beta1.ResourceBindingOverridden),
 								Status:             metav1.ConditionFalse,
@@ -1273,9 +1276,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 						"not-found-snapshot",
 					},
 				}
-				binding = generateClusterResourceBinding(spec)
-				Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
-				By(fmt.Sprintf("resource binding  %s created", binding.Name))
+				createClusterResourceBinding(&binding, spec)
 			})
 
 			AfterEach(func() {
@@ -1297,6 +1298,12 @@ var _ = Describe("Test Work Generator Controller", func() {
 					Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 					wantStatus := placementv1beta1.ResourceBindingStatus{
 						Conditions: []metav1.Condition{
+							{
+								Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
+								Status:             metav1.ConditionTrue,
+								Reason:             condition.RolloutStartedReason,
+								ObservedGeneration: binding.GetGeneration(),
+							},
 							{
 								Type:               string(placementv1beta1.ResourceBindingOverridden),
 								Status:             metav1.ConditionFalse,
@@ -1324,9 +1331,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 					ResourceSnapshotName: masterSnapshot.Name,
 					TargetCluster:        memberClusterName,
 				}
-				binding = generateClusterResourceBinding(spec)
-				Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
-				By(fmt.Sprintf("resource binding  %s created", binding.Name))
+				createClusterResourceBinding(&binding, spec)
 			})
 
 			AfterEach(func() {
@@ -1407,10 +1412,11 @@ var _ = Describe("Test Work Generator Controller", func() {
 				By(fmt.Sprintf("work %s is created in %s", work.Name, work.Namespace))
 				// update binding to be unscheduled
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
-				rolloutCond := binding.GetCondition(string(placementv1beta1.ResourceBindingRolloutStarted))
 				binding.Spec.State = placementv1beta1.BindingStateUnscheduled
 				Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
 				By(fmt.Sprintf("resource binding  %s updated to be unscheduled", binding.Name))
+				updateRolloutStartedGeneration(&binding)
+				rolloutCond := binding.GetCondition(string(placementv1beta1.ResourceBindingRolloutStarted))
 				Consistently(func() error {
 					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName), Namespace: memberClusterNamespaceName}, &work)
 				}, duration, interval).Should(Succeed(), "controller should not remove work in hub cluster for unscheduled binding")
@@ -1438,9 +1444,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				ResourceSnapshotName: "invalid-resource-snapshot",
 				TargetCluster:        "non-found-cluster",
 			}
-			binding = generateClusterResourceBinding(spec)
-			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
-			By(fmt.Sprintf("resource binding  %s created", binding.Name))
+			createClusterResourceBinding(&binding, spec)
 		})
 
 		AfterEach(func() {
@@ -1479,6 +1483,12 @@ func verifyBindingStatusSyncedNotApplied(binding *placementv1beta1.ClusterResour
 		wantStatus := placementv1beta1.ResourceBindingStatus{
 			Conditions: []metav1.Condition{
 				{
+					Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.RolloutStartedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
 					Type:               string(placementv1beta1.ResourceBindingOverridden),
 					Status:             metav1.ConditionTrue,
 					Reason:             overrideReason,
@@ -1512,6 +1522,12 @@ func verifyBindStatusAppliedNotAvailable(binding *placementv1beta1.ClusterResour
 		}
 		wantStatus := placementv1beta1.ResourceBindingStatus{
 			Conditions: []metav1.Condition{
+				{
+					Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.RolloutStartedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
 				{
 					Type:               string(placementv1beta1.ResourceBindingOverridden),
 					Status:             metav1.ConditionTrue,
@@ -1552,6 +1568,12 @@ func verifyBindStatusAvail(binding *placementv1beta1.ClusterResourceBinding, has
 		}
 		wantStatus := placementv1beta1.ResourceBindingStatus{
 			Conditions: []metav1.Condition{
+				{
+					Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.RolloutStartedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
 				{
 					Type:               string(placementv1beta1.ResourceBindingOverridden),
 					Status:             metav1.ConditionTrue,
@@ -1625,6 +1647,12 @@ func verifyBindStatusNotAppliedWithFailedPlacement(binding *placementv1beta1.Clu
 			},
 			Conditions: []metav1.Condition{
 				{
+					Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.RolloutStartedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
 					Type:               string(placementv1beta1.ResourceBindingOverridden),
 					Status:             metav1.ConditionTrue,
 					Reason:             overrideReason,
@@ -1690,6 +1718,12 @@ func verifyBindStatusNotAvailableWithTwoFailedPlacement(binding *placementv1beta
 			},
 			Conditions: []metav1.Condition{
 				{
+					Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.RolloutStartedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
 					Type:               string(placementv1beta1.ResourceBindingOverridden),
 					Status:             metav1.ConditionTrue,
 					Reason:             overrideReason,
@@ -1745,6 +1779,12 @@ func verifyBindStatusNotAvailableWithOneFailedPlacement(binding *placementv1beta
 				},
 			},
 			Conditions: []metav1.Condition{
+				{
+					Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.RolloutStartedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
 				{
 					Type:               string(placementv1beta1.ResourceBindingOverridden),
 					Status:             metav1.ConditionTrue,
@@ -2070,4 +2110,41 @@ func checkRolloutStartedNotUpdated(rolloutCond *metav1.Condition, binding *place
 	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 	diff := cmp.Diff(rolloutCond, binding.GetCondition(string(placementv1beta1.ResourceBindingRolloutStarted)), cmpConditionOptionWithLTT)
 	Expect(diff).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name), diff)
+}
+
+func createClusterResourceBinding(binding **placementv1beta1.ClusterResourceBinding, spec placementv1beta1.ResourceBindingSpec) {
+	*binding = generateClusterResourceBinding(spec)
+	Expect(k8sClient.Create(ctx, *binding)).Should(Succeed())
+	Eventually(func() error {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Name: (*binding).Name}, *binding); err != nil {
+			return err
+		}
+		(*binding).Status.Conditions = []metav1.Condition{
+			{
+				Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
+				Status:             metav1.ConditionTrue,
+				Reason:             condition.RolloutStartedReason,
+				ObservedGeneration: (*binding).GetGeneration(),
+				LastTransitionTime: metav1.Now(),
+			},
+		}
+		return k8sClient.Status().Update(ctx, *binding)
+	}, timeout, interval).Should(Succeed(), "Failed to update the binding with RolloutStarted condition")
+	By(fmt.Sprintf("resource binding  %s created", (*binding).Name))
+}
+
+func updateRolloutStartedGeneration(binding **placementv1beta1.ClusterResourceBinding) {
+	Eventually(func() error {
+		// Eventually update the binding with the new generation for RolloutStarted condition in case it runs into a conflict error
+		if err := k8sClient.Get(ctx, types.NamespacedName{Name: (*binding).Name}, *binding); err != nil {
+			return err
+		}
+		// RolloutStarted condition has to be updated to reflect the new generation
+		for i := range (*binding).Status.Conditions {
+			if (*binding).Status.Conditions[i].Type == string(placementv1beta1.ResourceBindingRolloutStarted) {
+				(*binding).Status.Conditions[0].ObservedGeneration = (*binding).GetGeneration()
+			}
+		}
+		return k8sClient.Status().Update(ctx, *binding)
+	}, timeout, interval).Should(Succeed(), "Failed to update the binding with new generation for RolloutStarted condition")
 }
