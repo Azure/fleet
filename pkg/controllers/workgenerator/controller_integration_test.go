@@ -143,6 +143,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			Expect(len(binding.Finalizers)).Should(Equal(0))
 			// flip the binding state to bound and check the work is created
 			binding.Spec.State = placementv1beta1.BindingStateBound
+			Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
 			updateRolloutStartedGeneration(&binding)
 			// check the work is created
 			Eventually(func() error {
