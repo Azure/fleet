@@ -143,25 +143,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			Expect(len(binding.Finalizers)).Should(Equal(0))
 			// flip the binding state to bound and check the work is created
 			binding.Spec.State = placementv1beta1.BindingStateBound
-			Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
-			Eventually(func() error {
-				// Eventually update the binding with for RolloutStarted condition in case it runs into a conflict error
-				if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding); err != nil {
-					return err
-				}
-				// RolloutStarted condition needs to be present to not hit race condition.
-				binding.Status.Conditions = []metav1.Condition{
-					{
-						Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
-						Status:             metav1.ConditionTrue,
-						Reason:             condition.RolloutStartedReason,
-						ObservedGeneration: binding.GetGeneration(),
-						LastTransitionTime: metav1.Now(),
-					},
-				}
-				return k8sClient.Status().Update(ctx, binding)
-			}, timeout, interval).Should(Succeed(), "Failed to update the binding with RolloutStarted condition")
-
+			updateRolloutStartedGeneration(&binding)
 			// check the work is created
 			Eventually(func() error {
 				return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName), Namespace: memberClusterNamespaceName}, &work)
