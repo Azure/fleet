@@ -865,12 +865,17 @@ type ResourcePlacementStatus struct {
 	// +kubebuilder:validation:MaxItems=100
 	FailedPlacements []FailedResourcePlacement `json:"failedPlacements,omitempty"`
 
-	// DriftedPlacements is a list of all the resources whose label/annotation and spec fields have changed on the
-	// target cluster after it is successfully applied.
+	// DriftedOrDiffedPlacements is a list of all the resources that:
+	// * have drifted from the desired state as kept in the hub cluster, as detected
+	//   by Fleet with the drift detection features enabled; or
+	// * have configuration differences from the desired state as kept in the hub cluster, as
+	//   found by Fleet during the takeover process, or with the ReportDiff apply strategy.
+	//
+	// To control the object size, only the first 100 drifted or diffed resources will be included.
 	// This field is only meaningful if the `ClusterName` is not empty.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:MaxItems=100
-	DriftedPlacements []DriftedResourcePlacement `json:"driftedPlacements,omitempty"`
+	DriftedOrDiffedPlacements []DriftedOrDiffedResourcePlacement `json:"driftedPlacements,omitempty"`
 
 	// Conditions is an array of current observed conditions for ResourcePlacementStatus.
 	// +kubebuilder:validation:Optional
@@ -888,36 +893,110 @@ type FailedResourcePlacement struct {
 	Condition metav1.Condition `json:"condition"`
 }
 
-// DriftedResourcePlacement contains the drifted resource details.
-type DriftedResourcePlacement struct {
+// DriftedOrDiffedResourceOwnership explains the ownership of a resource with drifts or
+// configuration differences. In other words, it helps report whether the resource is under
+// the management of Fleet.
+// +enum
+type DriftedOrDiffedResourceOwnership string
+
+const (
+	// DriftedOrDiffedResourceOwnershipManagedByFleet means the resource is currently managed
+	// by Fleet. Fleet will attempt to apply manifest from the hub cluster to the resource (
+	// if applicable); the resource will be deleted if its corresponding placement has been
+	// deleted.
+	DriftedOrDiffedResourceOwnershipManagedByFleet DriftedOrDiffedResourceOwnership = "ManagedByFleet"
+
+	// DriftedOrDiffedResourceOwnershipStandalone means the resource is not managed by Fleet;
+	// it might be created manually before Fleet starts managing the cluster. Fleet will not
+	// attempt to apply manifest from the hub cluster to the resource; the resource will also be
+	// left alone even if its corresponding placement has been deleted.
+	DriftedOrDiffedResourceOwnershipStandalone DriftedOrDiffedResourceOwnership = "Standalone"
+)
+
+// JSONPatchOp is the operation of a JSON patch. Fleet uses JSON patches to describe drifts
+// and configuration differences found in the resources; in the case of Fleet, only
+// the Add, Remove, and Replace operations are used.
+// +enum
+type JSONPatchOp string
+
+const (
+	// JSONPatchOpAdd is the Add operation in a JSON patch.
+	JSONPatchOpAdd JSONPatchOp = "add"
+
+	// JSONPatchOpRemove is the Remove operation in a JSON patch.
+	JSONPatchOpRemove JSONPatchOp = "remove"
+
+	// JSONPatchOpReplace is the Replace operation in a JSON patch.
+	JSONPatchOpReplace JSONPatchOp = "replace"
+)
+
+// ObservedDriftOrDiffDetail contains the details of observed drifts or configuration differences.
+// Each detail entry is a JSON patch that specifies how the live state (the state on the member
+// cluster side) compares against the desired state (the state kept in the hub cluster manifest).
+type ObservedDriftOrDiffDetail struct {
+	// Op is the JSON patch operation.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=add;remove;replace
+	Op JSONPatchOp `json:"op"`
+
+	// The JSON path that points to a field that has drifted or has configuration differences.
+	// +kubebuilder:validation:Required
+	Path string `json:"path"`
+
+	// The value that the drift or configuration difference entails.
+	//
+	// For the JSON patch operation Add and Replace, the value will be the added/replacement value;
+	// for the JSON patch operation Remove, this field will be empty.
+	// +kubebuilder:validation:Optional
+	Value string `json:"value,omitempty"`
+}
+
+// DriftedOrDiffedResourcePlacement contains the details of resources with drifts or configuration
+// differences.
+type DriftedOrDiffedResourcePlacement struct {
 	// The resource that has drifted.
 	// +kubebuilder:validation:Required
 	ResourceIdentifier `json:",inline"`
 
-	// ObservationTime is the time we observe the drift that is described in the observedDifferences field.
+	// ObservationTime is the time we observe the drifts or configuration differences that are
+	// described in the observedDifferences field.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Format=date-time
 	ObservationTime metav1.Time `json:"observationTime"`
 
 	// TargetClusterObservedGeneration is the generation of the resource on the target cluster
-	// that contains this drift.
+	// that contains the drifts or configuration differences.
 	// +kubebuilder:validation:Required
 	TargetClusterObservedGeneration int64 `json:"targetClusterObservedGeneration"`
 
-	// FirstDriftObservedTime is the first time the resource on the target cluster is observed to have
-	// been different from the resource to be applied from the hub.
+	// Ownership describes the ownership of the resource with drifts or configuration differences.
+	// Two options are available:
+	// * ManagedByFleet: the resource is currently managed by Fleet. Fleet will attempt to apply
+	//   manifest from the hub cluster to the resource (if applicable); the resource will be deleted
+	//   if its corresponding placement has been deleted.
+	// * Standalone: the resource is not managed by Fleet; it might be created manually before Fleet
+	//   starts managing the cluster. Fleet will not attempt to apply manifest from the hub cluster to
+	//   the resource; the resource will also be left alone even if its corresponding placement has been
+	//   deleted.
+	Ownership DriftedOrDiffedResourceOwnership `json:"ownership"`
+
+	// FirstDriftOrDiffObservedTime is the first time the resource on the target cluster is
+	// observed to have drifts or configuration differences.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Format=date-time
-	FirstDriftObservedTime metav1.Time `json:"firstDriftObservedTime"`
+	FirstDriftOrDiffObservedTime metav1.Time `json:"firstDriftOrDiffObservedTime"`
 
-	// ObservedDifferences contains the details of difference between the resource on the target cluster and
-	// the resource to be applied from the hub. We will truncate the difference details if it exceeds 8192 bytes.
-	// We will also emit an event with the difference details.
-	// +kubebuilder:validation:maxLength=8192
+	// ObservedDriftsOrDifferences explains the details about the observed drifts or configuration
+	// differences. Fleet might truncate the details as appropriate to control object size.
+	//
+	// Each detail entry is a JSON patch that specifies how the live state (the state on the member
+	// cluster side) compares against the desired state (the state kept in the hub cluster manifest).
+	//
+	// An event about the details will be emitted as well.
 	// +kubebuilder:validation:Optional
-	ObservedDifferences string `json:"observedDifferences,omitempty"`
+	ObservedDriftsOrDiffs []ObservedDriftOrDiffDetail `json:"observedDriftsOrDiffs,omitempty"`
 }
 
 // Toleration allows ClusterResourcePlacement to tolerate any taint that matches

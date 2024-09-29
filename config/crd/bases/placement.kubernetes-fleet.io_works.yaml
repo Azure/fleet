@@ -772,6 +772,47 @@ spec:
                       required:
                       - ordinal
                       type: object
+                    observedDriftsOrDiffs:
+                      description: |-
+                        ObservedDriftsOrDifferences explains the details about the observed drifts or configuration
+                        differences. Fleet might truncate the details as appropriate to control object size.
+
+
+                        Each detail entry is a JSON patch that specifies how the live state (the state on the member
+                        cluster side) compares against the desired state (the state kept in the hub cluster manifest).
+
+
+                        An event about the details will be emitted as well.
+                      items:
+                        description: |-
+                          ObservedDriftOrDiffDetail contains the details of observed drifts or configuration differences.
+                          Each detail entry is a JSON patch that specifies how the live state (the state on the member
+                          cluster side) compares against the desired state (the state kept in the hub cluster manifest).
+                        properties:
+                          op:
+                            description: Op is the JSON patch operation.
+                            enum:
+                            - add
+                            - remove
+                            - replace
+                            type: string
+                          path:
+                            description: The JSON path that points to a field that
+                              has drifted or has configuration differences.
+                            type: string
+                          value:
+                            description: |-
+                              The value that the drift or configuration difference entails.
+
+
+                              For the JSON patch operation Add and Replace, the value will be the added/replacement value;
+                              for the JSON patch operation Remove, this field will be empty.
+                            type: string
+                        required:
+                        - op
+                        - path
+                        type: object
+                      type: array
                   required:
                   - conditions
                   type: object

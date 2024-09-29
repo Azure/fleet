@@ -93,6 +93,18 @@ type ResourceBindingStatus struct {
 	// +optional
 	FailedPlacements []FailedResourcePlacement `json:"failedPlacements,omitempty"`
 
+	// DriftedOrDiffedPlacements is a list of all the resources that:
+	// * have drifted from the desired state as kept in the hub cluster, as detected
+	//   by Fleet with the drift detection features enabled; or
+	// * have configuration differences from the desired state as kept in the hub cluster, as
+	//   found by Fleet during the takeover process, or with the ReportDiff apply strategy.
+	//
+	// To control the object size, only the first 100 drifted or diffed resources will be included.
+	// This field is only meaningful if the `ClusterName` is not empty.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxItems=100
+	DriftedOrDiffedResourcePlacement []DriftedOrDiffedResourcePlacement `json:"driftedOrDiffedResourcePlacement,omitempty"`
+
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map

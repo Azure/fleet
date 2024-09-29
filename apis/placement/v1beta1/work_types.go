@@ -123,6 +123,16 @@ type ManifestCondition struct {
 	// Conditions represents the conditions of this resource on spoke cluster
 	// +required
 	Conditions []metav1.Condition `json:"conditions"`
+
+	// ObservedDriftsOrDifferences explains the details about the observed drifts or configuration
+	// differences. Fleet might truncate the details as appropriate to control object size.
+	//
+	// Each detail entry is a JSON patch that specifies how the live state (the state on the member
+	// cluster side) compares against the desired state (the state kept in the hub cluster manifest).
+	//
+	// An event about the details will be emitted as well.
+	// +kubebuilder:validation:Optional
+	ObservedDriftsOrDiffs []ObservedDriftOrDiffDetail `json:"observedDriftsOrDiffs,omitempty"`
 }
 
 // +genclient
