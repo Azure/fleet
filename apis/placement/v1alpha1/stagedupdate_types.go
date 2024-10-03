@@ -157,11 +157,17 @@ type StagedUpdateRunStatus struct {
 	// +kubebuilder:validation:Optional
 	PolicySnapshotIndexUsed string `json:"policySnapshotIndexUsed,omitempty"`
 
+	// PolicyObservedCRPGeneration is the generation of the CRP which the scheduler uses to perform the scheduling.
+	// It is computed at the beginning of the update run from the policy snapshot object. If the CRP is updated
+	// during the update run in a way that causes the policy snapshot condition to change, the update run is abandoned.
+	// +kubebuilder:validation:Optional
+	PolicyObservedNodeCount int `json:"policyObservedNodeCount,omitempty"`
+
 	// ApplyStrategy is the apply strategy that the stagedUpdateRun is using.
 	// It is the same as the apply strategy in the CRP when the staged update run starts.
 	// The apply strategy is not updated during the update run even if it changes in the CRP.
 	// +kubebuilder:validation:Optional
-	ApplyStrategy v1beta1.ApplyStrategy `json:"appliedStrategy,omitempty"`
+	ApplyStrategy *v1beta1.ApplyStrategy `json:"appliedStrategy,omitempty"`
 
 	// StagedUpdateStrategySnapshot is the snapshot of the StagedUpdateStrategy used for the update run.
 	// The snapshot is immutable during the update run.
@@ -169,7 +175,7 @@ type StagedUpdateRunStatus struct {
 	// The update run fails to initialize if the strategy fails to produce a valid list of stages where each selected
 	// cluster is included in exactly one stage.
 	// +kubebuilder:validation:Optional
-	StagedUpdateStrategySnapshot StagedUpdateStrategySpec `json:"stagedUpdateStrategySnapshot,omitempty"`
+	StagedUpdateStrategySnapshot *StagedUpdateStrategySpec `json:"stagedUpdateStrategySnapshot,omitempty"`
 
 	// StagesStatus lists the current updating status of each stage.
 	// The list is empty if the update run is not started or failed to initialize.
@@ -180,7 +186,7 @@ type StagedUpdateRunStatus struct {
 	// removes all the resources from the clusters that are not selected by the
 	// current policy after all the update stages are completed.
 	// +kubebuilder:validation:Optional
-	DeletionStageStatus StageUpdatingStatus `json:"deletionStageStatus,omitempty"`
+	DeletionStageStatus *StageUpdatingStatus `json:"deletionStageStatus,omitempty"`
 
 	// +patchMergeKey=type
 	// +patchStrategy=merge
@@ -201,8 +207,9 @@ const (
 	// StagedUpdateRunConditionInitialized indicates whether the staged update run is initialized, meaning it
 	// has computed all the stages according to the referenced strategy and is ready to start the update.
 	// Its condition status can be one of the following:
-	// - "True": The staged update run is initialized.
-	// - "False": The staged update run encountered an error during initialization.
+	// - "True": The staged update run is initialized successfully.
+	// - "False": The staged update run encountered an error during initialization and aborted.
+	// - "Unknown": The staged update run initialization has started.
 	StagedUpdateRunConditionInitialized StagedUpdateRunConditionType = "Initialized"
 
 	// StagedUpdateRunConditionProgressing indicates whether the staged update run is making progress.

@@ -97,6 +97,15 @@ const (
 	AllWorkAvailableReason = "AllWorkAreAvailable"
 )
 
+// A group of condition reason string which is used to populate the staged update run.
+const (
+	// UpdateRunInitializeSucceededReason is the reason string of placement condition if the update run is initialized successfully.
+	UpdateRunInitializeSucceededReason = "UpdateRunInitializedSuccessfully"
+
+	// UpdateRunInitializeFailedReason is the reason string of placement condition if the update run is failed to initialize.
+	UpdateRunInitializeFailedReason = "UpdateRunInitializedFailed"
+)
+
 // EqualCondition compares one condition with another; it ignores the LastTransitionTime and Message fields,
 // and will consider the ObservedGeneration values from the two conditions a match if the current
 // condition is newer.

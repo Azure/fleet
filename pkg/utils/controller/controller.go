@@ -14,7 +14,11 @@ import (
 	"sync"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
+	v12 "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -22,7 +26,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller/metrics"
+	"go.goms.io/fleet/pkg/utils/informer"
 	"go.goms.io/fleet/pkg/utils/keys"
 	"go.goms.io/fleet/pkg/utils/labels"
 )
@@ -351,7 +357,53 @@ type MemberController interface {
 	// Join describes the process of joining the fleet as a member.
 	Join(ctx context.Context) error
 
-	// Leaves describes the process of leaving the fleet as a member.
+	// Leave describes the process of leaving the fleet as a member.
 	// For example, delete all the resources created by the member controller.
 	Leave(ctx context.Context) error
+}
+
+// ShouldPropagateObj decides if one should propagate the object
+func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Unstructured) (bool, error) {
+	// TODO:  add more special handling for different resource kind
+	switch uObj.GroupVersionKind() {
+	case v1.SchemeGroupVersion.WithKind(utils.ConfigMapKind):
+		// Skip the built-in custom CA certificate created in the namespace
+		if uObj.GetName() == "kube-root-ca.crt" {
+			return false, nil
+		}
+	case v1.SchemeGroupVersion.WithKind("ServiceAccount"):
+		// Skip the default service account created in the namespace
+		if uObj.GetName() == "default" {
+			return false, nil
+		}
+	case v1.SchemeGroupVersion.WithKind("Secret"):
+		// The secret, with type 'kubernetes.io/service-account-token', is created along with `ServiceAccount` should be
+		// prevented from propagating.
+		var secret v1.Secret
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.Object, &secret); err != nil {
+			return false, NewUnexpectedBehaviorError(fmt.Errorf("failed to convert a secret object %s in namespace %s: %w", uObj.GetName(), uObj.GetNamespace(), err))
+		}
+		if secret.Type == v1.SecretTypeServiceAccountToken {
+			return false, nil
+		}
+	case v1.SchemeGroupVersion.WithKind("Endpoints"):
+		// we assume that all endpoints with the same name of a service is created by the service controller
+		if _, err := informerManager.Lister(utils.ServiceGVR).ByNamespace(uObj.GetNamespace()).Get(uObj.GetName()); err != nil {
+			if apierrors.IsNotFound(err) {
+				// there is no service of the same name as the end point,
+				// we assume that this endpoint is created by the user
+				return true, nil
+			}
+			return false, NewAPIServerError(true, fmt.Errorf("failed to get the service %s in namespace %s: %w", uObj.GetName(), uObj.GetNamespace(), err))
+		}
+		// we find a service of the same name as the endpoint, we assume it's created by the service
+		return false, nil
+	case v12.SchemeGroupVersion.WithKind("EndpointSlice"):
+		// all EndpointSlice created by the EndpointSlice controller has a managed by label
+		if _, exist := uObj.GetLabels()[v12.LabelManagedBy]; exist {
+			// do not propagate hub cluster generated endpoint slice
+			return false, nil
+		}
+	}
+	return true, nil
 }

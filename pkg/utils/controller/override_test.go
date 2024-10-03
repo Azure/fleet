@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package rollout
+package controller
 
 import (
 	"context"
@@ -22,7 +22,6 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/test/utils/informer"
 	"go.goms.io/fleet/test/utils/resource"
 )
@@ -780,11 +779,7 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 				WithScheme(scheme).
 				WithObjects(objects...).
 				Build()
-			r := Reconciler{
-				Client:          fakeClient,
-				InformerManager: &fakeInformer,
-			}
-			gotCRO, gotRO, err := r.fetchAllMatchingOverridesForResourceSnapshot(context.Background(), crpName, tc.master)
+			gotCRO, gotRO, err := FetchAllMatchOverridesForResourceSnapshot(context.Background(), fakeClient, &fakeInformer, crpName, tc.master)
 			if err != nil {
 				t.Fatalf("fetchAllMatchingOverridesForResourceSnapshot() failed, got err %v, want no err", err)
 			}
@@ -812,6 +807,7 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 }
 
 func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
+	clusterName := "cluster-1"
 	tests := []struct {
 		name    string
 		cluster *clusterv1beta1.MemberCluster
@@ -825,7 +821,7 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 			name: "empty overrides",
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "cluster-1",
+					Name: clusterName,
 				},
 			},
 			wantCRO: nil,
@@ -835,7 +831,7 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 			name: "non-latest override snapshots",
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "cluster-1",
+					Name: clusterName,
 				},
 			},
 			croList: []*placementv1alpha1.ClusterResourceOverrideSnapshot{
@@ -966,13 +962,13 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 					Name: "cluster-not-exist",
 				},
 			},
-			wantErr: controller.ErrExpectedBehavior,
+			wantErr: ErrExpectedBehavior,
 		},
 		{
 			name: "matched overrides with empty cluster label",
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "cluster-1",
+					Name: clusterName,
 				},
 			},
 			croList: []*placementv1alpha1.ClusterResourceOverrideSnapshot{
@@ -1090,7 +1086,7 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 			name: "matched overrides with non-empty cluster label",
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "cluster-1",
+					Name: clusterName,
 					Labels: map[string]string{
 						"key1": "value1",
 						"key2": "value2",
@@ -1235,7 +1231,7 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 			name: "no matched overrides with non-empty cluster label",
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "cluster-1",
+					Name: clusterName,
 					Labels: map[string]string{
 						"key1": "value1",
 						"key2": "value2",
@@ -1317,18 +1313,7 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 				WithScheme(scheme).
 				WithObjects(objects...).
 				Build()
-			r := Reconciler{
-				Client: fakeClient,
-			}
-			binding := &placementv1beta1.ClusterResourceBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "binding-1",
-				},
-				Spec: placementv1beta1.ResourceBindingSpec{
-					TargetCluster: "cluster-1",
-				},
-			}
-			gotCRO, gotRO, err := r.pickFromResourceMatchedOverridesForTargetCluster(context.Background(), binding, tc.croList, tc.roList)
+			gotCRO, gotRO, err := PickFromResourceMatchedOverridesForTargetCluster(context.Background(), fakeClient, clusterName, tc.croList, tc.roList)
 			if gotErr, wantErr := err != nil, tc.wantErr != nil; gotErr != wantErr || !errors.Is(err, tc.wantErr) {
 				t.Fatalf("pickFromResourceMatchedOverridesForTargetCluster() got error %v, want error %v", err, tc.wantErr)
 			}

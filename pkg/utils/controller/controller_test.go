@@ -10,7 +10,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -220,14 +219,6 @@ func TestNewCreateIgnoreAlreadyExistError(t *testing.T) {
 			}
 		})
 	}
-}
-
-func serviceScheme(t *testing.T) *runtime.Scheme {
-	scheme := runtime.NewScheme()
-	if err := fleetv1beta1.AddToScheme(scheme); err != nil {
-		t.Fatalf("Failed to add scheme: %v", err)
-	}
-	return scheme
 }
 
 func TestFetchAllClusterResourceSnapshots(t *testing.T) {

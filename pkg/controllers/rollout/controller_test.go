@@ -15,6 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/ptr"
@@ -63,6 +64,17 @@ var (
 		}),
 	}
 )
+
+func serviceScheme(t *testing.T) *runtime.Scheme {
+	scheme := runtime.NewScheme()
+	if err := fleetv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("Failed to add placement v1beta1 scheme: %v", err)
+	}
+	if err := clusterv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("Failed to add cluster v1beta1 scheme: %v", err)
+	}
+	return scheme
+}
 
 func TestReconcilerHandleResourceSnapshot(t *testing.T) {
 	tests := map[string]struct {

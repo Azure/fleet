@@ -49,20 +49,20 @@ spec:
                 items:
                   description: |-
                     StageConfig describes a single update stage.
-                    The clusters in each stage are updated sequentially for now.
-                    We will stop the update if any of the updates fail.
+                    The clusters in each stage are updated sequentially.
+                    The update stops if any of the updates fail.
                   properties:
                     afterStageTasks:
                       description: |-
                         The collection of tasks that each stage needs to complete successfully before moving to the next stage.
-                        Each task is executed in parallel and there can not be more than one task of the same type.
+                        Each task is executed in parallel and there cannot be more than one task of the same type.
                       items:
-                        description: AfterStageTask is the collection of post stage
-                          tasks that ALL need to be completed before we can move to
-                          the next stage.
+                        description: AfterStageTask is the collection of post-stage
+                          tasks that ALL need to be completed before moving to the
+                          next stage.
                         properties:
                           type:
-                            description: The type of the after stage task.
+                            description: The type of the after-stage task.
                             enum:
                             - TimedWait
                             - Approval
@@ -70,7 +70,7 @@ spec:
                           waitTime:
                             default: 1h
                             description: The time to wait after all the clusters in
-                              the current stage complete the update before we move
+                              the current stage complete the update before moving
                               to the next stage.
                             pattern: ^0|([0-9]+(\.[0-9]+)?(s|m|h))+$
                             type: string

@@ -14,4 +14,14 @@ const (
 
 	// ResourceOverrideSnapshotKind is the kind of the ResourceOverrideSnapshotKind.
 	ResourceOverrideSnapshotKind = "ResourceOverrideSnapshot"
+
+	// StagedUpdateRunFinalizer is used by the staged update run controller to make sure that the stagedUpdateRun
+	// object is not deleted until all its dependent resources are deleted.
+	StagedUpdateRunFinalizer = fleetPrefix + "stagedupdaterun-finalizer"
+
+	// TargetUpdateRunLabel is the label that indicates the target update run of a staged update run.
+	TargetUpdateRunLabel = fleetPrefix + "targetupdaterun"
+
+	// The name of delete stage in the staged update run
+	UpdateRunDeleteStageName = fleetPrefix + "deleteStage"
 )

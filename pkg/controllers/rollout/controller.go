@@ -125,7 +125,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	// fill out all the default values for CRP just in case the mutation webhook is not enabled.
 	defaulter.SetDefaultsClusterResourcePlacement(&crp)
 
-	matchedCRO, matchedRO, err := r.fetchAllMatchingOverridesForResourceSnapshot(ctx, crp.Name, latestResourceSnapshot)
+	matchedCRO, matchedRO, err := controller.FetchAllMatchOverridesForResourceSnapshot(ctx, r.Client, r.InformerManager, crp.Name, latestResourceSnapshot)
 	if err != nil {
 		klog.ErrorS(err, "Failed to find all matching overrides for the clusterResourcePlacement", "clusterResourcePlacement", crpName)
 		return runtime.Result{}, err
@@ -370,7 +370,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			schedulerTargetedBinds = append(schedulerTargetedBinds, binding)
 			// this binding has not been bound yet, so it is an update candidate
 			// pickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
-			cro, ro, err := r.pickFromResourceMatchedOverridesForTargetCluster(ctx, binding, matchedCROs, matchedROs)
+			cro, ro, err := controller.PickFromResourceMatchedOverridesForTargetCluster(ctx, r.Client, binding.Spec.TargetCluster, matchedCROs, matchedROs)
 			if err != nil {
 				return nil, nil, false, minWaitTime, err
 			}
@@ -395,7 +395,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 				canBeReadyBindings = append(canBeReadyBindings, binding)
 			}
 			// pickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
-			cro, ro, err := r.pickFromResourceMatchedOverridesForTargetCluster(ctx, binding, matchedCROs, matchedROs)
+			cro, ro, err := controller.PickFromResourceMatchedOverridesForTargetCluster(ctx, r.Client, binding.Spec.TargetCluster, matchedCROs, matchedROs)
 			if err != nil {
 				return nil, nil, false, 0, err
 			}
