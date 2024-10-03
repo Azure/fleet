@@ -15,6 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/ptr"
@@ -63,6 +64,17 @@ var (
 		}),
 	}
 )
+
+func serviceScheme(t *testing.T) *runtime.Scheme {
+	scheme := runtime.NewScheme()
+	if err := fleetv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("Failed to add placement v1beta1 scheme: %v", err)
+	}
+	if err := clusterv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("Failed to add cluster v1beta1 scheme: %v", err)
+	}
+	return scheme
+}
 
 func TestReconcilerHandleResourceSnapshot(t *testing.T) {
 	tests := map[string]struct {
@@ -565,7 +577,7 @@ func TestUpdateBindings(t *testing.T) {
 			for i := range tt.bindings {
 				objects = append(objects, &tt.bindings[i])
 			}
-			scheme := controller.serviceScheme(t)
+			scheme := serviceScheme(t)
 			fakeClient := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithObjects(objects...).
@@ -1510,7 +1522,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			scheme := controller.serviceScheme(t)
+			scheme := serviceScheme(t)
 			var objects []client.Object
 			for i := range tt.clusters {
 				objects = append(objects, &tt.clusters[i])
@@ -1828,7 +1840,7 @@ func TestUpdateStaleBindingsStatus(t *testing.T) {
 			for i := range tt.bindings {
 				objects = append(objects, &tt.bindings[i])
 			}
-			scheme := controller.serviceScheme(t)
+			scheme := serviceScheme(t)
 			fakeClient := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithObjects(objects...).
@@ -2028,7 +2040,7 @@ func TestCheckAndUpdateStaleBindingsStatus(t *testing.T) {
 			for i := range tt.bindings {
 				objects = append(objects, tt.bindings[i])
 			}
-			scheme := controller.serviceScheme(t)
+			scheme := serviceScheme(t)
 			fakeClient := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithObjects(objects...).

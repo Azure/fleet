@@ -82,6 +82,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 			}
 			return runtime.Result{}, err
 		}
+	} else {
+		klog.V(2).InfoS("The stagedUpdateRun is initialized,", "stagedUpdateRun", runObjRef)
+
 	}
 
 	// TODO: Implement stage by stage update logic
