@@ -286,7 +286,7 @@ func (r *Reconciler) fetchAllResourcesInOneNamespace(namespaceName string, place
 		}
 		for _, obj := range objs {
 			uObj := obj.DeepCopyObject().(*unstructured.Unstructured)
-			shouldInclude, err := utils.ShouldPropagateObj(r.InformerManager, uObj)
+			shouldInclude, err := controller.ShouldPropagateObj(r.InformerManager, uObj)
 			if err != nil {
 				klog.ErrorS(err, "cannot determine if we should propagate an object", "object", klog.KObj(uObj))
 				return nil, err

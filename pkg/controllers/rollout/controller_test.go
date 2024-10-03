@@ -565,7 +565,7 @@ func TestUpdateBindings(t *testing.T) {
 			for i := range tt.bindings {
 				objects = append(objects, &tt.bindings[i])
 			}
-			scheme := serviceScheme(t)
+			scheme := controller.serviceScheme(t)
 			fakeClient := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithObjects(objects...).
@@ -1510,7 +1510,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			scheme := serviceScheme(t)
+			scheme := controller.serviceScheme(t)
 			var objects []client.Object
 			for i := range tt.clusters {
 				objects = append(objects, &tt.clusters[i])
@@ -1828,7 +1828,7 @@ func TestUpdateStaleBindingsStatus(t *testing.T) {
 			for i := range tt.bindings {
 				objects = append(objects, &tt.bindings[i])
 			}
-			scheme := serviceScheme(t)
+			scheme := controller.serviceScheme(t)
 			fakeClient := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithObjects(objects...).
@@ -2028,7 +2028,7 @@ func TestCheckAndUpdateStaleBindingsStatus(t *testing.T) {
 			for i := range tt.bindings {
 				objects = append(objects, tt.bindings[i])
 			}
-			scheme := serviceScheme(t)
+			scheme := controller.serviceScheme(t)
 			fakeClient := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithObjects(objects...).

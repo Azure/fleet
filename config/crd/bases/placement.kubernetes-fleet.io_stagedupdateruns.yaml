@@ -21,12 +21,11 @@ spec:
     schema:
       openAPIV3Schema:
         description: |-
-          StagedUpdateRun defines a stage by stage update run that applies the selected resources by the
-          corresponding ClusterResourcePlacement to its selected clusters. We remove the resources from the clusters that are
-          unselected after all the stages explicitly defined in the updateStrategy complete.
-          Each StagedUpdateRun object corresponds to a single "release" of a certain version of the resources.
-          The release is abandoned if the StagedUpdateRun object is deleted or the scheduling decision (i.e., the selected clusters) changes.
-          The name of the StagedUpdateRun needs to conform to [RFC 1123](https://tools.ietf.org/html/rfc1123).
+          StagedUpdateRun represents a stage by stage update process that applies selected resources to specified clusters.
+          Resources from unselected clusters are removed after all stages in the update strategy are completed.
+          Each StagedUpdateRun object corresponds to a single release of a specific resource version.
+          The release is abandoned if the StagedUpdateRun object is deleted or the scheduling decision changes.
+          The name of the StagedUpdateRun must conform to RFC 1123.
         properties:
           apiVersion:
             description: |-
@@ -51,8 +50,8 @@ spec:
               placementRef:
                 description: |-
                   A reference to the placement that this update run is applied to.
-                  There can be multiple active update runs for each placement but
-                  it's up to the devOps to make sure they don't conflict with each other.
+                  There can be multiple active update runs for each placement, but
+                  it's up to the DevOps team to ensure they don't conflict with each other.
                 properties:
                   name:
                     description: Name is the name of the referenced placement.
@@ -63,14 +62,14 @@ spec:
               resourceSnapshotIndex:
                 description: |-
                   The resource snapshot index of the selected resources to be updated across clusters.
-                  The index represents a group of resourceSnapshots that includes all the resources a ResourcePlacement selected.
+                  The index represents a group of resource snapshots that includes all the resources a ResourcePlacement selected.
                 type: string
               stagedRolloutStrategyRef:
                 description: |-
                   The reference to the update strategy that specifies the stages and the sequence
-                  in which the selected resources will be updated on the member clusters. We will compute
-                  the stages according to the referenced strategy when we first start the update run
-                  and record the computed stages in the status field.
+                  in which the selected resources will be updated on the member clusters. The stages
+                  are computed according to the referenced strategy when the update run starts
+                  and recorded in the status field.
                 properties:
                   name:
                     description: Name is the name of the namespaced scope resource.
@@ -96,8 +95,8 @@ spec:
               appliedStrategy:
                 description: |-
                   ApplyStrategy is the apply strategy that the stagedUpdateRun is using.
-                  It is the same as the apply strategy in the CRP when we first start the staged update run.
-                  We will NOT update the apply strategy during the update run even if the apply strategy changes in the CRP.
+                  It is the same as the apply strategy in the CRP when the staged update run starts.
+                  The apply strategy is not updated during the update run even if it changes in the CRP.
                 properties:
                   actionType:
                     default: AlwaysApply
@@ -225,13 +224,13 @@ spec:
                 x-kubernetes-list-type: map
               deletionStageStatus:
                 description: |-
-                  DeletionStageStatus list the current status of the deletion stage. The deletion stage is
-                  the stage that removes all the resources from the clusters that are not selected by the
+                  DeletionStageStatus lists the current status of the deletion stage. The deletion stage
+                  removes all the resources from the clusters that are not selected by the
                   current policy after all the update stages are completed.
                 properties:
-                  'afterStageTaskStatus ':
+                  afterStageTaskStatus:
                     description: |-
-                      The status of the post update tasks that are associated with current stage.
+                      The status of the post-update tasks associated with the current stage.
                       Empty if the stage has not finished updating all the clusters.
                     items:
                       properties:
@@ -242,7 +241,7 @@ spec:
                           type: string
                         conditions:
                           description: |-
-                            Conditions is an array of current observed conditions for the specific type of post update task.
+                            Conditions is an array of current observed conditions for the specific type of post-update task.
                             Known conditions are "ApprovalRequestCreated", "WaitTimeElapsed", and "ApprovalRequestApproved".
                           items:
                             description: "Condition contains details for one aspect
@@ -319,7 +318,7 @@ spec:
                           - type
                           x-kubernetes-list-type: map
                         type:
-                          description: The type of the post update task.
+                          description: The type of the post-update task.
                           enum:
                           - TimedWait
                           - Approval
@@ -351,7 +350,7 @@ spec:
                         conditions:
                           description: |-
                             Conditions is an array of current observed conditions for clusters. Empty if the cluster has not started updating.
-                            Known conditions are "Started,"Succeeded".
+                            Known conditions are "Started", "Succeeded".
                           items:
                             description: "Condition contains details for one aspect
                               of the current state of this API Resource.\n---\nThis
@@ -546,6 +545,12 @@ spec:
                 - clusters
                 - stageName
                 type: object
+              policyObservedNodeCount:
+                description: |-
+                  PolicyObservedCRPGeneration is the generation of the CRP which the scheduler uses to perform the scheduling.
+                  It is computed at the beginning of the update run from the policy snapshot object. If the CRP is updated
+                  during the update run in a way that causes the policy snapshot condition to change, the update run is abandoned.
+                type: integer
               policySnapshotIndexUsed:
                 description: |-
                   PolicySnapShotIndexUsed records the policy snapshot index of the ClusterResourcePlacement (CRP) that
@@ -557,10 +562,10 @@ spec:
                 type: string
               stagedUpdateStrategySnapshot:
                 description: |-
-                  StagedUpdateStrategySnapshot is the snapshot of the StagedUpdateStrategy that we are going to use for the update run.
+                  StagedUpdateStrategySnapshot is the snapshot of the StagedUpdateStrategy used for the update run.
                   The snapshot is immutable during the update run.
-                  We will apply the strategy to the the list of clusters scheduled by the CRP according to the current policy.
-                  The update run will fail to initialize if the strategy fails to produce a valid list of stages in which each selected
+                  The strategy is applied to the list of clusters scheduled by the CRP according to the current policy.
+                  The update run fails to initialize if the strategy fails to produce a valid list of stages where each selected
                   cluster is included in exactly one stage.
                 properties:
                   stages:
@@ -569,20 +574,20 @@ spec:
                     items:
                       description: |-
                         StageConfig describes a single update stage.
-                        The clusters in each stage are updated sequentially for now.
-                        We will stop the update if any of the updates fail.
+                        The clusters in each stage are updated sequentially.
+                        The update stops if any of the updates fail.
                       properties:
                         afterStageTasks:
                           description: |-
                             The collection of tasks that each stage needs to complete successfully before moving to the next stage.
-                            Each task is executed in parallel and there can not be more than one task of the same type.
+                            Each task is executed in parallel and there cannot be more than one task of the same type.
                           items:
-                            description: AfterStageTask is the collection of post
-                              stage tasks that ALL need to be completed before we
-                              can move to the next stage.
+                            description: AfterStageTask is the collection of post-stage
+                              tasks that ALL need to be completed before moving to
+                              the next stage.
                             properties:
                               type:
-                                description: The type of the after stage task.
+                                description: The type of the after-stage task.
                                 enum:
                                 - TimedWait
                                 - Approval
@@ -591,7 +596,7 @@ spec:
                                 default: 1h
                                 description: The time to wait after all the clusters
                                   in the current stage complete the update before
-                                  we move to the next stage.
+                                  moving to the next stage.
                                 pattern: ^0|([0-9]+(\.[0-9]+)?(s|m|h))+$
                                 type: string
                             required:
@@ -671,15 +676,15 @@ spec:
                 type: object
               stagesStatus:
                 description: |-
-                  StagesStatus list the current updating status of each stage.
+                  StagesStatus lists the current updating status of each stage.
                   The list is empty if the update run is not started or failed to initialize.
                 items:
                   description: StageUpdatingStatus defines the status of the update
                     run in a stage.
                   properties:
-                    'afterStageTaskStatus ':
+                    afterStageTaskStatus:
                       description: |-
-                        The status of the post update tasks that are associated with current stage.
+                        The status of the post-update tasks associated with the current stage.
                         Empty if the stage has not finished updating all the clusters.
                       items:
                         properties:
@@ -690,7 +695,7 @@ spec:
                             type: string
                           conditions:
                             description: |-
-                              Conditions is an array of current observed conditions for the specific type of post update task.
+                              Conditions is an array of current observed conditions for the specific type of post-update task.
                               Known conditions are "ApprovalRequestCreated", "WaitTimeElapsed", and "ApprovalRequestApproved".
                             items:
                               description: "Condition contains details for one aspect
@@ -767,7 +772,7 @@ spec:
                             - type
                             x-kubernetes-list-type: map
                           type:
-                            description: The type of the post update task.
+                            description: The type of the post-update task.
                             enum:
                             - TimedWait
                             - Approval
@@ -799,7 +804,7 @@ spec:
                           conditions:
                             description: |-
                               Conditions is an array of current observed conditions for clusters. Empty if the cluster has not started updating.
-                              Known conditions are "Started,"Succeeded".
+                              Known conditions are "Started", "Succeeded".
                             items:
                               description: "Condition contains details for one aspect
                                 of the current state of this API Resource.\n---\nThis
