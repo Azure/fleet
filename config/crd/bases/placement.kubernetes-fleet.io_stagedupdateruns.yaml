@@ -21,12 +21,11 @@ spec:
     schema:
       openAPIV3Schema:
         description: |-
-          StagedUpdateRun defines a stage by stage update run that applies the selected resources by the
-          corresponding ClusterResourcePlacement to its selected clusters. We remove the resources from the clusters that are
-          unselected after all the stages explicitly defined in the updateStrategy complete.
-          Each StagedUpdateRun object corresponds to a single "release" of a certain version of the resources.
-          The release is abandoned if the StagedUpdateRun object is deleted or the scheduling decision (i.e., the selected clusters) changes.
-          The name of the StagedUpdateRun needs to conform to [RFC 1123](https://tools.ietf.org/html/rfc1123).
+          StagedUpdateRun represents a stage by stage update process that applies selected resources to specified clusters.
+          Resources from unselected clusters are removed after all stages in the update strategy are completed.
+          Each StagedUpdateRun object corresponds to a single release of a specific resource version.
+          The release is abandoned if the StagedUpdateRun object is deleted or the scheduling decision changes.
+          The name of the StagedUpdateRun must conform to RFC 1123.
         properties:
           apiVersion:
             description: |-
@@ -51,8 +50,8 @@ spec:
               placementRef:
                 description: |-
                   A reference to the placement that this update run is applied to.
-                  There can be multiple active update runs for each placement but
-                  it's up to the devOps to make sure they don't conflict with each other.
+                  There can be multiple active update runs for each placement, but
+                  it's up to the DevOps team to ensure they don't conflict with each other.
                 properties:
                   name:
                     description: Name is the name of the referenced placement.
@@ -63,14 +62,14 @@ spec:
               resourceSnapshotIndex:
                 description: |-
                   The resource snapshot index of the selected resources to be updated across clusters.
-                  The index represents a group of resourceSnapshots that includes all the resources a ResourcePlacement selected.
+                  The index represents a group of resource snapshots that includes all the resources a ResourcePlacement selected.
                 type: string
               stagedRolloutStrategyRef:
                 description: |-
                   The reference to the update strategy that specifies the stages and the sequence
-                  in which the selected resources will be updated on the member clusters. We will compute
-                  the stages according to the referenced strategy when we first start the update run
-                  and record the computed stages in the status field.
+                  in which the selected resources will be updated on the member clusters. The stages
+                  are computed according to the referenced strategy when the update run starts
+                  and recorded in the status field.
                 properties:
                   name:
                     description: Name is the name of the namespaced scope resource.
@@ -96,17 +95,65 @@ spec:
               appliedStrategy:
                 description: |-
                   ApplyStrategy is the apply strategy that the stagedUpdateRun is using.
-                  It is the same as the apply strategy in the CRP when we first start the staged update run.
-                  We will NOT update the apply strategy during the update run even if the apply strategy changes in the CRP.
+                  It is the same as the apply strategy in the CRP when the staged update run starts.
+                  The apply strategy is not updated during the update run even if it changes in the CRP.
                 properties:
                   actionType:
-                    default: AlwaysApply
-                    description: TakeoverAction describes the action to take when
-                      we place the selected resources on the target cluster the first
-                      time.
+                    default: Always
+                    description: |-
+                      WhenToTakeOver determines the action to take when Fleet applies resources to a member
+                      cluster for the first time and finds out that the resource already exists in the cluster.
+
+
+                      This setting is most relevant in cases where you would like Fleet to manage pre-existing
+                      resources on a member cluster.
+
+
+                      Available options include:
+
+
+                      * Always: with this action, Fleet will apply the hub cluster manifests to the member
+                        clusters even if the affected resources already exist. This is the default action.
+
+
+                        Note that this might lead to fields being overwritten on the member clusters, if they
+                        are specified in the hub cluster manifests.
+
+
+                      * IfNoDiff: with this action, Fleet will apply the hub cluster manifests to the member
+                        clusters if (and only if) pre-existing resources look the same as the hub cluster manifests.
+                        This is a safer option as pre-existing resources that are inconsistent with the hub cluster
+                        manifests will not be overwritten; in fact, Fleet will ignore them until the inconsistencies
+                        are resolved properly: any change you make to the hub cluster manifests would not be
+                        applied, and if you delete the manifests or even the ClusterResourcePlacement itself
+                        from the hub cluster, these pre-existing resources would not be taken away.
+
+
+                        Fleet will check for inconsistencies in accordance with the ComparisonOption setting. See also
+                        the comments on the ComparisonOption field for more information.
+
+
+                        If a diff has been found in a field that is **managed** by Fleet (i.e., the field
+                        **is specified ** in the hub cluster manifest), consider one of the following actions:
+                        * set the field in the member cluster to be of the same value as that in the hub cluster
+                          manifest.
+                        * update the hub cluster manifest so that its field value matches with that in the member
+                          cluster.
+                        * switch to the Always action, which will allow Fleet to overwrite the field with the
+                          value in the hub cluster manifest.
+
+
+                        If a diff has been found in a field that is **not managed** by Fleet (i.e., the field
+                        **is not specified** in the hub cluster manifest), consider one of the following actions:
+                        * remove the field from the member cluster.
+                        * update the hub cluster manifest so that the field is included in the hub cluster manifest.
+
+
+                        If appropriate, you may also delete the object from the member cluster; Fleet will recreate
+                        it using the hub cluster manifest.
                     enum:
-                    - AlwaysApply
-                    - ApplyIfNoDiff
+                    - Always
+                    - IfNoDiff
                     type: string
                   allowCoOwnership:
                     description: |-
@@ -115,6 +162,48 @@ spec:
                       If true, apply the resource and add fleet as a co-owner.
                       If false, leave the resource unchanged and fail the apply.
                     type: boolean
+                  compareOption:
+                    default: PartialComparison
+                    description: |-
+                      ComparisonOption controls how Fleet compares the desired state of a resource, as kept in
+                      a hub cluster manifest, with the current state of the resource (if applicable) in the
+                      member cluster.
+
+
+                      Available options are:
+
+
+                      * PartialComparison: with this option, Fleet will compare only fields that are managed by
+                        Fleet, i.e., the fields that are specified explicitly in the hub cluster manifest.
+                        Unmanaged fields are ignored. This is the default option.
+
+
+                      * FullComparison: with this option, Fleet will compare all fields of the resource,
+                        even if the fields are absent from the hub cluster manifest.
+
+
+                      Consider using the PartialComparison option if you would like to:
+
+
+                      * use the default values for certain fields; or
+                      * let another agent, e.g., HPAs, VPAs, etc., on the member cluster side manage some fields; or
+                      * allow ad-hoc or cluster-specific settings on the member cluster side.
+
+
+                      To use the FullComparison option, it is recommended that you:
+
+
+                      * specify all fields as appropriate in the hub cluster, even if you are OK with using default
+                        values;
+                      * make sure that no fields are managed by agents other than Fleet on the member cluster
+                        side, such as HPAs, VPAs, or other controllers.
+
+
+                      See the Fleet documentation for further explanations and usage examples.
+                    enum:
+                    - PartialComparison
+                    - FullComparison
+                    type: string
                   serverSideApplyConfig:
                     description: ServerSideApplyConfig defines the configuration for
                       server side apply. It is honored only when type is ServerSideApply.
@@ -134,18 +223,103 @@ spec:
                   type:
                     default: ClientSideApply
                     description: |-
-                      Type defines the type of strategy to use. Default to ClientSideApply.
-                      Server-side apply is more powerful and flexible than client-side apply.
-                      You SHOULD use server-side apply to safely resolve any potential drift between the
-                      original applied resource version and the current resource on the member cluster.
-                      Read more about the differences between server-side apply and client-side apply:
-                      https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply.
-                      You can also use ReportDiff to only report the difference between the resource on the member cluster
-                      and the resource to be applied from the hub on all the selected clusters.
+                      Type is the apply strategy to use; it determines how Fleet applies manifests from the
+                      hub cluster to a member cluster.
+
+
+                      Available options are:
+
+
+                      * ClientSideApply: Fleet uses three-way merge to apply manifests, similar to how kubectl
+                        performs a client-side apply. This is the default option.
+
+
+                        Note that this strategy requires that Fleet keep the last applied configuration in the
+                        annoation of an applied resource. If the object gets so large that apply ops can no longer
+                        be executed, Fleet will switch to server-side apply.
+
+
+                        Use ComparisonOption and WhenToApply settings to control when an apply op can be executed.
+
+
+                      * ServerSideApply: Fleet uses server-side apply to apply manifests; Fleet itself will
+                        become the field manager for specified fields in the manifests. Specify
+                        ServerSideApplyConfig as appropriate if you would like Fleet to take over field
+                        ownership upon conflicts. This is the recommended option for most scenarios; it might
+                        help reduce object size and safely resolve conflicts between field values. For more
+                        information, please refer to the Kubernetes documentation
+                        (https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply).
+
+
+                        Use ComparisonOption and WhenToApply settings to control when an apply op can be executed.
+
+
+                      * ReportDiff: Fleet will compare the desired state of a resource as kept in the hub cluster
+                        with its current state (if appliable) on the member cluster side, and report any
+                        differences. No actual apply ops would be executed, and resources will be left alone as they
+                        are on the member clusters.
+
+
+                        Use ComparisonOption setting to control how the difference is calculated.
+
+
+                      For a comparison between the different strategies and usage examples, refer to the
+                      Fleet documentation.
                     enum:
                     - ClientSideApply
                     - ServerSideApply
                     - ReportDiff
+                    type: string
+                  whenToApply:
+                    default: Always
+                    description: |-
+                      WhenToApply controls when Fleet would apply the manifests on the hub cluster to the member
+                      clusters.
+
+
+                      Available options are:
+
+
+                      * Always: with this option, Fleet will periodically apply hub cluster manifests
+                        on the member cluster side; this will effectively overwrite any change in the fields
+                        managed by Fleet (i.e., specified in the hub cluster manifest). This is the default
+                        option.
+
+
+                        Note that this option would revert any ad-hoc changes made on the member cluster side in
+                        the managed fields; if you would like to make temporary edits on the member cluster side
+                        in the managed fields, switch to IfNotDrifted option. Note that changes in unmanaged
+                        fields will be left alone; if you use the FullDiff compare option, such changes will
+                        be reported as drifts.
+
+
+                      * IfNotDrifted: with this option, Fleet will stop applying hub cluster manifests on
+                        clusters that have drifted from the desired state; apply ops would still continue on
+                        the rest of the clusters. Drifts are calculated using the ComparisonOption,
+                        as explained in the corresponding field.
+
+
+                        Use this option if you would like Fleet to detect drifts in your multi-cluster setup.
+                        A drift occurs when an agent makes an ad-hoc change on the member cluster side that
+                        makes affected resources deviate from its desired state as kept in the hub cluster;
+                        and this option grants you an opportunity to view the drift details and take actions
+                        accordingly. The drift details will be reported in the CRP status.
+
+
+                        To fix a drift, you may:
+
+
+                        * revert the changes manually on the member cluster side
+                        * update the hub cluster manifest; this will trigger Fleet to apply the latest revision
+                          of the manifests, which will overwrite the drifted fields
+                          (if they are managed by Fleet)
+                        * switch to the Always option; this will trigger Fleet to apply the current revision
+                          of the manifests, which will overwrite the drifted fields (if they are managed by Fleet).
+                        * if applicable and necessary, delete the drifted resources on the member cluster side; Fleet
+                          will attempt to re-create them using the hub cluster manifests
+                    enum:
+                    - Always
+                    - IfNotDrifted
                     type: string
                 type: object
               conditions:
@@ -225,13 +399,13 @@ spec:
                 x-kubernetes-list-type: map
               deletionStageStatus:
                 description: |-
-                  DeletionStageStatus list the current status of the deletion stage. The deletion stage is
-                  the stage that removes all the resources from the clusters that are not selected by the
+                  DeletionStageStatus lists the current status of the deletion stage. The deletion stage
+                  removes all the resources from the clusters that are not selected by the
                   current policy after all the update stages are completed.
                 properties:
-                  'afterStageTaskStatus ':
+                  afterStageTaskStatus:
                     description: |-
-                      The status of the post update tasks that are associated with current stage.
+                      The status of the post-update tasks associated with the current stage.
                       Empty if the stage has not finished updating all the clusters.
                     items:
                       properties:
@@ -242,7 +416,7 @@ spec:
                           type: string
                         conditions:
                           description: |-
-                            Conditions is an array of current observed conditions for the specific type of post update task.
+                            Conditions is an array of current observed conditions for the specific type of post-update task.
                             Known conditions are "ApprovalRequestCreated", "WaitTimeElapsed", and "ApprovalRequestApproved".
                           items:
                             description: "Condition contains details for one aspect
@@ -319,7 +493,7 @@ spec:
                           - type
                           x-kubernetes-list-type: map
                         type:
-                          description: The type of the post update task.
+                          description: The type of the post-update task.
                           enum:
                           - TimedWait
                           - Approval
@@ -351,7 +525,7 @@ spec:
                         conditions:
                           description: |-
                             Conditions is an array of current observed conditions for clusters. Empty if the cluster has not started updating.
-                            Known conditions are "Started,"Succeeded".
+                            Known conditions are "Started", "Succeeded".
                           items:
                             description: "Condition contains details for one aspect
                               of the current state of this API Resource.\n---\nThis
@@ -557,10 +731,10 @@ spec:
                 type: string
               stagedUpdateStrategySnapshot:
                 description: |-
-                  StagedUpdateStrategySnapshot is the snapshot of the StagedUpdateStrategy that we are going to use for the update run.
+                  StagedUpdateStrategySnapshot is the snapshot of the StagedUpdateStrategy used for the update run.
                   The snapshot is immutable during the update run.
-                  We will apply the strategy to the the list of clusters scheduled by the CRP according to the current policy.
-                  The update run will fail to initialize if the strategy fails to produce a valid list of stages in which each selected
+                  The strategy is applied to the list of clusters scheduled by the CRP according to the current policy.
+                  The update run fails to initialize if the strategy fails to produce a valid list of stages where each selected
                   cluster is included in exactly one stage.
                 properties:
                   stages:
@@ -569,20 +743,20 @@ spec:
                     items:
                       description: |-
                         StageConfig describes a single update stage.
-                        The clusters in each stage are updated sequentially for now.
-                        We will stop the update if any of the updates fail.
+                        The clusters in each stage are updated sequentially.
+                        The update stops if any of the updates fail.
                       properties:
                         afterStageTasks:
                           description: |-
                             The collection of tasks that each stage needs to complete successfully before moving to the next stage.
-                            Each task is executed in parallel and there can not be more than one task of the same type.
+                            Each task is executed in parallel and there cannot be more than one task of the same type.
                           items:
-                            description: AfterStageTask is the collection of post
-                              stage tasks that ALL need to be completed before we
-                              can move to the next stage.
+                            description: AfterStageTask is the collection of post-stage
+                              tasks that ALL need to be completed before moving to
+                              the next stage.
                             properties:
                               type:
-                                description: The type of the after stage task.
+                                description: The type of the after-stage task.
                                 enum:
                                 - TimedWait
                                 - Approval
@@ -591,7 +765,7 @@ spec:
                                 default: 1h
                                 description: The time to wait after all the clusters
                                   in the current stage complete the update before
-                                  we move to the next stage.
+                                  moving to the next stage.
                                 pattern: ^0|([0-9]+(\.[0-9]+)?(s|m|h))+$
                                 type: string
                             required:
@@ -671,15 +845,15 @@ spec:
                 type: object
               stagesStatus:
                 description: |-
-                  StagesStatus list the current updating status of each stage.
+                  StagesStatus lists the current updating status of each stage.
                   The list is empty if the update run is not started or failed to initialize.
                 items:
                   description: StageUpdatingStatus defines the status of the update
                     run in a stage.
                   properties:
-                    'afterStageTaskStatus ':
+                    afterStageTaskStatus:
                       description: |-
-                        The status of the post update tasks that are associated with current stage.
+                        The status of the post-update tasks associated with the current stage.
                         Empty if the stage has not finished updating all the clusters.
                       items:
                         properties:
@@ -690,7 +864,7 @@ spec:
                             type: string
                           conditions:
                             description: |-
-                              Conditions is an array of current observed conditions for the specific type of post update task.
+                              Conditions is an array of current observed conditions for the specific type of post-update task.
                               Known conditions are "ApprovalRequestCreated", "WaitTimeElapsed", and "ApprovalRequestApproved".
                             items:
                               description: "Condition contains details for one aspect
@@ -767,7 +941,7 @@ spec:
                             - type
                             x-kubernetes-list-type: map
                           type:
-                            description: The type of the post update task.
+                            description: The type of the post-update task.
                             enum:
                             - TimedWait
                             - Approval
@@ -799,7 +973,7 @@ spec:
                           conditions:
                             description: |-
                               Conditions is an array of current observed conditions for clusters. Empty if the cluster has not started updating.
-                              Known conditions are "Started,"Succeeded".
+                              Known conditions are "Started", "Succeeded".
                             items:
                               description: "Condition contains details for one aspect
                                 of the current state of this API Resource.\n---\nThis
