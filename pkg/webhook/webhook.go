@@ -47,6 +47,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
+	"go.goms.io/fleet/pkg/utils/controller/metrics"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceoverride"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/webhook/fleetresourcehandler"
@@ -174,7 +175,12 @@ func (w *Config) Start(ctx context.Context) error {
 		klog.ErrorS(err, "unable to setup webhook configurations in apiserver")
 		return err
 	}
+	w.initMetrics()
 	return nil
+}
+
+func (w *Config) initMetrics() {
+	metrics.GuardRailRejectionCount.WithLabelValues("fleet-guard-rail").Add(0)
 }
 
 // createFleetWebhookConfiguration creates the ValidatingWebhookConfiguration object for the webhook.
