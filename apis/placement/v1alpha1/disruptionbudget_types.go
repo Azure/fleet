@@ -17,7 +17,7 @@ import (
 
 // PlacementDisruptionBudget is the policy applied to a ClusterResourcePlacement
 // object that specifies its disruption budget, i.e., how many placements (clusters) can be
-// down at the same time due to **voluntary** disruptions (e.g., evictions). Involuntary
+// down at the same time due to voluntary disruptions (e.g., evictions). Involuntary
 // disruptions are not subject to this budget, but will still count against it.
 //
 // To apply a PlacementDisruptionBudget to a ClusterResourcePlacement, use the
@@ -46,7 +46,7 @@ type PlacementDisruptionBudgetSpec struct {
 	//
 	// This can be either an absolute value (e.g., 1) or a percentage (e.g., 10%).
 	//
-	// If a percentage is specified, Fleet will calculate the corresponding absolutate values
+	// If a percentage is specified, Fleet will calculate the corresponding absolute values
 	// as follows:
 	// * if the linked ClusterResourcePlacement object is of the PickFixed placement type,
 	//   the percentage is against the number of clusters specified in the placement (i.e., the
@@ -79,7 +79,7 @@ type PlacementDisruptionBudgetSpec struct {
 	//
 	// This can be either an absolute value (e.g., 1) or a percentage (e.g., 10%).
 	//
-	// If a percentage is specified, Fleet will calculate the corresponding absolutate values
+	// If a percentage is specified, Fleet will calculate the corresponding absolute values
 	// as follows:
 	// * if the linked ClusterResourcePlacement object is of the PickFixed placement type,
 	//   the percentage is against the number of clusters specified in the placement (i.e., the

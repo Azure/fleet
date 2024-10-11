@@ -18,7 +18,7 @@ import (
 // a ClusterResourcePlacement object; one may use this API to force the removal of specific
 // resources from a cluster.
 //
-// An eviction is a **voluntary** disruption; its execution is subject to the disruption budget
+// An eviction is a voluntary disruption; its execution is subject to the disruption budget
 // linked with the target ClusterResourcePlacement object (if present).
 //
 // Beware that an eviction alone does not guarantee that a placement will not re-appear; i.e.,
@@ -28,7 +28,7 @@ import (
 // where one would like to perform a cluster replacement.
 //
 // For safety reasons, Fleet will only execute an eviction once; the spec in this object is immutable,
-// and once executed, the object will be ignored afterwards. To trigger another eviction attempt on the
+// and once executed, the object will be ignored after. To trigger another eviction attempt on the
 // same placement from the same ClusterResourcePlacement object, one must re-create (delete and
 // create) the same Eviction object. Note also that an Eviction object will be
 // ignored once it is deemed invalid (e.g., such an object might be targeting a CRP object or
@@ -57,13 +57,13 @@ type PlacementEviction struct {
 // PlacementEvictionSpec is the desired state of the PlacementEviction.
 type PlacementEvictionSpec struct {
 	// PlacementReference is the name of the ClusterResourcePlacement object which
-	// the Eviction object targets at.
+	// the Eviction object targets.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="The PlacementReference field is immutable"
 	// +kubebuilder:validation:MaxLength=255
 	PlacementReference string `json:"placementReference"`
 
-	// ClusterName is the name of the cluster that the Eviction object targets at.
+	// ClusterName is the name of the cluster that the Eviction object targets.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="The ClusterName field is immutable"
 	// +kubebuilder:validation:MaxLength=255
@@ -84,7 +84,7 @@ type PlacementEvictionStatus struct {
 
 // PlacementEvictionConditionType identifies a specific condition of the
 // PlacementEviction.
-type ClusterResourcePlacementConditionType string
+type PlacementEvictionConditionType string
 
 const (
 	// PlacementEvictionValid indicates whether the Eviction object is valid.
@@ -95,7 +95,7 @@ const (
 	//   that does not exist yet.
 	//   Note that this is a terminal state; once an Eviction object is deemed invalid, it will
 	//   not be evaluated again, even if the target appears later.
-	PlacementEvictionValid ClusterResourcePlacementConditionType = "Valid"
+	PlacementEvictionValid PlacementEvictionConditionType = "Valid"
 
 	// PlacementEvictionExecuted indicates whether the Eviction object has been executed.
 	//
@@ -104,7 +104,7 @@ const (
 	//   Note that this is a terminal state; once an Eviction object is executed, it will not be
 	//   executed again.
 	// * False: the Eviction object has not been executed yet.
-	PlacementEvictionExecuted ClusterResourcePlacementConditionType = "Executed"
+	PlacementEvictionExecuted PlacementEvictionConditionType = "Executed"
 )
 
 // PlacementEvictionList contains a list of PlacementEviction objects.

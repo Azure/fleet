@@ -26,7 +26,7 @@ spec:
           resources from a cluster.
 
 
-          An eviction is a **voluntary** disruption; its execution is subject to the disruption budget
+          An eviction is a voluntary disruption; its execution is subject to the disruption budget
           linked with the target ClusterResourcePlacement object (if present).
 
 
@@ -38,7 +38,7 @@ spec:
 
 
           For safety reasons, Fleet will only execute an eviction once; the spec in this object is immutable,
-          and once executed, the object will be ignored afterwards. To trigger another eviction attempt on the
+          and once executed, the object will be ignored after. To trigger another eviction attempt on the
           same placement from the same ClusterResourcePlacement object, one must re-create (delete and
           create) the same Eviction object. Note also that an Eviction object will be
           ignored once it is deemed invalid (e.g., such an object might be targeting a CRP object or
@@ -77,7 +77,7 @@ spec:
             properties:
               clusterName:
                 description: ClusterName is the name of the cluster that the Eviction
-                  object targets at.
+                  object targets.
                 maxLength: 255
                 type: string
                 x-kubernetes-validations:
@@ -86,7 +86,7 @@ spec:
               placementReference:
                 description: |-
                   PlacementReference is the name of the ClusterResourcePlacement object which
-                  the Eviction object targets at.
+                  the Eviction object targets.
                 maxLength: 255
                 type: string
                 x-kubernetes-validations:
