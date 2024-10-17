@@ -4,34 +4,54 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.15.0
-  name: placementdisruptionbudgets.placement.kubernetes-fleet.io
+  name: clusterresourceplacementevictions.placement.kubernetes-fleet.io
 spec:
   group: placement.kubernetes-fleet.io
   names:
     categories:
     - fleet
     - fleet-placement
-    kind: PlacementDisruptionBudget
-    listKind: PlacementDisruptionBudgetList
-    plural: placementdisruptionbudgets
+    kind: ClusterResourcePlacementEviction
+    listKind: ClusterResourcePlacementEvictionList
+    plural: clusterresourceplacementevictions
     shortNames:
-    - crpdb
-    singular: placementdisruptionbudget
+    - crpe
+    singular: clusterresourceplacementeviction
   scope: Cluster
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: |-
-          PlacementDisruptionBudget is the policy applied to a ClusterResourcePlacement
-          object that specifies its disruption budget, i.e., how many placements (clusters) can be
-          down at the same time due to voluntary disruptions (e.g., evictions). Involuntary
-          disruptions are not subject to this budget, but will still count against it.
+          ClusterResourcePlacementEviction is an eviction attempt on a specific placement from
+          a ClusterResourcePlacement object; one may use this API to force the removal of specific
+          resources from a cluster.
 
 
-          To apply a PlacementDisruptionBudget to a ClusterResourcePlacement, use the
-          same name for the PlacementDisruptionBudget object as the ClusterResourcePlacement
-          object. This guarantees a 1:1 link between the two objects.
+          An eviction is a voluntary disruption; its execution is subject to the disruption budget
+          linked with the target ClusterResourcePlacement object (if present).
+
+
+          Beware that an eviction alone does not guarantee that a placement will not re-appear; i.e.,
+          after an eviction, the Fleet scheduler might still pick the previous target cluster for
+          placement. To prevent this, considering adding proper taints to the target cluster before running
+          an eviction that will exclude it from future placements; this is especially true in scenarios
+          where one would like to perform a cluster replacement.
+
+
+          For safety reasons, Fleet will only execute an eviction once; the spec in this object is immutable,
+          and once executed, the object will be ignored after. To trigger another eviction attempt on the
+          same placement from the same ClusterResourcePlacement object, one must re-create (delete and
+          create) the same Eviction object. Note also that an Eviction object will be
+          ignored once it is deemed invalid (e.g., such an object might be targeting a CRP object or
+          a placement that does not exist yet), even if it does become valid later
+          (e.g., the CRP object or the placement appears later). To fix the situation, re-create the
+          Eviction object.
+
+
+          Executed evictions might be kept around for a while for auditing purposes; the Fleet controllers might
+          have a TTL set up for such objects and will garbage collect them automatically. For further
+          information, see the Fleet documentation.
         properties:
           apiVersion:
             description: |-
@@ -51,97 +71,45 @@ spec:
           metadata:
             type: object
           spec:
-            description: Spec is the desired state of the PlacementDisruptionBudget.
+            description: |-
+              Spec is the desired state of the ClusterResourcePlacementEviction.
+
+
+              Note that all fields in the spec are immutable.
             properties:
-              maxUnavailable:
-                anyOf:
-                - type: integer
-                - type: string
-                default: 25%
+              clusterName:
+                description: ClusterName is the name of the cluster that the Eviction
+                  object targets.
+                maxLength: 255
+                type: string
+                x-kubernetes-validations:
+                - message: The ClusterName field is immutable
+                  rule: self == oldSelf
+              placementReference:
                 description: |-
-                  MaxUnavailable is the maximum number of placements that can be down at the same time
-                  due to voluntary disruptions. For example, a setting of 1 would imply that
-                  a voluntary disruption (e.g., an eviction) can only happen if all placements
-                  from the linked ClusterResourcePlacement object are applied and available.
-
-
-                  This can be either an absolute value (e.g., 1) or a percentage (e.g., 10%).
-
-
-                  If a percentage is specified, Fleet will calculate the corresponding absolute values
-                  as follows:
-                  * if the linked ClusterResourcePlacement object is of the PickFixed placement type,
-                    the percentage is against the number of clusters specified in the placement (i.e., the
-                    length of ClusterNames field in the placement policy);
-                  * if the linked ClusterResourcePlacement object is of the PickAll placement type,
-                    the percentage is against the total number of clusters being selected by the scheduler
-                    at the time of the evaluation of the disruption budget;
-                  * if the linked ClusterResourcePlacement object is of the PickN placement type,
-                    the percentage is against the number of clusters specified in the placement (i.e., the
-                    value of the NumberOfClusters fields in the placement policy).
-                  The end result will be rounded up to the nearest integer if applicable.
-
-
-                  One may use a value of 0 for this field; in this case, no voluntary disruption would be
-                  allowed.
-
-
-                  This field is mutually exclusive with the MinAvailable field in the spec; exactly one
-                  of them can be set at a time.
-
-
-                  Defaults to 25%.
-                pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
-                x-kubernetes-int-or-string: true
-              minAvailable:
-                anyOf:
-                - type: integer
-                - type: string
-                description: |-
-                  MinAvailable is the minimum number of placements that must be available at any time
-                  despite voluntary disruptions. For example, a setting of 10 would imply that
-                  a voluntary disruption (e.g., an eviction) can only happen if there are at least 11
-                  placements from the linked ClusterResourcePlacement object are applied and available.
-
-
-                  This can be either an absolute value (e.g., 1) or a percentage (e.g., 10%).
-
-
-                  If a percentage is specified, Fleet will calculate the corresponding absolute values
-                  as follows:
-                  * if the linked ClusterResourcePlacement object is of the PickFixed placement type,
-                    the percentage is against the number of clusters specified in the placement (i.e., the
-                    length of ClusterNames field in the placement policy);
-                  * if the linked ClusterResourcePlacement object is of the PickAll placement type,
-                    the percentage is against the total number of clusters being selected by the scheduler
-                    at the time of the evaluation of the disruption budget;
-                  * if the linked ClusterResourcePlacement object is of the PickN placement type,
-                    the percentage is against the number of clusters specified in the placement (i.e., the
-                    value of the NumberOfClusters fields in the placement policy).
-                  The end result will be rounded up to the nearest integer if applicable.
-
-
-                  One may use a value of 0 for this field; in this case, voluntary disruption would be
-                  allowed at any time.
-
-
-                  This field is mutually exclusive with the MaxUnavailable field in the spec; exactly one
-                  of them can be set at a time.
-                pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
-                x-kubernetes-int-or-string: true
+                  PlacementReference is the name of the ClusterResourcePlacement object which
+                  the Eviction object targets.
+                maxLength: 255
+                type: string
+                x-kubernetes-validations:
+                - message: The PlacementReference field is immutable
+                  rule: self == oldSelf
+            required:
+            - clusterName
+            - placementReference
             type: object
           status:
-            description: Status is the observed state of the PlacementDisruptionBudget.
+            description: Status is the observed state of the ClusterResourcePlacementEviction.
             properties:
               conditions:
                 description: |-
                   Conditions is the list of currently observed conditions for the
-                  PlacementDisruptionBudget object.
+                  ClusterResourcePlacementEviction object.
 
 
                   Available condition types include:
-                  * Applied: whether the disruption budget has been successfully applied to the linked
-                    ClusterResourcePlacement object.
+                  * Valid: whether the Eviction object is valid, i.e., it targets at a valid placement.
+                  * Executed: whether the Eviction object has been executed.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource.\n---\nThis struct is intended for
