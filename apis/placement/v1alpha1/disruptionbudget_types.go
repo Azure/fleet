@@ -29,16 +29,16 @@ type ClusterResourcePlacementDisruptionBudget struct {
 
 	// Spec is the desired state of the ClusterResourcePlacementDisruptionBudget.
 	// +required
-	Spec ClusterResourcePlacementDisruptionBudgetSpec `json:"spec"`
+	Spec PlacementDisruptionBudgetSpec `json:"spec"`
 
 	// Status is the observed state of the ClusterResourcePlacementDisruptionBudget.
 	// +optional
-	Status ClusterResourcePlacementDisruptionBudgetStatus `json:"status,omitempty"`
+	Status PlacementDisruptionBudgetStatus `json:"status,omitempty"`
 }
 
-// ClusterResourcePlacementDisruptionBudgetSpec is the desired state of the
+// PlacementDisruptionBudgetSpec is the desired state of the
 // ClusterResourcePlacementDisruptionBudget.
-type ClusterResourcePlacementDisruptionBudgetSpec struct {
+type PlacementDisruptionBudgetSpec struct {
 	// MaxUnavailable is the maximum number of placements that can be down at the same time
 	// due to voluntary disruptions. For example, a setting of 1 would imply that
 	// a voluntary disruption (e.g., an eviction) can only happen if all placements
@@ -104,9 +104,9 @@ type ClusterResourcePlacementDisruptionBudgetSpec struct {
 	MinAvailable *intstr.IntOrString `json:"minAvailable,omitempty"`
 }
 
-// ClusterResourcePlacementDisruptionBudgetStatus is the observed state of the
+// PlacementDisruptionBudgetStatus is the observed state of the
 // ClusterResourcePlacementDisruptionBudget.
-type ClusterResourcePlacementDisruptionBudgetStatus struct {
+type PlacementDisruptionBudgetStatus struct {
 	// Number of placement disruptions that are currently allowed.
 	// +optional
 	DisruptionsAllowed int32 `json:"disruptionsAllowed"`
@@ -134,18 +134,18 @@ type ClusterResourcePlacementDisruptionBudgetStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// ClusterResourcePlacementDisruptionBudgetConditionType identifies a specific condition of the
+// PlacementDisruptionBudgetConditionType identifies a specific condition of the
 // ClusterResourcePlacementDisruptionBudget.
-type ClusterResourcePlacementDisruptionBudgetConditionType string
+type PlacementDisruptionBudgetConditionType string
 
 const (
-	// ClusterResourcePlacementDisruptionBudgetConditionTypeDisruptionAllowed indicates whether the disruption budget
+	// PlacementDisruptionBudgetConditionTypeDisruptionAllowed indicates whether the disruption budget
 	// allows placements to be disrupted by voluntary disruptions.
 	//
 	// The following values are possible:
 	// * True: the disruption budget allows disruption for ClusterResourcePlacement.
 	// * False: the disruption budget does not allow any voluntary disruption for ClusterResourcePlacement.
-	ClusterResourcePlacementDisruptionBudgetConditionTypeDisruptionAllowed ClusterResourcePlacementDisruptionBudgetConditionType = "DisruptionAllowed"
+	PlacementDisruptionBudgetConditionTypeDisruptionAllowed PlacementDisruptionBudgetConditionType = "DisruptionAllowed"
 )
 
 // ClusterResourcePlacementDisruptionBudgetList contains a list of PlacementDisruptionBudget objects.

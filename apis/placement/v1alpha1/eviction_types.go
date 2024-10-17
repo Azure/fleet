@@ -47,15 +47,15 @@ type ClusterResourcePlacementEviction struct {
 	//
 	// Note that all fields in the spec are immutable.
 	// +required
-	Spec ClusterResourcePlacementEvictionSpec `json:"spec"`
+	Spec PlacementEvictionSpec `json:"spec"`
 
 	// Status is the observed state of the ClusterResourcePlacementEviction.
 	// +optional
-	Status ClusterResourcePlacementEvictionStatus `json:"status,omitempty"`
+	Status PlacementEvictionStatus `json:"status,omitempty"`
 }
 
-// ClusterResourcePlacementEvictionSpec is the desired state of the ClusterResourcePlacementEviction.
-type ClusterResourcePlacementEvictionSpec struct {
+// PlacementEvictionSpec is the desired state of the ClusterResourcePlacementEviction.
+type PlacementEvictionSpec struct {
 	// PlacementReference is the name of the ClusterResourcePlacement object which
 	// the Eviction object targets.
 	// +kubebuilder:validation:Required
@@ -70,8 +70,8 @@ type ClusterResourcePlacementEvictionSpec struct {
 	ClusterName string `json:"clusterName"`
 }
 
-// ClusterResourcePlacementEvictionStatus is the observed state of the ClusterResourcePlacementEviction.
-type ClusterResourcePlacementEvictionStatus struct {
+// PlacementEvictionStatus is the observed state of the ClusterResourcePlacementEviction.
+type PlacementEvictionStatus struct {
 	// Conditions is the list of currently observed conditions for the
 	// ClusterResourcePlacementEviction object.
 	//
@@ -82,12 +82,12 @@ type ClusterResourcePlacementEvictionStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// ClusterResourcePlacementEvictionConditionType identifies a specific condition of the
+// PlacementEvictionConditionType identifies a specific condition of the
 // ClusterResourcePlacementEviction.
-type ClusterResourcePlacementEvictionConditionType string
+type PlacementEvictionConditionType string
 
 const (
-	// ClusterResourcePlacementEvictionConditionTypeValid indicates whether the Eviction object is valid.
+	// PlacementEvictionConditionTypeValid indicates whether the Eviction object is valid.
 	//
 	// The following values are possible:
 	// * True: the Eviction object is valid.
@@ -95,16 +95,16 @@ const (
 	//   that does not exist yet.
 	//   Note that this is a terminal state; once an Eviction object is deemed invalid, it will
 	//   not be evaluated again, even if the target appears later.
-	ClusterResourcePlacementEvictionConditionTypeValid ClusterResourcePlacementEvictionConditionType = "Valid"
+	PlacementEvictionConditionTypeValid PlacementEvictionConditionType = "Valid"
 
-	// ClusterResourcePlacementEvictionConditionTypeExecuted indicates whether the Eviction object has been executed.
+	// PlacementEvictionConditionTypeExecuted indicates whether the Eviction object has been executed.
 	//
 	// The following values are possible:
 	// * True: the Eviction object has been executed.
 	//   Note that this is a terminal state; once an Eviction object is executed, it will not be
 	//   executed again.
 	// * False: the Eviction object has not been executed yet.
-	ClusterResourcePlacementEvictionConditionTypeExecuted ClusterResourcePlacementEvictionConditionType = "Executed"
+	PlacementEvictionConditionTypeExecuted PlacementEvictionConditionType = "Executed"
 )
 
 // ClusterResourcePlacementEvictionList contains a list of ClusterResourcePlacementEviction objects.
@@ -119,5 +119,7 @@ type ClusterResourcePlacementEvictionList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&ClusterResourcePlacementEviction{}, &ClusterResourcePlacementEvictionList{})
+	SchemeBuilder.Register(
+		&ClusterResourcePlacementEviction{},
+		&ClusterResourcePlacementEvictionList{})
 }
