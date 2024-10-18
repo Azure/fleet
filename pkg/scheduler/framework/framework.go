@@ -287,12 +287,18 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, p
 	// * dangling bindings, i.e., bindings that are associated with a cluster that is no longer
 	//   in a normally operating state (the cluster has left the fleet, or is in the state of leaving),
 	//   yet has not been marked as unscheduled by the scheduler; and
-	//
+	// * deleting bindings, i.e., bindings that have a deletionTimeStamp on them.
 	// Any deleted binding is also ignored.
 	// Note that bindings marked as unscheduled are ignored by the scheduler, as they
 	// are irrelevant to the scheduling cycle. However, we will reconcile them with the latest scheduling
 	// result so that we won't have a ever increasing chain of flip flop bindings.
-	bound, scheduled, obsolete, unscheduled, dangling := classifyBindings(policy, bindings, clusters)
+	bound, scheduled, obsolete, unscheduled, dangling, deleting := classifyBindings(policy, bindings, clusters)
+
+	// Remove finalizers on all deleting bindings.
+	if err := f.removeFinalizer(ctx, deleting); err != nil {
+		klog.ErrorS(err, "Failed to remove finalizers from deleting bindings", "clusterSchedulingPolicySnapshot", policyRef)
+		return ctrl.Result{}, err
+	}
 
 	// Mark all dangling bindings as unscheduled.
 	if err := f.markAsUnscheduledFor(ctx, dangling); err != nil {
@@ -374,6 +380,32 @@ func (f *framework) markAsUnscheduledFor(ctx context.Context, bindings []*placem
 					if apierrors.IsConflict(err) {
 						// get the binding again to make sure we have the latest version to update again.
 						return f.client.Get(cctx, client.ObjectKeyFromObject(unscheduledBinding), unscheduledBinding)
+					}
+					return err
+				})
+		})
+	}
+	return errs.Wait()
+}
+
+// removeFinalizer removes all finalizers from ClusterResourceBinding.
+func (f *framework) removeFinalizer(ctx context.Context, bindings []*placementv1beta1.ClusterResourceBinding) error {
+	// issue all the update requests in parallel
+	errs, cctx := errgroup.WithContext(ctx)
+	for _, binding := range bindings {
+		deletingBinding := binding
+		errs.Go(func() error {
+			return retry.OnError(retry.DefaultBackoff,
+				func(err error) bool {
+					return apierrors.IsServiceUnavailable(err) || apierrors.IsServerTimeout(err) || apierrors.IsConflict(err)
+				},
+				func() error {
+					deletingBinding.SetFinalizers([]string{})
+					err := f.client.Update(cctx, deletingBinding, &client.UpdateOptions{})
+					// There should ideally be no state changes for deleting bindings. But we will retry on conflicts.
+					if apierrors.IsConflict(err) {
+						// get the binding again to make sure we have the latest version to update again.
+						return f.client.Get(cctx, client.ObjectKeyFromObject(deletingBinding), deletingBinding)
 					}
 					return err
 				})

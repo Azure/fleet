@@ -10,6 +10,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	// SchedulerCRBReconcileFinalizer is a finalizer added to ClusterResourceBindings to ensure we can look up the
+	// corresponding CRP for deleting ClusterResourceBindings to start another scheduling cycle.
+	SchedulerCRBReconcileFinalizer = fleetPrefix + "scheduler-reconcile"
+)
+
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=rb
 // +kubebuilder:subresource:status

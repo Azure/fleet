@@ -29,16 +29,18 @@ import (
 //   - dangling bindings, i.e., bindings that are associated with a cluster that is no longer in
 //     a normally operating state (the cluster has left the fleet, or is in the state of leaving),
 //     yet has not been marked as unscheduled by the scheduler; and
-//   - unscheduled bindings, i.e., bindings that are marked to be removed by the scheduler.
+//   - unscheduled bindings, i.e., bindings that are marked to be removed by the scheduler; and
 //   - obsolete bindings, i.e., bindings that are no longer associated with the latest scheduling
-//     policy.
-func classifyBindings(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, bindings []placementv1beta1.ClusterResourceBinding, clusters []clusterv1beta1.MemberCluster) (bound, scheduled, obsolete, unscheduled, dangling []*placementv1beta1.ClusterResourceBinding) {
+//     policy; and
+//   - deleting bindings, i.e., bindings that have a deletionTimeStamp on them.
+func classifyBindings(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, bindings []placementv1beta1.ClusterResourceBinding, clusters []clusterv1beta1.MemberCluster) (bound, scheduled, obsolete, unscheduled, dangling, deleting []*placementv1beta1.ClusterResourceBinding) {
 	// Pre-allocate arrays.
 	bound = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
 	scheduled = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
 	obsolete = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
 	unscheduled = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
 	dangling = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
+	deleting = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
 
 	// Build a map for clusters for quick loopup.
 	clusterMap := make(map[string]clusterv1beta1.MemberCluster)
@@ -52,11 +54,8 @@ func classifyBindings(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, 
 
 		switch {
 		case !binding.DeletionTimestamp.IsZero():
-			// Ignore any binding that has been deleted.
-			//
-			// Note that the scheduler will not add any cleanup scheduler to a binding, as
-			// in normal operations bound and scheduled bindings will not be deleted, and
-			// unscheduled bindings are disregarded by the scheduler.
+			// we need remove scheduler reconcile finalizer from deleting ClusterResourceBindings.
+			deleting = append(deleting, &binding)
 		case binding.Spec.State == placementv1beta1.BindingStateUnscheduled:
 			// we need to remember those bindings so that we will not create another one.
 			unscheduled = append(unscheduled, &binding)
@@ -83,7 +82,7 @@ func classifyBindings(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, 
 		}
 	}
 
-	return bound, scheduled, obsolete, unscheduled, dangling
+	return bound, scheduled, obsolete, unscheduled, dangling, deleting
 }
 
 // bindingWithPatch is a helper struct that includes a binding that needs to be patched and the
@@ -186,6 +185,7 @@ func crossReferencePickedClustersAndDeDupBindings(
 					Labels: map[string]string{
 						placementv1beta1.CRPTrackingLabel: crpName,
 					},
+					Finalizers: []string{placementv1beta1.SchedulerCRBReconcileFinalizer},
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
 					State: placementv1beta1.BindingStateScheduled,
@@ -684,6 +684,7 @@ func crossReferenceValidTargetsWithBindings(
 					Labels: map[string]string{
 						placementv1beta1.CRPTrackingLabel: crpName,
 					},
+					Finalizers: []string{placementv1beta1.SchedulerCRBReconcileFinalizer},
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
 					State: placementv1beta1.BindingStateScheduled,
