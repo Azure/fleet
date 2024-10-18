@@ -57,7 +57,6 @@ spec:
                 anyOf:
                 - type: integer
                 - type: string
-                default: 25%
                 description: |-
                   MaxUnavailable is the maximum number of placements that can be down at the same time
                   due to voluntary disruptions. For example, a setting of 1 would imply that
@@ -88,9 +87,6 @@ spec:
 
                   This field is mutually exclusive with the MinAvailable field in the spec; exactly one
                   of them can be set at a time.
-
-
-                  Defaults to 25%.
                 pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
                 x-kubernetes-int-or-string: true
               minAvailable:
@@ -130,6 +126,9 @@ spec:
                 pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
                 x-kubernetes-int-or-string: true
             type: object
+            x-kubernetes-validations:
+            - message: Both MaxUnavailable and MinAvailable cannot be specified
+              rule: '!(has(self.maxUnavailable) && has(self.minAvailable))'
           status:
             description: Status is the observed state of the ClusterResourcePlacementDisruptionBudget.
             properties:

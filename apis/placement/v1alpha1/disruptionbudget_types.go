@@ -28,6 +28,7 @@ type ClusterResourcePlacementDisruptionBudget struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec is the desired state of the ClusterResourcePlacementDisruptionBudget.
+	// +kubebuilder:validation:XValidation:rule="!(has(self.maxUnavailable) && has(self.minAvailable))",message="Both MaxUnavailable and MinAvailable cannot be specified"
 	// +required
 	Spec PlacementDisruptionBudgetSpec `json:"spec"`
 
@@ -65,8 +66,6 @@ type PlacementDisruptionBudgetSpec struct {
 	// This field is mutually exclusive with the MinAvailable field in the spec; exactly one
 	// of them can be set at a time.
 	//
-	// Defaults to 25%.
-	// +kubebuilder:default="25%"
 	// +kubebuilder:validation:XIntOrString
 	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]+)$"
 	// +optional
