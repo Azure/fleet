@@ -31,31 +31,26 @@ type ClusterResourcePlacementDisruptionBudget struct {
 	// +kubebuilder:validation:XValidation:rule="!(has(self.maxUnavailable) && has(self.minAvailable))",message="Both MaxUnavailable and MinAvailable cannot be specified"
 	// +required
 	Spec PlacementDisruptionBudgetSpec `json:"spec"`
-
-	// Status is the observed state of the ClusterResourcePlacementDisruptionBudget.
-	// +optional
-	Status PlacementDisruptionBudgetStatus `json:"status,omitempty"`
 }
 
-// PlacementDisruptionBudgetSpec is the desired state of the
-// ClusterResourcePlacementDisruptionBudget.
+// PlacementDisruptionBudgetSpec is the desired state of the PlacementDisruptionBudget.
 type PlacementDisruptionBudgetSpec struct {
 	// MaxUnavailable is the maximum number of placements that can be down at the same time
 	// due to voluntary disruptions. For example, a setting of 1 would imply that
 	// a voluntary disruption (e.g., an eviction) can only happen if all placements
-	// from the linked ClusterResourcePlacement object are applied and available.
+	// from the linked Placement object are applied and available.
 	//
 	// This can be either an absolute value (e.g., 1) or a percentage (e.g., 10%).
 	//
 	// If a percentage is specified, Fleet will calculate the corresponding absolute values
 	// as follows:
-	// * if the linked ClusterResourcePlacement object is of the PickFixed placement type,
+	// * if the linked Placement object is of the PickFixed placement type,
 	//   the percentage is against the number of clusters specified in the placement (i.e., the
 	//   length of ClusterNames field in the placement policy);
-	// * if the linked ClusterResourcePlacement object is of the PickAll placement type,
+	// * if the linked Placement object is of the PickAll placement type,
 	//   the percentage is against the total number of clusters being selected by the scheduler
 	//   at the time of the evaluation of the disruption budget;
-	// * if the linked ClusterResourcePlacement object is of the PickN placement type,
+	// * if the linked Placement object is of the PickN placement type,
 	//   the percentage is against the number of clusters specified in the placement (i.e., the
 	//   value of the NumberOfClusters fields in the placement policy).
 	// The end result will be rounded up to the nearest integer if applicable.
@@ -74,19 +69,19 @@ type PlacementDisruptionBudgetSpec struct {
 	// MinAvailable is the minimum number of placements that must be available at any time
 	// despite voluntary disruptions. For example, a setting of 10 would imply that
 	// a voluntary disruption (e.g., an eviction) can only happen if there are at least 11
-	// placements from the linked ClusterResourcePlacement object are applied and available.
+	// placements from the linked Placement object are applied and available.
 	//
 	// This can be either an absolute value (e.g., 1) or a percentage (e.g., 10%).
 	//
 	// If a percentage is specified, Fleet will calculate the corresponding absolute values
 	// as follows:
-	// * if the linked ClusterResourcePlacement object is of the PickFixed placement type,
+	// * if the linked Placement object is of the PickFixed placement type,
 	//   the percentage is against the number of clusters specified in the placement (i.e., the
 	//   length of ClusterNames field in the placement policy);
-	// * if the linked ClusterResourcePlacement object is of the PickAll placement type,
+	// * if the linked Placement object is of the PickAll placement type,
 	//   the percentage is against the total number of clusters being selected by the scheduler
 	//   at the time of the evaluation of the disruption budget;
-	// * if the linked ClusterResourcePlacement object is of the PickN placement type,
+	// * if the linked Placement object is of the PickN placement type,
 	//   the percentage is against the number of clusters specified in the placement (i.e., the
 	//   value of the NumberOfClusters fields in the placement policy).
 	// The end result will be rounded up to the nearest integer if applicable.
@@ -103,51 +98,7 @@ type PlacementDisruptionBudgetSpec struct {
 	MinAvailable *intstr.IntOrString `json:"minAvailable,omitempty"`
 }
 
-// PlacementDisruptionBudgetStatus is the observed state of the
-// ClusterResourcePlacementDisruptionBudget.
-type PlacementDisruptionBudgetStatus struct {
-	// Number of placement disruptions that are currently allowed.
-	// +optional
-	DisruptionsAllowed int32 `json:"disruptionsAllowed"`
-
-	// Current number of available placements.
-	// +optional
-	CurrentAvailable int32 `json:"currentAvailable"`
-
-	// Minimum desired number of available placements.
-	// +optional
-	DesiredAvailable int32 `json:"desiredAvailable"`
-
-	// Total number of placements counted by this disruption budget.
-	// +optional
-	TotalPlacements int32 `json:"totalPlacements"`
-
-	// TODO: Add a map to track ongoing evictions, to protect against concurrent evictions.
-
-	// Conditions is the list of currently observed conditions for the
-	// ClusterResourcePlacementDisruptionBudget object.
-	//
-	// Available condition types include:
-	// * Allowed: whether the disruption budget allows disruption for ClusterResourcePlacement.
-	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
-}
-
-// PlacementDisruptionBudgetConditionType identifies a specific condition of the
-// ClusterResourcePlacementDisruptionBudget.
-type PlacementDisruptionBudgetConditionType string
-
-const (
-	// PDBConditionDisruptionAllowed indicates whether the disruption budget allows placements
-	// to be disrupted by voluntary disruptions.
-	//
-	// The following values are possible:
-	// * True: the disruption budget allows disruption for ClusterResourcePlacement.
-	// * False: the disruption budget does not allow any voluntary disruption for ClusterResourcePlacement.
-	PDBConditionDisruptionAllowed PlacementDisruptionBudgetConditionType = "DisruptionAllowed"
-)
-
-// ClusterResourcePlacementDisruptionBudgetList contains a list of PlacementDisruptionBudget objects.
+// ClusterResourcePlacementDisruptionBudgetList contains a list of ClusterResourcePlacementDisruptionBudget objects.
 // +kubebuilder:resource:scope=Cluster
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type ClusterResourcePlacementDisruptionBudgetList struct {

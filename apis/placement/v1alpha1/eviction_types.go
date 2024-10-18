@@ -54,9 +54,9 @@ type ClusterResourcePlacementEviction struct {
 	Status PlacementEvictionStatus `json:"status,omitempty"`
 }
 
-// PlacementEvictionSpec is the desired state of the ClusterResourcePlacementEviction.
+// PlacementEvictionSpec is the desired state of the parent PlacementEviction.
 type PlacementEvictionSpec struct {
-	// PlacementReference is the name of the ClusterResourcePlacement object which
+	// PlacementReference is the name of the Placement object which
 	// the Eviction object targets.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="The PlacementReference field is immutable"
@@ -70,10 +70,10 @@ type PlacementEvictionSpec struct {
 	ClusterName string `json:"clusterName"`
 }
 
-// PlacementEvictionStatus is the observed state of the ClusterResourcePlacementEviction.
+// PlacementEvictionStatus is the observed state of the parent PlacementEviction.
 type PlacementEvictionStatus struct {
 	// Conditions is the list of currently observed conditions for the
-	// ClusterResourcePlacementEviction object.
+	// PlacementEviction object.
 	//
 	// Available condition types include:
 	// * Valid: whether the Eviction object is valid, i.e., it targets at a valid placement.
@@ -83,7 +83,7 @@ type PlacementEvictionStatus struct {
 }
 
 // PlacementEvictionConditionType identifies a specific condition of the
-// ClusterResourcePlacementEviction.
+// PlacementEviction.
 type PlacementEvictionConditionType string
 
 const (

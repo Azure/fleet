@@ -87,7 +87,7 @@ spec:
                   rule: self == oldSelf
               placementReference:
                 description: |-
-                  PlacementReference is the name of the ClusterResourcePlacement object which
+                  PlacementReference is the name of the Placement object which
                   the Eviction object targets.
                 maxLength: 255
                 type: string
@@ -104,7 +104,7 @@ spec:
               conditions:
                 description: |-
                   Conditions is the list of currently observed conditions for the
-                  ClusterResourcePlacementEviction object.
+                  PlacementEviction object.
 
 
                   Available condition types include:

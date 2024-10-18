@@ -61,7 +61,7 @@ spec:
                   MaxUnavailable is the maximum number of placements that can be down at the same time
                   due to voluntary disruptions. For example, a setting of 1 would imply that
                   a voluntary disruption (e.g., an eviction) can only happen if all placements
-                  from the linked ClusterResourcePlacement object are applied and available.
+                  from the linked Placement object are applied and available.
 
 
                   This can be either an absolute value (e.g., 1) or a percentage (e.g., 10%).
@@ -69,13 +69,13 @@ spec:
 
                   If a percentage is specified, Fleet will calculate the corresponding absolute values
                   as follows:
-                  * if the linked ClusterResourcePlacement object is of the PickFixed placement type,
+                  * if the linked Placement object is of the PickFixed placement type,
                     the percentage is against the number of clusters specified in the placement (i.e., the
                     length of ClusterNames field in the placement policy);
-                  * if the linked ClusterResourcePlacement object is of the PickAll placement type,
+                  * if the linked Placement object is of the PickAll placement type,
                     the percentage is against the total number of clusters being selected by the scheduler
                     at the time of the evaluation of the disruption budget;
-                  * if the linked ClusterResourcePlacement object is of the PickN placement type,
+                  * if the linked Placement object is of the PickN placement type,
                     the percentage is against the number of clusters specified in the placement (i.e., the
                     value of the NumberOfClusters fields in the placement policy).
                   The end result will be rounded up to the nearest integer if applicable.
@@ -97,7 +97,7 @@ spec:
                   MinAvailable is the minimum number of placements that must be available at any time
                   despite voluntary disruptions. For example, a setting of 10 would imply that
                   a voluntary disruption (e.g., an eviction) can only happen if there are at least 11
-                  placements from the linked ClusterResourcePlacement object are applied and available.
+                  placements from the linked Placement object are applied and available.
 
 
                   This can be either an absolute value (e.g., 1) or a percentage (e.g., 10%).
@@ -105,13 +105,13 @@ spec:
 
                   If a percentage is specified, Fleet will calculate the corresponding absolute values
                   as follows:
-                  * if the linked ClusterResourcePlacement object is of the PickFixed placement type,
+                  * if the linked Placement object is of the PickFixed placement type,
                     the percentage is against the number of clusters specified in the placement (i.e., the
                     length of ClusterNames field in the placement policy);
-                  * if the linked ClusterResourcePlacement object is of the PickAll placement type,
+                  * if the linked Placement object is of the PickAll placement type,
                     the percentage is against the total number of clusters being selected by the scheduler
                     at the time of the evaluation of the disruption budget;
-                  * if the linked ClusterResourcePlacement object is of the PickN placement type,
+                  * if the linked Placement object is of the PickN placement type,
                     the percentage is against the number of clusters specified in the placement (i.e., the
                     value of the NumberOfClusters fields in the placement policy).
                   The end result will be rounded up to the nearest integer if applicable.
@@ -129,103 +129,6 @@ spec:
             x-kubernetes-validations:
             - message: Both MaxUnavailable and MinAvailable cannot be specified
               rule: '!(has(self.maxUnavailable) && has(self.minAvailable))'
-          status:
-            description: Status is the observed state of the ClusterResourcePlacementDisruptionBudget.
-            properties:
-              conditions:
-                description: |-
-                  Conditions is the list of currently observed conditions for the
-                  ClusterResourcePlacementDisruptionBudget object.
-
-
-                  Available condition types include:
-                  * Allowed: whether the disruption budget allows disruption for ClusterResourcePlacement.
-                items:
-                  description: "Condition contains details for one aspect of the current
-                    state of this API Resource.\n---\nThis struct is intended for
-                    direct use as an array at the field path .status.conditions.  For
-                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
-                    observations of a foo's current state.\n\t    // Known .status.conditions.type
-                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
-                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
-                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                    \   // other fields\n\t}"
-                  properties:
-                    lastTransitionTime:
-                      description: |-
-                        lastTransitionTime is the last time the condition transitioned from one status to another.
-                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
-                      format: date-time
-                      type: string
-                    message:
-                      description: |-
-                        message is a human readable message indicating details about the transition.
-                        This may be an empty string.
-                      maxLength: 32768
-                      type: string
-                    observedGeneration:
-                      description: |-
-                        observedGeneration represents the .metadata.generation that the condition was set based upon.
-                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
-                        with respect to the current state of the instance.
-                      format: int64
-                      minimum: 0
-                      type: integer
-                    reason:
-                      description: |-
-                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
-                        Producers of specific condition types may define expected values and meanings for this field,
-                        and whether the values are considered a guaranteed API.
-                        The value should be a CamelCase string.
-                        This field may not be empty.
-                      maxLength: 1024
-                      minLength: 1
-                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
-                      type: string
-                    status:
-                      description: status of the condition, one of True, False, Unknown.
-                      enum:
-                      - "True"
-                      - "False"
-                      - Unknown
-                      type: string
-                    type:
-                      description: |-
-                        type of condition in CamelCase or in foo.example.com/CamelCase.
-                        ---
-                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                        useful (see .node.status.conditions), the ability to deconflict is important.
-                        The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
-                      maxLength: 316
-                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
-                      type: string
-                  required:
-                  - lastTransitionTime
-                  - message
-                  - reason
-                  - status
-                  - type
-                  type: object
-                type: array
-              currentAvailable:
-                description: Current number of available placements.
-                format: int32
-                type: integer
-              desiredAvailable:
-                description: Minimum desired number of available placements.
-                format: int32
-                type: integer
-              disruptionsAllowed:
-                description: Number of placement disruptions that are currently allowed.
-                format: int32
-                type: integer
-              totalPlacements:
-                description: Total number of placements counted by this disruption
-                  budget.
-                format: int32
-                type: integer
-            type: object
         required:
         - spec
         type: object
