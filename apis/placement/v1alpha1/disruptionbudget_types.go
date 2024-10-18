@@ -35,9 +35,9 @@ type ClusterResourcePlacementDisruptionBudget struct {
 
 // PlacementDisruptionBudgetSpec is the desired state of the PlacementDisruptionBudget.
 type PlacementDisruptionBudgetSpec struct {
-	// MaxUnavailable is the maximum number of placements that can be down at the same time
-	// due to voluntary disruptions. For example, a setting of 1 would imply that
-	// a voluntary disruption (e.g., an eviction) can only happen if all placements
+	// MaxUnavailable is the maximum number of placements (clusters) that can be down at the
+	// same time due to voluntary disruptions. For example, a setting of 1 would imply that
+	// a voluntary disruption (e.g., an eviction) can only happen if all placements (clusters)
 	// from the linked Placement object are applied and available.
 	//
 	// This can be either an absolute value (e.g., 1) or a percentage (e.g., 10%).
@@ -66,10 +66,10 @@ type PlacementDisruptionBudgetSpec struct {
 	// +optional
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 
-	// MinAvailable is the minimum number of placements that must be available at any time
-	// despite voluntary disruptions. For example, a setting of 10 would imply that
+	// MinAvailable is the minimum number of placements (clusters) that must be available at any
+	// time despite voluntary disruptions. For example, a setting of 10 would imply that
 	// a voluntary disruption (e.g., an eviction) can only happen if there are at least 11
-	// placements from the linked Placement object are applied and available.
+	// placements (clusters) from the linked Placement object are applied and available.
 	//
 	// This can be either an absolute value (e.g., 1) or a percentage (e.g., 10%).
 	//
