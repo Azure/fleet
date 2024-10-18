@@ -139,13 +139,13 @@ type PlacementDisruptionBudgetStatus struct {
 type PlacementDisruptionBudgetConditionType string
 
 const (
-	// PlacementDisruptionBudgetConditionTypeDisruptionAllowed indicates whether the disruption budget
-	// allows placements to be disrupted by voluntary disruptions.
+	// PDBConditionDisruptionAllowed indicates whether the disruption budget allows placements
+	// to be disrupted by voluntary disruptions.
 	//
 	// The following values are possible:
 	// * True: the disruption budget allows disruption for ClusterResourcePlacement.
 	// * False: the disruption budget does not allow any voluntary disruption for ClusterResourcePlacement.
-	PlacementDisruptionBudgetConditionTypeDisruptionAllowed PlacementDisruptionBudgetConditionType = "DisruptionAllowed"
+	PDBConditionDisruptionAllowed PlacementDisruptionBudgetConditionType = "DisruptionAllowed"
 )
 
 // ClusterResourcePlacementDisruptionBudgetList contains a list of PlacementDisruptionBudget objects.
