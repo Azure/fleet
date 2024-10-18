@@ -10,15 +10,16 @@ import (
 	"fmt"
 	"time"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/scheduler/queue"
-	"go.goms.io/fleet/pkg/utils/controller"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/scheduler/queue"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 // Reconciler reconciles the deletion of a ClusterResourceBinding.
