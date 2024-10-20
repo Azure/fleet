@@ -24,6 +24,7 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -400,9 +401,9 @@ func (f *framework) removeFinalizer(ctx context.Context, bindings []*placementv1
 					return apierrors.IsServiceUnavailable(err) || apierrors.IsServerTimeout(err) || apierrors.IsConflict(err)
 				},
 				func() error {
-					deletingBinding.SetFinalizers([]string{})
+					controllerutil.RemoveFinalizer(deletingBinding, placementv1beta1.SchedulerCRBReconcileFinalizer)
 					err := f.client.Update(cctx, deletingBinding, &client.UpdateOptions{})
-					// There should ideally be no state changes for deleting bindings. But we will retry on conflicts.
+					// We will retry on conflicts.
 					if apierrors.IsConflict(err) {
 						// get the binding again to make sure we have the latest version to update again.
 						return f.client.Get(cctx, client.ObjectKeyFromObject(deletingBinding), deletingBinding)
