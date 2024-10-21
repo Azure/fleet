@@ -62,7 +62,7 @@ type PlacementDisruptionBudgetSpec struct {
 	// of them can be set at a time.
 	//
 	// +kubebuilder:validation:XIntOrString
-	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]+)$"
+	// +kubebuilder:validation:XValidation:rule="type(self) == string ? self.matches('^(100|[0-9]{1,2}%)$') : self >= 0",message="If supplied value is String should match regex '^(100|[0-9]{1,2}%)$' or If supplied value is Integer must be greater than or equal to 0"
 	// +optional
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 
@@ -93,7 +93,7 @@ type PlacementDisruptionBudgetSpec struct {
 	// of them can be set at a time.
 	//
 	// +kubebuilder:validation:XIntOrString
-	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]+)$"
+	// +kubebuilder:validation:XValidation:rule="type(self) == string ? self.matches('^(100|[0-9]{1,2}%)$') : self >= 0",message="If supplied value is String should match regex '^(100|[0-9]{1,2}%)$' or If supplied value is Integer must be greater than or equal to 0"
 	// +optional
 	MinAvailable *intstr.IntOrString `json:"minAvailable,omitempty"`
 }

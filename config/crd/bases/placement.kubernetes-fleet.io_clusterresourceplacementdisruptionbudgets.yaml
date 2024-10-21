@@ -87,8 +87,13 @@ spec:
 
                   This field is mutually exclusive with the MinAvailable field in the spec; exactly one
                   of them can be set at a time.
-                pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
                 x-kubernetes-int-or-string: true
+                x-kubernetes-validations:
+                - message: If supplied value is String should match regex '^(100|[0-9]{1,2}%)$'
+                    or If supplied value is Integer must be greater than or equal
+                    to 0
+                  rule: 'type(self) == string ? self.matches(''^(100|[0-9]{1,2}%)$'')
+                    : self >= 0'
               minAvailable:
                 anyOf:
                 - type: integer
@@ -123,8 +128,13 @@ spec:
 
                   This field is mutually exclusive with the MaxUnavailable field in the spec; exactly one
                   of them can be set at a time.
-                pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
                 x-kubernetes-int-or-string: true
+                x-kubernetes-validations:
+                - message: If supplied value is String should match regex '^(100|[0-9]{1,2}%)$'
+                    or If supplied value is Integer must be greater than or equal
+                    to 0
+                  rule: 'type(self) == string ? self.matches(''^(100|[0-9]{1,2}%)$'')
+                    : self >= 0'
             type: object
             x-kubernetes-validations:
             - message: Both MaxUnavailable and MinAvailable cannot be specified
