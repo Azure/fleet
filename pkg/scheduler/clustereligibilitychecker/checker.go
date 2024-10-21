@@ -120,7 +120,7 @@ func (checker *ClusterEligibilityChecker) IsEligible(cluster *clusterv1beta1.Mem
 		//
 		// Note that here no generation check is performed, as
 		// a) the member cluster object spec is most of the time not touched after creation; and
-		// b) as long as the heartbeat signal does not timeout, a little drift in genrations
+		// b) as long as the heartbeat signal does not timeout, a little drift in generations
 		//    should not exclude a cluster from resource scheduling.
 		return false, "cluster is not connected to the fleet: member agent not joined yet"
 	}

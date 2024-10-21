@@ -307,7 +307,7 @@ func (r *ApplyWorkReconciler) garbageCollectAppliedWork(ctx context.Context, wor
 	return ctrl.Result{}, r.client.Update(ctx, work, &client.UpdateOptions{})
 }
 
-// ensureAppliedWork makes sure that an associated appliedWork and a finalizer on the work resource exsits on the cluster.
+// ensureAppliedWork makes sure that an associated appliedWork and a finalizer on the work resource exists on the cluster.
 func (r *ApplyWorkReconciler) ensureAppliedWork(ctx context.Context, work *fleetv1beta1.Work) (*fleetv1beta1.AppliedWork, error) {
 	workRef := klog.KObj(work)
 	appliedWork := &fleetv1beta1.AppliedWork{}

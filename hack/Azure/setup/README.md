@@ -23,7 +23,7 @@ This how-to guide describes how to create a fleet using Azure Kubernetes Service
 
 ## Create a hub cluster from an AKS Cluster
 For your convenience, Fleet provides a script that can automate the process of creating a hub cluster. To use script,
-run the commands bellow:
+run the commands below:
 ```sh
 # Replace the value of <AZURE-SUBSCRIPTION-ID> with your Azure subscription ID.
 export SUB=<AZURE-SUBSCRIPTION-ID>

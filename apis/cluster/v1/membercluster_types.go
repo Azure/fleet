@@ -196,7 +196,7 @@ func (m *MemberCluster) RemoveCondition(conditionType string) {
 
 // GetAgentStatus retrieves the status of a specific member agent from the MemberCluster object.
 //
-// If the specificed agent does not exist, or it has not updated its status with the hub cluster
+// If the specified agent does not exist, or it has not updated its status with the hub cluster
 // yet, this function returns nil.
 func (m *MemberCluster) GetAgentStatus(agentType AgentType) *AgentStatus {
 	for _, s := range m.Status.AgentStatus {

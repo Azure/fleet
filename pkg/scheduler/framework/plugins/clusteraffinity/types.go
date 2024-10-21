@@ -63,7 +63,7 @@ func retrieveResourceUsageFrom(cluster *clusterv1beta1.MemberCluster, name strin
 	if !found {
 		// The property concerns a resource that is not present in the resource usage data.
 		//
-		// It cound be that the resource is not available in the cluster; consequently Fleet
+		// It could be that the resource is not available in the cluster; consequently Fleet
 		// does not consider this as an error.
 		return nil, nil
 	}

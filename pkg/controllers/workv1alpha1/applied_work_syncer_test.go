@@ -303,10 +303,10 @@ func TestDeleteStaleManifest(t *testing.T) {
 			gotErr := r.deleteStaleManifest(context.Background(), tt.staleManifests, tt.owner)
 			if tt.wantErr == nil {
 				if gotErr != nil {
-					t.Errorf("test case `%s` didn't return the exepected error,  want no error, got error = %+v ", name, gotErr)
+					t.Errorf("test case `%s` didn't return the expected error,  want no error, got error = %+v ", name, gotErr)
 				}
 			} else if gotErr == nil || gotErr.Error() != tt.wantErr.Error() {
-				t.Errorf("test case `%s` didn't return the exepected error, want error = %+v, got error = %+v", name, tt.wantErr, gotErr)
+				t.Errorf("test case `%s` didn't return the expected error, want error = %+v, got error = %+v", name, tt.wantErr, gotErr)
 			}
 		})
 	}

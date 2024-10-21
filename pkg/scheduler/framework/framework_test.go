@@ -137,7 +137,7 @@ var (
 	}
 )
 
-// TO-DO (chenyu1): expand the test cases as development stablizes.
+// TO-DO (chenyu1): expand the test cases as development stabilizes.
 
 // TestMain sets up the test environment.
 func TestMain(m *testing.M) {
@@ -3919,7 +3919,7 @@ func TestRunPostBatchPlugins(t *testing.T) {
 			wantBatchLimit:   1,
 		},
 		{
-			name: "multple plugins, one success, one error",
+			name: "multiple plugins, one success, one error",
 			postBatchPlugins: []PostBatchPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPostBatchPluginNameA,

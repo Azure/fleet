@@ -319,6 +319,6 @@ status:
     version: v1
 ```
 
-Nothing changes in the status because even if the new taint is not tolerated, the exising resources on the `MemberCluster`
+Nothing changes in the status because even if the new taint is not tolerated, the existing resources on the `MemberCluster`
 will continue to run because the taint effect is `NoSchedule` and the cluster was already selected for resource propagation in a 
 previous scheduling cycle.

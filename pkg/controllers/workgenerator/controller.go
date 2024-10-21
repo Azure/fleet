@@ -185,7 +185,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
 				Reason:             condition.SyncWorkFailedReason,
-				Message:            fmt.Sprintf("Failed to sychronize the work to the latest: %s", errorMessage),
+				Message:            fmt.Sprintf("Failed to synchronize the work to the latest: %s", errorMessage),
 				ObservedGeneration: resourceBinding.Generation,
 			})
 		}
@@ -326,7 +326,7 @@ func (r *Reconciler) ensureFinalizer(ctx context.Context, resourceBinding client
 	// functionally correct, might trigger the work queue rate limiter and eventually lead to
 	// substantial delays in processing.
 	//
-	// Also note that here default backoff strategy (exponetial backoff) rather than the Kubernetes'
+	// Also note that here default backoff strategy (exponential backoff) rather than the Kubernetes'
 	// recommended on-write-conflict backoff strategy is used, as experimentation suggests that
 	// this backoff strategy yields better performance, especially for the long-tail latencies.
 	//
@@ -891,7 +891,7 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 			// delete the corresponding resource binding fast.
 			DeleteFunc: func(ctx context.Context, evt event.DeleteEvent, queue workqueue.RateLimitingInterface) {
 				if evt.Object == nil {
-					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("deleteEvent %v received with no matadata", evt)),
+					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("deleteEvent %v received with no metadata", evt)),
 						"Failed to process a delete event for work object")
 					return
 				}
@@ -911,7 +911,7 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 			// update the corresponding resource binding status fast.
 			UpdateFunc: func(ctx context.Context, evt event.UpdateEvent, queue workqueue.RateLimitingInterface) {
 				if evt.ObjectOld == nil || evt.ObjectNew == nil {
-					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("updateEvent %v received with no matadata", evt)),
+					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("updateEvent %v received with no metadata", evt)),
 						"Failed to process an update event for work object")
 					return
 				}

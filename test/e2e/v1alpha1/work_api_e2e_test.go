@@ -141,7 +141,7 @@ var _ = Describe("Work API Controller test", func() {
 				return cmp.Diff(want, work.Status.Conditions, cmpOptions...)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got):")
 
-			By(fmt.Sprintf("Manifest Condiitons on Work Objects %s should be applied", namespaceType))
+			By(fmt.Sprintf("Manifest Conditions on Work Objects %s should be applied", namespaceType))
 			wantManifestCondition := []workapi.ManifestCondition{
 				{
 					Conditions: []metav1.Condition{
@@ -279,7 +279,7 @@ var _ = Describe("Work API Controller test", func() {
 				return cmp.Diff(want, workTwo.Status.Conditions, cmpOptions...)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got):")
 
-			By(fmt.Sprintf("Manifest Condiitons on Work Objects %s and %s should be applied", namespaceTypeOne, namespaceTypeTwo))
+			By(fmt.Sprintf("Manifest Conditions on Work Objects %s and %s should be applied", namespaceTypeOne, namespaceTypeTwo))
 			wantManifestCondition := []workapi.ManifestCondition{
 				{
 					Conditions: []metav1.Condition{
@@ -425,7 +425,7 @@ var _ = Describe("Work API Controller test", func() {
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(),
 				"Applied Condition mismatch for work %s (-want, +got):", workName)
 
-			By(fmt.Sprintf("Manifest Condiitons on Work Objects %s should be applied", namespaceType))
+			By(fmt.Sprintf("Manifest Conditions on Work Objects %s should be applied", namespaceType))
 			expectedManifestCondition := []workapi.ManifestCondition{
 				{
 					Conditions: []metav1.Condition{
@@ -521,7 +521,7 @@ var _ = Describe("Work API Controller test", func() {
 				},
 			}
 
-			Expect(cmp.Diff(wantCRD, crd, crdCmpOptions...)).Should(BeEmpty(), "Valdate CRD object mismatch (-want, got+):")
+			Expect(cmp.Diff(wantCRD, crd, crdCmpOptions...)).Should(BeEmpty(), "Validate CRD object mismatch (-want, got+):")
 
 			By(fmt.Sprintf("CR %s should have been created in cluster %s", crdObjectName, MemberCluster.ClusterName))
 
@@ -634,7 +634,7 @@ var _ = Describe("Work API Controller test", func() {
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(),
 				"Validate WorkStatus for work %s mismatch (-want, +got):", workForServiceAccount)
 
-			By(fmt.Sprintf("Manifest Condiitons on Work Objects %s and %s should be applied", namespaceTypeForNamespaceWork, namespaceTypeForServiceAccountWork))
+			By(fmt.Sprintf("Manifest Conditions on Work Objects %s and %s should be applied", namespaceTypeForNamespaceWork, namespaceTypeForServiceAccountWork))
 			wantNamespaceManifestCondition := []workapi.ManifestCondition{
 				{
 					Conditions: []metav1.Condition{

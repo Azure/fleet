@@ -89,7 +89,7 @@ spec:
                       type: string
                     ordinal:
                       description: Ordinal represents an index in manifests list,
-                        so the condition can still be linked to a manifest even thougth
+                        so the condition can still be linked to a manifest even though
                         manifest cannot be parsed successfully.
                       type: integer
                     resource:

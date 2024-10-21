@@ -139,7 +139,7 @@ status:
 ```
 The CRP attempted to override a propagated resource utilizing an applicable `ClusterResourceOverrideSnapshot`.
 However, as the `ClusterResourcePlacementOverridden` condition remains false, looking at the placement status for the cluster
-where the condition `Overriden` failed will offer insights into the exact cause of the failure.
+where the condition `Overridden` failed will offer insights into the exact cause of the failure.
 
 In this situation, the message indicates that the override failed because the path `/metadata/labels/new-label` and its corresponding value are missing.
 Based on the previous example of the cluster role `secret-reader`, you can see that the path `/metadata/labels/` doesn't exist. This means that `labels` doesn't exist.

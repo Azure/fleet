@@ -274,7 +274,7 @@ func evaluateAllConstraints(
 			}
 			if violated {
 				// A violation happens; since this is a ScheduleAnyway topology spread constraint,
-				// a violation score penality is applied to the score.
+				// a violation score penalty is applied to the score.
 				scores[clusterName(cluster.Name)] -= maxSkewViolationPenality
 				continue
 			}
