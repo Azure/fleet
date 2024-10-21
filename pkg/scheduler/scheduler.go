@@ -53,7 +53,7 @@ type Scheduler struct {
 	// Kubernetes API server; in most cases client should be used instead, unless consistency becomes
 	// a serious concern.
 	//
-	// TO-DO (chenyu1): explore the possbilities of using a mutation cache for better performance.
+	// TO-DO (chenyu1): explore the possibilities of using a mutation cache for better performance.
 	uncachedReader client.Reader
 
 	// manager is the controller manager in use by the scheduler.

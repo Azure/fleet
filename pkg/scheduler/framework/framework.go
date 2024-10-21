@@ -96,7 +96,7 @@ type framework struct {
 	// uncachedReader is the uncached read-only client in use by the scheduler framework for accessing
 	// Kubernetes API server; in most cases client should be used instead, unless consistency becomes
 	// a serious concern.
-	// TO-DO (chenyu1): explore the possbilities of using a mutation cache for better performance.
+	// TO-DO (chenyu1): explore the possibilities of using a mutation cache for better performance.
 	uncachedReader client.Reader
 	// manager is the controller manager in use by the scheduler framework.
 	manager ctrl.Manager
@@ -263,9 +263,9 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, p
 	// pods to nodes, is more expensive, it is better to avoid over-scheduling in the first place.
 	//
 	// This, of course, has additional performance overhead (and may further exacerbate API server
-	// overloading). In the long run we might still want to resort to a cached situtation.
+	// overloading). In the long run we might still want to resort to a cached situation.
 	//
-	// TO-DO (chenyu1): explore the possbilities of using a mutation cache for better performance.
+	// TO-DO (chenyu1): explore the possibilities of using a mutation cache for better performance.
 	bindings, err := f.collectBindings(ctx, crpName)
 	if err != nil {
 		klog.ErrorS(err, "Failed to collect bindings", "clusterSchedulingPolicySnapshot", policyRef)
@@ -731,7 +731,7 @@ func (f *framework) updatePolicySnapshotStatusFromBindings(
 	// Retrieve the corresponding CRP generation.
 	observedCRPGeneration, err := annotations.ExtractObservedCRPGenerationFromPolicySnapshot(policy)
 	if err != nil {
-		klog.ErrorS(err, "Failed to retrieve CRP generation from annoation", "clusterSchedulingPolicySnapshot", policyRef)
+		klog.ErrorS(err, "Failed to retrieve CRP generation from annotation", "clusterSchedulingPolicySnapshot", policyRef)
 		return controller.NewUnexpectedBehaviorError(err)
 	}
 

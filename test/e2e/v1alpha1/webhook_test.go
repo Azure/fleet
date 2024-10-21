@@ -1249,7 +1249,7 @@ var _ = Describe("Fleet's Reserved Namespace Handler fleet network tests", Order
 					return err
 				}
 				var statusErr *k8sErrors.StatusError
-				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update Internal Serivce Export call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update Internal Service Export call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 				g.Expect(statusErr.Status().Message).Should(ContainSubstring(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &iseGVK, "", types.NamespacedName{Name: ise.Name, Namespace: ise.Namespace})))
 				return nil
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())

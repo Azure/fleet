@@ -1549,7 +1549,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			//
 			// Normally upscaling is done by increasing the number of clusters field in the CRP;
 			// however, since in the integration test environment, CRP controller is not available,
-			// we directly manipulate the number of clusters annoation on the policy snapshot
+			// we directly manipulate the number of clusters annotation on the policy snapshot
 			// to trigger upscaling.
 			Eventually(func() error {
 				policySnapshot := &placementv1beta1.ClusterSchedulingPolicySnapshot{}
@@ -1640,7 +1640,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			//
 			// Normally downscaling is done by increasing the number of clusters field in the CRP;
 			// however, since in the integration test environment, CRP controller is not available,
-			// we directly manipulate the number of clusters annoation on the policy snapshot
+			// we directly manipulate the number of clusters annotation on the policy snapshot
 			// to trigger downscaling.
 			Eventually(func() error {
 				policySnapshot := &placementv1beta1.ClusterSchedulingPolicySnapshot{}

@@ -501,7 +501,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			Expect(hubClient.Create(ctx, crp)).To(Succeed())
 		})
 
-		It("should propgate works for the new cluster; can mark them as applied", func() {
+		It("should propagate works for the new cluster; can mark them as applied", func() {
 			verifyWorkPropagationAndMarkAsAvailable(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
 		})
 

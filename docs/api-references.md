@@ -632,7 +632,7 @@ _Appears in:_
 
 | Field | Description |
 | --- | --- |
-| `ordinal` _integer_ | Ordinal represents an index in manifests list, so the condition can still be linked to a manifest even thougth manifest cannot be parsed successfully. |
+| `ordinal` _integer_ | Ordinal represents an index in manifests list, so the condition can still be linked to a manifest even though manifest cannot be parsed successfully. |
 | `group` _string_ | Group is the group of the resource. |
 | `version` _string_ | Version is the version of the resource. |
 | `kind` _string_ | Kind is the kind of the resource. |
@@ -660,7 +660,7 @@ _Appears in:_
 
 | Field | Description |
 | --- | --- |
-| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.26/#condition-v1-meta) array_ | Conditions contains the different condition statuses for this work. Valid condition types are: 1. Applied represents workload in Work is applied successfully on the spoke cluster. 2. Progressing represents workload in Work in the trasitioning from one state to another the on the spoke cluster. 3. Available represents workload in Work exists on the spoke cluster. 4. Degraded represents the current state of workload does not match the desired state for a certain period. |
+| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.26/#condition-v1-meta) array_ | Conditions contains the different condition statuses for this work. Valid condition types are: 1. Applied represents workload in Work is applied successfully on the spoke cluster. 2. Progressing represents workload in Work in the transitioning from one state to another the on the spoke cluster. 3. Available represents workload in Work exists on the spoke cluster. 4. Degraded represents the current state of workload does not match the desired state for a certain period. |
 | `manifestConditions` _[ManifestCondition](#manifestcondition) array_ | ManifestConditions represents the conditions of each resource in work deployed on spoke cluster. |
 
 #### WorkloadTemplate
@@ -672,4 +672,4 @@ _Appears in:_
 
 | Field | Description |
 | --- | --- |
-| `manifests` _[Manifest](#manifest) array_ | Manifests represents a list of kuberenetes resources to be deployed on the spoke cluster. |
+| `manifests` _[Manifest](#manifest) array_ | Manifests represents a list of kubernetes resources to be deployed on the spoke cluster. |

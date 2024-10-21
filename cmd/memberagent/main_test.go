@@ -89,13 +89,13 @@ func Test_buildHubConfig(t *testing.T) {
 		assert.Nil(t, config)
 		assert.NotNil(t, err)
 	})
-	t.Run("use token auth, no toke path - error", func(t *testing.T) {
+	t.Run("use token auth, no token path - error", func(t *testing.T) {
 		t.Setenv("CONFIG_PATH", "")
 		config, err := buildHubConfig("https://hub.domain.com", false, false)
 		assert.Nil(t, config)
 		assert.NotNil(t, err)
 	})
-	t.Run("use token auth, not exists toke path - error", func(t *testing.T) {
+	t.Run("use token auth, not exists token path - error", func(t *testing.T) {
 		t.Setenv("CONFIG_PATH", "/hot/exists/token/path")
 		config, err := buildHubConfig("https://hub.domain.com", false, false)
 		assert.Nil(t, config)

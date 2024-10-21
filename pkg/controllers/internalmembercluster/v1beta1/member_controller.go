@@ -356,7 +356,7 @@ func (r *Reconciler) connectToPropertyProvider(ctx context.Context, imc *cluster
 	return nil
 }
 
-// reportPropertyProviderCollectionCondition reports the condition of whether a properity
+// reportPropertyProviderCollectionCondition reports the condition of whether a property
 // collection attempt has been successful.
 func reportPropertyProviderCollectionCondition(imc *clusterv1beta1.InternalMemberCluster, status metav1.ConditionStatus, reason, message string) {
 	meta.SetStatusCondition(&imc.Status.Conditions, metav1.Condition{

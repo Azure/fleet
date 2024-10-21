@@ -58,7 +58,7 @@ func (p *Plugin) Filter(
 			// The cluster matches with the required affinity term; mark it as eligible for
 			// resource placement.
 			//
-			// Note that when there are mulitiple cluster selector terms, the results are OR'd.
+			// Note that when there are multiple cluster selector terms, the results are OR'd.
 			return nil
 		}
 	}

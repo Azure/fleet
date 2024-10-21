@@ -32,7 +32,7 @@ type secretAuthTokenProvider struct {
 func New(secretName, namespace string) (interfaces.AuthTokenProvider, error) {
 	client, err := getClient()
 	if err != nil {
-		return nil, fmt.Errorf("an error occurd will creating client: %w", err)
+		return nil, fmt.Errorf("an error occurred will creating client: %w", err)
 	}
 	return &secretAuthTokenProvider{
 		client:          client,
