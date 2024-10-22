@@ -772,44 +772,95 @@ spec:
                       required:
                       - ordinal
                       type: object
-                    observedDriftsOrDiffs:
+                    observedDiffs:
                       description: |-
-                        ObservedDriftsOrDifferences explains the details about the observed drifts or configuration
-                        differences. Fleet might truncate the details as appropriate to control object size.
+                        ObservedDiffs explains the details about the observed configuration differences.
+                        Fleet might truncate the details as appropriate to control object size.
 
 
-                        Each detail entry is a JSON patch that specifies how the live state (the state on the member
+                        Each detail entry specifies how the live state (the state on the member
                         cluster side) compares against the desired state (the state kept in the hub cluster manifest).
 
 
-                        An event about the details will be emitted as well.
+                        Note that configuration differences can only occur on a resource if it is not currently owned
+                        by Fleet (i.e., it is a pre-existing resource that needs to be taken over), or if its
+                        corresponding placement is set to use the ReportDiff apply strategy. In other words,
+                        ObservedDiffs and ObservedDrifts will not be populated at the same time.
                       items:
                         description: |-
-                          ObservedDriftOrDiffDetail contains the details of observed drifts or configuration differences.
-                          Each detail entry is a JSON patch that specifies how the live state (the state on the member
-                          cluster side) compares against the desired state (the state kept in the hub cluster manifest).
+                          PatchDetail describes a patch that explains an observed configuration drift or
+                          difference.
+
+
+                          A patch detail can be transcribed as a JSON patch operation, as specified in RFC 6902.
                         properties:
-                          op:
-                            description: Op is the JSON patch operation.
-                            enum:
-                            - add
-                            - remove
-                            - replace
+                          hubClusterValue:
+                            description: |-
+                              The value at the JSON path from the hub cluster side.
+
+
+                              This field can be empty if the JSON path does not exist on the hub cluster side; i.e.,
+                              applying the manifest from the hub cluster side would remove the field.
+                            type: string
+                          memberClusterValue:
+                            description: |-
+                              The value at the JSON path from the member cluster side.
+
+
+                              This field can be empty if the JSON path does not exist on the member cluster side; i.e.,
+                              applying the manifest from the hub cluster side would add a new field.
                             type: string
                           path:
                             description: The JSON path that points to a field that
                               has drifted or has configuration differences.
                             type: string
-                          value:
+                        required:
+                        - path
+                        type: object
+                      type: array
+                    observedDrifts:
+                      description: |-
+                        ObservedDrifts explains the details about the observed configuration drifts.
+                        Fleet might truncate the details as appropriate to control object size.
+
+
+                        Each detail entry specifies how the live state (the state on the member
+                        cluster side) compares against the desired state (the state kept in the hub cluster manifest).
+
+
+                        Note that configuration drifts can only occur on a resource if it is currently owned by
+                        Fleet and its corresponding placement is set to use the ClientSideApply or ServerSideApply
+                        apply strategy. In other words, ObservedDrifts and ObservedDiffs will not be populated
+                        at the same time.
+                      items:
+                        description: |-
+                          PatchDetail describes a patch that explains an observed configuration drift or
+                          difference.
+
+
+                          A patch detail can be transcribed as a JSON patch operation, as specified in RFC 6902.
+                        properties:
+                          hubClusterValue:
                             description: |-
-                              The value that the drift or configuration difference entails.
+                              The value at the JSON path from the hub cluster side.
 
 
-                              For the JSON patch operation Add and Replace, the value will be the added/replacement value;
-                              for the JSON patch operation Remove, this field will be empty.
+                              This field can be empty if the JSON path does not exist on the hub cluster side; i.e.,
+                              applying the manifest from the hub cluster side would remove the field.
+                            type: string
+                          memberClusterValue:
+                            description: |-
+                              The value at the JSON path from the member cluster side.
+
+
+                              This field can be empty if the JSON path does not exist on the member cluster side; i.e.,
+                              applying the manifest from the hub cluster side would add a new field.
+                            type: string
+                          path:
+                            description: The JSON path that points to a field that
+                              has drifted or has configuration differences.
                             type: string
                         required:
-                        - op
                         - path
                         type: object
                       type: array

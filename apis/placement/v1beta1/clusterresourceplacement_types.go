@@ -905,49 +905,28 @@ type FailedResourcePlacement struct {
 	Condition metav1.Condition `json:"condition"`
 }
 
-// JSONPatchOp is the operation of a JSON patch. Fleet uses JSON patches to describe drifts
-// and configuration differences found in the resources; in the case of Fleet, only
-// the Add, Remove, and Replace operations are used.
-// +enum
-type JSONPatchOp string
-
-const (
-	// JSONPatchOpAdd is the Add operation in a JSON patch.
-	JSONPatchOpAdd JSONPatchOp = "add"
-
-	// JSONPatchOpRemove is the Remove operation in a JSON patch.
-	JSONPatchOpRemove JSONPatchOp = "remove"
-
-	// JSONPatchOpReplace is the Replace operation in a JSON patch.
-	JSONPatchOpReplace JSONPatchOp = "replace"
-)
-
-// JSONPatchDetail describes a JSON patch that explains an observed configuration drift or
+// PatchDetail describes a patch that explains an observed configuration drift or
 // difference.
-type JSONPatchDetail struct {
-	// Op is the JSON patch operation.
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=add;remove;replace
-	Op JSONPatchOp `json:"op"`
-
+//
+// A patch detail can be transcribed as a JSON patch operation, as specified in RFC 6902.
+type PatchDetail struct {
 	// The JSON path that points to a field that has drifted or has configuration differences.
 	// +kubebuilder:validation:Required
 	Path string `json:"path"`
 
-	// The current value at the JSON path, i.e., the value before the JSON patch operation.
+	// The value at the JSON path from the member cluster side.
 	//
-	// For the JSON patch operation Add, this field will be left empty.
-	//
-	// Note that this field is kept for informational purposes only; it is not a required part of the
-	// JSON patch; see RFC 6902 for more information.
+	// This field can be empty if the JSON path does not exist on the member cluster side; i.e.,
+	// applying the manifest from the hub cluster side would add a new field.
 	// +kubebuilder:validation:Optional
-	CurrentValue string `json:"value,omitempty"`
+	MemberClusterValue string `json:"memberClusterValue,omitempty"`
 
-	// The value associated with the JSON path, i.e., the value after the JSON patch operation.
+	// The value at the JSON path from the hub cluster side.
 	//
-	// For the JSON patch operation Remove, this field will be left empty.
+	// This field can be empty if the JSON path does not exist on the hub cluster side; i.e.,
+	// applying the manifest from the hub cluster side would remove the field.
 	// +kubebuilder:validation:Optional
-	Value string `json:"newValue,omitempty"`
+	HubClusterValue string `json:"hubClusterValue,omitempty"`
 }
 
 // DriftedResourcePlacement contains the details of a resource with configuration drifts.
@@ -977,12 +956,12 @@ type DriftedResourcePlacement struct {
 	// ObservedDrifts are the details about the found configuration drifts. Note that
 	// Fleet might truncate the details as appropriate to control the object size.
 	//
-	// Each detail entry is a JSON patch that specifies how the live state (the state on the member
+	// Each detail entry specifies how the live state (the state on the member
 	// cluster side) compares against the desired state (the state kept in the hub cluster manifest).
 	//
 	// An event about the details will be emitted as well.
 	// +kubebuilder:validation:Optional
-	ObservedDrifts []JSONPatchDetail `json:"observedDrifts,omitempty"`
+	ObservedDrifts []PatchDetail `json:"observedDrifts,omitempty"`
 }
 
 // DiffedResourcePlacement contains the details of a resource with configuration differences.
@@ -1012,12 +991,12 @@ type DiffedResourcePlacement struct {
 	// ObservedDiffs are the details about the found configuration differences. Note that
 	// Fleet might truncate the details as appropriate to control the object size.
 	//
-	// Each detail entry is a JSON patch that specifies how the live state (the state on the member
+	// Each detail entry specifies how the live state (the state on the member
 	// cluster side) compares against the desired state (the state kept in the hub cluster manifest).
 	//
 	// An event about the details will be emitted as well.
 	// +kubebuilder:validation:Optional
-	ObservedDiffs []JSONPatchDetail `json:"observedDrifts,omitempty"`
+	ObservedDiffs []PatchDetail `json:"observedDiffs,omitempty"`
 }
 
 // Toleration allows ClusterResourcePlacement to tolerate any taint that matches

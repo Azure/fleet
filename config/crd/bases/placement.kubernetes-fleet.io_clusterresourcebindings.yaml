@@ -823,21 +823,24 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
-              driftedOrDiffedResourcePlacement:
+              diffedPlacements:
                 description: |-
-                  DriftedOrDiffedPlacements is a list of all the resources that:
-                  * have drifted from the desired state as kept in the hub cluster, as detected
-                    by Fleet with the drift detection features enabled; or
-                  * have configuration differences from the desired state as kept in the hub cluster, as
-                    found by Fleet during the takeover process, or with the ReportDiff apply strategy.
+                  DiffedPlacements is a list of resources that have configuration differences from their
+                  corresponding hub cluster manifests. Fleet will report such differences when:
 
 
-                  To control the object size, only the first 100 drifted or diffed resources will be included.
+                  * The CRP uses the ReportDiff apply strategy, which instructs Fleet to compare the hub
+                    cluster manifests against the live resources without actually performing any apply op; or
+                  * Fleet finds a pre-existing resource on the member cluster side that does not match its
+                    hub cluster counterpart, and the CRP has been configured to only take over a resource if
+                    no configuration differences are found.
+
+
+                  To control the object size, only the first 100 diffed resources will be included.
                   This field is only meaningful if the `ClusterName` is not empty.
                 items:
-                  description: |-
-                    DriftedOrDiffedResourcePlacement contains the details of resources with drifts or configuration
-                    differences.
+                  description: DiffedResourcePlacement contains the details of a resource
+                    with configuration differences.
                   properties:
                     envelope:
                       description: Envelope identifies the envelope object that contains
@@ -859,10 +862,10 @@ spec:
                       required:
                       - name
                       type: object
-                    firstDriftOrDiffObservedTime:
+                    firstDiffedObservedTime:
                       description: |-
-                        FirstDriftOrDiffObservedTime is the first time the resource on the target cluster is
-                        observed to have drifts or configuration differences.
+                        FirstDiffedObservedTime is the first time the resource on the target cluster is
+                        observed to have configuration differences.
                       format: date-time
                       type: string
                     group:
@@ -879,79 +882,185 @@ spec:
                         if the resource is cluster scoped.
                       type: string
                     observationTime:
-                      description: |-
-                        ObservationTime is the time we observe the drifts or configuration differences that are
-                        described in the observedDifferences field.
+                      description: ObservationTime is the time when we observe the
+                        configuration differences for the resource.
                       format: date-time
                       type: string
-                    observedDriftsOrDiffs:
+                    observedDiffs:
                       description: |-
-                        ObservedDriftsOrDifferences explains the details about the observed drifts or configuration
-                        differences. Fleet might truncate the details as appropriate to control object size.
+                        ObservedDiffs are the details about the found configuration differences. Note that
+                        Fleet might truncate the details as appropriate to control the object size.
 
 
-                        Each detail entry is a JSON patch that specifies how the live state (the state on the member
+                        Each detail entry specifies how the live state (the state on the member
                         cluster side) compares against the desired state (the state kept in the hub cluster manifest).
 
 
                         An event about the details will be emitted as well.
                       items:
                         description: |-
-                          ObservedDriftOrDiffDetail contains the details of observed drifts or configuration differences.
-                          Each detail entry is a JSON patch that specifies how the live state (the state on the member
-                          cluster side) compares against the desired state (the state kept in the hub cluster manifest).
+                          PatchDetail describes a patch that explains an observed configuration drift or
+                          difference.
+
+
+                          A patch detail can be transcribed as a JSON patch operation, as specified in RFC 6902.
                         properties:
-                          op:
-                            description: Op is the JSON patch operation.
-                            enum:
-                            - add
-                            - remove
-                            - replace
+                          hubClusterValue:
+                            description: |-
+                              The value at the JSON path from the hub cluster side.
+
+
+                              This field can be empty if the JSON path does not exist on the hub cluster side; i.e.,
+                              applying the manifest from the hub cluster side would remove the field.
+                            type: string
+                          memberClusterValue:
+                            description: |-
+                              The value at the JSON path from the member cluster side.
+
+
+                              This field can be empty if the JSON path does not exist on the member cluster side; i.e.,
+                              applying the manifest from the hub cluster side would add a new field.
                             type: string
                           path:
                             description: The JSON path that points to a field that
                               has drifted or has configuration differences.
                             type: string
-                          value:
-                            description: |-
-                              The value that the drift or configuration difference entails.
-
-
-                              For the JSON patch operation Add and Replace, the value will be the added/replacement value;
-                              for the JSON patch operation Remove, this field will be empty.
-                            type: string
                         required:
-                        - op
                         - path
                         type: object
                       type: array
-                    ownership:
-                      description: |-
-                        Ownership describes the ownership of the resource with drifts or configuration differences.
-                        Two options are available:
-                        * ManagedByFleet: the resource is currently managed by Fleet. Fleet will attempt to apply
-                          manifest from the hub cluster to the resource (if applicable); the resource will be deleted
-                          if its corresponding placement has been deleted.
-                        * Standalone: the resource is not managed by Fleet; it might be created manually before Fleet
-                          starts managing the cluster. Fleet will not attempt to apply manifest from the hub cluster to
-                          the resource; the resource will also be left alone even if its corresponding placement has been
-                          deleted.
-                      type: string
                     targetClusterObservedGeneration:
                       description: |-
                         TargetClusterObservedGeneration is the generation of the resource on the target cluster
-                        that contains the drifts or configuration differences.
+                        that contains the configuration differences.
                       format: int64
                       type: integer
                     version:
                       description: Version is the version of the selected resource.
                       type: string
                   required:
-                  - firstDriftOrDiffObservedTime
+                  - firstDiffedObservedTime
                   - kind
                   - name
                   - observationTime
-                  - ownership
+                  - targetClusterObservedGeneration
+                  - version
+                  type: object
+                maxItems: 100
+                type: array
+              driftedPlacements:
+                description: |-
+                  DriftedPlacements is a list of resources that have drifted from their desired states
+                  kept in the hub cluster, as found by Fleet using the drift detection mechanism.
+
+
+                  To control the object size, only the first 100 drifted resources will be included.
+                  This field is only meaningful if the `ClusterName` is not empty.
+                items:
+                  description: DriftedResourcePlacement contains the details of a
+                    resource with configuration drifts.
+                  properties:
+                    envelope:
+                      description: Envelope identifies the envelope object that contains
+                        this resource.
+                      properties:
+                        name:
+                          description: Name of the envelope object.
+                          type: string
+                        namespace:
+                          description: Namespace is the namespace of the envelope
+                            object. Empty if the envelope object is cluster scoped.
+                          type: string
+                        type:
+                          default: ConfigMap
+                          description: Type of the envelope object.
+                          enum:
+                          - ConfigMap
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    firstDriftedObservedTime:
+                      description: |-
+                        FirstDriftedObservedTime is the first time the resource on the target cluster is
+                        observed to have configuration drifts.
+                      format: date-time
+                      type: string
+                    group:
+                      description: Group is the group name of the selected resource.
+                      type: string
+                    kind:
+                      description: Kind represents the Kind of the selected resources.
+                      type: string
+                    name:
+                      description: Name of the target resource.
+                      type: string
+                    namespace:
+                      description: Namespace is the namespace of the resource. Empty
+                        if the resource is cluster scoped.
+                      type: string
+                    observationTime:
+                      description: ObservationTime is the time when we observe the
+                        configuration drifts for the resource.
+                      format: date-time
+                      type: string
+                    observedDrifts:
+                      description: |-
+                        ObservedDrifts are the details about the found configuration drifts. Note that
+                        Fleet might truncate the details as appropriate to control the object size.
+
+
+                        Each detail entry specifies how the live state (the state on the member
+                        cluster side) compares against the desired state (the state kept in the hub cluster manifest).
+
+
+                        An event about the details will be emitted as well.
+                      items:
+                        description: |-
+                          PatchDetail describes a patch that explains an observed configuration drift or
+                          difference.
+
+
+                          A patch detail can be transcribed as a JSON patch operation, as specified in RFC 6902.
+                        properties:
+                          hubClusterValue:
+                            description: |-
+                              The value at the JSON path from the hub cluster side.
+
+
+                              This field can be empty if the JSON path does not exist on the hub cluster side; i.e.,
+                              applying the manifest from the hub cluster side would remove the field.
+                            type: string
+                          memberClusterValue:
+                            description: |-
+                              The value at the JSON path from the member cluster side.
+
+
+                              This field can be empty if the JSON path does not exist on the member cluster side; i.e.,
+                              applying the manifest from the hub cluster side would add a new field.
+                            type: string
+                          path:
+                            description: The JSON path that points to a field that
+                              has drifted or has configuration differences.
+                            type: string
+                        required:
+                        - path
+                        type: object
+                      type: array
+                    targetClusterObservedGeneration:
+                      description: |-
+                        TargetClusterObservedGeneration is the generation of the resource on the target cluster
+                        that contains the configuration drifts.
+                      format: int64
+                      type: integer
+                    version:
+                      description: Version is the version of the selected resource.
+                      type: string
+                  required:
+                  - firstDriftedObservedTime
+                  - kind
+                  - name
+                  - observationTime
                   - targetClusterObservedGeneration
                   - version
                   type: object

@@ -127,7 +127,7 @@ type ManifestCondition struct {
 	// ObservedDrifts explains the details about the observed configuration drifts.
 	// Fleet might truncate the details as appropriate to control object size.
 	//
-	// Each detail entry is a JSON patch that specifies how the live state (the state on the member
+	// Each detail entry specifies how the live state (the state on the member
 	// cluster side) compares against the desired state (the state kept in the hub cluster manifest).
 	//
 	// Note that configuration drifts can only occur on a resource if it is currently owned by
@@ -135,12 +135,12 @@ type ManifestCondition struct {
 	// apply strategy. In other words, ObservedDrifts and ObservedDiffs will not be populated
 	// at the same time.
 	// +kubebuilder:validation:Optional
-	ObservedDrifts []JSONPatchDetail `json:"observedDriftsOrDiffs,omitempty"`
+	ObservedDrifts []PatchDetail `json:"observedDrifts,omitempty"`
 
 	// ObservedDiffs explains the details about the observed configuration differences.
 	// Fleet might truncate the details as appropriate to control object size.
 	//
-	// Each detail entry is a JSON patch that specifies how the live state (the state on the member
+	// Each detail entry specifies how the live state (the state on the member
 	// cluster side) compares against the desired state (the state kept in the hub cluster manifest).
 	//
 	// Note that configuration differences can only occur on a resource if it is not currently owned
@@ -148,7 +148,7 @@ type ManifestCondition struct {
 	// corresponding placement is set to use the ReportDiff apply strategy. In other words,
 	// ObservedDiffs and ObservedDrifts will not be populated at the same time.
 	// +kubebuilder:validation:Optional
-	ObservedDiffs []JSONPatchDetail `json:"observedDiffs,omitempty"`
+	ObservedDiffs []PatchDetail `json:"observedDiffs,omitempty"`
 }
 
 // +genclient
