@@ -85,18 +85,18 @@ spec:
                 x-kubernetes-validations:
                 - message: The ClusterName field is immutable
                   rule: self == oldSelf
-              placementReference:
+              placementName:
                 description: |-
-                  PlacementReference is the name of the Placement object which
+                  PlacementName is the name of the Placement object which
                   the Eviction object targets.
                 maxLength: 255
                 type: string
                 x-kubernetes-validations:
-                - message: The PlacementReference field is immutable
+                - message: The PlacementName field is immutable
                   rule: self == oldSelf
             required:
             - clusterName
-            - placementReference
+            - placementName
             type: object
           status:
             description: Status is the observed state of the ClusterResourcePlacementEviction.

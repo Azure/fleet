@@ -56,12 +56,12 @@ type ClusterResourcePlacementEviction struct {
 
 // PlacementEvictionSpec is the desired state of the parent PlacementEviction.
 type PlacementEvictionSpec struct {
-	// PlacementReference is the name of the Placement object which
+	// PlacementName is the name of the Placement object which
 	// the Eviction object targets.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="The PlacementReference field is immutable"
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="The PlacementName field is immutable"
 	// +kubebuilder:validation:MaxLength=255
-	PlacementReference string `json:"placementReference"`
+	PlacementName string `json:"placementName"`
 
 	// ClusterName is the name of the cluster that the Eviction object targets.
 	// +kubebuilder:validation:Required
