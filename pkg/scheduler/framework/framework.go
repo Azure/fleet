@@ -731,7 +731,7 @@ func (f *framework) updatePolicySnapshotStatusFromBindings(
 	// Retrieve the corresponding CRP generation.
 	observedCRPGeneration, err := annotations.ExtractObservedCRPGenerationFromPolicySnapshot(policy)
 	if err != nil {
-		klog.ErrorS(err, "Failed to retrieve CRP generation from annoation", "clusterSchedulingPolicySnapshot", policyRef)
+		klog.ErrorS(err, "Failed to retrieve CRP generation from annotation", "clusterSchedulingPolicySnapshot", policyRef)
 		return controller.NewUnexpectedBehaviorError(err)
 	}
 

@@ -515,7 +515,7 @@ type ApplyStrategy struct {
 	//   performs a client-side apply. This is the default option.
 	//
 	//   Note that this strategy requires that Fleet keep the last applied configuration in the
-	//   annoation of an applied resource. If the object gets so large that apply ops can no longer
+	//   annotation of an applied resource. If the object gets so large that apply ops can no longer
 	//   be executed, Fleet will switch to server-side apply.
 	//
 	//   Use ComparisonOption and WhenToApply settings to control when an apply op can be executed.
@@ -531,7 +531,7 @@ type ApplyStrategy struct {
 	//   Use ComparisonOption and WhenToApply settings to control when an apply op can be executed.
 	//
 	// * ReportDiff: Fleet will compare the desired state of a resource as kept in the hub cluster
-	//   with its current state (if appliable) on the member cluster side, and report any
+	//   with its current state (if applicable) on the member cluster side, and report any
 	//   differences. No actual apply ops would be executed, and resources will be left alone as they
 	//   are on the member clusters.
 	//

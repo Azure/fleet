@@ -21,11 +21,11 @@ spec:
     schema:
       openAPIV3Schema:
         description: |-
-          ApprovalRequest defines a request for the approval from the user.
+          ApprovalRequest defines a request for user approval.
           The request object MUST have the following labels:
-            - `TargetUpdateRun` which points to the update run that this approval request is for.
-            - `TargetStage` which is the name of the stage that this approval request is for.
-            - `IsLatestUpdateRunApproval` which indicates whether this approval request is the latest one related to this update run.
+            - `TargetUpdateRun`: Points to the update run that this approval request is for.
+            - `TargetStage`: The name of the stage that this approval request is for.
+            - `IsLatestUpdateRunApproval`: Indicates whether this approval request is the latest one related to this update run.
         properties:
           apiVersion:
             description: |-
@@ -63,12 +63,12 @@ spec:
             - message: The spec field is immutable
               rule: self == oldSelf
           status:
-            description: The desired state of ApprovalRequest.
+            description: The observed state of ApprovalRequest.
             properties:
               conditions:
                 description: |-
-                  Conditions is an array of current observed conditions for the specific type of post update task.
-                  Known conditions are "Approved", and "ApprovalAccepted".
+                  Conditions is an array of current observed conditions for the specific type of post-update task.
+                  Known conditions are "Approved" and "ApprovalAccepted".
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource.\n---\nThis struct is intended for
