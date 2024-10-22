@@ -75,7 +75,7 @@ var _ = BeforeSuite(func() {
 	go func() {
 		defer GinkgoRecover()
 		err = hubCtrlMgr.Start(ctx)
-		Expect(err).ToNot(HaveOccurred(), "failed to start manager for hub controllers")
+		Expect(err).ToNot(HaveOccurred(), "failed to start manager for hub")
 	}()
 })
 
