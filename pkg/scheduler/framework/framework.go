@@ -406,7 +406,10 @@ func (f *framework) removeFinalizer(ctx context.Context, bindings []*placementv1
 					// We will retry on conflicts.
 					if apierrors.IsConflict(err) {
 						// get the binding again to make sure we have the latest version to update again.
-						return f.client.Get(cctx, client.ObjectKeyFromObject(deletingBinding), deletingBinding)
+						getErr := f.client.Get(cctx, client.ObjectKeyFromObject(deletingBinding), deletingBinding)
+						if getErr != nil {
+							return getErr
+						}
 					}
 					return err
 				})
