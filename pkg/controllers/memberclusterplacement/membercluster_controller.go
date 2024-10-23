@@ -123,7 +123,7 @@ func matchPlacement(placement *fleetv1alpha1.ClusterResourcePlacement, memberClu
 		s, err := metav1.LabelSelectorAsSelector(&clusterSelector.LabelSelector)
 		if err != nil {
 			// should not happen after we have webhooks
-			klog.ErrorS(err, "found a mal-formated placement", "placement", placementObj, "selector", clusterSelector.LabelSelector)
+			klog.ErrorS(err, "found a mal-formatted placement", "placement", placementObj, "selector", clusterSelector.LabelSelector)
 			continue
 		}
 		if s.Matches(labels.Set(memberCluster.GetLabels())) {

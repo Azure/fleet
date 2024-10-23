@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/klog/v2"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -26,6 +27,8 @@ func (p *Plugin) Filter(
 	if !isUntolerated {
 		return nil
 	}
+	policyRef := klog.KObj(policy)
+	klog.V(2).InfoS("Cluster is unschedulable, because taint cannot be tolerated", "clusterSchedulingPolicySnapshot", policyRef, "taint", taint)
 	return framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), fmt.Sprintf(reasonFmt, taint))
 }
 

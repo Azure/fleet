@@ -40,7 +40,7 @@ spec:
                   on spoke cluster
                 properties:
                   manifests:
-                    description: Manifests represents a list of kuberenetes resources
+                    description: Manifests represents a list of kubernetes resources
                       to be deployed on the spoke cluster.
                     items:
                       description: Manifest represents a resource to be deployed on
@@ -59,7 +59,7 @@ spec:
                 description: 'Conditions contains the different condition statuses
                   for this work. Valid condition types are: 1. Applied represents
                   workload in Work is applied successfully on the spoke cluster. 2.
-                  Progressing represents workload in Work in the trasitioning from
+                  Progressing represents workload in Work in the transitioning from
                   one state to another the on the spoke cluster. 3. Available represents
                   workload in Work exists on the spoke cluster. 4. Degraded represents
                   the current state of workload does not match the desired state for
@@ -233,7 +233,7 @@ spec:
                         ordinal:
                           description: Ordinal represents an index in manifests list,
                             so the condition can still be linked to a manifest even
-                            thougth manifest cannot be parsed successfully.
+                            though manifest cannot be parsed successfully.
                           type: integer
                         resource:
                           description: Resource is the resource type of the resource

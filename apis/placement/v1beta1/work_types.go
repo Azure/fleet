@@ -57,7 +57,7 @@ type WorkSpec struct {
 
 // WorkloadTemplate represents the manifest workload to be deployed on spoke cluster
 type WorkloadTemplate struct {
-	// Manifests represents a list of kuberenetes resources to be deployed on the spoke cluster.
+	// Manifests represents a list of kubernetes resources to be deployed on the spoke cluster.
 	// +optional
 	Manifests []Manifest `json:"manifests,omitempty"`
 }
@@ -74,7 +74,7 @@ type WorkStatus struct {
 	// Conditions contains the different condition statuses for this work.
 	// Valid condition types are:
 	// 1. Applied represents workload in Work is applied successfully on the spoke cluster.
-	// 2. Progressing represents workload in Work in the trasitioning from one state to another the on the spoke cluster.
+	// 2. Progressing represents workload in Work in the transitioning from one state to another the on the spoke cluster.
 	// 3. Available represents workload in Work exists on the spoke cluster.
 	// 4. Degraded represents the current state of workload does not match the desired
 	// state for a certain period.
@@ -90,7 +90,7 @@ type WorkStatus struct {
 // Renamed original "ResourceIdentifier" so that it won't conflict with ResourceIdentifier defined in the clusterresourceplacement_types.go.
 type WorkResourceIdentifier struct {
 	// Ordinal represents an index in manifests list, so the condition can still be linked
-	// to a manifest even thougth manifest cannot be parsed successfully.
+	// to a manifest even though manifest cannot be parsed successfully.
 	Ordinal int `json:"ordinal"`
 
 	// Group is the group of the resource.

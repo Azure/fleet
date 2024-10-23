@@ -45,7 +45,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 	BeforeEach(func() {
 		By("Create member cluster A ")
-		// create a new cluster everytime since namespace deletion doesn't work in testenv
+		// create a new cluster every time since namespace deletion doesn't work in testenv
 		clusterA = fleetv1alpha1.MemberCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   "cluster-a-" + utilrand.String(8),

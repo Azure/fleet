@@ -183,7 +183,7 @@ func (r *Reconciler) fetchClusterScopedResources(selector fleetv1beta1.ClusterRe
 	var selectedObjs []runtime.Object
 	objects, err := lister.List(labelSelector)
 	if err != nil {
-		return nil, controller.NewAPIServerError(true, fmt.Errorf("cannot list all the objets: %w", err))
+		return nil, controller.NewAPIServerError(true, fmt.Errorf("cannot list all the objects: %w", err))
 	}
 	// go ahead and claim all objects by adding a finalizer and insert the placement in its annotation
 	for i := 0; i < len(objects); i++ {
@@ -366,7 +366,7 @@ func generateRawContent(object *unstructured.Unstructured) ([]byte, error) {
 			}
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to get the ports field in Serivce object, name =%s: %w", object.GetName(), err)
+			return nil, fmt.Errorf("failed to get the ports field in Service object, name =%s: %w", object.GetName(), err)
 		}
 	} else if object.GetKind() == "Job" && object.GetAPIVersion() == batchv1.SchemeGroupVersion.String() {
 		if manualSelector, exist, _ := unstructured.NestedBool(object.Object, "spec", "manualSelector"); !exist || !manualSelector {

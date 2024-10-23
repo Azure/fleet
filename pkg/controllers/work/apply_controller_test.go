@@ -887,7 +887,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 		expected ApplyAction
 		err      error
 	}{
-		"Test a mal-formated object": {
+		"Test a mal-formatted object": {
 			gvr: utils.DeploymentGVR,
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{

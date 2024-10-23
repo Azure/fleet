@@ -7,7 +7,7 @@ of day-to-day Kubernetes management.
 > Note
 >
 > This tutorial assumes that you have some experience of performing administrative tasks for
-> Kubernetes clusters. If you are just gettings started with Kubernetes, or do not have much
+> Kubernetes clusters. If you are just getting started with Kubernetes, or do not have much
 > experience of setting up a Kubernetes cluster, it is recommended that you follow the
 > [Getting started with Fleet using Kind clusters](kind.md) tutorial instead.
 

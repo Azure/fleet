@@ -95,7 +95,7 @@ spec:
                     ordinal:
                       description: |-
                         Ordinal represents an index in manifests list, so the condition can still be linked
-                        to a manifest even thougth manifest cannot be parsed successfully.
+                        to a manifest even though manifest cannot be parsed successfully.
                       type: integer
                     resource:
                       description: Resource is the resource type of the resource
@@ -199,7 +199,7 @@ spec:
                     ordinal:
                       description: |-
                         Ordinal represents an index in manifests list, so the condition can still be linked
-                        to a manifest even thougth manifest cannot be parsed successfully.
+                        to a manifest even though manifest cannot be parsed successfully.
                       type: integer
                     resource:
                       description: Resource is the resource type of the resource

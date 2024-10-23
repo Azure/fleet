@@ -101,7 +101,7 @@ func WaitCreateClusterResourcePlacementStatus(ctx context.Context, cluster frame
 			return err
 		}
 		if statusDiff := cmp.Diff(wantCRPStatus, gotCRP.Status, crpStatusCmpOptions...); statusDiff != "" {
-			return fmt.Errorf("cluster resource placment(%s) status mismatch (-want +got):\n%s", gotCRP.Name, statusDiff)
+			return fmt.Errorf("cluster resource placement(%s) status mismatch (-want +got):\n%s", gotCRP.Name, statusDiff)
 		}
 		return nil
 	}, customTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait for cluster resource placement %s status to be updated", gotCRP.Name, cluster.ClusterName)

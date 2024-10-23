@@ -6,7 +6,7 @@ The `ClusterResourcePlacementWorkSynchronized` condition is false when the CRP h
 ## Common Scenarios:
 Instances where this condition may arise:
 - The controller encounters an error while trying to generate the corresponding `work` object.
-- The enveloped object is not well formated.
+- The enveloped object is not well formatted.
 
 ### Case Study:
 The CRP is attempting to propagate a resource to a selected cluster, but the work object has not been updated to reflect the latest changes due to the selected cluster has been terminated.
@@ -92,7 +92,7 @@ status:
       status: "True"
       type: Overridden
     - lastTransitionTime: "2024-05-14T18:05:05Z"
-      message: 'Failed to sychronize the work to the latest: works.placement.kubernetes-fleet.io
+      message: 'Failed to synchronize the work to the latest: works.placement.kubernetes-fleet.io
         "crp1-work" is forbidden: unable to create new content in namespace fleet-member-kind-cluster-1
         because it is being terminated'
       observedGeneration: 1

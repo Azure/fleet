@@ -40,7 +40,7 @@ func minInt(a, b int) int {
 // In addition, note that this function assumes that both the CRP name and the cluster name
 // are valid DNS label names (RFC 1123).
 func NewClusterResourceBindingName(CRPName string, clusterName string) (string, error) {
-	reservedSlots := 2 + uuidLength // 2 dashs + 8 character UUID string
+	reservedSlots := 2 + uuidLength // 2 dashes + 8 character UUID string
 
 	slotsPerSeg := (validation.DNS1123LabelMaxLength - reservedSlots) / 2
 	uniqueName := fmt.Sprintf("%s-%s-%s",

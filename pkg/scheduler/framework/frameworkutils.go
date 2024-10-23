@@ -40,7 +40,7 @@ func classifyBindings(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, 
 	unscheduled = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
 	dangling = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
 
-	// Build a map for clusters for quick loopup.
+	// Build a map for clusters for quick lookup.
 	clusterMap := make(map[string]clusterv1beta1.MemberCluster)
 	for _, cluster := range clusters {
 		clusterMap[cluster.Name] = cluster
@@ -218,7 +218,7 @@ func patchBindingFromScoredCluster(binding *placementv1beta1.ClusterResourceBind
 	updated := binding.DeepCopy()
 	affinityScore := int32(scored.Score.AffinityScore)
 	topologySpreadScore := int32(scored.Score.TopologySpreadScore)
-	// Update the binding so that it is associated with the lastest scheduling policy.
+	// Update the binding so that it is associated with the latest scheduling policy.
 	updated.Spec.State = desiredState
 	updated.Spec.SchedulingPolicySnapshotName = policy.Name
 	// copy the scheduling decision
@@ -243,7 +243,7 @@ func patchBindingFromFixedCluster(binding *placementv1beta1.ClusterResourceBindi
 	clusterName string, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) *bindingWithPatch {
 	// Update the binding so that it is associated with the latest score.
 	updated := binding.DeepCopy()
-	// Update the binding so that it is associated with the lastest scheduling policy.
+	// Update the binding so that it is associated with the latest scheduling policy.
 	updated.Spec.State = desiredState
 	updated.Spec.SchedulingPolicySnapshotName = policy.Name
 	// Technically speaking, overwriting the cluster decision is not needed, as the same value
