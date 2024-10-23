@@ -12,27 +12,28 @@ import (
 )
 
 // +genclient
-// +genclient:namespaced
+// +genclient:Cluster
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope="Namespaced",categories={fleet,fleet-placement}
+// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=crsur
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// StagedUpdateRun represents a stage by stage update process that applies selected resources to specified clusters.
+// ClusterStagedUpdateRun represents a stage by stage update process that applies ClusterResourcePlacement
+// selected resources to specified clusters.
 // Resources from unselected clusters are removed after all stages in the update strategy are completed.
-// Each StagedUpdateRun object corresponds to a single release of a specific resource version.
-// The release is abandoned if the StagedUpdateRun object is deleted or the scheduling decision changes.
-// The name of the StagedUpdateRun must conform to RFC 1123.
-type StagedUpdateRun struct {
+// Each ClusterStagedUpdateRun object corresponds to a single release of a specific resource version.
+// The release is abandoned if the ClusterStagedUpdateRun object is deleted or the scheduling decision changes.
+// The name of the ClusterStagedUpdateRun must conform to RFC 1123.
+type ClusterStagedUpdateRun struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// The desired state of StagedUpdateRun. The spec is immutable.
+	// The desired state of ClusterStagedUpdateRun. The spec is immutable.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="The spec field is immutable"
 	Spec StagedUpdateRunSpec `json:"spec"`
 
-	// The observed status of StagedUpdateRun.
+	// The observed status of ClusterStagedUpdateRun.
 	// +kubebuilder:validation:Optional
 	Status StagedUpdateRunStatus `json:"status,omitempty"`
 }
@@ -40,11 +41,12 @@ type StagedUpdateRun struct {
 // StagedUpdateRunSpec defines the desired rollout strategy and the snapshot indices of the resources to be updated.
 // It specifies a stage-by-stage update process across selected clusters for the given ResourcePlacement object.
 type StagedUpdateRunSpec struct {
-	// A reference to the placement that this update run is applied to.
+	// PlacementName is the name of placement that this update run is applied to.
 	// There can be multiple active update runs for each placement, but
 	// it's up to the DevOps team to ensure they don't conflict with each other.
 	// +kubebuilder:validation:Required
-	PlacementRef PlacementReference `json:"placementRef"`
+	// +kubebuilder:validation:MaxLength=255
+	PlacementName string `json:"placementName"`
 
 	// The resource snapshot index of the selected resources to be updated across clusters.
 	// The index represents a group of resource snapshots that includes all the resources a ResourcePlacement selected.
@@ -59,27 +61,20 @@ type StagedUpdateRunSpec struct {
 	StagedUpdateStrategyRef v1beta1.NamespacedName `json:"stagedRolloutStrategyRef"`
 }
 
-// PlacementReference is a reference to a placement object.
-type PlacementReference struct {
-	// Name is the name of the referenced placement.
-	// +kubebuilder:validation:Required
-	Name string `json:"name"`
-}
-
 // +genclient
-// +genclient:namespaced
+// +genclient:cluster
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope="Namespaced",categories={fleet,fleet-placement}
+// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=sus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// StagedUpdateStrategy defines a reusable strategy that specifies the stages and the sequence
-// in which the selected resources will be updated on the member clusters.
-type StagedUpdateStrategy struct {
+// ClusterStagedUpdateStrategy defines a reusable strategy that specifies the stages and the sequence
+// in which the selected cluster resources will be updated on the member clusters.
+type ClusterStagedUpdateStrategy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// The desired state of StagedUpdateStrategy.
+	// The desired state of ClusterStagedUpdateStrategy.
 	// +kubebuilder:validation:Required
 	Spec StagedUpdateStrategySpec `json:"spec"`
 }
@@ -92,13 +87,13 @@ type StagedUpdateStrategySpec struct {
 	Stages []StageConfig `json:"stages"`
 }
 
-// StagedUpdateStrategyList contains a list of StagedUpdateStrategy.
-// +kubebuilder:resource:scope="Namespaced"
+// ClusterStagedUpdateStrategyList contains a list of StagedUpdateStrategy.
+// +kubebuilder:resource:scope=Cluster
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type StagedUpdateStrategyList struct {
+type ClusterStagedUpdateStrategyList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []StagedUpdateStrategy `json:"items"`
+	Items           []ClusterStagedUpdateStrategy `json:"items"`
 }
 
 // StageConfig describes a single update stage.
@@ -146,7 +141,7 @@ type AfterStageTask struct {
 	WaitTime metav1.Duration `json:"waitTime,omitempty"`
 }
 
-// StagedUpdateRunStatus defines the observed state of the StagedUpdateRun.
+// StagedUpdateRunStatus defines the observed state of the ClusterStagedUpdateRun.
 type StagedUpdateRunStatus struct {
 	// PolicySnapShotIndexUsed records the policy snapshot index of the ClusterResourcePlacement (CRP) that
 	// the update run is based on. The index represents the latest policy snapshot at the start of the update run.
@@ -157,11 +152,17 @@ type StagedUpdateRunStatus struct {
 	// +kubebuilder:validation:Optional
 	PolicySnapshotIndexUsed string `json:"policySnapshotIndexUsed,omitempty"`
 
+	// PolicyObservedNodeCount records the number of observed nodes in the policy snapshot.
+	// It is recorded at the beginning of the update run from the policy snapshot object.
+	// If the OberservedCount value is updated during the update run, the update run is abandoned.
+	// +kubebuilder:validation:Optional
+	PolicyObservedNodeCount int `json:"policyObservedNodeCount,omitempty"`
+
 	// ApplyStrategy is the apply strategy that the stagedUpdateRun is using.
 	// It is the same as the apply strategy in the CRP when the staged update run starts.
 	// The apply strategy is not updated during the update run even if it changes in the CRP.
 	// +kubebuilder:validation:Optional
-	ApplyStrategy v1beta1.ApplyStrategy `json:"appliedStrategy,omitempty"`
+	ApplyStrategy *v1beta1.ApplyStrategy `json:"appliedStrategy,omitempty"`
 
 	// StagedUpdateStrategySnapshot is the snapshot of the StagedUpdateStrategy used for the update run.
 	// The snapshot is immutable during the update run.
@@ -169,7 +170,7 @@ type StagedUpdateRunStatus struct {
 	// The update run fails to initialize if the strategy fails to produce a valid list of stages where each selected
 	// cluster is included in exactly one stage.
 	// +kubebuilder:validation:Optional
-	StagedUpdateStrategySnapshot StagedUpdateStrategySpec `json:"stagedUpdateStrategySnapshot,omitempty"`
+	StagedUpdateStrategySnapshot *StagedUpdateStrategySpec `json:"stagedUpdateStrategySnapshot,omitempty"`
 
 	// StagesStatus lists the current updating status of each stage.
 	// The list is empty if the update run is not started or failed to initialize.
@@ -180,7 +181,7 @@ type StagedUpdateRunStatus struct {
 	// removes all the resources from the clusters that are not selected by the
 	// current policy after all the update stages are completed.
 	// +kubebuilder:validation:Optional
-	DeletionStageStatus StageUpdatingStatus `json:"deletionStageStatus,omitempty"`
+	DeletionStageStatus *StageUpdatingStatus `json:"deletionStageStatus,omitempty"`
 
 	// +patchMergeKey=type
 	// +patchStrategy=merge
@@ -201,8 +202,9 @@ const (
 	// StagedUpdateRunConditionInitialized indicates whether the staged update run is initialized, meaning it
 	// has computed all the stages according to the referenced strategy and is ready to start the update.
 	// Its condition status can be one of the following:
-	// - "True": The staged update run is initialized.
-	// - "False": The staged update run encountered an error during initialization.
+	// - "True": The staged update run is initialized successfully.
+	// - "False": The staged update run encountered an error during initialization and aborted.
+	// - "Unknown": The staged update run initialization has started.
 	StagedUpdateRunConditionInitialized StagedUpdateRunConditionType = "Initialized"
 
 	// StagedUpdateRunConditionProgressing indicates whether the staged update run is making progress.
@@ -269,11 +271,11 @@ const (
 	// - "False": The stage updating is waiting/pausing.
 	StageUpdatingConditionProgressing StageUpdatingConditionType = "Progressing"
 
-	// ClusterUpdatingStatusConditionSucceeded indicates whether the stage updating is completed successfully.
+	// StageUpdatingConditionSucceeded indicates whether the stage updating is completed successfully.
 	// Its condition status can be one of the following:
 	// - "True": The stage updating is completed successfully.
 	// - "False": The stage updating encountered an error and stopped.
-	ClusterUpdatingStatusConditionSucceeded StageUpdatingConditionType = "Succeeded"
+	StageUpdatingConditionSucceeded StageUpdatingConditionType = "Succeeded"
 )
 
 // ClusterUpdatingStatus defines the status of the update run on a cluster.
@@ -311,17 +313,16 @@ type ClusterUpdatingStatus struct {
 type ClusterUpdatingStatusConditionType string
 
 const (
-	// UpdatingStatusConditionTypeStarted indicates whether the cluster updating has started.
+	// ClusterUpdatingConditionStarted indicates whether the cluster updating has started.
 	// Its condition status can be one of the following:
 	// - "True": The cluster updating has started.
-	// - "False": The stage updating has not started.
-	UpdatingStatusConditionTypeStarted ClusterUpdatingStatusConditionType = "Started"
+	ClusterUpdatingConditionStarted ClusterUpdatingStatusConditionType = "Started"
 
-	// UpdatingStatusConditionTypeSucceeded indicates whether the cluster updating is completed successfully.
+	// ClusterUpdatingConditionSucceeded indicates whether the cluster updating is completed successfully.
 	// Its condition status can be one of the following:
 	// - "True": The cluster updating is completed successfully.
 	// - "False": The cluster updating encountered an error and stopped.
-	UpdatingStatusConditionTypeSucceeded ClusterUpdatingStatusConditionType = "Succeeded"
+	ClusterUpdatingConditionSucceeded ClusterUpdatingStatusConditionType = "Succeeded"
 )
 
 type AfterStageTaskStatus struct {
@@ -366,54 +367,52 @@ const (
 	// AfterStageTaskConditionApprovalRequestCreated indicates if the approval request has been created.
 	// Its condition status can be:
 	// - "True": The approval request has been created.
-	// - "False": The approval request has not been created.
 	AfterStageTaskConditionApprovalRequestCreated AfterStageTaskConditionType = "ApprovalRequestCreated"
 
 	// AfterStageTaskConditionApprovalRequestApproved indicates if the approval request has been approved.
 	// Its condition status can be:
 	// - "True": The approval request has been approved.
-	// - "False": The approval request has not been approved.
 	AfterStageTaskConditionApprovalRequestApproved AfterStageTaskConditionType = "ApprovalRequestApproved"
 
-	// AfterStageTaskConditionApprovalWaitTimeElapsed indicates if the wait time after each stage has elapsed.
+	// AfterStageTaskConditionWaitTimeElapsed indicates if the wait time after each stage has elapsed.
 	// If the status is "False", the condition message will include the remaining wait time.
 	// Its condition status can be:
 	// - "True": The wait time has elapsed.
 	// - "False": The wait time has not elapsed.
-	AfterStageTaskConditionApprovalWaitTimeElapsed AfterStageTaskConditionType = "WaitTimeElapsed"
+	AfterStageTaskConditionWaitTimeElapsed AfterStageTaskConditionType = "WaitTimeElapsed"
 )
 
-// StagedUpdateRunList contains a list of StagedUpdateRun.
-// +kubebuilder:resource:scope="Namespaced"
+// ClusterStagedUpdateRunList contains a list of ClusterStagedUpdateRun.
+// +kubebuilder:resource:scope=Cluster
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type StagedUpdateRunList struct {
+type ClusterStagedUpdateRunList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []StagedUpdateRun `json:"items"`
+	Items           []ClusterStagedUpdateRun `json:"items"`
 }
 
 // +genclient
-// +genclient:namespaced
+// +genclient:Cluster
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope="Namespaced",categories={fleet,fleet-placement}
+// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=areq
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ApprovalRequest defines a request for user approval.
+// ClusterApprovalRequest defines a request for user approval for cluster staged update run.
 // The request object MUST have the following labels:
-//   - `TargetUpdateRun`: Points to the update run that this approval request is for.
+//   - `TargetUpdateRun`: Points to the cluster staged update run that this approval request is for.
 //   - `TargetStage`: The name of the stage that this approval request is for.
 //   - `IsLatestUpdateRunApproval`: Indicates whether this approval request is the latest one related to this update run.
-type ApprovalRequest struct {
+type ClusterApprovalRequest struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// The desired state of ApprovalRequest.
+	// The desired state of ClusterApprovalRequest.
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="The spec field is immutable"
 	// +kubebuilder:validation:Required
 	Spec ApprovalRequestSpec `json:"spec"`
 
-	// The observed state of ApprovalRequest.
+	// The observed state of ClusterApprovalRequest.
 	// +kubebuilder:validation:Optional
 	Status ApprovalRequestStatus `json:"status,omitempty"`
 }
@@ -430,7 +429,7 @@ type ApprovalRequestSpec struct {
 	TargetStage string `json:"targetStage"`
 }
 
-// ApprovalRequestStatus defines the observed state of the ApprovalRequest.
+// ApprovalRequestStatus defines the observed state of the ClusterApprovalRequest.
 type ApprovalRequestStatus struct {
 	// +patchMergeKey=type
 	// +patchStrategy=merge
@@ -443,35 +442,27 @@ type ApprovalRequestStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// ApprovalRequestConditionType identifies a specific condition of the ApprovalRequest.
+// ApprovalRequestConditionType identifies a specific condition of the ClusterApprovalRequest.
 type ApprovalRequestConditionType string
 
 const (
 	// ApprovalRequestConditionApproved indicates if the approval request was approved.
 	// Its condition status can be:
 	// - "True": The request is approved.
-	// - "False": The request is not approved.
 	ApprovalRequestConditionApproved ApprovalRequestConditionType = "Approved"
-
-	// ApprovalRequestConditionApprovalAccepted indicates whether the approval request is accepted by the update process.
-	// Its condition status can be:
-	// - "True": The approval request is accepted.
-	// - "False": The approval request is not accepted.
-	// - "Unknown": The approval request is not yet approved.
-	ApprovalRequestConditionApprovalAccepted ApprovalRequestConditionType = "ApprovalAccepted"
 )
 
-// ApprovalRequestList contains a list of ApprovalRequest.
-// +kubebuilder:resource:scope="Namespaced"
+// ClusterApprovalRequestList contains a list of ClusterApprovalRequest.
+// +kubebuilder:resource:scope=Cluster
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type ApprovalRequestList struct {
+type ClusterApprovalRequestList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ApprovalRequest `json:"items"`
+	Items           []ClusterApprovalRequest `json:"items"`
 }
 
 func init() {
 	SchemeBuilder.Register(
-		&StagedUpdateRun{}, &StagedUpdateRunList{}, &StagedUpdateStrategy{}, &StagedUpdateStrategyList{}, &ApprovalRequest{}, &ApprovalRequestList{},
+		&ClusterStagedUpdateRun{}, &ClusterStagedUpdateRunList{}, &ClusterStagedUpdateStrategy{}, &ClusterStagedUpdateStrategyList{}, &ClusterApprovalRequest{}, &ClusterApprovalRequestList{},
 	)
 }
