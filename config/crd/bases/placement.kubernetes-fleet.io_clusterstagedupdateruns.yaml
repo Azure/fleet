@@ -4,28 +4,31 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.15.0
-  name: stagedupdateruns.placement.kubernetes-fleet.io
+  name: clusterstagedupdateruns.placement.kubernetes-fleet.io
 spec:
   group: placement.kubernetes-fleet.io
   names:
     categories:
     - fleet
     - fleet-placement
-    kind: StagedUpdateRun
-    listKind: StagedUpdateRunList
-    plural: stagedupdateruns
-    singular: stagedupdaterun
-  scope: Namespaced
+    kind: ClusterStagedUpdateRun
+    listKind: ClusterStagedUpdateRunList
+    plural: clusterstagedupdateruns
+    shortNames:
+    - crsur
+    singular: clusterstagedupdaterun
+  scope: Cluster
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: |-
-          StagedUpdateRun represents a stage by stage update process that applies selected resources to specified clusters.
+          ClusterStagedUpdateRun represents a stage by stage update process that applies ClusterResourcePlacement
+          selected resources to specified clusters.
           Resources from unselected clusters are removed after all stages in the update strategy are completed.
-          Each StagedUpdateRun object corresponds to a single release of a specific resource version.
-          The release is abandoned if the StagedUpdateRun object is deleted or the scheduling decision changes.
-          The name of the StagedUpdateRun must conform to RFC 1123.
+          Each ClusterStagedUpdateRun object corresponds to a single release of a specific resource version.
+          The release is abandoned if the ClusterStagedUpdateRun object is deleted or the scheduling decision changes.
+          The name of the ClusterStagedUpdateRun must conform to RFC 1123.
         properties:
           apiVersion:
             description: |-
@@ -45,52 +48,38 @@ spec:
           metadata:
             type: object
           spec:
-            description: The desired state of StagedUpdateRun. The spec is immutable.
+            description: The desired state of ClusterStagedUpdateRun. The spec is
+              immutable.
             properties:
-              placementRef:
+              placementName:
                 description: |-
-                  A reference to the placement that this update run is applied to.
+                  PlacementName is the name of placement that this update run is applied to.
                   There can be multiple active update runs for each placement, but
                   it's up to the DevOps team to ensure they don't conflict with each other.
-                properties:
-                  name:
-                    description: Name is the name of the referenced placement.
-                    type: string
-                required:
-                - name
-                type: object
+                maxLength: 255
+                type: string
               resourceSnapshotIndex:
                 description: |-
                   The resource snapshot index of the selected resources to be updated across clusters.
                   The index represents a group of resource snapshots that includes all the resources a ResourcePlacement selected.
                 type: string
-              stagedRolloutStrategyRef:
+              stagedRolloutStrategyName:
                 description: |-
-                  The reference to the update strategy that specifies the stages and the sequence
+                  The name of the update strategy that specifies the stages and the sequence
                   in which the selected resources will be updated on the member clusters. The stages
                   are computed according to the referenced strategy when the update run starts
                   and recorded in the status field.
-                properties:
-                  name:
-                    description: Name is the name of the namespaced scope resource.
-                    type: string
-                  namespace:
-                    description: Namespace is namespace of the namespaced scope resource.
-                    type: string
-                required:
-                - name
-                - namespace
-                type: object
+                type: string
             required:
-            - placementRef
+            - placementName
             - resourceSnapshotIndex
-            - stagedRolloutStrategyRef
+            - stagedRolloutStrategyName
             type: object
             x-kubernetes-validations:
             - message: The spec field is immutable
               rule: self == oldSelf
           status:
-            description: The observed status of StagedUpdateRun.
+            description: The observed status of ClusterStagedUpdateRun.
             properties:
               appliedStrategy:
                 description: |-
@@ -720,6 +709,12 @@ spec:
                 - clusters
                 - stageName
                 type: object
+              policyObservedClusterCount:
+                description: |-
+                  PolicyObservedClusterCount records the number of observed clusters in the policy snapshot.
+                  It is recorded at the beginning of the update run from the policy snapshot object.
+                  If the `ObservedClusterCount` value is updated during the update run, the update run is abandoned.
+                type: integer
               policySnapshotIndexUsed:
                 description: |-
                   PolicySnapShotIndexUsed records the policy snapshot index of the ClusterResourcePlacement (CRP) that

@@ -4,26 +4,28 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.15.0
-  name: approvalrequests.placement.kubernetes-fleet.io
+  name: clusterapprovalrequests.placement.kubernetes-fleet.io
 spec:
   group: placement.kubernetes-fleet.io
   names:
     categories:
     - fleet
     - fleet-placement
-    kind: ApprovalRequest
-    listKind: ApprovalRequestList
-    plural: approvalrequests
-    singular: approvalrequest
-  scope: Namespaced
+    kind: ClusterApprovalRequest
+    listKind: ClusterApprovalRequestList
+    plural: clusterapprovalrequests
+    shortNames:
+    - careq
+    singular: clusterapprovalrequest
+  scope: Cluster
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: |-
-          ApprovalRequest defines a request for user approval.
+          ClusterApprovalRequest defines a request for user approval for cluster staged update run.
           The request object MUST have the following labels:
-            - `TargetUpdateRun`: Points to the update run that this approval request is for.
+            - `TargetUpdateRun`: Points to the cluster staged update run that this approval request is for.
             - `TargetStage`: The name of the stage that this approval request is for.
             - `IsLatestUpdateRunApproval`: Indicates whether this approval request is the latest one related to this update run.
         properties:
@@ -45,7 +47,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: The desired state of ApprovalRequest.
+            description: The desired state of ClusterApprovalRequest.
             properties:
               parentStageRollout:
                 description: The name of the staged update run that this approval
@@ -63,7 +65,7 @@ spec:
             - message: The spec field is immutable
               rule: self == oldSelf
           status:
-            description: The observed state of ApprovalRequest.
+            description: The observed state of ClusterApprovalRequest.
             properties:
               conditions:
                 description: |-
