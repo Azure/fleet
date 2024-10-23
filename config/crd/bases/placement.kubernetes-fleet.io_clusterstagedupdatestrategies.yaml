@@ -4,25 +4,27 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.15.0
-  name: stagedupdatestrategies.placement.kubernetes-fleet.io
+  name: clusterstagedupdatestrategies.placement.kubernetes-fleet.io
 spec:
   group: placement.kubernetes-fleet.io
   names:
     categories:
     - fleet
     - fleet-placement
-    kind: StagedUpdateStrategy
-    listKind: StagedUpdateStrategyList
-    plural: stagedupdatestrategies
-    singular: stagedupdatestrategy
-  scope: Namespaced
+    kind: ClusterStagedUpdateStrategy
+    listKind: ClusterStagedUpdateStrategyList
+    plural: clusterstagedupdatestrategies
+    shortNames:
+    - sus
+    singular: clusterstagedupdatestrategy
+  scope: Cluster
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: |-
-          StagedUpdateStrategy defines a reusable strategy that specifies the stages and the sequence
-          in which the selected resources will be updated on the member clusters.
+          ClusterStagedUpdateStrategy defines a reusable strategy that specifies the stages and the sequence
+          in which the selected cluster resources will be updated on the member clusters.
         properties:
           apiVersion:
             description: |-
@@ -42,7 +44,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: The desired state of StagedUpdateStrategy.
+            description: The desired state of ClusterStagedUpdateStrategy.
             properties:
               stages:
                 description: Stage specifies the configuration for each update stage.
