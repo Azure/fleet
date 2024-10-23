@@ -461,7 +461,7 @@ type ApplyStrategy struct {
 	// +kubebuilder:default=PartialComparison
 	// +kubebuilder:validation:Enum=PartialComparison;FullComparison
 	// +kubebuilder:validation:Optional
-	ComparisonOption ComparisonOptionType `json:"compareOption,omitempty"`
+	ComparisonOption ComparisonOptionType `json:"comparisonOption,omitempty"`
 
 	// WhenToApply controls when Fleet would apply the manifests on the hub cluster to the member
 	// clusters.
@@ -600,7 +600,7 @@ type ApplyStrategy struct {
 	// +kubebuilder:default=Always
 	// +kubebuilder:validation:Enum=Always;IfNoDiff
 	// +kubebuilder:validation:Optional
-	WhenToTakeOver WhenToTakeOverType `json:"actionType,omitempty"`
+	WhenToTakeOver WhenToTakeOverType `json:"whenToTakeOver,omitempty"`
 }
 
 // ComparisonOptionType describes the compare option that Fleet uses to detect drifts and/or

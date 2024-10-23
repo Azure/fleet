@@ -1756,63 +1756,6 @@ spec:
                     description: ApplyStrategy describes when and how to apply the
                       selected resources to the target cluster.
                     properties:
-                      actionType:
-                        default: Always
-                        description: |-
-                          WhenToTakeOver determines the action to take when Fleet applies resources to a member
-                          cluster for the first time and finds out that the resource already exists in the cluster.
-
-
-                          This setting is most relevant in cases where you would like Fleet to manage pre-existing
-                          resources on a member cluster.
-
-
-                          Available options include:
-
-
-                          * Always: with this action, Fleet will apply the hub cluster manifests to the member
-                            clusters even if the affected resources already exist. This is the default action.
-
-
-                            Note that this might lead to fields being overwritten on the member clusters, if they
-                            are specified in the hub cluster manifests.
-
-
-                          * IfNoDiff: with this action, Fleet will apply the hub cluster manifests to the member
-                            clusters if (and only if) pre-existing resources look the same as the hub cluster manifests.
-                            This is a safer option as pre-existing resources that are inconsistent with the hub cluster
-                            manifests will not be overwritten; in fact, Fleet will ignore them until the inconsistencies
-                            are resolved properly: any change you make to the hub cluster manifests would not be
-                            applied, and if you delete the manifests or even the ClusterResourcePlacement itself
-                            from the hub cluster, these pre-existing resources would not be taken away.
-
-
-                            Fleet will check for inconsistencies in accordance with the ComparisonOption setting. See also
-                            the comments on the ComparisonOption field for more information.
-
-
-                            If a diff has been found in a field that is **managed** by Fleet (i.e., the field
-                            **is specified ** in the hub cluster manifest), consider one of the following actions:
-                            * set the field in the member cluster to be of the same value as that in the hub cluster
-                              manifest.
-                            * update the hub cluster manifest so that its field value matches with that in the member
-                              cluster.
-                            * switch to the Always action, which will allow Fleet to overwrite the field with the
-                              value in the hub cluster manifest.
-
-
-                            If a diff has been found in a field that is **not managed** by Fleet (i.e., the field
-                            **is not specified** in the hub cluster manifest), consider one of the following actions:
-                            * remove the field from the member cluster.
-                            * update the hub cluster manifest so that the field is included in the hub cluster manifest.
-
-
-                            If appropriate, you may also delete the object from the member cluster; Fleet will recreate
-                            it using the hub cluster manifest.
-                        enum:
-                        - Always
-                        - IfNoDiff
-                        type: string
                       allowCoOwnership:
                         description: |-
                           AllowCoOwnership defines whether to apply the resource if it already exists in the target cluster and is not
@@ -1820,7 +1763,7 @@ spec:
                           If true, apply the resource and add fleet as a co-owner.
                           If false, leave the resource unchanged and fail the apply.
                         type: boolean
-                      compareOption:
+                      comparisonOption:
                         default: PartialComparison
                         description: |-
                           ComparisonOption controls how Fleet compares the desired state of a resource, as kept in
@@ -1978,6 +1921,63 @@ spec:
                         enum:
                         - Always
                         - IfNotDrifted
+                        type: string
+                      whenToTakeOver:
+                        default: Always
+                        description: |-
+                          WhenToTakeOver determines the action to take when Fleet applies resources to a member
+                          cluster for the first time and finds out that the resource already exists in the cluster.
+
+
+                          This setting is most relevant in cases where you would like Fleet to manage pre-existing
+                          resources on a member cluster.
+
+
+                          Available options include:
+
+
+                          * Always: with this action, Fleet will apply the hub cluster manifests to the member
+                            clusters even if the affected resources already exist. This is the default action.
+
+
+                            Note that this might lead to fields being overwritten on the member clusters, if they
+                            are specified in the hub cluster manifests.
+
+
+                          * IfNoDiff: with this action, Fleet will apply the hub cluster manifests to the member
+                            clusters if (and only if) pre-existing resources look the same as the hub cluster manifests.
+                            This is a safer option as pre-existing resources that are inconsistent with the hub cluster
+                            manifests will not be overwritten; in fact, Fleet will ignore them until the inconsistencies
+                            are resolved properly: any change you make to the hub cluster manifests would not be
+                            applied, and if you delete the manifests or even the ClusterResourcePlacement itself
+                            from the hub cluster, these pre-existing resources would not be taken away.
+
+
+                            Fleet will check for inconsistencies in accordance with the ComparisonOption setting. See also
+                            the comments on the ComparisonOption field for more information.
+
+
+                            If a diff has been found in a field that is **managed** by Fleet (i.e., the field
+                            **is specified ** in the hub cluster manifest), consider one of the following actions:
+                            * set the field in the member cluster to be of the same value as that in the hub cluster
+                              manifest.
+                            * update the hub cluster manifest so that its field value matches with that in the member
+                              cluster.
+                            * switch to the Always action, which will allow Fleet to overwrite the field with the
+                              value in the hub cluster manifest.
+
+
+                            If a diff has been found in a field that is **not managed** by Fleet (i.e., the field
+                            **is not specified** in the hub cluster manifest), consider one of the following actions:
+                            * remove the field from the member cluster.
+                            * update the hub cluster manifest so that the field is included in the hub cluster manifest.
+
+
+                            If appropriate, you may also delete the object from the member cluster; Fleet will recreate
+                            it using the hub cluster manifest.
+                        enum:
+                        - Always
+                        - IfNoDiff
                         type: string
                     type: object
                   rollingUpdate:
