@@ -63,27 +63,17 @@ spec:
                   The resource snapshot index of the selected resources to be updated across clusters.
                   The index represents a group of resource snapshots that includes all the resources a ResourcePlacement selected.
                 type: string
-              stagedRolloutStrategyRef:
+              stagedRolloutStrategyName:
                 description: |-
-                  The reference to the update strategy that specifies the stages and the sequence
+                  The name of the update strategy that specifies the stages and the sequence
                   in which the selected resources will be updated on the member clusters. The stages
                   are computed according to the referenced strategy when the update run starts
                   and recorded in the status field.
-                properties:
-                  name:
-                    description: Name is the name of the namespaced scope resource.
-                    type: string
-                  namespace:
-                    description: Namespace is namespace of the namespaced scope resource.
-                    type: string
-                required:
-                - name
-                - namespace
-                type: object
+                type: string
             required:
             - placementName
             - resourceSnapshotIndex
-            - stagedRolloutStrategyRef
+            - stagedRolloutStrategyName
             type: object
             x-kubernetes-validations:
             - message: The spec field is immutable
@@ -719,11 +709,11 @@ spec:
                 - clusters
                 - stageName
                 type: object
-              policyObservedNodeCount:
+              policyObservedClusterCount:
                 description: |-
-                  PolicyObservedNodeCount records the number of observed nodes in the policy snapshot.
+                  PolicyObservedClusterCount records the number of observed clusters in the policy snapshot.
                   It is recorded at the beginning of the update run from the policy snapshot object.
-                  If the OberservedCount value is updated during the update run, the update run is abandoned.
+                  If the `ObservedClusterCount` value is updated during the update run, the update run is abandoned.
                 type: integer
               policySnapshotIndexUsed:
                 description: |-

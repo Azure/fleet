@@ -15,7 +15,7 @@ spec:
     listKind: ClusterApprovalRequestList
     plural: clusterapprovalrequests
     shortNames:
-    - areq
+    - careq
     singular: clusterapprovalrequest
   scope: Cluster
   versions:

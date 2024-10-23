@@ -53,12 +53,12 @@ type StagedUpdateRunSpec struct {
 	// +kubebuilder:validation:Required
 	ResourceSnapshotIndex string `json:"resourceSnapshotIndex"`
 
-	// The reference to the update strategy that specifies the stages and the sequence
+	// The name of the update strategy that specifies the stages and the sequence
 	// in which the selected resources will be updated on the member clusters. The stages
 	// are computed according to the referenced strategy when the update run starts
 	// and recorded in the status field.
 	// +kubebuilder:validation:Required
-	StagedUpdateStrategyRef v1beta1.NamespacedName `json:"stagedRolloutStrategyRef"`
+	StagedUpdateStrategyName string `json:"stagedRolloutStrategyName"`
 }
 
 // +genclient
@@ -152,11 +152,11 @@ type StagedUpdateRunStatus struct {
 	// +kubebuilder:validation:Optional
 	PolicySnapshotIndexUsed string `json:"policySnapshotIndexUsed,omitempty"`
 
-	// PolicyObservedNodeCount records the number of observed nodes in the policy snapshot.
+	// PolicyObservedClusterCount records the number of observed clusters in the policy snapshot.
 	// It is recorded at the beginning of the update run from the policy snapshot object.
-	// If the OberservedCount value is updated during the update run, the update run is abandoned.
+	// If the `ObservedClusterCount` value is updated during the update run, the update run is abandoned.
 	// +kubebuilder:validation:Optional
-	PolicyObservedNodeCount int `json:"policyObservedNodeCount,omitempty"`
+	PolicyObservedClusterCount int `json:"policyObservedClusterCount,omitempty"`
 
 	// ApplyStrategy is the apply strategy that the stagedUpdateRun is using.
 	// It is the same as the apply strategy in the CRP when the staged update run starts.
@@ -395,7 +395,7 @@ type ClusterStagedUpdateRunList struct {
 // +genclient:Cluster
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=areq
+// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=careq
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ClusterApprovalRequest defines a request for user approval for cluster staged update run.
