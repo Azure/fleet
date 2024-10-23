@@ -1,9 +1,4 @@
-/*
-Copyright (c) Microsoft Corporation.
-Licensed under the MIT license.
-*/
-
-package rollout
+package controller
 
 import (
 	"context"
@@ -11,33 +6,34 @@ import (
 	"sort"
 	"strconv"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	errors2 "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	"go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/informer"
 	"go.goms.io/fleet/pkg/utils/overrider"
 )
 
-// fetchAllMatchingOverridesForResourceSnapshot fetches all the matching overrides which are attached to the selected resources.
-func (r *Reconciler) fetchAllMatchingOverridesForResourceSnapshot(ctx context.Context, crp string, masterResourceSnapshot *placementv1beta1.ClusterResourceSnapshot) ([]*placementv1alpha1.ClusterResourceOverrideSnapshot, []*placementv1alpha1.ResourceOverrideSnapshot, error) {
+// FetchAllMatchOverridesForResourceSnapshot finds all the overrides that selected the resources in any of the resource in the resource snapshot.
+func FetchAllMatchOverridesForResourceSnapshot(ctx context.Context, c client.Client, manager informer.Manager, crp string,
+	masterResourceSnapshot *placementv1beta1.ClusterResourceSnapshot) ([]*placementv1alpha1.ClusterResourceOverrideSnapshot, []*placementv1alpha1.ResourceOverrideSnapshot, error) {
 	// fetch the cro and ro snapshot list first before finding the matched ones.
 	latestSnapshotLabelMatcher := client.MatchingLabels{
 		placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
 	}
 	croList := &placementv1alpha1.ClusterResourceOverrideSnapshotList{}
-	if err := r.Client.List(ctx, croList, latestSnapshotLabelMatcher); err != nil {
+	if err := c.List(ctx, croList, latestSnapshotLabelMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list all the clusterResourceOverrideSnapshots")
 		return nil, nil, err
 	}
 	roList := &placementv1alpha1.ResourceOverrideSnapshotList{}
-	if err := r.Client.List(ctx, roList, latestSnapshotLabelMatcher); err != nil {
+	if err := c.List(ctx, roList, latestSnapshotLabelMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list all the resourceOverrideSnapshots")
 		return nil, nil, err
 	}
@@ -46,7 +42,7 @@ func (r *Reconciler) fetchAllMatchingOverridesForResourceSnapshot(ctx context.Co
 		return nil, nil, nil // no overrides and nothing to do
 	}
 
-	resourceSnapshots, err := controller.FetchAllClusterResourceSnapshots(ctx, r.Client, crp, masterResourceSnapshot)
+	resourceSnapshots, err := FetchAllClusterResourceSnapshots(ctx, c, crp, masterResourceSnapshot)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -59,11 +55,11 @@ func (r *Reconciler) fetchAllMatchingOverridesForResourceSnapshot(ctx context.Co
 			var uResource unstructured.Unstructured
 			if err := uResource.UnmarshalJSON(res.Raw); err != nil {
 				klog.ErrorS(err, "Resource has invalid content", "snapshot", klog.KObj(snapshot), "selectedResource", res.Raw)
-				return nil, nil, controller.NewUnexpectedBehaviorError(err)
+				return nil, nil, NewUnexpectedBehaviorError(err)
 			}
 			// If the resource is namespaced scope resource, the resource could be selected by the namespace or selected
 			// by the object itself.
-			if !r.InformerManager.IsClusterScopedResources(uResource.GroupVersionKind()) {
+			if !manager.IsClusterScopedResources(uResource.GroupVersionKind()) {
 				croKey := placementv1beta1.ResourceIdentifier{
 					Group:   utils.NamespaceMetaGVK.Group,
 					Version: utils.NamespaceMetaGVK.Version,
@@ -125,24 +121,21 @@ func (r *Reconciler) fetchAllMatchingOverridesForResourceSnapshot(ctx context.Co
 	return filteredCRO, filteredRO, nil
 }
 
-// pickFromResourceMatchedOverridesForTargetCluster will look for any overrides associated with the "Bound" or "Scheduled" binding.
-// croList is a list of clusterResourceOverrides attached to the selected resources.
-// roList is a list of resourceOverrides attached to the selected resources.
-// It returns names of cro and ro attached to the target cluster, and they're ordered by its namespace (if present) and
-// then name.
-func (r *Reconciler) pickFromResourceMatchedOverridesForTargetCluster(ctx context.Context, binding *placementv1beta1.ClusterResourceBinding, croList []*placementv1alpha1.ClusterResourceOverrideSnapshot, roList []*placementv1alpha1.ResourceOverrideSnapshot) ([]string, []placementv1beta1.NamespacedName, error) {
+// PickFromResourceMatchedOverridesForTargetCluster filter the overrides that are matched with resources to the target cluster.
+func PickFromResourceMatchedOverridesForTargetCluster(ctx context.Context, c client.Client, targetCluster string,
+	croList []*placementv1alpha1.ClusterResourceOverrideSnapshot, roList []*placementv1alpha1.ResourceOverrideSnapshot) ([]string, []placementv1beta1.NamespacedName, error) {
+	// the common case that there is no override for the resources.
 	if len(croList) == 0 && len(roList) == 0 {
 		return nil, nil, nil
 	}
-
-	cluster := clusterv1beta1.MemberCluster{}
-	if err := r.Client.Get(ctx, types.NamespacedName{Name: binding.Spec.TargetCluster}, &cluster); err != nil {
-		if apierrors.IsNotFound(err) {
-			klog.V(2).InfoS("MemberCluster has been deleted and we expect that scheduler will update the spec of binding to unscheduled", "memberCluster", binding.Spec.TargetCluster, "clusterResourceBinding", klog.KObj(binding))
-			return nil, nil, controller.NewExpectedBehaviorError(err)
+	cluster := v1beta1.MemberCluster{}
+	if err := c.Get(ctx, types.NamespacedName{Name: targetCluster}, &cluster); err != nil {
+		if errors2.IsNotFound(err) {
+			klog.V(2).InfoS("MemberCluster has been deleted and we expect that scheduler will update the spec of binding to unscheduled", "memberCluster", targetCluster)
+			return nil, nil, NewExpectedBehaviorError(err)
 		}
-		klog.ErrorS(err, "Failed to get the memberCluster", "memberCluster", binding.Spec.TargetCluster, "clusterResourceBinding", klog.KObj(binding))
-		return nil, nil, controller.NewAPIServerError(true, err)
+		klog.ErrorS(err, "Failed to get the memberCluster", "memberCluster", targetCluster)
+		return nil, nil, NewAPIServerError(true, err)
 	}
 
 	croFiltered := make([]*placementv1alpha1.ClusterResourceOverrideSnapshot, 0, len(croList))
@@ -150,7 +143,7 @@ func (r *Reconciler) pickFromResourceMatchedOverridesForTargetCluster(ctx contex
 		matched, err := isClusterMatched(cluster, cro.Spec.OverrideSpec.Policy)
 		if err != nil {
 			klog.ErrorS(err, "Invalid clusterResourceOverride", "clusterResourceOverride", klog.KObj(cro))
-			return nil, nil, controller.NewUnexpectedBehaviorError(err)
+			return nil, nil, NewUnexpectedBehaviorError(err)
 		}
 		if matched {
 			croFiltered = append(croFiltered, croList[i])
@@ -166,7 +159,7 @@ func (r *Reconciler) pickFromResourceMatchedOverridesForTargetCluster(ctx contex
 		matched, err := isClusterMatched(cluster, ro.Spec.OverrideSpec.Policy)
 		if err != nil {
 			klog.ErrorS(err, "Invalid resourceOverride", "resourceOverride", klog.KObj(ro))
-			return nil, nil, controller.NewUnexpectedBehaviorError(err)
+			return nil, nil, NewUnexpectedBehaviorError(err)
 		}
 		if matched {
 			roFiltered = append(roFiltered, roList[i])
@@ -187,11 +180,11 @@ func (r *Reconciler) pickFromResourceMatchedOverridesForTargetCluster(ctx contex
 	for i, o := range roFiltered {
 		roNames[i] = placementv1beta1.NamespacedName{Name: o.Name, Namespace: o.Namespace}
 	}
-	klog.V(2).InfoS("Found matched overrides for the binding", "binding", klog.KObj(binding), "matchedCROCount", len(croNames), "matchedROCount", len(roNames))
+	klog.V(2).InfoS("Found matched overrides for the binding", "memberCluster", targetCluster, "matchedCROCount", len(croNames), "matchedROCount", len(roNames))
 	return croNames, roNames, nil
 }
 
-func isClusterMatched(cluster clusterv1beta1.MemberCluster, policy *placementv1alpha1.OverridePolicy) (bool, error) {
+func isClusterMatched(cluster v1beta1.MemberCluster, policy *placementv1alpha1.OverridePolicy) (bool, error) {
 	if policy == nil {
 		return false, errors.New("policy is nil")
 	}
