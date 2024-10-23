@@ -919,14 +919,14 @@ type PatchDetail struct {
 	// This field can be empty if the JSON path does not exist on the member cluster side; i.e.,
 	// applying the manifest from the hub cluster side would add a new field.
 	// +kubebuilder:validation:Optional
-	MemberClusterValue string `json:"memberClusterValue,omitempty"`
+	ValueInMember string `json:"valueInMember,omitempty"`
 
 	// The value at the JSON path from the hub cluster side.
 	//
 	// This field can be empty if the JSON path does not exist on the hub cluster side; i.e.,
 	// applying the manifest from the hub cluster side would remove the field.
 	// +kubebuilder:validation:Optional
-	HubClusterValue string `json:"hubClusterValue,omitempty"`
+	ValueInHub string `json:"valueInHub,omitempty"`
 }
 
 // DriftedResourcePlacement contains the details of a resource with configuration drifts.

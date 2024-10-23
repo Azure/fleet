@@ -905,7 +905,11 @@ spec:
 
                           A patch detail can be transcribed as a JSON patch operation, as specified in RFC 6902.
                         properties:
-                          hubClusterValue:
+                          path:
+                            description: The JSON path that points to a field that
+                              has drifted or has configuration differences.
+                            type: string
+                          valueInHub:
                             description: |-
                               The value at the JSON path from the hub cluster side.
 
@@ -913,17 +917,13 @@ spec:
                               This field can be empty if the JSON path does not exist on the hub cluster side; i.e.,
                               applying the manifest from the hub cluster side would remove the field.
                             type: string
-                          memberClusterValue:
+                          valueInMember:
                             description: |-
                               The value at the JSON path from the member cluster side.
 
 
                               This field can be empty if the JSON path does not exist on the member cluster side; i.e.,
                               applying the manifest from the hub cluster side would add a new field.
-                            type: string
-                          path:
-                            description: The JSON path that points to a field that
-                              has drifted or has configuration differences.
                             type: string
                         required:
                         - path
@@ -1023,7 +1023,11 @@ spec:
 
                           A patch detail can be transcribed as a JSON patch operation, as specified in RFC 6902.
                         properties:
-                          hubClusterValue:
+                          path:
+                            description: The JSON path that points to a field that
+                              has drifted or has configuration differences.
+                            type: string
+                          valueInHub:
                             description: |-
                               The value at the JSON path from the hub cluster side.
 
@@ -1031,17 +1035,13 @@ spec:
                               This field can be empty if the JSON path does not exist on the hub cluster side; i.e.,
                               applying the manifest from the hub cluster side would remove the field.
                             type: string
-                          memberClusterValue:
+                          valueInMember:
                             description: |-
                               The value at the JSON path from the member cluster side.
 
 
                               This field can be empty if the JSON path does not exist on the member cluster side; i.e.,
                               applying the manifest from the hub cluster side would add a new field.
-                            type: string
-                          path:
-                            description: The JSON path that points to a field that
-                              has drifted or has configuration differences.
                             type: string
                         required:
                         - path
