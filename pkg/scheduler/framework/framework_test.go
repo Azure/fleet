@@ -352,8 +352,9 @@ func TestClassifyBindings(t *testing.T) {
 	wantObsolete := []*placementv1beta1.ClusterResourceBinding{&obsoleteBinding}
 	wantUnscheduled := []*placementv1beta1.ClusterResourceBinding{&unscheduledBinding}
 	wantDangling := []*placementv1beta1.ClusterResourceBinding{&associatedWithLeavingClusterBinding, &assocaitedWithDisappearedClusterBinding}
+	wantDeleting := []*placementv1beta1.ClusterResourceBinding{&deletingBinding}
 
-	bound, scheduled, obsolete, unscheduled, dangling := classifyBindings(policy, bindings, clusters)
+	bound, scheduled, obsolete, unscheduled, dangling, deleting := classifyBindings(policy, bindings, clusters)
 	if diff := cmp.Diff(bound, wantBound); diff != "" {
 		t.Errorf("classifyBindings() bound diff (-got, +want): %s", diff)
 	}
@@ -372,6 +373,10 @@ func TestClassifyBindings(t *testing.T) {
 
 	if diff := cmp.Diff(dangling, wantDangling); diff != "" {
 		t.Errorf("classifyBindings() dangling diff (-got, +want) = %s", diff)
+	}
+
+	if diff := cmp.Diff(deleting, wantDeleting); diff != "" {
+		t.Errorf("classifyBIndings() deleting diff (-got, +want) = %s", diff)
 	}
 }
 
