@@ -185,7 +185,7 @@ func crossReferencePickedClustersAndDeDupBindings(
 					Labels: map[string]string{
 						placementv1beta1.CRPTrackingLabel: crpName,
 					},
-					Finalizers: []string{placementv1beta1.SchedulerCRBReconcileFinalizer},
+					Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
 					State: placementv1beta1.BindingStateScheduled,
@@ -684,7 +684,7 @@ func crossReferenceValidTargetsWithBindings(
 					Labels: map[string]string{
 						placementv1beta1.CRPTrackingLabel: crpName,
 					},
-					Finalizers: []string{placementv1beta1.SchedulerCRBReconcileFinalizer},
+					Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
 					State: placementv1beta1.BindingStateScheduled,

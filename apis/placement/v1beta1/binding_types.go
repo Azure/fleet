@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	// SchedulerCRBReconcileFinalizer is a finalizer added to ClusterResourceBindings to ensure we can look up the
-	// corresponding CRP for deleting ClusterResourceBindings to start another scheduling cycle.
-	SchedulerCRBReconcileFinalizer = fleetPrefix + "scheduler-reconcile"
+	// SchedulerCRBCleanupFinalizer is a finalizer added to ClusterResourceBindings to ensure we can look up the
+	// corresponding CRP for deleting ClusterResourceBindings in a scheduling cycle.
+	SchedulerCRBCleanupFinalizer = fleetPrefix + "scheduler-crb-cleanup"
 )
 
 // +kubebuilder:object:root=true

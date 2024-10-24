@@ -401,7 +401,7 @@ func (f *framework) removeFinalizer(ctx context.Context, bindings []*placementv1
 					return apierrors.IsServiceUnavailable(err) || apierrors.IsServerTimeout(err) || apierrors.IsConflict(err)
 				},
 				func() error {
-					controllerutil.RemoveFinalizer(deletingBinding, placementv1beta1.SchedulerCRBReconcileFinalizer)
+					controllerutil.RemoveFinalizer(deletingBinding, placementv1beta1.SchedulerCRBCleanupFinalizer)
 					err := f.client.Update(cctx, deletingBinding, &client.UpdateOptions{})
 					// We will retry on conflicts.
 					if apierrors.IsConflict(err) {
