@@ -6,6 +6,8 @@ Licensed under the MIT license.
 package workgenerator
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -64,13 +66,14 @@ const (
 )
 
 var _ = Describe("Test Work Generator Controller", func() {
-
 	Context("Test Bound ClusterResourceBinding", func() {
 		var binding *placementv1beta1.ClusterResourceBinding
 		ignoreTypeMeta := cmpopts.IgnoreFields(metav1.TypeMeta{}, "Kind", "APIVersion")
 		ignoreWorkOption := cmpopts.IgnoreFields(metav1.ObjectMeta{},
 			"UID", "ResourceVersion", "ManagedFields", "CreationTimestamp", "Generation")
-
+		var emptyArray []string
+		jsonBytes, _ := json.Marshal(emptyArray)
+		emptyHash := fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
 		BeforeEach(func() {
 			memberClusterName = "cluster-" + utils.RandStr()
 			testCRPName = "crp" + utils.RandStr()
@@ -306,6 +309,10 @@ var _ = Describe("Test Work Generator Controller", func() {
 							placementv1beta1.ParentBindingLabel:               binding.Name,
 							placementv1beta1.ParentResourceSnapshotIndexLabel: "1",
 						},
+						Annotations: map[string]string{
+							placementv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: emptyHash,
+							placementv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        emptyHash,
+						},
 					},
 					Spec: placementv1beta1.WorkSpec{
 						Workload: placementv1beta1.WorkloadTemplate{
@@ -394,6 +401,10 @@ var _ = Describe("Test Work Generator Controller", func() {
 								placementv1beta1.CRPTrackingLabel:                 testCRPName,
 								placementv1beta1.ParentBindingLabel:               binding.Name,
 								placementv1beta1.ParentResourceSnapshotIndexLabel: "1",
+							},
+							Annotations: map[string]string{
+								placementv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: emptyHash,
+								placementv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        emptyHash,
 							},
 						},
 						Spec: placementv1beta1.WorkSpec{
@@ -492,6 +503,10 @@ var _ = Describe("Test Work Generator Controller", func() {
 							placementv1beta1.ParentBindingLabel:               binding.Name,
 							placementv1beta1.ParentResourceSnapshotIndexLabel: "1",
 						},
+						Annotations: map[string]string{
+							placementv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: emptyHash,
+							placementv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        emptyHash,
+						},
 					},
 					Spec: placementv1beta1.WorkSpec{
 						Workload: placementv1beta1.WorkloadTemplate{
@@ -530,6 +545,10 @@ var _ = Describe("Test Work Generator Controller", func() {
 							placementv1beta1.EnvelopeTypeLabel:                string(placementv1beta1.ConfigMapEnvelopeType),
 							placementv1beta1.EnvelopeNameLabel:                "envelop-configmap",
 							placementv1beta1.EnvelopeNamespaceLabel:           "app",
+						},
+						Annotations: map[string]string{
+							placementv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: emptyHash,
+							placementv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        emptyHash,
 						},
 					},
 					Spec: placementv1beta1.WorkSpec{
@@ -609,6 +628,10 @@ var _ = Describe("Test Work Generator Controller", func() {
 							placementv1beta1.ParentBindingLabel:               binding.Name,
 							placementv1beta1.ParentResourceSnapshotIndexLabel: "2",
 						},
+						Annotations: map[string]string{
+							placementv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: emptyHash,
+							placementv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        emptyHash,
+						},
 					},
 					Spec: placementv1beta1.WorkSpec{
 						Workload: placementv1beta1.WorkloadTemplate{
@@ -646,6 +669,10 @@ var _ = Describe("Test Work Generator Controller", func() {
 							placementv1beta1.EnvelopeTypeLabel:                string(placementv1beta1.ConfigMapEnvelopeType),
 							placementv1beta1.EnvelopeNameLabel:                "envelop-configmap",
 							placementv1beta1.EnvelopeNamespaceLabel:           "app",
+						},
+						Annotations: map[string]string{
+							placementv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: emptyHash,
+							placementv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        emptyHash,
 						},
 					},
 					Spec: placementv1beta1.WorkSpec{
@@ -787,6 +814,10 @@ var _ = Describe("Test Work Generator Controller", func() {
 							placementv1beta1.ParentResourceSnapshotIndexLabel: "2",
 							placementv1beta1.ParentBindingLabel:               binding.Name,
 						},
+						Annotations: map[string]string{
+							placementv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: emptyHash,
+							placementv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        emptyHash,
+						},
 					},
 					Spec: placementv1beta1.WorkSpec{
 						Workload: placementv1beta1.WorkloadTemplate{
@@ -856,6 +887,10 @@ var _ = Describe("Test Work Generator Controller", func() {
 							placementv1beta1.CRPTrackingLabel:                 testCRPName,
 							placementv1beta1.ParentResourceSnapshotIndexLabel: "2",
 							placementv1beta1.ParentBindingLabel:               binding.Name,
+						},
+						Annotations: map[string]string{
+							placementv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: emptyHash,
+							placementv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        emptyHash,
 						},
 					},
 					Spec: placementv1beta1.WorkSpec{
@@ -1082,6 +1117,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 
 		Context("Test Bound ClusterResourceBinding with a single resource snapshot and valid overrides", func() {
 			var masterSnapshot *placementv1beta1.ClusterResourceSnapshot
+			var roHash, croHash string
 
 			BeforeEach(func() {
 				masterSnapshot = generateResourceSnapshot(1, 1, 0, [][]byte{
@@ -1089,21 +1125,25 @@ var _ = Describe("Test Work Generator Controller", func() {
 				})
 				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 				By(fmt.Sprintf("master resource snapshot  %s created", masterSnapshot.Name))
-				spec := placementv1beta1.ResourceBindingSpec{
-					State:                placementv1beta1.BindingStateBound,
-					ResourceSnapshotName: masterSnapshot.Name,
-					TargetCluster:        memberClusterName,
-					ClusterResourceOverrideSnapshots: []string{
-						validClusterResourceOverrideSnapshotName,
-					},
-					ResourceOverrideSnapshots: []placementv1beta1.NamespacedName{
-						{
-							Name:      validResourceOverrideSnapshotName,
-							Namespace: appNamespaceName,
-						},
+				crolist := []string{validClusterResourceOverrideSnapshotName}
+				roList := []placementv1beta1.NamespacedName{
+					{
+						Name:      validResourceOverrideSnapshotName,
+						Namespace: appNamespaceName,
 					},
 				}
+				spec := placementv1beta1.ResourceBindingSpec{
+					State:                            placementv1beta1.BindingStateBound,
+					ResourceSnapshotName:             masterSnapshot.Name,
+					TargetCluster:                    memberClusterName,
+					ClusterResourceOverrideSnapshots: crolist,
+					ResourceOverrideSnapshots:        roList,
+				}
 				createClusterResourceBinding(&binding, spec)
+				jsonBytes, _ := json.Marshal(roList)
+				roHash = fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
+				jsonBytes, _ = json.Marshal(crolist)
+				croHash = fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
 			})
 
 			AfterEach(func() {
@@ -1145,6 +1185,10 @@ var _ = Describe("Test Work Generator Controller", func() {
 							placementv1beta1.CRPTrackingLabel:                 testCRPName,
 							placementv1beta1.ParentBindingLabel:               binding.Name,
 							placementv1beta1.ParentResourceSnapshotIndexLabel: "1",
+						},
+						Annotations: map[string]string{
+							placementv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: croHash,
+							placementv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        roHash,
 						},
 					},
 					Spec: placementv1beta1.WorkSpec{
@@ -1373,6 +1417,10 @@ var _ = Describe("Test Work Generator Controller", func() {
 							placementv1beta1.CRPTrackingLabel:                 testCRPName,
 							placementv1beta1.ParentBindingLabel:               binding.Name,
 							placementv1beta1.ParentResourceSnapshotIndexLabel: "1",
+						},
+						Annotations: map[string]string{
+							placementv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: emptyHash,
+							placementv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        emptyHash,
 						},
 					},
 					Spec: placementv1beta1.WorkSpec{
