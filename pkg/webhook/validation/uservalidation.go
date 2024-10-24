@@ -24,6 +24,7 @@ import (
 
 const (
 	mastersGroup              = "system:masters"
+	kubeadmClusterAdminsGroup = "kubeadm:cluster-admins"
 	serviceAccountsGroup      = "system:serviceaccounts"
 	nodeGroup                 = "system:nodes"
 	kubeSchedulerUser         = "system:kube-scheduler"
@@ -48,7 +49,7 @@ var (
 func ValidateUserForFleetCRD(req admission.Request, whiteListedUsers []string, group string) admission.Response {
 	namespacedName := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
 	userInfo := req.UserInfo
-	if checkCRDGroup(group) && !isMasterGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) {
+	if checkCRDGroup(group) && !isAdminGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) {
 		klog.V(2).InfoS(deniedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		return admission.Denied(fmt.Sprintf(ResourceDeniedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
 	}
@@ -60,7 +61,7 @@ func ValidateUserForFleetCRD(req admission.Request, whiteListedUsers []string, g
 func ValidateUserForResource(req admission.Request, whiteListedUsers []string) admission.Response {
 	namespacedName := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
 	userInfo := req.UserInfo
-	if isMasterGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) || isUserAuthenticatedServiceAccount(userInfo) || isUserKubeScheduler(userInfo) || isUserKubeControllerManager(userInfo) || isNodeGroupUser(userInfo) {
+	if isAdminGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) || isUserAuthenticatedServiceAccount(userInfo) || isUserKubeScheduler(userInfo) || isUserKubeControllerManager(userInfo) || isNodeGroupUser(userInfo) {
 		klog.V(3).InfoS(allowedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		return admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
 	}
@@ -130,9 +131,11 @@ func ValidatedUpstreamMemberClusterUpdate(currentMC, oldMC clusterv1beta1.Member
 	return admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
 }
 
-// isMasterGroupUserOrWhiteListedUser returns true is user belongs to white listed users or user belongs to system:masters group.
-func isMasterGroupUserOrWhiteListedUser(whiteListedUsers []string, userInfo authenticationv1.UserInfo) bool {
-	return slices.Contains(whiteListedUsers, userInfo.Username) || slices.Contains(userInfo.Groups, mastersGroup)
+// isAdminGroupUserOrWhiteListedUser returns true is user belongs to white listed users or user belongs to system:masters/kubeadm:cluster-admins group.
+// In clusters using kubeadm, kubernetes-admin belongs to kubeadm:cluster-admins group and kubernetes-super-admin user belongs to system:masters group.
+// https://kubernetes.io/docs/reference/setup-tools/kubeadm/implementation-details/#generate-kubeconfig-files-for-control-plane-components
+func isAdminGroupUserOrWhiteListedUser(whiteListedUsers []string, userInfo authenticationv1.UserInfo) bool {
+	return slices.Contains(whiteListedUsers, userInfo.Username) || slices.Contains(userInfo.Groups, mastersGroup) || slices.Contains(userInfo.Groups, kubeadmClusterAdminsGroup)
 }
 
 // isUserAuthenticatedServiceAccount returns true if user is a valid service account.

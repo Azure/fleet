@@ -37,6 +37,21 @@ func TestValidateUserForResource(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{mastersGroup}), admissionv1.Create, &utils.RoleMetaGVK, "", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
 		},
+		"allow user in kubeadm:cluster-admin group": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name:        "test-role",
+					Namespace:   "test-namespace",
+					RequestKind: &utils.RoleMetaGVK,
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{kubeadmClusterAdminsGroup},
+					},
+					Operation: admissionv1.Create,
+				},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{kubeadmClusterAdminsGroup}), admissionv1.Create, &utils.RoleMetaGVK, "", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
+		},
 		// UT to test GenerateGroupString in pkg/utils/common.gp
 		"allow user in system:masters group along with 10 other groups": {
 			req: admission.Request{
