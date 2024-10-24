@@ -380,7 +380,10 @@ func (f *framework) markAsUnscheduledFor(ctx context.Context, bindings []*placem
 					// We will just retry for conflict errors since the scheduler holds the truth here.
 					if apierrors.IsConflict(err) {
 						// get the binding again to make sure we have the latest version to update again.
-						return f.client.Get(cctx, client.ObjectKeyFromObject(unscheduledBinding), unscheduledBinding)
+						getErr := f.client.Get(cctx, client.ObjectKeyFromObject(unscheduledBinding), unscheduledBinding)
+						if getErr != nil {
+							return getErr
+						}
 					}
 					return err
 				})
