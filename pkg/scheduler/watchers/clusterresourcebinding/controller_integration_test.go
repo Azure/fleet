@@ -110,6 +110,7 @@ var _ = Describe("scheduler - cluster resource binding watcher", Ordered, func()
 		})
 
 		It("should enqueue CRP name when CRB is deleted", func() {
+			Eventually(expectedKeySetEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Workqueue is either empty or it contains more than one element")
 			Consistently(expectedKeySetEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is either empty or it contains more than one element")
 		})
 
