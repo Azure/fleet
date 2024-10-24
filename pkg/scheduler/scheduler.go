@@ -282,8 +282,6 @@ func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, crp *fleetv1beta1
 		return controller.NewAPIServerError(false, err)
 	}
 
-	// Remove the scheduler cleanup finalizer from all the bindings, and delete them.
-	//
 	// Note that once a CRP has been marked for deletion, it will no longer enter the scheduling cycle,
 	// so any cleanup finalizer has to be removed here.
 	//
@@ -291,16 +289,24 @@ func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, crp *fleetv1beta1
 	// the scheduler no longer marks them as deleting and waits for another controller to actually
 	// run the deletion.
 	for idx := range bindingList.Items {
-		binding := bindingList.Items[idx]
+		binding := &bindingList.Items[idx]
 		// Delete the binding if it has not been marked for deletion yet.
 		if binding.DeletionTimestamp == nil {
-			if err := s.client.Delete(ctx, &binding); err != nil && !errors.IsNotFound(err) {
-				klog.ErrorS(err, "Failed to delete binding", "clusterResourceBinding", klog.KObj(&binding))
+			if err := s.client.Delete(ctx, binding); err != nil && !errors.IsNotFound(err) {
+				klog.ErrorS(err, "Failed to delete binding", "clusterResourceBinding", klog.KObj(binding))
 				return controller.NewAPIServerError(false, err)
 			}
 		}
+	}
 
-		// Note that the scheduler will not add any cleanup finalizer to a binding.
+	// Remove scheduler reconcile finalizer from deleting bindings.
+	for idx := range bindingList.Items {
+		binding := &bindingList.Items[idx]
+		controllerutil.RemoveFinalizer(binding, fleetv1beta1.SchedulerCRBReconcileFinalizer)
+		if err := s.client.Update(ctx, binding); err != nil {
+			klog.ErrorS(err, "Failed to remove scheduler reconcile finalizer from cluster resource binding", "clusterResourceBinding", klog.KObj(binding))
+			return controller.NewUpdateIgnoreConflictError(err)
+		}
 	}
 
 	// All bindings have been deleted; remove the scheduler cleanup finalizer from the CRP.

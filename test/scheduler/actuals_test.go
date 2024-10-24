@@ -170,6 +170,7 @@ func boundBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCl
 					Labels: map[string]string{
 						placementv1beta1.CRPTrackingLabel: crpName,
 					},
+					Finalizers: []string{placementv1beta1.SchedulerCRBReconcileFinalizer},
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
 					State:                        placementv1beta1.BindingStateBound,
@@ -230,6 +231,7 @@ func unscheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, sco
 					Labels: map[string]string{
 						placementv1beta1.CRPTrackingLabel: crpName,
 					},
+					Finalizers: []string{placementv1beta1.SchedulerCRBReconcileFinalizer},
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
 					State:                        placementv1beta1.BindingStateUnscheduled,
