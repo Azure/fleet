@@ -1,0 +1,155 @@
+package cloudconfig
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"strings"
+
+	"k8s.io/apimachinery/pkg/util/yaml"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+)
+
+const (
+	// DefaultUserAgent is the default user agent string to access Azure resources.
+	DefaultUserAgent = "fleet-member-agent"
+)
+
+// CloudConfig holds the configuration parsed from the --cloud-config flag
+type RateLimitConfig ratelimit.Config
+type CloudConfig struct {
+	azclient.ARMClientConfig `json:",inline" mapstructure:",squash"`
+	azclient.AzureAuthConfig `json:",inline" mapstructure:",squash"`
+	*RateLimitConfig         `json:",inline" mapstructure:",squash"`
+	// name of cluster
+	ClusterName string `json:"clusterName,omitempty" mapstructure:"clusterName,omitempty"`
+	// azure resource location
+	Location string `json:"location,omitempty" mapstructure:"location,omitempty"`
+	// subscription ID
+	SubscriptionID string `json:"subscriptionID,omitempty" mapstructure:"subscriptionID,omitempty"`
+	// default resource group where the cluster is deployed
+	ClusterResourceGroup string `json:"clusterResourceGroup,omitempty" mapstructure:"resourceGroup,omitempty"`
+	// name of the virtual network of cluster
+	VnetName string `json:"vnetName,omitempty" mapstructure:"vnetName,omitempty"`
+	// name of the resource group where the virtual network is deployed
+	VnetResourceGroup string `json:"vnetResourceGroup,omitempty" mapstructure:"vnetResourceGroup,omitempty"`
+	// Enable exponential backoff to manage resource request retries
+	CloudProviderBackoff bool `json:"cloudProviderBackoff,omitempty" mapstructure:"cloudProviderBackoff,omitempty"`
+}
+
+// LoadCloudConfigFromFile loads the cloud config from the specified file
+func LoadCloudConfigFromFile(filePath string) (*CloudConfig, error) {
+	if filePath == "" {
+		return nil, fmt.Errorf("failed to load cloud cloudconfig: file path is empty")
+	}
+
+	var config *CloudConfig
+	configReader, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open cloud cloudconfig file: %w, file path: %s", err, filePath)
+	}
+	defer configReader.Close()
+
+	contents, err := io.ReadAll(configReader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read cloud cloudconfig file: %w, file path: %s", err, filePath)
+	}
+
+	if err := yaml.Unmarshal(contents, &config); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal cloud cloudconfig: %w, file path: %s", err, filePath)
+	}
+
+	if err := config.defaultAndValidate(); err != nil {
+		return nil, fmt.Errorf("failed to validate cloud cloudconfig: %w, file contents: `%s`", err, string(contents))
+	}
+
+	return config, nil
+}
+
+// defaultAndValidate validates the cloud config and sets default values
+func (cfg *CloudConfig) defaultAndValidate() error {
+	cfg.trimSpace()
+
+	if cfg.Cloud == "" {
+		return fmt.Errorf("cloud is empty")
+	}
+
+	if cfg.Location == "" {
+		return fmt.Errorf("location is empty")
+	}
+
+	if cfg.SubscriptionID == "" {
+		return fmt.Errorf("subscription ID is empty")
+	}
+
+	if cfg.ClusterResourceGroup == "" {
+		return fmt.Errorf("cluster resource group is empty")
+	}
+
+	if cfg.VnetName == "" {
+		return fmt.Errorf("virtual network name is empty")
+	}
+
+	if cfg.ClusterName == "" {
+		return fmt.Errorf("cluster name is empty")
+	}
+
+	if cfg.VnetResourceGroup == "" {
+		cfg.VnetResourceGroup = cfg.ClusterResourceGroup
+	}
+
+	if !cfg.UseManagedIdentityExtension {
+		if cfg.UserAssignedIdentityID != "" {
+			return fmt.Errorf("useManagedIdentityExtension needs to be true when userAssignedIdentityID is provided")
+		}
+		if cfg.AADClientID == "" || cfg.AADClientSecret == "" {
+			return fmt.Errorf("AAD client ID or AAD client secret is empty")
+		}
+	}
+
+	// default values
+	if cfg.UserAgent == "" {
+		cfg.UserAgent = DefaultUserAgent
+	}
+
+	// if not specified, apply default rate limit cloudconfig
+	if cfg.RateLimitConfig == nil {
+		cfg.RateLimitConfig = &RateLimitConfig{CloudProviderRateLimit: false}
+	}
+
+	if cfg.CloudProviderRateLimit {
+		// Assign read rate limit defaults if no configuration was passed in.
+		if cfg.CloudProviderRateLimitQPS == 0 {
+			cfg.CloudProviderRateLimitQPS = consts.RateLimitQPSDefault
+		}
+		if cfg.CloudProviderRateLimitBucket == 0 {
+			cfg.CloudProviderRateLimitBucket = consts.RateLimitBucketDefault
+		}
+		// Assign write rate limit defaults if no configuration was passed in.
+		if cfg.CloudProviderRateLimitQPSWrite == 0 {
+			cfg.CloudProviderRateLimitQPSWrite = cfg.CloudProviderRateLimitQPS
+		}
+		if cfg.CloudProviderRateLimitBucketWrite == 0 {
+			cfg.CloudProviderRateLimitBucketWrite = cfg.CloudProviderRateLimitBucket
+		}
+	}
+	return nil
+}
+
+// trimSpace trims the leading and trailing spaces of the cloud config fields
+func (cfg *CloudConfig) trimSpace() {
+	cfg.Cloud = strings.TrimSpace(cfg.Cloud)
+	cfg.Location = strings.TrimSpace(cfg.Location)
+	cfg.SubscriptionID = strings.TrimSpace(cfg.SubscriptionID)
+	cfg.TenantID = strings.TrimSpace(cfg.TenantID)
+	cfg.UserAssignedIdentityID = strings.TrimSpace(cfg.UserAssignedIdentityID)
+	cfg.AADClientID = strings.TrimSpace(cfg.AADClientID)
+	cfg.AADClientSecret = strings.TrimSpace(cfg.AADClientSecret)
+	cfg.UserAgent = strings.TrimSpace(cfg.UserAgent)
+	cfg.ClusterResourceGroup = strings.TrimSpace(cfg.ClusterResourceGroup)
+	cfg.VnetName = strings.TrimSpace(cfg.VnetName)
+	cfg.VnetResourceGroup = strings.TrimSpace(cfg.VnetResourceGroup)
+	cfg.ClusterName = strings.TrimSpace(cfg.ClusterName)
+}

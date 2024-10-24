@@ -73,7 +73,7 @@ type simpleClusterResourcePlacementSchedulingQueueOptions struct {
 	name        string
 }
 
-// Option is the function that configures the simpleClusterResourcePlacmentSchedulingQueue.
+// Option is the function that configures the simpleClusterResourcePlacementSchedulingQueue.
 type Option func(*simpleClusterResourcePlacementSchedulingQueueOptions)
 
 var defaultSimpleClusterResourcePlacementSchedulingQueueOptions = simpleClusterResourcePlacementSchedulingQueueOptions{

@@ -10,7 +10,11 @@ Licensed under the MIT license.
 package v1alpha1
 
 import (
+<<<<<<< HEAD
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+=======
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
+>>>>>>> 27aa8f2 (add cloudConfig & some tests)
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 

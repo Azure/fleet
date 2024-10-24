@@ -36,6 +36,7 @@ spec:
             - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
             {{- if .Values.propertyProvider }}
             - --property-provider={{ .Values.propertyProvider }}
+            - --cloud-config={{ .Values.cloudConfig }}
             {{- end }}
             {{- if .Values.region }}
             - --region={{ .Values.region }}
@@ -84,6 +85,9 @@ spec:
           volumeMounts:
           - name: provider-token 
             mountPath: /config
+          - name: cloud-provider-config
+            mountPath: /etc/kubernetes/provider
+            readOnly: true
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
           imagePullPolicy: {{ .Values.refreshtoken.pullPolicy }}
@@ -105,6 +109,9 @@ spec:
       volumes:
       - name: provider-token
         emptyDir: {}
+      - name: cloud-provider-config
+        secret:
+          secretName: cloud-config
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

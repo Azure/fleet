@@ -1,0 +1,12 @@
+{
+  "cloud": "AzurePublicCloud",
+  "tenantId": "00000000-0000-0000-0000-000000000000",
+  "subscriptionId": "00000000-0000-0000-0000-000000000000",
+  "useManagedIdentityExtension": true,
+  "clusterResourceGroup": "test-rg",
+  "location": "westus",
+  clusterName: "test-cluster",
+  "vnetName": "test-vnet",
+  "vnetResourceGroup": "test-rg",
+  "cloudProviderBackoff": false
+}
