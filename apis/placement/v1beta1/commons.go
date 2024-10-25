@@ -50,6 +50,15 @@ const (
 	// The format is {workPrefix}-configMap-uuid
 	WorkNameWithConfigEnvelopeFmt = "%s-configmap-%s"
 
+	// ParentClusterResourceOverrideSnapshotHashAnnotation is the annotation to work that contains the hash of the parent cluster resource override snapshot list.
+	ParentClusterResourceOverrideSnapshotHashAnnotation = fleetPrefix + "parent-cluster-resource-override-snapshot-hash"
+
+	// ParentResourceOverrideSnapshotHashAnnotation is the annotation to work that contains the hash of the parent resource override snapshot list.
+	ParentResourceOverrideSnapshotHashAnnotation = fleetPrefix + "parent-resource-override-snapshot-hash"
+
+	// ParentResourceSnapshotNameAnnotation is the annotation applied to work that contains the name of the master resource snapshot that generates the work.
+	ParentResourceSnapshotNameAnnotation = fleetPrefix + "parent-resource-snapshot-name"
+
 	// ParentResourceSnapshotIndexLabel is the label applied to work that contains the index of the resource snapshot that generates the work.
 	ParentResourceSnapshotIndexLabel = fleetPrefix + "parent-resource-snapshot-index"
 
