@@ -85,7 +85,7 @@ var _ = Describe("scheduler - cluster resource binding watcher", Ordered, func()
 					},
 				},
 			}
-			// create cluster resource binding.
+			// Create cluster resource binding.
 			Expect(hubClient.Create(ctx, &crb)).Should(Succeed(), "Failed to create cluster resource binding")
 		})
 

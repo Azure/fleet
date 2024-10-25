@@ -380,8 +380,7 @@ func (f *framework) markAsUnscheduledFor(ctx context.Context, bindings []*placem
 					// We will just retry for conflict errors since the scheduler holds the truth here.
 					if apierrors.IsConflict(err) {
 						// get the binding again to make sure we have the latest version to update again.
-						getErr := f.client.Get(cctx, client.ObjectKeyFromObject(unscheduledBinding), unscheduledBinding)
-						if getErr != nil {
+						if getErr := f.client.Get(cctx, client.ObjectKeyFromObject(unscheduledBinding), unscheduledBinding); getErr != nil {
 							return getErr
 						}
 					}
@@ -409,8 +408,7 @@ func (f *framework) removeFinalizer(ctx context.Context, bindings []*placementv1
 					// We will retry on conflicts.
 					if apierrors.IsConflict(err) {
 						// get the binding again to make sure we have the latest version to update again.
-						getErr := f.client.Get(cctx, client.ObjectKeyFromObject(deletingBinding), deletingBinding)
-						if getErr != nil {
+						if getErr := f.client.Get(cctx, client.ObjectKeyFromObject(deletingBinding), deletingBinding); getErr != nil {
 							return getErr
 						}
 					}

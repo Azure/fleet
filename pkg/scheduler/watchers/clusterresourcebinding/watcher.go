@@ -47,9 +47,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, controller.NewAPIServerError(true, client.IgnoreNotFound(err))
 	}
 
-	// Check if the CRB has been deleted and has the scheduler finalizer.
+	// Check if the CRB has been deleted and has the scheduler CRB cleanup finalizer.
 	if crb.DeletionTimestamp != nil && controllerutil.ContainsFinalizer(crb, fleetv1beta1.SchedulerCRBCleanupFinalizer) {
-		// The CRB has been deleted and still has the scheduler finalizer; enqueue it's corresponding CRP
+		// The CRB has been deleted and still has the scheduler CRB cleanup finalizer; enqueue it's corresponding CRP
 		// for the scheduler to process.
 		crpName, exist := crb.GetLabels()[fleetv1beta1.CRPTrackingLabel]
 		if !exist {
