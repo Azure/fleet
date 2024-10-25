@@ -282,7 +282,7 @@ func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, crp *fleetv1beta1
 		return controller.NewAPIServerError(false, err)
 	}
 
-	// Remove scheduler reconcile finalizer from deleting bindings.
+	// Remove scheduler CRB cleanup finalizer from deleting bindings.
 	for idx := range bindingList.Items {
 		binding := &bindingList.Items[idx]
 		controllerutil.RemoveFinalizer(binding, fleetv1beta1.SchedulerCRBCleanupFinalizer)

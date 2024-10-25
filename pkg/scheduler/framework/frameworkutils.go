@@ -54,7 +54,7 @@ func classifyBindings(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, 
 
 		switch {
 		case !binding.DeletionTimestamp.IsZero():
-			// we need remove scheduler reconcile finalizer from deleting ClusterResourceBindings.
+			// we need remove scheduler CRB cleanup finalizer from deleting ClusterResourceBindings.
 			deleting = append(deleting, &binding)
 		case binding.Spec.State == placementv1beta1.BindingStateUnscheduled:
 			// we need to remember those bindings so that we will not create another one.

@@ -12,7 +12,7 @@ import (
 
 const (
 	// SchedulerCRBCleanupFinalizer is a finalizer added to ClusterResourceBindings to ensure we can look up the
-	// corresponding CRP for deleting ClusterResourceBindings in a scheduling cycle.
+	// corresponding CRP name for deleting ClusterResourceBindings to trigger a new scheduling cycle.
 	SchedulerCRBCleanupFinalizer = fleetPrefix + "scheduler-crb-cleanup"
 )
 

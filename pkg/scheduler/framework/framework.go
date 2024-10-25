@@ -295,7 +295,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, p
 	// result so that we won't have a ever increasing chain of flip flop bindings.
 	bound, scheduled, obsolete, unscheduled, dangling, deleting := classifyBindings(policy, bindings, clusters)
 
-	// Remove finalizers on all deleting bindings.
+	// Remove scheduler CRB cleanup finalizer on all deleting bindings.
 	if err := f.removeFinalizer(ctx, deleting); err != nil {
 		klog.ErrorS(err, "Failed to remove finalizers from deleting bindings", "clusterSchedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, err
@@ -392,7 +392,7 @@ func (f *framework) markAsUnscheduledFor(ctx context.Context, bindings []*placem
 	return errs.Wait()
 }
 
-// removeFinalizer removes all finalizers from ClusterResourceBinding.
+// removeFinalizer removes scheduler CRB cleanup finalizer from ClusterResourceBindings.
 func (f *framework) removeFinalizer(ctx context.Context, bindings []*placementv1beta1.ClusterResourceBinding) error {
 	// issue all the update requests in parallel
 	errs, cctx := errgroup.WithContext(ctx)
