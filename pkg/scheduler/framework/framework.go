@@ -24,6 +24,7 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -287,12 +288,18 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, p
 	// * dangling bindings, i.e., bindings that are associated with a cluster that is no longer
 	//   in a normally operating state (the cluster has left the fleet, or is in the state of leaving),
 	//   yet has not been marked as unscheduled by the scheduler; and
-	//
+	// * deleting bindings, i.e., bindings that have a deletionTimeStamp on them.
 	// Any deleted binding is also ignored.
 	// Note that bindings marked as unscheduled are ignored by the scheduler, as they
 	// are irrelevant to the scheduling cycle. However, we will reconcile them with the latest scheduling
 	// result so that we won't have a ever increasing chain of flip flop bindings.
-	bound, scheduled, obsolete, unscheduled, dangling := classifyBindings(policy, bindings, clusters)
+	bound, scheduled, obsolete, unscheduled, dangling, deleting := classifyBindings(policy, bindings, clusters)
+
+	// Remove scheduler CRB cleanup finalizer on all deleting bindings.
+	if err := f.removeFinalizer(ctx, deleting); err != nil {
+		klog.ErrorS(err, "Failed to remove finalizers from deleting bindings", "clusterSchedulingPolicySnapshot", policyRef)
+		return ctrl.Result{}, err
+	}
 
 	// Mark all dangling bindings as unscheduled.
 	if err := f.markAsUnscheduledFor(ctx, dangling); err != nil {
@@ -373,7 +380,39 @@ func (f *framework) markAsUnscheduledFor(ctx context.Context, bindings []*placem
 					// We will just retry for conflict errors since the scheduler holds the truth here.
 					if apierrors.IsConflict(err) {
 						// get the binding again to make sure we have the latest version to update again.
-						return f.client.Get(cctx, client.ObjectKeyFromObject(unscheduledBinding), unscheduledBinding)
+						getErr := f.client.Get(cctx, client.ObjectKeyFromObject(unscheduledBinding), unscheduledBinding)
+						if getErr != nil {
+							return getErr
+						}
+					}
+					return err
+				})
+		})
+	}
+	return errs.Wait()
+}
+
+// removeFinalizer removes scheduler CRB cleanup finalizer from ClusterResourceBindings.
+func (f *framework) removeFinalizer(ctx context.Context, bindings []*placementv1beta1.ClusterResourceBinding) error {
+	// issue all the update requests in parallel
+	errs, cctx := errgroup.WithContext(ctx)
+	for _, binding := range bindings {
+		deletingBinding := binding
+		errs.Go(func() error {
+			return retry.OnError(retry.DefaultBackoff,
+				func(err error) bool {
+					return apierrors.IsServiceUnavailable(err) || apierrors.IsServerTimeout(err) || apierrors.IsConflict(err)
+				},
+				func() error {
+					controllerutil.RemoveFinalizer(deletingBinding, placementv1beta1.SchedulerCRBCleanupFinalizer)
+					err := f.client.Update(cctx, deletingBinding, &client.UpdateOptions{})
+					// We will retry on conflicts.
+					if apierrors.IsConflict(err) {
+						// get the binding again to make sure we have the latest version to update again.
+						getErr := f.client.Get(cctx, client.ObjectKeyFromObject(deletingBinding), deletingBinding)
+						if getErr != nil {
+							return getErr
+						}
 					}
 					return err
 				})

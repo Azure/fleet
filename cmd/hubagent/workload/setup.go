@@ -39,6 +39,7 @@ import (
 	"go.goms.io/fleet/pkg/scheduler/framework"
 	"go.goms.io/fleet/pkg/scheduler/profile"
 	"go.goms.io/fleet/pkg/scheduler/queue"
+	schedulercrbwatcher "go.goms.io/fleet/pkg/scheduler/watchers/clusterresourcebinding"
 	schedulercrpwatcher "go.goms.io/fleet/pkg/scheduler/watchers/clusterresourceplacement"
 	schedulercspswatcher "go.goms.io/fleet/pkg/scheduler/watchers/clusterschedulingpolicysnapshot"
 	"go.goms.io/fleet/pkg/scheduler/watchers/membercluster"
@@ -275,6 +276,15 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			SchedulerWorkQueue: defaultSchedulingQueue,
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up clusterSchedulingPolicySnapshot watcher for scheduler")
+			return err
+		}
+
+		klog.Info("Setting up the clusterResourceBinding watcher for scheduler")
+		if err := (&schedulercrbwatcher.Reconciler{
+			Client:             mgr.GetClient(),
+			SchedulerWorkQueue: defaultSchedulingQueue,
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "Unable to set up clusterResourceBinding watcher for scheduler")
 			return err
 		}
 
