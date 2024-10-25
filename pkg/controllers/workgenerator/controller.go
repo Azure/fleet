@@ -392,24 +392,24 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 	if err != nil {
 		if errors.Is(err, errResourceSnapshotNotFound) {
 			// the resourceIndex is deleted but the works might still be up to date with the binding.
-			if areAllWorkSynced(existingWorks, resourceBinding.Spec.ResourceSnapshotName, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash) {
+			if areAllWorkSynced(existingWorks, resourceBinding, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash) {
 				klog.V(2).InfoS("All the works are synced with the resourceBinding even if the resource snapshot index is removed", "resourceBinding", resourceBindingRef)
-				return false, false, nil
+				return true, false, nil
 			}
-			return false, false, controller.NewUserError(err)
+			return true, false, controller.NewUserError(err)
 		}
 		// TODO(RZ): handle errResourceNotFullyCreated error so we don't need to wait for all the snapshots to be created
-		return false, false, err
+		return true, false, err
 	}
 
 	croMap, err := r.fetchClusterResourceOverrideSnapshots(ctx, resourceBinding)
 	if err != nil {
-		return false, false, err
+		return true, false, err
 	}
 
 	roMap, err := r.fetchResourceOverrideSnapshots(ctx, resourceBinding)
 	if err != nil {
-		return false, false, err
+		return true, false, err
 	}
 
 	// issue all the create/update requests for the corresponding works for each snapshot in parallel
@@ -422,7 +422,7 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 		workNamePrefix, err := getWorkNamePrefixFromSnapshotName(snapshot)
 		if err != nil {
 			klog.ErrorS(err, "Encountered a mal-formatted resource snapshot", "resourceSnapshot", klog.KObj(snapshot))
-			return false, false, err
+			return true, false, err
 		}
 		var simpleManifests []fleetv1beta1.Manifest
 		for j := range snapshot.Spec.SelectedResources {
@@ -505,10 +505,20 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 }
 
 // areAllWorkSynced checks if all the works are synced with the resource binding.
-func areAllWorkSynced(existingWorks map[string]*fleetv1beta1.Work, resourceSnapshotIndex, _, _ string) bool {
+func areAllWorkSynced(existingWorks map[string]*fleetv1beta1.Work, resourceBinding *fleetv1beta1.ClusterResourceBinding, _, _ string) bool {
 	// TODO: check resourceOverrideSnapshotHash and  clusterResourceOverrideSnapshotHash after all the work has the ParentResourceOverrideSnapshotHashAnnotation and ParentClusterResourceOverrideSnapshotHashAnnotation
+	resourceSnapshotName := resourceBinding.Spec.ResourceSnapshotName
 	for _, work := range existingWorks {
-		if work.GetLabels()[fleetv1beta1.ParentResourceSnapshotIndexLabel] != resourceSnapshotIndex {
+		recordedName, exist := work.Annotations[fleetv1beta1.ParentResourceSnapshotNameAnnotation]
+		if !exist {
+			// TODO: remove this block after all the work has the ParentResourceSnapshotNameAnnotation
+			// the parent resource snapshot name is not recorded in the work, we need to construct it from the labels
+			crpName := resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel]
+			index, _ := labels.ExtractResourceSnapshotIndexFromWork(work)
+			recordedName = fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, crpName, index)
+		}
+		if recordedName != resourceSnapshotName {
+			klog.V(2).InfoS("The work is not synced with the resourceBinding", "work", klog.KObj(work), "resourceBinding", klog.KObj(resourceBinding), "annotationExist", exist, "recordedName", recordedName, "resourceSnapshotName", resourceSnapshotName)
 			return false
 		}
 	}
@@ -576,6 +586,7 @@ func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePre
 					fleetv1beta1.EnvelopeNamespaceLabel:           envelopeObj.GetNamespace(),
 				},
 				Annotations: map[string]string{
+					fleetv1beta1.ParentResourceSnapshotNameAnnotation:                resourceBinding.Spec.ResourceSnapshotName,
 					fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        resourceOverrideSnapshotHash,
 					fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: clusterResourceOverrideSnapshotHash,
 				},
@@ -604,6 +615,7 @@ func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePre
 	}
 	work := workList.Items[0]
 	work.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel] = resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel]
+	work.Annotations[fleetv1beta1.ParentResourceSnapshotNameAnnotation] = resourceBinding.Spec.ResourceSnapshotName
 	work.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] = resourceOverrideSnapshotHash
 	work.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] = clusterResourceOverrideSnapshotHash
 	work.Spec.Workload.Manifests = manifest
@@ -624,6 +636,7 @@ func generateSnapshotWorkObj(workName string, resourceBinding *fleetv1beta1.Clus
 				fleetv1beta1.ParentResourceSnapshotIndexLabel: resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel],
 			},
 			Annotations: map[string]string{
+				fleetv1beta1.ParentResourceSnapshotNameAnnotation:                resourceBinding.Spec.ResourceSnapshotName,
 				fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        resourceOverrideSnapshotHash,
 				fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: clusterResourceOverrideSnapshotHash,
 			},
@@ -679,8 +692,9 @@ func (r *Reconciler) upsertWork(ctx context.Context, newWork, existingWork *flee
 		}
 		klog.V(2).InfoS("Work is already associated with the desired resourceSnapshot but still not having the right override snapshots", "resourceIndex", resourceIndex, "work", workObj, "resourceSnapshot", resourceSnapshotObj)
 	}
-	// need to copy the new work to the existing work, only 4 possible changes:
+	// need to copy the new work to the existing work, only 5 possible changes:
 	existingWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel] = newWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
+	existingWork.Annotations[fleetv1beta1.ParentResourceSnapshotNameAnnotation] = newWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation]
 	existingWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] = newWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation]
 	existingWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] = newWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation]
 	existingWork.Spec.Workload.Manifests = newWork.Spec.Workload.Manifests
