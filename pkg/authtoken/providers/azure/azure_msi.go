@@ -8,13 +8,13 @@ import (
 	"context"
 	"fmt"
 
-	"go.goms.io/fleet/pkg/authtoken"
-
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
+
+	"go.goms.io/fleet/pkg/authtoken"
 )
 
 const (
