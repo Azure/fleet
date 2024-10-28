@@ -7,6 +7,7 @@ package azure
 import (
 	"context"
 	"fmt"
+
 	"go.goms.io/fleet/pkg/authtoken"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"

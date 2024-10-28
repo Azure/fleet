@@ -7,8 +7,9 @@ package secret
 import (
 	"context"
 	"fmt"
-	"go.goms.io/fleet/pkg/authtoken"
 	"time"
+
+	"go.goms.io/fleet/pkg/authtoken"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
