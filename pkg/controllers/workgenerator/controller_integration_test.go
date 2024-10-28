@@ -497,14 +497,8 @@ var _ = Describe("Test Work Generator Controller", func() {
 								},
 								{
 									Type:               string(placementv1beta1.ResourceBindingOverridden),
-									Status:             metav1.ConditionTrue,
-									Reason:             condition.OverrideNotSpecifiedReason,
-									ObservedGeneration: binding.GetGeneration(),
-								},
-								{
-									Type:               string(placementv1beta1.ResourceBindingWorkSynchronized),
 									Status:             metav1.ConditionFalse,
-									Reason:             condition.SyncWorkFailedReason,
+									Reason:             condition.OverriddenFailedReason,
 									ObservedGeneration: binding.GetGeneration(),
 								},
 							},

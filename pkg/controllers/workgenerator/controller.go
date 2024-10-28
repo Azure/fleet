@@ -136,7 +136,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 
 	workUpdated := false
 	overrideSucceeded := false
-	resourceBinding.Status.FailedPlacements = nil
 	// list all the corresponding works
 	works, syncErr := r.listAllWorksAssociated(ctx, &resourceBinding)
 	if syncErr == nil {
@@ -147,6 +146,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 	for i := condition.OverriddenCondition; i < condition.TotalCondition; i++ {
 		resourceBinding.RemoveCondition(string(i.ResourceBindingConditionType()))
 	}
+	resourceBinding.Status.FailedPlacements = nil
 	if overrideSucceeded {
 		overrideReason := condition.OverriddenSucceededReason
 		overrideMessage := "Successfully applied the override rules on the resources"
