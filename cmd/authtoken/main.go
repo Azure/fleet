@@ -16,15 +16,14 @@ import (
 	"go.goms.io/fleet/pkg/authtoken"
 	"go.goms.io/fleet/pkg/authtoken/providers/azure"
 	"go.goms.io/fleet/pkg/authtoken/providers/secret"
-	"go.goms.io/fleet/pkg/interfaces"
 )
 
 var (
 	configPath string
 )
 
-func parseArgs() (interfaces.AuthTokenProvider, error) {
-	var tokenProvider interfaces.AuthTokenProvider
+func parseArgs() (authtoken.AuthTokenProvider, error) {
+	var tokenProvider authtoken.AuthTokenProvider
 	rootCmd := &cobra.Command{Use: "refreshtoken", Args: cobra.NoArgs}
 	rootCmd.PersistentFlags().StringVar(&configPath, "file-path", "/config/token", "token file path")
 

@@ -11,8 +11,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"go.goms.io/fleet/pkg/interfaces"
 )
 
 type BufferWriterFactory struct {
@@ -43,7 +41,7 @@ func (c BufferWriter) Close() error {
 }
 
 func TestWriteToken(t *testing.T) {
-	token := interfaces.AuthToken{
+	token := AuthToken{
 		Token:     "test token",
 		ExpiresOn: time.Now(),
 	}

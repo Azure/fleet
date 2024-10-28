@@ -10,22 +10,20 @@ import (
 	"time"
 
 	"k8s.io/klog/v2"
-
-	"go.goms.io/fleet/pkg/interfaces"
 )
 
-type RefreshDurationFuncType func(token interfaces.AuthToken) time.Duration
+type RefreshDurationFuncType func(token AuthToken) time.Duration
 type CreateTickerFuncType func(time.Duration) <-chan time.Time
 
 type Refresher struct {
-	provider         interfaces.AuthTokenProvider
-	writer           interfaces.AuthTokenWriter
+	provider         AuthTokenProvider
+	writer           AuthTokenWriter
 	refreshCalculate RefreshDurationFuncType
 	createTicker     CreateTickerFuncType
 }
 
-func NewAuthTokenRefresher(tokenProvider interfaces.AuthTokenProvider,
-	writer interfaces.AuthTokenWriter,
+func NewAuthTokenRefresher(tokenProvider AuthTokenProvider,
+	writer AuthTokenWriter,
 	refreshCalculate RefreshDurationFuncType,
 	createTicker CreateTickerFuncType) *Refresher {
 	return &Refresher{
@@ -37,14 +35,14 @@ func NewAuthTokenRefresher(tokenProvider interfaces.AuthTokenProvider,
 }
 
 var (
-	DefaultRefreshDurationFunc = func(token interfaces.AuthToken) time.Duration {
+	DefaultRefreshDurationFunc = func(token AuthToken) time.Duration {
 		return time.Until(token.ExpiresOn) / 2
 	}
 	DefaultCreateTicker    = time.Tick
 	DefaultRefreshDuration = time.Second * 30
 )
 
-func (at *Refresher) callFetchToken(ctx context.Context) (interfaces.AuthToken, error) {
+func (at *Refresher) callFetchToken(ctx context.Context) (AuthToken, error) {
 	klog.V(2).InfoS("FetchToken start")
 	deadline := time.Now().Add(DefaultRefreshDuration)
 	fetchTokenContext, cancel := context.WithDeadline(ctx, deadline)
