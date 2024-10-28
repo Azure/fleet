@@ -9,18 +9,22 @@ import (
 	"time"
 )
 
-// AuthToken: Authorization Token containing token name as a string and its expiration time
+// An AuthToken is an authorization token for the fleet
 type AuthToken struct {
-	Token     string
-	ExpiresOn time.Time
+	Token     string    // name of token
+	ExpiresOn time.Time // expiration time of token
 }
 
-// AuthTokenProvider: Interface with a function that takes in a context input in order to fetch an AuthToken
+// AuthTokenProvider defines a method for fetching an AuthToken
 type AuthTokenProvider interface {
+	// FetchToken fetches an AuthToken
+	// It returns an error if it is unable to fetch an AuthToken for the given input context
 	FetchToken(ctx context.Context) (AuthToken, error)
 }
 
-// AuthTokenWriter: Interface with a function to write an AuthToken
+// AuthTokenWriter defines a method for writing an AuthToken
 type AuthTokenWriter interface {
+	// WriteToken writes an AuthToken
+	// It returns an error if it is unable to write the AuthToken
 	WriteToken(token AuthToken) error
 }
