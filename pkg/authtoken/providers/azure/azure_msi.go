@@ -25,7 +25,7 @@ type AuthTokenProvider struct {
 	Scope    string
 }
 
-func New(clientID, scope string) authtoken.AuthTokenProvider {
+func New(clientID, scope string) authtoken.Provider {
 	if scope == "" {
 		scope = aksScope
 	}

@@ -28,7 +28,7 @@ type secretAuthTokenProvider struct {
 	secretNamespace string
 }
 
-func New(secretName, namespace string) (authtoken.AuthTokenProvider, error) {
+func New(secretName, namespace string) (authtoken.Provider, error) {
 	client, err := getClient()
 	if err != nil {
 		return nil, fmt.Errorf("an error occurred will creating client: %w", err)

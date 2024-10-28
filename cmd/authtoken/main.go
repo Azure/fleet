@@ -22,8 +22,8 @@ var (
 	configPath string
 )
 
-func parseArgs() (authtoken.AuthTokenProvider, error) {
-	var tokenProvider authtoken.AuthTokenProvider
+func parseArgs() (authtoken.Provider, error) {
+	var tokenProvider authtoken.Provider
 	rootCmd := &cobra.Command{Use: "refreshtoken", Args: cobra.NoArgs}
 	rootCmd.PersistentFlags().StringVar(&configPath, "file-path", "/config/token", "token file path")
 

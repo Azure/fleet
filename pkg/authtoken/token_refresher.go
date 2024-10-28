@@ -16,14 +16,14 @@ type RefreshDurationFuncType func(token AuthToken) time.Duration
 type CreateTickerFuncType func(time.Duration) <-chan time.Time
 
 type Refresher struct {
-	provider         AuthTokenProvider
-	writer           AuthTokenWriter
+	provider         Provider
+	writer           Writer
 	refreshCalculate RefreshDurationFuncType
 	createTicker     CreateTickerFuncType
 }
 
-func NewAuthTokenRefresher(tokenProvider AuthTokenProvider,
-	writer AuthTokenWriter,
+func NewAuthTokenRefresher(tokenProvider Provider,
+	writer Writer,
 	refreshCalculate RefreshDurationFuncType,
 	createTicker CreateTickerFuncType) *Refresher {
 	return &Refresher{
