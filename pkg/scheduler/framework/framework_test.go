@@ -65,7 +65,7 @@ var (
 	lessFuncFilteredCluster = func(filtered1, filtered2 *filteredClusterWithStatus) bool {
 		return filtered1.cluster.Name < filtered2.cluster.Name
 	}
-	lessFuncBinding = func(binding1, binding2 *placementv1beta1.ClusterResourceBinding) bool {
+	lessFuncBinding = func(binding1, binding2 placementv1beta1.ClusterResourceBinding) bool {
 		return binding1.Name < binding2.Name
 	}
 )
@@ -503,12 +503,7 @@ func TestUpdateBindingRemoveFinalizerAndUpdate(t *testing.T) {
 		t.Fatalf("List cluster resource boundBindings returned %v, want no error", err)
 	}
 
-	got := make([]*placementv1beta1.ClusterResourceBinding, len(clusterResourceBindingList.Items))
-	for i := range clusterResourceBindingList.Items {
-		got[i] = &clusterResourceBindingList.Items[i]
-	}
-
-	want := []*placementv1beta1.ClusterResourceBinding{
+	want := []placementv1beta1.ClusterResourceBinding{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: bindingName,
@@ -535,7 +530,7 @@ func TestUpdateBindingRemoveFinalizerAndUpdate(t *testing.T) {
 		},
 	}
 
-	if diff := cmp.Diff(got, want, ignoreTypeMetaAPIVersionKindFields, ignoreObjectMetaResourceVersionField, cmpopts.SortSlices(lessFuncBinding)); diff != "" {
+	if diff := cmp.Diff(clusterResourceBindingList.Items, want, ignoreTypeMetaAPIVersionKindFields, ignoreObjectMetaResourceVersionField, cmpopts.SortSlices(lessFuncBinding)); diff != "" {
 		t.Errorf("diff (-got, +want): %s", diff)
 	}
 }
