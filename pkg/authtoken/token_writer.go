@@ -10,8 +10,6 @@ import (
 	"os"
 
 	"k8s.io/klog/v2"
-
-	"go.goms.io/fleet/pkg/interfaces"
 )
 
 type Factory struct {
@@ -30,17 +28,17 @@ func (w Factory) Create() (io.WriteCloser, error) {
 	return wc, nil
 }
 
-type Writer struct {
+type TokenWriter struct {
 	writerFactory func() (io.WriteCloser, error)
 }
 
-func NewWriter(factory func() (io.WriteCloser, error)) interfaces.AuthTokenWriter {
-	return &Writer{
+func NewWriter(factory func() (io.WriteCloser, error)) Writer {
+	return &TokenWriter{
 		writerFactory: factory,
 	}
 }
 
-func (w *Writer) WriteToken(token interfaces.AuthToken) error {
+func (w *TokenWriter) WriteToken(token AuthToken) error {
 	writer, err := w.writerFactory()
 	if err != nil {
 		return err

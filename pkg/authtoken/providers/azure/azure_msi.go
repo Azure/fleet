@@ -14,7 +14,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 
-	"go.goms.io/fleet/pkg/interfaces"
+	"go.goms.io/fleet/pkg/authtoken"
 )
 
 const (
@@ -26,7 +26,7 @@ type AuthTokenProvider struct {
 	Scope    string
 }
 
-func New(clientID, scope string) interfaces.AuthTokenProvider {
+func New(clientID, scope string) authtoken.Provider {
 	if scope == "" {
 		scope = aksScope
 	}
@@ -37,8 +37,8 @@ func New(clientID, scope string) interfaces.AuthTokenProvider {
 }
 
 // FetchToken gets a new token to make request to the associated fleet' hub cluster.
-func (a *AuthTokenProvider) FetchToken(ctx context.Context) (interfaces.AuthToken, error) {
-	token := interfaces.AuthToken{}
+func (a *AuthTokenProvider) FetchToken(ctx context.Context) (authtoken.AuthToken, error) {
+	token := authtoken.AuthToken{}
 	opts := &azidentity.ManagedIdentityCredentialOptions{ID: azidentity.ClientID(a.ClientID)}
 
 	klog.V(2).InfoS("FetchToken", "client ID", a.ClientID)

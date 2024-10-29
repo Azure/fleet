@@ -16,7 +16,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"go.goms.io/fleet/pkg/interfaces"
+	"go.goms.io/fleet/pkg/authtoken"
 )
 
 var (
@@ -29,7 +29,7 @@ type secretAuthTokenProvider struct {
 	secretNamespace string
 }
 
-func New(secretName, namespace string) (interfaces.AuthTokenProvider, error) {
+func New(secretName, namespace string) (authtoken.Provider, error) {
 	client, err := getClient()
 	if err != nil {
 		return nil, fmt.Errorf("an error occurred will creating client: %w", err)
@@ -41,9 +41,9 @@ func New(secretName, namespace string) (interfaces.AuthTokenProvider, error) {
 	}, nil
 }
 
-func (s *secretAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.AuthToken, error) {
+func (s *secretAuthTokenProvider) FetchToken(ctx context.Context) (authtoken.AuthToken, error) {
 	klog.V(2).InfoS("fetching token from secret", "secret", klog.KRef(s.secretName, s.secretNamespace))
-	token := interfaces.AuthToken{}
+	token := authtoken.AuthToken{}
 	secret, err := s.fetchSecret(ctx)
 	if err != nil {
 		return token, fmt.Errorf("cannot get the secret: %w", err)
