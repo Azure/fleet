@@ -65,6 +65,9 @@ var (
 	lessFuncFilteredCluster = func(filtered1, filtered2 *filteredClusterWithStatus) bool {
 		return filtered1.cluster.Name < filtered2.cluster.Name
 	}
+	lessFuncBinding = func(binding1, binding2 *placementv1beta1.ClusterResourceBinding) bool {
+		return binding1.Name < binding2.Name
+	}
 )
 
 // A few utilities for generating a large number of objects.
@@ -380,8 +383,8 @@ func TestClassifyBindings(t *testing.T) {
 	}
 }
 
-// TestMarkAsUnscheduledFor tests the markAsUnscheduledFor method.
-func TestMarkAsUnscheduledFor(t *testing.T) {
+// TestUpdateBindingsMarkAsUnscheduledForAndUpdate tests the updateBinding method by passing markUnscheduledForAndUpdate update function.
+func TestUpdateBindingsMarkAsUnscheduledForAndUpdate(t *testing.T) {
 	boundBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: bindingName,
@@ -408,10 +411,10 @@ func TestMarkAsUnscheduledFor(t *testing.T) {
 	f := &framework{
 		client: fakeClient,
 	}
-	// call markAsUnscheduledFor
+	// call markAsUnscheduledForAndUpdate
 	ctx := context.Background()
-	if err := f.markAsUnscheduledFor(ctx, []*placementv1beta1.ClusterResourceBinding{&boundBinding, &scheduledBinding}); err != nil {
-		t.Fatalf("markAsUnscheduledFor() = %v, want no error", err)
+	if err := f.updateBindings(ctx, []*placementv1beta1.ClusterResourceBinding{&boundBinding, &scheduledBinding}, markUnscheduledForAndUpdate); err != nil {
+		t.Fatalf("updateBindings() = %v, want no error", err)
 	}
 	// check if the boundBinding has been updated
 	if err := fakeClient.Get(ctx, types.NamespacedName{Name: bindingName}, &boundBinding); err != nil {
@@ -448,6 +451,92 @@ func TestMarkAsUnscheduledFor(t *testing.T) {
 	}
 	if diff := cmp.Diff(scheduledBinding, want, ignoreTypeMetaAPIVersionKindFields, ignoreObjectMetaResourceVersionField); diff != "" {
 		t.Errorf("scheduledBinding diff (-got, +want): %s", diff)
+	}
+}
+
+func TestUpdateBindingRemoveFinalizerAndUpdate(t *testing.T) {
+	boundBinding := placementv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       bindingName,
+			Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+		},
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateBound,
+		},
+	}
+	scheduledBinding := placementv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       altBindingName,
+			Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+		},
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateScheduled,
+		},
+	}
+	unScheduledBinding := placementv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       anotherBindingName,
+			Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+		},
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateUnscheduled,
+		},
+	}
+
+	// setup fake client with bindings
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme.Scheme).
+		WithObjects(&boundBinding, &scheduledBinding, &unScheduledBinding).
+		Build()
+	// Construct framework manually instead of using NewFramework() to avoid mocking the controller manager.
+	f := &framework{
+		client: fakeClient,
+	}
+	// call markAsUnscheduledForAndUpdate
+	ctx := context.Background()
+	if err := f.updateBindings(ctx, []*placementv1beta1.ClusterResourceBinding{&boundBinding, &scheduledBinding, &unScheduledBinding}, removeFinalizerAndUpdate); err != nil {
+		t.Fatalf("updateBindings() = %v, want no error", err)
+	}
+
+	var clusterResourceBindingList placementv1beta1.ClusterResourceBindingList
+	if err := f.client.List(ctx, &clusterResourceBindingList); err != nil {
+		t.Fatalf("List cluster resource boundBindings returned %v, want no error", err)
+	}
+
+	got := make([]*placementv1beta1.ClusterResourceBinding, len(clusterResourceBindingList.Items))
+	for i := range clusterResourceBindingList.Items {
+		got = append(got, &clusterResourceBindingList.Items[i])
+	}
+
+	want := []*placementv1beta1.ClusterResourceBinding{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: bindingName,
+			},
+			Spec: placementv1beta1.ResourceBindingSpec{
+				State: placementv1beta1.BindingStateBound,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: altBindingName,
+			},
+			Spec: placementv1beta1.ResourceBindingSpec{
+				State: placementv1beta1.BindingStateScheduled,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: anotherBindingName,
+			},
+			Spec: placementv1beta1.ResourceBindingSpec{
+				State: placementv1beta1.BindingStateUnscheduled,
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want, ignoreTypeMetaAPIVersionKindFields, ignoreObjectMetaResourceVersionField, cmpopts.SortSlices(lessFuncBinding)); diff != "" {
+		t.Errorf("diff (-got, +want): %s", diff)
 	}
 }
 
