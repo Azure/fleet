@@ -505,7 +505,7 @@ func TestUpdateBindingRemoveFinalizerAndUpdate(t *testing.T) {
 
 	got := make([]*placementv1beta1.ClusterResourceBinding, len(clusterResourceBindingList.Items))
 	for i := range clusterResourceBindingList.Items {
-		got = append(got, &clusterResourceBindingList.Items[i])
+		got[i] = &clusterResourceBindingList.Items[i]
 	}
 
 	want := []*placementv1beta1.ClusterResourceBinding{
