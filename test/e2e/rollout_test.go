@@ -472,6 +472,122 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 	})
 
+	Context("Test a CRP place workload successful and update it to be failed and then delete the resource snapshot,"+
+		"rollout should eventually be successful after we correct the image", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		workNamespace := appNamespace()
+		var wantSelectedResources []placementv1beta1.ResourceIdentifier
+		var testDeployment appv1.Deployment
+
+		BeforeAll(func() {
+			// Create the test resources.
+			readDeploymentTestManifest(&testDeployment)
+			wantSelectedResources = []placementv1beta1.ResourceIdentifier{
+				{
+					Kind:    utils.NamespaceKind,
+					Name:    workNamespace.Name,
+					Version: corev1.SchemeGroupVersion.Version,
+				},
+				{
+					Group:     appv1.SchemeGroupVersion.Group,
+					Version:   appv1.SchemeGroupVersion.Version,
+					Kind:      utils.DeploymentKind,
+					Name:      testDeployment.Name,
+					Namespace: workNamespace.Name,
+				},
+			}
+		})
+
+		It("create the deployment resource in the namespace", func() {
+			Expect(hubClient.Create(ctx, &workNamespace)).To(Succeed(), "Failed to create namespace %s", workNamespace.Name)
+			testDeployment.Namespace = workNamespace.Name
+			Expect(hubClient.Create(ctx, &testDeployment)).To(Succeed(), "Failed to create test deployment %s", testDeployment.Name)
+		})
+
+		It("create the CRP that select the namespace", func() {
+			crp := buildCRPForSafeRollout()
+			crp.Spec.RevisionHistoryLimit = ptr.To(int32(1))
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
+
+		It("should update CRP status as expected", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should place the resources on all member clusters", func() {
+			for idx := range allMemberClusters {
+				memberCluster := allMemberClusters[idx]
+				workResourcesPlacedActual := waitForDeploymentPlacementToReady(memberCluster, &testDeployment)
+				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+			}
+		})
+
+		It("change the image name in deployment, to make it unavailable", func() {
+			Eventually(func() error {
+				var dep appv1.Deployment
+				err := hubClient.Get(ctx, types.NamespacedName{Name: testDeployment.Name, Namespace: testDeployment.Namespace}, &dep)
+				if err != nil {
+					return err
+				}
+				dep.Spec.Template.Spec.Containers[0].Image = randomImageName
+				return hubClient.Update(ctx, &dep)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to change the image name in deployment")
+		})
+
+		It("should update CRP status on deployment failed as expected", func() {
+			failedDeploymentResourceIdentifier := placementv1beta1.ResourceIdentifier{
+				Group:     appv1.SchemeGroupVersion.Group,
+				Version:   appv1.SchemeGroupVersion.Version,
+				Kind:      utils.DeploymentKind,
+				Name:      testDeployment.Name,
+				Namespace: testDeployment.Namespace,
+			}
+			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDeploymentResourceIdentifier, allMemberClusterNames, "1", 2)
+			Eventually(crpStatusActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("change the image name in deployment, to roll over the resourcesnapshot", func() {
+			crsList := &placementv1beta1.ClusterResourceSnapshotList{}
+			Expect(hubClient.List(ctx, crsList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName})).Should(Succeed(), "Failed to list the resourcesnapshot")
+			Expect(len(crsList.Items) == 1).Should(BeTrue())
+			oldCRS := crsList.Items[0].Name
+			Expect(hubClient.Get(ctx, types.NamespacedName{Name: testDeployment.Name, Namespace: testDeployment.Namespace}, &testDeployment)).Should(Succeed(), "Failed to get deployment")
+			testDeployment.Spec.Template.Spec.Containers[0].Image = "extra-snapshot"
+			Expect(hubClient.Update(ctx, &testDeployment)).Should(Succeed(), "Failed to change the image name in deployment")
+			// wait for the new resourcesnapshot to be created
+			Eventually(func() bool {
+				Expect(hubClient.List(ctx, crsList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName})).Should(Succeed(), "Failed to list the resourcesnapshot")
+				Expect(len(crsList.Items) == 1).Should(BeTrue())
+				return crsList.Items[0].Name != oldCRS
+			}, eventuallyDuration, eventuallyInterval).Should(BeTrue(), "Failed to remove the old resourcensnapshot")
+		})
+
+		It("change the image name in deployment, to make it available again", func() {
+			Eventually(func() error {
+				err := hubClient.Get(ctx, types.NamespacedName{Name: testDeployment.Name, Namespace: testDeployment.Namespace}, &testDeployment)
+				if err != nil {
+					return err
+				}
+				testDeployment.Spec.Template.Spec.Containers[0].Image = "1.26.2"
+				return hubClient.Update(ctx, &testDeployment)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to change the image name in deployment")
+		})
+
+		It("should place the resources on all member clusters", func() {
+			for idx := range allMemberClusters {
+				memberCluster := allMemberClusters[idx]
+				workResourcesPlacedActual := waitForDeploymentPlacementToReady(memberCluster, &testDeployment)
+				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+			}
+		})
+
+		AfterAll(func() {
+			// Remove the custom deletion blocker finalizer from the CRP.
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		})
+	})
+
 	Context("Test a CRP place workload objects successfully, don't block rollout based on job availability", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		workNamespace := appNamespace()
@@ -823,7 +939,7 @@ func waitForDeploymentPlacementToReady(memberCluster *framework.Cluster, testDep
 		if placedDeployment.Status.ObservedGeneration == placedDeployment.Generation && depCond != nil && depCond.Status == corev1.ConditionTrue {
 			return nil
 		}
-		return nil
+		return fmt.Errorf("deployment `%s` is not updated", testDeployment.Name)
 	}
 }
 

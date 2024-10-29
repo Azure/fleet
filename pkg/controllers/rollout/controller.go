@@ -521,6 +521,7 @@ func calculateMaxToAdd(crp *fleetv1beta1.ClusterResourcePlacement, targetNumber 
 		upperBoundReadyNumber, "maxNumberOfBindingsToAdd", maxNumberToAdd)
 	return maxNumberToAdd
 }
+
 func (r *Reconciler) calculateRealTarget(crp *fleetv1beta1.ClusterResourcePlacement, schedulerTargetedBinds []*fleetv1beta1.ClusterResourceBinding) int {
 	crpKObj := klog.KObj(crp)
 	// calculate the target number of bindings
