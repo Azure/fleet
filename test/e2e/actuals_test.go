@@ -420,7 +420,7 @@ func resourcePlacementRolloutCompletedConditions(generation int64, resourceIsTra
 	}
 }
 
-func resourcePlacementRolloutFailedConditions(generation int64) []metav1.Condition {
+func resourcePlacementScheduleFailedConditions(generation int64) []metav1.Condition {
 	return []metav1.Condition{
 		{
 			Type:               string(placementv1beta1.ResourceScheduledConditionType),
@@ -689,7 +689,7 @@ func customizedCRPStatusUpdatedActual(crpName string,
 		}
 		for i := 0; i < len(wantUnselectedClusters); i++ {
 			wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.ResourcePlacementStatus{
-				Conditions: resourcePlacementRolloutFailedConditions(crp.Generation),
+				Conditions: resourcePlacementScheduleFailedConditions(crp.Generation),
 			})
 		}
 
