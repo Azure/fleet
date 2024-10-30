@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -17,6 +18,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -547,6 +549,26 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			Eventually(crpStatusActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
+		It("update work to trigger a work generator reconcile", func() {
+			for idx := range allMemberClusters {
+				memberCluster := allMemberClusters[idx].ClusterName
+				namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster)
+				workName := fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, crpName)
+				work := placementv1beta1.Work{}
+				Expect(hubClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: namespaceName}, &work)).Should(Succeed(), "Failed to get the work")
+				if work.Status.ManifestConditions != nil {
+					work.Status.ManifestConditions = nil
+				} else {
+					meta.SetStatusCondition(&work.Status.Conditions, metav1.Condition{
+						Type:   placementv1beta1.WorkConditionTypeAvailable,
+						Status: metav1.ConditionFalse,
+						Reason: "WorkNotAvailable",
+					})
+				}
+				Expect(hubClient.Status().Update(ctx, &work)).Should(Succeed(), "Failed to update the work")
+			}
+		})
+
 		It("change the image name in deployment, to roll over the resourcesnapshot", func() {
 			crsList := &placementv1beta1.ClusterResourceSnapshotList{}
 			Expect(hubClient.List(ctx, crsList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName})).Should(Succeed(), "Failed to list the resourcesnapshot")
@@ -561,6 +583,26 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				Expect(len(crsList.Items) == 1).Should(BeTrue())
 				return crsList.Items[0].Name != oldCRS
 			}, eventuallyDuration, eventuallyInterval).Should(BeTrue(), "Failed to remove the old resourcensnapshot")
+		})
+
+		It("update work to trigger a work generator reconcile", func() {
+			for idx := range allMemberClusters {
+				memberCluster := allMemberClusters[idx].ClusterName
+				namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster)
+				workName := fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, crpName)
+				work := placementv1beta1.Work{}
+				Expect(hubClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: namespaceName}, &work)).Should(Succeed(), "Failed to get the work")
+				if work.Status.ManifestConditions != nil {
+					work.Status.ManifestConditions = nil
+				} else {
+					meta.SetStatusCondition(&work.Status.Conditions, metav1.Condition{
+						Type:   placementv1beta1.WorkConditionTypeAvailable,
+						Status: metav1.ConditionFalse,
+						Reason: "WorkNotAvailable",
+					})
+				}
+				Expect(hubClient.Status().Update(ctx, &work)).Should(Succeed(), "Failed to update the work")
+			}
 		})
 
 		It("change the image name in deployment, to make it available again", func() {
@@ -937,6 +979,9 @@ func waitForDeploymentPlacementToReady(memberCluster *framework.Cluster, testDep
 			}
 		}
 		if placedDeployment.Status.ObservedGeneration == placedDeployment.Generation && depCond != nil && depCond.Status == corev1.ConditionTrue {
+			if !reflect.DeepEqual(placedDeployment.Spec, testDeployment.Spec) {
+				return fmt.Errorf("deployment spec`%s` is not updated", testDeployment.Name)
+			}
 			return nil
 		}
 		return fmt.Errorf("deployment `%s` is not updated", testDeployment.Name)
