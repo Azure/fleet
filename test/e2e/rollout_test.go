@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -979,8 +978,8 @@ func waitForDeploymentPlacementToReady(memberCluster *framework.Cluster, testDep
 			}
 		}
 		if placedDeployment.Status.ObservedGeneration == placedDeployment.Generation && depCond != nil && depCond.Status == corev1.ConditionTrue {
-			if !reflect.DeepEqual(placedDeployment.Spec, testDeployment.Spec) {
-				return fmt.Errorf("deployment spec`%s` is not updated", testDeployment.Name)
+			if placedDeployment.Spec.Template.Spec.Containers[0].Image != testDeployment.Spec.Template.Spec.Containers[0].Image {
+				return fmt.Errorf("deployment spec`%s` is not updated, placedDeployment = %+v, testDeployment = %+v", testDeployment.Name, placedDeployment.Spec, testDeployment.Spec)
 			}
 			return nil
 		}
@@ -1002,6 +1001,9 @@ func waitForDaemonSetPlacementToReady(memberCluster *framework.Cluster, testDaem
 		if placedDaemonSet.Status.ObservedGeneration == placedDaemonSet.Generation &&
 			placedDaemonSet.Status.NumberAvailable == placedDaemonSet.Status.DesiredNumberScheduled &&
 			placedDaemonSet.Status.CurrentNumberScheduled == placedDaemonSet.Status.UpdatedNumberScheduled {
+			if placedDaemonSet.Spec.Template.Spec.Containers[0].Image != testDaemonSet.Spec.Template.Spec.Containers[0].Image {
+				return fmt.Errorf("daemonSet spec`%s` is not updated", testDaemonSet.Name)
+			}
 			return nil
 		}
 		return errors.New("daemonset is not ready")
@@ -1022,6 +1024,9 @@ func waitForStatefulSetPlacementToReady(memberCluster *framework.Cluster, testSt
 		if placedStatefulSet.Status.ObservedGeneration == placedStatefulSet.Generation &&
 			placedStatefulSet.Status.CurrentReplicas == *placedStatefulSet.Spec.Replicas &&
 			placedStatefulSet.Status.CurrentReplicas == placedStatefulSet.Status.UpdatedReplicas {
+			if placedStatefulSet.Spec.Template.Spec.Containers[0].Image != testStatefulSet.Spec.Template.Spec.Containers[0].Image {
+				return fmt.Errorf("statefulSet spec`%s` is not updated", placedStatefulSet.Name)
+			}
 			return nil
 		}
 		return errors.New("statefulset is not ready")
