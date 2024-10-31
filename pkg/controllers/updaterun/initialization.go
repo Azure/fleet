@@ -122,7 +122,7 @@ func (r *Reconciler) determinePolicySnapshot(ctx context.Context, placementName 
 		return nil, -1, fmt.Errorf("%w: %s", errInitializedFailed, annErr.Error())
 	}
 	updateRun.Status.PolicyObservedClusterCount = clusterCount
-	klog.V(2).InfoS("Found the corresponding policy snapshot", "policySnapshot", latestPolicySnapshot.Name, "observed CRP generation", updateRun.Status.PolicyObservedClusterCount, "stagedUpdateRun", updateRunRef)
+	klog.V(2).InfoS("Found the corresponding policy snapshot", "policySnapshot", latestPolicySnapshot.Name, "observed cluster count", updateRun.Status.PolicyObservedClusterCount, "stagedUpdateRun", updateRunRef)
 	if !condition.IsConditionStatusTrue(latestPolicySnapshot.GetCondition(string(placementv1beta1.PolicySnapshotScheduled)), latestPolicySnapshot.Generation) {
 		scheduleErr := fmt.Errorf("policy snapshot not fully scheduled yet")
 		klog.ErrorS(scheduleErr, "The policy snapshot is not scheduled successfully", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "stagedUpdateRun", updateRunRef)
