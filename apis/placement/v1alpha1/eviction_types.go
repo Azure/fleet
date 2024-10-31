@@ -6,6 +6,7 @@ Licensed under the MIT license.
 package v1alpha1
 
 import (
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -116,6 +117,18 @@ type ClusterResourcePlacementEvictionList struct {
 
 	// Items is the list of ClusterResourcePlacementEviction objects.
 	Items []ClusterResourcePlacementEviction `json:"items"`
+}
+
+// SetConditions set the given conditions on the ClusterResourcePlacementEviction.
+func (e *ClusterResourcePlacementEviction) SetConditions(conditions ...metav1.Condition) {
+	for _, c := range conditions {
+		meta.SetStatusCondition(&e.Status.Conditions, c)
+	}
+}
+
+// GetCondition returns the condition of the given ClusterResourcePlacementEviction.
+func (e *ClusterResourcePlacementEviction) GetCondition(conditionType string) *metav1.Condition {
+	return meta.FindStatusCondition(e.Status.Conditions, conditionType)
 }
 
 func init() {
