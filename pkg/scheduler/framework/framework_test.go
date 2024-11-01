@@ -387,7 +387,7 @@ func TestClassifyBindings(t *testing.T) {
 }
 
 func TestUpdateBindingsWithErrors(t *testing.T) {
-	boundBinding := placementv1beta1.ClusterResourceBinding{
+	binding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: bindingName,
 		},
@@ -411,19 +411,19 @@ func TestUpdateBindingsWithErrors(t *testing.T) {
 		wantErr      error
 	}{
 		{
-			name:     "service unavailable error on update, successful get & return return service unavailable",
-			bindings: []*placementv1beta1.ClusterResourceBinding{&boundBinding},
+			name:     "service unavailable error on update, successful get & retry update keeps returning service unavailable error",
+			bindings: []*placementv1beta1.ClusterResourceBinding{&binding},
 			customClient: &errorClient{
 				Client: fakeClient,
-				// set large error retry count to force the return of update error.
+				// set large error retry count to keep returning of update error.
 				errorForRetryCount: 1000000,
 				returnUpdateErr:    "ServiceUnavailable",
 			},
 			wantErr: k8serrors.NewServiceUnavailable("service is unavailable"),
 		},
 		{
-			name:     "service unavailable error on update, successful get & retry return nil",
-			bindings: []*placementv1beta1.ClusterResourceBinding{&boundBinding},
+			name:     "service unavailable error on update, successful get & retry update returns nil",
+			bindings: []*placementv1beta1.ClusterResourceBinding{&binding},
 			customClient: &errorClient{
 				Client:             fakeClient,
 				errorForRetryCount: 1,
@@ -432,8 +432,8 @@ func TestUpdateBindingsWithErrors(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name:     "server timeout error on update, successful get & retry return nil",
-			bindings: []*placementv1beta1.ClusterResourceBinding{&boundBinding},
+			name:     "server timeout error on update, successful get & retry update returns nil",
+			bindings: []*placementv1beta1.ClusterResourceBinding{&binding},
 			customClient: &errorClient{
 				Client:             fakeClient,
 				errorForRetryCount: 1,
@@ -442,8 +442,8 @@ func TestUpdateBindingsWithErrors(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name:     "conflict error on update, get failed, return get error",
-			bindings: []*placementv1beta1.ClusterResourceBinding{&boundBinding},
+			name:     "conflict error on update, get failed, retry update returns get error",
+			bindings: []*placementv1beta1.ClusterResourceBinding{&binding},
 			customClient: &errorClient{
 				Client:             fakeClient,
 				errorForRetryCount: 1,
