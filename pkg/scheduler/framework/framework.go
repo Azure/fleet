@@ -366,7 +366,9 @@ var markUnscheduledForAndUpdate = func(ctx context.Context, hubClient client.Cli
 	// unscheduledBinding from "scheduled" to "bound".
 	binding.Spec.State = placementv1beta1.BindingStateUnscheduled
 	err := hubClient.Update(ctx, binding, &client.UpdateOptions{})
-	klog.V(2).InfoS("Marking binding as unscheduled", "clusterResourceBinding", klog.KObj(binding), "error", err)
+	if err == nil {
+		klog.V(2).InfoS("Marked binding as unscheduled", "clusterResourceBinding", klog.KObj(binding))
+	}
 	return err
 }
 
@@ -374,10 +376,13 @@ var markUnscheduledForAndUpdate = func(ctx context.Context, hubClient client.Cli
 var removeFinalizerAndUpdate = func(ctx context.Context, hubClient client.Client, binding *placementv1beta1.ClusterResourceBinding) error {
 	controllerutil.RemoveFinalizer(binding, placementv1beta1.SchedulerCRBCleanupFinalizer)
 	err := hubClient.Update(ctx, binding, &client.UpdateOptions{})
-	klog.V(2).InfoS("Remove scheduler CRB cleanup finalizer", "clusterResourceBinding", klog.KObj(binding), "error", err)
+	if err == nil {
+		klog.V(2).InfoS("Removed scheduler CRB cleanup finalizer", "clusterResourceBinding", klog.KObj(binding))
+	}
 	return err
 }
 
+// updateBindings iterates over bindings and updates them using the update function provided.
 func (f *framework) updateBindings(ctx context.Context, bindings []*placementv1beta1.ClusterResourceBinding, updateFn func(ctx context.Context, client client.Client, binding *placementv1beta1.ClusterResourceBinding) error) error {
 	// issue all the update requests in parallel
 	errs, cctx := errgroup.WithContext(ctx)

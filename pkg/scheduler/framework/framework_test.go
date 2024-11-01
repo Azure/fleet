@@ -7,6 +7,7 @@ package framework
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -16,8 +17,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -381,6 +384,122 @@ func TestClassifyBindings(t *testing.T) {
 	if diff := cmp.Diff(deleting, wantDeleting); diff != "" {
 		t.Errorf("classifyBIndings() deleting diff (-got, +want) = %s", diff)
 	}
+}
+
+func TestUpdateBindingsWithErrors(t *testing.T) {
+	boundBinding := placementv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: bindingName,
+		},
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateBound,
+		},
+	}
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme.Scheme).
+		Build()
+
+	var genericUpdateFn = func(ctx context.Context, hubClient client.Client, binding *placementv1beta1.ClusterResourceBinding) error {
+		binding.SetLabels(map[string]string{"test-key": "test-value"})
+		return hubClient.Update(ctx, binding, &client.UpdateOptions{})
+	}
+
+	testCases := []struct {
+		name         string
+		bindings     []*placementv1beta1.ClusterResourceBinding
+		customClient client.Client
+		wantErr      error
+	}{
+		{
+			name:     "service unavailable error on update, successful get & return return service unavailable",
+			bindings: []*placementv1beta1.ClusterResourceBinding{&boundBinding},
+			customClient: &errorClient{
+				Client: fakeClient,
+				// set large error retry count to force the return of update error.
+				errorForRetryCount: 1000000,
+				returnUpdateErr:    "ServiceUnavailable",
+			},
+			wantErr: k8serrors.NewServiceUnavailable("service is unavailable"),
+		},
+		{
+			name:     "service unavailable error on update, successful get & retry return nil",
+			bindings: []*placementv1beta1.ClusterResourceBinding{&boundBinding},
+			customClient: &errorClient{
+				Client:             fakeClient,
+				errorForRetryCount: 1,
+				returnUpdateErr:    "ServiceUnavailable",
+			},
+			wantErr: nil,
+		},
+		{
+			name:     "server timeout error on update, successful get & retry return nil",
+			bindings: []*placementv1beta1.ClusterResourceBinding{&boundBinding},
+			customClient: &errorClient{
+				Client:             fakeClient,
+				errorForRetryCount: 1,
+				returnUpdateErr:    "ServerTimeout",
+			},
+			wantErr: nil,
+		},
+		{
+			name:     "conflict error on update, get failed, return get error",
+			bindings: []*placementv1beta1.ClusterResourceBinding{&boundBinding},
+			customClient: &errorClient{
+				Client:             fakeClient,
+				errorForRetryCount: 1,
+				returnUpdateErr:    "Conflict",
+				returnGetErr:       "GetError",
+			},
+			wantErr: errors.New("get error"),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Construct framework manually instead of using NewFramework() to avoid mocking the controller manager.
+			f := &framework{
+				client: tc.customClient,
+			}
+			ctx := context.Background()
+			gotErr := f.updateBindings(ctx, tc.bindings, genericUpdateFn)
+			got, want := gotErr != nil, tc.wantErr != nil
+			if got != want {
+				t.Fatalf("updateBindings() = %v, want %v", gotErr, tc.wantErr)
+			}
+			if got && want && !strings.Contains(gotErr.Error(), tc.wantErr.Error()) {
+				t.Errorf("updateBindings() = %v, want %v", gotErr, tc.wantErr)
+			}
+		})
+	}
+}
+
+type errorClient struct {
+	client.Client
+	errorForRetryCount int
+	returnGetErr       string
+	returnUpdateErr    string
+}
+
+func (e *errorClient) Get(_ context.Context, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
+	if e.returnGetErr == "GetError" {
+		return errors.New("get error")
+	}
+	return nil
+}
+
+func (e *errorClient) Update(_ context.Context, _ client.Object, _ ...client.UpdateOption) error {
+	if e.returnUpdateErr == "ServiceUnavailable" && e.errorForRetryCount > 0 {
+		e.errorForRetryCount--
+		return k8serrors.NewServiceUnavailable("service is unavailable")
+	}
+	if e.returnUpdateErr == "ServerTimeout" && e.errorForRetryCount > 0 {
+		e.errorForRetryCount--
+		return k8serrors.NewServerTimeout(schema.GroupResource{Group: placementv1beta1.GroupVersion.Group, Resource: "clusterresourcebinding"}, "UPDATE", 0)
+	}
+	if e.returnUpdateErr == "Conflict" && e.errorForRetryCount > 0 {
+		e.errorForRetryCount--
+		return k8serrors.NewConflict(schema.GroupResource{Group: placementv1beta1.GroupVersion.Group, Resource: "clusterresourcebinding"}, "UPDATE", errors.New("conflict"))
+	}
+	return nil
 }
 
 // TestUpdateBindingsMarkAsUnscheduledForAndUpdate tests the updateBinding method by passing markUnscheduledForAndUpdate update function.
