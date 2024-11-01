@@ -24,7 +24,6 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	"go.goms.io/fleet/pkg/propertyprovider"
-	"go.goms.io/fleet/pkg/propertyprovider/azure/cloudconfig"
 	"go.goms.io/fleet/pkg/propertyprovider/azure/controllers"
 	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 )
@@ -70,9 +69,6 @@ type PropertyProvider struct {
 	// The controller manager in use by the Azure property provider; this field is mostly reserved for
 	// testing purposes.
 	mgr ctrl.Manager
-
-	// The cloud configuration in use by the Azure property provider.
-	cloudConfig cloudconfig.CloudConfig
 }
 
 // Verify that the Azure property provider implements the MetricProvider interface at compile time.
@@ -316,10 +312,9 @@ func (p *PropertyProvider) autoDiscoverRegionAndSetupTrackers(ctx context.Contex
 // If the region is unspecified at the time when this function is called, the provider
 // will attempt to auto-discover the region of its host cluster when the Start method is
 // called.
-func New(region *string, config cloudconfig.CloudConfig) propertyprovider.PropertyProvider {
+func New(region *string) propertyprovider.PropertyProvider {
 	return &PropertyProvider{
-		region:      region,
-		cloudConfig: config,
+		region: region,
 	}
 }
 
@@ -328,9 +323,8 @@ func New(region *string, config cloudconfig.CloudConfig) propertyprovider.Proper
 //
 // This is mostly used for allow plugging in of alternate pricing providers (one that
 // does not use the Karpenter client), and for testing purposes.
-func NewWithPricingProvider(pp trackers.PricingProvider, config cloudconfig.CloudConfig) propertyprovider.PropertyProvider {
+func NewWithPricingProvider(pp trackers.PricingProvider) propertyprovider.PropertyProvider {
 	return &PropertyProvider{
 		nodeTracker: trackers.NewNodeTracker(pp),
-		cloudConfig: config,
 	}
 }

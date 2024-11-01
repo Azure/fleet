@@ -40,6 +40,10 @@ config:
     tenantId: ""
     subscriptionId: ""
     useManagedIdentityExtension: false
+    userAssignedIdentityID: ""
+    aadClientId: ""
+    aadClientSecret: ""
+    resourceGroup: ""
     userAgent: ""
     location: ""
     vnetName: ""

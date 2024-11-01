@@ -171,7 +171,7 @@ func NewController(Name string, KeyFunc KeyFunc, ReconcileFunc ReconcileFunc, ra
 		name:          Name,
 		keyFunc:       KeyFunc,
 		reconcileFunc: ReconcileFunc,
-		queue:         workqueue.NewRateLimitingQueue(rateLimiter),
+		queue:         workqueue.NewNamedRateLimitingQueue(rateLimiter, Name),
 	}
 }
 

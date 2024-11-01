@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/discovery"
@@ -49,7 +48,6 @@ import (
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/propertyprovider/azure"
-	"go.goms.io/fleet/pkg/propertyprovider/azure/cloudconfig"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/httpclient"
 	//+kubebuilder:scaffold:imports
@@ -320,7 +318,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 	discoverClient := discovery.NewDiscoveryClientForConfigOrDie(memberConfig)
 
 	if *enableV1Alpha1APIs {
-		gvk := schema.GroupVersionKind{Group: workv1alpha1.GroupVersion.Group, Version: workv1alpha1.GroupVersion.Version, Kind: workv1alpha1.AppliedWorkKind}
+		gvk := workv1alpha1.SchemeGroupVersion.WithKind(workv1alpha1.AppliedWorkKind)
 		if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
 			klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
 			return err
@@ -368,17 +366,11 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		switch {
 		case propertyProvider != nil && *propertyProvider == azurePropertyProvider:
 			klog.V(2).Info("setting up the Azure property provider")
-			// Set cloud configuration.
-			cloudConfiguration, err := cloudconfig.LoadCloudConfigFromFile(*cloudConfigFile)
-			if err != nil {
-				klog.ErrorS(err, "Unable to load cloud config from file", "file", *cloudConfigFile)
-				return err
-			}
-			klog.V(2).Info("Cloud config loaded successfully")
-
+			// TODO: Set cloud configuration.
 			// Note that the property provider, though initialized here, is not started until
 			// the specific instance wins the leader election.
-			pp = azure.New(region, *cloudConfiguration)
+			klog.V(1).InfoS("Cloud config loaded successfully", "config", cloudConfigFile)
+			pp = azure.New(region)
 		default:
 			// Fall back to not using any property provider if the provided type is none or
 			// not recognizable.

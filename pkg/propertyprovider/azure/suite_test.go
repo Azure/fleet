@@ -22,7 +22,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"go.goms.io/fleet/pkg/propertyprovider"
-	"go.goms.io/fleet/pkg/propertyprovider/azure/cloudconfig"
 	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 )
 
@@ -95,10 +94,7 @@ var _ = BeforeSuite(func() {
 
 	// Start the Azure property provider.
 	pp = trackers.NewAKSKarpenterPricingClient(ctx, region)
-	cloudConfigFile := "./cloudconfig/test/azure_valid_config.yaml"
-	cloudConfiguration, err := cloudconfig.LoadCloudConfigFromFile(cloudConfigFile)
-	Expect(err).NotTo(HaveOccurred())
-	p = NewWithPricingProvider(pp, *cloudConfiguration)
+	p = NewWithPricingProvider(pp)
 	Expect(p.Start(ctx, memberCfg)).To(Succeed())
 })
 
