@@ -1,0 +1,12 @@
+{
+  "cloud": "AzurePublicCloud",
+  "tenantId": "00000000-0000-0000-0000-000000000000",
+  "subscriptionId": "00000000-0000-0000-0000-000000000000",
+  "useManagedIdentityExtension": false,
+  "aadClientId": "00000000-0000-0000-0000-000000000000",
+  "resourceGroup": " test-rg ",
+  "location": " eastus ",
+  "clusterName": "  test-cluster",
+  "vnetName": "test  -vnet",
+  "clusterResourceGroup": "test-rg   ",
+}
