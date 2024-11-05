@@ -36,6 +36,8 @@ spec:
             - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
             {{- if .Values.propertyProvider }}
             - --property-provider={{ .Values.propertyProvider }}
+            {{- end }}
+            {{- if eq .Values.propertyProvider "azure" }}
             - --cloud-config={{ .Values.cloudConfig }}
             {{- end }}
             {{- if .Values.region }}
