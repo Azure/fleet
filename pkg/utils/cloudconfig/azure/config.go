@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // CloudConfig holds the configuration parsed from the --cloud-config flag
@@ -104,7 +105,7 @@ func (cfg *CloudConfig) validate() error {
 	}
 
 	if cfg.VnetResourceGroup == "" {
-		cfg.VnetResourceGroup = cfg.ClusterResourceGroup
+		cfg.VnetResourceGroup = cfg.ResourceGroup
 	}
 
 	if !cfg.UseManagedIdentityExtension {
@@ -113,6 +114,27 @@ func (cfg *CloudConfig) validate() error {
 		}
 		if cfg.AADClientID == "" || cfg.AADClientSecret == "" {
 			return fmt.Errorf("AAD client ID or AAD client secret is empty")
+		}
+	}
+
+	if cfg.RateLimitConfig == nil {
+		cfg.RateLimitConfig = &RateLimitConfig{CloudProviderRateLimit: true}
+	}
+
+	if cfg.CloudProviderRateLimit {
+		// Assign read rate limit defaults if no configuration was passed in.
+		if cfg.CloudProviderRateLimitQPS == 0 {
+			cfg.CloudProviderRateLimitQPS = consts.RateLimitQPSDefault
+		}
+		if cfg.CloudProviderRateLimitBucket == 0 {
+			cfg.CloudProviderRateLimitBucket = consts.RateLimitBucketDefault
+		}
+		// Assign write rate limit defaults if no configuration was passed in.
+		if cfg.CloudProviderRateLimitQPSWrite == 0 {
+			cfg.CloudProviderRateLimitQPSWrite = cfg.CloudProviderRateLimitQPS
+		}
+		if cfg.CloudProviderRateLimitBucketWrite == 0 {
+			cfg.CloudProviderRateLimitBucketWrite = cfg.CloudProviderRateLimitBucket
 		}
 	}
 

@@ -52,7 +52,7 @@ func TestTrimSpace(t *testing.T) {
 		}
 		config.trimSpace()
 		if diff := cmp.Diff(config, expected); diff != "" {
-			t.Fatalf("trimSpace(), expect cloudconfig fields are trimmed, got: %v", config)
+			t.Fatalf("trimSpace()mismatch (-want +got):\n%s", diff)
 		}
 	})
 }
@@ -319,6 +319,11 @@ func TestValidate(t *testing.T) {
 			if got := err == nil; got != test.expectPass {
 				t.Errorf("validate() = got %v, want %v", got, test.expectPass)
 			}
+			if name == "VnetResourceGroup empty" {
+				if test.config.VnetResourceGroup != test.config.ResourceGroup {
+					t.Errorf("validate() = got %v, want %v", test.config.VnetResourceGroup, test.config.ResourceGroup)
+				}
+			}
 		})
 	}
 }
@@ -365,6 +370,13 @@ func TestNewCloudConfigFromFile(t *testing.T) {
 				VnetResourceGroup:    "test-rg",
 				ClusterName:          "test-cluster",
 				ClusterResourceGroup: "test-rg",
+				RateLimitConfig: &RateLimitConfig{
+					CloudProviderRateLimit:            true,
+					CloudProviderRateLimitQPS:         1,
+					CloudProviderRateLimitQPSWrite:    1,
+					CloudProviderRateLimitBucket:      5,
+					CloudProviderRateLimitBucketWrite: 5,
+				},
 			},
 			expectErr: false,
 		},
@@ -376,7 +388,7 @@ func TestNewCloudConfigFromFile(t *testing.T) {
 				t.Errorf("Failed to run NewCloudConfigFromFile(%s): got %v, want %v", test.filePath, got, test.expectErr)
 			}
 			if diff := cmp.Diff(config, test.expectedConfig); diff != "" {
-				t.Errorf("NewCloudConfigFromFile(%s) = %v, want %v, diff %s", test.filePath, config, test.expectedConfig, diff)
+				t.Errorf("NewCloudConfigFromFile(%s) mismatch (-want +got):\n%s", test.filePath, diff)
 			}
 		})
 	}
