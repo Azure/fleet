@@ -7,6 +7,7 @@ package framework
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -16,8 +17,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -64,6 +67,9 @@ var (
 	}
 	lessFuncFilteredCluster = func(filtered1, filtered2 *filteredClusterWithStatus) bool {
 		return filtered1.cluster.Name < filtered2.cluster.Name
+	}
+	lessFuncBinding = func(binding1, binding2 placementv1beta1.ClusterResourceBinding) bool {
+		return binding1.Name < binding2.Name
 	}
 )
 
@@ -352,8 +358,9 @@ func TestClassifyBindings(t *testing.T) {
 	wantObsolete := []*placementv1beta1.ClusterResourceBinding{&obsoleteBinding}
 	wantUnscheduled := []*placementv1beta1.ClusterResourceBinding{&unscheduledBinding}
 	wantDangling := []*placementv1beta1.ClusterResourceBinding{&associatedWithLeavingClusterBinding, &assocaitedWithDisappearedClusterBinding}
+	wantDeleting := []*placementv1beta1.ClusterResourceBinding{&deletingBinding}
 
-	bound, scheduled, obsolete, unscheduled, dangling := classifyBindings(policy, bindings, clusters)
+	bound, scheduled, obsolete, unscheduled, dangling, deleting := classifyBindings(policy, bindings, clusters)
 	if diff := cmp.Diff(bound, wantBound); diff != "" {
 		t.Errorf("classifyBindings() bound diff (-got, +want): %s", diff)
 	}
@@ -373,10 +380,130 @@ func TestClassifyBindings(t *testing.T) {
 	if diff := cmp.Diff(dangling, wantDangling); diff != "" {
 		t.Errorf("classifyBindings() dangling diff (-got, +want) = %s", diff)
 	}
+
+	if diff := cmp.Diff(deleting, wantDeleting); diff != "" {
+		t.Errorf("classifyBIndings() deleting diff (-got, +want) = %s", diff)
+	}
 }
 
-// TestMarkAsUnscheduledFor tests the markAsUnscheduledFor method.
-func TestMarkAsUnscheduledFor(t *testing.T) {
+func TestUpdateBindingsWithErrors(t *testing.T) {
+	binding := placementv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: bindingName,
+		},
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateBound,
+		},
+	}
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme.Scheme).
+		Build()
+
+	var genericUpdateFn = func(ctx context.Context, hubClient client.Client, binding *placementv1beta1.ClusterResourceBinding) error {
+		binding.SetLabels(map[string]string{"test-key": "test-value"})
+		return hubClient.Update(ctx, binding, &client.UpdateOptions{})
+	}
+
+	testCases := []struct {
+		name         string
+		bindings     []*placementv1beta1.ClusterResourceBinding
+		customClient client.Client
+		wantErr      error
+	}{
+		{
+			name:     "service unavailable error on update, successful get & retry update keeps returning service unavailable error",
+			bindings: []*placementv1beta1.ClusterResourceBinding{&binding},
+			customClient: &errorClient{
+				Client: fakeClient,
+				// set large error retry count to keep returning of update error.
+				errorForRetryCount: 1000000,
+				returnUpdateErr:    "ServiceUnavailable",
+			},
+			wantErr: k8serrors.NewServiceUnavailable("service is unavailable"),
+		},
+		{
+			name:     "service unavailable error on update, successful get & retry update returns nil",
+			bindings: []*placementv1beta1.ClusterResourceBinding{&binding},
+			customClient: &errorClient{
+				Client:             fakeClient,
+				errorForRetryCount: 1,
+				returnUpdateErr:    "ServiceUnavailable",
+			},
+			wantErr: nil,
+		},
+		{
+			name:     "server timeout error on update, successful get & retry update returns nil",
+			bindings: []*placementv1beta1.ClusterResourceBinding{&binding},
+			customClient: &errorClient{
+				Client:             fakeClient,
+				errorForRetryCount: 1,
+				returnUpdateErr:    "ServerTimeout",
+			},
+			wantErr: nil,
+		},
+		{
+			name:     "conflict error on update, get failed, retry update returns get error",
+			bindings: []*placementv1beta1.ClusterResourceBinding{&binding},
+			customClient: &errorClient{
+				Client:             fakeClient,
+				errorForRetryCount: 1,
+				returnUpdateErr:    "Conflict",
+				returnGetErr:       "GetError",
+			},
+			wantErr: errors.New("get error"),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Construct framework manually instead of using NewFramework() to avoid mocking the controller manager.
+			f := &framework{
+				client: tc.customClient,
+			}
+			ctx := context.Background()
+			gotErr := f.updateBindings(ctx, tc.bindings, genericUpdateFn)
+			got, want := gotErr != nil, tc.wantErr != nil
+			if got != want {
+				t.Fatalf("updateBindings() = %v, want %v", gotErr, tc.wantErr)
+			}
+			if got && want && !strings.Contains(gotErr.Error(), tc.wantErr.Error()) {
+				t.Errorf("updateBindings() = %v, want %v", gotErr, tc.wantErr)
+			}
+		})
+	}
+}
+
+type errorClient struct {
+	client.Client
+	errorForRetryCount int
+	returnGetErr       string
+	returnUpdateErr    string
+}
+
+func (e *errorClient) Get(_ context.Context, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
+	if e.returnGetErr == "GetError" {
+		return errors.New("get error")
+	}
+	return nil
+}
+
+func (e *errorClient) Update(_ context.Context, _ client.Object, _ ...client.UpdateOption) error {
+	if e.returnUpdateErr == "ServiceUnavailable" && e.errorForRetryCount > 0 {
+		e.errorForRetryCount--
+		return k8serrors.NewServiceUnavailable("service is unavailable")
+	}
+	if e.returnUpdateErr == "ServerTimeout" && e.errorForRetryCount > 0 {
+		e.errorForRetryCount--
+		return k8serrors.NewServerTimeout(schema.GroupResource{Group: placementv1beta1.GroupVersion.Group, Resource: "clusterresourcebinding"}, "UPDATE", 0)
+	}
+	if e.returnUpdateErr == "Conflict" && e.errorForRetryCount > 0 {
+		e.errorForRetryCount--
+		return k8serrors.NewConflict(schema.GroupResource{Group: placementv1beta1.GroupVersion.Group, Resource: "clusterresourcebinding"}, "UPDATE", errors.New("conflict"))
+	}
+	return nil
+}
+
+// TestUpdateBindingsMarkAsUnscheduledForAndUpdate tests the updateBinding method by passing markUnscheduledForAndUpdate update function.
+func TestUpdateBindingsMarkAsUnscheduledForAndUpdate(t *testing.T) {
 	boundBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: bindingName,
@@ -403,10 +530,10 @@ func TestMarkAsUnscheduledFor(t *testing.T) {
 	f := &framework{
 		client: fakeClient,
 	}
-	// call markAsUnscheduledFor
+	// call markAsUnscheduledForAndUpdate
 	ctx := context.Background()
-	if err := f.markAsUnscheduledFor(ctx, []*placementv1beta1.ClusterResourceBinding{&boundBinding, &scheduledBinding}); err != nil {
-		t.Fatalf("markAsUnscheduledFor() = %v, want no error", err)
+	if err := f.updateBindings(ctx, []*placementv1beta1.ClusterResourceBinding{&boundBinding, &scheduledBinding}, markUnscheduledForAndUpdate); err != nil {
+		t.Fatalf("updateBindings() = %v, want no error", err)
 	}
 	// check if the boundBinding has been updated
 	if err := fakeClient.Get(ctx, types.NamespacedName{Name: bindingName}, &boundBinding); err != nil {
@@ -443,6 +570,87 @@ func TestMarkAsUnscheduledFor(t *testing.T) {
 	}
 	if diff := cmp.Diff(scheduledBinding, want, ignoreTypeMetaAPIVersionKindFields, ignoreObjectMetaResourceVersionField); diff != "" {
 		t.Errorf("scheduledBinding diff (-got, +want): %s", diff)
+	}
+}
+
+func TestUpdateBindingRemoveFinalizerAndUpdate(t *testing.T) {
+	boundBinding := placementv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       bindingName,
+			Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+		},
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateBound,
+		},
+	}
+	scheduledBinding := placementv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       altBindingName,
+			Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+		},
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateScheduled,
+		},
+	}
+	unScheduledBinding := placementv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       anotherBindingName,
+			Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+		},
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateUnscheduled,
+		},
+	}
+
+	// setup fake client with bindings
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme.Scheme).
+		WithObjects(&boundBinding, &scheduledBinding, &unScheduledBinding).
+		Build()
+	// Construct framework manually instead of using NewFramework() to avoid mocking the controller manager.
+	f := &framework{
+		client: fakeClient,
+	}
+	// call markAsUnscheduledForAndUpdate
+	ctx := context.Background()
+	if err := f.updateBindings(ctx, []*placementv1beta1.ClusterResourceBinding{&boundBinding, &scheduledBinding, &unScheduledBinding}, removeFinalizerAndUpdate); err != nil {
+		t.Fatalf("updateBindings() = %v, want no error", err)
+	}
+
+	var clusterResourceBindingList placementv1beta1.ClusterResourceBindingList
+	if err := f.client.List(ctx, &clusterResourceBindingList); err != nil {
+		t.Fatalf("List cluster resource boundBindings returned %v, want no error", err)
+	}
+
+	want := []placementv1beta1.ClusterResourceBinding{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: bindingName,
+			},
+			Spec: placementv1beta1.ResourceBindingSpec{
+				State: placementv1beta1.BindingStateBound,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: altBindingName,
+			},
+			Spec: placementv1beta1.ResourceBindingSpec{
+				State: placementv1beta1.BindingStateScheduled,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: anotherBindingName,
+			},
+			Spec: placementv1beta1.ResourceBindingSpec{
+				State: placementv1beta1.BindingStateUnscheduled,
+			},
+		},
+	}
+
+	if diff := cmp.Diff(clusterResourceBindingList.Items, want, ignoreTypeMetaAPIVersionKindFields, ignoreObjectMetaResourceVersionField, cmpopts.SortSlices(lessFuncBinding)); diff != "" {
+		t.Errorf("diff (-got, +want): %s", diff)
 	}
 }
 
@@ -1274,6 +1482,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 						Labels: map[string]string{
 							placementv1beta1.CRPTrackingLabel: crpName,
 						},
+						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1296,6 +1505,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 						Labels: map[string]string{
 							placementv1beta1.CRPTrackingLabel: crpName,
 						},
+						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1318,6 +1528,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 						Labels: map[string]string{
 							placementv1beta1.CRPTrackingLabel: crpName,
 						},
+						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1510,6 +1721,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 						Labels: map[string]string{
 							placementv1beta1.CRPTrackingLabel: crpName,
 						},
+						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1619,6 +1831,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 						Labels: map[string]string{
 							placementv1beta1.CRPTrackingLabel: crpName,
 						},
+						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1641,6 +1854,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 						Labels: map[string]string{
 							placementv1beta1.CRPTrackingLabel: crpName,
 						},
+						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1663,6 +1877,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 						Labels: map[string]string{
 							placementv1beta1.CRPTrackingLabel: crpName,
 						},
+						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1706,6 +1921,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 						Labels: map[string]string{
 							placementv1beta1.CRPTrackingLabel: crpName,
 						},
+						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1728,6 +1944,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 						Labels: map[string]string{
 							placementv1beta1.CRPTrackingLabel: crpName,
 						},
+						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1813,6 +2030,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 						Labels: map[string]string{
 							placementv1beta1.CRPTrackingLabel: crpName,
 						},
+						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
