@@ -8,5 +8,5 @@
   "location": " eastus ",
   "clusterName": "  test-cluster",
   "vnetName": "test  -vnet",
-  "clusterResourceGroup": "test-rg   ",
+  "clusterResourceGroup": "test-rg   "
 }

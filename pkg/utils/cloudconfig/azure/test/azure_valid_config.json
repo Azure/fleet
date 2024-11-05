@@ -9,5 +9,5 @@
   "clusterResourceGroup": "test-rg",
   "clusterName": "test-cluster",
   "vnetName": "test-vnet",
-  "vnetResourceGroup": "test-rg"
+  "vnetResourceGroup": "test-rg",
 }

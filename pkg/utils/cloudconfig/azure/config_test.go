@@ -5,6 +5,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 func TestTrimSpace(t *testing.T) {
@@ -52,7 +54,7 @@ func TestTrimSpace(t *testing.T) {
 		}
 		config.trimSpace()
 		if diff := cmp.Diff(config, expected); diff != "" {
-			t.Fatalf("trimSpace()mismatch (-want +got):\n%s", diff)
+			t.Errorf("trimSpace() mismatch (-got +want):\n%s", diff)
 		}
 	})
 }
@@ -290,7 +292,7 @@ func TestValidate(t *testing.T) {
 				ClusterName:          "c",
 				ClusterResourceGroup: "g",
 				VnetName:             "vn",
-				RateLimitConfig: &RateLimitConfig{
+				Config: ratelimit.Config{
 					CloudProviderRateLimit:            true,
 					CloudProviderRateLimitQPS:         0,
 					CloudProviderRateLimitBucket:      0,
@@ -317,7 +319,7 @@ func TestValidate(t *testing.T) {
 				ClusterName:          "c",
 				ClusterResourceGroup: "g",
 				VnetName:             "vn",
-				RateLimitConfig: &RateLimitConfig{
+				Config: ratelimit.Config{
 					CloudProviderRateLimit:            true,
 					CloudProviderRateLimitQPS:         2,
 					CloudProviderRateLimitBucket:      4,
@@ -344,7 +346,7 @@ func TestValidate(t *testing.T) {
 				ClusterName:          "c",
 				ClusterResourceGroup: "g",
 				VnetName:             "vn",
-				RateLimitConfig: &RateLimitConfig{
+				Config: ratelimit.Config{
 					CloudProviderRateLimit: false,
 				},
 			},
@@ -396,9 +398,26 @@ func TestValidate(t *testing.T) {
 			if got := err == nil; got != test.expectPass {
 				t.Errorf("validate() = got %v, want %v", got, test.expectPass)
 			}
-			if name == "VnetResourceGroup empty" {
+
+			if err == nil {
 				if test.config.VnetResourceGroup != test.config.ResourceGroup {
 					t.Errorf("validate() = got %v, want %v", test.config.VnetResourceGroup, test.config.ResourceGroup)
+				}
+
+				rateLimitConfig := test.config.Config
+				if rateLimitConfig.CloudProviderRateLimit {
+					if rateLimitConfig.CloudProviderRateLimitQPS == 0 {
+						t.Errorf("validate() = got %v, want default %v", rateLimitConfig.CloudProviderRateLimitQPS, consts.RateLimitQPSDefault)
+					}
+					if test.config.Config.CloudProviderRateLimitBucket == 0 {
+						t.Errorf("validate() = got %v, want default %v", rateLimitConfig.CloudProviderRateLimitBucket, consts.RateLimitBucketDefault)
+					}
+					if test.config.Config.CloudProviderRateLimitQPSWrite == 0 {
+						t.Errorf("validate() = got %v, want default %v", rateLimitConfig.CloudProviderRateLimitQPSWrite, rateLimitConfig.CloudProviderRateLimitQPS)
+					}
+					if test.config.Config.CloudProviderRateLimitBucketWrite == 0 {
+						t.Errorf("validate() = got %v, want default %v", rateLimitConfig.CloudProviderRateLimitBucketWrite, rateLimitConfig.CloudProviderRateLimitBucket)
+					}
 				}
 			}
 		})
@@ -447,12 +466,8 @@ func TestNewCloudConfigFromFile(t *testing.T) {
 				VnetResourceGroup:    "test-rg",
 				ClusterName:          "test-cluster",
 				ClusterResourceGroup: "test-rg",
-				RateLimitConfig: &RateLimitConfig{
-					CloudProviderRateLimit:            true,
-					CloudProviderRateLimitQPS:         1,
-					CloudProviderRateLimitQPSWrite:    1,
-					CloudProviderRateLimitBucket:      5,
-					CloudProviderRateLimitBucketWrite: 5,
+				Config: ratelimit.Config{
+					CloudProviderRateLimit: false,
 				},
 			},
 			expectErr: false,
@@ -462,10 +477,10 @@ func TestNewCloudConfigFromFile(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			config, err := NewCloudConfigFromFile(test.filePath)
 			if got := err != nil; got != test.expectErr {
-				t.Errorf("Failed to run NewCloudConfigFromFile(%s): got %v, want %v", test.filePath, got, test.expectErr)
+				t.Fatalf("Failed to run NewCloudConfigFromFile(%s): got %v, want %v", test.filePath, got, test.expectErr)
 			}
 			if diff := cmp.Diff(config, test.expectedConfig); diff != "" {
-				t.Errorf("NewCloudConfigFromFile(%s) mismatch (-want +got):\n%s", test.filePath, diff)
+				t.Errorf("NewCloudConfigFromFile(%s) mismatch (-got +want):\n%s", test.filePath, diff)
 			}
 		})
 	}

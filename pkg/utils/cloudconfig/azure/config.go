@@ -18,12 +18,11 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
-// CloudConfig holds the configuration parsed from the --cloud-config flag
-type RateLimitConfig ratelimit.Config
+// CloudConfig holds the configuration parsed from the --cloud-config flag.
 type CloudConfig struct {
 	azclient.ARMClientConfig `json:",inline" mapstructure:",squash"`
 	azclient.AzureAuthConfig `json:",inline" mapstructure:",squash"`
-	*RateLimitConfig         `json:",inline" mapstructure:",squash"`
+	ratelimit.Config         `json:",inline" mapstructure:",squash"`
 	// name of cluster
 	ClusterName string `json:"clusterName,omitempty" mapstructure:"clusterName,omitempty"`
 	// azure resource location
@@ -115,10 +114,6 @@ func (cfg *CloudConfig) validate() error {
 		if cfg.AADClientID == "" || cfg.AADClientSecret == "" {
 			return fmt.Errorf("AAD client ID or AAD client secret is empty")
 		}
-	}
-
-	if cfg.RateLimitConfig == nil {
-		cfg.RateLimitConfig = &RateLimitConfig{CloudProviderRateLimit: true}
 	}
 
 	if cfg.CloudProviderRateLimit {
