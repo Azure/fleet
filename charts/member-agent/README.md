@@ -46,7 +46,7 @@ helm upgrade member-agent member-agent/ --namespace fleet-system
 
 ## Override Azure cloud config
 
-**If PropertyProvider feature is enabled, then a cloud configuration is required.** 
+**If PropertyProvider feature is set to azure, then a cloud configuration is required.**
 Cloud configuration provides resource metadata and credentials for `fleet-member-agent` to manipulate Azure resources. 
 It's embedded into a Kubernetes secret and mounted to the pods. 
 The values can be modified under `config.cloudConfig` section in values.yaml or can be provided as a separate file.
@@ -69,7 +69,7 @@ The values can be modified under `config.cloudConfig` section in values.yaml or 
 | `vnetName`                    | The name of the virtual network where the cluster is deployed. |                                                                           |
 | `vnetResourceGroup`           | The resource group where the virtual network is deployed. |                                                                           |
 
-You can create a file `azure.yaml` with the following content, and pass it to `helm install` command: `helm install <release-name> <chart-name> -f azure.yaml`
+You can create a file `azure.yaml` with the following content, and pass it to `helm install` command: `helm install <release-name> <chart-name> --set propertyProvider=azure -f azure.yaml`
 
 ```yaml
 config:

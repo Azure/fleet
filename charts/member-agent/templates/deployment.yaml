@@ -87,9 +87,11 @@ spec:
           volumeMounts:
           - name: provider-token 
             mountPath: /config
+          {{- if eq .Values.propertyProvider "azure" }}
           - name: cloud-provider-config
             mountPath: /etc/kubernetes/provider
             readOnly: true
+          {{- end }}
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
           imagePullPolicy: {{ .Values.refreshtoken.pullPolicy }}
@@ -111,9 +113,11 @@ spec:
       volumes:
       - name: provider-token
         emptyDir: {}
+        {{- if eq .Values.propertyProvider "azure" }}
       - name: cloud-provider-config
         secret:
           secretName: cloud-config
+        {{- end }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
