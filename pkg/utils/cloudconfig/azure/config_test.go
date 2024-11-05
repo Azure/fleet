@@ -273,6 +273,83 @@ func TestValidate(t *testing.T) {
 			},
 			expectPass: false,
 		},
+		"RateLimitConfig values are zero": {
+			config: &CloudConfig{
+				ARMClientConfig: azclient.ARMClientConfig{
+					Cloud: "c",
+				},
+				AzureAuthConfig: azclient.AzureAuthConfig{
+					UseManagedIdentityExtension: false,
+					UserAssignedIdentityID:      "",
+					AADClientID:                 "1",
+					AADClientSecret:             "2",
+				},
+				Location:             "l",
+				SubscriptionID:       "s",
+				ResourceGroup:        "v",
+				ClusterName:          "c",
+				ClusterResourceGroup: "g",
+				VnetName:             "vn",
+				RateLimitConfig: &RateLimitConfig{
+					CloudProviderRateLimit:            true,
+					CloudProviderRateLimitQPS:         0,
+					CloudProviderRateLimitBucket:      0,
+					CloudProviderRateLimitQPSWrite:    0,
+					CloudProviderRateLimitBucketWrite: 0,
+				},
+			},
+			expectPass: true,
+		},
+		"RateLimitConfig with non-zero values": {
+			config: &CloudConfig{
+				ARMClientConfig: azclient.ARMClientConfig{
+					Cloud: "c",
+				},
+				AzureAuthConfig: azclient.AzureAuthConfig{
+					UseManagedIdentityExtension: false,
+					UserAssignedIdentityID:      "",
+					AADClientID:                 "1",
+					AADClientSecret:             "2",
+				},
+				Location:             "l",
+				SubscriptionID:       "s",
+				ResourceGroup:        "v",
+				ClusterName:          "c",
+				ClusterResourceGroup: "g",
+				VnetName:             "vn",
+				RateLimitConfig: &RateLimitConfig{
+					CloudProviderRateLimit:            true,
+					CloudProviderRateLimitQPS:         2,
+					CloudProviderRateLimitBucket:      4,
+					CloudProviderRateLimitQPSWrite:    2,
+					CloudProviderRateLimitBucketWrite: 4,
+				},
+			},
+			expectPass: true,
+		},
+		"CloudProviderRateLimit is false": {
+			config: &CloudConfig{
+				ARMClientConfig: azclient.ARMClientConfig{
+					Cloud: "c",
+				},
+				AzureAuthConfig: azclient.AzureAuthConfig{
+					UseManagedIdentityExtension: false,
+					UserAssignedIdentityID:      "",
+					AADClientID:                 "1",
+					AADClientSecret:             "2",
+				},
+				Location:             "l",
+				SubscriptionID:       "s",
+				ResourceGroup:        "v",
+				ClusterName:          "c",
+				ClusterResourceGroup: "g",
+				VnetName:             "vn",
+				RateLimitConfig: &RateLimitConfig{
+					CloudProviderRateLimit: false,
+				},
+			},
+			expectPass: true,
+		},
 		"has all required properties with secret and default values": {
 			config: &CloudConfig{
 				ARMClientConfig: azclient.ARMClientConfig{
