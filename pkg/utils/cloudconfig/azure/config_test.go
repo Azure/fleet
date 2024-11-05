@@ -106,6 +106,42 @@ func TestValidate(t *testing.T) {
 			},
 			expectPass: false,
 		},
+		"ClusterName empty": {
+			config: &CloudConfig{
+				ARMClientConfig: azclient.ARMClientConfig{
+					Cloud: "c",
+				},
+				AzureAuthConfig: azclient.AzureAuthConfig{
+					UseManagedIdentityExtension: true,
+					UserAssignedIdentityID:      "a",
+				},
+				Location:             "l",
+				SubscriptionID:       "s",
+				ResourceGroup:        "v",
+				ClusterName:          "",
+				ClusterResourceGroup: "g",
+				VnetName:             "vn",
+			},
+			expectPass: false,
+		},
+		"ClusterResourceGroup empty": {
+			config: &CloudConfig{
+				ARMClientConfig: azclient.ARMClientConfig{
+					Cloud: "c",
+				},
+				AzureAuthConfig: azclient.AzureAuthConfig{
+					UseManagedIdentityExtension: true,
+					UserAssignedIdentityID:      "a",
+				},
+				Location:             "l",
+				SubscriptionID:       "s",
+				ResourceGroup:        "v",
+				ClusterName:          "c",
+				ClusterResourceGroup: "",
+				VnetName:             "vn",
+			},
+			expectPass: false,
+		},
 		"SubscriptionID empty": {
 			config: &CloudConfig{
 				ARMClientConfig: azclient.ARMClientConfig{
@@ -141,6 +177,43 @@ func TestValidate(t *testing.T) {
 				VnetName:             "vn",
 			},
 			expectPass: false,
+		},
+		"VnetName empty": {
+			config: &CloudConfig{
+				ARMClientConfig: azclient.ARMClientConfig{
+					Cloud: "c",
+				},
+				AzureAuthConfig: azclient.AzureAuthConfig{
+					UseManagedIdentityExtension: true,
+					UserAssignedIdentityID:      "a",
+				},
+				Location:             "l",
+				SubscriptionID:       "s",
+				ResourceGroup:        "v",
+				ClusterName:          "c",
+				ClusterResourceGroup: "g",
+				VnetName:             "",
+			},
+			expectPass: false,
+		},
+		"VnetResourceGroup empty": {
+			config: &CloudConfig{
+				ARMClientConfig: azclient.ARMClientConfig{
+					Cloud: "c",
+				},
+				AzureAuthConfig: azclient.AzureAuthConfig{
+					UseManagedIdentityExtension: true,
+					UserAssignedIdentityID:      "a",
+				},
+				Location:             "l",
+				SubscriptionID:       "s",
+				ResourceGroup:        "v",
+				ClusterName:          "c",
+				ClusterResourceGroup: "g",
+				VnetName:             "vn",
+				VnetResourceGroup:    "",
+			},
+			expectPass: true,
 		},
 		"UserAssignedIdentityID not empty when UseManagedIdentityExtension is false": {
 			config: &CloudConfig{
@@ -265,15 +338,15 @@ func TestNewCloudConfigFromFile(t *testing.T) {
 			expectErr: true,
 		},
 		"failed to unmarshal file": {
-			filePath:  "../test/azure_config_nojson.txt",
+			filePath:  "./test/azure_config_nojson.txt",
 			expectErr: true,
 		},
 		"failed to validate config": {
-			filePath:  "../test/azure_invalid_config.json",
+			filePath:  "./test/azure_invalid_config.json",
 			expectErr: true,
 		},
 		"succeeded to load config": {
-			filePath: "../test/azure_valid_config.json",
+			filePath: "./test/azure_valid_config.json",
 			expectedConfig: &CloudConfig{
 				ARMClientConfig: azclient.ARMClientConfig{
 					Cloud:    "AzurePublicCloud",

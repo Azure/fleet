@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-// Package provides utilities to load, parse, and validate Azure cloud configuration.
+// Package azure provides utilities to load, parse, and validate Azure cloud configuration.
 package azure
 
 import (
