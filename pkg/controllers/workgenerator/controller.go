@@ -684,22 +684,25 @@ func (r *Reconciler) upsertWork(ctx context.Context, newWork, existingWork *flee
 	// check if we need to update the existing work object
 	workResourceIndex, err := labels.ExtractResourceSnapshotIndexFromWork(existingWork)
 	if err != nil {
-		klog.ErrorS(err, "work has invalid parent resource index", "work", workObj)
-		return false, controller.NewUnexpectedBehaviorError(err)
-	}
-	// we already checked the label in fetchAllResourceSnapShots function so no need to check again
-	resourceIndex, _ := labels.ExtractResourceIndexFromClusterResourceSnapshot(resourceSnapshot)
-	if workResourceIndex == resourceIndex {
-		// no need to do anything if the work is generated from the same resource/override snapshots
-		if existingWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] == newWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] &&
-			existingWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] == newWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] {
-			klog.V(2).InfoS("Work is associated with the desired override snapshots", "existingROHash", existingWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation],
-				"existingCROHash", existingWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation], "work", workObj)
-			return false, nil
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "work has invalid parent resource index", "work", workObj)
+	} else {
+		// we already checked the label in fetchAllResourceSnapShots function so no need to check again
+		resourceIndex, _ := labels.ExtractResourceIndexFromClusterResourceSnapshot(resourceSnapshot)
+		if workResourceIndex == resourceIndex {
+			// no need to do anything if the work is generated from the same resource/override snapshots
+			if existingWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] == newWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] &&
+				existingWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] == newWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] {
+				klog.V(2).InfoS("Work is associated with the desired resource/override snapshots", "existingROHash", existingWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation],
+					"existingCROHash", existingWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation], "work", workObj)
+				return false, nil
+			}
+			klog.V(2).InfoS("Work is already associated with the desired resourceSnapshot but still not having the right override snapshots", "resourceIndex", resourceIndex, "work", workObj, "resourceSnapshot", resourceSnapshotObj)
 		}
-		klog.V(2).InfoS("Work is already associated with the desired resourceSnapshot but still not having the right override snapshots", "resourceIndex", resourceIndex, "work", workObj, "resourceSnapshot", resourceSnapshotObj)
 	}
 	// need to copy the new work to the existing work, only 5 possible changes:
+	if existingWork.Labels == nil {
+		existingWork.Labels = make(map[string]string)
+	}
 	existingWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel] = newWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
 	if existingWork.Annotations == nil {
 		existingWork.Annotations = make(map[string]string)

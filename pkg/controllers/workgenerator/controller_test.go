@@ -11,7 +11,10 @@ import (
 	"testing"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/google/go-cmp/cmp"
@@ -24,6 +27,7 @@ import (
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/test/utils/informer"
@@ -138,6 +142,199 @@ func TestGetWorkNamePrefixFromSnapshotName(t *testing.T) {
 			}
 			if workName != tt.wantedName {
 				t.Errorf("getWorkNamePrefixFromSnapshotName test `%s` workName = `%v`, wantedName `%v`", name, workName, tt.wantedName)
+			}
+		})
+	}
+}
+
+func TestUpsertWork(t *testing.T) {
+	workName := "work"
+	namespace := "default"
+
+	var cmpOptions = []cmp.Option{
+		// ignore the message as we may change the message in the future
+		cmpopts.IgnoreFields(fleetv1beta1.Work{}, "Status"),
+		cmpopts.IgnoreFields(metav1.ObjectMeta{}, "CreationTimestamp"),
+		cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
+		cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ManagedFields"),
+		cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime"),
+		cmpopts.IgnoreFields(fleetv1beta1.WorkloadTemplate{}, "Manifests"),
+	}
+
+	testDeployment := appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       utils.DeploymentKind,
+			APIVersion: utils.DeploymentGVK.GroupVersion().String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "testDeployment",
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas:        ptr.To(int32(2)),
+			MinReadySeconds: 5,
+		},
+	}
+	newWork := &fleetv1beta1.Work{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      workName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				fleetv1beta1.ParentResourceSnapshotIndexLabel: "1",
+			},
+			Annotations: map[string]string{
+				fleetv1beta1.ParentResourceSnapshotNameAnnotation:                "snapshot-1",
+				fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: "hash1",
+				fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        "hash2",
+			},
+		},
+		Spec: fleetv1beta1.WorkSpec{
+			Workload: fleetv1beta1.WorkloadTemplate{
+				Manifests: []fleetv1beta1.Manifest{{RawExtension: runtime.RawExtension{Object: &testDeployment}}},
+			},
+		},
+	}
+
+	resourceSnapshot := &fleetv1beta1.ClusterResourceSnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "snapshot-1",
+			Labels: map[string]string{
+				fleetv1beta1.ResourceIndexLabel: "1",
+			},
+		},
+	}
+
+	tests := []struct {
+		name          string
+		existingWork  *fleetv1beta1.Work
+		expectChanged bool
+	}{
+		{
+			name:          "Create new work when existing work is nil",
+			existingWork:  nil,
+			expectChanged: true,
+		},
+		{
+			name: "Update existing work with new annotations",
+			existingWork: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: namespace,
+					Labels: map[string]string{
+						fleetv1beta1.ParentResourceSnapshotIndexLabel: "1",
+					},
+				},
+				Spec: fleetv1beta1.WorkSpec{
+					Workload: fleetv1beta1.WorkloadTemplate{
+						Manifests: []fleetv1beta1.Manifest{{RawExtension: runtime.RawExtension{Raw: []byte("{}")}}},
+					},
+				},
+			},
+			expectChanged: true,
+		},
+		{
+			name: "Update existing work even if it does not have the resource snapshot label",
+			existingWork: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: namespace,
+					Annotations: map[string]string{
+						fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: "hash1",
+					},
+				},
+				Spec: fleetv1beta1.WorkSpec{
+					Workload: fleetv1beta1.WorkloadTemplate{
+						Manifests: []fleetv1beta1.Manifest{{RawExtension: runtime.RawExtension{Raw: []byte("{}")}}},
+					},
+				},
+			},
+			expectChanged: true,
+		},
+
+		{
+			name: "Update existing work even if it does not have the resource snapshot label",
+			existingWork: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: namespace,
+					Annotations: map[string]string{
+						fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: "hash1",
+					},
+				},
+				Spec: fleetv1beta1.WorkSpec{
+					Workload: fleetv1beta1.WorkloadTemplate{
+						Manifests: []fleetv1beta1.Manifest{{RawExtension: runtime.RawExtension{Raw: []byte("{}")}}},
+					},
+				},
+			},
+			expectChanged: true,
+		},
+		{
+			name: "Do not update the existing work if it already points to the same resource and override snapshots",
+			existingWork: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: namespace,
+					Labels: map[string]string{
+						fleetv1beta1.ParentResourceSnapshotIndexLabel: "1",
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.ParentResourceSnapshotNameAnnotation:                "snapshot-1",
+						fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: "hash1",
+						fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        "hash2",
+					},
+				},
+				Spec: fleetv1beta1.WorkSpec{
+					Workload: fleetv1beta1.WorkloadTemplate{
+						Manifests: []fleetv1beta1.Manifest{{RawExtension: runtime.RawExtension{Raw: []byte("{}")}}},
+					},
+				},
+			},
+			expectChanged: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := serviceScheme(t)
+			objects := []client.Object{resourceSnapshot}
+			if tt.existingWork != nil {
+				objects = append(objects, tt.existingWork)
+			}
+			fakeClient := fake.NewClientBuilder().
+				WithStatusSubresource(objects...).
+				WithScheme(scheme).
+				WithObjects(objects...).
+				Build()
+			// Create reconciler with custom client
+			reconciler := &Reconciler{
+				Client:          fakeClient,
+				recorder:        record.NewFakeRecorder(10),
+				InformerManager: &informer.FakeManager{},
+			}
+			changed, _ := reconciler.upsertWork(ctx, newWork, tt.existingWork, resourceSnapshot)
+			if changed != tt.expectChanged {
+				t.Fatalf("expected changed: %v, got: %v", tt.expectChanged, changed)
+			}
+			upsertedWork := &fleetv1beta1.Work{}
+			if fakeClient.Get(ctx, client.ObjectKeyFromObject(newWork), upsertedWork) != nil {
+				t.Fatalf("failed to get upserted work")
+			}
+			if diff := cmp.Diff(newWork, upsertedWork, cmpOptions...); diff != "" {
+				t.Errorf("upsertWork didn't update the work, mismatch (-want +got):\n%s", diff)
+			}
+			if tt.expectChanged {
+				// check if the deployment is applied
+				var u unstructured.Unstructured
+				if err := u.UnmarshalJSON(upsertedWork.Spec.Workload.Manifests[0].Raw); err != nil {
+					t.Fatalf("Failed to unmarshl the result: %v, want nil", err)
+				}
+				var deployment appsv1.Deployment
+				if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &deployment); err != nil {
+					t.Fatalf("Failed to convert the result to deployment: %v, want nil", err)
+				}
+				if diff := cmp.Diff(testDeployment, deployment); diff != "" {
+					t.Errorf("applyJSONPatchOverride() deployment mismatch (-want, +got):\n%s", diff)
+				}
 			}
 		})
 	}
