@@ -23,16 +23,13 @@ type CloudConfig struct {
 	azclient.ARMClientConfig `json:",inline" mapstructure:",squash"`
 	azclient.AzureAuthConfig `json:",inline" mapstructure:",squash"`
 	ratelimit.Config         `json:",inline" mapstructure:",squash"`
-	// name of cluster
-	ClusterName string `json:"clusterName,omitempty" mapstructure:"clusterName,omitempty"`
+
 	// azure resource location
 	Location string `json:"location,omitempty" mapstructure:"location,omitempty"`
 	// subscription ID
 	SubscriptionID string `json:"subscriptionID,omitempty" mapstructure:"subscriptionID,omitempty"`
 	// default resource group where the azure resources are deployed
 	ResourceGroup string `json:"resourceGroup,omitempty" mapstructure:"resourceGroup,omitempty"`
-	// default resource group where the cluster is deployed
-	ClusterResourceGroup string `json:"clusterResourceGroup,omitempty" mapstructure:"resourceGroup,omitempty"`
 	// name of the virtual network of cluster
 	VnetName string `json:"vnetName,omitempty" mapstructure:"vnetName,omitempty"`
 	// name of the resource group where the virtual network is deployed
@@ -91,14 +88,6 @@ func (cfg *CloudConfig) validate() error {
 		return fmt.Errorf("resource group is empty")
 	}
 
-	if cfg.ClusterResourceGroup == "" {
-		return fmt.Errorf("cluster resource group is empty")
-	}
-
-	if cfg.ClusterName == "" {
-		return fmt.Errorf("cluster name is empty")
-	}
-
 	if cfg.VnetName == "" {
 		return fmt.Errorf("virtual network name is empty")
 	}
@@ -146,8 +135,6 @@ func (cfg *CloudConfig) trimSpace() {
 	cfg.UserAssignedIdentityID = strings.TrimSpace(cfg.UserAssignedIdentityID)
 	cfg.AADClientID = strings.TrimSpace(cfg.AADClientID)
 	cfg.AADClientSecret = strings.TrimSpace(cfg.AADClientSecret)
-	cfg.ClusterResourceGroup = strings.TrimSpace(cfg.ClusterResourceGroup)
 	cfg.VnetName = strings.TrimSpace(cfg.VnetName)
 	cfg.VnetResourceGroup = strings.TrimSpace(cfg.VnetResourceGroup)
-	cfg.ClusterName = strings.TrimSpace(cfg.ClusterName)
 }

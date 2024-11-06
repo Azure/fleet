@@ -6,8 +6,6 @@
   "userAssignedIdentityID": "11111111-1111-1111-1111-111111111111",
   "resourceGroup": "test-rg",
   "location": "eastus",
-  "clusterResourceGroup": "test-rg",
-  "clusterName": "test-cluster",
   "vnetName": "test-vnet",
-  "vnetResourceGroup": "test-rg",
+  "vnetResourceGroup": "test-rg"
 }
