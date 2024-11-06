@@ -6,18 +6,25 @@ Licensed under the MIT license.
 package v1beta1
 
 const (
-	ClusterResourcePlacementKind        = "ClusterResourcePlacement"
-	ClusterResourcePlacementResource    = "clusterresourceplacements"
-	ClusterResourceBindingKind          = "ClusterResourceBinding"
-	ClusterResourceSnapshotKind         = "ClusterResourceSnapshot"
+	// ClusterResourcePlacementKind represents the kind of ClusterResourcePlacement.
+	ClusterResourcePlacementKind = "ClusterResourcePlacement"
+	// ClusterResourcePlacementResource represents the resource name for ClusterResourcePlacement.
+	ClusterResourcePlacementResource = "clusterresourceplacements"
+	// ClusterResourceBindingKind represents the kind of ClusterResourceBinding.
+	ClusterResourceBindingKind = "ClusterResourceBinding"
+	// ClusterResourceSnapshotKind represents the kind of ClusterResourceSnapshot.
+	ClusterResourceSnapshotKind = "ClusterResourceSnapshot"
+	// ClusterSchedulingPolicySnapshotKind represents the kind of ClusterSchedulingPolicySnapshot.
 	ClusterSchedulingPolicySnapshotKind = "ClusterSchedulingPolicySnapshot"
-	WorkKind                            = "Work"
-	AppliedWorkKind                     = "AppliedWork"
+	// WorkKind represents the kind of Work.
+	WorkKind = "Work"
+	// AppliedWorkKind represents the kind of AppliedWork.
+	AppliedWorkKind = "AppliedWork"
 )
 
 const (
+	// fleetPrefix is the prefix used for official fleet labels/annotations.
 	// Unprefixed labels/annotations are reserved for end-users
-	// we will add a kubernetes-fleet.io to designate these labels/annotations as official fleet labels/annotations.
 	// See https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#label-selector-and-annotation-conventions
 	fleetPrefix = "kubernetes-fleet.io/"
 
@@ -29,25 +36,25 @@ const (
 	// cluster.
 	WorkFinalizer = fleetPrefix + "work-cleanup"
 
-	// CRPTrackingLabel is the label that points to the cluster resource policy that creates a resource binding.
+	// CRPTrackingLabel points to the cluster resource placement that creates this resource binding.
 	CRPTrackingLabel = fleetPrefix + "parent-CRP"
 
-	// IsLatestSnapshotLabel tells if the snapshot is the latest one.
+	// IsLatestSnapshotLabel indicates if the snapshot is the latest one.
 	IsLatestSnapshotLabel = fleetPrefix + "is-latest-snapshot"
 
-	// FleetResourceLabelKey is that label that indicates the resource is a fleet resource.
+	// FleetResourceLabelKey indicates that the resource is a fleet resource.
 	FleetResourceLabelKey = fleetPrefix + "is-fleet-resource"
 
-	// FirstWorkNameFmt is the format of the name of the work generated with first resource snapshot .
+	// FirstWorkNameFmt is the format of the name of the work generated with the first resource snapshot.
 	// The name of the first work is {crpName}-work.
 	FirstWorkNameFmt = "%s-work"
 
-	// WorkNameWithSubindexFmt is the format of the name of a work generated with resource snapshot with subindex.
+	// WorkNameWithSubindexFmt is the format of the name of a work generated with a resource snapshot with a subindex.
 	// The name of the first work is {crpName}-{subindex}.
 	WorkNameWithSubindexFmt = "%s-%d"
 
-	// WorkNameWithConfigEnvelopeFmt is the format of the name of a work generated with config envelop.
-	// The format is {workPrefix}-configMap-uuid
+	// WorkNameWithConfigEnvelopeFmt is the format of the name of a work generated with a config envelope.
+	// The format is {workPrefix}-configMap-uuid.
 	WorkNameWithConfigEnvelopeFmt = "%s-configmap-%s"
 
 	// ParentClusterResourceOverrideSnapshotHashAnnotation is the annotation to work that contains the hash of the parent cluster resource override snapshot list.
@@ -65,25 +72,23 @@ const (
 	// ParentBindingLabel is the label applied to work that contains the name of the binding that generates the work.
 	ParentBindingLabel = fleetPrefix + "parent-resource-binding"
 
-	// CRPGenerationAnnotation is the annotation that indicates the generation of the CRP from
-	// which an object is derived or last updated.
+	// CRPGenerationAnnotation indicates the generation of the CRP from which an object is derived or last updated.
 	CRPGenerationAnnotation = fleetPrefix + "CRP-generation"
 
-	// EnvelopeConfigMapAnnotation is the annotation that indicates the configmap is an envelope configmap that contains resources
-	// we need to apply to the member cluster instead of the configMap itself.
+	// EnvelopeConfigMapAnnotation indicates the configmap is an envelope configmap containing resources we need to apply to the member cluster instead of the configMap itself.
 	EnvelopeConfigMapAnnotation = fleetPrefix + "envelope-configmap"
 
-	// EnvelopeTypeLabel is the label that marks the work object as generated from an envelope object.
+	// EnvelopeTypeLabel marks the work object as generated from an envelope object.
 	// The value of the annotation is the type of the envelope object.
 	EnvelopeTypeLabel = fleetPrefix + "envelope-work"
 
-	// EnvelopeNamespaceLabel is the label that contains the namespace of the envelope object that the work is generated from.
+	// EnvelopeNamespaceLabel contains the namespace of the envelope object that the work is generated from.
 	EnvelopeNamespaceLabel = fleetPrefix + "envelope-namespace"
 
-	// EnvelopeNameLabel is the label that contains the name of the envelope object that the work is generated from.
+	// EnvelopeNameLabel contains the name of the envelope object that the work is generated from.
 	EnvelopeNameLabel = fleetPrefix + "envelope-name"
 
-	// PreviousBindingStateAnnotation is the annotation that records the previous state of a binding.
+	// PreviousBindingStateAnnotation records the previous state of a binding.
 	// This is used to remember if an "unscheduled" binding was moved from a "bound" state or a "scheduled" state.
 	PreviousBindingStateAnnotation = fleetPrefix + "previous-binding-state"
 )
