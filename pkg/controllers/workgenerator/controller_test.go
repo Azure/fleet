@@ -237,8 +237,23 @@ func TestUpsertWork(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      workName,
 					Namespace: namespace,
-					Annotations: map[string]string{
-						fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: "hash1",
+				},
+				Spec: fleetv1beta1.WorkSpec{
+					Workload: fleetv1beta1.WorkloadTemplate{
+						Manifests: []fleetv1beta1.Manifest{{RawExtension: runtime.RawExtension{Raw: []byte("{}")}}},
+					},
+				},
+			},
+			expectChanged: true,
+		},
+		{
+			name: "Update existing work if it misses annotations even if the resource snapshot label is correct",
+			existingWork: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: namespace,
+					Labels: map[string]string{
+						fleetv1beta1.ParentResourceSnapshotIndexLabel: "1",
 					},
 				},
 				Spec: fleetv1beta1.WorkSpec{
@@ -249,16 +264,18 @@ func TestUpsertWork(t *testing.T) {
 			},
 			expectChanged: true,
 		},
-
 		{
-			name: "Update existing work even if it does not have the resource snapshot label",
+			name: "Update existing work if it does not have correct override snapshot hash",
 			existingWork: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      workName,
 					Namespace: namespace,
-					Annotations: map[string]string{
-						fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: "hash1",
+					Labels: map[string]string{
+						fleetv1beta1.ParentResourceSnapshotIndexLabel: "1",
 					},
+					Annotations: map[string]string{
+						fleetv1beta1.ParentResourceSnapshotNameAnnotation:                "snapshot-1",
+						fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: "wrong-hash"},
 				},
 				Spec: fleetv1beta1.WorkSpec{
 					Workload: fleetv1beta1.WorkloadTemplate{
@@ -326,14 +343,14 @@ func TestUpsertWork(t *testing.T) {
 				// check if the deployment is applied
 				var u unstructured.Unstructured
 				if err := u.UnmarshalJSON(upsertedWork.Spec.Workload.Manifests[0].Raw); err != nil {
-					t.Fatalf("Failed to unmarshl the result: %v, want nil", err)
+					t.Fatalf("Failed to unmarshal the result: %v, want nil", err)
 				}
 				var deployment appsv1.Deployment
 				if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &deployment); err != nil {
 					t.Fatalf("Failed to convert the result to deployment: %v, want nil", err)
 				}
 				if diff := cmp.Diff(testDeployment, deployment); diff != "" {
-					t.Errorf("applyJSONPatchOverride() deployment mismatch (-want, +got):\n%s", diff)
+					t.Errorf("The new Deployment mismatch (-want, +got):\n%s", diff)
 				}
 			}
 		})
