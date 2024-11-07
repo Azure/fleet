@@ -22,7 +22,7 @@ import (
 type CloudConfig struct {
 	azclient.ARMClientConfig `json:",inline" mapstructure:",squash"`
 	azclient.AzureAuthConfig `json:",inline" mapstructure:",squash"`
-	*ratelimit.Config        `json:",inline" mapstructure:",squash"` // if nil, ratelimit config will be set using default value
+	*ratelimit.Config        `json:",inline" mapstructure:",squash"` // if nil, the rate limiting will be enabled by default
 
 	// azure resource location
 	Location string `json:"location,omitempty" mapstructure:"location,omitempty"`
