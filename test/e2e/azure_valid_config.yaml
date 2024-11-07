@@ -7,3 +7,4 @@ config:
     location: "westus"
     vnetName: "test-vnet"
     vnetResourceGroup: "test-rg"
+    resourceGroup: "test-rg"
