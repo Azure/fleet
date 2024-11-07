@@ -64,8 +64,6 @@ The values can be modified under `config.cloudConfig` section in values.yaml or 
 | `resourceGroup`               | The name of the resource group where cluster resources are deployed. |                                                                           |
 | `userAgent`                   | The userAgent provided when accessing resources. |                                                                           |
 | `location`                    | The region where resource group and its resources is deployed. |                                                                           |
-| `clusterName`                 | The name of the cluster where the agent is running. |                                                                           |
-| `clusterResourceGroup`        | The resource group where the cluster is deployed. |                                                                           |
 | `vnetName`                    | The name of the virtual network where the cluster is deployed. |                                                                           |
 | `vnetResourceGroup`           | The resource group where the virtual network is deployed. |                                                                           |
 
@@ -84,8 +82,6 @@ config:
     userAgent: "fleet-member-agent"
     resourceGroup: "<resource group name>"
     location: "<resource group location>"
-    clusterName: "<cluster name>"
-    clusterResourceGroup: "<cluster resource group>"
     vnetName: "<vnet name>"
     vnetResourceGroup: "<vnet resource group>"
 ```

@@ -38,7 +38,7 @@ spec:
             - --property-provider={{ .Values.propertyProvider }}
             {{- end }}
             {{- if eq .Values.propertyProvider "azure" }}
-            - --cloud-config={{ .Values.cloudConfig }}
+            - --cloud-config=/etc/kubernetes/provider/azure.json
             {{- end }}
             {{- if .Values.region }}
             - --region={{ .Values.region }}

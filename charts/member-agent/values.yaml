@@ -48,8 +48,6 @@ config:
     location: ""
     vnetName: ""
     vnetResourceGroup: ""
-    clusterName: ""
-    clusterResourceGroup: ""
 
 secret:
   name: "hub-kubeconfig-secret"
