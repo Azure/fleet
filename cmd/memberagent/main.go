@@ -49,6 +49,7 @@ import (
 	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/propertyprovider/azure"
 	"go.goms.io/fleet/pkg/utils"
+	azureCloudConfig "go.goms.io/fleet/pkg/utils/cloudconfig/azure"
 	"go.goms.io/fleet/pkg/utils/httpclient"
 	//+kubebuilder:scaffold:imports
 )
@@ -366,10 +367,15 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		switch {
 		case propertyProvider != nil && *propertyProvider == azurePropertyProvider:
 			klog.V(2).Info("setting up the Azure property provider")
-			// TODO: Set cloud configuration.
 			// Note that the property provider, though initialized here, is not started until
 			// the specific instance wins the leader election.
-			klog.V(1).InfoS("Cloud config loaded successfully", "config", cloudConfigFile)
+			cloudConfig, err := azureCloudConfig.NewCloudConfigFromFile(*cloudConfigFile)
+			if err != nil {
+				klog.ErrorS(err, "Unable to load cloud config", "file name", *cloudConfigFile)
+				return fmt.Errorf("unable to load cloud config: %w", err)
+			}
+			cloudConfig.SetUserAgent("fleet-member-agent")
+			klog.V(1).InfoS("Cloud config loaded successfully", "config", cloudConfig)
 			pp = azure.New(region)
 		default:
 			// Fall back to not using any property provider if the provided type is none or
