@@ -25,7 +25,6 @@ export HUB_AGENT_IMAGE="${HUB_AGENT_IMAGE:-hub-agent}"
 export MEMBER_AGENT_IMAGE="${MEMBER_AGENT_IMAGE:-member-agent}"
 export REFRESH_TOKEN_IMAGE="${REFRESH_TOKEN_IMAGE:-refresh-token}"
 export PROPERTY_PROVIDER="${PROPERTY_PROVIDER:-azure}"
-export CLOUD_CONFIG_FILE="${CLOUD_CONFIG_FILE:-"/etc/kubernetes/provider/config.json"}"
 export USE_PREDEFINED_REGIONS="${USE_PREDEFINED_REGIONS:-false}"
 # The pre-defined regions; if the AKS property provider is used.
 #
@@ -186,7 +185,6 @@ do
             --set enableV1Alpha1APIs=false \
             --set enableV1Beta1APIs=true \
             --set propertyProvider=$PROPERTY_PROVIDER \
-            --set cloudConfig=$CLOUD_CONFIG_FILE \
             --set region=${REGIONS[$i]} \
             -f azure_valid_config.yaml
     else
@@ -204,7 +202,6 @@ do
             --set enableV1Alpha1APIs=false \
             --set enableV1Beta1APIs=true \
             --set propertyProvider=$PROPERTY_PROVIDER \
-            --set cloudConfig=$CLOUD_CONFIG_FILE \
             -f azure_valid_config.yaml
     fi
 done
