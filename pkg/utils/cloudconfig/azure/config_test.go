@@ -6,6 +6,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 func TestTrimSpace(t *testing.T) {
@@ -162,6 +163,13 @@ func TestValidate(t *testing.T) {
 				ResourceGroup:     "v",
 				VnetName:          "vn",
 				VnetResourceGroup: "",
+				Config: &ratelimit.Config{
+					CloudProviderRateLimit:            true,
+					CloudProviderRateLimitQPS:         1.0,
+					CloudProviderRateLimitBucket:      5,
+					CloudProviderRateLimitQPSWrite:    1.0,
+					CloudProviderRateLimitBucketWrite: 5,
+				},
 			},
 			wantConfig: &CloudConfig{
 				ARMClientConfig: azclient.ARMClientConfig{
@@ -176,6 +184,52 @@ func TestValidate(t *testing.T) {
 				ResourceGroup:     "v",
 				VnetName:          "vn",
 				VnetResourceGroup: "v",
+				Config: &ratelimit.Config{
+					CloudProviderRateLimit:            true,
+					CloudProviderRateLimitQPS:         consts.RateLimitQPSDefault,
+					CloudProviderRateLimitBucket:      consts.RateLimitBucketDefault,
+					CloudProviderRateLimitBucketWrite: consts.RateLimitBucketDefault,
+					CloudProviderRateLimitQPSWrite:    consts.RateLimitQPSDefault,
+				},
+			},
+			wantPass: true,
+		},
+		"ratelimit.Config nil": {
+			config: &CloudConfig{
+				ARMClientConfig: azclient.ARMClientConfig{
+					Cloud: "c",
+				},
+				AzureAuthConfig: azclient.AzureAuthConfig{
+					UseManagedIdentityExtension: true,
+					UserAssignedIdentityID:      "a",
+				},
+				Location:          "l",
+				SubscriptionID:    "s",
+				ResourceGroup:     "v",
+				VnetName:          "vn",
+				VnetResourceGroup: "v",
+				Config:            nil,
+			},
+			wantConfig: &CloudConfig{
+				ARMClientConfig: azclient.ARMClientConfig{
+					Cloud: "c",
+				},
+				AzureAuthConfig: azclient.AzureAuthConfig{
+					UseManagedIdentityExtension: true,
+					UserAssignedIdentityID:      "a",
+				},
+				Location:          "l",
+				SubscriptionID:    "s",
+				ResourceGroup:     "v",
+				VnetName:          "vn",
+				VnetResourceGroup: "v",
+				Config: &ratelimit.Config{
+					CloudProviderRateLimit:            true,
+					CloudProviderRateLimitQPS:         consts.RateLimitQPSDefault,
+					CloudProviderRateLimitBucket:      consts.RateLimitBucketDefault,
+					CloudProviderRateLimitBucketWrite: consts.RateLimitBucketDefault,
+					CloudProviderRateLimitQPSWrite:    consts.RateLimitQPSDefault,
+				},
 			},
 			wantPass: true,
 		},
@@ -231,7 +285,7 @@ func TestValidate(t *testing.T) {
 			},
 			wantPass: false,
 		},
-		"RateLimitConfig values are zero": {
+		"ratelimit.Config values are zero": {
 			config: &CloudConfig{
 				ARMClientConfig: azclient.ARMClientConfig{
 					Cloud: "c",
@@ -246,7 +300,7 @@ func TestValidate(t *testing.T) {
 				SubscriptionID: "s",
 				ResourceGroup:  "v",
 				VnetName:       "vn",
-				Config: ratelimit.Config{
+				Config: &ratelimit.Config{
 					CloudProviderRateLimit:            true,
 					CloudProviderRateLimitQPS:         0,
 					CloudProviderRateLimitBucket:      0,
@@ -269,17 +323,17 @@ func TestValidate(t *testing.T) {
 				ResourceGroup:     "v",
 				VnetName:          "vn",
 				VnetResourceGroup: "v",
-				Config: ratelimit.Config{
+				Config: &ratelimit.Config{
 					CloudProviderRateLimit:            true,
-					CloudProviderRateLimitQPS:         1.0,
-					CloudProviderRateLimitBucket:      5,
-					CloudProviderRateLimitQPSWrite:    1.0,
-					CloudProviderRateLimitBucketWrite: 5,
+					CloudProviderRateLimitQPS:         consts.RateLimitQPSDefault,
+					CloudProviderRateLimitBucket:      consts.RateLimitBucketDefault,
+					CloudProviderRateLimitBucketWrite: consts.RateLimitBucketDefault,
+					CloudProviderRateLimitQPSWrite:    consts.RateLimitQPSDefault,
 				},
 			},
 			wantPass: true,
 		},
-		"RateLimitConfig with non-zero values": {
+		"ratelimit.Config with non-zero values": {
 			config: &CloudConfig{
 				ARMClientConfig: azclient.ARMClientConfig{
 					Cloud: "c",
@@ -294,7 +348,7 @@ func TestValidate(t *testing.T) {
 				SubscriptionID: "s",
 				ResourceGroup:  "v",
 				VnetName:       "vn",
-				Config: ratelimit.Config{
+				Config: &ratelimit.Config{
 					CloudProviderRateLimit:            true,
 					CloudProviderRateLimitQPS:         2,
 					CloudProviderRateLimitBucket:      4,
@@ -317,7 +371,7 @@ func TestValidate(t *testing.T) {
 				ResourceGroup:     "v",
 				VnetName:          "vn",
 				VnetResourceGroup: "v",
-				Config: ratelimit.Config{
+				Config: &ratelimit.Config{
 					CloudProviderRateLimit:            true,
 					CloudProviderRateLimitQPS:         2,
 					CloudProviderRateLimitBucket:      4,
@@ -342,7 +396,7 @@ func TestValidate(t *testing.T) {
 				SubscriptionID: "s",
 				ResourceGroup:  "v",
 				VnetName:       "vn",
-				Config: ratelimit.Config{
+				Config: &ratelimit.Config{
 					CloudProviderRateLimit: false,
 				},
 			},
@@ -361,7 +415,7 @@ func TestValidate(t *testing.T) {
 				ResourceGroup:     "v",
 				VnetName:          "vn",
 				VnetResourceGroup: "v",
-				Config: ratelimit.Config{
+				Config: &ratelimit.Config{
 					CloudProviderRateLimit: false,
 				},
 			},
@@ -378,10 +432,18 @@ func TestValidate(t *testing.T) {
 					AADClientID:                 "1",
 					AADClientSecret:             "2",
 				},
-				Location:       "l",
-				SubscriptionID: "s",
-				ResourceGroup:  "v",
-				VnetName:       "vn",
+				Location:          "l",
+				SubscriptionID:    "s",
+				ResourceGroup:     "v",
+				VnetName:          "vn",
+				VnetResourceGroup: "v",
+				Config: &ratelimit.Config{
+					CloudProviderRateLimit:            true,
+					CloudProviderRateLimitQPS:         consts.RateLimitQPSDefault,
+					CloudProviderRateLimitBucket:      consts.RateLimitBucketDefault,
+					CloudProviderRateLimitBucketWrite: consts.RateLimitBucketDefault,
+					CloudProviderRateLimitQPSWrite:    consts.RateLimitQPSDefault,
+				},
 			},
 			wantConfig: &CloudConfig{
 				ARMClientConfig: azclient.ARMClientConfig{
@@ -398,6 +460,13 @@ func TestValidate(t *testing.T) {
 				ResourceGroup:     "v",
 				VnetName:          "vn",
 				VnetResourceGroup: "v",
+				Config: &ratelimit.Config{
+					CloudProviderRateLimit:            true,
+					CloudProviderRateLimitQPS:         consts.RateLimitQPSDefault,
+					CloudProviderRateLimitBucket:      consts.RateLimitBucketDefault,
+					CloudProviderRateLimitBucketWrite: consts.RateLimitBucketDefault,
+					CloudProviderRateLimitQPSWrite:    consts.RateLimitQPSDefault,
+				},
 			},
 			wantPass: true,
 		},
@@ -410,10 +479,18 @@ func TestValidate(t *testing.T) {
 					UseManagedIdentityExtension: true,
 					UserAssignedIdentityID:      "u",
 				},
-				Location:       "l",
-				SubscriptionID: "s",
-				ResourceGroup:  "v",
-				VnetName:       "vn",
+				Location:          "l",
+				SubscriptionID:    "s",
+				ResourceGroup:     "v",
+				VnetName:          "vn",
+				VnetResourceGroup: "v",
+				Config: &ratelimit.Config{
+					CloudProviderRateLimit:            true,
+					CloudProviderRateLimitQPS:         consts.RateLimitQPSDefault,
+					CloudProviderRateLimitBucket:      consts.RateLimitBucketDefault,
+					CloudProviderRateLimitBucketWrite: consts.RateLimitBucketDefault,
+					CloudProviderRateLimitQPSWrite:    consts.RateLimitQPSDefault,
+				},
 			},
 			wantConfig: &CloudConfig{
 				ARMClientConfig: azclient.ARMClientConfig{
@@ -428,6 +505,13 @@ func TestValidate(t *testing.T) {
 				ResourceGroup:     "v",
 				VnetName:          "vn",
 				VnetResourceGroup: "v",
+				Config: &ratelimit.Config{
+					CloudProviderRateLimit:            true,
+					CloudProviderRateLimitQPS:         consts.RateLimitQPSDefault,
+					CloudProviderRateLimitBucket:      consts.RateLimitBucketDefault,
+					CloudProviderRateLimitBucketWrite: consts.RateLimitBucketDefault,
+					CloudProviderRateLimitQPSWrite:    consts.RateLimitQPSDefault,
+				},
 			},
 			wantPass: true,
 		},
@@ -489,8 +573,12 @@ func TestNewCloudConfigFromFile(t *testing.T) {
 				ResourceGroup:     "test-rg",
 				VnetName:          "test-vnet",
 				VnetResourceGroup: "test-rg",
-				Config: ratelimit.Config{
-					CloudProviderRateLimit: false,
+				Config: &ratelimit.Config{
+					CloudProviderRateLimit:            true,
+					CloudProviderRateLimitQPS:         consts.RateLimitQPSDefault,
+					CloudProviderRateLimitBucket:      consts.RateLimitBucketDefault,
+					CloudProviderRateLimitBucketWrite: consts.RateLimitBucketDefault,
+					CloudProviderRateLimitQPSWrite:    consts.RateLimitQPSDefault,
 				},
 			},
 			wantErr: false,

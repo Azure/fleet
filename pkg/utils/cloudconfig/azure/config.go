@@ -22,7 +22,7 @@ import (
 type CloudConfig struct {
 	azclient.ARMClientConfig `json:",inline" mapstructure:",squash"`
 	azclient.AzureAuthConfig `json:",inline" mapstructure:",squash"`
-	ratelimit.Config         `json:",inline" mapstructure:",squash"`
+	*ratelimit.Config        `json:",inline" mapstructure:",squash"` // if nil, ratelimit config will be set using default value
 
 	// azure resource location
 	Location string `json:"location,omitempty" mapstructure:"location,omitempty"`
@@ -103,6 +103,11 @@ func (cfg *CloudConfig) validate() error {
 		if cfg.AADClientID == "" || cfg.AADClientSecret == "" {
 			return fmt.Errorf("AAD client ID or AAD client secret is empty")
 		}
+	}
+
+	// if not specified, apply default rate limit config
+	if cfg.Config == nil {
+		cfg.Config = &ratelimit.Config{CloudProviderRateLimit: true}
 	}
 
 	if cfg.CloudProviderRateLimit {
