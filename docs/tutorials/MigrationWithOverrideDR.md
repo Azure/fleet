@@ -270,6 +270,9 @@ When the clusters in WestUS are nearing capacity limits and risk becoming overlo
 For this tutorial, we will move them to WestEurope.
 
 ## Create Resource Override
+
+> Note: Cluster resource override test file located [here](./testfiles/ro-1.yaml)
+
 To scale up during migration, apply this override before updating crp:
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1alpha1
