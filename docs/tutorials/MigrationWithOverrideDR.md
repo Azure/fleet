@@ -15,6 +15,9 @@ Due to a sudden increase in traffic and resource demands in your WestUS clusters
 The following resources are currently deployed in the WestUS clusters:
 
 #### Service
+
+Service test file located here: https://github.com/Azure/fleet/blob/main/docs/tutorials/tesfiles/nginx-service.yaml
+
 ```yaml
 apiVersion: v1
 kind: Service
@@ -36,6 +39,9 @@ Summary:
 - It targets pods with the label app: nginx and forwards traffic to port 80 on the pods.
 
 #### Deployment
+
+Deployment test file located here: https://github.com/Azure/fleet/blob/main/docs/tutorials/tesfiles/nginx-deployment.yaml
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -67,6 +73,9 @@ Summary:
 - The pods are labeled with `app: nginx` and expose port 80.
 
 #### ClusterResourcePlacement
+
+CRP Availability test file located here: https://github.com/Azure/fleet/blob/main/docs/tutorials/tesfiles/crp-availability.yaml
+
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1
 kind: ClusterResourcePlacement
