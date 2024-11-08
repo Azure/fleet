@@ -16,7 +16,7 @@ The following resources are currently deployed in the WestUS clusters:
 
 #### Service
 
-Service test file located [here](./testfiles/nginx-service.yaml)
+> Note: Service test file located [here](./testfiles/nginx-service.yaml).
 
 ```yaml
 apiVersion: v1
