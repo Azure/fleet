@@ -79,9 +79,6 @@ spec:
                   name:
                     description: Name of the object being referenced.
                     type: string
-                    x-kubernetes-validations:
-                      - message: Name of the object should be restricted to 63
-                        rule: length(self) <= 63
                   namespace:
                     description: |-
                       Namespace of the referenced object.  If the object kind is non-namespace, such as "User" or "Group", and this value is not empty
