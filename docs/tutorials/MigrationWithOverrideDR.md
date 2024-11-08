@@ -318,13 +318,13 @@ spec:
   strategy:
     type: RollingUpdate
 ```
-Update the `crp.yaml` to reflect selecting clusters with higher node-count and apply it:
+Update the `crp-availability.yaml` to reflect selecting clusters with higher node-count and apply it:
 ```bash
-kubectl apply -f crp.yaml
+kubectl apply -f crp-availability.yaml
 ```
 
 ### Results
-After applying the updated `crp.yaml`, the Fleet will schedule the application on the available clusters in WestEurope as they each have 3 nodes.
+After applying the updated `crp-availability.yaml`, the Fleet will schedule the application on the available clusters in WestEurope as they each have 3 nodes.
 You can check the status of the CRP to ensure that the application has been successfully migrated and is running in the new region:
 ```bash
 kubectl get crp crp-availability -o yaml
