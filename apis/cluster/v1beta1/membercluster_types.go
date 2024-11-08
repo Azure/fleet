@@ -46,6 +46,7 @@ type MemberClusterSpec struct {
 	// The identity used by the member cluster to access the hub cluster.
 	// The hub agents deployed on the hub cluster will automatically grant the minimal required permissions to this identity for the member agents deployed on the member cluster to access the hub cluster.
 	// +required
+	// +kubebuilder:validation:items:XValidation:fieldPath="Name",message="Name of the object should be restricted to 63",rule="length(self) <= 63" on rbacv1.Subject
 	Identity rbacv1.Subject `json:"identity"`
 
 	// +kubebuilder:default=60
