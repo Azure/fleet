@@ -1,0 +1,26 @@
+apiVersion: placement.kubernetes-fleet.io/v1
+kind: ClusterResourcePlacement
+metadata:
+  name: crp-availability
+spec:
+  policy:
+    placementType: PickN
+    numberOfClusters: 2
+    affinity:
+      clusterAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          clusterSelectorTerms:
+            - propertySelector:
+                matchExpressions:
+                  - name: kubernetes-fleet.io/node-count
+                    operator: Ge
+                    values:
+                      - "3"
+  resourceSelectors:
+    - group: ""
+      kind: Namespace
+      name: test-app
+      version: v1
+  revisionHistoryLimit: 10
+  strategy:
+    type: RollingUpdate
