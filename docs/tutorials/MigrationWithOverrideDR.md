@@ -16,7 +16,7 @@ The following resources are currently deployed in the WestUS clusters:
 
 #### Service
 
-Service test file located here: [https://github.com/Azure/fleet/blob/main/docs/tutorials/tesfiles/nginx-service.yaml] (./tesfiles/nginx-service.yaml)
+Service test file located [here] (./tesfiles/nginx-service.yaml)
 
 ```yaml
 apiVersion: v1
@@ -40,7 +40,7 @@ Summary:
 
 #### Deployment
 
-Deployment test file located here: [https://github.com/Azure/fleet/blob/main/docs/tutorials/tesfiles/nginx-deployment.yaml] (./tesfiles/nginx-deployment.yaml)
+Deployment test file located [here] (./tesfiles/nginx-deployment.yaml)
 
 ```yaml
 apiVersion: apps/v1
@@ -74,7 +74,7 @@ Summary:
 
 #### ClusterResourcePlacement
 
-CRP Availability test file located here: [https://github.com/Azure/fleet/blob/main/docs/tutorials/tesfiles/crp-availability.yaml] (./tesfiles/crp-availability.yaml)
+CRP Availability test file located [here] (./tesfiles/crp-availability.yaml)
 
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1
