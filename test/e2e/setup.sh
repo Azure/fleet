@@ -186,7 +186,7 @@ do
             --set enableV1Beta1APIs=true \
             --set propertyProvider=$PROPERTY_PROVIDER \
             --set region=${REGIONS[$i]} \
-            -f azure_valid_config.yaml
+            $( [ "$PROPERTY_PROVIDER" = "azure" ] && echo "-f azure_valid_config.yaml" )
     else
         helm install member-agent ../../charts/member-agent/ \
             --set config.hubURL=$HUB_SERVER_URL \
@@ -202,7 +202,7 @@ do
             --set enableV1Alpha1APIs=false \
             --set enableV1Beta1APIs=true \
             --set propertyProvider=$PROPERTY_PROVIDER \
-            -f azure_valid_config.yaml
+            $( [ "$PROPERTY_PROVIDER" = "azure" ] && echo "-f azure_valid_config.yaml" )
     fi
 done
 

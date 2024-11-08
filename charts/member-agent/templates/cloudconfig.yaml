@@ -6,5 +6,5 @@ metadata:
   namespace: {{ .Values.namespace }}
 type: Opaque
 data:
-  config.json: {{ .Values.config.cloudConfig | toJson | indent 4 | b64enc | quote }}
+  config.json: {{ .Values.config.azureCloudConfig | toJson | indent 4 | b64enc | quote }}
 {{- end }}

@@ -35,7 +35,7 @@ config:
   identityKey: "identity-key-path"
   identityCert: "identity-cert-path"
   CABundle: "ca-bundle-path"
-  cloudConfig:
+  azureCloudConfig:
     cloud: ""
     tenantId: ""
     subscriptionId: ""

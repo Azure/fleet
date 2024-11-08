@@ -29,27 +29,27 @@ helm upgrade member-agent member-agent/ --namespace fleet-system
 
 ## Parameters
 
-| Parameter          | Description                                                                                                                                                                                                                                    | Default                                              |
-|:-------------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:-----------------------------------------------------|
-| replicaCount       | The number of member-agent replicas to deploy                                                                                                                                                                                                  | `1`                                                  |
-| image.repository   | Image repository                                                                                                                                                                                                                               | `ghcr.io/azure/azure/fleet/member-agent`             |
-| image.pullPolicy   | Image pullPolicy                                                                                                                                                                                                                               | `IfNotPresent`                                       |
-| image.tag          | The image tag to use                                                                                                                                                                                                                           | `v0.1.0`                                             |
-| affinity           | The node affinity to use for pod scheduling                                                                                                                                                                                                    | `{}`                                                 |
-| tolerations        | The toleration to use for pod scheduling                                                                                                                                                                                                       | `[]`                                                 |
-| resources          | The resource request/limits for the container image                                                                                                                                                                                            | limits: "2" CPU, 4Gi, requests: 100m CPU, 128Mi      |
-| namespace          | Namespace that this Helm chart is installed on.                                                                                                                                                                                                | `fleet-system`                                       |
-| logVerbosity       | Log level. Uses V logs (klog)                                                                                                                                                                                                                  | `3`                                                  |
-| propertyProvider   | The property provider to use with the member agent; if none is specified, the Fleet member agent will start with no property provider (i.e., the agent will expose no cluster properties, and collect only limited resource usage information) | ``                                                   |
-| region             | The region where the member cluster resides                                                                                                                                                                                                    | ``                                                   |
-| config.cloudConfig | The cloud provider configuration                                                                                                                                                                                                               | **required if property provider is set to azure**    |
+| Parameter               | Description                                                                                                                                                                                                                                    | Default                                              |
+|:------------------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:-----------------------------------------------------|
+| replicaCount            | The number of member-agent replicas to deploy                                                                                                                                                                                                  | `1`                                                  |
+| image.repository        | Image repository                                                                                                                                                                                                                               | `ghcr.io/azure/azure/fleet/member-agent`             |
+| image.pullPolicy        | Image pullPolicy                                                                                                                                                                                                                               | `IfNotPresent`                                       |
+| image.tag               | The image tag to use                                                                                                                                                                                                                           | `v0.1.0`                                             |
+| affinity                | The node affinity to use for pod scheduling                                                                                                                                                                                                    | `{}`                                                 |
+| tolerations             | The toleration to use for pod scheduling                                                                                                                                                                                                       | `[]`                                                 |
+| resources               | The resource request/limits for the container image                                                                                                                                                                                            | limits: "2" CPU, 4Gi, requests: 100m CPU, 128Mi      |
+| namespace               | Namespace that this Helm chart is installed on.                                                                                                                                                                                                | `fleet-system`                                       |
+| logVerbosity            | Log level. Uses V logs (klog)                                                                                                                                                                                                                  | `3`                                                  |
+| propertyProvider        | The property provider to use with the member agent; if none is specified, the Fleet member agent will start with no property provider (i.e., the agent will expose no cluster properties, and collect only limited resource usage information) | ``                                                   |
+| region                  | The region where the member cluster resides                                                                                                                                                                                                    | ``                                                   |
+| config.azureCloudConfig | The cloud provider configuration                                                                                                                                                                                                               | **required if property provider is set to azure**    |
 
 ## Override Azure cloud config
 
 **If PropertyProvider feature is set to azure, then a cloud configuration is required.**
 Cloud configuration provides resource metadata and credentials for `fleet-member-agent` to manipulate Azure resources. 
 It's embedded into a Kubernetes secret and mounted to the pods. 
-The values can be modified under `config.cloudConfig` section in values.yaml or can be provided as a separate file.
+The values can be modified under `config.azureCloudConfig` section in values.yaml or can be provided as a separate file.
 
 
 | configuration value                                   | description | Remark                                                                    |
@@ -71,7 +71,7 @@ You can create a file `azure.yaml` with the following content, and pass it to `h
 
 ```yaml
 config:
-  cloudConfig:
+  azureCloudConfig:
     cloud: "AzurePublicCloud"
     tenantId: "00000000-0000-0000-0000-000000000000"
     subscriptionId: "00000000-0000-0000-0000-000000000000"
