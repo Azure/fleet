@@ -70,6 +70,7 @@ func TestCleanUpAllBindingsFor(t *testing.T) {
 				Labels: map[string]string{
 					fleetv1beta1.CRPTrackingLabel: crpName,
 				},
+				Finalizers: []string{fleetv1beta1.SchedulerCRBCleanupFinalizer},
 			},
 		},
 		{
@@ -78,6 +79,7 @@ func TestCleanUpAllBindingsFor(t *testing.T) {
 				Labels: map[string]string{
 					fleetv1beta1.CRPTrackingLabel: crpName,
 				},
+				Finalizers: []string{fleetv1beta1.SchedulerCRBCleanupFinalizer},
 			},
 		},
 	}

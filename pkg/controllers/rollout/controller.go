@@ -281,6 +281,7 @@ func createUpdateInfo(binding *fleetv1beta1.ClusterResourceBinding, crp *fleetv1
 	desiredBinding.Spec.ResourceSnapshotName = latestResourceSnapshot.Name
 	// update the resource apply strategy when controller rolls out the new changes
 	desiredBinding.Spec.ApplyStrategy = crp.Spec.Strategy.ApplyStrategy
+	// TODO: check the size of the cro and ro to not exceed the limit
 	desiredBinding.Spec.ClusterResourceOverrideSnapshots = cro
 	desiredBinding.Spec.ResourceOverrideSnapshots = ro
 	return toBeUpdatedBinding{
@@ -520,6 +521,7 @@ func calculateMaxToAdd(crp *fleetv1beta1.ClusterResourcePlacement, targetNumber 
 		upperBoundReadyNumber, "maxNumberOfBindingsToAdd", maxNumberToAdd)
 	return maxNumberToAdd
 }
+
 func (r *Reconciler) calculateRealTarget(crp *fleetv1beta1.ClusterResourcePlacement, schedulerTargetedBinds []*fleetv1beta1.ClusterResourceBinding) int {
 	crpKObj := klog.KObj(crp)
 	// calculate the target number of bindings

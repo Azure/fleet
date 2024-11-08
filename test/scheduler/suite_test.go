@@ -38,6 +38,7 @@ import (
 	"go.goms.io/fleet/pkg/scheduler"
 	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/queue"
+	"go.goms.io/fleet/pkg/scheduler/watchers/clusterresourcebinding"
 	"go.goms.io/fleet/pkg/scheduler/watchers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/scheduler/watchers/clusterschedulingpolicysnapshot"
 	"go.goms.io/fleet/pkg/scheduler/watchers/membercluster"
@@ -583,6 +584,13 @@ func beforeSuiteForProcess1() []byte {
 	}
 	err = memberClusterWatcher.SetupWithManager(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred(), "Failed to set up member cluster watcher with controller manager")
+
+	clusterResourceBindingWatcher := clusterresourcebinding.Reconciler{
+		Client:             hubClient,
+		SchedulerWorkQueue: schedulerWorkQueue,
+	}
+	err = clusterResourceBindingWatcher.SetupWithManager(ctrlMgr)
+	Expect(err).NotTo(HaveOccurred(), "Failed to set up cluster resource binding watcher with controller manager")
 
 	// Set up the scheduler.
 	fw := buildSchedulerFramework(ctrlMgr, clusterEligibilityChecker)
