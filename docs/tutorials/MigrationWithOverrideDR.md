@@ -16,7 +16,7 @@ The following resources are currently deployed in the WestUS clusters:
 
 #### Service
 
-Service test file located [here](./tesfiles/nginx-service.yaml)
+Service test file located [here](./testfiles/nginx-service.yaml)
 
 ```yaml
 apiVersion: v1
@@ -40,7 +40,7 @@ Summary:
 
 #### Deployment
 
-Deployment test file located [here](./tesfiles/nginx-deployment.yaml)
+Deployment test file located [here](./testfiles/nginx-deployment.yaml)
 
 ```yaml
 apiVersion: apps/v1
@@ -74,7 +74,7 @@ Summary:
 
 #### ClusterResourcePlacement
 
-CRP Availability test file located [here](./tesfiles/crp-availability.yaml)
+CRP Availability test file located [here](./testfiles/crp-availability.yaml)
 
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1
@@ -327,13 +327,13 @@ spec:
   strategy:
     type: RollingUpdate
 ```
-Update the [`crp-availability.yaml`](./tesfiles/crp-availability.yaml) to reflect selecting clusters with higher node-count and apply it:
+Update the [`crp-availability.yaml`](./testfiles/crp-availability.yaml) to reflect selecting clusters with higher node-count and apply it:
 ```bash
 kubectl apply -f crp-availability.yaml
 ```
 
 ### Results
-After applying the updated [`crp-availability.yaml`](./tesfiles/crp-availability.yaml), the Fleet will schedule the application on the available clusters in WestEurope as they each have 3 nodes.
+After applying the updated [`crp-availability.yaml`](./testfiles/crp-availability.yaml), the Fleet will schedule the application on the available clusters in WestEurope as they each have 3 nodes.
 You can check the status of the CRP to ensure that the application has been successfully migrated and is running in the new region:
 ```bash
 kubectl get crp crp-availability -o yaml
