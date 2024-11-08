@@ -4,18 +4,15 @@ metadata:
   name: crp-availability
 spec:
   policy:
-    placementType: PickN
-    numberOfClusters: 2
     affinity:
       clusterAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
           clusterSelectorTerms:
-            - propertySelector:
-                matchExpressions:
-                  - name: kubernetes-fleet.io/node-count
-                    operator: Ge
-                    values:
-                      - "3"
+            - labelSelector:
+                matchLabels:
+                  fleet.azure.com/location: westus
+    numberOfClusters: 2
+    placementType: PickN
   resourceSelectors:
     - group: ""
       kind: Namespace
