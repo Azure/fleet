@@ -74,7 +74,7 @@ Summary:
 
 #### ClusterResourcePlacement
 
-CRP Availability test file located [here](./testfiles/crp-availability.yaml)
+> Note: CRP Availability test file located [here](./testfiles/crp-availability.yaml)
 
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1
