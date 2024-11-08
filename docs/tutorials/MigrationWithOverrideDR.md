@@ -40,7 +40,7 @@ Summary:
 
 #### Deployment
 
-Deployment test file located [here](./testfiles/nginx-deployment.yaml)
+> Note: Deployment test file located [here](./testfiles/nginx-deployment.yaml).
 
 ```yaml
 apiVersion: apps/v1
