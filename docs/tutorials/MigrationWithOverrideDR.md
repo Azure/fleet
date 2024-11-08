@@ -16,7 +16,7 @@ The following resources are currently deployed in the WestUS clusters:
 
 #### Service
 
-Service test file located [here](./testfiles/nginx-service.yaml)
+> Note: Service test file located [here](./testfiles/nginx-service.yaml).
 
 ```yaml
 apiVersion: v1
@@ -40,7 +40,7 @@ Summary:
 
 #### Deployment
 
-Deployment test file located [here](./testfiles/nginx-deployment.yaml)
+> Note: Deployment test file located [here](./testfiles/nginx-deployment.yaml).
 
 ```yaml
 apiVersion: apps/v1
@@ -74,7 +74,7 @@ Summary:
 
 #### ClusterResourcePlacement
 
-CRP Availability test file located [here](./testfiles/crp-availability.yaml)
+> Note: CRP Availability test file located [here](./testfiles/crp-availability.yaml)
 
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1
