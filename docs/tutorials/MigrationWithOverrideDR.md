@@ -15,6 +15,9 @@ Due to a sudden increase in traffic and resource demands in your WestUS clusters
 The following resources are currently deployed in the WestUS clusters:
 
 #### Service
+
+> Note: Service test file located [here](./testfiles/nginx-service.yaml).
+
 ```yaml
 apiVersion: v1
 kind: Service
@@ -36,6 +39,9 @@ Summary:
 - It targets pods with the label app: nginx and forwards traffic to port 80 on the pods.
 
 #### Deployment
+
+> Note: Deployment test file located [here](./testfiles/nginx-deployment.yaml).
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -67,6 +73,9 @@ Summary:
 - The pods are labeled with `app: nginx` and expose port 80.
 
 #### ClusterResourcePlacement
+
+> Note: CRP Availability test file located [here](./testfiles/crp-availability.yaml)
+
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1
 kind: ClusterResourcePlacement
@@ -261,6 +270,9 @@ When the clusters in WestUS are nearing capacity limits and risk becoming overlo
 For this tutorial, we will move them to WestEurope.
 
 ## Create Resource Override
+
+> Note: Cluster resource override test file located [here](./testfiles/ro-1.yaml)
+
 To scale up during migration, apply this override before updating crp:
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1alpha1
@@ -318,13 +330,13 @@ spec:
   strategy:
     type: RollingUpdate
 ```
-Update the `crp.yaml` to reflect selecting clusters with higher node-count and apply it:
+Update the [`crp-availability.yaml`](./testfiles/crp-availability.yaml) to reflect selecting clusters with higher node-count and apply it:
 ```bash
-kubectl apply -f crp.yaml
+kubectl apply -f crp-availability.yaml
 ```
 
 ### Results
-After applying the updated `crp.yaml`, the Fleet will schedule the application on the available clusters in WestEurope as they each have 3 nodes.
+After applying the updated [`crp-availability.yaml`](./testfiles/crp-availability.yaml), the Fleet will schedule the application on the available clusters in WestEurope as they each have 3 nodes.
 You can check the status of the CRP to ensure that the application has been successfully migrated and is running in the new region:
 ```bash
 kubectl get crp crp-availability -o yaml
