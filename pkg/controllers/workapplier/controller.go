@@ -1129,7 +1129,7 @@ func (r *Reconciler) removeOneLeftOverManifest(
 				// right before the deletion request is sent.
 				//
 				// Technically speaking resource version based concurrency control should also be
-				// enabled here; Fleet drops the check to aovid conflicts; this is safe as the Fleet
+				// enabled here; Fleet drops the check to avoid conflicts; this is safe as the Fleet
 				// ownership is considered to be a reserved field and other changes on the object are
 				// irrelevant to this step.
 				UID: &inMemberClusterObjUID,
@@ -1218,7 +1218,7 @@ func (r *Reconciler) removeOneLeftOverManifestWithGenerateName(
 					// right before the deletion request is sent.
 					//
 					// Technically speaking resource version based concurrency control should also be
-					// enabled here; Fleet drops the check to aovid conflicts; this is safe as the Fleet
+					// enabled here; Fleet drops the check to avoid conflicts; this is safe as the Fleet
 					// ownership is considered to be a reserved field and other changes on the object are
 					// irrelevant to this step.
 					UID: &inMemberClusterObjUID,

@@ -96,7 +96,7 @@ func buildWorkResourceIdentifier(
 func formatWRIString(wri *fleetv1beta1.WorkResourceIdentifier) (string, error) {
 	switch {
 	case wri.Group == "":
-		// The manifest object cannot be decoded, i.e., it can only be identfied by its ordinal.
+		// The manifest object cannot be decoded, i.e., it can only be identified by its ordinal.
 		//
 		// This branch is added solely for completeness reasons; normally such objects would not
 		// be included in any cases that would require a WRI string formatting.
@@ -171,7 +171,7 @@ func isInMemberClusterObjectDerivedFromManifestObj(inMemberClusterObj *unstructu
 	return false
 }
 
-// shouldInitiateTakeOverAttempt checks if Fleet should initate the takeover process for an object.
+// shouldInitiateTakeOverAttempt checks if Fleet should initiate the takeover process for an object.
 //
 // A takeover process is initiated when:
 //   - An object that matches with the given manifest has been created; but
@@ -264,7 +264,7 @@ func discardFieldsIrrelevantInComparisonFrom(obj *unstructured.Unstructured) *un
 	// Clear out the object's generate name. This is also a field that is irrelevant in comparison.
 	objCopy.SetGenerateName("")
 
-	// Remove certain labels and annoations. At this moment Fleet only removes annotations that
+	// Remove certain labels and annotations. At this moment Fleet only removes annotations that
 	// concerns itself.
 	//
 	// TO-DO (chenyu1): evaluate if there are additional Kubernetes well-known labels and annotations

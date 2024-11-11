@@ -95,7 +95,7 @@ func (r *Reconciler) apply(
 	setOwnerRef(manifestObjCopy, expectedAppliedWorkOwnerRef)
 
 	// If three-way merge patch is used, set the Fleet-specific last applied annotation.
-	// Note that this op might not complete due to the last applied annoation being too large;
+	// Note that this op might not complete due to the last applied annotation being too large;
 	// this is not recognized as an error and Fleet will switch to server-side apply instead.
 	isLastAppliedAnnotationSet := false
 	if applyStrategy.Type == fleetv1beta1.ApplyStrategyTypeClientSideApply {
@@ -190,7 +190,7 @@ func (r *Reconciler) threeWayMergePatch(
 	optimisticLock, dryRun bool,
 ) (*unstructured.Unstructured, error) {
 	// Enable optimistic lock by forcing the resource version field to be added to the
-	// JSON merge patch. Optimistic lock is always enabed in the dry run mode.
+	// JSON merge patch. Optimistic lock is always enabled in the dry run mode.
 	if optimisticLock || dryRun {
 		curResourceVer := inMemberClusterObj.GetResourceVersion()
 		if len(curResourceVer) == 0 {
