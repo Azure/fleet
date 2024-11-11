@@ -73,6 +73,7 @@ var (
 	enableV1Beta1APIs       = flag.Bool("enable-v1beta1-apis", false, "If set, the agents will watch for the v1beta1 APIs.")
 	propertyProvider        = flag.String("property-provider", "none", "The property provider to use for the agent.")
 	region                  = flag.String("region", "", "The region where the member cluster resides.")
+	cloudConfigFile         = flag.String("cloud-config", "/etc/kubernetes/provider/config.json", "The path to the cloud cloudconfig file.")
 )
 
 func init() {
@@ -367,6 +368,8 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 			klog.V(2).Info("setting up the Azure property provider")
 			// Note that the property provider, though initialized here, is not started until
 			// the specific instance wins the leader election.
+			klog.V(1).InfoS("Property Provider is azure, loading cloud config", "cloudConfigFile", *cloudConfigFile)
+			// TODO (britaniar): load cloud config for Azure property provider.
 			pp = azure.New(region)
 		default:
 			// Fall back to not using any property provider if the provided type is none or

@@ -37,6 +37,9 @@ spec:
             {{- if .Values.propertyProvider }}
             - --property-provider={{ .Values.propertyProvider }}
             {{- end }}
+            {{- if eq .Values.propertyProvider "azure" }}
+            - --cloud-config=/etc/kubernetes/provider/config.json
+            {{- end }}
             {{- if .Values.region }}
             - --region={{ .Values.region }}
             {{- end }}
@@ -80,10 +83,19 @@ spec:
             httpGet:
               path: /readyz
               port: hubhealthz
-      {{- if not .Values.useCAAuth }}
+        {{- if or (not .Values.useCAAuth) (eq .Values.propertyProvider "azure") }}
           volumeMounts:
+          {{- if not .Values.useCAAuth }}
           - name: provider-token 
             mountPath: /config
+          {{- end }}
+          {{- if eq .Values.propertyProvider "azure" }}
+          - name: cloud-provider-config
+            mountPath: /etc/kubernetes/provider
+            readOnly: true
+          {{- end }}
+        {{- end }}
+        {{- if not .Values.useCAAuth }}
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
           imagePullPolicy: {{ .Values.refreshtoken.pullPolicy }}
@@ -102,9 +114,18 @@ spec:
           volumeMounts:
           - name: provider-token
             mountPath: /config
+        {{- end }}
+      {{- if or (not .Values.useCAAuth) (eq .Values.propertyProvider "azure") }}
       volumes:
+      {{- if not .Values.useCAAuth }}
       - name: provider-token
         emptyDir: {}
+      {{- end }}
+      {{- if eq .Values.propertyProvider "azure" }}
+      - name: cloud-provider-config
+        secret:
+          secretName: cloud-config
+      {{- end }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

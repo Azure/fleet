@@ -35,6 +35,19 @@ config:
   identityKey: "identity-key-path"
   identityCert: "identity-cert-path"
   CABundle: "ca-bundle-path"
+  azureCloudConfig:
+    cloud: ""
+    tenantId: ""
+    subscriptionId: ""
+    useManagedIdentityExtension: false
+    userAssignedIdentityID: ""
+    aadClientId: ""
+    aadClientSecret: ""
+    resourceGroup: ""
+    userAgent: ""
+    location: ""
+    vnetName: ""
+    vnetResourceGroup: ""
 
 secret:
   name: "hub-kubeconfig-secret"
