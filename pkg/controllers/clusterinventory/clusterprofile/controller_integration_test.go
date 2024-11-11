@@ -38,7 +38,7 @@ var _ = Describe("Test ClusterProfile Controller", func() {
 	BeforeEach(func() {
 		testMCName = testTargetCluster + utils.RandStr()
 		By("Creating a new MemberCluster")
-		mc = clusterResourceBindingForTest(testMCName)
+		mc = memberClusterForTest(testMCName)
 		Expect(k8sClient.Create(ctx, mc)).Should(Succeed(), "failed to create MemberCluster")
 	})
 
@@ -72,7 +72,7 @@ var _ = Describe("Test ClusterProfile Controller", func() {
 				LastReceivedHeartbeat: metav1.Time{Time: time.Now()},
 			},
 		}
-		Expect(k8sClient.Status().Update(ctx, mc)).Should(Succeed(), "failed to update cluster resource binding")
+		Expect(k8sClient.Status().Update(ctx, mc)).Should(Succeed(), "failed to update member cluster status")
 		Eventually(func() bool {
 			if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: clusterProfileNS, Name: testMCName}, &clusterProfile); err != nil {
 				return false
@@ -112,7 +112,7 @@ var _ = Describe("Test ClusterProfile Controller", func() {
 	})
 })
 
-func clusterResourceBindingForTest(mcName string) *clusterv1beta1.MemberCluster {
+func memberClusterForTest(mcName string) *clusterv1beta1.MemberCluster {
 	return &clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: mcName,

@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-// Package clusterprofile features a controller to generate clusterprofile objects from MemberCluster
+// Package clusterprofile features a controller to generate clusterprofile objects from MemberCluster.
 package clusterprofile
 
 import (
@@ -27,6 +27,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 const (
@@ -125,10 +126,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				},
 			}
 		}
-
-		// Return an error if the cluster profile is under the management of a different platform.
+		// log an unexpected error if the cluster profile is under the management of a different platform.
 		if cp.Spec.ClusterManager.Name != utils.ClusterManagerName {
-			return fmt.Errorf("cluster profile is under the management of a different platform: %s", cp.Spec.ClusterManager.Name)
+			klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("found another clustrer Manager: `%s`", cp.Spec.ClusterManager.Name)),
+				"cluster profile is under the management of a different platform", "MemberCluster", mcRef, "ClusterProfile", klog.KObj(cp))
+			return nil
 		}
 
 		// Set the labels.
@@ -244,6 +246,7 @@ func (r *Reconciler) cleanupClusterProfile(ctx context.Context, clusterName stri
 	}
 	klog.V(2).InfoS("delete the cluster profile", "MemberCluster", clusterName, "ClusterProfile", klog.KObj(cp))
 	if err := r.Delete(ctx, cp); err != nil && !errors.IsNotFound(err) {
+		klog.ErrorS(err, "Failed to delete the cluster profile", "MemberCluster", clusterName, "ClusterProfile", klog.KObj(cp))
 		return err
 	}
 	return nil

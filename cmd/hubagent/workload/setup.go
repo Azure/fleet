@@ -98,25 +98,6 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 	}
 
 	discoverClient := discovery.NewDiscoveryClientForConfigOrDie(config)
-	// Verify CRD installation status.
-	if opts.EnableClusterInventoryAPIs {
-		for _, gvk := range clusterInventoryGVKs {
-			if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
-				klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
-				return err
-			}
-		}
-		klog.Info("Setting up cluster profile controller")
-		if err = (&clusterprofile.Reconciler{
-			Client:                    mgr.GetClient(),
-			ClusterProfileNamespace:   utils.FleetSystemNamespace,
-			ClusterUnhealthyThreshold: opts.ClusterUnhealthyThreshold.Duration,
-		}).SetupWithManager(mgr); err != nil {
-			klog.ErrorS(err, "unable to set up ClusterProfile controller")
-			return err
-		}
-	}
-
 	// AllowedPropagatingAPIs and SkippedPropagatingAPIs are mutually exclusive.
 	// If none of them are set, the resourceConfig by default stores a list of skipped propagation APIs.
 	resourceConfig := utils.NewResourceConfig(opts.AllowedPropagatingAPIs != "")
@@ -315,6 +296,25 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up resourceOverride controller")
 			return err
+		}
+
+		// Verify cluster inventory CRD installation status.
+		if opts.EnableClusterInventoryAPIs {
+			for _, gvk := range clusterInventoryGVKs {
+				if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
+					klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
+					return err
+				}
+			}
+			klog.Info("Setting up cluster profile controller")
+			if err = (&clusterprofile.Reconciler{
+				Client:                    mgr.GetClient(),
+				ClusterProfileNamespace:   utils.FleetSystemNamespace,
+				ClusterUnhealthyThreshold: opts.ClusterUnhealthyThreshold.Duration,
+			}).SetupWithManager(mgr); err != nil {
+				klog.ErrorS(err, "unable to set up ClusterProfile controller")
+				return err
+			}
 		}
 	}
 
