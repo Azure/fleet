@@ -103,15 +103,19 @@ type WorkResourceIdentifier struct {
 	// Kind is the kind of the resource.
 	Kind string `json:"kind,omitempty"`
 
-	// Resource is the resource type of the resource
+	// Resource is the resource type of the resource.
 	Resource string `json:"resource,omitempty"`
 
 	// Namespace is the namespace of the resource, the resource is cluster scoped if the value
-	// is empty
+	// is empty.
 	Namespace string `json:"namespace,omitempty"`
 
-	// Name is the name of the resource
+	// Name is the name of the resource.
 	Name string `json:"name,omitempty"`
+
+	// GenerateName is the generate name of the resource. This field will be populated if the
+	// object to place has a generate name only.
+	GenerateName string `json:"generateName,omitempty"`
 }
 
 // ManifestCondition represents the conditions of the resources deployed on
