@@ -1,0 +1,42 @@
+apiVersion: placement.fleet.azure.com/v1alpha1
+kind: ClusterStagedUpdateRun
+metadata:
+  name: example-run
+spec:
+  placementName: example-placement
+  resourceSnapshotIndex: "1"
+  stagedRolloutStrategyName: example-strategy
+status:
+  policySnapshotIndexUsed: "1"
+  policyObservedClusterCount: 3
+  appliedStrategy:
+    type: Immediate
+  stagedUpdateStrategySnapshot:
+    stages:
+      - name: stage1
+        labelSelector:
+          matchLabels:
+            environment: production
+        sortingLabelKey: priority
+        afterStageTasks:
+          - type: TimedWait
+            waitTime: 1h
+  stagesStatus:
+    - stageName: stage1
+      clusters:
+        - clusterName: cluster1
+          conditions:
+            - type: Started
+              status: "True"
+      startTime: "2023-10-01T00:00:00Z"
+      endTime: "2023-10-01T01:00:00Z"
+      conditions:
+        - type: Progressing
+          status: "True"
+  conditions:
+    - type: Initialized
+      status: "True"
+    - type: Progressing
+      status: "True"
+    - type: Succeeded
+      status: "False"

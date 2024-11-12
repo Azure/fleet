@@ -1,0 +1,29 @@
+apiVersion: placement.fleet.azure.com/v1alpha1
+kind: ClusterStagedUpdateStrategy
+metadata:
+  name: example-strategy
+spec:
+  stages:
+    - name: staging
+      labelSelector:
+        matchLabels:
+          environment: staging
+      afterStageTasks:
+        - type: TimedWait
+          waitTime: 1h
+    - name: canary
+      labelSelector:
+        matchLabels:
+          environment: canary
+      sortingLabelKey: name
+      afterStageTasks:
+        - type: Approval
+    - name: production
+      labelSelector:
+        matchLabels:
+          environment: production
+      sortingLabelKey: order
+      afterStageTasks:
+        - type: Approval
+        - type: TimedWait
+          waitTime: 1h
