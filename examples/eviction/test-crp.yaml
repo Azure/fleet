@@ -1,0 +1,35 @@
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourcePlacement
+metadata:
+  name: test-crp
+spec:
+  resourceSelectors:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      name: testresources.test.kubernetes-fleet.io
+      version: v1
+  policy:
+    placementType: PickN
+    numberOfClusters: 3
+    affinity:
+      clusterAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 20
+            preference:
+              labelSelector:
+                matchExpressions:
+                  - key: env
+                    operator: In
+                    values:
+                      - canary
+          - weight: 80
+            preference:
+              propertySorter:
+                name: kubernetes.azure.com/per-gb-memory-core-cost
+                sortOrder: Descending
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: color
+        whenUnsatisfiable: DoNotSchedule
+  strategy:
+    type: RollingUpdate
