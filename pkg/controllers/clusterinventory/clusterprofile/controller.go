@@ -196,7 +196,7 @@ func (r *Reconciler) syncClusterProfileCondition(mc *clusterv1beta1.MemberCluste
 		// Set the unknown health condition in the cluster profile status.
 		meta.SetStatusCondition(&cp.Status.Conditions, metav1.Condition{
 			Type:               clusterinventory.ClusterConditionControlPlaneHealthy,
-			Status:             metav1.ConditionUnknown,
+			Status:             metav1.ConditionFalse,
 			Reason:             clusterHeartbeatLostReason,
 			ObservedGeneration: cp.Generation,
 			Message:            "The Fleet member agent has lost its heartbeat connection to the Fleet hub cluster",

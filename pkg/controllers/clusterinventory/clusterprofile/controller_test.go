@@ -73,7 +73,7 @@ func TestSyncClusterProfileCondition(t *testing.T) {
 				},
 			},
 			clusterProfile:          &clusterinventory.ClusterProfile{},
-			expectedConditionStatus: metav1.ConditionUnknown,
+			expectedConditionStatus: metav1.ConditionFalse,
 			expectedConditionReason: clusterHeartbeatLostReason,
 		},
 		{
