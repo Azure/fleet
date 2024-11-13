@@ -1,4 +1,4 @@
-apiVersion: placement.kubernetes-fleet.io/v1beta1
+apiVersion: placement.kubernetes-fleet.io/v1
 kind: ClusterResourcePlacement
 metadata:
   name: test-crp

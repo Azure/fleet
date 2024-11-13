@@ -1,0 +1,22 @@
+apiVersion: placement.kubernetes-fleet.io/v1alpha1
+kind: ResourceOverride
+metadata:
+  name: ro-1
+  namespace: test-namespace
+spec:
+  policy:
+    overrideRules:
+      - clusterSelector:
+          clusterSelectorTerms:
+            - labelSelector:
+                matchLabels:
+                  fleet.azure.com/location: westeurope
+        jsonPatchOverrides:
+          - op: replace
+            path: /spec/replicas
+            value: 4
+  resourceSelectors:
+    - group: apps
+      kind: Deployment
+      name: nginx-deployment
+      version: v1

@@ -1,0 +1,33 @@
+apiVersion: placement.kubernetes-fleet.io/v1
+kind: ClusterResourcePlacement
+metadata:
+  name: crp-example
+spec:
+  resourceSelectors:
+    - group: ""
+      kind: Namespace
+      version: v1
+      labelSelector:
+        matchLabels:
+          kubernetes-fleet.io/app: prod
+  policy:
+    placementType: PickN
+    numberOfClusters: 2
+    affinity:
+      clusterAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          clusterSelectorTerms:
+            - propertySelector:
+                matchExpressions:
+                  - name: kubernetes.azure.com/per-gb-memory-cost
+                    operator: Lt
+                    values:
+                      - "0.025"
+              labelSelector:
+                matchLabels:
+                  fleet.azure.com/location: westeurope
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 50%
