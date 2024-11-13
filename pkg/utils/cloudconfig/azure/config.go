@@ -88,8 +88,8 @@ func (cfg *CloudConfig) validate() error {
 		return fmt.Errorf("resource group is empty")
 	}
 
-	if cfg.VnetName == "" {
-		return fmt.Errorf("virtual network name is empty")
+	if cfg.UserAgent == "fleet-member-agent" && cfg.VnetName == "" {
+		return fmt.Errorf("vnet name is empty")
 	}
 
 	if cfg.VnetResourceGroup == "" {
