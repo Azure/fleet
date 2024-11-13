@@ -31,10 +31,11 @@ const (
 	reasonClusterResourcePlacementEvictionExecuted    = "ClusterResourcePlacementEvictionExecuted"
 	reasonClusterResourcePlacementEvictionNotExecuted = "ClusterResourcePlacementEvictionNotExecuted"
 
-	evictionInvalidMissingCRP = "Failed to find cluster resource placement targeted by eviction"
-	evictionInvalidMissingCRB = "Failed to find cluster resource binding for cluster targeted by eviction"
-	evictionValid             = "Eviction is valid"
-	evictionAllowedNoPDB      = "Eviction Allowed, no ClusterResourcePlacementDisruptionBudget specified"
+	evictionInvalidMissingCRP  = "Failed to find cluster resource placement targeted by eviction"
+	evictionInvalidMissingCRB  = "Failed to find cluster resource binding for cluster targeted by eviction"
+	evictionInvalidMultipleCRB = "Found more than one ClusterResourceBinding for cluster targeted by eviction"
+	evictionValid              = "Eviction is valid"
+	evictionAllowedNoPDB       = "Eviction Allowed, no ClusterResourcePlacementDisruptionBudget specified"
 
 	evictionAllowedPDBSpecified = "Eviction is allowed by specified ClusterResourcePlacementDisruptionBudget, disruptionsAllowed: %d, availableBindings: %d, desiredBindings: %d, totalBindings: %d"
 	evictionBlockedPDBSpecified = "Eviction is blocked by specified ClusterResourcePlacementDisruptionBudget, disruptionsAllowed: %d, availableBindings: %d, desiredBindings: %d, totalBindings: %d"
@@ -95,7 +96,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	var evictionTargetBinding *placementv1beta1.ClusterResourceBinding
 	for i := range crbList.Items {
 		if crbList.Items[i].Spec.TargetCluster == eviction.Spec.ClusterName {
-			evictionTargetBinding = &crbList.Items[i]
+			if evictionTargetBinding == nil {
+				evictionTargetBinding = &crbList.Items[i]
+			} else {
+				klog.V(2).InfoS(evictionInvalidMultipleCRB, "clusterResourcePlacementEviction", evictionName, "clusterResourcePlacement", eviction.Spec.PlacementName)
+				markEvictionInvalid(&eviction, evictionInvalidMultipleCRB)
+				return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
+			}
 		}
 	}
 	if evictionTargetBinding == nil {

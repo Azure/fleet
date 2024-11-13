@@ -43,7 +43,7 @@ var (
 const (
 	eventuallyDuration   = time.Minute * 2
 	eventuallyInterval   = time.Millisecond * 250
-	consistentlyDuration = time.Second * 15
+	consistentlyDuration = time.Second * 10
 	consistentlyInterval = time.Millisecond * 500
 )
 
@@ -82,7 +82,6 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 		It("Create ClusterResourcePlacementEviction", func() {
 			eviction := buildTestEviction(evictionName, crpName, "test-cluster")
 			Expect(k8sClient.Create(ctx, &eviction)).Should(Succeed())
-
 		})
 
 		It("Check eviction status", func() {
@@ -92,6 +91,93 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 
 		It("Clean up resources", func() {
 			ensureEvictionRemoved(evictionName)
+			ensureCRPRemoved(crpName)
+		})
+	})
+
+	Context("Invalid Eviction - Multiple ClusterResourceBindings for one cluster", func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		evictionName := fmt.Sprintf(evictionNameTemplate, GinkgoParallelProcess())
+		crbName := fmt.Sprintf(crbNameTemplate, GinkgoParallelProcess())
+		anotherCRBName := fmt.Sprintf("another-crb-%d", GinkgoParallelProcess())
+
+		It("Create ClusterResourcePlacement", func() {
+			crp := buildTestCRP(crpName)
+			Expect(k8sClient.Create(ctx, &crp)).Should(Succeed())
+			// ensure CRP exists.
+			Eventually(func() error {
+				return k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, &crp)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		It("Create ClusterResourceBinding", func() {
+			// Create CRB.
+			crb := placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   crbName,
+					Labels: map[string]string{placementv1beta1.CRPTrackingLabel: crpName},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                        placementv1beta1.BindingStateScheduled,
+					ResourceSnapshotName:         "test-resource-snapshot",
+					SchedulingPolicySnapshotName: "test-scheduling-policy-snapshot",
+					TargetCluster:                "test-cluster",
+				},
+			}
+			Expect(k8sClient.Create(ctx, &crb)).Should(Succeed())
+			// ensure CRB exists.
+			Eventually(func() error {
+				return k8sClient.Get(ctx, types.NamespacedName{Name: crb.Name}, &crb)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		It("Create another ClusterResourceBinding", func() {
+			// Create anotherCRB.
+			anotherCRB := placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   anotherCRBName,
+					Labels: map[string]string{placementv1beta1.CRPTrackingLabel: crpName},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                        placementv1beta1.BindingStateScheduled,
+					ResourceSnapshotName:         "test-resource-snapshot",
+					SchedulingPolicySnapshotName: "test-scheduling-policy-snapshot",
+					TargetCluster:                "test-cluster",
+				},
+			}
+			Expect(k8sClient.Create(ctx, &anotherCRB)).Should(Succeed())
+			// ensure another CRB exists.
+			Eventually(func() error {
+				return k8sClient.Get(ctx, types.NamespacedName{Name: anotherCRB.Name}, &anotherCRB)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		It("Create ClusterResourcePlacementEviction", func() {
+			eviction := buildTestEviction(evictionName, crpName, "test-cluster")
+			Expect(k8sClient.Create(ctx, &eviction)).Should(Succeed())
+		})
+
+		It("Check eviction status", func() {
+			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: false, msg: evictionInvalidMultipleCRB}, nil)
+			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		It("Ensure eviction was not successful", func() {
+			var crb, anotherCRB placementv1beta1.ClusterResourceBinding
+			// check to see CRB was not deleted.
+			Consistently(func() bool {
+				return !k8serrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: crbName}, &crb))
+			}, consistentlyDuration, consistentlyInterval).Should(BeTrue())
+			// check to see another CRB was not deleted.
+			Consistently(func() bool {
+				return !k8serrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: anotherCRBName}, &anotherCRB))
+			}, consistentlyDuration, consistentlyInterval).Should(BeTrue())
+		})
+
+		It("Clean up resources", func() {
+			ensureEvictionRemoved(evictionName)
+			ensureCRBRemoved(anotherCRBName)
+			ensureCRBRemoved(crbName)
 			ensureCRPRemoved(crpName)
 		})
 	})
