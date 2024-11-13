@@ -23,9 +23,10 @@ import (
 )
 
 const (
-	crbNameTemplate      = "crb-%d"
-	crpNameTemplate      = "crp-%d"
-	evictionNameTemplate = "eviction-%d"
+	crbNameTemplate        = "crb-%d"
+	anotherCRBNameTemplate = "another-crb-%d"
+	crpNameTemplate        = "crp-%d"
+	evictionNameTemplate   = "eviction-%d"
 )
 
 var (
@@ -62,7 +63,6 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 		})
 
 		It("Clean up resources", func() {
-			// Delete eviction.
 			ensureEvictionRemoved(evictionName)
 		})
 	})
@@ -99,7 +99,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		evictionName := fmt.Sprintf(evictionNameTemplate, GinkgoParallelProcess())
 		crbName := fmt.Sprintf(crbNameTemplate, GinkgoParallelProcess())
-		anotherCRBName := fmt.Sprintf("another-crb-%d", GinkgoParallelProcess())
+		anotherCRBName := fmt.Sprintf(anotherCRBNameTemplate, GinkgoParallelProcess())
 
 		It("Create ClusterResourcePlacement", func() {
 			crp := buildTestCRP(crpName)
@@ -505,7 +505,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 		evictionName := fmt.Sprintf(evictionNameTemplate, GinkgoParallelProcess())
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		crbName := fmt.Sprintf(crbNameTemplate, GinkgoParallelProcess())
-		anotherCRBName := fmt.Sprintf("another-crb-%d", GinkgoParallelProcess())
+		anotherCRBName := fmt.Sprintf(anotherCRBNameTemplate, GinkgoParallelProcess())
 
 		It("Create ClusterResourcePlacement", func() {
 			// Create CRP.
@@ -556,7 +556,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 				return k8sClient.Get(ctx, types.NamespacedName{Name: crb.Name}, &crb)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 
-			// Update CRB status to have available condition.
+			// Update CRB, anotherCRB status to have available condition.
 			// Ideally binding would contain more condition before available, but for the sake testing we only specify available condition.
 			availableCondition := metav1.Condition{
 				Type:               string(placementv1beta1.ResourceBindingAvailable),

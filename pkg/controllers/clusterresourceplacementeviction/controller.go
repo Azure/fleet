@@ -153,6 +153,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
 }
 
+// updateEvictionStatus updates eviction status.
 func (r *Reconciler) updateEvictionStatus(ctx context.Context, eviction *placementv1alpha1.ClusterResourcePlacementEviction) error {
 	evictionRef := klog.KObj(eviction)
 	if err := r.Client.Status().Update(ctx, eviction); err != nil {
@@ -163,6 +164,7 @@ func (r *Reconciler) updateEvictionStatus(ctx context.Context, eviction *placeme
 	return nil
 }
 
+// deleteClusterResourceBinding deletes the specified cluster resource binding.
 func (r *Reconciler) deleteClusterResourceBinding(ctx context.Context, binding *placementv1beta1.ClusterResourceBinding) error {
 	bindingRef := klog.KObj(binding)
 	if err := r.Client.Delete(ctx, binding); err != nil {
@@ -173,6 +175,7 @@ func (r *Reconciler) deleteClusterResourceBinding(ctx context.Context, binding *
 	return nil
 }
 
+// isEvictionAllowed calculates if eviction allowed based on available bindings and spec specified in placement disruption budget.
 func isEvictionAllowed(desiredBindings int, bindings []placementv1beta1.ClusterResourceBinding, db placementv1alpha1.ClusterResourcePlacementDisruptionBudget) (bool, int, int) {
 	availableBindings := 0
 	for i := range bindings {
@@ -197,6 +200,7 @@ func isEvictionAllowed(desiredBindings int, bindings []placementv1beta1.ClusterR
 	return disruptionsAllowed > 0, disruptionsAllowed, availableBindings
 }
 
+// markEvictionValid sets the valid condition as true in eviction status.
 func markEvictionValid(eviction *placementv1alpha1.ClusterResourcePlacementEviction) {
 	cond := metav1.Condition{
 		Type:               string(placementv1alpha1.PlacementEvictionConditionTypeValid),
@@ -208,6 +212,7 @@ func markEvictionValid(eviction *placementv1alpha1.ClusterResourcePlacementEvict
 	eviction.SetConditions(cond)
 }
 
+// markEvictionInvalid sets the valid condition as false in eviction status.
 func markEvictionInvalid(eviction *placementv1alpha1.ClusterResourcePlacementEviction, message string) {
 	cond := metav1.Condition{
 		Type:               string(placementv1alpha1.PlacementEvictionConditionTypeValid),
@@ -219,6 +224,7 @@ func markEvictionInvalid(eviction *placementv1alpha1.ClusterResourcePlacementEvi
 	eviction.SetConditions(cond)
 }
 
+// markEvictionExecuted sets the executed condition as true in eviction status.
 func markEvictionExecuted(eviction *placementv1alpha1.ClusterResourcePlacementEviction, message string) {
 	cond := metav1.Condition{
 		Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
@@ -230,6 +236,7 @@ func markEvictionExecuted(eviction *placementv1alpha1.ClusterResourcePlacementEv
 	eviction.SetConditions(cond)
 }
 
+// markEvictionNotExecuted sets the executed condition as false in eviction status.
 func markEvictionNotExecuted(eviction *placementv1alpha1.ClusterResourcePlacementEviction, message string) {
 	cond := metav1.Condition{
 		Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
