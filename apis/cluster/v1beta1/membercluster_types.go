@@ -27,7 +27,8 @@ import (
 
 // MemberCluster is a resource created in the hub cluster to represent a member cluster within a fleet.
 type MemberCluster struct {
-	metav1.TypeMeta   `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
+	// +kubebuilder:validation:XValidation:rule="length(self.Name) <= 63",message="Name of the object should be restricted to 63"
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// The desired state of MemberCluster.
@@ -46,7 +47,6 @@ type MemberClusterSpec struct {
 	// The identity used by the member cluster to access the hub cluster.
 	// The hub agents deployed on the hub cluster will automatically grant the minimal required permissions to this identity for the member agents deployed on the member cluster to access the hub cluster.
 	// +required
-	// +kubebuilder:validation:XValidation:rule="length(self.Name) <= 63",message="Name of the object should be restricted to 63"
 	Identity rbacv1.Subject `json:"identity"`
 
 	// +kubebuilder:default=60
