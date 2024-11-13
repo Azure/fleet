@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	k8sscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
+	clusterinventory "sigs.k8s.io/cluster-inventory-api/apis/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -237,6 +238,9 @@ func TestMain(m *testing.M) {
 	}
 	if err := apiextensionsv1.AddToScheme(scheme); err != nil {
 		log.Fatalf("failed to add API extensions to the runtime scheme: %v", err)
+	}
+	if err := clusterinventory.AddToScheme(scheme); err != nil {
+		log.Fatalf("failed to add cluster inventory APIs to the runtime scheme: %v", err)
 	}
 
 	os.Exit(m.Run())
