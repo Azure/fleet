@@ -22,7 +22,7 @@ func newTestOptions(modifyOptions ModifyOptions) Options {
 	option := Options{
 		SkippedPropagatingAPIs:      "fleet.azure.com;multicluster.x-k8s.io",
 		WorkPendingGracePeriod:      metav1.Duration{Duration: 10 * time.Second},
-		ClusterUnhealthyThreshold:   metav1.Duration{Duration: 1 * time.Second},
+		ClusterUnhealthyThreshold:   metav1.Duration{Duration: 60 * time.Second},
 		WebhookClientConnectionType: "url",
 		EnableV1Alpha1APIs:          true,
 	}

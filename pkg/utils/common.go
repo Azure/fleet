@@ -42,6 +42,7 @@ import (
 )
 
 const (
+	ClusterManagerName     = "KubeFleet"
 	kubePrefix             = "kube-"
 	fleetPrefix            = "fleet-"
 	FleetSystemNamespace   = fleetPrefix + "system"

@@ -16,6 +16,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
+	clusterinventory "sigs.k8s.io/cluster-inventory-api/apis/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
@@ -24,6 +25,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
+	"go.goms.io/fleet/pkg/controllers/clusterinventory/clusterprofile"
 	"go.goms.io/fleet/pkg/controllers/clusterresourcebindingwatcher"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacementwatcher"
@@ -81,6 +83,10 @@ var (
 		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ResourceOverrideKind),
 		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ResourceOverrideSnapshotKind),
 	}
+
+	clusterInventoryGVKs = []schema.GroupVersionKind{
+		clusterinventory.GroupVersion.WithKind("ClusterProfile"),
+	}
 )
 
 // SetupControllers set up the customized controllers we developed
@@ -93,32 +99,32 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 
 	discoverClient := discovery.NewDiscoveryClientForConfigOrDie(config)
 	// Verify CRD installation status.
-	if opts.EnableV1Alpha1APIs {
-		for _, gvk := range v1Alpha1RequiredGVKs {
+	if opts.EnableClusterInventoryAPIs {
+		for _, gvk := range clusterInventoryGVKs {
 			if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
 				klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
 				return err
 			}
 		}
-	}
-
-	if opts.EnableV1Beta1APIs {
-		for _, gvk := range v1Beta1RequiredGVKs {
-			if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
-				klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
-				return err
-			}
+		klog.Info("Setting up cluster profile controller")
+		if err = (&clusterprofile.Reconciler{
+			Client:                    mgr.GetClient(),
+			ClusterProfileNamespace:   utils.FleetSystemNamespace,
+			ClusterUnhealthyThreshold: opts.ClusterUnhealthyThreshold.Duration,
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "unable to set up ClusterProfile controller")
+			return err
 		}
 	}
 
 	// AllowedPropagatingAPIs and SkippedPropagatingAPIs are mutually exclusive.
 	// If none of them are set, the resourceConfig by default stores a list of skipped propagation APIs.
 	resourceConfig := utils.NewResourceConfig(opts.AllowedPropagatingAPIs != "")
-	if err := resourceConfig.Parse(opts.AllowedPropagatingAPIs); err != nil {
+	if err = resourceConfig.Parse(opts.AllowedPropagatingAPIs); err != nil {
 		// The program will never go here because the parameters have been checked.
 		return err
 	}
-	if err := resourceConfig.Parse(opts.SkippedPropagatingAPIs); err != nil {
+	if err = resourceConfig.Parse(opts.SkippedPropagatingAPIs); err != nil {
 		// The program will never go here because the parameters have been checked
 		return err
 	}
@@ -154,32 +160,16 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 	rateLimiter := options.DefaultControllerRateLimiter(opts.RateLimiterOpts)
 	var clusterResourcePlacementControllerV1Alpha1 controller.Controller
 	var clusterResourcePlacementControllerV1Beta1 controller.Controller
-
-	if opts.EnableV1Alpha1APIs {
-		klog.Info("Setting up clusterResourcePlacement v1alpha1 controller")
-		clusterResourcePlacementControllerV1Alpha1 = controller.NewController(crpControllerV1Alpha1Name, controller.NamespaceKeyFunc, crpc.ReconcileV1Alpha1, rateLimiter)
-	}
-
-	if opts.EnableV1Beta1APIs {
-		klog.Info("Setting up clusterResourcePlacement v1beta1 controller")
-		clusterResourcePlacementControllerV1Beta1 = controller.NewController(crpControllerV1Beta1Name, controller.NamespaceKeyFunc, crpc.Reconcile, rateLimiter)
-	}
-
-	// Set up  a new controller to reconcile any resources in the cluster
-	klog.Info("Setting up resource change controller")
-	rcr := &resourcechange.Reconciler{
-		DynamicClient:               dynamicClient,
-		Recorder:                    mgr.GetEventRecorderFor(resourceChangeControllerName),
-		RestMapper:                  mgr.GetRESTMapper(),
-		InformerManager:             dynamicInformerManager,
-		PlacementControllerV1Alpha1: clusterResourcePlacementControllerV1Alpha1,
-		PlacementControllerV1Beta1:  clusterResourcePlacementControllerV1Beta1,
-	}
-
-	resourceChangeController := controller.NewController(resourceChangeControllerName, controller.ClusterWideKeyFunc, rcr.Reconcile, rateLimiter)
-
 	var memberClusterPlacementController controller.Controller
 	if opts.EnableV1Alpha1APIs {
+		for _, gvk := range v1Alpha1RequiredGVKs {
+			if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
+				klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
+				return err
+			}
+		}
+		klog.Info("Setting up clusterResourcePlacement v1alpha1 controller")
+		clusterResourcePlacementControllerV1Alpha1 = controller.NewController(crpControllerV1Alpha1Name, controller.NamespaceKeyFunc, crpc.ReconcileV1Alpha1, rateLimiter)
 		klog.Info("Setting up member cluster change controller")
 		mcp := &memberclusterplacement.Reconciler{
 			InformerManager:     dynamicInformerManager,
@@ -189,6 +179,14 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 	}
 
 	if opts.EnableV1Beta1APIs {
+		for _, gvk := range v1Beta1RequiredGVKs {
+			if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
+				klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
+				return err
+			}
+		}
+		klog.Info("Setting up clusterResourcePlacement v1beta1 controller")
+		clusterResourcePlacementControllerV1Beta1 = controller.NewController(crpControllerV1Beta1Name, controller.NamespaceKeyFunc, crpc.Reconcile, rateLimiter)
 		klog.Info("Setting up clusterResourcePlacement watcher")
 		if err := (&clusterresourceplacementwatcher.Reconciler{
 			PlacementController: clusterResourcePlacementControllerV1Beta1,
@@ -319,6 +317,18 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			return err
 		}
 	}
+
+	// Set up  a new controller to reconcile any resources in the cluster
+	klog.Info("Setting up resource change controller")
+	rcr := &resourcechange.Reconciler{
+		DynamicClient:               dynamicClient,
+		Recorder:                    mgr.GetEventRecorderFor(resourceChangeControllerName),
+		RestMapper:                  mgr.GetRESTMapper(),
+		InformerManager:             dynamicInformerManager,
+		PlacementControllerV1Alpha1: clusterResourcePlacementControllerV1Alpha1,
+		PlacementControllerV1Beta1:  clusterResourcePlacementControllerV1Beta1,
+	}
+	resourceChangeController := controller.NewController(resourceChangeControllerName, controller.ClusterWideKeyFunc, rcr.Reconcile, rateLimiter)
 
 	// Set up a runner that starts all the custom controllers we created above
 	resourceChangeDetector := &resourcewatcher.ChangeDetector{

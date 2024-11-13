@@ -23,16 +23,17 @@ require (
 	golang.org/x/exp v0.0.0-20241004190924-225e2abe05e6
 	golang.org/x/sync v0.8.0
 	golang.org/x/time v0.7.0
-	k8s.io/api v0.30.2
+	k8s.io/api v0.30.3
 	k8s.io/apiextensions-apiserver v0.30.2
-	k8s.io/apimachinery v0.30.2
-	k8s.io/client-go v0.30.2
+	k8s.io/apimachinery v0.30.3
+	k8s.io/client-go v0.30.3
 	k8s.io/component-base v0.30.2
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/metrics v0.25.2
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
 	sigs.k8s.io/cloud-provider-azure v1.28.2
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.50
+	sigs.k8s.io/cluster-inventory-api v0.0.0-20240730014211-ef0154379848
 	sigs.k8s.io/controller-runtime v0.18.5
 	sigs.k8s.io/work-api v0.0.0-20220407021756-586d707fdb2c
 )
