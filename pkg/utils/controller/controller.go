@@ -28,6 +28,11 @@ import (
 )
 
 const (
+	// ClusterManagerName is the name of KubeFleet cluster manager.
+	ClusterManagerName = "KubeFleet"
+)
+
+const (
 	labelError        = "error"
 	labelRequeueAfter = "requeue_after"
 	labelRequeue      = "requeue"

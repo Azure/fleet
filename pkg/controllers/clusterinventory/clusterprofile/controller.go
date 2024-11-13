@@ -26,7 +26,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -56,43 +55,43 @@ type Reconciler struct {
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	mcRef := klog.KRef(req.Namespace, req.Name)
 	startTime := time.Now()
-	klog.V(2).InfoS("Reconciliation starts (cluster profile controller)", "MemberCluster", mcRef)
+	klog.V(2).InfoS("Reconciliation starts (cluster profile controller)", "memberCluster", mcRef)
 	defer func() {
 		latency := time.Since(startTime).Milliseconds()
-		klog.V(2).InfoS("Reconciliation ends (cluster profile controller)", "MemberCluster", mcRef, "latency", latency)
+		klog.V(2).InfoS("Reconciliation ends (cluster profile controller)", "memberCluster", mcRef, "latency", latency)
 	}()
 
 	// Retrieve the MemberCluster object.
 	mc := &clusterv1beta1.MemberCluster{}
 	if err := r.Get(ctx, req.NamespacedName, mc); err != nil {
 		if errors.IsNotFound(err) {
-			klog.InfoS("Member cluster object is not found", "MemberCluster", mcRef)
+			klog.InfoS("Member cluster object is not found", "memberCluster", mcRef)
 			// To address the case where a member cluster is deleted before its cluster profile is cleaned up
 			// since we didn't put the logic in the member cluster controller
 			// or a cluster profile has been created without the acknowledgment of this controller.
 			if err = r.cleanupClusterProfile(ctx, req.Name); err != nil {
-				klog.ErrorS(err, "Failed to clean up the cluster profile when the member cluster is already gone", "MemberCluster", mcRef)
+				klog.ErrorS(err, "Failed to clean up the cluster profile when the member cluster is already gone", "memberCluster", mcRef)
 				return ctrl.Result{}, err
 			}
 			return ctrl.Result{}, nil
 		}
-		klog.ErrorS(err, "Failed to get member cluster", "MemberCluster", mcRef)
+		klog.ErrorS(err, "Failed to get member cluster", "memberCluster", mcRef)
 		return ctrl.Result{}, err
 	}
 
 	// Check if the member cluster object has been marked for deletion.
 	if mc.DeletionTimestamp != nil {
-		klog.V(2).InfoS("Member cluster object is being deleted; remove the corresponding cluster profile", "MemberCluster", mcRef)
+		klog.V(2).InfoS("Member cluster object is being deleted; remove the corresponding cluster profile", "memberCluster", mcRef)
 		// Delete the corresponding ClusterProfile object.
 		if err := r.cleanupClusterProfile(ctx, mc.Name); err != nil {
-			klog.ErrorS(err, "Failed to clean up cluster profile when member cluster is marked for deletion", "MemberCluster", mcRef)
+			klog.ErrorS(err, "Failed to clean up cluster profile when member cluster is marked for deletion", "memberCluster", mcRef)
 			return ctrl.Result{}, err
 		}
 
 		// Remove the cleanup finalizer from the MemberCluster object.
 		controllerutil.RemoveFinalizer(mc, clusterProfileCleanupFinalizer)
 		if err := r.Update(ctx, mc); err != nil {
-			klog.ErrorS(err, "Failed to remove cleanup finalizer", "MemberCluster", mcRef)
+			klog.ErrorS(err, "Failed to remove cleanup finalizer", "memberCluster", mcRef)
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
@@ -102,7 +101,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if !controllerutil.ContainsFinalizer(mc, clusterProfileCleanupFinalizer) {
 		mc.Finalizers = append(mc.Finalizers, clusterProfileCleanupFinalizer)
 		if err := r.Update(ctx, mc); err != nil {
-			klog.ErrorS(err, "Failed to add cleanup finalizer", "MemberCluster", mcRef)
+			klog.ErrorS(err, "Failed to add cleanup finalizer", "memberCluster", mcRef)
 			return ctrl.Result{}, err
 		}
 	}
@@ -122,14 +121,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			// is immutable by definition.
 			cp.Spec = clusterinventory.ClusterProfileSpec{
 				ClusterManager: clusterinventory.ClusterManager{
-					Name: utils.ClusterManagerName,
+					Name: controller.ClusterManagerName,
 				},
 			}
 		}
 		// log an unexpected error if the cluster profile is under the management of a different platform.
-		if cp.Spec.ClusterManager.Name != utils.ClusterManagerName {
+		if cp.Spec.ClusterManager.Name != controller.ClusterManagerName {
 			klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("found another clustrer Manager: `%s`", cp.Spec.ClusterManager.Name)),
-				"cluster profile is under the management of a different platform", "MemberCluster", mcRef, "ClusterProfile", klog.KObj(cp))
+				"Cluster profile is under the management of a different platform", "memberCluster", mcRef, "clusterProfile", klog.KObj(cp))
 			return nil
 		}
 
@@ -137,21 +136,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		if cp.Labels == nil {
 			cp.Labels = make(map[string]string)
 		}
-		cp.Labels[clusterinventory.LabelClusterManagerKey] = utils.ClusterManagerName
+		cp.Labels[clusterinventory.LabelClusterManagerKey] = controller.ClusterManagerName
 
 		// Set the display name.
 		cp.Spec.DisplayName = mc.Name
 		return nil
 	})
 	if err != nil {
-		klog.ErrorS(err, "Failed to create or update cluster profile", "MemberCluster", mcRef, "ClusterProfile", klog.KObj(cp), "operation", createOrUpdateRes)
+		klog.ErrorS(err, "Failed to create or update cluster profile", "memberCluster", mcRef, "clusterProfile", klog.KObj(cp), "operation", createOrUpdateRes)
 		return ctrl.Result{}, err
 	}
-	klog.V(2).InfoS("Cluster profile object is created or updated", "MemberCluster", mcRef, "ClusterProfile", klog.KObj(cp), "operation", createOrUpdateRes)
+	klog.V(2).InfoS("Cluster profile object is created or updated", "memberCluster", mcRef, "clusterProfile", klog.KObj(cp), "operation", createOrUpdateRes)
 	// sync the cluster profile condition from the member cluster condition
 	r.syncClusterProfileCondition(mc, cp)
 	if err = r.Status().Update(ctx, cp); err != nil {
-		klog.ErrorS(err, "Failed to update cluster profile status", "MemberCluster", mcRef, "ClusterProfile", klog.KObj(cp))
+		klog.ErrorS(err, "Failed to update cluster profile status", "memberCluster", mcRef, "clusterProfile", klog.KObj(cp))
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
@@ -244,9 +243,9 @@ func (r *Reconciler) cleanupClusterProfile(ctx context.Context, clusterName stri
 			Name:      clusterName,
 		},
 	}
-	klog.V(2).InfoS("delete the cluster profile", "MemberCluster", clusterName, "ClusterProfile", klog.KObj(cp))
+	klog.V(2).InfoS("delete the cluster profile", "memberCluster", clusterName, "clusterProfile", klog.KObj(cp))
 	if err := r.Delete(ctx, cp); err != nil && !errors.IsNotFound(err) {
-		klog.ErrorS(err, "Failed to delete the cluster profile", "MemberCluster", clusterName, "ClusterProfile", klog.KObj(cp))
+		klog.ErrorS(err, "Failed to delete the cluster profile", "memberCluster", clusterName, "clusterProfile", klog.KObj(cp))
 		return err
 	}
 	return nil
