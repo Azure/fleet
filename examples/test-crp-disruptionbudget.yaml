@@ -1,0 +1,6 @@
+apiVersion: placement.kubernetes-fleet.io/v1alpha1
+kind: ClusterResourcePlacementDisruptionBudget
+metadata:
+  name: test-crp-disruption-budget
+spec:
+  maxUnavailable: 1
