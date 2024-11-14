@@ -15,7 +15,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
-func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
+func TestIsEvictionAllowed(t *testing.T) {
 	availableCondition := metav1.Condition{
 		Type:               string(placementv1beta1.ResourceBindingAvailable),
 		Status:             metav1.ConditionTrue,
