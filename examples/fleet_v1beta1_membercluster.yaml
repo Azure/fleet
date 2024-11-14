@@ -1,7 +1,8 @@
 apiVersion: cluster.kubernetes-fleet.io/v1beta1
 kind: MemberCluster
 metadata:
-  name: kind-cluster-1
+  name: abcd-123456789-123456789-123456789-123456789-123456789-123456789-123456789
+#  name: kind-cluster-1
 spec:
   identity:
     name: fleet-member-agent-cluster-1

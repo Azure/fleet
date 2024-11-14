@@ -110,9 +110,6 @@ spec:
                 - name
                 type: object
                 x-kubernetes-map-type: atomic
-                x-kubernetes-validations:
-                - message: Name of the object should be restricted to 63
-                  rule: length(self.Name) <= 63
               taints:
                 description: |-
                   If specified, the MemberCluster's taints.
@@ -506,9 +503,6 @@ spec:
                 - name
                 type: object
                 x-kubernetes-map-type: atomic
-                x-kubernetes-validations:
-                - message: Name of the object should be restricted to 63
-                  rule: length(self.Name) <= 63
               taints:
                 description: |-
                   If specified, the MemberCluster's taints.
