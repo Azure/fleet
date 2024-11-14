@@ -27,7 +27,7 @@ import (
 // MemberCluster is a resource created in the hub cluster to represent a member cluster within a fleet.
 type MemberCluster struct {
 	metav1.TypeMeta `json:",inline"`
-	// +kubebuilder:validation:XValidation:rule="length(self.Name) <= 63",message="Name of the object should be restricted to 63"
+	// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) < 64",message="metadata.name max length is 63"
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// The desired state of MemberCluster.
