@@ -133,23 +133,6 @@ func TestValidate(t *testing.T) {
 			},
 			wantPass: false,
 		},
-		"VnetName empty": {
-			config: &CloudConfig{
-				ARMClientConfig: azclient.ARMClientConfig{
-					Cloud:     "c",
-					UserAgent: "fleet-member-agent",
-				},
-				AzureAuthConfig: azclient.AzureAuthConfig{
-					UseManagedIdentityExtension: true,
-					UserAssignedIdentityID:      "a",
-				},
-				Location:       "l",
-				SubscriptionID: "s",
-				ResourceGroup:  "v",
-				VnetName:       "",
-			},
-			wantPass: false,
-		},
 		"VnetResourceGroup empty": {
 			config: &CloudConfig{
 				ARMClientConfig: azclient.ARMClientConfig{
