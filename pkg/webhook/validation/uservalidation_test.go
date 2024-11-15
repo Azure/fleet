@@ -159,6 +159,20 @@ func TestValidateUserForResource(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Delete, &utils.RoleMetaGVK, "", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
 		},
+		"allow aks-support user": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name:        "test-mc",
+					RequestKind: &utils.MCMetaGVK,
+					UserInfo: authenticationv1.UserInfo{
+						Username: "aks-support",
+						Groups:   []string{"system:authenticated"},
+					},
+					Operation: admissionv1.Create,
+				},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, "aks-support", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Create, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
 	}
 
 	for testName, testCase := range testCases {

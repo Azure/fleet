@@ -367,6 +367,26 @@ func TestHandleV1Alpha1MemberCluster(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCV1Alpha1MetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
+		"allow delete of member cluster by aks-support user": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					OldObject: runtime.RawExtension{
+						Raw: MCObjectBytes,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "aks-support",
+						Groups:   []string{"system:authenticated"},
+					},
+					RequestKind: &utils.MCV1Alpha1MetaGVK,
+					Operation:   admissionv1.Delete,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "aks-support", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Delete, &utils.MCV1Alpha1MetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
 	}
 
 	for testName, testCase := range testCases {
@@ -569,6 +589,28 @@ func TestHandleMemberCluster(t *testing.T) {
 				whiteListedUsers: []string{"test-user"},
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCMetaGVK, "status", types.NamespacedName{Name: "test-mc"})),
+		},
+		// added as UT since testing this case as an E2E requires
+		// creating a new user called aks-support in our test environment.
+		"allow delete for fleet MC by aks-support user": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					OldObject: runtime.RawExtension{
+						Raw: fleetMCObjectBytes,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "aks-support",
+						Groups:   []string{"system:authenticated"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Delete,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "aks-support", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Delete, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
 	}
 
@@ -872,6 +914,25 @@ func TestHandleFleetReservedNamespacedResource(t *testing.T) {
 				isFleetV1Beta1API: true,
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "testUser", utils.GenerateGroupString([]string{"testGroup"}), admissionv1.Create, &utils.EndpointSliceExportMetaGVK, "", types.NamespacedName{Name: "test-net-eps", Namespace: "fleet-system"})),
+		},
+		"allow delete on v1beta1 IMC in fleet-member namespace": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name:        "test-mc",
+					Namespace:   "fleet-member-test-mc",
+					RequestKind: &utils.IMCMetaGVK,
+					UserInfo: authenticationv1.UserInfo{
+						Username: "aks-support",
+						Groups:   []string{"system:authenticated"},
+					},
+					Operation: admissionv1.Delete,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				client:            mockClient,
+				isFleetV1Beta1API: true,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "aks-support", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Delete, &utils.IMCMetaGVK, "", types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"})),
 		},
 	}
 	for testName, testCase := range testCases {
