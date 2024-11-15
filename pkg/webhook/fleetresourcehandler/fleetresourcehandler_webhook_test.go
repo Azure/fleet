@@ -367,6 +367,8 @@ func TestHandleV1Alpha1MemberCluster(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCV1Alpha1MetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
+		// added as UT since testing this case as an E2E requires
+		// creating a new user called aks-support in our test environment.
 		"allow delete of member cluster by aks-support user": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
@@ -915,6 +917,8 @@ func TestHandleFleetReservedNamespacedResource(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "testUser", utils.GenerateGroupString([]string{"testGroup"}), admissionv1.Create, &utils.EndpointSliceExportMetaGVK, "", types.NamespacedName{Name: "test-net-eps", Namespace: "fleet-system"})),
 		},
+		// added as UT since testing this case as an E2E requires
+		// creating a new user called aks-support in our test environment.
 		"allow delete on v1beta1 IMC in fleet-member namespace": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{

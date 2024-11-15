@@ -156,6 +156,7 @@ func isUserKubeControllerManager(userInfo authenticationv1.UserInfo) bool {
 	return userInfo.Username == kubeControllerManagerUser
 }
 
+// isUserKubeControllerManager return true if user is aks-support.
 func isAKSSupportUser(userInfo authenticationv1.UserInfo) bool {
 	// aks-support user only belongs to system:authenticated group hence comparing username.
 	return userInfo.Username == aksSupportUser
