@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package work
+package workapplier
 
 import (
 	"fmt"
@@ -53,7 +53,6 @@ func buildWorkResourceIdentifier(
 	manifestIdx int,
 	gvr *schema.GroupVersionResource,
 	manifestObj *unstructured.Unstructured,
-	inMemberClusterObj *unstructured.Unstructured,
 ) *fleetv1beta1.WorkResourceIdentifier {
 	// The ordinal field is always set.
 	identifier := &fleetv1beta1.WorkResourceIdentifier{
@@ -81,21 +80,13 @@ func buildWorkResourceIdentifier(
 		identifier.Resource = gvr.Resource
 	}
 
-	// Normally, the names between the manifest and the live object would always match. However, for
-	// manifest objects with generated names, its name can only be resolved after the object is
-	// applied; in this case, Fleet will set the name field using the information from the live
-	// object.
-	if inMemberClusterObj != nil {
-		identifier.Name = inMemberClusterObj.GetName()
-	}
-
 	return identifier
 }
 
 // formatWRIString returns a string representation of a work resource identifier.
 func formatWRIString(wri *fleetv1beta1.WorkResourceIdentifier) (string, error) {
 	switch {
-	case wri.Group == "":
+	case wri.Group == "" && wri.Version == "":
 		// The manifest object cannot be decoded, i.e., it can only be identified by its ordinal.
 		//
 		// This branch is added solely for completeness reasons; normally such objects would not
@@ -108,30 +99,9 @@ func formatWRIString(wri *fleetv1beta1.WorkResourceIdentifier) (string, error) {
 			wri.Group, wri.Version, wri.Kind, wri.Namespace, wri.GenerateName), nil
 	default:
 		// For a regular object, the string representation includes the actual name.
-		return fmt.Sprintf("Ordinal=%d, GV=%s/%s, Kind=%s, Namespace=%s, Name=%s",
-			wri.Ordinal, wri.Group, wri.Version, wri.Kind, wri.Namespace, wri.Name), nil
+		return fmt.Sprintf("GV=%s/%s, Kind=%s, Namespace=%s, Name=%s",
+			wri.Group, wri.Version, wri.Kind, wri.Namespace, wri.Name), nil
 	}
-}
-
-// appendManifestConditionPreparingToProcess appends a manifest's Applied condition
-// to the set of manifest conditions, and marks it as preparing to process.
-func appendManifestConditionPreparingToProcess(
-	manifestConds []fleetv1beta1.ManifestCondition,
-	wri *fleetv1beta1.WorkResourceIdentifier,
-	workGeneration int64,
-) []fleetv1beta1.ManifestCondition {
-	appliedCond := metav1.Condition{
-		Type:               fleetv1beta1.WorkConditionTypeApplied,
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: workGeneration,
-		Reason:             ManifestAppliedCondPreparingToProcessReason,
-		Message:            ManifestAppliedCondPreparingToProcessMessage,
-	}
-
-	return append(manifestConds, fleetv1beta1.ManifestCondition{
-		Identifier: *wri,
-		Conditions: []metav1.Condition{appliedCond},
-	})
 }
 
 // isLiveObjectDerivedFromManifestObjWithGenerateName checks if a live object is connected to a
@@ -208,39 +178,6 @@ func isPlacedByFleetInDuplicate(ownerRefs []metav1.OwnerReference, expectedAppli
 		}
 	}
 	return false
-}
-
-func fullDiffBetweenManifestAndInMemberClusterObjects(
-	manifestObj, inMemberClusterObj *unstructured.Unstructured,
-) ([]fleetv1beta1.PatchDetail, error) {
-	// Fleet calculates the full diff between two objects by directly comparing their JSON
-	// representations.
-
-	// Discard certain fields from both objects before comparison.
-	manifestObjCopy := discardFieldsIrrelevantInComparisonFrom(manifestObj)
-	inMemberClusterObjCopy := discardFieldsIrrelevantInComparisonFrom(inMemberClusterObj)
-
-	// Marshal the objects into JSON.
-	manifestObjJSONBytes, err := manifestObjCopy.MarshalJSON()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal the manifest object into JSON: %w", err)
-	}
-	inMemberClusterObjJSONBytes, err := inMemberClusterObjCopy.MarshalJSON()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal the object from the member cluster into JSON: %w", err)
-	}
-
-	// Compare the JSON representations.
-	patch, err := jsondiff.CompareJSON(manifestObjJSONBytes, inMemberClusterObjJSONBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compare the JSON representations of the manifest object and the object from the member cluster: %w", err)
-	}
-
-	details, err := organizeJSONPatchIntoFleetPatchDetails(patch, manifestObjJSONBytes, inMemberClusterObjJSONBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to organize JSON patch operations into Fleet patch details: %w", err)
-	}
-	return details, nil
 }
 
 // discardFieldsIrrelevantInComparisonFrom discards fields that are irrelevant when comparing
@@ -783,59 +720,111 @@ func setWorkAvailableCondition(
 	meta.SetStatusCondition(workStatusConditions, *availableCond)
 }
 
-func crossReferenceManifestConditions(
+func prepareExistingManifestCondQIdx(existingManifestConditions []fleetv1beta1.ManifestCondition) map[string]int {
+	existingManifestConditionQIdx := make(map[string]int)
+	for idx := range existingManifestConditions {
+		manifestCond := existingManifestConditions[idx]
+
+		wriStr, err := formatWRIString(&manifestCond.Identifier)
+		if err != nil {
+			// There might be manifest conditions without a valid identifier in the existing set of
+			// manifest conditions (e.g., decoding error has occurred in the previous run).
+			// Fleet will skip these manifest conditions. This is not considered as an error.
+			continue
+		}
+
+		existingManifestConditionQIdx[wriStr] = idx
+	}
+	return existingManifestConditionQIdx
+}
+
+func prepareManifestCondForWA(
+	wriStr string, wri *fleetv1beta1.WorkResourceIdentifier,
+	workGeneration int64,
+	existingManifestCondQIdx map[string]int,
+	existingManifestConds []fleetv1beta1.ManifestCondition,
+) fleetv1beta1.ManifestCondition {
+	// For each manifest to process, check if there is a corresponding entry in the existing set
+	// of manifest conditions. If so, Fleet will port information back to keep track of the
+	// previous processing results; otherwise, Fleet will report that it is preparing to process
+	// the manifest.
+	existingManifestConditionIdx, found := existingManifestCondQIdx[wriStr]
+	if found {
+		// The current manifest condition has a corresponding entry in the existing set of manifest
+		// conditions.
+		//
+		// Fleet simply ports the information back.
+		return existingManifestConds[existingManifestConditionIdx]
+	}
+
+	// No corresponding entry is found in the existing set of manifest conditions.
+	//
+	// Prepare a manifest condition that indicates that Fleet is preparing to be process the manifest.
+	return fleetv1beta1.ManifestCondition{
+		Identifier: *wri,
+		Conditions: []metav1.Condition{
+			{
+				Type:               fleetv1beta1.WorkConditionTypeApplied,
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: workGeneration,
+				Reason:             ManifestAppliedCondPreparingToProcessReason,
+				Message:            ManifestAppliedCondPreparingToProcessMessage,
+			},
+		},
+	}
+}
+
+func findLeftOverManifests(
 	manifestCondsForWA []fleetv1beta1.ManifestCondition,
+	existingManifestCondQIdx map[string]int,
 	existingManifestConditions []fleetv1beta1.ManifestCondition,
 ) []fleetv1beta1.AppliedResourceMeta {
-	// Build an index for quicker lookup.
+	// Build an index for quicker lookup in the newly prepared write-ahead manifest conditions.
+	// Here Fleet uses the string representations as map keys to omit ordinals from any lookup.
 	//
-	// Here Fleet also uses the string representations as map keys to omit ordinals from any lookup.
-	manifestCondsForWAIdx := make(map[string]bool)
+	// Note that before this step, Fleet has already filtered out duplicate manifests.
+	manifestCondsForWAQIdx := make(map[string]int)
 	for idx := range manifestCondsForWA {
 		manifestCond := manifestCondsForWA[idx]
 
 		wriStr, err := formatWRIString(&manifestCond.Identifier)
 		if err != nil {
 			// Normally this branch will never run as all manifests that cannot be decoded has been
-			// skipped before this function is called. Here Fleet simply skips the manifest.
+			// skipped before this function is called. Here Fleet simply skips the manifest as it
+			// has no effect on the process.
 			klog.ErrorS(err, "failed to format the work resource identifier string", "manifest", manifestCond.Identifier)
 			continue
 		}
 
-		manifestCondsForWAIdx[wriStr] = true
+		manifestCondsForWAQIdx[wriStr] = idx
 	}
 
-	// Cross-reference the two set of manifest conditions. Filter out any manifest condition
-	// that does not have a corresponding entry in the set of manifest conditions prepared
-	// for the write-ahead process.
+	// For each manifest condition in the existing set of manifest conditions, check if
+	// there is a corresponding entry in the set of manifest conditions prepared for the write-ahead
+	// process. If not, Fleet will consider that the manifest has been left over on the member
+	// cluster side and should be removed.
 
 	// Use an AppliedResourceMeta slice to allow code sharing.
 	leftOverManifests := []fleetv1beta1.AppliedResourceMeta{}
-	for idx := range existingManifestConditions {
-		manifestCond := existingManifestConditions[idx]
-
-		wriStr, err := formatWRIString(&manifestCond.Identifier)
-		if err != nil {
-			// No special handling is needed for manifest conditions without a valid identifier
-			// in the existing set of manifest conditions. They will be overwritten shortly.
-			continue
-		}
-
-		if _, found := manifestCondsForWAIdx[wriStr]; !found {
-			// The manifest condition does not have a corresponding entry in the set of manifest
+	for existingManifestWRIStr, existingManifestCondIdx := range existingManifestCondQIdx {
+		_, found := manifestCondsForWAQIdx[existingManifestWRIStr]
+		if !found {
+			existingManifestCond := existingManifestConditions[existingManifestCondIdx]
+			// The current manifest condition does not have a corresponding entry in the set of manifest
 			// conditions prepared for the write-ahead process.
 
 			// Verify if the manifest condition indicates that the manifest could have been
 			// applied.
-			applied := meta.FindStatusCondition(manifestCond.Conditions, fleetv1beta1.WorkConditionTypeApplied)
+			applied := meta.FindStatusCondition(existingManifestCond.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 			if applied.Status == metav1.ConditionTrue || applied.Reason == ManifestAppliedCondPreparingToProcessReason {
 				// Fleet assumes that the manifest has been applied if:
 				// a) it has an applied condition set to the True status; or
 				// b) it has an applied condition which signals that the object is preparing to be processed.
 				//
-				// Note that the manifest condition might not be up-to-date.
+				// Note that the manifest condition might not be up-to-date, so Fleet will not
+				// check on the generation information.
 				leftOverManifests = append(leftOverManifests, fleetv1beta1.AppliedResourceMeta{
-					WorkResourceIdentifier: manifestCond.Identifier,
+					WorkResourceIdentifier: existingManifestCond.Identifier,
 					// UID information might not be available at this moment; the cleanup process
 					// will perform additional checks anyway to guard against the
 					// create-delete-recreate cases and/or same name but different setup cases.

@@ -19,14 +19,13 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package work
+package workapplier
 
 import (
 	"context"
 	"fmt"
 	"time"
 
-	"github.com/wI2L/jsondiff"
 	"go.uber.org/atomic"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -47,7 +46,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/defaulter"
 	"go.goms.io/fleet/pkg/utils/parallelizer"
@@ -154,18 +152,20 @@ const (
 )
 
 type manifestProcessingBundle struct {
-	manifest           *fleetv1beta1.Manifest
-	id                 *fleetv1beta1.WorkResourceIdentifier
-	manifestObj        *unstructured.Unstructured
-	inMemberClusterObj *unstructured.Unstructured
-	manifestCondIdx    *int
-	gvr                *schema.GroupVersionResource
-	applyResTyp        manifestProcessingAppliedResultType
-	availabilityResTyp ManifestProcessingAvailabilityResultType
-	applyErr           error
-	availabilityErr    error
-	drifts             []fleetv1beta1.PatchDetail
-	diffs              []fleetv1beta1.PatchDetail
+	manifest              *fleetv1beta1.Manifest
+	id                    *fleetv1beta1.WorkResourceIdentifier
+	manifestObj           *unstructured.Unstructured
+	inMemberClusterObj    *unstructured.Unstructured
+	manifestCondIdx       *int
+	gvr                   *schema.GroupVersionResource
+	applyResTyp           manifestProcessingAppliedResultType
+	availabilityResTyp    ManifestProcessingAvailabilityResultType
+	applyErr              error
+	availabilityErr       error
+	drifts                []fleetv1beta1.PatchDetail
+	firstDriftedTimestamp *metav1.Time
+	diffs                 []fleetv1beta1.PatchDetail
+	firstDiffedTimestamp  *metav1.Time
 }
 
 // Reconcile implement the control loop logic for Work object.
@@ -231,7 +231,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// Prepare the bundles.
 	bundles := prepareManifestProcessingBundles(work)
+
 	// Pre-process the manifests to apply.
+	//
+	// In this step, Fleet will:
+	// a) decode the manifests; and
+	// b) write ahead the manifest processing attempts; and
+	// c) remove any applied manifests left over from previous runs.
 	if err := r.preProcessManifests(ctx, bundles, work, expectedAppliedWorkOwnerRef); err != nil {
 		klog.ErrorS(err, "Failed to pre-process the manifests", "work", workRef)
 		return ctrl.Result{}, err
@@ -289,7 +295,7 @@ func (r *Reconciler) preProcessManifests(
 		gvr, manifestObj, err := r.decodeManifest(bundle.manifest)
 		// Build the identifier. Note that this would return an identifier even if the decoding
 		// fails.
-		bundle.id = buildWorkResourceIdentifier(pieces, gvr, manifestObj, nil)
+		bundle.id = buildWorkResourceIdentifier(pieces, gvr, manifestObj)
 		if err != nil {
 			klog.ErrorS(err, "Failed to decode the manifest", "ordinal", pieces, "work", klog.KObj(work))
 			bundle.applyErr = fmt.Errorf("failed to decode manifest: %w", err)
@@ -343,19 +349,24 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 	expectedAppliedWorkOwnerRef *metav1.OwnerReference,
 ) error {
 	// As a shortcut, if there's no spec change in the Work object and the status indicates that
-	// a previous apply attempt has been completed successfully, Fleet will skip the write-ahead
+	// a previous apply attempt has been recorded (**successful or not**), Fleet will skip the write-ahead
 	// op.
 	workAppliedCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
-	if condition.IsConditionStatusTrue(workAppliedCond, work.Generation) {
+	if workAppliedCond.ObservedGeneration == work.Generation {
+		klog.V(2).InfoS("Fleet has attempted to apply the current set of manifests before and recorded the results; will skip the write-ahead process", "work", klog.KObj(work))
 		return nil
 	}
 
-	// Prepare the status update (the new manifest conditions) for the WA process.
+	// Prepare the status update (the new manifest conditions) for the write-ahead process.
 	//
 	// Note that even though we pre-allocate the slice, the length is set to 0. This is to
 	// accommodate the case where there might manifests that have failed pre-processing;
 	// such manifests will not be included in this round's status update.
 	manifestCondsForWA := make([]fleetv1beta1.ManifestCondition, 0, len(bundles))
+
+	// Prepare an query index of existing manifest conditions on the Work object for quicker
+	// lookups.
+	existingManifestCondQIdx := prepareExistingManifestCondQIdx(work.Status.ManifestConditions)
 
 	// For each manifest, verify if it has been tracked in the newly prepared manifest conditions.
 	// This helps signal duplicated resources in the Work object.
@@ -395,19 +406,22 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 		}
 		checked[wriStr] = true
 
-		// Append a new preparing to process manifest condition.
-		//
-		// The slice has been pre-allocated, but Fleet will still re-assign the variable just
-		// in case.
-		manifestCondsForWA = appendManifestConditionPreparingToProcess(manifestCondsForWA, bundle.id, work.Generation)
+		// Prepare the manifest conditions for the write-ahead process.
+		manifestCondForWA := prepareManifestCondForWA(wriStr, bundle.id, work.Generation, existingManifestCondQIdx, work.Status.ManifestConditions)
+		manifestCondsForWA = append(manifestCondsForWA, manifestCondForWA)
+
+		// Keep track of the last drift/diff observed timestamp.
+		if manifestCondForWA.DriftDetails != nil && !manifestCondForWA.DriftDetails.FirstDriftedObservedTime.IsZero() {
+			bundle.firstDriftedTimestamp = manifestCondForWA.DriftDetails.FirstDriftedObservedTime.DeepCopy()
+		}
+		if manifestCondForWA.DiffDetails != nil && !manifestCondForWA.DiffDetails.FirstDiffedObservedTime.IsZero() {
+			bundle.firstDiffedTimestamp = manifestCondForWA.DiffDetails.FirstDiffedObservedTime.DeepCopy()
+		}
 	}
 
-	// Cross-reference the manifest conditions prepared for WA and the current set of manifest
-	// conditions in the Work object status.
-	//
-	// Through this process Fleet intends to find out if there exists any left-over manifests
-	// from previous runs that might have been applied and are now left over in the member cluster.
-	leftOverManifests := crossReferenceManifestConditions(manifestCondsForWA, work.Status.ManifestConditions)
+	// Identify any manifests from previous runs that might have been applied and are now left
+	// over in the member cluster.
+	leftOverManifests := findLeftOverManifests(manifestCondsForWA, existingManifestCondQIdx, work.Status.ManifestConditions)
 	if err := r.removeLeftOverManifests(ctx, leftOverManifests, expectedAppliedWorkOwnerRef); err != nil {
 		klog.Errorf("Failed to remove left-over manifests (work=%+v, leftOverManifestCount=%d, removalFailureCount=%d)",
 			klog.KObj(work), len(leftOverManifests), len(err.Errors()))
@@ -574,6 +588,11 @@ func (r *Reconciler) processOneManifest(
 		return
 	}
 	bundle.inMemberClusterObj = appliedObj
+	// For objects with generated names, Fleet would need to update the bundle identifier to include
+	// the actual name of the applied object.
+	if bundle.id.GenerateName != "" && bundle.id.Name == "" {
+		bundle.id.Name = appliedObj.GetName()
+	}
 
 	// Perform another round of drift detection after the apply op, if the ApplyStrategy dictates
 	// that drift detection should be done in full comparison mode.
@@ -605,129 +624,6 @@ func (r *Reconciler) processOneManifest(
 	}
 
 	// All done.
-}
-
-func (r *Reconciler) diffBetweenManifestAndInMemberClusterObjects(
-	ctx context.Context,
-	gvr *schema.GroupVersionResource,
-	manifestObj, inMemberClusterObj *unstructured.Unstructured,
-	cmpOption fleetv1beta1.ComparisonOptionType,
-) ([]fleetv1beta1.PatchDetail, error) {
-	switch cmpOption {
-	case fleetv1beta1.ComparisonOptionTypePartialComparison:
-		return r.partialDiffBetweenManifestAndInMemberClusterObjects(ctx, gvr, manifestObj, inMemberClusterObj)
-	case fleetv1beta1.ComparisonOptionTypeFullComparison:
-		return fullDiffBetweenManifestAndInMemberClusterObjects(manifestObj, inMemberClusterObj)
-	default:
-		return nil, fmt.Errorf("an invalid comparison option is specified")
-	}
-}
-
-func (r *Reconciler) partialDiffBetweenManifestAndInMemberClusterObjects(
-	ctx context.Context,
-	gvr *schema.GroupVersionResource,
-	manifestObj, inMemberClusterObj *unstructured.Unstructured,
-) ([]fleetv1beta1.PatchDetail, error) {
-	// Fleet calculates the partial diff between two objects by running apply ops in the dry-run
-	// mode.
-
-	appliedObj, err := r.applyInDryRunMode(ctx, gvr, manifestObj, inMemberClusterObj)
-	if err != nil {
-		return nil, fmt.Errorf("failed to apply the manifest in dry-run mode: %w", err)
-	}
-
-	// After the dry-run apply op, all the managed fields should have been overwritten using the
-	// values from the manifest object, while leaving all the unmanaged fields untouched. This
-	// would allow Fleet to compare the object returned by the dry-run apply op with the object
-	// that is currently in the member cluster; if all the fields are consistent, it is safe
-	// for us to assume that there are no drifts, otherwise, any fields that are different
-	// imply that running an actual apply op would lead to unexpected changes, which signifies
-	// the presence of partial drifts (drifts in managed fields).
-
-	// Discard certain fields from both objects before comparison.
-	inMemberClusterObjCopy := discardFieldsIrrelevantInComparisonFrom(inMemberClusterObj)
-	appliedObjCopy := discardFieldsIrrelevantInComparisonFrom(appliedObj)
-
-	// Marshal the objects into JSON.
-	inMemberClusterObjCopyJSONBytes, err := inMemberClusterObjCopy.MarshalJSON()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal the object from the member cluster into JSON: %w", err)
-	}
-	appliedObjJSONBytes, err := appliedObjCopy.MarshalJSON()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal the object returned by the dry-run apply op into JSON: %w", err)
-	}
-
-	// Compare the JSON representations.
-	patch, err := jsondiff.CompareJSON(appliedObjJSONBytes, inMemberClusterObjCopyJSONBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compare the JSON representations of the the object from the member cluster and the object returned by the dry-run apply op: %w", err)
-	}
-
-	details, err := organizeJSONPatchIntoFleetPatchDetails(patch, appliedObjJSONBytes, inMemberClusterObjCopyJSONBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to organize the JSON patch into Fleet patch details: %w", err)
-	}
-	return details, nil
-}
-
-func (r *Reconciler) takeOverPreExistingObject(
-	ctx context.Context,
-	gvr *schema.GroupVersionResource,
-	manifestObj, inMemberClusterObj *unstructured.Unstructured,
-	applyStrategy *fleetv1beta1.ApplyStrategy,
-	expectedAppliedWorkOwnerRef *metav1.OwnerReference,
-) (*unstructured.Unstructured, []fleetv1beta1.PatchDetail, error) {
-	// Check this object is already owned by another object (or controller); if so, Fleet will only
-	// add itself as an additional owner if co-ownership is allowed.
-	inMemberClusterObjCopy := inMemberClusterObj.DeepCopy()
-	existingOwnerRefs := inMemberClusterObjCopy.GetOwnerReferences()
-	if len(existingOwnerRefs) >= 1 && !applyStrategy.AllowCoOwnership {
-		// The object is already owned by another object, and co-ownership is forbidden.
-		// No takeover will be performed.
-		//
-		// Note that This will be registered as an (apply) error.
-		return nil, nil, fmt.Errorf("the object is already owned by some other sources(s) and co-ownership is disallowed")
-	}
-
-	// Check if the object is already owned by Fleet, but the owner is a different AppliedWork
-	// object, i.e., the object has been placed in duplicate.
-	//
-	// Note: originally Fleet does allow placing the same object multiple times; each placement
-	// attempt might have its own object spec (envelopes might be used and in each envelope
-	// the object looks different). This would lead to the object being constantly overwritten,
-	// but no error would be raised on the user-end. With the drift detection feature, however,
-	// this scenario would lead to constant flipping of the drift reporting, which could lead to
-	// user confusion. To address this corner case, Fleet would now deny placing the same object
-	// twice.
-	if isPlacedByFleetInDuplicate(existingOwnerRefs, expectedAppliedWorkOwnerRef) {
-		return nil, nil, fmt.Errorf("the object is already owned by another Fleet AppliedWork object")
-	}
-
-	// Check if the takeover action requires additional steps (configuration difference inspection).
-	//
-	// Note that the default takeover action is AlwaysApply.
-	if applyStrategy.WhenToTakeOver == fleetv1beta1.WhenToTakeOverTypeIfNoDiff {
-		configDiffs, err := r.diffBetweenManifestAndInMemberClusterObjects(ctx, gvr, manifestObj, inMemberClusterObjCopy, applyStrategy.ComparisonOption)
-		switch {
-		case err != nil:
-			return nil, nil, fmt.Errorf("failed to calculate configuration diffs between the manifest object and the object from the member cluster: %w", err)
-		case len(configDiffs) > 0:
-			return nil, configDiffs, fmt.Errorf("configuration differences are found between the manifest object and the object from the member cluster")
-		}
-	}
-
-	// Take over the object.
-	updatedOwnerRefs := append(existingOwnerRefs, *expectedAppliedWorkOwnerRef)
-	inMemberClusterObjCopy.SetOwnerReferences(updatedOwnerRefs)
-	takenOverInMemberClusterObj, err := r.spokeDynamicClient.
-		Resource(*gvr).Namespace(inMemberClusterObjCopy.GetNamespace()).
-		Update(ctx, inMemberClusterObjCopy, metav1.UpdateOptions{})
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to take over the object: %w", err)
-	}
-
-	return takenOverInMemberClusterObj, nil, nil
 }
 
 // findInMemberClusterObjectFor attempts to find the corresponding object in the member cluster
@@ -921,100 +817,6 @@ func (r *Reconciler) decodeManifest(manifest *fleetv1beta1.Manifest) (*schema.Gr
 	return &mapping.Resource, unstructuredObj, nil
 }
 
-func (r *Reconciler) refreshWorkStatus(
-	ctx context.Context,
-	work *fleetv1beta1.Work,
-	bundles []*manifestProcessingBundle,
-) error {
-	// Note (chenyu1): this method can run in parallel; however, for simplicity reasons,
-	// considering that in most of the time the count of manifests would be low, currently
-	// Fleet still does the status refresh sequentially.
-
-	manifestCount := len(bundles)
-	appliedManifestsCount := 0
-	availableAppliedObjectsCount := 0
-
-	// Rebuild the manifest conditions.
-
-	// Pre-allocate the slice.
-	rebuiltManifestConds := make([]fleetv1beta1.ManifestCondition, len(bundles))
-	for idx := range bundles {
-		bundle := bundles[idx]
-
-		// Update the manifest condition based on the bundle processing results.
-		manifestCond := &rebuiltManifestConds[idx]
-		manifestCond.Identifier = *bundle.id
-		manifestCond.Conditions = []metav1.Condition{}
-		setManifestAppliedCondition(manifestCond, bundle.applyResTyp, bundle.applyErr, work.Generation)
-		setManifestAvailableCondition(manifestCond, bundle.availabilityResTyp, bundle.availabilityErr, work.Generation)
-		manifestCond.ObservedDrifts = bundle.drifts
-		manifestCond.ObservedDiffs = bundle.diffs
-
-		// Tally the stats.
-		if isManifestObjectApplied(bundle.applyResTyp) {
-			appliedManifestsCount++
-		}
-		if !isAppliedObjectAvailable(bundle.availabilityResTyp) {
-			availableAppliedObjectsCount++
-		}
-	}
-
-	// Refresh the Work object status conditions.
-
-	// Do a sanity check.
-	if appliedManifestsCount > manifestCount || availableAppliedObjectsCount > manifestCount {
-		// Normally this should never happen.
-		return controller.NewUnexpectedBehaviorError(
-			fmt.Errorf("the number of applied manifests (%d) or available applied objects (%d) exceeds the total number of manifests (%d)",
-				appliedManifestsCount, availableAppliedObjectsCount, manifestCount))
-	}
-
-	setWorkAppliedCondition(&work.Status.Conditions, appliedManifestsCount, manifestCount, work.Generation)
-	setWorkAvailableCondition(&work.Status.Conditions, availableAppliedObjectsCount, manifestCount, work.Generation)
-	work.Status.ManifestConditions = rebuiltManifestConds
-
-	// Update the Work object status.
-	if err := r.hubClient.Status().Update(ctx, work); err != nil {
-		return controller.NewAPIServerError(false, err)
-	}
-	return nil
-}
-
-func (r *Reconciler) refreshAppliedWorkStatus(
-	ctx context.Context,
-	appliedWork *fleetv1beta1.AppliedWork,
-	bundles []*manifestProcessingBundle,
-) error {
-	// Note (chenyu1): this method can run in parallel; however, for simplicity reasons,
-	// considering that in most of the time the count of manifests would be low, currently
-	// Fleet still does the status refresh sequentially.
-
-	// Pre-allocate the slice.
-	//
-	// Manifests that failed to get applied are not included in this list, hence
-	// empty length.
-	appliedResources := make([]fleetv1beta1.AppliedResourceMeta, 0, len(bundles))
-
-	// Build the list of applied resources.
-	for idx := range bundles {
-		bundle := bundles[idx]
-
-		if isManifestObjectApplied(bundle.applyResTyp) {
-			appliedResources = append(appliedResources, fleetv1beta1.AppliedResourceMeta{
-				WorkResourceIdentifier: *bundle.id,
-				UID:                    bundle.inMemberClusterObj.GetUID(),
-			})
-		}
-	}
-
-	// Update the AppliedWork object status.
-	appliedWork.Status.AppliedResources = appliedResources
-	if err := r.hubClient.Status().Update(ctx, appliedWork); err != nil {
-		return controller.NewAPIServerError(false, err)
-	}
-	return nil
-}
-
 // removeLeftOverManifests removes applied left-over manifests from the member cluster.
 func (r *Reconciler) removeLeftOverManifests(
 	ctx context.Context,
@@ -1059,6 +861,8 @@ func (r *Reconciler) removeLeftOverManifests(
 	return utilerrors.NewAggregate(errs)
 }
 
+// removeOneLeftOverManifestWithGenerateName removes an applied manifest object that is left over
+// in the member cluster.
 func (r *Reconciler) removeOneLeftOverManifest(
 	ctx context.Context,
 	leftOverManifest fleetv1beta1.AppliedResourceMeta,
@@ -1144,6 +948,8 @@ func (r *Reconciler) removeOneLeftOverManifest(
 	return nil
 }
 
+// removeOneLeftOverManifestWithGenerateName removes an applied manifest object with a generated
+// name only that might be left over in the member cluster.
 func (r *Reconciler) removeOneLeftOverManifestWithGenerateName(
 	ctx context.Context,
 	leftOverManifest fleetv1beta1.AppliedResourceMeta,
@@ -1174,7 +980,7 @@ func (r *Reconciler) removeOneLeftOverManifestWithGenerateName(
 
 	// Pre-allocation a slice to hold matching objects; use a smaller size as normally there should
 	// be at most one matching object.
-	inMemberClusterObjs := make([]*unstructured.Unstructured, 1)
+	inMemberClusterObjs := make([]*unstructured.Unstructured, 0, 1)
 	for idx := range inMemberClusterObjCandidates.Items {
 		inMemberClusterObjCandidate := inMemberClusterObjCandidates.Items[idx]
 		if isInMemberClusterObjectDerivedFromManifestObjWithGenerateName(&inMemberClusterObjCandidate, leftOverManifest.GenerateName, expectedAppliedWorkOwnerRef) {
