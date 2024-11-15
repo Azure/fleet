@@ -917,6 +917,17 @@ func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*fram
 	cleanupWorkResources()
 }
 
+func ensureCRPEvictionDeletion(crpEvictionName string) {
+	crpe := &placementv1alpha1.ClusterResourcePlacementEviction{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: crpEvictionName,
+		},
+	}
+	Expect(hubClient.Delete(ctx, crpe)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete CRP eviction")
+	removedActual := crpEvictionRemovedActual(crpEvictionName)
+	Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "CRP eviction still exists")
+}
+
 // verifyWorkPropagationAndMarkAsAvailable verifies that works derived from a specific CPR have been created
 // for a specific cluster, and marks these works in the specific member cluster's
 // reserved namespace as applied and available.
