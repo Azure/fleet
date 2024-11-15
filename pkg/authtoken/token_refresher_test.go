@@ -12,22 +12,20 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"go.goms.io/fleet/pkg/interfaces"
 )
 
 type MockAuthTokenProvider struct {
-	Token interfaces.AuthToken
+	Token AuthToken
 }
 
-func (m MockAuthTokenProvider) FetchToken(_ context.Context) (interfaces.AuthToken, error) {
+func (m MockAuthTokenProvider) FetchToken(_ context.Context) (AuthToken, error) {
 	return m.Token, nil
 }
 
 // TestRefreshTokenOnce test to refresh/rewrite token for one time
 func TestRefreshTokenOnce(t *testing.T) {
 	provider := MockAuthTokenProvider{
-		Token: interfaces.AuthToken{
+		Token: AuthToken{
 			Token:     "test token",
 			ExpiresOn: time.Now(),
 		},
@@ -60,7 +58,7 @@ func TestRefreshTokenOnce(t *testing.T) {
 // TestRefreshToken test to refresh/rewrite token multiple times
 func TestRefreshToken(t *testing.T) {
 	provider := MockAuthTokenProvider{
-		Token: interfaces.AuthToken{
+		Token: AuthToken{
 			Token:     "test token",
 			ExpiresOn: time.Now(),
 		},
@@ -99,7 +97,7 @@ func TestRefreshToken(t *testing.T) {
 // TestRefresherCancelContext test if the func will be canceled/returned once the ctx is canceled
 func TestRefresherCancelContext(t *testing.T) {
 	provider := MockAuthTokenProvider{
-		Token: interfaces.AuthToken{
+		Token: AuthToken{
 			Token:     "test token",
 			ExpiresOn: time.Now().Add(100 * time.Millisecond),
 		},

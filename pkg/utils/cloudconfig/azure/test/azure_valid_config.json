@@ -1,0 +1,12 @@
+{
+  "cloud": "AzurePublicCloud",
+  "userAgent": "fleet-member-agent",
+  "tenantId": "00000000-0000-0000-0000-000000000000",
+  "subscriptionId": "00000000-0000-0000-0000-000000000000",
+  "useManagedIdentityExtension": true,
+  "userAssignedIdentityID": "11111111-1111-1111-1111-111111111111",
+  "resourceGroup": "test-rg",
+  "location": "eastus",
+  "vnetName": "test-vnet",
+  "vnetResourceGroup": "test-rg"
+}

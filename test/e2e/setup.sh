@@ -6,7 +6,7 @@ set -o pipefail
 
 # Before updating the default kind image to use, verify that the version is supported
 # by the current kind release.
-KIND_IMAGE="${KIND_IMAGE:-kindest/node:v1.28.0}"
+KIND_IMAGE="${KIND_IMAGE:-kindest/node:v1.30.0}"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 MEMBER_CLUSTER_COUNT=$1
 
@@ -122,6 +122,7 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set enableWebhook=true \
     --set webhookClientConnectionType=service \
     --set forceDeleteWaitTime="1m0s" \
+    --set clusterUnhealthyThreshold="3m0s" \
     --set logFileMaxSize=1000000
 
 # Download CRDs from Fleet networking repo
@@ -185,7 +186,8 @@ do
             --set enableV1Alpha1APIs=false \
             --set enableV1Beta1APIs=true \
             --set propertyProvider=$PROPERTY_PROVIDER \
-            --set region=${REGIONS[$i]}
+            --set region=${REGIONS[$i]} \
+            $( [ "$PROPERTY_PROVIDER" = "azure" ] && echo "-f azure_valid_config.yaml" )
     else
         helm install member-agent ../../charts/member-agent/ \
             --set config.hubURL=$HUB_SERVER_URL \
@@ -200,7 +202,8 @@ do
             --set namespace=fleet-system \
             --set enableV1Alpha1APIs=false \
             --set enableV1Beta1APIs=true \
-            --set propertyProvider=$PROPERTY_PROVIDER
+            --set propertyProvider=$PROPERTY_PROVIDER \
+            $( [ "$PROPERTY_PROVIDER" = "azure" ] && echo "-f azure_valid_config.yaml" )
     fi
 done
 

@@ -4,28 +4,31 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.15.0
-  name: stagedupdateruns.placement.kubernetes-fleet.io
+  name: clusterstagedupdateruns.placement.kubernetes-fleet.io
 spec:
   group: placement.kubernetes-fleet.io
   names:
     categories:
     - fleet
     - fleet-placement
-    kind: StagedUpdateRun
-    listKind: StagedUpdateRunList
-    plural: stagedupdateruns
-    singular: stagedupdaterun
-  scope: Namespaced
+    kind: ClusterStagedUpdateRun
+    listKind: ClusterStagedUpdateRunList
+    plural: clusterstagedupdateruns
+    shortNames:
+    - crsur
+    singular: clusterstagedupdaterun
+  scope: Cluster
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: |-
-          StagedUpdateRun represents a stage by stage update process that applies selected resources to specified clusters.
+          ClusterStagedUpdateRun represents a stage by stage update process that applies ClusterResourcePlacement
+          selected resources to specified clusters.
           Resources from unselected clusters are removed after all stages in the update strategy are completed.
-          Each StagedUpdateRun object corresponds to a single release of a specific resource version.
-          The release is abandoned if the StagedUpdateRun object is deleted or the scheduling decision changes.
-          The name of the StagedUpdateRun must conform to RFC 1123.
+          Each ClusterStagedUpdateRun object corresponds to a single release of a specific resource version.
+          The release is abandoned if the ClusterStagedUpdateRun object is deleted or the scheduling decision changes.
+          The name of the ClusterStagedUpdateRun must conform to RFC 1123.
         properties:
           apiVersion:
             description: |-
@@ -45,52 +48,38 @@ spec:
           metadata:
             type: object
           spec:
-            description: The desired state of StagedUpdateRun. The spec is immutable.
+            description: The desired state of ClusterStagedUpdateRun. The spec is
+              immutable.
             properties:
-              placementRef:
+              placementName:
                 description: |-
-                  A reference to the placement that this update run is applied to.
+                  PlacementName is the name of placement that this update run is applied to.
                   There can be multiple active update runs for each placement, but
                   it's up to the DevOps team to ensure they don't conflict with each other.
-                properties:
-                  name:
-                    description: Name is the name of the referenced placement.
-                    type: string
-                required:
-                - name
-                type: object
+                maxLength: 255
+                type: string
               resourceSnapshotIndex:
                 description: |-
                   The resource snapshot index of the selected resources to be updated across clusters.
                   The index represents a group of resource snapshots that includes all the resources a ResourcePlacement selected.
                 type: string
-              stagedRolloutStrategyRef:
+              stagedRolloutStrategyName:
                 description: |-
-                  The reference to the update strategy that specifies the stages and the sequence
+                  The name of the update strategy that specifies the stages and the sequence
                   in which the selected resources will be updated on the member clusters. The stages
                   are computed according to the referenced strategy when the update run starts
                   and recorded in the status field.
-                properties:
-                  name:
-                    description: Name is the name of the namespaced scope resource.
-                    type: string
-                  namespace:
-                    description: Namespace is namespace of the namespaced scope resource.
-                    type: string
-                required:
-                - name
-                - namespace
-                type: object
+                type: string
             required:
-            - placementRef
+            - placementName
             - resourceSnapshotIndex
-            - stagedRolloutStrategyRef
+            - stagedRolloutStrategyName
             type: object
             x-kubernetes-validations:
             - message: The spec field is immutable
               rule: self == oldSelf
           status:
-            description: The observed status of StagedUpdateRun.
+            description: The observed status of ClusterStagedUpdateRun.
             properties:
               appliedStrategy:
                 description: |-
@@ -98,63 +87,6 @@ spec:
                   It is the same as the apply strategy in the CRP when the staged update run starts.
                   The apply strategy is not updated during the update run even if it changes in the CRP.
                 properties:
-                  actionType:
-                    default: Always
-                    description: |-
-                      WhenToTakeOver determines the action to take when Fleet applies resources to a member
-                      cluster for the first time and finds out that the resource already exists in the cluster.
-
-
-                      This setting is most relevant in cases where you would like Fleet to manage pre-existing
-                      resources on a member cluster.
-
-
-                      Available options include:
-
-
-                      * Always: with this action, Fleet will apply the hub cluster manifests to the member
-                        clusters even if the affected resources already exist. This is the default action.
-
-
-                        Note that this might lead to fields being overwritten on the member clusters, if they
-                        are specified in the hub cluster manifests.
-
-
-                      * IfNoDiff: with this action, Fleet will apply the hub cluster manifests to the member
-                        clusters if (and only if) pre-existing resources look the same as the hub cluster manifests.
-                        This is a safer option as pre-existing resources that are inconsistent with the hub cluster
-                        manifests will not be overwritten; in fact, Fleet will ignore them until the inconsistencies
-                        are resolved properly: any change you make to the hub cluster manifests would not be
-                        applied, and if you delete the manifests or even the ClusterResourcePlacement itself
-                        from the hub cluster, these pre-existing resources would not be taken away.
-
-
-                        Fleet will check for inconsistencies in accordance with the ComparisonOption setting. See also
-                        the comments on the ComparisonOption field for more information.
-
-
-                        If a diff has been found in a field that is **managed** by Fleet (i.e., the field
-                        **is specified ** in the hub cluster manifest), consider one of the following actions:
-                        * set the field in the member cluster to be of the same value as that in the hub cluster
-                          manifest.
-                        * update the hub cluster manifest so that its field value matches with that in the member
-                          cluster.
-                        * switch to the Always action, which will allow Fleet to overwrite the field with the
-                          value in the hub cluster manifest.
-
-
-                        If a diff has been found in a field that is **not managed** by Fleet (i.e., the field
-                        **is not specified** in the hub cluster manifest), consider one of the following actions:
-                        * remove the field from the member cluster.
-                        * update the hub cluster manifest so that the field is included in the hub cluster manifest.
-
-
-                        If appropriate, you may also delete the object from the member cluster; Fleet will recreate
-                        it using the hub cluster manifest.
-                    enum:
-                    - Always
-                    - IfNoDiff
-                    type: string
                   allowCoOwnership:
                     description: |-
                       AllowCoOwnership defines whether to apply the resource if it already exists in the target cluster and is not
@@ -162,7 +94,7 @@ spec:
                       If true, apply the resource and add fleet as a co-owner.
                       If false, leave the resource unchanged and fail the apply.
                     type: boolean
-                  compareOption:
+                  comparisonOption:
                     default: PartialComparison
                     description: |-
                       ComparisonOption controls how Fleet compares the desired state of a resource, as kept in
@@ -320,6 +252,63 @@ spec:
                     enum:
                     - Always
                     - IfNotDrifted
+                    type: string
+                  whenToTakeOver:
+                    default: Always
+                    description: |-
+                      WhenToTakeOver determines the action to take when Fleet applies resources to a member
+                      cluster for the first time and finds out that the resource already exists in the cluster.
+
+
+                      This setting is most relevant in cases where you would like Fleet to manage pre-existing
+                      resources on a member cluster.
+
+
+                      Available options include:
+
+
+                      * Always: with this action, Fleet will apply the hub cluster manifests to the member
+                        clusters even if the affected resources already exist. This is the default action.
+
+
+                        Note that this might lead to fields being overwritten on the member clusters, if they
+                        are specified in the hub cluster manifests.
+
+
+                      * IfNoDiff: with this action, Fleet will apply the hub cluster manifests to the member
+                        clusters if (and only if) pre-existing resources look the same as the hub cluster manifests.
+                        This is a safer option as pre-existing resources that are inconsistent with the hub cluster
+                        manifests will not be overwritten; in fact, Fleet will ignore them until the inconsistencies
+                        are resolved properly: any change you make to the hub cluster manifests would not be
+                        applied, and if you delete the manifests or even the ClusterResourcePlacement itself
+                        from the hub cluster, these pre-existing resources would not be taken away.
+
+
+                        Fleet will check for inconsistencies in accordance with the ComparisonOption setting. See also
+                        the comments on the ComparisonOption field for more information.
+
+
+                        If a diff has been found in a field that is **managed** by Fleet (i.e., the field
+                        **is specified ** in the hub cluster manifest), consider one of the following actions:
+                        * set the field in the member cluster to be of the same value as that in the hub cluster
+                          manifest.
+                        * update the hub cluster manifest so that its field value matches with that in the member
+                          cluster.
+                        * switch to the Always action, which will allow Fleet to overwrite the field with the
+                          value in the hub cluster manifest.
+
+
+                        If a diff has been found in a field that is **not managed** by Fleet (i.e., the field
+                        **is not specified** in the hub cluster manifest), consider one of the following actions:
+                        * remove the field from the member cluster.
+                        * update the hub cluster manifest so that the field is included in the hub cluster manifest.
+
+
+                        If appropriate, you may also delete the object from the member cluster; Fleet will recreate
+                        it using the hub cluster manifest.
+                    enum:
+                    - Always
+                    - IfNoDiff
                     type: string
                 type: object
               conditions:
@@ -720,6 +709,12 @@ spec:
                 - clusters
                 - stageName
                 type: object
+              policyObservedClusterCount:
+                description: |-
+                  PolicyObservedClusterCount records the number of observed clusters in the policy snapshot.
+                  It is recorded at the beginning of the update run from the policy snapshot object.
+                  If the `ObservedClusterCount` value is updated during the update run, the update run is abandoned.
+                type: integer
               policySnapshotIndexUsed:
                 description: |-
                   PolicySnapShotIndexUsed records the policy snapshot index of the ClusterResourcePlacement (CRP) that

@@ -12,7 +12,6 @@ RUN go mod download
 # Copy the go source
 COPY cmd/authtoken/main.go main.go
 COPY pkg/authtoken pkg/authtoken
-COPY pkg/interfaces pkg/interfaces
 
 ARG TARGETARCH
 

@@ -1,0 +1,10 @@
+{{- if eq .Values.propertyProvider "azure" }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cloud-config
+  namespace: {{ .Values.namespace }}
+type: Opaque
+data:
+  config.json: {{ .Values.config.azureCloudConfig | toJson | indent 4 | b64enc | quote }}
+{{- end }}

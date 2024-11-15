@@ -1,5 +1,5 @@
 REGISTRY ?= ghcr.io
-KIND_IMAGE ?= kindest/node:v1.28.0
+KIND_IMAGE ?= kindest/node:v1.30.0
 ifndef TAG
 	TAG ?= $(shell git rev-parse --short=7 HEAD)
 endif
@@ -165,6 +165,7 @@ install-hub-agent-helm:
     --set webhookClientConnectionType=service \
     --set enableV1Alpha1APIs=true \
     --set enableV1Beta1APIs=false \
+    --set enableClusterInventoryAPI=true \
     --set logFileMaxSize=1000000
 
 .PHONY: e2e-v1alpha1-hub-kubeconfig-secret

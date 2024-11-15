@@ -123,6 +123,32 @@ type ManifestCondition struct {
 	// Conditions represents the conditions of this resource on spoke cluster
 	// +required
 	Conditions []metav1.Condition `json:"conditions"`
+
+	// ObservedDrifts explains the details about the observed configuration drifts.
+	// Fleet might truncate the details as appropriate to control object size.
+	//
+	// Each detail entry specifies how the live state (the state on the member
+	// cluster side) compares against the desired state (the state kept in the hub cluster manifest).
+	//
+	// Note that configuration drifts can only occur on a resource if it is currently owned by
+	// Fleet and its corresponding placement is set to use the ClientSideApply or ServerSideApply
+	// apply strategy. In other words, ObservedDrifts and ObservedDiffs will not be populated
+	// at the same time.
+	// +kubebuilder:validation:Optional
+	ObservedDrifts []PatchDetail `json:"observedDrifts,omitempty"`
+
+	// ObservedDiffs explains the details about the observed configuration differences.
+	// Fleet might truncate the details as appropriate to control object size.
+	//
+	// Each detail entry specifies how the live state (the state on the member
+	// cluster side) compares against the desired state (the state kept in the hub cluster manifest).
+	//
+	// Note that configuration differences can only occur on a resource if it is not currently owned
+	// by Fleet (i.e., it is a pre-existing resource that needs to be taken over), or if its
+	// corresponding placement is set to use the ReportDiff apply strategy. In other words,
+	// ObservedDiffs and ObservedDrifts will not be populated at the same time.
+	// +kubebuilder:validation:Optional
+	ObservedDiffs []PatchDetail `json:"observedDiffs,omitempty"`
 }
 
 // +genclient

@@ -26,12 +26,14 @@ helm install hub-agent charts/hub-agent/ \
   --set image.pullPolicy=Always \
   --set image.repository=$REGISTRY/hub-agent \
   --set image.tag=$TAG \
-  --set logVerbosity=2 \
+  --set logVerbosity=5 \
   --set namespace=fleet-system \
   --set enableWebhook=false \
   --set webhookClientConnectionType=service \
   --set enableV1Alpha1APIs=false \
   --set enableV1Beta1APIs=true \
+  --set clusterUnhealthyThreshold="3m0s" \
+  --set forceDeleteWaitTime="1m0s" \
   --set resources.limits.cpu=4 \
   --set resources.limits.memory=4Gi \
   --set concurrentClusterPlacementSyncs=10 \

@@ -428,63 +428,6 @@ spec:
                   ApplyStrategy describes how to resolve the conflict if the resource to be placed already exists in the target cluster
                   and is owned by other appliers.
                 properties:
-                  actionType:
-                    default: Always
-                    description: |-
-                      WhenToTakeOver determines the action to take when Fleet applies resources to a member
-                      cluster for the first time and finds out that the resource already exists in the cluster.
-
-
-                      This setting is most relevant in cases where you would like Fleet to manage pre-existing
-                      resources on a member cluster.
-
-
-                      Available options include:
-
-
-                      * Always: with this action, Fleet will apply the hub cluster manifests to the member
-                        clusters even if the affected resources already exist. This is the default action.
-
-
-                        Note that this might lead to fields being overwritten on the member clusters, if they
-                        are specified in the hub cluster manifests.
-
-
-                      * IfNoDiff: with this action, Fleet will apply the hub cluster manifests to the member
-                        clusters if (and only if) pre-existing resources look the same as the hub cluster manifests.
-                        This is a safer option as pre-existing resources that are inconsistent with the hub cluster
-                        manifests will not be overwritten; in fact, Fleet will ignore them until the inconsistencies
-                        are resolved properly: any change you make to the hub cluster manifests would not be
-                        applied, and if you delete the manifests or even the ClusterResourcePlacement itself
-                        from the hub cluster, these pre-existing resources would not be taken away.
-
-
-                        Fleet will check for inconsistencies in accordance with the ComparisonOption setting. See also
-                        the comments on the ComparisonOption field for more information.
-
-
-                        If a diff has been found in a field that is **managed** by Fleet (i.e., the field
-                        **is specified ** in the hub cluster manifest), consider one of the following actions:
-                        * set the field in the member cluster to be of the same value as that in the hub cluster
-                          manifest.
-                        * update the hub cluster manifest so that its field value matches with that in the member
-                          cluster.
-                        * switch to the Always action, which will allow Fleet to overwrite the field with the
-                          value in the hub cluster manifest.
-
-
-                        If a diff has been found in a field that is **not managed** by Fleet (i.e., the field
-                        **is not specified** in the hub cluster manifest), consider one of the following actions:
-                        * remove the field from the member cluster.
-                        * update the hub cluster manifest so that the field is included in the hub cluster manifest.
-
-
-                        If appropriate, you may also delete the object from the member cluster; Fleet will recreate
-                        it using the hub cluster manifest.
-                    enum:
-                    - Always
-                    - IfNoDiff
-                    type: string
                   allowCoOwnership:
                     description: |-
                       AllowCoOwnership defines whether to apply the resource if it already exists in the target cluster and is not
@@ -492,7 +435,7 @@ spec:
                       If true, apply the resource and add fleet as a co-owner.
                       If false, leave the resource unchanged and fail the apply.
                     type: boolean
-                  compareOption:
+                  comparisonOption:
                     default: PartialComparison
                     description: |-
                       ComparisonOption controls how Fleet compares the desired state of a resource, as kept in
@@ -650,6 +593,63 @@ spec:
                     enum:
                     - Always
                     - IfNotDrifted
+                    type: string
+                  whenToTakeOver:
+                    default: Always
+                    description: |-
+                      WhenToTakeOver determines the action to take when Fleet applies resources to a member
+                      cluster for the first time and finds out that the resource already exists in the cluster.
+
+
+                      This setting is most relevant in cases where you would like Fleet to manage pre-existing
+                      resources on a member cluster.
+
+
+                      Available options include:
+
+
+                      * Always: with this action, Fleet will apply the hub cluster manifests to the member
+                        clusters even if the affected resources already exist. This is the default action.
+
+
+                        Note that this might lead to fields being overwritten on the member clusters, if they
+                        are specified in the hub cluster manifests.
+
+
+                      * IfNoDiff: with this action, Fleet will apply the hub cluster manifests to the member
+                        clusters if (and only if) pre-existing resources look the same as the hub cluster manifests.
+                        This is a safer option as pre-existing resources that are inconsistent with the hub cluster
+                        manifests will not be overwritten; in fact, Fleet will ignore them until the inconsistencies
+                        are resolved properly: any change you make to the hub cluster manifests would not be
+                        applied, and if you delete the manifests or even the ClusterResourcePlacement itself
+                        from the hub cluster, these pre-existing resources would not be taken away.
+
+
+                        Fleet will check for inconsistencies in accordance with the ComparisonOption setting. See also
+                        the comments on the ComparisonOption field for more information.
+
+
+                        If a diff has been found in a field that is **managed** by Fleet (i.e., the field
+                        **is specified ** in the hub cluster manifest), consider one of the following actions:
+                        * set the field in the member cluster to be of the same value as that in the hub cluster
+                          manifest.
+                        * update the hub cluster manifest so that its field value matches with that in the member
+                          cluster.
+                        * switch to the Always action, which will allow Fleet to overwrite the field with the
+                          value in the hub cluster manifest.
+
+
+                        If a diff has been found in a field that is **not managed** by Fleet (i.e., the field
+                        **is not specified** in the hub cluster manifest), consider one of the following actions:
+                        * remove the field from the member cluster.
+                        * update the hub cluster manifest so that the field is included in the hub cluster manifest.
+
+
+                        If appropriate, you may also delete the object from the member cluster; Fleet will recreate
+                        it using the hub cluster manifest.
+                    enum:
+                    - Always
+                    - IfNoDiff
                     type: string
                 type: object
               clusterDecision:
@@ -823,6 +823,249 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              diffedPlacements:
+                description: |-
+                  DiffedPlacements is a list of resources that have configuration differences from their
+                  corresponding hub cluster manifests. Fleet will report such differences when:
+
+
+                  * The CRP uses the ReportDiff apply strategy, which instructs Fleet to compare the hub
+                    cluster manifests against the live resources without actually performing any apply op; or
+                  * Fleet finds a pre-existing resource on the member cluster side that does not match its
+                    hub cluster counterpart, and the CRP has been configured to only take over a resource if
+                    no configuration differences are found.
+
+
+                  To control the object size, only the first 100 diffed resources will be included.
+                  This field is only meaningful if the `ClusterName` is not empty.
+                items:
+                  description: DiffedResourcePlacement contains the details of a resource
+                    with configuration differences.
+                  properties:
+                    envelope:
+                      description: Envelope identifies the envelope object that contains
+                        this resource.
+                      properties:
+                        name:
+                          description: Name of the envelope object.
+                          type: string
+                        namespace:
+                          description: Namespace is the namespace of the envelope
+                            object. Empty if the envelope object is cluster scoped.
+                          type: string
+                        type:
+                          default: ConfigMap
+                          description: Type of the envelope object.
+                          enum:
+                          - ConfigMap
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    firstDiffedObservedTime:
+                      description: |-
+                        FirstDiffedObservedTime is the first time the resource on the target cluster is
+                        observed to have configuration differences.
+                      format: date-time
+                      type: string
+                    group:
+                      description: Group is the group name of the selected resource.
+                      type: string
+                    kind:
+                      description: Kind represents the Kind of the selected resources.
+                      type: string
+                    name:
+                      description: Name of the target resource.
+                      type: string
+                    namespace:
+                      description: Namespace is the namespace of the resource. Empty
+                        if the resource is cluster scoped.
+                      type: string
+                    observationTime:
+                      description: ObservationTime is the time when we observe the
+                        configuration differences for the resource.
+                      format: date-time
+                      type: string
+                    observedDiffs:
+                      description: |-
+                        ObservedDiffs are the details about the found configuration differences. Note that
+                        Fleet might truncate the details as appropriate to control the object size.
+
+
+                        Each detail entry specifies how the live state (the state on the member
+                        cluster side) compares against the desired state (the state kept in the hub cluster manifest).
+
+
+                        An event about the details will be emitted as well.
+                      items:
+                        description: |-
+                          PatchDetail describes a patch that explains an observed configuration drift or
+                          difference.
+
+
+                          A patch detail can be transcribed as a JSON patch operation, as specified in RFC 6902.
+                        properties:
+                          path:
+                            description: The JSON path that points to a field that
+                              has drifted or has configuration differences.
+                            type: string
+                          valueInHub:
+                            description: |-
+                              The value at the JSON path from the hub cluster side.
+
+
+                              This field can be empty if the JSON path does not exist on the hub cluster side; i.e.,
+                              applying the manifest from the hub cluster side would remove the field.
+                            type: string
+                          valueInMember:
+                            description: |-
+                              The value at the JSON path from the member cluster side.
+
+
+                              This field can be empty if the JSON path does not exist on the member cluster side; i.e.,
+                              applying the manifest from the hub cluster side would add a new field.
+                            type: string
+                        required:
+                        - path
+                        type: object
+                      type: array
+                    targetClusterObservedGeneration:
+                      description: |-
+                        TargetClusterObservedGeneration is the generation of the resource on the target cluster
+                        that contains the configuration differences.
+                      format: int64
+                      type: integer
+                    version:
+                      description: Version is the version of the selected resource.
+                      type: string
+                  required:
+                  - firstDiffedObservedTime
+                  - kind
+                  - name
+                  - observationTime
+                  - targetClusterObservedGeneration
+                  - version
+                  type: object
+                maxItems: 100
+                type: array
+              driftedPlacements:
+                description: |-
+                  DriftedPlacements is a list of resources that have drifted from their desired states
+                  kept in the hub cluster, as found by Fleet using the drift detection mechanism.
+
+
+                  To control the object size, only the first 100 drifted resources will be included.
+                  This field is only meaningful if the `ClusterName` is not empty.
+                items:
+                  description: DriftedResourcePlacement contains the details of a
+                    resource with configuration drifts.
+                  properties:
+                    envelope:
+                      description: Envelope identifies the envelope object that contains
+                        this resource.
+                      properties:
+                        name:
+                          description: Name of the envelope object.
+                          type: string
+                        namespace:
+                          description: Namespace is the namespace of the envelope
+                            object. Empty if the envelope object is cluster scoped.
+                          type: string
+                        type:
+                          default: ConfigMap
+                          description: Type of the envelope object.
+                          enum:
+                          - ConfigMap
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    firstDriftedObservedTime:
+                      description: |-
+                        FirstDriftedObservedTime is the first time the resource on the target cluster is
+                        observed to have configuration drifts.
+                      format: date-time
+                      type: string
+                    group:
+                      description: Group is the group name of the selected resource.
+                      type: string
+                    kind:
+                      description: Kind represents the Kind of the selected resources.
+                      type: string
+                    name:
+                      description: Name of the target resource.
+                      type: string
+                    namespace:
+                      description: Namespace is the namespace of the resource. Empty
+                        if the resource is cluster scoped.
+                      type: string
+                    observationTime:
+                      description: ObservationTime is the time when we observe the
+                        configuration drifts for the resource.
+                      format: date-time
+                      type: string
+                    observedDrifts:
+                      description: |-
+                        ObservedDrifts are the details about the found configuration drifts. Note that
+                        Fleet might truncate the details as appropriate to control the object size.
+
+
+                        Each detail entry specifies how the live state (the state on the member
+                        cluster side) compares against the desired state (the state kept in the hub cluster manifest).
+
+
+                        An event about the details will be emitted as well.
+                      items:
+                        description: |-
+                          PatchDetail describes a patch that explains an observed configuration drift or
+                          difference.
+
+
+                          A patch detail can be transcribed as a JSON patch operation, as specified in RFC 6902.
+                        properties:
+                          path:
+                            description: The JSON path that points to a field that
+                              has drifted or has configuration differences.
+                            type: string
+                          valueInHub:
+                            description: |-
+                              The value at the JSON path from the hub cluster side.
+
+
+                              This field can be empty if the JSON path does not exist on the hub cluster side; i.e.,
+                              applying the manifest from the hub cluster side would remove the field.
+                            type: string
+                          valueInMember:
+                            description: |-
+                              The value at the JSON path from the member cluster side.
+
+
+                              This field can be empty if the JSON path does not exist on the member cluster side; i.e.,
+                              applying the manifest from the hub cluster side would add a new field.
+                            type: string
+                        required:
+                        - path
+                        type: object
+                      type: array
+                    targetClusterObservedGeneration:
+                      description: |-
+                        TargetClusterObservedGeneration is the generation of the resource on the target cluster
+                        that contains the configuration drifts.
+                      format: int64
+                      type: integer
+                    version:
+                      description: Version is the version of the selected resource.
+                      type: string
+                  required:
+                  - firstDriftedObservedTime
+                  - kind
+                  - name
+                  - observationTime
+                  - targetClusterObservedGeneration
+                  - version
+                  type: object
+                maxItems: 100
+                type: array
               failedPlacements:
                 description: |-
                   FailedPlacements is a list of all the resources failed to be placed to the given cluster or the resource is unavailable.

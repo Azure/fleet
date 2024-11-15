@@ -461,7 +461,7 @@ type ApplyStrategy struct {
 	// +kubebuilder:default=PartialComparison
 	// +kubebuilder:validation:Enum=PartialComparison;FullComparison
 	// +kubebuilder:validation:Optional
-	ComparisonOption ComparisonOptionType `json:"compareOption,omitempty"`
+	ComparisonOption ComparisonOptionType `json:"comparisonOption,omitempty"`
 
 	// WhenToApply controls when Fleet would apply the manifests on the hub cluster to the member
 	// clusters.
@@ -600,7 +600,7 @@ type ApplyStrategy struct {
 	// +kubebuilder:default=Always
 	// +kubebuilder:validation:Enum=Always;IfNoDiff
 	// +kubebuilder:validation:Optional
-	WhenToTakeOver WhenToTakeOverType `json:"actionType,omitempty"`
+	WhenToTakeOver WhenToTakeOverType `json:"whenToTakeOver,omitempty"`
 }
 
 // ComparisonOptionType describes the compare option that Fleet uses to detect drifts and/or
@@ -865,12 +865,29 @@ type ResourcePlacementStatus struct {
 	// +kubebuilder:validation:MaxItems=100
 	FailedPlacements []FailedResourcePlacement `json:"failedPlacements,omitempty"`
 
-	// DriftedPlacements is a list of all the resources whose label/annotation and spec fields have changed on the
-	// target cluster after it is successfully applied.
+	// DriftedPlacements is a list of resources that have drifted from their desired states
+	// kept in the hub cluster, as found by Fleet using the drift detection mechanism.
+	//
+	// To control the object size, only the first 100 drifted resources will be included.
 	// This field is only meaningful if the `ClusterName` is not empty.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:MaxItems=100
 	DriftedPlacements []DriftedResourcePlacement `json:"driftedPlacements,omitempty"`
+
+	// DiffedPlacements is a list of resources that have configuration differences from their
+	// corresponding hub cluster manifests. Fleet will report such differences when:
+	//
+	// * The CRP uses the ReportDiff apply strategy, which instructs Fleet to compare the hub
+	//   cluster manifests against the live resources without actually performing any apply op; or
+	// * Fleet finds a pre-existing resource on the member cluster side that does not match its
+	//   hub cluster counterpart, and the CRP has been configured to only take over a resource if
+	//   no configuration differences are found.
+	//
+	// To control the object size, only the first 100 diffed resources will be included.
+	// This field is only meaningful if the `ClusterName` is not empty.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxItems=100
+	DiffedPlacements []DiffedResourcePlacement `json:"diffedPlacements,omitempty"`
 
 	// Conditions is an array of current observed conditions for ResourcePlacementStatus.
 	// +kubebuilder:validation:Optional
@@ -888,36 +905,98 @@ type FailedResourcePlacement struct {
 	Condition metav1.Condition `json:"condition"`
 }
 
-// DriftedResourcePlacement contains the drifted resource details.
+// PatchDetail describes a patch that explains an observed configuration drift or
+// difference.
+//
+// A patch detail can be transcribed as a JSON patch operation, as specified in RFC 6902.
+type PatchDetail struct {
+	// The JSON path that points to a field that has drifted or has configuration differences.
+	// +kubebuilder:validation:Required
+	Path string `json:"path"`
+
+	// The value at the JSON path from the member cluster side.
+	//
+	// This field can be empty if the JSON path does not exist on the member cluster side; i.e.,
+	// applying the manifest from the hub cluster side would add a new field.
+	// +kubebuilder:validation:Optional
+	ValueInMember string `json:"valueInMember,omitempty"`
+
+	// The value at the JSON path from the hub cluster side.
+	//
+	// This field can be empty if the JSON path does not exist on the hub cluster side; i.e.,
+	// applying the manifest from the hub cluster side would remove the field.
+	// +kubebuilder:validation:Optional
+	ValueInHub string `json:"valueInHub,omitempty"`
+}
+
+// DriftedResourcePlacement contains the details of a resource with configuration drifts.
 type DriftedResourcePlacement struct {
 	// The resource that has drifted.
 	// +kubebuilder:validation:Required
 	ResourceIdentifier `json:",inline"`
 
-	// ObservationTime is the time we observe the drift that is described in the observedDifferences field.
+	// ObservationTime is the time when we observe the configuration drifts for the resource.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Format=date-time
 	ObservationTime metav1.Time `json:"observationTime"`
 
 	// TargetClusterObservedGeneration is the generation of the resource on the target cluster
-	// that contains this drift.
+	// that contains the configuration drifts.
 	// +kubebuilder:validation:Required
 	TargetClusterObservedGeneration int64 `json:"targetClusterObservedGeneration"`
 
-	// FirstDriftObservedTime is the first time the resource on the target cluster is observed to have
-	// been different from the resource to be applied from the hub.
+	// FirstDriftedObservedTime is the first time the resource on the target cluster is
+	// observed to have configuration drifts.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Format=date-time
-	FirstDriftObservedTime metav1.Time `json:"firstDriftObservedTime"`
+	FirstDriftedObservedTime metav1.Time `json:"firstDriftedObservedTime"`
 
-	// ObservedDifferences contains the details of difference between the resource on the target cluster and
-	// the resource to be applied from the hub. We will truncate the difference details if it exceeds 8192 bytes.
-	// We will also emit an event with the difference details.
-	// +kubebuilder:validation:maxLength=8192
+	// ObservedDrifts are the details about the found configuration drifts. Note that
+	// Fleet might truncate the details as appropriate to control the object size.
+	//
+	// Each detail entry specifies how the live state (the state on the member
+	// cluster side) compares against the desired state (the state kept in the hub cluster manifest).
+	//
+	// An event about the details will be emitted as well.
 	// +kubebuilder:validation:Optional
-	ObservedDifferences string `json:"observedDifferences,omitempty"`
+	ObservedDrifts []PatchDetail `json:"observedDrifts,omitempty"`
+}
+
+// DiffedResourcePlacement contains the details of a resource with configuration differences.
+type DiffedResourcePlacement struct {
+	// The resource that has drifted.
+	// +kubebuilder:validation:Required
+	ResourceIdentifier `json:",inline"`
+
+	// ObservationTime is the time when we observe the configuration differences for the resource.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	ObservationTime metav1.Time `json:"observationTime"`
+
+	// TargetClusterObservedGeneration is the generation of the resource on the target cluster
+	// that contains the configuration differences.
+	// +kubebuilder:validation:Required
+	TargetClusterObservedGeneration int64 `json:"targetClusterObservedGeneration"`
+
+	// FirstDiffedObservedTime is the first time the resource on the target cluster is
+	// observed to have configuration differences.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	FirstDiffedObservedTime metav1.Time `json:"firstDiffedObservedTime"`
+
+	// ObservedDiffs are the details about the found configuration differences. Note that
+	// Fleet might truncate the details as appropriate to control the object size.
+	//
+	// Each detail entry specifies how the live state (the state on the member
+	// cluster side) compares against the desired state (the state kept in the hub cluster manifest).
+	//
+	// An event about the details will be emitted as well.
+	// +kubebuilder:validation:Optional
+	ObservedDiffs []PatchDetail `json:"observedDiffs,omitempty"`
 }
 
 // Toleration allows ClusterResourcePlacement to tolerate any taint that matches
