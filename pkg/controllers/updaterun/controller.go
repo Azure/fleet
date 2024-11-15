@@ -13,7 +13,6 @@ import (
 
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -28,11 +27,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
-)
-
-const (
-	// stageUpdateRunDeletionWaitTime is the time to wait before checking whether the stage update run is completed before deletion.
-	stageUpdateRunDeletionWaitTime = 60 * time.Second
 )
 
 // Reconciler reconciles a ClusterStagedUpdateRun object.
@@ -80,18 +74,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 }
 
 // handleDelete handles the deletion of the clusterStagedUpdateRun object.
-// We need to wait for the update run to stop before deleting the clusterStagedUpdateRun object.
-// We will delete all the dependent resources, including approvalRequest objects, of the clusterStagedUpdateRun object.
+// We delete all the dependent resources, including approvalRequest objects, of the clusterStagedUpdateRun object.
 func (r *Reconciler) handleDelete(ctx context.Context, updateRun *placementv1alpha1.ClusterStagedUpdateRun) (bool, time.Duration, error) {
 	runObjRef := klog.KObj(updateRun)
-	// check if the update run is still running.
-	// the update run is considered as running if started condition is true while finished condition is not true or false.
-	if meta.IsStatusConditionTrue(updateRun.Status.Conditions, string(placementv1alpha1.StagedUpdateRunConditionProgressing)) &&
-		!meta.IsStatusConditionTrue(updateRun.Status.Conditions, string(placementv1alpha1.StagedUpdateRunConditionSucceeded)) &&
-		!meta.IsStatusConditionFalse(updateRun.Status.Conditions, string(placementv1alpha1.StagedUpdateRunConditionSucceeded)) {
-		klog.V(2).InfoS("The clusterStagedUpdateRun is still running, waiting for it to stop", "clusterStagedUpdateRun", runObjRef)
-		return false, stageUpdateRunDeletionWaitTime, nil
-	}
 	// delete all the associated approvalRequests.
 	approvalRequest := &placementv1alpha1.ClusterApprovalRequest{}
 	if err := r.Client.DeleteAllOf(ctx, approvalRequest, client.MatchingLabels{placementv1alpha1.TargetUpdateRunLabel: updateRun.GetName()}); err != nil {

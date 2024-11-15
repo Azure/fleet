@@ -16,13 +16,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/condition"
 )
 
 const (
@@ -67,7 +65,7 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 	})
 
 	Context("Test deleting a clusterStagedUpdateRun", func() {
-		It("Should delete the clusterStagedUpdateRun if it's not started yet", func() {
+		It("Should delete the clusterStagedUpdateRun without any clusterApprovalRequests", func() {
 			By("Creating a new clusterStagedUpdateRun")
 			updateRun := getTestClusterStagedUpdateRun(testUpdateRunName)
 			Expect(k8sClient.Create(ctx, updateRun)).Should(Succeed())
@@ -75,89 +73,8 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 			By("Checking the finalizer is added")
 			validateUpdateRunHasFinalizer(ctx, k8sClient, updateRun)
 
-			By("Updating the clusterStagedUpdateRun to initialized")
-			initcond := getTrueCondition(updateRun, string(placementv1alpha1.StagedUpdateRunConditionInitialized))
-			meta.SetStatusCondition(&updateRun.Status.Conditions, initcond)
-			Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed(), "failed to update the clusterStagedUpdateRun")
-
 			By("Deleting the clusterStagedUpdateRun")
 			Expect(k8sClient.Delete(ctx, updateRun)).Should(Succeed())
-
-			By("Checking the clusterStagedUpdateRun is deleted")
-			validateUpdateRunIsDeleted(ctx, k8sClient, updateRunNamespacedName)
-		})
-
-		It("Should delete the clusterStagedUpdateRun if it finished and succeeded", func() {
-			By("Creating a new clusterStagedUpdateRun")
-			updateRun := getTestClusterStagedUpdateRun(testUpdateRunName)
-			Expect(k8sClient.Create(ctx, updateRun)).Should(Succeed())
-
-			By("Checking the finalizer is added")
-			validateUpdateRunHasFinalizer(ctx, k8sClient, updateRun)
-
-			By("Updating the clusterStagedUpdateRun to succeeded")
-			startedcond := getTrueCondition(updateRun, string(placementv1alpha1.StagedUpdateRunConditionProgressing))
-			finishedcond := getTrueCondition(updateRun, string(placementv1alpha1.StagedUpdateRunConditionSucceeded))
-			meta.SetStatusCondition(&updateRun.Status.Conditions, startedcond)
-			meta.SetStatusCondition(&updateRun.Status.Conditions, finishedcond)
-			Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed(), "failed to update the clusterStagedUpdateRun")
-
-			By("Deleting the clusterStagedUpdateRun")
-			Expect(k8sClient.Delete(ctx, updateRun)).Should(Succeed())
-
-			By("Checking the clusterStagedUpdateRun is deleted")
-			validateUpdateRunIsDeleted(ctx, k8sClient, updateRunNamespacedName)
-		})
-
-		It("Should delete the clusterStagedUpdateRun if it finished but failed", func() {
-			By("Creating a new clusterStagedUpdateRun")
-			updateRun := getTestClusterStagedUpdateRun(testUpdateRunName)
-			Expect(k8sClient.Create(ctx, updateRun)).Should(Succeed())
-
-			By("Checking the finalizer is added")
-			validateUpdateRunHasFinalizer(ctx, k8sClient, updateRun)
-
-			By("Updating the clusterStagedUpdateRun to failed")
-			startedcond := getTrueCondition(updateRun, string(placementv1alpha1.StagedUpdateRunConditionProgressing))
-			finishedcond := getFalseCondition(updateRun, string(placementv1alpha1.StagedUpdateRunConditionSucceeded))
-			meta.SetStatusCondition(&updateRun.Status.Conditions, startedcond)
-			meta.SetStatusCondition(&updateRun.Status.Conditions, finishedcond)
-			Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed(), "failed to update the clusterStagedUpdateRun")
-
-			By("Deleting the clusterStagedUpdateRun")
-			Expect(k8sClient.Delete(ctx, updateRun)).Should(Succeed())
-
-			By("Checking the clusterStagedUpdateRun is deleted")
-			validateUpdateRunIsDeleted(ctx, k8sClient, updateRunNamespacedName)
-		})
-
-		It("Should not delete the clusterStagedUpdateRun if it's still progressing'", func() {
-			By("Creating a new clusterStagedUpdateRun")
-			updateRun := getTestClusterStagedUpdateRun(testUpdateRunName)
-			Expect(k8sClient.Create(ctx, updateRun)).Should(Succeed())
-
-			By("Checking the finalizer is added")
-			validateUpdateRunHasFinalizer(ctx, k8sClient, updateRun)
-
-			By("Updating the clusterStagedUpdateRun to progressing")
-			startedcond := getTrueCondition(updateRun, string(placementv1alpha1.StagedUpdateRunConditionProgressing))
-			meta.SetStatusCondition(&updateRun.Status.Conditions, startedcond)
-			Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed(), "failed to add condition to the clusterStagedUpdateRun")
-
-			By("Deleting the clusterStagedUpdateRun")
-			Expect(k8sClient.Delete(ctx, updateRun)).Should(Succeed())
-
-			By("Checking the clusterStagedUpdateRun is not deleted")
-			Consistently(func() error {
-				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); errors.IsNotFound(err) {
-					return fmt.Errorf("clusterStagedUpdateRun %s does not exist: %w", testUpdateRunName, err)
-				}
-				return nil
-			}, duration, interval).Should(Succeed(), "Failed to find clusterStagedUpdateRun %s", testUpdateRunName)
-
-			By("Removing the finalizer")
-			controllerutil.RemoveFinalizer(updateRun, placementv1alpha1.ClusterStagedUpdateRunFinalizer)
-			Expect(k8sClient.Update(ctx, updateRun)).Should(Succeed(), "failed to remove finalizer from the clusterStagedUpdateRun")
 
 			By("Checking the clusterStagedUpdateRun is deleted")
 			validateUpdateRunIsDeleted(ctx, k8sClient, updateRunNamespacedName)
@@ -245,40 +162,6 @@ func validateUpdateRunHasFinalizer(ctx context.Context, k8sClient client.Client,
 		}
 		return nil
 	}, timeout, interval).Should(Succeed(), "Failed to add finalizer to clusterStagedUpdateRun %s", namepsacedName)
-}
-
-func getTrueCondition(updateRun *placementv1alpha1.ClusterStagedUpdateRun, condType string) metav1.Condition {
-	reason := ""
-	switch condType {
-	case string(placementv1alpha1.StagedUpdateRunConditionInitialized):
-		reason = condition.UpdateRunInitializeSucceededReason
-	case string(placementv1alpha1.StagedUpdateRunConditionProgressing):
-		reason = condition.UpdateRunStartedReason
-	case string(placementv1alpha1.StagedUpdateRunConditionSucceeded):
-		reason = condition.UpdateRunSucceededReason
-	}
-	return metav1.Condition{
-		Status:             metav1.ConditionTrue,
-		Type:               condType,
-		ObservedGeneration: updateRun.Generation,
-		Reason:             reason,
-	}
-}
-
-func getFalseCondition(updateRun *placementv1alpha1.ClusterStagedUpdateRun, condType string) metav1.Condition {
-	reason := ""
-	switch condType {
-	case string(placementv1alpha1.StagedUpdateRunConditionInitialized):
-		reason = condition.UpdateRunInitializeFailedReason
-	case string(placementv1alpha1.StagedUpdateRunConditionSucceeded):
-		reason = condition.UpdateRunFailedReason
-	}
-	return metav1.Condition{
-		Status:             metav1.ConditionFalse,
-		Type:               condType,
-		ObservedGeneration: updateRun.Generation,
-		Reason:             reason,
-	}
 }
 
 func validateUpdateRunIsDeleted(ctx context.Context, k8sClient client.Client, name types.NamespacedName) {
