@@ -397,21 +397,32 @@ func validateOwnerReferences(
 	expectedAppliedWorkOwnerRef *metav1.OwnerReference,
 ) error {
 	manifestObjOwnerRefs := manifestObj.GetOwnerReferences()
-	inMemberClusterObjOwnerRefs := inMemberClusterObj.GetOwnerReferences()
 
 	// If the manifest object already features some owner reference(s), but co-ownership is
 	// disallowed, the validation fails.
+	//
+	// This is just a sanity check; normally the branch will never get triggered as Fleet would
+	// perform sanitization on the manifest object before applying it, which removes all owner
+	// references.
 	if len(manifestObjOwnerRefs) > 0 && !applyStrategy.AllowCoOwnership {
 		return fmt.Errorf("manifest is set to have multiple owner references but co-ownership is disallowed")
 	}
 
 	// Do a sanity check to verify that no AppliedWork object is directly added as an owner
-	// in the manifest object.
+	// in the manifest object. Normally the branch will never get triggered as Fleet would
+	// perform sanitization on the manifest object before applying it, which removes all owner
+	// references.
 	for _, ownerRef := range manifestObjOwnerRefs {
 		if ownerRef.APIVersion == fleetv1beta1.GroupVersion.String() && ownerRef.Kind == fleetv1beta1.AppliedWorkKind {
 			return fmt.Errorf("an AppliedWork object is unexpectedly added as an owner in the manifest object")
 		}
 	}
+
+	if inMemberClusterObj == nil {
+		// The manifest object has never been applied yet; no need to do further validation.
+		return nil
+	}
+	inMemberClusterObjOwnerRefs := inMemberClusterObj.GetOwnerReferences()
 
 	// If the live object is co-owned but co-ownership is no longer allowed, the validation fails.
 	if len(inMemberClusterObjOwnerRefs) > 1 && !applyStrategy.AllowCoOwnership {
@@ -769,6 +780,7 @@ func prepareManifestCondForWA(
 				ObservedGeneration: workGeneration,
 				Reason:             ManifestAppliedCondPreparingToProcessReason,
 				Message:            ManifestAppliedCondPreparingToProcessMessage,
+				LastTransitionTime: metav1.Now(),
 			},
 		},
 	}

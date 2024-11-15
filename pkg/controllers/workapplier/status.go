@@ -46,33 +46,41 @@ func (r *Reconciler) refreshWorkStatus(
 		setManifestAppliedCondition(manifestCond, bundle.applyResTyp, bundle.applyErr, work.Generation)
 		setManifestAvailableCondition(manifestCond, bundle.availabilityResTyp, bundle.availabilityErr, work.Generation)
 
+		// Check if a first drifted timestamp has been set; if not, set it to the current time.
 		firstDriftedTimestamp := bundle.firstDriftedTimestamp
 		if firstDriftedTimestamp == nil {
 			firstDriftedTimestamp = &now
 		}
-		manifestCond.DriftDetails = &fleetv1beta1.DriftDetails{
-			ObservationTime:                   now,
-			ObservedInMemberClusterGeneration: bundle.inMemberClusterObj.GetGeneration(),
-			FirstDriftedObservedTime:          *firstDriftedTimestamp,
-			ObservedDrifts:                    bundle.drifts,
+		if bundle.drifts != nil {
+			// Populate drift details if there are drifts found.
+			manifestCond.DriftDetails = &fleetv1beta1.DriftDetails{
+				ObservationTime:                   now,
+				ObservedInMemberClusterGeneration: bundle.inMemberClusterObj.GetGeneration(),
+				FirstDriftedObservedTime:          *firstDriftedTimestamp,
+				ObservedDrifts:                    bundle.drifts,
+			}
 		}
 
+		// Check if a first diffed timestamp has been set; if not, set it to the current time.
 		firstDiffedTimestamp := bundle.firstDiffedTimestamp
 		if firstDiffedTimestamp == nil {
 			firstDiffedTimestamp = &now
 		}
-		manifestCond.DiffDetails = &fleetv1beta1.DiffDetails{
-			ObservationTime:                   now,
-			ObservedInMemberClusterGeneration: bundle.inMemberClusterObj.GetGeneration(),
-			FirstDiffedObservedTime:           *firstDiffedTimestamp,
-			ObservedDiffs:                     bundle.diffs,
+		// Populate diff details if there are diffs found.
+		if bundle.diffs != nil {
+			manifestCond.DiffDetails = &fleetv1beta1.DiffDetails{
+				ObservationTime:                   now,
+				ObservedInMemberClusterGeneration: bundle.inMemberClusterObj.GetGeneration(),
+				FirstDiffedObservedTime:           *firstDiffedTimestamp,
+				ObservedDiffs:                     bundle.diffs,
+			}
 		}
 
 		// Tally the stats.
 		if isManifestObjectApplied(bundle.applyResTyp) {
 			appliedManifestsCount++
 		}
-		if !isAppliedObjectAvailable(bundle.availabilityResTyp) {
+		if isAppliedObjectAvailable(bundle.availabilityResTyp) {
 			availableAppliedObjectsCount++
 		}
 	}
@@ -127,7 +135,7 @@ func (r *Reconciler) refreshAppliedWorkStatus(
 
 	// Update the AppliedWork object status.
 	appliedWork.Status.AppliedResources = appliedResources
-	if err := r.hubClient.Status().Update(ctx, appliedWork); err != nil {
+	if err := r.spokeClient.Status().Update(ctx, appliedWork); err != nil {
 		return controller.NewAPIServerError(false, err)
 	}
 	return nil

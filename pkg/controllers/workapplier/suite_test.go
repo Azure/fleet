@@ -29,6 +29,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -38,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
@@ -52,7 +55,7 @@ var (
 	memberCfg           *rest.Config
 	hubEnv              *envtest.Environment
 	memberEnv           *envtest.Environment
-	memberMgr           manager.Manager
+	hubMgr              manager.Manager
 	hubClient           client.Client
 	memberClient        client.Client
 	memberDynamicClient dynamic.Interface
@@ -77,6 +80,15 @@ func TestAPIs(t *testing.T) {
 	RunSpecs(t, "Work Applier Integration Test Suite")
 }
 
+func setupResources() {
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: memberReservedNSName,
+		},
+	}
+	Expect(hubClient.Create(ctx, ns)).To(Succeed())
+}
+
 var _ = BeforeSuite(func() {
 	ctx, cancel = context.WithCancel(context.TODO())
 
@@ -84,6 +96,8 @@ var _ = BeforeSuite(func() {
 	fs := flag.NewFlagSet("klog", flag.ContinueOnError)
 	klog.InitFlags(fs)
 	Expect(fs.Parse([]string{"--v", "5", "-add_dir_header", "true"})).Should(Succeed())
+
+	klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	By("Bootstrapping test environments")
 	hubEnv = &envtest.Environment{
@@ -126,8 +140,11 @@ var _ = BeforeSuite(func() {
 	memberDynamicClient, err = dynamic.NewForConfig(memberCfg)
 	Expect(err).ToNot(HaveOccurred())
 
+	By("Setting up the resources")
+	setupResources()
+
 	By("Setting up the controller and the controller manager")
-	memberMgr, err = ctrl.NewManager(memberCfg, ctrl.Options{
+	hubMgr, err = ctrl.NewManager(hubCfg, ctrl.Options{
 		Scheme: scheme.Scheme,
 		Metrics: server.Options{
 			BindAddress: "0",
@@ -146,16 +163,17 @@ var _ = BeforeSuite(func() {
 		memberReservedNSName,
 		memberDynamicClient,
 		memberClient,
-		memberMgr.GetRESTMapper(),
-		memberMgr.GetEventRecorderFor("work-applier"),
+		memberClient.RESTMapper(),
+		hubMgr.GetEventRecorderFor("work-applier"),
 		maxConcurrentReconciles,
 		workerCount,
 	)
-	Expect(workApplier.SetupWithManager(memberMgr)).To(Succeed())
+	Expect(workApplier.SetupWithManager(hubMgr)).To(Succeed())
 
 	go func() {
 		defer GinkgoRecover()
-		Expect(memberMgr.Start(ctx)).To(Succeed())
+		Expect(workApplier.Join(ctx)).To(Succeed())
+		Expect(hubMgr.Start(ctx)).To(Succeed())
 	}()
 })
 

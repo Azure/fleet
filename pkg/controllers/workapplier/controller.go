@@ -192,6 +192,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		klog.ErrorS(err, "Failed to retrieve the work", "work", req.NamespacedName)
 		return ctrl.Result{}, controller.NewAPIServerError(true, err)
 	}
+
 	workRef := klog.KObj(work)
 
 	// Garbage collect the AppliedWork object if the Work object has been deleted.
@@ -261,7 +262,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// If the Work object is not yet available, reconcile again in 5 seconds.
-	if isWorkObjectAvailable(work) {
+	if !isWorkObjectAvailable(work) {
 		return ctrl.Result{RequeueAfter: availabilityCheckRequeueAfter}, nil
 	}
 	// Otherwise, reconcile again in 3 minutes for drift detection purposes.
@@ -352,7 +353,7 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 	// a previous apply attempt has been recorded (**successful or not**), Fleet will skip the write-ahead
 	// op.
 	workAppliedCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
-	if workAppliedCond.ObservedGeneration == work.Generation {
+	if workAppliedCond != nil && workAppliedCond.ObservedGeneration == work.Generation {
 		klog.V(2).InfoS("Fleet has attempted to apply the current set of manifests before and recorded the results; will skip the write-ahead process", "work", klog.KObj(work))
 		return nil
 	}
@@ -432,6 +433,11 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 	//
 	// Note that the Work object might have been refreshed by controllers on the hub cluster
 	// before this step runs; in this case the current reconciliation loop must be abandoned.
+	if work.Status.Conditions == nil {
+		// As a sanity check, set an empty set of conditions. Currently the API definition does
+		// not allow nil conditions.
+		work.Status.Conditions = []metav1.Condition{}
+	}
 	work.Status.ManifestConditions = manifestCondsForWA
 	if err := r.hubClient.Status().Update(ctx, work); err != nil {
 		return controller.NewAPIServerError(false, fmt.Errorf("failed to write ahead manifest processing attempts: %w", err))
@@ -624,6 +630,7 @@ func (r *Reconciler) processOneManifest(
 	}
 
 	// All done.
+	bundle.applyResTyp = ManifestProcessingApplyResultTypeApplied
 }
 
 // findInMemberClusterObjectFor attempts to find the corresponding object in the member cluster
