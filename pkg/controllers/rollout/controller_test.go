@@ -190,7 +190,7 @@ func TestWaitForResourcesToCleanUp(t *testing.T) {
 		"test deleting binding block schedule binding on the same cluster": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
-				generateDeletingClusterResourceBinding(cluster1),
+				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, cluster1),
 			},
 			wantWait: true,
 			wantErr:  false,
@@ -198,7 +198,7 @@ func TestWaitForResourcesToCleanUp(t *testing.T) {
 		"test deleting binding not block binding on different cluster": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
-				generateDeletingClusterResourceBinding(cluster2),
+				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, cluster2),
 				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
 			},
 			wantWait: false,
@@ -206,7 +206,7 @@ func TestWaitForResourcesToCleanUp(t *testing.T) {
 		},
 		"test deleting binding cannot co-exsit with a bound binding on same cluster": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
-				generateDeletingClusterResourceBinding(cluster1),
+				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, cluster1),
 				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
 			},
 			wantWait: false,
@@ -835,6 +835,36 @@ func TestPickBindingsToRoll(t *testing.T) {
 			Reason: work.WorkNotTrackableReason, // Make it not ready
 		},
 	}
+
+	readyBoundDeletingBinding := generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateBound, cluster1)
+	readyBoundDeletingBinding.Generation = 15
+	readyBoundDeletingBinding.Status.Conditions = []metav1.Condition{
+		{
+			Type:               string(fleetv1beta1.ResourceBindingApplied),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: 15,
+		},
+		{
+			Type:               string(fleetv1beta1.ResourceBindingAvailable),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: 15,
+			LastTransitionTime: metav1.Time{
+				Time: now.Add(-35 * time.Second),
+			},
+			Reason: work.WorkNotTrackableReason,
+		},
+	}
+
+	failedToApplyBoundBinding := generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1)
+	failedToApplyBoundBinding.Generation = 2
+	failedToApplyBoundBinding.Status.Conditions = []metav1.Condition{
+		{
+			Type:               string(fleetv1beta1.ResourceBindingApplied),
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: 2,
+		},
+	}
+
 	tests := map[string]struct {
 		allBindings                 []*fleetv1beta1.ClusterResourceBinding
 		latestResourceSnapshotName  string
@@ -1498,6 +1528,262 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll:                true,
 			wantWaitTime:                25 * time.Second, // minWaitTime = (t - 35 seconds) - (t - 60 seconds) = 25 seconds
 		},
+		"test one scheduled deleting binding - rollout blocked": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateScheduled, cluster1),
+			},
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
+			wantTobeUpdatedBindings:     []int{},
+			wantStaleUnselectedBindings: nil,
+			wantNeedRoll:                false,
+			wantWaitTime:                0,
+		},
+		"test one deleting scheduled binding, one scheduled binding - rollout allowed": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateScheduled, cluster1),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster2),
+			},
+			latestResourceSnapshotName: "snapshot-1",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 2)),
+			wantTobeUpdatedBindings:     []int{1},
+			wantStaleUnselectedBindings: []int{},
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				// scheduled deleting binding does not have desired spec, so it's empty.
+				{},
+				{
+					State:                fleetv1beta1.BindingStateBound,
+					TargetCluster:        cluster2,
+					ResourceSnapshotName: "snapshot-1",
+				},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: 0,
+		},
+		"test one deleting scheduled binding, one canBeReady bound binding, update candidate - rollout allowed update stale binding": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				canBeReadyBinding,
+				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateScheduled, cluster2),
+			},
+			latestResourceSnapshotName: "snapshot-2", // make canBeReadyBinding update candidate.
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
+			wantTobeUpdatedBindings:     []int{},
+			wantStaleUnselectedBindings: []int{0},
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				{
+					State:                fleetv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-2",
+				},
+				// scheduled deleting binding does not have desired spec, so it's empty.
+				{},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: time.Second,
+		},
+		"test one deleting scheduled binding, one ready bound binding, update candidate - rollout allowed update stale binding": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateScheduled, cluster1),
+				readyBoundBinding,
+			},
+			latestResourceSnapshotName: "snapshot-3", // make readyBoundBinding update candidate.
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
+			wantTobeUpdatedBindings:     []int{},
+			wantStaleUnselectedBindings: []int{1},
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				// scheduled deleting binding does not have desired spec, so it's empty.
+				{},
+				{
+					State:                fleetv1beta1.BindingStateBound,
+					TargetCluster:        cluster2,
+					ResourceSnapshotName: "snapshot-3",
+				},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: 0,
+		},
+		// If target number is greater than 1 we block rollout for same case.
+		"test one deleting scheduled binding, one unscheduled binding - rollout allowed": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateScheduled, cluster1),
+				notReadyUnscheduledBinding, // actually ready binding since UnavailablePeriodSeconds is not specified in CRP used.
+			},
+			latestResourceSnapshotName: "snapshot-1",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
+			wantTobeUpdatedBindings:     []int{1},
+			wantStaleUnselectedBindings: []int{},
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				// scheduled deleting binding does not have desired spec, so it's empty.
+				{},
+				{
+					State:                fleetv1beta1.BindingStateUnscheduled,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: 0,
+		},
+		"test bound deleting binding - rollout blocked": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateBound, cluster1),
+			},
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
+			wantTobeUpdatedBindings:     []int{},
+			wantStaleUnselectedBindings: nil,
+			wantNeedRoll:                false,
+			wantWaitTime:                time.Second,
+		},
+		"test one scheduled, one deleting bound binding - rollout allowed": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-2", cluster1),
+				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateBound, cluster2),
+			},
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 2)),
+			latestResourceSnapshotName:  "snapshot-2",
+			wantTobeUpdatedBindings:     []int{0},
+			wantStaleUnselectedBindings: []int{},
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				{
+					State:                fleetv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-2",
+				},
+				// bound deleting binding does not have desired spec, so it's empty.
+				{},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: time.Second,
+		},
+		"test one canBeReady bound binding, one deleting canBeReady bound binding, one update candidate - rollout allowed only to update stale binding status": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				canBeReadyBinding,
+				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateBound, cluster2),
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 2)),
+			wantTobeUpdatedBindings:     []int{},
+			wantStaleUnselectedBindings: []int{0},
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				{
+					State:                fleetv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-2",
+				},
+				// bound deleting binding does not have desired spec, so it's empty.
+				{},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: time.Second,
+		},
+		"test one ready bound binding, one deleting ready bound binding, update candidate - rollout allowed to update stale binding status": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				readyBoundDeletingBinding,
+				readyBoundBinding,
+			},
+			latestResourceSnapshotName: "snapshot-3", // readyBoundBinding's snapshot is snapshot-2 to force update.
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 2)),
+			wantTobeUpdatedBindings:     []int{},
+			wantStaleUnselectedBindings: []int{1},
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				// bound deleting binding does not have desired spec, so it's empty.
+				{},
+				{
+					State:                fleetv1beta1.BindingStateBound,
+					TargetCluster:        cluster2,
+					ResourceSnapshotName: "snapshot-3",
+				},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: 0,
+		},
+		"test one failedToApply binding, one deleting binding, update candidate - rollout allowed": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				failedToApplyBoundBinding,
+				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateBound, cluster2),
+			},
+			latestResourceSnapshotName: "snapshot-2", // failedToApplyBoundBinding's snapshot is snapshot-1 to force update.
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 2)),
+			wantTobeUpdatedBindings:     []int{0},
+			wantStaleUnselectedBindings: []int{},
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				{
+					State:                fleetv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-2",
+				},
+				// bound deleting binding does not have desired spec, so it's empty.
+				{},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: time.Second,
+		},
+		"test one ready deleting bound binding, one unscheduled binding - rollout allowed, unscheduled binding is not removed": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				readyBoundDeletingBinding,
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
+			},
+			latestResourceSnapshotName: "snapshot-1",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
+			wantTobeUpdatedBindings:     []int{},
+			wantStaleUnselectedBindings: []int{},
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				// bound deleting binding does not have desired spec, so it's empty.
+				{},
+				// unscheduled binding does not have desired spec, so it's empty.
+				{},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: time.Second,
+		},
+		"test one deleting unscheduled binding - rollout blocked": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, cluster1),
+			},
+			latestResourceSnapshotName: "snapshot-1",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
+			wantTobeUpdatedBindings:     []int{},
+			wantStaleUnselectedBindings: []int{},
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				// unscheduled deleting binding does not have desired spec, so it's empty.
+				{},
+			},
+			wantNeedRoll: false,
+			wantWaitTime: time.Second,
+		},
+		"test one scheduled, one deleting unscheduled binding - rollout allowed for scheduled binding": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, cluster1),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster2),
+			},
+			latestResourceSnapshotName: "snapshot-1",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
+			wantTobeUpdatedBindings:     []int{1},
+			wantStaleUnselectedBindings: []int{},
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				// unscheduled deleting binding does not have desired spec, so it's empty.
+				{},
+				{
+					State:                fleetv1beta1.BindingStateBound,
+					TargetCluster:        cluster2,
+					ResourceSnapshotName: "snapshot-1",
+				},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: time.Second,
+		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -1529,15 +1815,25 @@ func TestPickBindingsToRoll(t *testing.T) {
 
 			wantTobeUpdatedBindings := make([]toBeUpdatedBinding, len(tt.wantTobeUpdatedBindings))
 			for i, index := range tt.wantTobeUpdatedBindings {
-				wantTobeUpdatedBindings[i].currentBinding = tt.allBindings[index]
-				wantTobeUpdatedBindings[i].desiredBinding = tt.allBindings[index].DeepCopy()
-				wantTobeUpdatedBindings[i].desiredBinding.Spec = tt.wantDesiredBindingsSpec[index]
+				// Unscheduled bindings are only removed in a single rollout cycle.
+				if tt.allBindings[index].Spec.State != fleetv1beta1.BindingStateUnscheduled {
+					wantTobeUpdatedBindings[i].currentBinding = tt.allBindings[index]
+					wantTobeUpdatedBindings[i].desiredBinding = tt.allBindings[index].DeepCopy()
+					wantTobeUpdatedBindings[i].desiredBinding.Spec = tt.wantDesiredBindingsSpec[index]
+				} else {
+					wantTobeUpdatedBindings[i].currentBinding = tt.allBindings[index]
+				}
 			}
 			wantStaleUnselectedBindings := make([]toBeUpdatedBinding, len(tt.wantStaleUnselectedBindings))
 			for i, index := range tt.wantStaleUnselectedBindings {
-				wantStaleUnselectedBindings[i].currentBinding = tt.allBindings[index]
-				wantStaleUnselectedBindings[i].desiredBinding = tt.allBindings[index].DeepCopy()
-				wantStaleUnselectedBindings[i].desiredBinding.Spec = tt.wantDesiredBindingsSpec[index]
+				// Unscheduled bindings are only removed in a single rollout cycle.
+				if tt.allBindings[index].Spec.State != fleetv1beta1.BindingStateUnscheduled {
+					wantStaleUnselectedBindings[i].currentBinding = tt.allBindings[index]
+					wantStaleUnselectedBindings[i].desiredBinding = tt.allBindings[index].DeepCopy()
+					wantStaleUnselectedBindings[i].desiredBinding.Spec = tt.wantDesiredBindingsSpec[index]
+				} else {
+					wantStaleUnselectedBindings[i].currentBinding = tt.allBindings[index]
+				}
 			}
 
 			if diff := cmp.Diff(wantTobeUpdatedBindings, gotUpdatedBindings, cmpOptions...); diff != "" {
@@ -2041,4 +2337,12 @@ func TestCheckAndUpdateStaleBindingsStatus(t *testing.T) {
 			}
 		})
 	}
+}
+
+func generateDeletingClusterResourceBinding(state fleetv1beta1.BindingState, targetCluster string) *fleetv1beta1.ClusterResourceBinding {
+	binding := generateClusterResourceBinding(state, "anything", targetCluster)
+	binding.DeletionTimestamp = &metav1.Time{
+		Time: now,
+	}
+	return binding
 }
