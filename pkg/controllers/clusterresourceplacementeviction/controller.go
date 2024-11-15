@@ -129,18 +129,19 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
 	}
 
+	bindingList := crbList.Items
 	var desiredBindings int
 	switch crp.Spec.Policy.PlacementType {
 	case placementv1beta1.PickAllPlacementType:
-		desiredBindings = len(crbList.Items)
+		desiredBindings = calculateSchedulerTargetedBindings(bindingList)
 	case placementv1beta1.PickNPlacementType:
 		desiredBindings = int(*crp.Spec.Policy.NumberOfClusters)
 	case placementv1beta1.PickFixedPlacementType:
 		desiredBindings = len(crp.Spec.Policy.ClusterNames)
 	}
 
-	totalBindings := len(crbList.Items)
-	allowed, disruptionsAllowed, availableBindings := isEvictionAllowed(desiredBindings, crbList.Items, db)
+	totalBindings := len(bindingList)
+	allowed, disruptionsAllowed, availableBindings := isEvictionAllowed(desiredBindings, bindingList, db)
 	if allowed {
 		if err := r.deleteClusterResourceBinding(ctx, evictionTargetBinding); err != nil {
 			return runtime.Result{}, err
@@ -198,6 +199,17 @@ func isEvictionAllowed(desiredBindings int, bindings []placementv1beta1.ClusterR
 		disruptionsAllowed = 0
 	}
 	return disruptionsAllowed > 0, disruptionsAllowed, availableBindings
+}
+
+// calculateSchedulerTargetedBindings returns the count of bindings targeted by the scheduler.
+func calculateSchedulerTargetedBindings(bindings []placementv1beta1.ClusterResourceBinding) int {
+	schedulerTargetedBindings := 0
+	for i := range bindings {
+		if bindings[i].Spec.State == placementv1beta1.BindingStateBound || bindings[i].Spec.State == placementv1beta1.BindingStateScheduled {
+			schedulerTargetedBindings++
+		}
+	}
+	return schedulerTargetedBindings
 }
 
 // markEvictionValid sets the valid condition as true in eviction status.
