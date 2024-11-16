@@ -781,8 +781,9 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 	}
 
 	resourceBinding.Status.DriftedPlacements = nil
-	// collect and set the drifted resource placements to the binding
+	resourceBinding.Status.DiffedPlacements = nil
 	driftedResourcePlacements := make([]fleetv1beta1.DriftedResourcePlacement, 0, maxDriftedResourcePlacementLimit) // preallocate the memory
+	diffedResourcePlacements := make([]fleetv1beta1.DiffedResourcePlacement, 0, maxDiffedResourcePlacementLimit)    // preallocate the memory
 	for _, w := range works {
 		if w.DeletionTimestamp != nil {
 			klog.V(2).InfoS("Ignoring the deleting work", "clusterResourceBinding", bindingRef, "work", klog.KObj(w))
@@ -790,33 +791,25 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 		}
 		driftedManifests := extractDriftedResourcePlacementsFromWork(w)
 		driftedResourcePlacements = append(driftedResourcePlacements, driftedManifests...)
+
+		diffedManifests := extractDiffedResourcePlacementsFromWork(w)
+		diffedResourcePlacements = append(diffedResourcePlacements, diffedManifests...)
 	}
 	// cut the list to keep only the max limit
 	if len(driftedResourcePlacements) > maxDriftedResourcePlacementLimit {
 		driftedResourcePlacements = driftedResourcePlacements[0:maxDriftedResourcePlacementLimit]
 	}
-	resourceBinding.Status.DriftedPlacements = driftedResourcePlacements
 	if len(driftedResourcePlacements) > 0 {
+		resourceBinding.Status.DriftedPlacements = driftedResourcePlacements
 		klog.V(2).InfoS("Populated drifted manifests", "clusterResourceBinding", bindingRef, "numberOfDriftedPlacements", len(driftedResourcePlacements))
 	}
 
-	resourceBinding.Status.DiffedPlacements = nil
-	// collect and set the diffed resource placements to the binding
-	diffedResourcePlacements := make([]fleetv1beta1.DiffedResourcePlacement, 0, maxDiffedResourcePlacementLimit) // preallocate the memory
-	for _, w := range works {
-		if w.DeletionTimestamp != nil {
-			klog.V(2).InfoS("Ignoring the deleting work", "clusterResourceBinding", bindingRef, "work", klog.KObj(w))
-			continue // ignore the deleting work
-		}
-		diffedManifests := extractDiffedResourcePlacementsFromWork(w)
-		diffedResourcePlacements = append(diffedResourcePlacements, diffedManifests...)
-	}
 	// cut the list to keep only the max limit
 	if len(diffedResourcePlacements) > maxDiffedResourcePlacementLimit {
 		diffedResourcePlacements = diffedResourcePlacements[0:maxDiffedResourcePlacementLimit]
 	}
-	resourceBinding.Status.DiffedPlacements = diffedResourcePlacements
 	if len(diffedResourcePlacements) > 0 {
+		resourceBinding.Status.DiffedPlacements = diffedResourcePlacements
 		klog.V(2).InfoS("Populated diffed manifests", "clusterResourceBinding", bindingRef, "numberOfDiffedPlacements", len(diffedResourcePlacements))
 	}
 }
@@ -1011,6 +1004,9 @@ func extractDriftedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1
 	}
 	res := make([]fleetv1beta1.DriftedResourcePlacement, 0, len(work.Status.ManifestConditions))
 	for _, manifestCondition := range work.Status.ManifestConditions {
+		if manifestCondition.DriftDetails == nil {
+			continue
+		}
 		driftedManifest := fleetv1beta1.DriftedResourcePlacement{
 			ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
 				Group:     manifestCondition.Identifier.Group,
@@ -1026,6 +1022,11 @@ func extractDriftedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1
 		}
 
 		if isEnveloped {
+			driftedManifest.ResourceIdentifier.Envelope = &fleetv1beta1.EnvelopeIdentifier{
+				Name:      envelopObjName,
+				Namespace: envelopObjNamespace,
+				Type:      fleetv1beta1.EnvelopeType(envelopeType),
+			}
 			klog.V(2).InfoS("Found a drifted enveloped manifest",
 				"manifestName", manifestCondition.Identifier.Name,
 				"group", manifestCondition.Identifier.Group,
@@ -1037,7 +1038,6 @@ func extractDriftedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1
 				"version", manifestCondition.Identifier.Version, "kind", manifestCondition.Identifier.Kind)
 		}
 		res = append(res, driftedManifest)
-		continue //jump to the next manifest
 	}
 	return res
 }
@@ -1054,6 +1054,9 @@ func extractDiffedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1b
 	}
 	res := make([]fleetv1beta1.DiffedResourcePlacement, 0, len(work.Status.ManifestConditions))
 	for _, manifestCondition := range work.Status.ManifestConditions {
+		if manifestCondition.DiffDetails == nil {
+			continue
+		}
 		diffedManifest := fleetv1beta1.DiffedResourcePlacement{
 			ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
 				Group:     manifestCondition.Identifier.Group,
@@ -1069,6 +1072,11 @@ func extractDiffedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1b
 		}
 
 		if isEnveloped {
+			diffedManifest.ResourceIdentifier.Envelope = &fleetv1beta1.EnvelopeIdentifier{
+				Name:      envelopObjName,
+				Namespace: envelopObjNamespace,
+				Type:      fleetv1beta1.EnvelopeType(envelopeType),
+			}
 			klog.V(2).InfoS("Found a diffed enveloped manifest",
 				"manifestName", manifestCondition.Identifier.Name,
 				"group", manifestCondition.Identifier.Group,
@@ -1080,7 +1088,6 @@ func extractDiffedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1b
 				"version", manifestCondition.Identifier.Version, "kind", manifestCondition.Identifier.Kind)
 		}
 		res = append(res, diffedManifest)
-		continue //jump to the next manifest
 	}
 	return res
 }
