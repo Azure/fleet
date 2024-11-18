@@ -16,11 +16,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
 )
 
 const (
@@ -80,6 +82,62 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 			validateUpdateRunIsDeleted(ctx, k8sClient, updateRunNamespacedName)
 		})
 
+		It("Should delete the clusterStagedUpdateRun if it failed", func() {
+			By("Creating a new clusterStagedUpdateRun")
+			updateRun := getTestClusterStagedUpdateRun(testUpdateRunName)
+			Expect(k8sClient.Create(ctx, updateRun)).Should(Succeed())
+
+			By("Checking the finalizer is added")
+			validateUpdateRunHasFinalizer(ctx, k8sClient, updateRun)
+
+			By("Updating the clusterStagedUpdateRun to failed")
+			startedcond := getTrueCondition(updateRun, string(placementv1alpha1.StagedUpdateRunConditionProgressing))
+			finishedcond := getFalseCondition(updateRun, string(placementv1alpha1.StagedUpdateRunConditionSucceeded))
+			meta.SetStatusCondition(&updateRun.Status.Conditions, startedcond)
+			meta.SetStatusCondition(&updateRun.Status.Conditions, finishedcond)
+			Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed(), "failed to update the clusterStagedUpdateRun")
+
+			By("Creating a clusterApprovalRequest")
+			approvalRequest := getTestApprovalRequest("req1")
+			Expect(k8sClient.Create(ctx, approvalRequest)).Should(Succeed())
+
+			By("Deleting the clusterStagedUpdateRun")
+			Expect(k8sClient.Delete(ctx, updateRun)).Should(Succeed())
+
+			By("Checking the clusterStagedUpdateRun is deleted")
+			validateUpdateRunIsDeleted(ctx, k8sClient, updateRunNamespacedName)
+
+			By("Checking the clusterApprovalRequest is deleted")
+			validateApprovalRequestCount(ctx, k8sClient, 0)
+		})
+
+		It("Should not block deletion though the clusterStagedUpdateRun is still processing", func() {
+			By("Creating a new clusterStagedUpdateRun")
+			updateRun := getTestClusterStagedUpdateRun(testUpdateRunName)
+			Expect(k8sClient.Create(ctx, updateRun)).Should(Succeed())
+
+			By("Checking the finalizer is added")
+			validateUpdateRunHasFinalizer(ctx, k8sClient, updateRun)
+
+			By("Updating the clusterStagedUpdateRun status to processing")
+			startedcond := getTrueCondition(updateRun, string(placementv1alpha1.StagedUpdateRunConditionProgressing))
+			meta.SetStatusCondition(&updateRun.Status.Conditions, startedcond)
+			Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed(), "failed to add condition to the clusterStagedUpdateRun")
+
+			By("Creating a clusterApprovalRequest")
+			approvalRequest := getTestApprovalRequest("req1")
+			Expect(k8sClient.Create(ctx, approvalRequest)).Should(Succeed())
+
+			By("Deleting the clusterStagedUpdateRun")
+			Expect(k8sClient.Delete(ctx, updateRun)).Should(Succeed())
+
+			By("Checking the clusterStagedUpdateRun is deleted")
+			validateUpdateRunIsDeleted(ctx, k8sClient, updateRunNamespacedName)
+
+			By("Checking the clusterApprovalRequest is deleted")
+			validateApprovalRequestCount(ctx, k8sClient, 0)
+		})
+
 		It("Should delete all ClusterApprovalRequest objects associated with the clusterStagedUpdateRun", func() {
 			By("Creating a new clusterStagedUpdateRun")
 			updateRun := getTestClusterStagedUpdateRun(testUpdateRunName)
@@ -126,13 +184,7 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 			validateUpdateRunIsDeleted(ctx, k8sClient, updateRunNamespacedName)
 
 			By("Checking the clusterApprovalRequests are deleted")
-			Eventually(func() (int, error) {
-				appReqList := &placementv1alpha1.ClusterApprovalRequestList{}
-				if err := k8sClient.List(ctx, appReqList); err != nil {
-					return -1, err
-				}
-				return len(appReqList.Items), nil
-			}, duration, interval).Should(Equal(1))
+			validateApprovalRequestCount(ctx, k8sClient, 1)
 		})
 
 	})
@@ -147,6 +199,17 @@ func getTestClusterStagedUpdateRun(name string) *placementv1alpha1.ClusterStaged
 			PlacementName:            testCRPName,
 			ResourceSnapshotIndex:    testResourceSnapshotName,
 			StagedUpdateStrategyName: testUpdateStrategyName,
+		},
+	}
+}
+
+func getTestApprovalRequest(name string) *placementv1alpha1.ClusterApprovalRequest {
+	return &placementv1alpha1.ClusterApprovalRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				placementv1alpha1.TargetUpdateRunLabel: testUpdateRunName,
+			},
 		},
 	}
 }
@@ -172,4 +235,48 @@ func validateUpdateRunIsDeleted(ctx context.Context, k8sClient client.Client, na
 		}
 		return nil
 	}, timeout, interval).Should(Succeed(), "Failed to remove clusterStagedUpdateRun %s ", name)
+}
+
+func validateApprovalRequestCount(ctx context.Context, k8sClient client.Client, count int) {
+	Eventually(func() (int, error) {
+		appReqList := &placementv1alpha1.ClusterApprovalRequestList{}
+		if err := k8sClient.List(ctx, appReqList); err != nil {
+			return -1, err
+		}
+		return len(appReqList.Items), nil
+	}, duration, interval).Should(Equal(count))
+}
+
+func getTrueCondition(updateRun *placementv1alpha1.ClusterStagedUpdateRun, condType string) metav1.Condition {
+	reason := ""
+	switch condType {
+	case string(placementv1alpha1.StagedUpdateRunConditionInitialized):
+		reason = condition.UpdateRunInitializeSucceededReason
+	case string(placementv1alpha1.StagedUpdateRunConditionProgressing):
+		reason = condition.UpdateRunStartedReason
+	case string(placementv1alpha1.StagedUpdateRunConditionSucceeded):
+		reason = condition.UpdateRunSucceededReason
+	}
+	return metav1.Condition{
+		Status:             metav1.ConditionTrue,
+		Type:               condType,
+		ObservedGeneration: updateRun.Generation,
+		Reason:             reason,
+	}
+}
+
+func getFalseCondition(updateRun *placementv1alpha1.ClusterStagedUpdateRun, condType string) metav1.Condition {
+	reason := ""
+	switch condType {
+	case string(placementv1alpha1.StagedUpdateRunConditionInitialized):
+		reason = condition.UpdateRunInitializeFailedReason
+	case string(placementv1alpha1.StagedUpdateRunConditionSucceeded):
+		reason = condition.UpdateRunFailedReason
+	}
+	return metav1.Condition{
+		Status:             metav1.ConditionFalse,
+		Type:               condType,
+		ObservedGeneration: updateRun.Generation,
+		Reason:             reason,
+	}
 }
