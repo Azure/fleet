@@ -31,11 +31,13 @@ var (
 		Version:  "v1",
 		Resource: "namespaces",
 	}
+	/**
 	deployGVR = schema.GroupVersionResource{
 		Group:    "apps",
 		Version:  "v1",
 		Resource: "deployments",
 	}
+	*/
 	jobGVR = schema.GroupVersionResource{
 		Group:    "batch",
 		Version:  "v1",
@@ -82,6 +84,7 @@ var (
 	}
 	deployUnstructured *unstructured.Unstructured
 	deployJSON         []byte
+	/**
 	deployWRI          = &fleetv1beta1.WorkResourceIdentifier{
 		Ordinal:   0,
 		Group:     "apps",
@@ -91,6 +94,7 @@ var (
 		Name:      deployName,
 		Namespace: nsName,
 	}
+	*/
 
 	ns = &corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{
@@ -123,6 +127,7 @@ var (
 	}
 	nsWithGenerateNameUnstructured *unstructured.Unstructured
 	nsWithGenerateNameJSON         []byte
+	/**
 	nsWithGenerateNameWRI          = &fleetv1beta1.WorkResourceIdentifier{
 		Ordinal:      2,
 		Group:        "",
@@ -131,6 +136,7 @@ var (
 		Resource:     "namespaces",
 		GenerateName: nsGenerateName,
 	}
+	*/
 
 	jobWithGenerateName = &batchv1.Job{
 		TypeMeta: metav1.TypeMeta{
@@ -168,6 +174,7 @@ var (
 	}
 )
 
+/**
 var (
 	lessFuncAppliedResourceMeta = func(i, j fleetv1beta1.AppliedResourceMeta) bool {
 		iStr := fmt.Sprintf("%s/%s/%s/%s/%s/%s", i.Group, i.Version, i.Kind, i.Namespace, i.Name, i.GenerateName)
@@ -175,6 +182,7 @@ var (
 		return iStr < jStr
 	}
 )
+*/
 
 func TestMain(m *testing.M) {
 	// Add custom APIs to the runtime scheme.
@@ -239,6 +247,7 @@ func initializeVariables() {
 	}
 }
 
+/**
 // getPreparingToProcessAppliedCond returns a manifest condition, which signals that the
 // Fleet is preparing to be process the manifest.
 func getPreparingToProcessAppliedCond(workGeneration int64) metav1.Condition {
@@ -272,6 +281,7 @@ func getFailedToApplyCond(reason, message string, workGeneration int64) metav1.C
 		Message:            message,
 	}
 }
+*/
 
 // TestPrepareManifestProcessingBundles tests the prepareManifestProcessingBundles function.
 func TestPrepareManifestProcessingBundles(t *testing.T) {
@@ -458,6 +468,3 @@ func TestFormatWRIString(t *testing.T) {
 		})
 	}
 }
-
-// TestPrepareExistingManifestCondQIdx tests the preparingExistingManifestCondQIdx function.
-func TestPrepareExistingManifestCondQIdx(t *testing.T) {}
