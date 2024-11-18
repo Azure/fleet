@@ -175,7 +175,7 @@ func (r *Reconciler) collectScheduledClusters(
 	for i, binding := range bindingList.Items {
 		if binding.Spec.SchedulingPolicySnapshotName == latestPolicySnapshot.Name {
 			if binding.Spec.State != placementv1beta1.BindingStateScheduled && binding.Spec.State != placementv1beta1.BindingStateBound {
-				stateErr := fmt.Errorf("binding `%s`'s state %s is not scheduled or bound", binding.Name, binding.Spec.State)
+				stateErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("binding `%s`'s state %s is not scheduled or bound", binding.Name, binding.Spec.State))
 				klog.ErrorS(stateErr, "Failed to collect clusterResourceBindings", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
 				// no more retries here.
 				return nil, nil, fmt.Errorf("%w: %s", errInitializedFailed, stateErr.Error())
@@ -255,6 +255,7 @@ func (r *Reconciler) computeRunStageStatus(
 	for _, binding := range scheduledBindings {
 		allSelectedClusters[binding.Spec.TargetCluster] = struct{}{}
 	}
+	stagesStatus := make([]placementv1alpha1.StageUpdatingStatus, 0, len(updateRun.Status.StagedUpdateStrategySnapshot.Stages))
 
 	// Apply the label selectors from the ClusterStagedUpdateStrategy to filter the clusters.
 	for _, stage := range updateRun.Status.StagedUpdateStrategySnapshot.Stages {
@@ -272,7 +273,7 @@ func (r *Reconciler) computeRunStageStatus(
 			klog.ErrorS(err, "Failed to convert label selector", "clusterStagedUpdateStrategy", updateStrategyName, "stage name", stage.Name, "labelSelector", stage.LabelSelector, "clusterStagedUpdateRun", updateRunRef)
 			// no more retries here.
 			invalidLabelErr := controller.NewUserError(fmt.Errorf("the stage label selector is invalid, clusterStagedUpdateStrategy: %s, stage: %s, err: %s", updateStrategyName, stage.Name, err.Error()))
-			return controller.NewUserError(fmt.Errorf("%w: %s", errInitializedFailed, invalidLabelErr.Error()))
+			return fmt.Errorf("%w: %s", errInitializedFailed, invalidLabelErr.Error())
 		}
 		// List all the clusters that match the label selector.
 		var clusterList clusterv1beta1.MemberClusterList
@@ -340,8 +341,9 @@ func (r *Reconciler) computeRunStageStatus(
 				curStageUpdatingStatus.AfterStageTaskStatus[i].ApprovalRequestName = fmt.Sprintf(placementv1alpha1.ApprovalTaskNameFmt, updateRun.Name, stage.Name)
 			}
 		}
-		updateRun.Status.StagesStatus = append(updateRun.Status.StagesStatus, curStageUpdatingStatus)
+		stagesStatus = append(stagesStatus, curStageUpdatingStatus)
 	}
+	updateRun.Status.StagesStatus = stagesStatus
 
 	// Check if the clusters are all placed.
 	if len(allPlacedClusters) != len(allSelectedClusters) {
