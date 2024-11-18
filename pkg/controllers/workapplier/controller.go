@@ -116,6 +116,7 @@ const (
 	ManifestProcessingApplyResultTypeFailedToReportDiff             manifestProcessingAppliedResultType = "FailedToReportDiff"
 	ManifestProcessingApplyResultTypeFailedToRunDriftDetection      manifestProcessingAppliedResultType = "FailedToRunDriftDetection"
 	ManifestProcessingApplyResultTypeFoundDrifts                    manifestProcessingAppliedResultType = "FoundDrifts"
+	ManifestProcessingApplyResultTypeFoundDiffs                     manifestProcessingAppliedResultType = "FoundDiffs"
 	ManifestProcessingApplyResultTypeFailedToApply                  manifestProcessingAppliedResultType = "FailedToApply"
 
 	// The result type and description for partially successfully processing attempts.
@@ -127,6 +128,10 @@ const (
 	ManifestProcessingApplyResultTypeApplied manifestProcessingAppliedResultType = "Applied"
 
 	ManifestProcessingApplyResultTypeAppliedDescription = "Manifest has been applied successfully"
+
+	ManifestProcessingApplyResultTypeNoDiffFound manifestProcessingAppliedResultType = "NoDiffFound"
+
+	ManifestProcessingApplyResultTypeNoDiffFoundDescription = "No configuration diffs are found between the manifest object and the object from the member cluster"
 )
 
 type ManifestProcessingAvailabilityResultType string
@@ -527,11 +532,21 @@ func (r *Reconciler) processOneManifest(
 	// check for the configuration difference now; no drift detection nor apply op will be
 	// executed.
 	if applyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff {
+		if bundle.inMemberClusterObj == nil {
+			// The object has not created in the member cluster yet; Fleet will consider this
+			// as an error.
+			bundle.applyErr = fmt.Errorf("cannot report configuration diffs as the object has not been created in the member cluster yet")
+			bundle.applyResTyp = ManifestProcessingApplyResultTypeFailedToReportDiff
+			return
+		}
+
 		configDiffs, err := r.diffBetweenManifestAndInMemberClusterObjects(ctx,
 			bundle.gvr,
 			bundle.manifestObj, bundle.inMemberClusterObj,
 			applyStrategy.ComparisonOption)
-		if err != nil {
+		switch {
+		case err != nil:
+			// Failed to calculate the configuration diffs.
 			bundle.applyErr = fmt.Errorf("failed to calculate configuration diffs between the manifest object and the object from the member cluster: %w", err)
 			bundle.applyResTyp = ManifestProcessingApplyResultTypeFailedToReportDiff
 			klog.ErrorS(err,
@@ -539,8 +554,16 @@ func (r *Reconciler) processOneManifest(
 				"work", klog.KObj(work), "GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
 				"inMemberClusterObj", klog.KObj(bundle.inMemberClusterObj), "expectedAppliedWorkOwnerRef", *expectedAppliedWorkOwnerRef)
 			return
+		case len(configDiffs) > 0:
+			// Configuration diffs are found.
+			bundle.diffs = configDiffs
+			bundle.applyErr = fmt.Errorf("configuration diffs are found between the manifest object and the object from the member cluster")
+			bundle.applyResTyp = ManifestProcessingApplyResultTypeFoundDiffs
+		default:
+			// No configuration diffs are found. This is considered to be the equivalent of a
+			// successful apply op.
+			bundle.applyResTyp = ManifestProcessingApplyResultTypeNoDiffFound
 		}
-		bundle.diffs = configDiffs
 		return
 	}
 

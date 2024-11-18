@@ -95,8 +95,8 @@ func (r *Reconciler) refreshWorkStatus(
 				appliedManifestsCount, availableAppliedObjectsCount, manifestCount))
 	}
 
-	setWorkAppliedCondition(&work.Status.Conditions, appliedManifestsCount, manifestCount, work.Generation)
-	setWorkAvailableCondition(&work.Status.Conditions, availableAppliedObjectsCount, manifestCount, work.Generation)
+	setWorkAppliedCondition(&work.Status.Conditions, manifestCount, appliedManifestsCount, work.Generation)
+	setWorkAvailableCondition(&work.Status.Conditions, manifestCount, availableAppliedObjectsCount, work.Generation)
 	work.Status.ManifestConditions = rebuiltManifestConds
 
 	// Update the Work object status.

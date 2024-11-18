@@ -541,7 +541,9 @@ func shouldPerformPostApplyDriftDetection(applyStrategy *fleetv1beta1.ApplyStrat
 // isManifestObjectApplied returns if an applied result type indicates that a manifest
 // object in a bundle has been successfully applied.
 func isManifestObjectApplied(appliedResTyp manifestProcessingAppliedResultType) bool {
-	return appliedResTyp == ManifestProcessingApplyResultTypeApplied || appliedResTyp == ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetection
+	return appliedResTyp == ManifestProcessingApplyResultTypeApplied ||
+		appliedResTyp == ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetection ||
+		appliedResTyp == ManifestProcessingApplyResultTypeNoDiffFound
 }
 
 // isManifestObjectAvailable returns if an availability result type indicates that a manifest
@@ -578,6 +580,16 @@ func setManifestAppliedCondition(
 			Status:             metav1.ConditionTrue,
 			Reason:             string(ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetection),
 			Message:            ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetectionDescription,
+			ObservedGeneration: workGeneration,
+		}
+	case appliedResTyp == ManifestProcessingApplyResultTypeNoDiffFound:
+		// No configuration diff has been found between the manifest and the corresponding
+		// object on the member cluster side.
+		appliedCond = &metav1.Condition{
+			Type:               fleetv1beta1.WorkConditionTypeApplied,
+			Status:             metav1.ConditionTrue,
+			Reason:             string(ManifestProcessingApplyResultTypeNoDiffFound),
+			Message:            ManifestProcessingApplyResultTypeNoDiffFoundDescription,
 			ObservedGeneration: workGeneration,
 		}
 	default:
