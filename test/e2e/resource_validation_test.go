@@ -61,7 +61,6 @@ var _ = Describe("Resource validation tests for Member Cluster", func() {
 		}
 		Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
 		Expect(hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName.Name}, memberClusterName)).Should(Succeed())
-		Expect(hubClient.Delete(ctx, memberClusterName)).Should(Succeed())
 		ensureMemberClusterAndRelatedResourcesDeletion(name)
 	})
 
@@ -106,7 +105,6 @@ var _ = Describe("Resource validation tests for Member Cluster", func() {
 		}
 		Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
 		Expect(hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName.Name}, memberClusterName)).Should(Succeed())
-		Expect(hubClient.Delete(ctx, memberClusterName)).Should(Succeed())
 		ensureMemberClusterAndRelatedResourcesDeletion(name)
 	})
 
@@ -128,7 +126,6 @@ var _ = Describe("Resource validation tests for Member Cluster", func() {
 		}
 		Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
 		Expect(hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName.Name}, memberClusterName)).Should(Succeed())
-		Expect(hubClient.Delete(ctx, memberClusterName)).Should(Succeed())
 		ensureMemberClusterAndRelatedResourcesDeletion(name)
 	})
 
@@ -173,7 +170,6 @@ var _ = Describe("Resource validation tests for Member Cluster", func() {
 		}
 		Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
 		Expect(hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName.Name}, memberClusterName)).Should(Succeed())
-		Expect(hubClient.Delete(ctx, memberClusterName)).Should(Succeed())
 		ensureMemberClusterAndRelatedResourcesDeletion(name)
 	})
 
@@ -195,7 +191,6 @@ var _ = Describe("Resource validation tests for Member Cluster", func() {
 		}
 		Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
 		Expect(hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName.Name}, memberClusterName)).Should(Succeed())
-		Expect(hubClient.Delete(ctx, memberClusterName)).Should(Succeed())
 		ensureMemberClusterAndRelatedResourcesDeletion(name)
 	})
 
