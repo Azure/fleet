@@ -97,6 +97,54 @@ const (
 	AllWorkAvailableReason = "AllWorkAreAvailable"
 )
 
+// A group of condition reason string which is used t populate the ClusterStagedUpdateRun condition.
+const (
+	// UpdateRunInitializeSucceededReason is the reason string of condition if the update run is initialized successfully.
+	UpdateRunInitializeSucceededReason = "UpdateRunInitializedSuccessfully"
+
+	// UpdateRunInitializeFailedReason is the reason string of condition if the update run is failed to initialize.
+	UpdateRunInitializeFailedReason = "UpdateRunInitializedFailed"
+
+	// UpdateRunStartedReason is the reason string of condition if the staged update run has started.
+	UpdateRunStartedReason = "UpdateRunStarted"
+
+	// UpdateRunFailedReason is the reason string of condition if the staged update run failed.
+	UpdateRunFailedReason = "UpdateRunFailed"
+
+	// UpdateRunSucceededReason is the reason string of condition if the staged update run succeeded.
+	UpdateRunSucceededReason = "UpdateRunSucceeded"
+
+	// StageUpdatingStartedReason is the reason string of condition if the stage updating has started.
+	StageUpdatingStartedReason = "StageUpdatingStarted"
+
+	// StageUpdatingWaitingReason is the reason string of condition if the stage updating is waiting.
+	StageUpdatingWaitingReason = "StageUpdatingWaiting"
+
+	// StageUpdatingFailedReason is the reason string of condition if the stage updating failed.
+	StageUpdatingFailedReason = "StageUpdatingFailed"
+
+	// StageUpdatingSucceededReason is the reason string of condition if the stage updating succeeded.
+	StageUpdatingSucceededReason = "StageUpdatingSucceeded"
+
+	// ClusterUpdatingStartedReason is the reason string of condition if the cluster updating has started.
+	ClusterUpdatingStartedReason = "ClusterUpdatingStarted"
+
+	// ClusterUpdatingFailedReason is the reason string of condition if the cluster updating failed.
+	ClusterUpdatingFailedReason = "ClusterUpdatingFailed"
+
+	// ClusterUpdatingSucceededReason is the reason string of condition if the cluster updating succeeded.
+	ClusterUpdatingSucceededReason = "ClusterUpdatingSucceeded"
+
+	// AfterStageTaskApprovalRequestApprovedReason is the reason string of condition if the approval request for after stage task has been approved.
+	AfterStageTaskApprovalRequestApprovedReason = "AfterStageTaskApprovalRequestApproved"
+
+	// AfterStageTaskApprovalRequestCreatedReason is the reason string of condition if the approval request for after stage task has been created.
+	AfterStageTaskApprovalRequestCreatedReason = "AfterStageTaskApprovalRequestCreated"
+
+	// AfterStageTaskWaitTimeElapsedReason is the reason string of condition if the wait time for after stage task has elapsed.
+	AfterStageTaskWaitTimeElapsedReason = "AfterStageTaskWaitTimeElapsed"
+)
+
 // EqualCondition compares one condition with another; it ignores the LastTransitionTime and Message fields,
 // and will consider the ObservedGeneration values from the two conditions a match if the current
 // condition is newer.

@@ -67,9 +67,10 @@ const (
 )
 
 const (
-	PlacementFieldManagerName          = "cluster-placement-controller"
-	MCControllerFieldManagerName       = "member-cluster-controller"
-	OverrideControllerFieldManagerName = "override-controller"
+	PlacementFieldManagerName           = "cluster-placement-controller"
+	MCControllerFieldManagerName        = "member-cluster-controller"
+	OverrideControllerFieldManagerName  = "override-controller"
+	UpdateRunControllerFieldManagerName = "cluster-staged-update-run-controller"
 )
 
 // TODO(ryanzhang): move this to the api directory
