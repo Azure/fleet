@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -25,8 +26,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/test/utils/informer"
 )
 
 var (
@@ -63,6 +66,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).Should(Succeed())
 	Expect(cfg).NotTo(BeNil())
 
+	Expect(clusterv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(fleetv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(placementv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(err).NotTo(HaveOccurred())
@@ -84,8 +88,31 @@ var _ = BeforeSuite(func() {
 	By("set k8s client same as the controller manager")
 	k8sClient = mgr.GetClient()
 
+	// setup our main reconciler
+	fakeInformer := &informer.FakeManager{
+		APIResources: map[schema.GroupVersionKind]bool{
+			{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Service",
+			}: true,
+			{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Deployment",
+			}: true,
+			{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Secret",
+			}: true,
+		},
+		IsClusterScopedResource: false,
+	}
+
 	err = (&Reconciler{
-		Client: k8sClient,
+		Client:          k8sClient,
+		InformerManager: fakeInformer,
 	}).SetupWithManager(mgr)
 	Expect(err).Should(Succeed())
 
