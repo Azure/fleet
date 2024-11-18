@@ -49,14 +49,13 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/defaulter"
 	"go.goms.io/fleet/pkg/utils/parallelizer"
-	"go.goms.io/fleet/pkg/utils/resource"
 )
 
 const (
 	patchDetailPerObjLimit = 100
 
 	availabilityCheckRequeueAfter = time.Second * 5
-	driftCheckRequeueAfter        = time.Minute * 3
+	driftCheckRequeueAfter        = time.Second * 15
 )
 
 const (
@@ -593,7 +592,10 @@ func (r *Reconciler) processOneManifest(
 			"inMemberClusterObj", klog.KObj(bundle.inMemberClusterObj), "expectedAppliedWorkOwnerRef", *expectedAppliedWorkOwnerRef)
 		return
 	}
-	bundle.inMemberClusterObj = appliedObj
+	if appliedObj != nil {
+		// Update the bundle with the newly applied object, if an apply op has been run.
+		bundle.inMemberClusterObj = appliedObj
+	}
 	// For objects with generated names, Fleet would need to update the bundle identifier to include
 	// the actual name of the applied object.
 	if bundle.id.GenerateName != "" && bundle.id.Name == "" {
@@ -614,7 +616,8 @@ func (r *Reconciler) processOneManifest(
 			bundle.gvr,
 			bundle.manifestObj, appliedObj,
 			applyStrategy.ComparisonOption)
-		if err != nil {
+		switch {
+		case err != nil:
 			bundle.applyErr = fmt.Errorf("failed to calculate post-apply drifts between the manifest object and the object from the member cluster: %w", err)
 			// This case counts as a partial error; the apply op has been completed, but Fleet
 			// cannot determine if there are any drifts.
@@ -624,9 +627,10 @@ func (r *Reconciler) processOneManifest(
 				"work", klog.KObj(work), "GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
 				"inMemberClusterObj", klog.KObj(bundle.inMemberClusterObj), "expectedAppliedWorkOwnerRef", *expectedAppliedWorkOwnerRef)
 			return
+		case len(drifts) > 0:
+			bundle.drifts = drifts
+			// The presence of such drifts are not considered as an error.
 		}
-		bundle.drifts = drifts
-		// The presence of such drifts are not considered as an error.
 	}
 
 	// All done.
@@ -1096,22 +1100,4 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}).
 		For(&fleetv1beta1.Work{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Complete(r)
-}
-
-// setManifestHashAnnotation computes the hash of the provided manifest and sets an annotation of the
-// hash on the provided unstructured object.
-func setManifestHashAnnotation(manifestObj *unstructured.Unstructured) error {
-	cleanedManifestObj := discardFieldsIrrelevantInComparisonFrom(manifestObj)
-	manifestObjHash, err := resource.HashOf(cleanedManifestObj.Object)
-	if err != nil {
-		return err
-	}
-
-	annotations := manifestObj.GetAnnotations()
-	if annotations == nil {
-		annotations = map[string]string{}
-	}
-	annotations[fleetv1beta1.ManifestHashAnnotation] = manifestObjHash
-	manifestObj.SetAnnotations(annotations)
-	return nil
 }

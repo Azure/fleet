@@ -10,8 +10,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/tidwall/gjson"
-	"github.com/wI2L/jsondiff"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/validation"
@@ -22,6 +20,12 @@ import (
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/resource"
+)
+
+const (
+	k8sReservedLabelAnnotationFullDomain = "kubernetes.io/"
+	k8sReservedLabelAnnotationAbbrDomain = "k8s.io/"
+	fleetReservedLabelAnnotationDomain   = "kubernetes-fleet.io/"
 )
 
 const (
@@ -201,20 +205,52 @@ func discardFieldsIrrelevantInComparisonFrom(obj *unstructured.Unstructured) *un
 	// Clear out the object's generate name. This is also a field that is irrelevant in comparison.
 	objCopy.SetGenerateName("")
 
-	// Remove certain labels and annotations. At this moment Fleet only removes annotations that
-	// concerns itself.
+	// Remove certain labels and annotations.
 	//
-	// TO-DO (chenyu1): evaluate if there are additional Kubernetes well-known labels and annotations
-	// that needs to be removed in this process.
-	if annotations := objCopy.GetAnnotations(); annotations != nil {
-		delete(annotations, fleetv1beta1.ManifestHashAnnotation)
-		delete(annotations, fleetv1beta1.LastAppliedConfigAnnotation)
-		if len(annotations) == 0 {
-			objCopy.SetAnnotations(nil)
-		} else {
-			objCopy.SetAnnotations(annotations)
+	// Fleet will remove labels/annotations that are reserved for Fleet own use cases, plus
+	// well-known Kubernetes labels and annotations, as these cannot (should not) be set by users
+	// directly.
+	annotations := objCopy.GetAnnotations()
+	cleanedAnnotations := map[string]string{}
+	for k, v := range annotations {
+		if strings.Contains(k, k8sReservedLabelAnnotationFullDomain) {
+			// Skip Kubernetes reserved annotations.
+			continue
 		}
+
+		if strings.Contains(k, k8sReservedLabelAnnotationAbbrDomain) {
+			// Skip Kubernetes reserved annotations.
+			continue
+		}
+
+		if strings.Contains(k, fleetReservedLabelAnnotationDomain) {
+			// Skip Fleet reserved annotations.
+			continue
+		}
+		cleanedAnnotations[k] = v
 	}
+	objCopy.SetAnnotations(cleanedAnnotations)
+
+	labels := objCopy.GetLabels()
+	cleanedLabels := map[string]string{}
+	for k, v := range labels {
+		if strings.Contains(k, k8sReservedLabelAnnotationFullDomain) {
+			// Skip Kubernetes reserved labels.
+			continue
+		}
+
+		if strings.Contains(k, k8sReservedLabelAnnotationAbbrDomain) {
+			// Skip Kubernetes reserved labels.
+			continue
+		}
+
+		if strings.Contains(k, fleetReservedLabelAnnotationDomain) {
+			// Skip Fleet reserved labels.
+			continue
+		}
+		cleanedLabels[k] = v
+	}
+	objCopy.SetLabels(cleanedLabels)
 
 	// Fields below are system-reserved fields in object meta. Technically speaking they can be
 	// set in the manifests, but this is a very uncommon practice, and currently Fleet will clear
@@ -243,81 +279,6 @@ func discardFieldsIrrelevantInComparisonFrom(obj *unstructured.Unstructured) *un
 	unstructured.RemoveNestedField(objCopy.Object, "status")
 
 	return objCopy
-}
-
-func organizeJSONPatchIntoFleetPatchDetails(patch jsondiff.Patch, manifestObjJSONBytes, inMemberClusterObjJSONBytes []byte) ([]fleetv1beta1.PatchDetail, error) {
-	// Pre-allocate the slice for the patch details. The organization procedure typically will yield
-	// the same number of PatchDetail items as the JSON patch operations.
-	details := make([]fleetv1beta1.PatchDetail, len(patch))
-
-	// Prepare the string form to save some overhead.
-	manifestObjJSONStr := string(manifestObjJSONBytes)
-	inMemberClusterObjJSONStr := string(inMemberClusterObjJSONBytes)
-
-	// A side note: here Fleet takes an expedient approach processing null JSON paths, by treating
-	// null paths as empty strings.
-
-	// Process only the first 100 ops.
-	// TO-DO (chenyu1): Impose additional size limits.
-	for idx := 0; idx < len(patch) && idx < patchDetailPerObjLimit; idx++ {
-		op := patch[idx]
-		switch op.Type {
-		case jsondiff.OperationAdd:
-			details = append(details, fleetv1beta1.PatchDetail{
-				Path:          op.Path,
-				ValueInMember: fmt.Sprint(op.Value),
-			})
-		case jsondiff.OperationRemove:
-			// Fleet here skips validation as the JSON data is just marshalled.
-			hubValue := gjson.Get(manifestObjJSONStr, op.Path)
-			details = append(details, fleetv1beta1.PatchDetail{
-				Path:       op.Path,
-				ValueInHub: hubValue.Str,
-			})
-		case jsondiff.OperationReplace:
-			// Fleet here skips validation as the JSON data is just marshalled.
-			hubValue := gjson.Get(manifestObjJSONStr, op.Path)
-			details = append(details, fleetv1beta1.PatchDetail{
-				Path:          op.Path,
-				ValueInMember: fmt.Sprint(op.Value),
-				ValueInHub:    hubValue.Str,
-			})
-		case jsondiff.OperationMove:
-			// Normally the Move operation will not be returned as factorization is disabled
-			// for the JSON patch calculation process; however, Fleet here still processes them
-			// just in case.
-			//
-			// Each Move operation will be parsed into two separate operations.
-			hubValue := gjson.Get(manifestObjJSONStr, op.Path)
-			details = append(details, fleetv1beta1.PatchDetail{
-				Path:       op.From,
-				ValueInHub: hubValue.Str,
-			})
-
-			details = append(details, fleetv1beta1.PatchDetail{
-				Path:          op.Path,
-				ValueInMember: hubValue.Str,
-			})
-		case jsondiff.OperationCopy:
-			// Normally the Copy operation will not be returned as factorization is disabled
-			// for the JSON patch calculation process; however, Fleet here still processes them
-			// just in case.
-			//
-			// Each Copy operation will be parsed into a Replace operation.
-			memberValue := gjson.Get(inMemberClusterObjJSONStr, op.Path)
-			details = append(details, fleetv1beta1.PatchDetail{
-				Path:          op.Path,
-				ValueInMember: memberValue.Str,
-			})
-		case jsondiff.OperationTest:
-			// The Test op is a no-op in Fleet's use case. Normally it will not be returned, either.
-		default:
-			// An unexpected op is returned.
-			return nil, fmt.Errorf("an unexpected JSON patch operation is returned (%s)", op)
-		}
-	}
-
-	return details, nil
 }
 
 func setFleetLastAppliedAnnotation(manifestObj *unstructured.Unstructured) (bool, error) {
@@ -363,6 +324,24 @@ func getFleetLastAppliedAnnotation(inMemberClusterObj *unstructured.Unstructured
 	}
 
 	return []byte(lastAppliedManifestJSONStr)
+}
+
+// setManifestHashAnnotation computes the hash of the provided manifest and sets an annotation of the
+// hash on the provided unstructured object.
+func setManifestHashAnnotation(manifestObj *unstructured.Unstructured) error {
+	cleanedManifestObj := discardFieldsIrrelevantInComparisonFrom(manifestObj)
+	manifestObjHash, err := resource.HashOf(cleanedManifestObj.Object)
+	if err != nil {
+		return err
+	}
+
+	annotations := manifestObj.GetAnnotations()
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+	annotations[fleetv1beta1.ManifestHashAnnotation] = manifestObjHash
+	manifestObj.SetAnnotations(annotations)
+	return nil
 }
 
 func setOwnerRef(obj *unstructured.Unstructured, expectedAppliedWorkOwnerRef *metav1.OwnerReference) {
@@ -532,11 +511,12 @@ func shouldEnableOptimisticLock(applyStrategy *fleetv1beta1.ApplyStrategy) bool 
 // shouldPerformPreApplyDriftDetection checks if pre-apply drift detection should be performed.
 func shouldPerformPreApplyDriftDetection(manifestObj, inMemberClusterObj *unstructured.Unstructured, applyStrategy *fleetv1beta1.ApplyStrategy) (bool, error) {
 	// Drift detection is performed before the apply op if (and only if):
+	// * Fleet reports that the manifest has been applied before (i.e., inMemberClusterObj exists); and
 	// * The apply strategy dictates that an apply op should only run if there is no
 	//   detected drift; and
 	// * The hash of the manifest object is consistently with that bookkept in the live object
 	//   annotations (i.e., the manifest object has been applied before).
-	if applyStrategy.WhenToApply != fleetv1beta1.WhenToApplyTypeIfNotDrifted {
+	if applyStrategy.WhenToApply != fleetv1beta1.WhenToApplyTypeIfNotDrifted || inMemberClusterObj == nil {
 		// A shortcut to save some overhead.
 		return false, nil
 	}
@@ -546,6 +526,7 @@ func shouldPerformPreApplyDriftDetection(manifestObj, inMemberClusterObj *unstru
 	if err != nil {
 		return false, err
 	}
+
 	inMemberClusterObjLastAppliedManifestObjHash := inMemberClusterObj.GetAnnotations()[fleetv1beta1.ManifestHashAnnotation]
 	return manifestObjHash == inMemberClusterObjLastAppliedManifestObjHash, nil
 }

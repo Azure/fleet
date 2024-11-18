@@ -163,6 +163,7 @@ func (r *Reconciler) apply(
 		}
 	}
 
+	// No apply op needed.
 	return nil, nil
 }
 

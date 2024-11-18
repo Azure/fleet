@@ -31,12 +31,11 @@ var (
 		Version:  "v1",
 		Resource: "namespaces",
 	}
-	/**
 	deployGVR = schema.GroupVersionResource{
 		Group:    "apps",
 		Version:  "v1",
 		Resource: "deployments",
-	}*/
+	}
 	jobGVR = schema.GroupVersionResource{
 		Group:    "batch",
 		Version:  "v1",
@@ -113,16 +112,18 @@ var (
 		Name:     nsName,
 	}
 
-	/**
 	nsWithGenerateName = &corev1.Namespace{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Namespace",
+			APIVersion: "v1",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: nsGenerateName,
 		},
 	}
 	nsWithGenerateNameUnstructured *unstructured.Unstructured
 	nsWithGenerateNameJSON         []byte
-	*/
-	nsWithGenerateNameWRI = &fleetv1beta1.WorkResourceIdentifier{
+	nsWithGenerateNameWRI          = &fleetv1beta1.WorkResourceIdentifier{
 		Ordinal:      2,
 		Group:        "",
 		Version:      "v1",
@@ -149,13 +150,14 @@ var (
 							Image: "busybox",
 						},
 					},
+					RestartPolicy: corev1.RestartPolicyNever,
 				},
 			},
 		},
 	}
 	jobWithGenerateNameUnstructured *unstructured.Unstructured
-	//jobWithGenerateNameJSON         []byte
-	jobWithGenerateNameWRI = &fleetv1beta1.WorkResourceIdentifier{
+	jobWithGenerateNameJSON         []byte
+	jobWithGenerateNameWRI          = &fleetv1beta1.WorkResourceIdentifier{
 		Ordinal:      3,
 		Group:        "batch",
 		Version:      "v1",
@@ -208,56 +210,34 @@ func initializeVariables() {
 		log.Fatalf("failed to convert namespace to unstructured: %v", err)
 	}
 	nsUnstructured = &unstructured.Unstructured{Object: nsGenericMap}
-
 	nsJSON, err = nsUnstructured.MarshalJSON()
 	if err != nil {
 		log.Fatalf("failed to marshal namespace to JSON: %v", err)
 	}
 
 	// Objects with generate names.
+	// Namespace.
+	nsWithGenerateNameGenericMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(nsWithGenerateName)
+	if err != nil {
+		log.Fatalf("failed to convert namespace with GenerateName to unstructured: %v", err)
+	}
+	nsWithGenerateNameUnstructured = &unstructured.Unstructured{Object: nsWithGenerateNameGenericMap}
+	nsWithGenerateNameJSON, err = nsWithGenerateNameUnstructured.MarshalJSON()
+	if err != nil {
+		log.Fatalf("failed to marshal namespace with GenerateName to JSON: %v", err)
+	}
+
 	// Job.
-	jobGenericMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(jobWithGenerateName)
+	jobWithGenerateNameGenericMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(jobWithGenerateName)
 	if err != nil {
 		log.Fatalf("failed to convert job with GenerateName to unstructured: %v", err)
 	}
-	jobWithGenerateNameUnstructured = &unstructured.Unstructured{Object: jobGenericMap}
-
-	/**
+	jobWithGenerateNameUnstructured = &unstructured.Unstructured{Object: jobWithGenerateNameGenericMap}
 	jobWithGenerateNameJSON, err = jobWithGenerateNameUnstructured.MarshalJSON()
 	if err != nil {
 		log.Fatalf("failed to marshal job with GenerateName to JSON: %v", err)
 	}
-	*/
 }
-
-// getNSWithGenerateNameUnstructured returns a Namespace object with a GenerateName field in the form of a K8s unstructured object.
-/**
-func getNSWithGenerateNameUnstructured(t *testing.T) *unstructured.Unstructured {
-	if nsWithGenerateNameUnstructured != nil {
-		return nsWithGenerateNameUnstructured
-	}
-
-	nsGenericMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(nsWithGenerateName)
-	if err != nil {
-		t.Fatalf("failed to convert namespace with GenerateName to unstructured: %v", err)
-	}
-	nsWithGenerateNameUnstructured = &unstructured.Unstructured{Object: nsGenericMap}
-	return nsWithGenerateNameUnstructured
-}
-*/
-
-// getNSWithGenerateNameJSON returns the JSON representation of a Namespace object with a GenerateName field.
-/**
-func getNSWithGenerateNameJSON(t *testing.T) []byte {
-	nsWithGenerateNameUnstructured := getNSWithGenerateNameUnstructured(t)
-	var err error
-	nsWithGenerateNameJSON, err = nsWithGenerateNameUnstructured.MarshalJSON()
-	if err != nil {
-		t.Fatalf("failed to marshal namespace with GenerateName to JSON: %v", err)
-	}
-	return nsWithGenerateNameJSON
-}
-*/
 
 // getPreparingToProcessAppliedCond returns a manifest condition, which signals that the
 // Fleet is preparing to be process the manifest.
@@ -478,3 +458,6 @@ func TestFormatWRIString(t *testing.T) {
 		})
 	}
 }
+
+// TestPrepareExistingManifestCondQIdx tests the preparingExistingManifestCondQIdx function.
+func TestPrepareExistingManifestCondQIdx(t *testing.T) {}

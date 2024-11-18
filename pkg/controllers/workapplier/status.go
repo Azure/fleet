@@ -51,7 +51,7 @@ func (r *Reconciler) refreshWorkStatus(
 		if firstDriftedTimestamp == nil {
 			firstDriftedTimestamp = &now
 		}
-		if bundle.drifts != nil {
+		if len(bundle.drifts) > 0 {
 			// Populate drift details if there are drifts found.
 			manifestCond.DriftDetails = &fleetv1beta1.DriftDetails{
 				ObservationTime:                   now,
@@ -67,7 +67,7 @@ func (r *Reconciler) refreshWorkStatus(
 			firstDiffedTimestamp = &now
 		}
 		// Populate diff details if there are diffs found.
-		if bundle.diffs != nil {
+		if len(bundle.diffs) > 0 {
 			manifestCond.DiffDetails = &fleetv1beta1.DiffDetails{
 				ObservationTime:                   now,
 				ObservedInMemberClusterGeneration: bundle.inMemberClusterObj.GetGeneration(),

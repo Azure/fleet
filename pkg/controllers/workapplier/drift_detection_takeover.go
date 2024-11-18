@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/qri-io/jsonpointer"
 	"github.com/wI2L/jsondiff"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -59,7 +60,7 @@ func (r *Reconciler) takeOverPreExistingObject(
 		case err != nil:
 			return nil, nil, fmt.Errorf("failed to calculate configuration diffs between the manifest object and the object from the member cluster: %w", err)
 		case len(configDiffs) > 0:
-			return nil, configDiffs, fmt.Errorf("configuration differences are found between the manifest object and the object from the member cluster")
+			return nil, configDiffs, nil
 		}
 	}
 
@@ -101,7 +102,6 @@ func (r *Reconciler) partialDiffBetweenManifestAndInMemberClusterObjects(
 ) ([]fleetv1beta1.PatchDetail, error) {
 	// Fleet calculates the partial diff between two objects by running apply ops in the dry-run
 	// mode.
-
 	appliedObj, err := r.applyInDryRunMode(ctx, gvr, manifestObj, inMemberClusterObj)
 	if err != nil {
 		return nil, fmt.Errorf("failed to apply the manifest in dry-run mode: %w", err)
@@ -135,7 +135,7 @@ func (r *Reconciler) partialDiffBetweenManifestAndInMemberClusterObjects(
 		return nil, fmt.Errorf("failed to compare the JSON representations of the the object from the member cluster and the object returned by the dry-run apply op: %w", err)
 	}
 
-	details, err := organizeJSONPatchIntoFleetPatchDetails(patch, appliedObjJSONBytes, inMemberClusterObjCopyJSONBytes)
+	details, err := organizeJSONPatchIntoFleetPatchDetails(patch, appliedObjCopy.Object, inMemberClusterObj.Object)
 	if err != nil {
 		return nil, fmt.Errorf("failed to organize the JSON patch into Fleet patch details: %w", err)
 	}
@@ -168,9 +168,98 @@ func fullDiffBetweenManifestAndInMemberClusterObjects(
 		return nil, fmt.Errorf("failed to compare the JSON representations of the manifest object and the object from the member cluster: %w", err)
 	}
 
-	details, err := organizeJSONPatchIntoFleetPatchDetails(patch, manifestObjJSONBytes, inMemberClusterObjJSONBytes)
+	details, err := organizeJSONPatchIntoFleetPatchDetails(patch, manifestObjCopy.Object, inMemberClusterObj.Object)
 	if err != nil {
 		return nil, fmt.Errorf("failed to organize JSON patch operations into Fleet patch details: %w", err)
 	}
+	return details, nil
+}
+
+func organizeJSONPatchIntoFleetPatchDetails(patch jsondiff.Patch, manifestObjMap, inMemberClusterObjMap map[string]interface{}) ([]fleetv1beta1.PatchDetail, error) {
+	// Pre-allocate the slice for the patch details. The organization procedure typically will yield
+	// the same number of PatchDetail items as the JSON patch operations.
+	details := make([]fleetv1beta1.PatchDetail, 0, len(patch))
+
+	// A side note: here Fleet takes an expedient approach processing null JSON paths, by treating
+	// null paths as empty strings.
+
+	// Process only the first 100 ops.
+	// TO-DO (chenyu1): Impose additional size limits.
+	for idx := 0; idx < len(patch) && idx < patchDetailPerObjLimit; idx++ {
+		op := patch[idx]
+		pathPtr, err := jsonpointer.Parse(op.Path)
+		if err != nil {
+			// An invalid path is found; normally this should not happen.
+			return nil, fmt.Errorf("failed to parse the JSON path: %w", err)
+		}
+
+		switch op.Type {
+		case jsondiff.OperationAdd:
+			details = append(details, fleetv1beta1.PatchDetail{
+				Path:          op.Path,
+				ValueInMember: fmt.Sprint(op.Value),
+			})
+		case jsondiff.OperationRemove:
+			// Fleet here skips validation as the JSON data is just marshalled.
+			hubValue, err := pathPtr.Eval(manifestObjMap)
+			if err != nil {
+				return nil, fmt.Errorf("failed to evaluate the JSON path %s in the manifest object: %w", op.Path, err)
+			}
+			details = append(details, fleetv1beta1.PatchDetail{
+				Path:       op.Path,
+				ValueInHub: fmt.Sprintf("%v", hubValue),
+			})
+		case jsondiff.OperationReplace:
+			// Fleet here skips validation as the JSON data is just marshalled.
+			hubValue, err := pathPtr.Eval(manifestObjMap)
+			if err != nil {
+				return nil, fmt.Errorf("failed to evaluate the JSON path %s in the manifest object: %w", op.Path, err)
+			}
+			details = append(details, fleetv1beta1.PatchDetail{
+				Path:          op.Path,
+				ValueInMember: fmt.Sprint(op.Value),
+				ValueInHub:    fmt.Sprintf("%v", hubValue),
+			})
+		case jsondiff.OperationMove:
+			// Normally the Move operation will not be returned as factorization is disabled
+			// for the JSON patch calculation process; however, Fleet here still processes them
+			// just in case.
+			//
+			// Each Move operation will be parsed into two separate operations.
+			hubValue, err := pathPtr.Eval(manifestObjMap)
+			if err != nil {
+				return nil, fmt.Errorf("failed to evaluate the JSON path %s in the manifest object: %w", op.Path, err)
+			}
+			details = append(details, fleetv1beta1.PatchDetail{
+				Path:       op.From,
+				ValueInHub: fmt.Sprintf("%v", hubValue),
+			})
+
+			details = append(details, fleetv1beta1.PatchDetail{
+				Path:          op.Path,
+				ValueInMember: fmt.Sprintf("%v", hubValue),
+			})
+		case jsondiff.OperationCopy:
+			// Normally the Copy operation will not be returned as factorization is disabled
+			// for the JSON patch calculation process; however, Fleet here still processes them
+			// just in case.
+			//
+			// Each Copy operation will be parsed into a Replace operation.
+			memberValue, err := pathPtr.Eval(inMemberClusterObjMap)
+			if err != nil {
+				return nil, fmt.Errorf("failed to evaluate the JSON path %s in the applied object: %w", op.Path, err)
+			}
+			details = append(details, fleetv1beta1.PatchDetail{
+				Path:          op.Path,
+				ValueInMember: fmt.Sprintf("%v", memberValue),
+			})
+		case jsondiff.OperationTest:
+			// The Test op is a no-op in Fleet's use case. Normally it will not be returned, either.
+		default:
+			// An unexpected op is returned.
+			return nil, fmt.Errorf("an unexpected JSON patch operation is returned (%s)", op)
+		}
+	}
+
 	return details, nil
 }
