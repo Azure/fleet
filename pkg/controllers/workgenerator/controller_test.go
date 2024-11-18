@@ -1238,7 +1238,7 @@ func TestSetBindingStatus(t *testing.T) {
 									FirstDriftedObservedTime:          metav1.NewTime(timeNow.Add(-time.Hour)),
 									ObservedDrifts: []fleetv1beta1.PatchDetail{
 										{
-											Path:          "/spec/ports/1/port",
+											Path:          "/spec/ports/0/port",
 											ValueInHub:    "80",
 											ValueInMember: "90",
 										},
@@ -1339,7 +1339,7 @@ func TestSetBindingStatus(t *testing.T) {
 					FirstDriftedObservedTime:        metav1.NewTime(timeNow.Add(-time.Hour)),
 					ObservedDrifts: []fleetv1beta1.PatchDetail{
 						{
-							Path:          "/spec/ports/1/port",
+							Path:          "/spec/ports/0/port",
 							ValueInHub:    "80",
 							ValueInMember: "90",
 						},
@@ -1442,7 +1442,7 @@ func TestSetBindingStatus(t *testing.T) {
 									FirstDiffedObservedTime:           metav1.NewTime(timeNow.Add(-time.Second)),
 									ObservedDiffs: []fleetv1beta1.PatchDetail{
 										{
-											Path:          "/spec/ports/1/port",
+											Path:          "/spec/ports/0/port",
 											ValueInHub:    "80",
 											ValueInMember: "90",
 										},
@@ -1472,12 +1472,12 @@ func TestSetBindingStatus(t *testing.T) {
 						Group:     "",
 						Version:   "v1",
 						Kind:      "Service",
-						Name:      "svc-name-1",
+						Name:      "svc-name",
 						Namespace: "svc-namespace",
 					},
 					ObservationTime:                 metav1.NewTime(timeNow),
 					TargetClusterObservedGeneration: 2,
-					FirstDiffedObservedTime:         metav1.NewTime(timeNow.Add(-time.Second)),
+					FirstDiffedObservedTime:         metav1.NewTime(timeNow.Add(-time.Hour)),
 					ObservedDiffs: []fleetv1beta1.PatchDetail{
 						{
 							Path:          "/spec/ports/1/port",
@@ -1694,9 +1694,9 @@ func TestSetBindingStatus(t *testing.T) {
 			binding := &fleetv1beta1.ClusterResourceBinding{}
 			setBindingStatus(tt.works, binding)
 			got := binding.Status.FailedPlacements
-			// setBindingStatus is using map to populate the failedResourcePlacement.
+			// setBindingStatus is using map to populate the placements.
 			// There is no default order in traversing the map.
-			// When the result of failedResourcePlacement exceeds the limit, the result will be truncated and cannot be
+			// When the result of Placements exceeds the limit, the result will be truncated and cannot be
 			// guaranteed.
 			if maxFailedResourcePlacementLimit == len(tt.wantFailedResourcePlacements) {
 				opt := cmp.Comparer(func(x, y fleetv1beta1.FailedResourcePlacement) bool {
@@ -1735,8 +1735,8 @@ func TestSetBindingStatus(t *testing.T) {
 						}
 						return n1.Namespace < n2.Namespace
 					}),
-					cmpopts.SortSlices(func(f1, f2 fleetv1beta1.DriftedResourcePlacement) bool {
-						return f1.ResourceIdentifier.Kind < f2.ResourceIdentifier.Kind
+					cmp.Comparer(func(f1, f2 fleetv1beta1.DriftedResourcePlacement) bool {
+						return f1.ResourceIdentifier.Kind == f2.ResourceIdentifier.Kind
 					}),
 					cmp.Comparer(func(t1, t2 metav1.Time) bool {
 						if t1.Time.IsZero() || t2.Time.IsZero() {
@@ -1757,13 +1757,13 @@ func TestSetBindingStatus(t *testing.T) {
 
 			resourceCmpOptions := []cmp.Option{
 				cmpopts.SortSlices(func(i, j fleetv1beta1.DriftedResourcePlacement) bool {
-					if i.ResourceIdentifier.Group < j.ResourceIdentifier.Group {
+					if i.Group < j.Group {
 						return true
 					}
-					if i.ResourceIdentifier.Kind < j.ResourceIdentifier.Kind {
+					if i.Kind < j.Kind {
 						return true
 					}
-					return i.ResourceIdentifier.Name < j.ResourceIdentifier.Name
+					return i.Name < j.Name
 				}),
 			}
 			if diff := cmp.Diff(gotDrifted, tt.wantDriftedResourcePlacements, resourceCmpOptions...); diff != "" {
@@ -1804,13 +1804,13 @@ func TestSetBindingStatus(t *testing.T) {
 
 			resourceCmpOptions = []cmp.Option{
 				cmpopts.SortSlices(func(i, j fleetv1beta1.DiffedResourcePlacement) bool {
-					if i.ResourceIdentifier.Group < j.ResourceIdentifier.Group {
+					if i.Group < j.Group {
 						return true
 					}
-					if i.ResourceIdentifier.Kind < j.ResourceIdentifier.Kind {
+					if i.Kind < j.Kind {
 						return true
 					}
-					return i.ResourceIdentifier.Name < j.ResourceIdentifier.Name
+					return i.Name < j.Name
 				}),
 			}
 			if diff := cmp.Diff(gotDiffed, tt.wantDiffedResourcePlacements, resourceCmpOptions...); diff != "" {

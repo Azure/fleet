@@ -151,6 +151,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		resourceBinding.RemoveCondition(string(i.ResourceBindingConditionType()))
 	}
 	resourceBinding.Status.FailedPlacements = nil
+	resourceBinding.Status.DriftedPlacements = nil
+	resourceBinding.Status.DiffedPlacements = nil
 	if overrideSucceeded {
 		overrideReason := condition.OverriddenSucceededReason
 		overrideMessage := "Successfully applied the override rules on the resources"
@@ -1181,21 +1183,6 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 							return
 						}
 					}
-				}
-				// we need to compare the drift placement
-				oldDriftedPlacements := extractDriftedResourcePlacementsFromWork(oldWork)
-				newDriftedPlacements := extractDriftedResourcePlacementsFromWork(newWork)
-				if utils.IsDriftedResourcePlacementsEqual(oldDriftedPlacements, newDriftedPlacements) {
-					klog.V(2).InfoS("The drifted placement list didn't change, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
-					return
-				}
-
-				// we need to compare the diffed placement
-				oldDiffedPlacements := extractDiffedResourcePlacementsFromWork(oldWork)
-				newDiffedPlacements := extractDiffedResourcePlacementsFromWork(newWork)
-				if utils.IsDiffedResourcePlacementsEqual(oldDiffedPlacements, newDiffedPlacements) {
-					klog.V(2).InfoS("The diffed placement list didn't change, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
-					return
 				}
 				// We need to update the binding status in this case
 				klog.V(2).InfoS("Received a work update event that we need to handle", "work", klog.KObj(newWork), "parentBindingName", parentBindingName)
