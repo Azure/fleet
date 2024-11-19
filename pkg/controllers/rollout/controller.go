@@ -33,6 +33,7 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/defaulter"
@@ -342,7 +343,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 		bindingKObj := klog.KObj(binding)
 		switch binding.Spec.State {
 		case fleetv1beta1.BindingStateUnscheduled:
-			if hasBindingFailed(binding) {
+			if utils.HasBindingFailed(binding) {
 				klog.V(3).InfoS("Found a failed to be ready unscheduled binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 			} else {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
@@ -389,7 +390,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 				}
 			}
 			// check if the binding is failed or still on going
-			if hasBindingFailed(binding) {
+			if utils.HasBindingFailed(binding) {
 				klog.V(3).InfoS("Found a failed to be ready bound binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 				bindingFailed = true
 			} else {
@@ -433,16 +434,6 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 		readyBindings, canBeReadyBindings, canBeUnavailableBindings)
 
 	return toBeUpdatedBindingList, staleUnselectedBinding, true, minWaitTime, nil
-}
-
-// hasBindingFailed checks if ClusterResourceBinding has failed based on its applied and available conditions.
-func hasBindingFailed(binding *fleetv1beta1.ClusterResourceBinding) bool {
-	appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
-	availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
-	if condition.IsConditionStatusFalse(appliedCondition, binding.Generation) || condition.IsConditionStatusFalse(availableCondition, binding.Generation) {
-		return true
-	}
-	return false
 }
 
 // determineBindingsToUpdate determines which bindings to update

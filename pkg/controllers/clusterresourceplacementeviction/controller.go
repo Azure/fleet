@@ -21,6 +21,7 @@ import (
 
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
@@ -31,11 +32,12 @@ const (
 	reasonClusterResourcePlacementEvictionExecuted    = "ClusterResourcePlacementEvictionExecuted"
 	reasonClusterResourcePlacementEvictionNotExecuted = "ClusterResourcePlacementEvictionNotExecuted"
 
-	evictionInvalidMissingCRP  = "Failed to find cluster resource placement targeted by eviction"
-	evictionInvalidMissingCRB  = "Failed to find cluster resource binding for cluster targeted by eviction"
-	evictionInvalidMultipleCRB = "Found more than one ClusterResourceBinding for cluster targeted by eviction"
-	evictionValid              = "Eviction is valid"
-	evictionAllowedNoPDB       = "Eviction Allowed, no ClusterResourcePlacementDisruptionBudget specified"
+	evictionInvalidMissingCRP      = "Failed to find cluster resource placement targeted by eviction"
+	evictionInvalidMissingCRB      = "Failed to find cluster resource binding for cluster targeted by eviction"
+	evictionInvalidMultipleCRB     = "Found more than one ClusterResourceBinding for cluster targeted by eviction"
+	evictionValid                  = "Eviction is valid"
+	evictionAllowedNoPDB           = "Eviction Allowed, no ClusterResourcePlacementDisruptionBudget specified"
+	evictionAllowedPlacementFailed = "Eviction Allowed, placement has failed"
 
 	evictionAllowedPDBSpecified = "Eviction is allowed by specified ClusterResourcePlacementDisruptionBudget, disruptionsAllowed: %d, availableBindings: %d, desiredBindings: %d, totalBindings: %d"
 	evictionBlockedPDBSpecified = "Eviction is blocked by specified ClusterResourcePlacementDisruptionBudget, disruptionsAllowed: %d, availableBindings: %d, desiredBindings: %d, totalBindings: %d"
@@ -78,7 +80,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	var crp placementv1beta1.ClusterResourcePlacement
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: eviction.Spec.PlacementName}, &crp); err != nil {
 		if !errors.IsNotFound(err) {
-			return runtime.Result{}, err
+			return runtime.Result{}, controller.NewAPIServerError(true, err)
 		}
 		isCRPPresent = false
 	}
@@ -90,7 +92,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	var crbList placementv1beta1.ClusterResourceBindingList
 	if err := r.Client.List(ctx, &crbList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
-		return runtime.Result{}, err
+		return runtime.Result{}, controller.NewAPIServerError(true, err)
 	}
 
 	var evictionTargetBinding *placementv1beta1.ClusterResourceBinding
@@ -112,11 +114,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	}
 
 	markEvictionValid(&eviction)
+
+	// Check to see if binding has failed. If so no need to check disruption budget we can evict.
+	if utils.HasBindingFailed(evictionTargetBinding) {
+		if err := r.deleteClusterResourceBinding(ctx, evictionTargetBinding); err != nil {
+			return runtime.Result{}, err
+		}
+		markEvictionExecuted(&eviction, evictionAllowedPlacementFailed)
+		return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
+	}
+
 	isDBPresent := true
 	var db placementv1alpha1.ClusterResourcePlacementDisruptionBudget
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: crp.Name}, &db); err != nil {
 		if !errors.IsNotFound(err) {
-			return runtime.Result{}, err
+			return runtime.Result{}, controller.NewAPIServerError(true, err)
 		}
 		isDBPresent = false
 	}
@@ -186,12 +198,12 @@ func isEvictionAllowed(desiredBindings int, bindings []placementv1beta1.ClusterR
 		}
 	}
 	var disruptionsAllowed int
-	if db.Spec.MaxUnavailable != nil {
+	switch {
+	case db.Spec.MaxUnavailable != nil:
 		maxUnavailable, _ := intstr.GetScaledValueFromIntOrPercent(db.Spec.MaxUnavailable, desiredBindings, true)
 		unavailableBindings := len(bindings) - availableBindings
 		disruptionsAllowed = maxUnavailable - unavailableBindings
-	}
-	if db.Spec.MinAvailable != nil {
+	case db.Spec.MinAvailable != nil:
 		minAvailable, _ := intstr.GetScaledValueFromIntOrPercent(db.Spec.MinAvailable, desiredBindings, true)
 		disruptionsAllowed = availableBindings - minAvailable
 	}
