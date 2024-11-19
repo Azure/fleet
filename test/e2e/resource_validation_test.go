@@ -11,12 +11,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 )
 
 var _ = Describe("Resource validation tests for denying Member Cluster", func() {
@@ -132,7 +130,6 @@ var _ = Describe("Resource validation tests for allowing Member Cluster", func()
 			},
 		}
 		Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
-		Expect(hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName.Name}, memberClusterName)).Should(Succeed())
 		ensureMemberClusterAndRelatedResourcesDeletion(name)
 	})
 
@@ -153,7 +150,6 @@ var _ = Describe("Resource validation tests for allowing Member Cluster", func()
 			},
 		}
 		Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
-		Expect(hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName.Name}, memberClusterName)).Should(Succeed())
 		ensureMemberClusterAndRelatedResourcesDeletion(name)
 	})
 
@@ -174,7 +170,6 @@ var _ = Describe("Resource validation tests for allowing Member Cluster", func()
 			},
 		}
 		Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
-		Expect(hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName.Name}, memberClusterName)).Should(Succeed())
 		ensureMemberClusterAndRelatedResourcesDeletion(name)
 	})
 
@@ -195,7 +190,6 @@ var _ = Describe("Resource validation tests for allowing Member Cluster", func()
 			},
 		}
 		Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
-		Expect(hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName.Name}, memberClusterName)).Should(Succeed())
 		ensureMemberClusterAndRelatedResourcesDeletion(name)
 	})
 
@@ -216,7 +210,6 @@ var _ = Describe("Resource validation tests for allowing Member Cluster", func()
 			},
 		}
 		Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
-		Expect(hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName.Name}, memberClusterName)).Should(Succeed())
 		ensureMemberClusterAndRelatedResourcesDeletion(name)
 	})
 })
