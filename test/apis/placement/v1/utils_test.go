@@ -13,17 +13,6 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 )
 
-var (
-	croTestAnnotationKey    = "cro-test-annotation"
-	croTestAnnotationValue  = "cro-test-annotation-val"
-	croTestAnnotationKey1   = "cro-test-annotation1"
-	croTestAnnotationValue1 = "cro-test-annotation-val1"
-	roTestAnnotationKey     = "ro-test-annotation"
-	roTestAnnotationValue   = "ro-test-annotation-val"
-	roTestAnnotationKey1    = "ro-test-annotation1"
-	roTestAnnotationValue1  = "ro-test-annotation-val1"
-)
-
 // cleanupMemberCluster removes finalizers (if any) from the member cluster, and
 // wait until its final removal.
 func cleanupMemberCluster(memberClusterName string) {
