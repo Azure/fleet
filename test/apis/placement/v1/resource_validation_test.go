@@ -11,10 +11,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	clusterv1 "go.goms.io/fleet/apis/cluster/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	clusterv1 "go.goms.io/fleet/apis/cluster/v1"
 )
 
 var _ = Describe("Resource validation tests for denying Member Cluster", func() {
