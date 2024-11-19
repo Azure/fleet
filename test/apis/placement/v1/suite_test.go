@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	placementv1 "go.goms.io/fleet/apis/placement/v1"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -18,6 +16,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+
+	placementv1 "go.goms.io/fleet/apis/placement/v1"
 )
 
 const (
