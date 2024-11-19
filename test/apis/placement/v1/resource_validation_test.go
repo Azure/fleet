@@ -2,7 +2,7 @@
 Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
-package e2e
+package v1
 
 import (
 	"errors"
@@ -35,7 +35,7 @@ var _ = Describe("Resource validation tests for denying Member Cluster", func() 
 			},
 		}
 		By(fmt.Sprintf("expecting denial of CREATE API %s", name))
-		err := hubClient.Create(ctx, memberClusterName)
+		var err = hubClient.Create(ctx, memberClusterName)
 		var statusErr *k8serrors.StatusError
 		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create API call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8serrors.StatusError{})))
 		Expect(statusErr.Status().Message).Should(ContainSubstring("metadata.name max length is 63"))
