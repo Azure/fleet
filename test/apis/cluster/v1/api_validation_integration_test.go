@@ -18,8 +18,8 @@ import (
 	clusterv1 "go.goms.io/fleet/apis/cluster/v1"
 )
 
-var _ = Describe("Resource validation tests for denying Member Cluster", func() {
-	Context("Test Member Cluster creation API validation - invalid cases", func() {
+var _ = Describe("Test cluster v1 API validation", func() {
+	Context("Test MemberCluster API validation - invalid cases", func() {
 		It("should deny creating API with invalid name size", func() {
 			var name = "abcdef-123456789-123456789-123456789-123456789-123456789-123456789-123456789"
 			// Create the API.
@@ -112,9 +112,7 @@ var _ = Describe("Resource validation tests for denying Member Cluster", func() 
 			Expect(statusErr.Status().Message).Should(ContainSubstring("a lowercase RFC 1123 subdomain"))
 		})
 	})
-})
 
-var _ = Describe("Resource validation tests for allowing Member Cluster", func() {
 	Context("Test Member Cluster creation API validation - valid cases", func() {
 		It("should allow creating API with valid name size", func() {
 			var name = "abc-123456789-123456789-123456789-123456789-123456789-123456789"
@@ -133,7 +131,7 @@ var _ = Describe("Resource validation tests for allowing Member Cluster", func()
 				},
 			}
 			Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
-			ensureMemberClusterAndRelatedResourcesDeletion(name)
+			Expect(hubClient.Delete(ctx, memberClusterName)).Should(Succeed())
 		})
 
 		It("should allow creating API with valid name starting with alphabet character", func() {
@@ -153,7 +151,7 @@ var _ = Describe("Resource validation tests for allowing Member Cluster", func()
 				},
 			}
 			Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
-			ensureMemberClusterAndRelatedResourcesDeletion(name)
+			Expect(hubClient.Delete(ctx, memberClusterName)).Should(Succeed())
 		})
 
 		It("should allow creating API with valid name starting with numeric character", func() {
@@ -173,7 +171,7 @@ var _ = Describe("Resource validation tests for allowing Member Cluster", func()
 				},
 			}
 			Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
-			ensureMemberClusterAndRelatedResourcesDeletion(name)
+			Expect(hubClient.Delete(ctx, memberClusterName)).Should(Succeed())
 		})
 
 		It("should allow creating API with valid name ending with alphabet character", func() {
@@ -193,7 +191,7 @@ var _ = Describe("Resource validation tests for allowing Member Cluster", func()
 				},
 			}
 			Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
-			ensureMemberClusterAndRelatedResourcesDeletion(name)
+			Expect(hubClient.Delete(ctx, memberClusterName)).Should(Succeed())
 		})
 
 		It("should allow creating API with valid name ending with numeric character", func() {
@@ -213,7 +211,7 @@ var _ = Describe("Resource validation tests for allowing Member Cluster", func()
 				},
 			}
 			Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
-			ensureMemberClusterAndRelatedResourcesDeletion(name)
+			Expect(hubClient.Delete(ctx, memberClusterName)).Should(Succeed())
 		})
 	})
 })
