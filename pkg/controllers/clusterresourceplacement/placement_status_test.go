@@ -4081,6 +4081,207 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "drifts and configuration diffs",
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       bindingName,
+					Generation: 1,
+				},
+				Spec: fleetv1beta1.ResourceBindingSpec{
+					ResourceSnapshotName:             resourceSnapshotName,
+					ResourceOverrideSnapshots:        []fleetv1beta1.NamespacedName{},
+					ClusterResourceOverrideSnapshots: []string{},
+					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					TargetCluster:                    cluster,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					FailedPlacements: []fleetv1beta1.FailedResourcePlacement{
+						{
+							ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+								Group:     "",
+								Version:   "v1",
+								Kind:      "ConfigMap",
+								Name:      "cm-1",
+								Namespace: "ns-1",
+							},
+							Condition: metav1.Condition{
+								Type:   fleetv1beta1.WorkConditionTypeApplied,
+								Status: metav1.ConditionFalse,
+							},
+						},
+					},
+					DriftedPlacements: []fleetv1beta1.DriftedResourcePlacement{
+						{
+							ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+								Group:     "",
+								Version:   "v1",
+								Kind:      "ConfigMap",
+								Name:      "cm-1",
+								Namespace: "ns-1",
+							},
+							ObservationTime:                 metav1.Time{Time: time.Now()},
+							TargetClusterObservedGeneration: 1,
+							FirstDriftedObservedTime:        metav1.Time{Time: time.Now()},
+							ObservedDrifts: []fleetv1beta1.PatchDetail{
+								{
+									Path:          "/data",
+									ValueInMember: "k=1",
+									ValueInHub:    "k=2",
+								},
+							},
+						},
+					},
+					DiffedPlacements: []fleetv1beta1.DiffedResourcePlacement{
+						{
+							ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+								Group:     "apps",
+								Version:   "v1",
+								Kind:      "Deployment",
+								Name:      "app-1",
+								Namespace: "ns-1",
+							},
+							ObservationTime:                 metav1.Time{Time: time.Now()},
+							TargetClusterObservedGeneration: 2,
+							FirstDiffedObservedTime:         metav1.Time{Time: time.Now()},
+							ObservedDiffs: []fleetv1beta1.PatchDetail{
+								{
+									Path:          "/spec/replicas",
+									ValueInMember: "1",
+									ValueInHub:    "2",
+								},
+							},
+						},
+					},
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+							Reason:             condition.RolloutStartedReason,
+							ObservedGeneration: 1,
+						},
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(fleetv1beta1.ResourceBindingOverridden),
+							Reason:             condition.OverriddenSucceededReason,
+							ObservedGeneration: 1,
+						},
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
+							Reason:             condition.WorkSynchronizedReason,
+							ObservedGeneration: 1,
+						},
+						{
+							Status:             metav1.ConditionFalse,
+							Type:               string(fleetv1beta1.ResourceBindingApplied),
+							Reason:             condition.ApplySucceededReason,
+							ObservedGeneration: 1,
+						},
+						{
+							Status:             metav1.ConditionFalse,
+							Type:               string(fleetv1beta1.ResourceBindingAvailable),
+							Reason:             condition.NotAvailableYetReason,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			want: []metav1.ConditionStatus{
+				metav1.ConditionTrue,
+				metav1.ConditionTrue,
+				metav1.ConditionTrue,
+				metav1.ConditionFalse,
+			},
+			wantStatus: fleetv1beta1.ResourcePlacementStatus{
+				ClusterName:                        cluster,
+				ApplicableResourceOverrides:        []fleetv1beta1.NamespacedName{},
+				ApplicableClusterResourceOverrides: []string{},
+				FailedPlacements: []fleetv1beta1.FailedResourcePlacement{
+					{
+						ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+							Group:     "",
+							Version:   "v1",
+							Kind:      "ConfigMap",
+							Name:      "cm-1",
+							Namespace: "ns-1",
+						},
+						Condition: metav1.Condition{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionFalse,
+						},
+					},
+				},
+				DriftedPlacements: []fleetv1beta1.DriftedResourcePlacement{
+					{
+						ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+							Group:     "",
+							Version:   "v1",
+							Kind:      "ConfigMap",
+							Name:      "cm-1",
+							Namespace: "ns-1",
+						},
+						ObservationTime:                 metav1.Time{Time: time.Now()},
+						TargetClusterObservedGeneration: 1,
+						FirstDriftedObservedTime:        metav1.Time{Time: time.Now()},
+						ObservedDrifts: []fleetv1beta1.PatchDetail{
+							{
+								Path:          "/data",
+								ValueInMember: "k=1",
+								ValueInHub:    "k=2",
+							},
+						},
+					},
+				},
+				DiffedPlacements: []fleetv1beta1.DiffedResourcePlacement{
+					{
+						ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+							Group:     "apps",
+							Version:   "v1",
+							Kind:      "Deployment",
+							Name:      "app-1",
+							Namespace: "ns-1",
+						},
+						ObservationTime:                 metav1.Time{Time: time.Now()},
+						TargetClusterObservedGeneration: 2,
+						FirstDiffedObservedTime:         metav1.Time{Time: time.Now()},
+						ObservedDiffs: []fleetv1beta1.PatchDetail{
+							{
+								Path:          "/spec/replicas",
+								ValueInMember: "1",
+								ValueInHub:    "2",
+							},
+						},
+					},
+				},
+				Conditions: []metav1.Condition{
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+						Reason:             condition.RolloutStartedReason,
+						ObservedGeneration: crpGeneration,
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ResourceBindingOverridden),
+						Reason:             condition.OverriddenSucceededReason,
+						ObservedGeneration: crpGeneration,
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
+						Reason:             condition.WorkSynchronizedReason,
+						ObservedGeneration: crpGeneration,
+					},
+					{
+						Status:             metav1.ConditionFalse,
+						Type:               string(fleetv1beta1.ResourceBindingApplied),
+						Reason:             condition.ApplySucceededReason,
+						ObservedGeneration: crpGeneration,
+					},
+				},
+			},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
