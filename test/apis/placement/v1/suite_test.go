@@ -3,10 +3,11 @@ package v1
 import (
 	"context"
 	"flag"
-	placementv1 "go.goms.io/fleet/apis/placement/v1"
 	"path/filepath"
 	"testing"
 	"time"
+
+	placementv1 "go.goms.io/fleet/apis/placement/v1"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
