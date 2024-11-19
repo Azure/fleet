@@ -29,6 +29,7 @@ const (
 	nodeGroup                 = "system:nodes"
 	kubeSchedulerUser         = "system:kube-scheduler"
 	kubeControllerManagerUser = "system:kube-controller-manager"
+	aksSupportUser            = "aks-support"
 	serviceAccountFmt         = "system:serviceaccount:fleet-system:%s"
 
 	allowedModifyResource       = "user in groups is allowed to modify resource"
@@ -61,7 +62,7 @@ func ValidateUserForFleetCRD(req admission.Request, whiteListedUsers []string, g
 func ValidateUserForResource(req admission.Request, whiteListedUsers []string) admission.Response {
 	namespacedName := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
 	userInfo := req.UserInfo
-	if isAdminGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) || isUserAuthenticatedServiceAccount(userInfo) || isUserKubeScheduler(userInfo) || isUserKubeControllerManager(userInfo) || isNodeGroupUser(userInfo) {
+	if isAdminGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) || isUserAuthenticatedServiceAccount(userInfo) || isUserKubeScheduler(userInfo) || isUserKubeControllerManager(userInfo) || isNodeGroupUser(userInfo) || isAKSSupportUser(userInfo) {
 		klog.V(3).InfoS(allowedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		return admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
 	}
@@ -153,6 +154,12 @@ func isUserKubeScheduler(userInfo authenticationv1.UserInfo) bool {
 func isUserKubeControllerManager(userInfo authenticationv1.UserInfo) bool {
 	// system:kube-controller-manager user only belongs to system:authenticated group hence comparing username.
 	return userInfo.Username == kubeControllerManagerUser
+}
+
+// isUserKubeControllerManager return true if user is aks-support.
+func isAKSSupportUser(userInfo authenticationv1.UserInfo) bool {
+	// aks-support user only belongs to system:authenticated group hence comparing username.
+	return userInfo.Username == aksSupportUser
 }
 
 // isNodeGroupUser returns true if user belongs to system:nodes group.
