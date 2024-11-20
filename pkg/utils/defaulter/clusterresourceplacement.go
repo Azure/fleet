@@ -80,16 +80,24 @@ func SetDefaultsClusterResourcePlacement(obj *fleetv1beta1.ClusterResourcePlacem
 	if obj.Spec.Strategy.ApplyStrategy == nil {
 		obj.Spec.Strategy.ApplyStrategy = &fleetv1beta1.ApplyStrategy{}
 	}
-	if obj.Spec.Strategy.ApplyStrategy.Type == "" {
-		obj.Spec.Strategy.ApplyStrategy.Type = fleetv1beta1.ApplyStrategyTypeClientSideApply
-	}
-	if obj.Spec.Strategy.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeServerSideApply && obj.Spec.Strategy.ApplyStrategy.ServerSideApplyConfig == nil {
-		obj.Spec.Strategy.ApplyStrategy.ServerSideApplyConfig = &fleetv1beta1.ServerSideApplyConfig{
-			ForceConflicts: false,
-		}
-	}
+	SetDefaultsApplyStrategy(obj.Spec.Strategy.ApplyStrategy)
 
 	if obj.Spec.RevisionHistoryLimit == nil {
 		obj.Spec.RevisionHistoryLimit = ptr.To(int32(DefaultRevisionHistoryLimitValue))
 	}
+}
+
+// SetDefaultsApplyStrategy sets the default values for an ApplyStrategy object.
+func SetDefaultsApplyStrategy(obj *fleetv1beta1.ApplyStrategy) {
+	if obj.Type == "" {
+		obj.Type = fleetv1beta1.ApplyStrategyTypeClientSideApply
+	}
+	if obj.Type == fleetv1beta1.ApplyStrategyTypeServerSideApply && obj.ServerSideApplyConfig == nil {
+		obj.ServerSideApplyConfig = &fleetv1beta1.ServerSideApplyConfig{
+			ForceConflicts: false,
+		}
+	}
+	obj.ComparisonOption = fleetv1beta1.ComparisonOptionTypePartialComparison
+	obj.WhenToApply = fleetv1beta1.WhenToApplyTypeAlways
+	obj.WhenToTakeOver = fleetv1beta1.WhenToTakeOverTypeAlways
 }
