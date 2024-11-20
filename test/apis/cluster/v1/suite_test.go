@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	placementv1 "go.goms.io/fleet/apis/placement/v1"
+	clusterv1 "go.goms.io/fleet/apis/cluster/v1"
 )
 
 var (
@@ -52,7 +52,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(hubCfg).NotTo(BeNil())
 
-	Expect(placementv1.AddToScheme(scheme.Scheme)).Should(Succeed())
+	Expect(clusterv1.AddToScheme(scheme.Scheme)).Should(Succeed())
 
 	klog.InitFlags(flag.CommandLine)
 	flag.Parse()
