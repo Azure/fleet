@@ -1,0 +1,7 @@
+apiVersion: placement.kubernetes-fleet.io/v1alpha1
+kind: ClusterResourcePlacementEviction
+metadata:
+  name: test-eviction
+spec:
+  placementName: test-crp
+  clusterName: cluster-1

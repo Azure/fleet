@@ -1,0 +1,33 @@
+apiVersion: placement.kubernetes-fleet.io/v1
+kind: ClusterResourcePlacement
+metadata:
+  name: crp-example
+spec:
+  resourceSelectors:
+    - group: ""
+      kind: Namespace
+      version: v1
+      labelSelector:
+        matchLabels:
+          kubernetes-fleet.io/app: prod
+  policy:
+    placementType: PickN
+    numberOfClusters: 2
+    affinity:
+      clusterAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          clusterSelectorTerms:
+            - labelSelector:
+                matchLabels:
+                  fleet.azure.com/location: westus
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 20
+            preference:
+              propertySorter:
+                name: kubernetes-fleet.io/node-count
+                sortOrder: Descending
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 50%

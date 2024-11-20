@@ -612,11 +612,11 @@ const (
 	// ComparisonOptionTypePartialComparison will compare only fields that are managed by Fleet, i.e.,
 	// fields that are specified explicitly in the hub cluster manifest. Unmanaged fields
 	// are ignored.
-	ComparisonOptionTypePartialComparison ComparisonOptionType = "PartialDiff"
+	ComparisonOptionTypePartialComparison ComparisonOptionType = "PartialComparison"
 
 	// ComparisonOptionTypeFullDiff will compare all fields of the resource, even if the fields
 	// are absent from the hub cluster manifest.
-	ComparisonOptionTypeFullComparison ComparisonOptionType = "FullDiff"
+	ComparisonOptionTypeFullComparison ComparisonOptionType = "FullComparison"
 )
 
 // WhenToApplyType describes when Fleet would apply the manifests on the hub cluster to
