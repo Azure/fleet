@@ -761,9 +761,13 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 		resourceBinding.SetConditions(availableCond)
 	}
 	resourceBinding.Status.FailedPlacements = nil
+	resourceBinding.Status.DiffedPlacements = nil
+	resourceBinding.Status.DriftedPlacements = nil
 	// collect and set the failed resource placements to the binding if not all the works are available
 	if appliedCond.Status != metav1.ConditionTrue || availableCond.Status != metav1.ConditionTrue {
-		failedResourcePlacements := make([]fleetv1beta1.FailedResourcePlacement, 0, maxFailedResourcePlacementLimit) // preallocate the memory
+		failedResourcePlacements := make([]fleetv1beta1.FailedResourcePlacement, 0, maxFailedResourcePlacementLimit)    // preallocate the memory
+		diffedResourcePlacements := make([]fleetv1beta1.DiffedResourcePlacement, 0, maxDiffedResourcePlacementLimit)    // preallocate the memory
+		driftedResourcePlacements := make([]fleetv1beta1.DriftedResourcePlacement, 0, maxDriftedResourcePlacementLimit) // preallocate the memory
 		for _, w := range works {
 			if w.DeletionTimestamp != nil {
 				klog.V(2).InfoS("Ignoring the deleting work", "clusterResourceBinding", bindingRef, "work", klog.KObj(w))
@@ -771,6 +775,12 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 			}
 			failedManifests := extractFailedResourcePlacementsFromWork(w)
 			failedResourcePlacements = append(failedResourcePlacements, failedManifests...)
+
+			diffedManifests := extractDiffedResourcePlacementsFromWork(w)
+			diffedResourcePlacements = append(diffedResourcePlacements, diffedManifests...)
+
+			driftedManifests := extractDriftedResourcePlacementsFromWork(w)
+			driftedResourcePlacements = append(driftedResourcePlacements, driftedManifests...)
 		}
 		// cut the list to keep only the max limit
 		if len(failedResourcePlacements) > maxFailedResourcePlacementLimit {
@@ -780,39 +790,26 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 		if len(failedResourcePlacements) > 0 {
 			klog.V(2).InfoS("Populated failed manifests", "clusterResourceBinding", bindingRef, "numberOfFailedPlacements", len(failedResourcePlacements))
 		}
-	}
 
-	resourceBinding.Status.DriftedPlacements = nil
-	resourceBinding.Status.DiffedPlacements = nil
-	driftedResourcePlacements := make([]fleetv1beta1.DriftedResourcePlacement, 0, maxDriftedResourcePlacementLimit) // preallocate the memory
-	diffedResourcePlacements := make([]fleetv1beta1.DiffedResourcePlacement, 0, maxDiffedResourcePlacementLimit)    // preallocate the memory
-	for _, w := range works {
-		if w.DeletionTimestamp != nil {
-			klog.V(2).InfoS("Ignoring the deleting work", "clusterResourceBinding", bindingRef, "work", klog.KObj(w))
-			continue // ignore the deleting work
+		// cut the list to keep only the max limit
+		if len(diffedResourcePlacements) > maxDiffedResourcePlacementLimit {
+			diffedResourcePlacements = diffedResourcePlacements[0:maxDiffedResourcePlacementLimit]
 		}
-		driftedManifests := extractDriftedResourcePlacementsFromWork(w)
-		driftedResourcePlacements = append(driftedResourcePlacements, driftedManifests...)
 
-		diffedManifests := extractDiffedResourcePlacementsFromWork(w)
-		diffedResourcePlacements = append(diffedResourcePlacements, diffedManifests...)
-	}
-	// cut the list to keep only the max limit
-	if len(driftedResourcePlacements) > maxDriftedResourcePlacementLimit {
-		driftedResourcePlacements = driftedResourcePlacements[0:maxDriftedResourcePlacementLimit]
-	}
-	if len(driftedResourcePlacements) > 0 {
-		resourceBinding.Status.DriftedPlacements = driftedResourcePlacements
-		klog.V(2).InfoS("Populated drifted manifests", "clusterResourceBinding", bindingRef, "numberOfDriftedPlacements", len(driftedResourcePlacements))
-	}
-
-	// cut the list to keep only the max limit
-	if len(diffedResourcePlacements) > maxDiffedResourcePlacementLimit {
-		diffedResourcePlacements = diffedResourcePlacements[0:maxDiffedResourcePlacementLimit]
-	}
-	if len(diffedResourcePlacements) > 0 {
 		resourceBinding.Status.DiffedPlacements = diffedResourcePlacements
-		klog.V(2).InfoS("Populated diffed manifests", "clusterResourceBinding", bindingRef, "numberOfDiffedPlacements", len(diffedResourcePlacements))
+		if len(diffedResourcePlacements) > 0 {
+			klog.V(2).InfoS("Populated diffed manifests", "clusterResourceBinding", bindingRef, "numberOfDiffedPlacements", len(diffedResourcePlacements))
+		}
+
+		// cut the list to keep only the max limit
+		if len(driftedResourcePlacements) > maxDriftedResourcePlacementLimit {
+			driftedResourcePlacements = driftedResourcePlacements[0:maxDriftedResourcePlacementLimit]
+		}
+
+		resourceBinding.Status.DriftedPlacements = driftedResourcePlacements
+		if len(driftedResourcePlacements) > 0 {
+			klog.V(2).InfoS("Populated drifted manifests", "clusterResourceBinding", bindingRef, "numberOfDriftedPlacements", len(driftedResourcePlacements))
+		}
 	}
 }
 
@@ -1160,8 +1157,12 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 						// we need to compare the failed placement if the work is not applied or available
 						oldFailedPlacements := extractFailedResourcePlacementsFromWork(oldWork)
 						newFailedPlacements := extractFailedResourcePlacementsFromWork(newWork)
-						if utils.IsFailedResourcePlacementsEqual(oldFailedPlacements, newFailedPlacements) {
-							klog.V(2).InfoS("The failed placement list didn't change on failed work, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
+						oldDiffedPlacements := extractDiffedResourcePlacementsFromWork(oldWork)
+						newDiffedPlacements := extractDiffedResourcePlacementsFromWork(newWork)
+						oldDriftedPlacements := extractDriftedResourcePlacementsFromWork(oldWork)
+						newDriftedPlacements := extractDriftedResourcePlacementsFromWork(newWork)
+						if utils.IsDriftedResourcePlacementsEqual(oldDriftedPlacements, newDriftedPlacements) && utils.IsDiffedResourcePlacementsEqual(oldDiffedPlacements, newDiffedPlacements) && utils.IsFailedResourcePlacementsEqual(oldFailedPlacements, newFailedPlacements) {
+							klog.V(2).InfoS("The placement lists didn't change on failed work, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
 							return
 						}
 					} else {
