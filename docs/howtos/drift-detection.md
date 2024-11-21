@@ -41,26 +41,26 @@ See the steps below for an example; the code assumes that you have a Fleet of tw
     apiVersion: placement.kubernetes-fleet.io/v1beta1
     kind: ClusterResourcePlacement
     metadata:
-    name: work
+      name: work
     spec:
-    resourceSelectors:
-      - group: ""
-        kind: Namespace
-        version: v1
-        # Select all namespaces with the label app=work.      
-        labelSelector:
-            matchLabels:
-            app: work
-    policy:
-        placementType: PickAll
-    strategy:
-        # For simplicity reasons, the CRP is configured to roll out changes to
-        # all member clusters at once. This is not a setup recommended for production
-        # use.         
-        type: RollingUpdate
-        rollingUpdate:
-        maxUnavailable: 100%
-        unavailablePeriodSeconds: 1            
+      resourceSelectors:
+        - group: ""
+          kind: Namespace
+          version: v1
+          # Select all namespaces with the label app=work.      
+          labelSelector:
+              matchLabels:
+              app: work
+      policy:
+          placementType: PickAll
+      strategy:
+          # For simplicity reasons, the CRP is configured to roll out changes to
+          # all member clusters at once. This is not a setup recommended for production
+          # use.         
+          type: RollingUpdate
+          rollingUpdate:
+          maxUnavailable: 100%
+          unavailablePeriodSeconds: 1            
     EOF
     ```
 
@@ -145,28 +145,28 @@ illustrated by the steps below:
     apiVersion: placement.kubernetes-fleet.io/v1beta1
     kind: ClusterResourcePlacement
     metadata:
-    name: work
+      name: work
     spec:
-    resourceSelectors:
+      resourceSelectors:
         - group: ""
-        kind: Namespace
-        version: v1
-        # Select all namespaces with the label app=work. 
-        labelSelector:
-            matchLabels:
-            app: work
-    policy:
-        placementType: PickAll
-    strategy:
-        applyStrategy:
-        whenToApply: IfNotDrifted
-        # For simplicity reasons, the CRP is configured to roll out changes to
-        # all member clusters at once. This is not a setup recommended for production
-        # use.      
-        type: RollingUpdate
-        rollingUpdate:
-        maxUnavailable: 100%
-        unavailablePeriodSeconds: 1                
+          kind: Namespace
+          version: v1
+          # Select all namespaces with the label app=work. 
+          labelSelector:
+              matchLabels:
+              app: work
+      policy:
+          placementType: PickAll
+      strategy:
+          applyStrategy:
+          whenToApply: IfNotDrifted
+          # For simplicity reasons, the CRP is configured to roll out changes to
+          # all member clusters at once. This is not a setup recommended for production
+          # use.      
+          type: RollingUpdate
+          rollingUpdate:
+          maxUnavailable: 100%
+          unavailablePeriodSeconds: 1                
     EOF
     ```
 
