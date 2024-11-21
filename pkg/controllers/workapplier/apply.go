@@ -119,52 +119,50 @@ func (r *Reconciler) apply(
 	// of drift detection and takeover capabilities, such steps have been completed before
 	// the apply op actually runs.
 
-	if shouldApply(manifestObj, inMemberClusterObj) {
-		// Prepare the manifest object for the apply op if it uses a generate name.
-		prepareObjectWithGenerateName(manifestObjCopy, inMemberClusterObj)
+	// Run the apply op. Note that Fleet will always attempt to apply the manifest, even if
+	// the manifest object hash does not change.
 
-		// Optimistic lock is enabled when the apply strategy dictates that an apply op should
-		// not be carries through if a drift has been found (i.e., the WhenToApply field is set
-		// to IfNotDrifted); this helps Fleet guard against
-		// cases where inadvertent changes are being made in an untimely manner (i.e., changes
-		// are made when the Fleet agent is preparing an apply op).
-		//
-		// Note that if the apply strategy dictates that apply ops are always executed (i.e.,
-		// the WhenToApply field is set to Always), Fleet will not enable optimistic lock. This
-		// is consistent with the behavior before the drift detection and takeover experience
-		// is added.
-		isOptimisticLockEnabled := shouldEnableOptimisticLock(applyStrategy)
+	// Prepare the manifest object for the apply op if it uses a generate name.
+	prepareObjectWithGenerateName(manifestObjCopy, inMemberClusterObj)
 
-		switch {
-		case applyStrategy.Type == fleetv1beta1.ApplyStrategyTypeClientSideApply && isLastAppliedAnnotationSet:
-			// The apply strategy dictates that three-way merge patch
-			// (client-side apply esque patch) should be used, and the last applied annotation
-			// has been set.
-			return r.threeWayMergePatch(ctx, gvr, manifestObjCopy, inMemberClusterObj, isOptimisticLockEnabled, false)
-		case applyStrategy.Type == fleetv1beta1.ApplyStrategyTypeClientSideApply:
-			// The apply strategy dictates that three-way merge patch
-			// (client-side apply esque patch) should be used, but the last applied annotation
-			// cannot be set. Fleet will fall back to server-side apply.
-			return r.serverSideApply(
-				ctx,
-				gvr, manifestObjCopy, inMemberClusterObj,
-				applyStrategy.ServerSideApplyConfig.ForceConflicts, isOptimisticLockEnabled, false,
-			)
-		case applyStrategy.Type == fleetv1beta1.ApplyStrategyTypeServerSideApply:
-			// The apply strategy dictates that server-side apply should be used.
-			return r.serverSideApply(
-				ctx,
-				gvr, manifestObjCopy, inMemberClusterObj,
-				applyStrategy.ServerSideApplyConfig.ForceConflicts, isOptimisticLockEnabled, false,
-			)
-		default:
-			// An unexpected apply strategy has been set.
-			return nil, fmt.Errorf("unexpected apply strategy %s is found", applyStrategy.Type)
-		}
+	// Optimistic lock is enabled when the apply strategy dictates that an apply op should
+	// not be carries through if a drift has been found (i.e., the WhenToApply field is set
+	// to IfNotDrifted); this helps Fleet guard against
+	// cases where inadvertent changes are being made in an untimely manner (i.e., changes
+	// are made when the Fleet agent is preparing an apply op).
+	//
+	// Note that if the apply strategy dictates that apply ops are always executed (i.e.,
+	// the WhenToApply field is set to Always), Fleet will not enable optimistic lock. This
+	// is consistent with the behavior before the drift detection and takeover experience
+	// is added.
+	isOptimisticLockEnabled := shouldEnableOptimisticLock(applyStrategy)
+
+	switch {
+	case applyStrategy.Type == fleetv1beta1.ApplyStrategyTypeClientSideApply && isLastAppliedAnnotationSet:
+		// The apply strategy dictates that three-way merge patch
+		// (client-side apply esque patch) should be used, and the last applied annotation
+		// has been set.
+		return r.threeWayMergePatch(ctx, gvr, manifestObjCopy, inMemberClusterObj, isOptimisticLockEnabled, false)
+	case applyStrategy.Type == fleetv1beta1.ApplyStrategyTypeClientSideApply:
+		// The apply strategy dictates that three-way merge patch
+		// (client-side apply esque patch) should be used, but the last applied annotation
+		// cannot be set. Fleet will fall back to server-side apply.
+		return r.serverSideApply(
+			ctx,
+			gvr, manifestObjCopy, inMemberClusterObj,
+			applyStrategy.ServerSideApplyConfig.ForceConflicts, isOptimisticLockEnabled, false,
+		)
+	case applyStrategy.Type == fleetv1beta1.ApplyStrategyTypeServerSideApply:
+		// The apply strategy dictates that server-side apply should be used.
+		return r.serverSideApply(
+			ctx,
+			gvr, manifestObjCopy, inMemberClusterObj,
+			applyStrategy.ServerSideApplyConfig.ForceConflicts, isOptimisticLockEnabled, false,
+		)
+	default:
+		// An unexpected apply strategy has been set.
+		return nil, fmt.Errorf("unexpected apply strategy %s is found", applyStrategy.Type)
 	}
-
-	// No apply op needed.
-	return nil, nil
 }
 
 // createManifestObject creates the manifest object in the member cluster.

@@ -622,7 +622,7 @@ func (r *Reconciler) processOneManifest(
 	// For objects with generated names, Fleet would need to update the bundle identifier to include
 	// the actual name of the applied object.
 	if bundle.id.GenerateName != "" && bundle.id.Name == "" {
-		bundle.id.Name = appliedObj.GetName()
+		bundle.id.Name = bundle.inMemberClusterObj.GetName()
 	}
 
 	// Perform another round of drift detection after the apply op, if the ApplyStrategy dictates
@@ -630,14 +630,15 @@ func (r *Reconciler) processOneManifest(
 	//
 	// Drift detection is always enabled currently in Fleet. At this stage of execution, it is
 	// safe for us to assume that all the managed fields have been overwritten by the just
-	// completed apply op; consequently, no further drift detection is necessary if the partial
-	// comparison mode is used. However, for the full comparison mode, the apply op might not to
-	// able to resolve all the drifts, should there be any change made on the unmanaged fields;
-	// and Fleet would need to perform another round of drift detection.
+	// completed apply op (or no apply op is necessary); consequently, no further drift
+	// detection is necessary if the partial comparison mode is used. However, for the full
+	// comparison mode, the apply op might not to able to resolve all the drifts, should there
+	// be any change made on the unmanaged fields; and Fleet would need to perform another
+	// round of drift detection.
 	if shouldPerformPostApplyDriftDetection(work.Spec.ApplyStrategy) {
 		drifts, err := r.diffBetweenManifestAndInMemberClusterObjects(ctx,
 			bundle.gvr,
-			bundle.manifestObj, appliedObj,
+			bundle.manifestObj, bundle.inMemberClusterObj,
 			applyStrategy.ComparisonOption)
 		switch {
 		case err != nil:

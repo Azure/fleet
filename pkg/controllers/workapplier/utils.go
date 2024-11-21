@@ -432,12 +432,6 @@ func validateOwnerReferences(
 	return nil
 }
 
-func shouldApply(manifestObj, inMemberClusterObj *unstructured.Unstructured) bool {
-	// Fleet will apply the manifest if (and only if) a newer version of the manifest
-	// is available.
-	return manifestObj.GetAnnotations()[fleetv1beta1.ManifestHashAnnotation] != inMemberClusterObj.GetAnnotations()[fleetv1beta1.ManifestHashAnnotation]
-}
-
 // prepareObjectWithGenerateName prepares an object with a generated name for an apply op.
 //
 // Specifically, Fleet will set the manifest object to have the same name as the live object. For
