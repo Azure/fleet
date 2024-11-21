@@ -232,6 +232,8 @@ func markEvictionValid(eviction *placementv1alpha1.ClusterResourcePlacementEvict
 		Message:            evictionValidMessage,
 	}
 	eviction.SetConditions(cond)
+
+	klog.V(2).InfoS("Marked eviction as valid", "clusterResourcePlacementEviction", klog.KObj(eviction))
 }
 
 // markEvictionInvalid sets the valid condition as false in eviction status.
@@ -244,6 +246,7 @@ func markEvictionInvalid(eviction *placementv1alpha1.ClusterResourcePlacementEvi
 		Message:            message,
 	}
 	eviction.SetConditions(cond)
+	klog.V(2).InfoS("Marked eviction as invalid", "clusterResourcePlacementEviction", klog.KObj(eviction))
 }
 
 // markEvictionExecuted sets the executed condition as true in eviction status.
@@ -256,6 +259,7 @@ func markEvictionExecuted(eviction *placementv1alpha1.ClusterResourcePlacementEv
 		Message:            message,
 	}
 	eviction.SetConditions(cond)
+	klog.V(2).InfoS("Marked eviction as executed", "clusterResourcePlacementEviction", klog.KObj(eviction))
 }
 
 // markEvictionNotExecuted sets the executed condition as false in eviction status.
@@ -268,6 +272,7 @@ func markEvictionNotExecuted(eviction *placementv1alpha1.ClusterResourcePlacemen
 		Message:            message,
 	}
 	eviction.SetConditions(cond)
+	klog.V(2).InfoS("Marked eviction as not executed", "clusterResourcePlacementEviction", klog.KObj(eviction))
 }
 
 // SetupWithManager sets up the controller with the Manager.
