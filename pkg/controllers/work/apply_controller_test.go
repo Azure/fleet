@@ -53,6 +53,7 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/defaulter"
 	testcontroller "go.goms.io/fleet/test/utils/controller"
 )
 
@@ -1618,6 +1619,7 @@ func TestApplyUnstructuredAndTrackAvailability(t *testing.T) {
 							Spec: fleetv1beta1.WorkSpec{
 								ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 									AllowCoOwnership: true,
+									Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
 								},
 							},
 						}
@@ -1821,6 +1823,12 @@ func TestApplyUnstructuredAndTrackAvailability(t *testing.T) {
 				Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
 				AllowCoOwnership: testCase.allowCoOwnership,
 			}
+			// Certain path of the applyUnstructuredAndTrackAvailability method will attempt
+			// to set default values of the retrieve apply strategy from the mock Work object and
+			// compare it with the passed-in apply strategy.
+			// To keep things consistent, here the test spec sets the passed-in apply strategy
+			// as well.
+			defaulter.SetDefaultsApplyStrategy(strategy)
 			applyResult, applyAction, err := r.applyUnstructuredAndTrackAvailability(context.Background(), utils.DeploymentGVR, testCase.workObj, strategy)
 			assert.Equalf(t, testCase.resultAction, applyAction, "updated boolean not matching for Testcase %s", testName)
 			if testCase.resultErr != nil {

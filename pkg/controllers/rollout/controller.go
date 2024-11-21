@@ -113,6 +113,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 
+	// Process apply strategy updates (if any).
+	//
+	// Apply strategy changes will be immediately applied to all bindings that have not been
+	// marked for deletion yet. Note that even unscheduled bindings will receive this update;
+	// as apply strategy changes might have an effect on its Applied and Available status, and
+	// consequently on the rollout progress.
+	if err := r.processApplyStrategyUpdates(ctx, &crp, allBindings); err != nil {
+		klog.ErrorS(err, "Failed to process apply strategy updates", "clusterResourcePlacement", crpName)
+		return runtime.Result{}, err
+	}
+
 	// find the latest clusterResourceSnapshot.
 	latestResourceSnapshot, err := r.fetchLatestResourceSnapshot(ctx, crpName)
 	if err != nil {
@@ -648,6 +659,16 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 				handleResourceBinding(e.Object, q)
 			},
 		}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		// Aside from ClusterResourceSnapshot and ClusterResourceBinding objects, the rollout
+		// controller also watches ClusterResourcePlacement objects, so that it can push apply
+		// strategy updates to all bindings right away.
+		Watches(&fleetv1beta1.ClusterResourcePlacement{}, handler.Funcs{
+			// Ignore all Create, Delete, and Generic events; these do not concern the rollout controller.
+			UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+				klog.V(2).InfoS("Handling a clusterResourcePlacement update event", "clusterResourcePlacement", klog.KObj(e.ObjectNew))
+				handleCRP(e.ObjectNew, e.ObjectOld, q)
+			},
+		}).
 		Complete(r)
 }
 
@@ -752,4 +773,94 @@ func (r *Reconciler) updateBindingStatus(ctx context.Context, binding *fleetv1be
 	}
 	klog.V(2).InfoS("Updated the status of a binding", "clusterResourceBinding", klog.KObj(binding), "condition", cond)
 	return nil
+}
+
+// processApplyStrategyUpdates processes apply strategy updates on the CRP end; specifically
+// it will push the update to all applicable bindings.
+func (r *Reconciler) processApplyStrategyUpdates(
+	ctx context.Context,
+	crp *fleetv1beta1.ClusterResourcePlacement,
+	allBindings []*fleetv1beta1.ClusterResourceBinding,
+) error {
+	applyStrategy := crp.Spec.Strategy.ApplyStrategy
+	if applyStrategy == nil {
+		// Initialize the apply strategy with default values; normally this would not happen
+		// as default values have been set up in the definitions.
+		//
+		// Note (chenyu1): at this moment, due to the fact that Fleet offers both v1 and v1beta1
+		// APIs at the same time with Kubernetes favoring the v1 API by default, should the
+		// user chooses to use the v1 API, default values for v1beta1 exclusive fields
+		// might not be handled correctly, hence the default value resetting logic added here.
+		applyStrategy = &fleetv1beta1.ApplyStrategy{}
+		defaulter.SetDefaultsApplyStrategy(applyStrategy)
+	}
+
+	errs, childCtx := errgroup.WithContext(ctx)
+	for idx := range allBindings {
+		binding := allBindings[idx]
+		if !binding.DeletionTimestamp.IsZero() {
+			// The binding has been marked for deletion; no need to push the apply strategy
+			// update there.
+			continue
+		}
+
+		// Verify if the binding has the latest apply strategy set.
+		if equality.Semantic.DeepEqual(binding.Spec.ApplyStrategy, applyStrategy) {
+			// The binding already has the latest apply strategy set; no need to push the update.
+			klog.V(2).InfoS("The binding already has the latest apply strategy; skip the apply strategy update", "clusterResourceBinding", klog.KObj(binding))
+			continue
+		}
+
+		// Push the new apply strategy to the binding.
+		//
+		// The ApplyStrategy field on binding objects are managed exclusively by the rollout
+		// controller; to avoid unnecessary conflicts, Fleet will patch the field directly.
+		updatedBinding := binding.DeepCopy()
+		updatedBinding.Spec.ApplyStrategy = applyStrategy
+
+		errs.Go(func() error {
+			if err := r.Client.Patch(childCtx, updatedBinding, client.MergeFrom(binding)); err != nil {
+				klog.ErrorS(err, "Failed to update binding with new apply strategy", "clusterResourceBinding", klog.KObj(binding))
+				return controller.NewAPIServerError(false, err)
+			}
+			klog.V(2).InfoS("Updated binding with new apply strategy", "clusterResourceBinding", klog.KObj(binding))
+			return nil
+		})
+	}
+
+	// The patches are issued in parallel; wait for all of them to complete (or the first error
+	// to return).
+	return errs.Wait()
+}
+
+// handleCRP handles the update event of a ClusterResourcePlacement, which the rollout controller
+// watches.
+func handleCRP(newCRPObj, oldCRPObj client.Object, q workqueue.RateLimitingInterface) {
+	// Check if the CRP has been deleted.
+	if newCRPObj.GetDeletionTimestamp() != nil {
+		// No need to process a CRP that has been marked for deletion.
+		return
+	}
+
+	// Do some sanity checks. Normally these checks would never fail.
+	if newCRPObj == nil || oldCRPObj == nil {
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("CRP object is nil")), "Received an unexpected nil object in the CRP Update event")
+	}
+	newCRP, newOK := newCRPObj.(*fleetv1beta1.ClusterResourcePlacement)
+	oldCRP, oldOK := oldCRPObj.(*fleetv1beta1.ClusterResourcePlacement)
+	if !newOK || !oldOK {
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("object is not an CRP object")), "Failed to cast the new object in the CRP Update event to a CRP object")
+	}
+
+	// Check if the apply strategy has been updated.
+	newApplyStrategy := newCRP.Spec.Strategy.ApplyStrategy
+	oldApplyStrategy := oldCRP.Spec.Strategy.ApplyStrategy
+	if !equality.Semantic.DeepEqual(newApplyStrategy, oldApplyStrategy) {
+		klog.V(2).InfoS("Detected an update to the apply strategy on the CRP", "clusterResourcePlacement", klog.KObj(newCRP))
+		q.Add(reconcile.Request{
+			NamespacedName: types.NamespacedName{Name: newCRP.GetName()},
+		})
+	}
+
+	klog.V(2).InfoS("No update to apply strategy detected; ignore the CRP Update event", "clusterResourcePlacement", klog.KObj(newCRP))
 }

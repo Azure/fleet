@@ -97,7 +97,14 @@ func SetDefaultsApplyStrategy(obj *fleetv1beta1.ApplyStrategy) {
 			ForceConflicts: false,
 		}
 	}
-	obj.ComparisonOption = fleetv1beta1.ComparisonOptionTypePartialComparison
-	obj.WhenToApply = fleetv1beta1.WhenToApplyTypeAlways
-	obj.WhenToTakeOver = fleetv1beta1.WhenToTakeOverTypeAlways
+
+	if obj.ComparisonOption == "" {
+		obj.ComparisonOption = fleetv1beta1.ComparisonOptionTypePartialComparison
+	}
+	if obj.WhenToApply == "" {
+		obj.WhenToApply = fleetv1beta1.WhenToApplyTypeAlways
+	}
+	if obj.WhenToTakeOver == "" {
+		obj.WhenToTakeOver = fleetv1beta1.WhenToTakeOverTypeAlways
+	}
 }

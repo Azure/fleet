@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/utils/ptr"
@@ -30,6 +32,11 @@ const (
 	consistentTimeout      = time.Second * 60
 	consistentInterval     = time.Second * 5
 	customBindingFinalizer = "custom-binding-finalizer"
+)
+
+var (
+	ignoreCRBTypeMetaAndStatusFields = cmpopts.IgnoreFields(fleetv1beta1.ClusterResourceBinding{}, "TypeMeta", "Status")
+	ignoreObjectMetaAutoGenFields    = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "CreationTimestamp", "Generation", "ResourceVersion", "SelfLink", "UID", "ManagedFields")
 )
 
 var testCRPName string
@@ -92,6 +99,113 @@ var _ = Describe("Test the rollout Controller", func() {
 			}
 			return true
 		}, timeout, interval).Should(BeTrue(), "rollout controller should roll all the bindings to Bound state")
+	})
+
+	It("should push apply strategy changes to all the bindings (if applicable)", func() {
+		// Create a CRP.
+		targetClusterCount := int32(3)
+		rolloutCRP = clusterResourcePlacementForTest(testCRPName, createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, targetClusterCount))
+		Expect(k8sClient.Create(ctx, rolloutCRP)).Should(Succeed(), "Failed to create CRP")
+
+		// Create a master cluster resource snapstho.
+		resourceSnapshot := generateResourceSnapshot(rolloutCRP.Name, 0, true)
+		Expect(k8sClient.Create(ctx, resourceSnapshot)).Should(Succeed(), "Failed to create cluster resource snapshot")
+
+		// Create all the bindings.
+		clusters := make([]string, targetClusterCount)
+		for i := 0; i < int(targetClusterCount); i++ {
+			clusters[i] = "cluster-" + utils.RandStr()
+			binding := generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, resourceSnapshot.Name, clusters[i])
+			Expect(k8sClient.Create(ctx, binding)).Should(Succeed(), "Failed to create cluster resource binding")
+			bindings = append(bindings, binding)
+		}
+
+		// Verify that all the bindings are bound.
+		Eventually(func() error {
+			for _, binding := range bindings {
+				gotBinding := &fleetv1beta1.ClusterResourceBinding{}
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, gotBinding); err != nil {
+					return fmt.Errorf("failed to get binding %s: %w", binding.Name, err)
+				}
+
+				wantBinding := &fleetv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: binding.Name,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:                fleetv1beta1.BindingStateBound,
+						ResourceSnapshotName: resourceSnapshot.Name,
+						TargetCluster:        binding.Spec.TargetCluster,
+						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+							ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+							WhenToApply:      fleetv1beta1.WhenToApplyTypeAlways,
+							WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeAlways,
+							Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
+						},
+					},
+				}
+				if diff := cmp.Diff(
+					gotBinding, wantBinding,
+					ignoreCRBTypeMetaAndStatusFields, ignoreObjectMetaAutoGenFields,
+					// For this spec, labels and annotations are irrelevant.
+					cmpopts.IgnoreFields(metav1.ObjectMeta{}, "Labels", "Annotations"),
+				); diff != "" {
+					return fmt.Errorf("binding diff (-got, +want):\n%s", diff)
+				}
+			}
+			return nil
+		}, timeout, interval).Should(Succeed(), "Failed to verify that all the bindings are bound")
+
+		// Update the CRP with a new apply strategy.
+		rolloutCRP.Spec.Strategy.ApplyStrategy = &fleetv1beta1.ApplyStrategy{
+			ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+			WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+			WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeIfNoDiff,
+			Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
+			ServerSideApplyConfig: &fleetv1beta1.ServerSideApplyConfig{
+				ForceConflicts: true,
+			},
+		}
+		Expect(k8sClient.Update(ctx, rolloutCRP)).Should(Succeed(), "Failed to update CRP")
+
+		// Verify that all the bindings are updated with the new apply strategy.
+		Eventually(func() error {
+			for _, binding := range bindings {
+				gotBinding := &fleetv1beta1.ClusterResourceBinding{}
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, gotBinding); err != nil {
+					return fmt.Errorf("failed to get binding %s: %w", binding.Name, err)
+				}
+
+				wantBinding := &fleetv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: binding.Name,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:                fleetv1beta1.BindingStateBound,
+						ResourceSnapshotName: resourceSnapshot.Name,
+						TargetCluster:        binding.Spec.TargetCluster,
+						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+							ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+							WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+							WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeIfNoDiff,
+							Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
+							ServerSideApplyConfig: &fleetv1beta1.ServerSideApplyConfig{
+								ForceConflicts: true,
+							},
+						},
+					},
+				}
+				if diff := cmp.Diff(
+					gotBinding, wantBinding,
+					ignoreCRBTypeMetaAndStatusFields, ignoreObjectMetaAutoGenFields,
+					// For this spec, labels and annotations are irrelevant.
+					cmpopts.IgnoreFields(metav1.ObjectMeta{}, "Labels", "Annotations"),
+				); diff != "" {
+					return fmt.Errorf("binding diff (-got, +want):\n%s", diff)
+				}
+			}
+			return nil
+		}, timeout, interval).Should(Succeed(), "Failed to update all bindings with the new apply strategy")
 	})
 
 	It("Should rollout all the selected bindings when the rollout strategy is not set", func() {
