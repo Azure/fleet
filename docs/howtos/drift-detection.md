@@ -199,7 +199,7 @@ and its details will be reported in the status of the CRP object:
     # uses the jq utility to pretty print the output JSON.
     #
     # jq might not be available in your environment. You may have to install it
-    # seperately, or omit it from the command.
+    # separately, or omit it from the command.
     #
     # If the output is empty, the status might have not been populated properly
     # yet. Retry in a few seconds; you may also want to switch the output type
