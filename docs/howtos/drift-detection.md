@@ -49,16 +49,16 @@ See the steps below for an example; the code assumes that you have a Fleet of tw
           version: v1
           # Select all namespaces with the label app=work.      
           labelSelector:
-              matchLabels:
+            matchLabels:
               app: work
       policy:
-          placementType: PickAll
+        placementType: PickAll
       strategy:
-          # For simplicity reasons, the CRP is configured to roll out changes to
-          # all member clusters at once. This is not a setup recommended for production
-          # use.         
-          type: RollingUpdate
-          rollingUpdate:
+        # For simplicity reasons, the CRP is configured to roll out changes to
+        # all member clusters at once. This is not a setup recommended for production
+        # use.         
+        type: RollingUpdate
+        rollingUpdate:
           maxUnavailable: 100%
           unavailablePeriodSeconds: 1            
     EOF
@@ -153,18 +153,18 @@ illustrated by the steps below:
           version: v1
           # Select all namespaces with the label app=work. 
           labelSelector:
-              matchLabels:
+            matchLabels:
               app: work
       policy:
-          placementType: PickAll
+        placementType: PickAll
       strategy:
-          applyStrategy:
+        applyStrategy:
           whenToApply: IfNotDrifted
-          # For simplicity reasons, the CRP is configured to roll out changes to
-          # all member clusters at once. This is not a setup recommended for production
-          # use.      
-          type: RollingUpdate
-          rollingUpdate:
+        # For simplicity reasons, the CRP is configured to roll out changes to
+        # all member clusters at once. This is not a setup recommended for production
+        # use.      
+        type: RollingUpdate
+        rollingUpdate:
           maxUnavailable: 100%
           unavailablePeriodSeconds: 1                
     EOF
