@@ -34,7 +34,7 @@ differences are found. Consider using this option for a safer adoption journey.
 
 ## How Fleet can be used to safely take over pre-existing resources
 
-The steps below explains how the takeover experience functions. The code assumes that you have
+The steps below explain how the takeover experience functions. The code assumes that you have
 a fleet of two clusters, `member-1` and `member-2`:
 
 * Switch to the first member cluster, and create a namespace, `work-2`, with labels:
@@ -63,28 +63,28 @@ a fleet of two clusters, `member-1` and `member-2`:
     apiVersion: placement.kubernetes-fleet.io/v1beta1
     kind: ClusterResourcePlacement
     metadata:
-    name: work-2
+      name: work-2
     spec:
-    resourceSelectors:
+      resourceSelectors:
         - group: ""
-        kind: Namespace
-        version: v1
-        # Select all namespaces with the label app=work. 
-        labelSelector:
+          kind: Namespace
+          version: v1
+          # Select all namespaces with the label app=work. 
+          labelSelector:
             matchLabels:
-            app: work-2
-    policy:
+              app: work-2
+      policy:
         placementType: PickAll
-    strategy:
+      strategy:
         # For simplicity reasons, the CRP is configured to roll out changes to
         # all member clusters at once. This is not a setup recommended for production
         # use.      
         type: RollingUpdate
         rollingUpdate:
-        maxUnavailable: 100%
-        unavailablePeriodSeconds: 1
+          maxUnavailable: 100%
+          unavailablePeriodSeconds: 1
         applyStrategy:
-        whenToTakeOver: IfNoDiff
+          whenToTakeOver: IfNoDiff
     EOF
     ```
 
@@ -95,8 +95,8 @@ a fleet of two clusters, `member-1` and `member-2`:
     # The command above uses JSON paths to query the drift details directly and
     # uses the jq utility to pretty print the output JSON.
     #
-    # If your system does not have jq installed, consider installing it, or drop
-    # it from the command.
+    # jq might not be available in your environment. You may have to install it
+    # separately, or omit it from the command.
     #
     # If the output is empty, the status might have not been populated properly
     # yet. You can switch the output type from jsonpath to yaml to see the full
@@ -124,8 +124,8 @@ configuration differences as well:
     # The command above uses JSON paths to query the drift details directly and
     # uses the jq utility to pretty print the output JSON.
     #
-    # If your system does not have jq installed, consider installing it, or drop
-    # it from the command.
+    # jq might not be available in your environment. You may have to install it
+    # separately, or omit it from the command.
     #
     # If the output is empty, the status might have not been populated properly
     # yet. You can switch the output type from jsonpath to yaml to see the full
@@ -168,7 +168,7 @@ configuration differences as well:
 
 * To fix the configuration difference, consider one of the following options:
 
-    * Switch the whenToTakeOver setting back to Always, which will instruct Fleet to take over the resource right away and overwrite all configuration differences; or
+    * Switch the `whenToTakeOver` setting back to `Always`, which will instruct Fleet to take over the resource right away and overwrite all configuration differences; or
     * Edit the diff'd field directly on the member cluster side, so that the value is consistent with that on the hub cluster; Fleet will periodically re-evaluate diffs and should take over the resource soon after.
     * Delete the resource from the member cluster. Fleet will then re-apply the resource template and re-create the resource.
 
@@ -178,7 +178,7 @@ configuration differences as well:
 
 ## Takeover and comparison options
 
-> See the how-to guide on drift detection for an explaination on comparison options.
+> See the how-to guide on drift detection for an explanation on comparison options.
 
 The `comparisonOptions` setting applies to the takeover process as well.
 If `partialComparison` is used, Fleet will only report configuration differences in the managed
@@ -194,6 +194,3 @@ Below is the synergy table that summarizes the combos and their respective effec
 | `IfNoDiff` | `partialComparison` | The pre-existing resource has a field that is absent on the hub cluster resource template. | Fleet will take over the resource; the configuration difference in the unmanaged field will be left untouched. |
 | `IfNoDiff` | `fullComparison` | **Difference has been found on a field, managed or not.** | Fleet will report an apply error in the status, plus the diff details. |
 | `Always` | any option | Difference has been found on a field, managed or not. | Fleet will take over the resource; configuration differences in unmanaged fields will be left untouched. |
-
-
-
