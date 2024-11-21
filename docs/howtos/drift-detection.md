@@ -44,7 +44,7 @@ See the steps below for an example; the code assumes that you have a Fleet of tw
     name: work
     spec:
     resourceSelectors:
-        - group: ""
+      - group: ""
         kind: Namespace
         version: v1
         # Select all namespaces with the label app=work.      
@@ -179,7 +179,7 @@ illustrated by the steps below:
     this setting, Fleet will check for drifts periodically; if drifts are found, Fleet will stop
     applying the resource templates and report in the CRP status.
 
-* witch to the first member cluster and edit the labels for a second time, effectively introducing
+* Switch to the first member cluster and edit the labels for a second time, effectively introducing
 a drift in the system. After it's done, switch back to the hub cluster:
 
     ```sh
@@ -245,9 +245,13 @@ and its details will be reported in the status of the CRP object:
 
 * To fix the drift, consider one of the following options:
 
-    * Switch the whenToApply setting back to Always, which will instruct Fleet to overwrite the drifts using values from the hub cluster resource template; or
-    * Edit the drifted field directly on the member cluster side, so that the value is consistent with that on the hub cluster; Fleet will periodically re-evaluate drifts and should report that no drifts are found soon after.
-    * Delete the resource from the member cluster. Fleet will then re-apply the resource template and re-create the resource.
+    * Switch the `whenToApply` setting back to `Always`, which will instruct Fleet to overwrite
+    the drifts using values from the hub cluster resource template; or
+    * Edit the drifted field directly on the member cluster side, so that the value is
+    consistent with that on the hub cluster; Fleet will periodically re-evaluate drifts
+    and should report that no drifts are found soon after.
+    * Delete the resource from the member cluster. Fleet will then re-apply the resource
+    template and re-create the resource.
 
     > Important:
     >
@@ -262,7 +266,7 @@ template. If a field is not populated on the hub cluster side, Fleet will not re
 presence on the member cluster side as a drift. This allows controllers on the member cluster
 side to manage some fields automatically without Fleet's involvement; for example, one might would
 like to use an HPA solution to auto-scale Deployments as appropriate and consequently decide not
-to include the `.spec.replicas field` in the resource template.
+to include the `.spec.replicas` field in the resource template.
 
 Fleet recognizes that there might be cases where developers and admins would like to have their
 resources look exactly the same across their fleet. If this scenario applies, one might set up
