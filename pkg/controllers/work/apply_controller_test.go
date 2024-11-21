@@ -1824,7 +1824,7 @@ func TestApplyUnstructuredAndTrackAvailability(t *testing.T) {
 				AllowCoOwnership: testCase.allowCoOwnership,
 			}
 			// Certain path of the applyUnstructuredAndTrackAvailability method will attempt
-			// to set default values of the retrieve apply strategy from the mock Work object and
+			// to set default values of the retrieved apply strategy from the mock Work object and
 			// compare it with the passed-in apply strategy.
 			// To keep things consistent, here the test spec sets the passed-in apply strategy
 			// as well.
