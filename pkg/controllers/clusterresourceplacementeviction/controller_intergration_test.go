@@ -58,7 +58,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 		})
 
 		It("Check eviction status", func() {
-			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: false, msg: evictionInvalidMissingCRP}, nil)
+			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: false, msg: evictionInvalidMissingCRPMessage}, nil)
 			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -85,7 +85,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 		})
 
 		It("Check eviction status", func() {
-			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: false, msg: evictionInvalidMissingCRB}, nil)
+			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: false, msg: "Failed to find scheduler decision for placement in cluster targeted by eviction"}, nil)
 			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -158,7 +158,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 		})
 
 		It("Check eviction status", func() {
-			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: false, msg: evictionInvalidMultipleCRB}, nil)
+			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: false, msg: "Found more than one scheduler decision for placement in cluster targeted by eviction"}, nil)
 			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -233,7 +233,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 		})
 
 		It("Check eviction status", func() {
-			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValid}, &isExecutedEviction{bool: true, msg: evictionAllowedPlacementFailed})
+			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValidMessage}, &isExecutedEviction{bool: true, msg: evictionAllowedPlacementFailedMessage})
 			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -312,7 +312,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 		})
 
 		It("Check eviction status", func() {
-			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValid}, &isExecutedEviction{bool: true, msg: evictionAllowedPlacementFailed})
+			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValidMessage}, &isExecutedEviction{bool: true, msg: evictionAllowedPlacementFailedMessage})
 			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -375,7 +375,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 		})
 
 		It("Check eviction status", func() {
-			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValid}, &isExecutedEviction{bool: true, msg: evictionAllowedNoPDB})
+			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValidMessage}, &isExecutedEviction{bool: true, msg: evictionAllowedNoPDBMessage})
 			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -457,7 +457,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 		})
 
 		It("Check eviction status", func() {
-			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValid}, &isExecutedEviction{bool: false, msg: fmt.Sprintf(evictionBlockedPDBSpecified, 0, 0, 1, 1)})
+			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValidMessage}, &isExecutedEviction{bool: false, msg: fmt.Sprintf(evictionBlockedPDBSpecifiedFmt, 0, 1, 1)})
 			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -556,7 +556,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 		})
 
 		It("Check eviction status", func() {
-			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValid}, &isExecutedEviction{bool: true, msg: fmt.Sprintf(evictionAllowedPDBSpecified, 1, 1, 1, 1)})
+			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValidMessage}, &isExecutedEviction{bool: true, msg: fmt.Sprintf(evictionAllowedPDBSpecifiedFmt, 1, 1, 1)})
 			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -639,7 +639,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 		})
 
 		It("Check eviction status", func() {
-			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValid}, &isExecutedEviction{bool: false, msg: fmt.Sprintf(evictionBlockedPDBSpecified, 0, 0, 1, 1)})
+			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValidMessage}, &isExecutedEviction{bool: false, msg: fmt.Sprintf(evictionBlockedPDBSpecifiedFmt, 0, 1, 1)})
 			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -761,7 +761,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 		})
 
 		It("Check eviction status", func() {
-			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValid}, &isExecutedEviction{bool: true, msg: fmt.Sprintf(evictionAllowedPDBSpecified, 1, 2, 2, 2)})
+			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValidMessage}, &isExecutedEviction{bool: true, msg: fmt.Sprintf(evictionAllowedPDBSpecifiedFmt, 2, 2, 2)})
 			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -807,7 +807,7 @@ func evictionStatusUpdatedActual(isValid *isValidEviction, isExecuted *isExecute
 					Type:               string(placementv1alpha1.PlacementEvictionConditionTypeValid),
 					Status:             metav1.ConditionTrue,
 					ObservedGeneration: eviction.GetGeneration(),
-					Reason:             reasonClusterResourcePlacementEvictionValid,
+					Reason:             clusterResourcePlacementEvictionValidReason,
 					Message:            isValid.msg,
 				}
 				conditions = append(conditions, validCondition)
@@ -816,7 +816,7 @@ func evictionStatusUpdatedActual(isValid *isValidEviction, isExecuted *isExecute
 					Type:               string(placementv1alpha1.PlacementEvictionConditionTypeValid),
 					Status:             metav1.ConditionFalse,
 					ObservedGeneration: eviction.GetGeneration(),
-					Reason:             reasonClusterResourcePlacementEvictionInvalid,
+					Reason:             clusterResourcePlacementEvictionInvalidReason,
 					Message:            isValid.msg,
 				}
 				conditions = append(conditions, invalidCondition)
@@ -828,7 +828,7 @@ func evictionStatusUpdatedActual(isValid *isValidEviction, isExecuted *isExecute
 					Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
 					Status:             metav1.ConditionTrue,
 					ObservedGeneration: eviction.GetGeneration(),
-					Reason:             reasonClusterResourcePlacementEvictionExecuted,
+					Reason:             clusterResourcePlacementEvictionExecutedReason,
 					Message:            isExecuted.msg,
 				}
 				conditions = append(conditions, executedCondition)
@@ -837,7 +837,7 @@ func evictionStatusUpdatedActual(isValid *isValidEviction, isExecuted *isExecute
 					Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
 					Status:             metav1.ConditionFalse,
 					ObservedGeneration: eviction.GetGeneration(),
-					Reason:             reasonClusterResourcePlacementEvictionNotExecuted,
+					Reason:             clusterResourcePlacementEvictionNotExecutedReason,
 					Message:            isExecuted.msg,
 				}
 				conditions = append(conditions, notExecutedCondition)

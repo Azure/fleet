@@ -33,7 +33,7 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/work"
-	"go.goms.io/fleet/pkg/utils"
+	bindingutils "go.goms.io/fleet/pkg/utils/binding"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/defaulter"
@@ -343,7 +343,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 		bindingKObj := klog.KObj(binding)
 		switch binding.Spec.State {
 		case fleetv1beta1.BindingStateUnscheduled:
-			if utils.HasBindingFailed(binding) {
+			if bindingutils.HasBindingFailed(binding) {
 				klog.V(3).InfoS("Found a failed to be ready unscheduled binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 			} else {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
@@ -390,7 +390,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 				}
 			}
 			// check if the binding is failed or still on going
-			if utils.HasBindingFailed(binding) {
+			if bindingutils.HasBindingFailed(binding) {
 				klog.V(3).InfoS("Found a failed to be ready bound binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 				bindingFailed = true
 			} else {

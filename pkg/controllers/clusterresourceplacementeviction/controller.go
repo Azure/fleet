@@ -21,26 +21,24 @@ import (
 
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
+	bindingutils "go.goms.io/fleet/pkg/utils/binding"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 const (
-	reasonClusterResourcePlacementEvictionValid       = "ClusterResourcePlacementEvictionValid"
-	reasonClusterResourcePlacementEvictionInvalid     = "ClusterResourcePlacementEvictionInvalid"
-	reasonClusterResourcePlacementEvictionExecuted    = "ClusterResourcePlacementEvictionExecuted"
-	reasonClusterResourcePlacementEvictionNotExecuted = "ClusterResourcePlacementEvictionNotExecuted"
+	clusterResourcePlacementEvictionValidReason       = "ClusterResourcePlacementEvictionValid"
+	clusterResourcePlacementEvictionInvalidReason     = "ClusterResourcePlacementEvictionInvalid"
+	clusterResourcePlacementEvictionExecutedReason    = "ClusterResourcePlacementEvictionExecuted"
+	clusterResourcePlacementEvictionNotExecutedReason = "ClusterResourcePlacementEvictionNotExecuted"
 
-	evictionInvalidMissingCRP      = "Failed to find cluster resource placement targeted by eviction"
-	evictionInvalidMissingCRB      = "Failed to find cluster resource binding for cluster targeted by eviction"
-	evictionInvalidMultipleCRB     = "Found more than one ClusterResourceBinding for cluster targeted by eviction"
-	evictionValid                  = "Eviction is valid"
-	evictionAllowedNoPDB           = "Eviction Allowed, no ClusterResourcePlacementDisruptionBudget specified"
-	evictionAllowedPlacementFailed = "Eviction Allowed, placement has failed"
+	evictionInvalidMissingCRPMessage      = "Failed to find ClusterResourcePlacement targeted by eviction"
+	evictionValidMessage                  = "Eviction is valid"
+	evictionAllowedNoPDBMessage           = "Eviction Allowed, no ClusterResourcePlacementDisruptionBudget specified"
+	evictionAllowedPlacementFailedMessage = "Eviction Allowed, placement has failed"
 
-	evictionAllowedPDBSpecified = "Eviction is allowed by specified ClusterResourcePlacementDisruptionBudget, disruptionsAllowed: %d, availableBindings: %d, desiredBindings: %d, totalBindings: %d"
-	evictionBlockedPDBSpecified = "Eviction is blocked by specified ClusterResourcePlacementDisruptionBudget, disruptionsAllowed: %d, availableBindings: %d, desiredBindings: %d, totalBindings: %d"
+	evictionAllowedPDBSpecifiedFmt = "Eviction is allowed by specified ClusterResourcePlacementDisruptionBudget, availablePlacements: %d, desiredPlacements: %d, totalPlacements: %d"
+	evictionBlockedPDBSpecifiedFmt = "Eviction is blocked by specified ClusterResourcePlacementDisruptionBudget, availablePlacements: %d, desiredPlacements: %d, totalPlacements: %d"
 )
 
 // Reconciler reconciles a ClusterResourcePlacementEviction object.
@@ -85,8 +83,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		isCRPPresent = false
 	}
 	if !isCRPPresent {
-		klog.V(2).InfoS(evictionInvalidMissingCRP, "clusterResourcePlacementEviction", evictionName, "clusterResourcePlacement", eviction.Spec.PlacementName)
-		markEvictionInvalid(&eviction, evictionInvalidMissingCRP)
+		klog.V(2).InfoS(evictionInvalidMissingCRPMessage, "clusterResourcePlacementEviction", evictionName, "clusterResourcePlacement", eviction.Spec.PlacementName)
+		markEvictionInvalid(&eviction, evictionInvalidMissingCRPMessage)
 		return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
 	}
 
@@ -101,26 +99,26 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 			if evictionTargetBinding == nil {
 				evictionTargetBinding = &crbList.Items[i]
 			} else {
-				klog.V(2).InfoS(evictionInvalidMultipleCRB, "clusterResourcePlacementEviction", evictionName, "clusterResourcePlacement", eviction.Spec.PlacementName)
-				markEvictionInvalid(&eviction, evictionInvalidMultipleCRB)
+				klog.V(2).InfoS("Found more than one cluster resource binding for cluster targeted by eviction", "clusterResourcePlacementEviction", evictionName, "clusterResourcePlacement", eviction.Spec.PlacementName)
+				markEvictionInvalid(&eviction, "Found more than one scheduler decision for placement in cluster targeted by eviction")
 				return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
 			}
 		}
 	}
 	if evictionTargetBinding == nil {
-		klog.V(2).InfoS(evictionInvalidMissingCRB, "clusterResourcePlacementEviction", evictionName, "clusterName", eviction.Spec.ClusterName)
-		markEvictionInvalid(&eviction, evictionInvalidMissingCRB)
+		klog.V(2).InfoS("Failed to find cluster resource binding for cluster targeted by eviction", "clusterResourcePlacementEviction", evictionName, "clusterName", eviction.Spec.ClusterName)
+		markEvictionInvalid(&eviction, "Failed to find scheduler decision for placement in cluster targeted by eviction")
 		return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
 	}
 
 	markEvictionValid(&eviction)
 
 	// Check to see if binding has failed. If so no need to check disruption budget we can evict.
-	if utils.HasBindingFailed(evictionTargetBinding) {
+	if bindingutils.HasBindingFailed(evictionTargetBinding) {
 		if err := r.deleteClusterResourceBinding(ctx, evictionTargetBinding); err != nil {
 			return runtime.Result{}, err
 		}
-		markEvictionExecuted(&eviction, evictionAllowedPlacementFailed)
+		markEvictionExecuted(&eviction, evictionAllowedPlacementFailedMessage)
 		return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
 	}
 
@@ -137,7 +135,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		if err := r.deleteClusterResourceBinding(ctx, evictionTargetBinding); err != nil {
 			return runtime.Result{}, err
 		}
-		markEvictionExecuted(&eviction, evictionAllowedNoPDB)
+		markEvictionExecuted(&eviction, evictionAllowedNoPDBMessage)
 		return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
 	}
 
@@ -153,14 +151,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	}
 
 	totalBindings := len(bindingList)
-	allowed, disruptionsAllowed, availableBindings := isEvictionAllowed(desiredBindings, bindingList, db)
+	allowed, availableBindings := isEvictionAllowed(desiredBindings, bindingList, db)
 	if allowed {
 		if err := r.deleteClusterResourceBinding(ctx, evictionTargetBinding); err != nil {
 			return runtime.Result{}, err
 		}
-		markEvictionExecuted(&eviction, fmt.Sprintf(evictionAllowedPDBSpecified, disruptionsAllowed, availableBindings, desiredBindings, totalBindings))
+		markEvictionExecuted(&eviction, fmt.Sprintf(evictionAllowedPDBSpecifiedFmt, availableBindings, desiredBindings, totalBindings))
 	} else {
-		markEvictionNotExecuted(&eviction, fmt.Sprintf(evictionBlockedPDBSpecified, disruptionsAllowed, availableBindings, desiredBindings, totalBindings))
+		markEvictionNotExecuted(&eviction, fmt.Sprintf(evictionBlockedPDBSpecifiedFmt, availableBindings, desiredBindings, totalBindings))
 	}
 
 	return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
@@ -189,7 +187,7 @@ func (r *Reconciler) deleteClusterResourceBinding(ctx context.Context, binding *
 }
 
 // isEvictionAllowed calculates if eviction allowed based on available bindings and spec specified in placement disruption budget.
-func isEvictionAllowed(desiredBindings int, bindings []placementv1beta1.ClusterResourceBinding, db placementv1alpha1.ClusterResourcePlacementDisruptionBudget) (bool, int, int) {
+func isEvictionAllowed(desiredBindings int, bindings []placementv1beta1.ClusterResourceBinding, db placementv1alpha1.ClusterResourcePlacementDisruptionBudget) (bool, int) {
 	availableBindings := 0
 	for i := range bindings {
 		availableCondition := bindings[i].GetCondition(string(placementv1beta1.ResourceBindingAvailable))
@@ -210,7 +208,7 @@ func isEvictionAllowed(desiredBindings int, bindings []placementv1beta1.ClusterR
 	if disruptionsAllowed < 0 {
 		disruptionsAllowed = 0
 	}
-	return disruptionsAllowed > 0, disruptionsAllowed, availableBindings
+	return disruptionsAllowed > 0, availableBindings
 }
 
 // calculateSchedulerTargetedBindings returns the count of bindings targeted by the scheduler.
@@ -230,8 +228,8 @@ func markEvictionValid(eviction *placementv1alpha1.ClusterResourcePlacementEvict
 		Type:               string(placementv1alpha1.PlacementEvictionConditionTypeValid),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: eviction.Generation,
-		Reason:             reasonClusterResourcePlacementEvictionValid,
-		Message:            evictionValid,
+		Reason:             clusterResourcePlacementEvictionValidReason,
+		Message:            evictionValidMessage,
 	}
 	eviction.SetConditions(cond)
 }
@@ -242,7 +240,7 @@ func markEvictionInvalid(eviction *placementv1alpha1.ClusterResourcePlacementEvi
 		Type:               string(placementv1alpha1.PlacementEvictionConditionTypeValid),
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: eviction.Generation,
-		Reason:             reasonClusterResourcePlacementEvictionInvalid,
+		Reason:             clusterResourcePlacementEvictionInvalidReason,
 		Message:            message,
 	}
 	eviction.SetConditions(cond)
@@ -254,7 +252,7 @@ func markEvictionExecuted(eviction *placementv1alpha1.ClusterResourcePlacementEv
 		Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: eviction.Generation,
-		Reason:             reasonClusterResourcePlacementEvictionExecuted,
+		Reason:             clusterResourcePlacementEvictionExecutedReason,
 		Message:            message,
 	}
 	eviction.SetConditions(cond)
@@ -266,7 +264,7 @@ func markEvictionNotExecuted(eviction *placementv1alpha1.ClusterResourcePlacemen
 		Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: eviction.Generation,
-		Reason:             reasonClusterResourcePlacementEvictionNotExecuted,
+		Reason:             clusterResourcePlacementEvictionNotExecutedReason,
 		Message:            message,
 	}
 	eviction.SetConditions(cond)
@@ -274,8 +272,9 @@ func markEvictionNotExecuted(eviction *placementv1alpha1.ClusterResourcePlacemen
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
+	// TODO(arvind): Increase max concurrent reconcile count, use map in PDB status to keep track of ongoing evictions.
 	return runtime.NewControllerManagedBy(mgr).
-		WithOptions(ctrl.Options{MaxConcurrentReconciles: 1}). // set the max number of concurrent reconciles
+		WithOptions(ctrl.Options{MaxConcurrentReconciles: 1}). // max concurrent reconciles is currently set to 1 for concurrency control.
 		For(&placementv1alpha1.ClusterResourcePlacementEviction{}).
 		Complete(r)
 }

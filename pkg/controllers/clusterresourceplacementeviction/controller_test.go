@@ -92,13 +92,12 @@ func TestIsEvictionAllowed(t *testing.T) {
 		},
 	}
 	tests := []struct {
-		name                   string
-		targetNumber           int
-		bindings               []placementv1beta1.ClusterResourceBinding
-		disruptionBudget       placementv1alpha1.ClusterResourcePlacementDisruptionBudget
-		wantAllowed            bool
-		wantDisruptionsAllowed int
-		wantAvailableBindings  int
+		name                  string
+		targetNumber          int
+		bindings              []placementv1beta1.ClusterResourceBinding
+		disruptionBudget      placementv1alpha1.ClusterResourcePlacementDisruptionBudget
+		wantAllowed           bool
+		wantAvailableBindings int
 	}{
 		{
 			name:         "MaxUnavailable specified as Integer zero, one available binding - block eviction",
@@ -115,9 +114,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  1,
+			wantAllowed:           false,
+			wantAvailableBindings: 1,
 		},
 		{
 			name:         "MaxUnavailable specified as Integer zero, one unavailable bindings - block eviction",
@@ -134,9 +132,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  0,
+			wantAllowed:           false,
+			wantAvailableBindings: 0,
 		},
 		{
 			name:         "MaxUnavailable specified as Integer one, one unavailable binding - block eviction",
@@ -153,9 +150,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  0,
+			wantAllowed:           false,
+			wantAvailableBindings: 0,
 		},
 		{
 			name:         "MaxUnavailable specified as Integer one, one available binding - allow eviction",
@@ -172,9 +168,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            true,
-			wantDisruptionsAllowed: 1,
-			wantAvailableBindings:  1,
+			wantAllowed:           true,
+			wantAvailableBindings: 1,
 		},
 		{
 			name:         "MaxUnavailable specified as Integer one, one available, one unavailable binding - block eviction",
@@ -191,9 +186,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  1,
+			wantAllowed:           false,
+			wantAvailableBindings: 1,
 		},
 		{
 			name:         "MaxUnavailable specified as Integer one, two available binding - allow eviction",
@@ -210,9 +204,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            true,
-			wantDisruptionsAllowed: 1,
-			wantAvailableBindings:  2,
+			wantAllowed:           true,
+			wantAvailableBindings: 2,
 		},
 		{
 			name:         "MaxUnavailable specified as Integer greater than one - block eviction",
@@ -229,9 +222,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  2,
+			wantAllowed:           false,
+			wantAvailableBindings: 2,
 		},
 		{
 			name:         "MaxUnavailable specified as Integer greater than one - allow eviction",
@@ -248,9 +240,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            true,
-			wantDisruptionsAllowed: 1,
-			wantAvailableBindings:  2,
+			wantAllowed:           true,
+			wantAvailableBindings: 2,
 		},
 		{
 			name:         "MaxUnavailable specified as Integer large number greater than target number - allows eviction",
@@ -267,9 +258,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            true,
-			wantDisruptionsAllowed: 8,
-			wantAvailableBindings:  2,
+			wantAllowed:           true,
+			wantAvailableBindings: 2,
 		},
 		{
 			name:         "MaxUnavailable specified as percentage zero - block eviction",
@@ -286,9 +276,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  2,
+			wantAllowed:           false,
+			wantAvailableBindings: 2,
 		},
 		{
 			name:         "MaxUnavailable specified as percentage greater than zero, rounds up to 1 - block eviction",
@@ -305,9 +294,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  0,
+			wantAllowed:           false,
+			wantAvailableBindings: 0,
 		},
 		{
 			name:         "MaxUnavailable specified as percentage greater than zero, rounds up to 1 - allow eviction",
@@ -324,9 +312,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            true,
-			wantDisruptionsAllowed: 1,
-			wantAvailableBindings:  1,
+			wantAllowed:           true,
+			wantAvailableBindings: 1,
 		},
 		{
 			name:         "MaxUnavailable specified as percentage greater than zero, rounds up to greater than 1 - block eviction",
@@ -343,9 +330,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  2,
+			wantAllowed:           false,
+			wantAvailableBindings: 2,
 		},
 		{
 			name:         "MaxUnavailable specified as percentage greater than zero, rounds up to greater than 1 - allow eviction",
@@ -362,9 +348,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            true,
-			wantDisruptionsAllowed: 1,
-			wantAvailableBindings:  2,
+			wantAllowed:           true,
+			wantAvailableBindings: 2,
 		},
 		{
 			name:         "MaxUnavailable specified as percentage hundred, target number greater than bindings - allow eviction",
@@ -381,9 +366,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            true,
-			wantDisruptionsAllowed: 8,
-			wantAvailableBindings:  3,
+			wantAllowed:           true,
+			wantAvailableBindings: 3,
 		},
 		{
 			name:         "MaxUnavailable specified as percentage hundred, target number equal to bindings - block eviction",
@@ -400,9 +384,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  0,
+			wantAllowed:           false,
+			wantAvailableBindings: 0,
 		},
 		{
 			name:         "MaxUnavailable specified as percentage hundred, target number equal to bindings - allow eviction",
@@ -419,9 +402,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            true,
-			wantDisruptionsAllowed: 2,
-			wantAvailableBindings:  2,
+			wantAllowed:           true,
+			wantAvailableBindings: 2,
 		},
 		{
 			name:         "MinAvailable specified as Integer zero, unavailable binding - block eviction",
@@ -438,9 +420,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  0,
+			wantAllowed:           false,
+			wantAvailableBindings: 0,
 		},
 		{
 			name:         "MinAvailable specified as Integer zero, available binding - allow eviction",
@@ -457,9 +438,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            true,
-			wantDisruptionsAllowed: 1,
-			wantAvailableBindings:  1,
+			wantAllowed:           true,
+			wantAvailableBindings: 1,
 		},
 		{
 			name:         "MinAvailable specified as Integer one, unavailable binding - block eviction",
@@ -476,9 +456,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  0,
+			wantAllowed:           false,
+			wantAvailableBindings: 0,
 		},
 		{
 			name:         "MinAvailable specified as Integer one, available binding - block eviction",
@@ -495,9 +474,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  1,
+			wantAllowed:           false,
+			wantAvailableBindings: 1,
 		},
 		{
 			name:         "MinAvailable specified as Integer one, one available, one unavailable binding - block eviction",
@@ -514,9 +492,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  1,
+			wantAllowed:           false,
+			wantAvailableBindings: 1,
 		},
 		{
 			name:         "MinAvailable specified as Integer one, two available bindings - allow eviction",
@@ -533,9 +510,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            true,
-			wantDisruptionsAllowed: 1,
-			wantAvailableBindings:  2,
+			wantAllowed:           true,
+			wantAvailableBindings: 2,
 		},
 		{
 			name:         "MinAvailable specified as Integer greater than one - block eviction",
@@ -552,9 +528,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  2,
+			wantAllowed:           false,
+			wantAvailableBindings: 2,
 		},
 		{
 			name:         "MinAvailable specified as Integer greater than one - allow eviction",
@@ -571,9 +546,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            true,
-			wantDisruptionsAllowed: 1,
-			wantAvailableBindings:  3,
+			wantAllowed:           true,
+			wantAvailableBindings: 3,
 		},
 		{
 			name:         "MinAvailable specified as Integer large number greater than target number - blocks eviction",
@@ -590,9 +564,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  3,
+			wantAllowed:           false,
+			wantAvailableBindings: 3,
 		},
 		{
 			name:         "MinAvailable specified as percentage zero, all bindings are unavailable - block eviction",
@@ -609,9 +582,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  0,
+			wantAllowed:           false,
+			wantAvailableBindings: 0,
 		},
 		{
 			name:         "MinAvailable specified as percentage zero, all bindings are available - allow eviction",
@@ -628,9 +600,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            true,
-			wantDisruptionsAllowed: 3,
-			wantAvailableBindings:  3,
+			wantAllowed:           true,
+			wantAvailableBindings: 3,
 		},
 		{
 			name:         "MinAvailable specified as percentage rounds upto one - block eviction",
@@ -647,9 +618,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  0,
+			wantAllowed:           false,
+			wantAvailableBindings: 0,
 		},
 		{
 			name:         "MinAvailable specified as percentage rounds upto one - allow eviction",
@@ -666,9 +636,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            true,
-			wantDisruptionsAllowed: 1,
-			wantAvailableBindings:  2,
+			wantAllowed:           true,
+			wantAvailableBindings: 2,
 		},
 		{
 			name:         "MinAvailable specified as percentage greater than zero, rounds up to greater than 1 - block eviction",
@@ -685,9 +654,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  2,
+			wantAllowed:           false,
+			wantAvailableBindings: 2,
 		},
 		{
 			name:         "MinAvailable specified as percentage greater than zero, rounds up to greater than 1 - allow eviction",
@@ -704,9 +672,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            true,
-			wantDisruptionsAllowed: 1,
-			wantAvailableBindings:  3,
+			wantAllowed:           true,
+			wantAvailableBindings: 3,
 		},
 		{
 			name:         "MinAvailable specified as percentage hundred, bindings less than target number - block eviction",
@@ -723,9 +690,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  2,
+			wantAllowed:           false,
+			wantAvailableBindings: 2,
 		},
 		{
 			name:         "MinAvailable specified as percentage hundred, bindings equal to target number  - block eviction",
@@ -742,9 +708,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            false,
-			wantDisruptionsAllowed: 0,
-			wantAvailableBindings:  3,
+			wantAllowed:           false,
+			wantAvailableBindings: 3,
 		},
 		{
 			name:         "MinAvailable specified as percentage hundred, bindings greater than target number - allow eviction",
@@ -761,19 +726,15 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:            true,
-			wantDisruptionsAllowed: 1,
-			wantAvailableBindings:  3,
+			wantAllowed:           true,
+			wantAvailableBindings: 3,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			gotAllowed, gotDisruptionsAllowed, gotAvailableBindings := isEvictionAllowed(tc.targetNumber, tc.bindings, tc.disruptionBudget)
+			gotAllowed, gotAvailableBindings := isEvictionAllowed(tc.targetNumber, tc.bindings, tc.disruptionBudget)
 			if gotAllowed != tc.wantAllowed {
 				t.Errorf("isEvictionAllowed test `%s` failed gotAllowed: %v, wantAllowedAllowed: %v", tc.name, gotAllowed, tc.wantAllowed)
-			}
-			if gotDisruptionsAllowed != tc.wantDisruptionsAllowed {
-				t.Errorf("isEvictionAllowed test `%s` failed gotDisruptionsAllowed: %v, wantDisruptionsAllowed: %v", tc.name, gotDisruptionsAllowed, tc.wantDisruptionsAllowed)
 			}
 			if gotAvailableBindings != tc.wantAvailableBindings {
 				t.Errorf("isEvictionAllowed test `%s` failed gotAvailableBindings: %v, wantAvailableBindings: %v", tc.name, gotAvailableBindings, tc.wantAvailableBindings)
