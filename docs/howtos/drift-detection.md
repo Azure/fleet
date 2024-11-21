@@ -89,7 +89,7 @@ See the steps below for an example; the code assumes that you have a Fleet of tw
 
     ```
     NAME     STATUS   AGE   LABELS
-    work-1   Active   91m   app=work,owner=redfield,kubernetes.io/metadata.name=work-1
+    work     Active   91m   app=work,owner=redfield,kubernetes.io/metadata.name=work
     ```
 
 * Anyone with proper access to the member cluster could modify the namespace as they want;
@@ -198,12 +198,12 @@ and its details will be reported in the status of the CRP object:
     # The command above uses JSON paths to query the drift details directly and
     # uses the jq utility to pretty print the output JSON.
     #
-    # If your system does not have jq installed, consider installing it, or drop
-    # it from the command.
+    # jq might not be available in your environment. You may have to install it
+    # seperately, or omit it from the command.
     #
     # If the output is empty, the status might have not been populated properly
-    # yet. You can switch the output type from jsonpath to yaml to see the full
-    # object.
+    # yet. Retry in a few seconds; you may also want to switch the output type
+    # from jsonpath to yaml to see the full object.
     ```
 
     The output should look like this:
