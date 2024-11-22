@@ -199,7 +199,7 @@ func isEvictionAllowed(desiredBindings int, bindings []placementv1beta1.ClusterR
 	switch {
 	case db.Spec.MaxUnavailable != nil:
 		maxUnavailable, _ := intstr.GetScaledValueFromIntOrPercent(db.Spec.MaxUnavailable, desiredBindings, true)
-		unavailableBindings := len(bindings) - availableBindings
+		unavailableBindings := desiredBindings - availableBindings
 		disruptionsAllowed = maxUnavailable - unavailableBindings
 	case db.Spec.MinAvailable != nil:
 		minAvailable, _ := intstr.GetScaledValueFromIntOrPercent(db.Spec.MinAvailable, desiredBindings, true)
