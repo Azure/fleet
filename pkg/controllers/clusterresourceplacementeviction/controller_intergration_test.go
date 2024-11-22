@@ -240,7 +240,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 				if err != nil {
 					return err
 				}
-				crb.SetFinalizers([]string{})
+				crb.SetFinalizers(nil)
 				return k8sClient.Update(ctx, &crb)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 			ensureEvictionRemoved(evictionName)
@@ -269,7 +269,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 					Labels: map[string]string{placementv1beta1.CRPTrackingLabel: crpName},
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
-					State:                        placementv1beta1.BindingStateScheduled,
+					State:                        placementv1beta1.BindingStateBound,
 					ResourceSnapshotName:         "test-resource-snapshot",
 					SchedulingPolicySnapshotName: "test-scheduling-policy-snapshot",
 					TargetCluster:                "test-cluster",
@@ -341,7 +341,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 					Labels: map[string]string{placementv1beta1.CRPTrackingLabel: crpName},
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
-					State:                        placementv1beta1.BindingStateScheduled,
+					State:                        placementv1beta1.BindingStateBound,
 					ResourceSnapshotName:         "test-resource-snapshot",
 					SchedulingPolicySnapshotName: "test-scheduling-policy-snapshot",
 					TargetCluster:                "test-cluster",

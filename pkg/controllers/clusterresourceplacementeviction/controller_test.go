@@ -154,7 +154,7 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 0,
 		},
 		{
-			name:         "MaxUnavailable specified as Integer one, one available binding - allow eviction",
+			name:         "MaxUnavailable specified as Integer one, one available binding, upscaling - allow eviction",
 			targetNumber: 2,
 			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
@@ -206,6 +206,24 @@ func TestIsEvictionAllowed(t *testing.T) {
 			},
 			wantAllowed:           true,
 			wantAvailableBindings: 2,
+		},
+		{
+			name:         "MaxUnavailable specified as Integer one, available bindings greater than target, downscaling - allow eviction",
+			targetNumber: 1,
+			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
+			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-disruption-budget",
+				},
+				Spec: placementv1alpha1.PlacementDisruptionBudgetSpec{
+					MaxUnavailable: &intstr.IntOrString{
+						Type:   intstr.Int,
+						IntVal: 1,
+					},
+				},
+			},
+			wantAllowed:           true,
+			wantAvailableBindings: 3,
 		},
 		{
 			name:         "MaxUnavailable specified as Integer greater than one - block eviction",
@@ -460,7 +478,7 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 0,
 		},
 		{
-			name:         "MinAvailable specified as Integer one, available binding - block eviction",
+			name:         "MinAvailable specified as Integer one, available binding, upscaling - block eviction",
 			targetNumber: 1,
 			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
@@ -514,6 +532,24 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 2,
 		},
 		{
+			name:         "MinAvailable specified as Integer one, available bindings greater than target number, downscaling - allow eviction",
+			targetNumber: 1,
+			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
+			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-disruption-budget",
+				},
+				Spec: placementv1alpha1.PlacementDisruptionBudgetSpec{
+					MinAvailable: &intstr.IntOrString{
+						Type:   intstr.Int,
+						IntVal: 1,
+					},
+				},
+			},
+			wantAllowed:           true,
+			wantAvailableBindings: 3,
+		},
+		{
 			name:         "MinAvailable specified as Integer greater than one - block eviction",
 			targetNumber: 2,
 			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, unScheduledAvailableBinding},
@@ -547,6 +583,24 @@ func TestIsEvictionAllowed(t *testing.T) {
 				},
 			},
 			wantAllowed:           true,
+			wantAvailableBindings: 3,
+		},
+		{
+			name:         "MinAvailable specified as Integer greater than one, available bindings greater than target number, downscaling - block eviction",
+			targetNumber: 1,
+			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
+			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-disruption-budget",
+				},
+				Spec: placementv1alpha1.PlacementDisruptionBudgetSpec{
+					MinAvailable: &intstr.IntOrString{
+						Type:   intstr.Int,
+						IntVal: 3,
+					},
+				},
+			},
+			wantAllowed:           false,
 			wantAvailableBindings: 3,
 		},
 		{
