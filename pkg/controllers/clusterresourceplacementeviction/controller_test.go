@@ -82,7 +82,7 @@ func TestIsEvictionAllowed(t *testing.T) {
 			Labels: map[string]string{placementv1beta1.CRPTrackingLabel: "test-crp"},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
-			State:                        placementv1beta1.BindingStateBound,
+			State:                        placementv1beta1.BindingStateUnscheduled,
 			ResourceSnapshotName:         "test-resource-snapshot",
 			SchedulingPolicySnapshotName: "test-scheduling-policy-snapshot",
 			TargetCluster:                "test-cluster-5",
