@@ -33,6 +33,8 @@ const (
 	clusterResourcePlacementEvictionNotExecutedReason = "ClusterResourcePlacementEvictionNotExecuted"
 
 	evictionInvalidMissingCRPMessage       = "Failed to find ClusterResourcePlacement targeted by eviction"
+	evictionInvalidMissingCRBMessage       = "Failed to find scheduler decision for placement in cluster targeted by eviction"
+	evictionInvalidMultipleCRBMessage      = "Found more than one scheduler decision for placement in cluster targeted by eviction"
 	evictionValidMessage                   = "Eviction is valid"
 	evictionAllowedNoPDBMessage            = "Eviction Allowed, no ClusterResourcePlacementDisruptionBudget specified"
 	evictionAllowedPlacementRemovedMessage = "Eviction Allowed, placement is currently being removed from cluster targeted by eviction"
@@ -100,15 +102,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 			if evictionTargetBinding == nil {
 				evictionTargetBinding = &crbList.Items[i]
 			} else {
-				klog.V(2).InfoS("Found more than one cluster resource binding for cluster targeted by eviction", "clusterResourcePlacementEviction", evictionName, "clusterResourcePlacement", eviction.Spec.PlacementName)
-				markEvictionInvalid(&eviction, "Found more than one scheduler decision for placement in cluster targeted by eviction")
+				klog.V(2).InfoS("Found more than one cluster resource binding for cluster targeted by eviction",
+					"clusterResourcePlacementEviction", evictionName, "clusterResourcePlacement", eviction.Spec.PlacementName)
+				markEvictionInvalid(&eviction, evictionInvalidMultipleCRBMessage)
 				return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
 			}
 		}
 	}
 	if evictionTargetBinding == nil {
-		klog.V(2).InfoS("Failed to find cluster resource binding for cluster targeted by eviction", "clusterResourcePlacementEviction", evictionName, "clusterName", eviction.Spec.ClusterName)
-		markEvictionInvalid(&eviction, "Failed to find scheduler decision for placement in cluster targeted by eviction")
+		klog.V(2).InfoS("Failed to find cluster resource binding for cluster targeted by eviction",
+			"clusterResourcePlacementEviction", evictionName, "targetCluster", eviction.Spec.ClusterName)
+		markEvictionInvalid(&eviction, evictionInvalidMissingCRBMessage)
 		return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
 	}
 
@@ -116,12 +120,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	// Check to see if binding is being deleted.
 	if evictionTargetBinding.GetDeletionTimestamp() != nil {
+		klog.V(2).InfoS("ClusterResourceBinding targeted by eviction is being deleted",
+			"clusterResourcePlacementEviction", evictionName, "clusterResourceBinding", evictionTargetBinding.Name, "targetCluster", eviction.Spec.ClusterName)
 		markEvictionExecuted(&eviction, evictionAllowedPlacementRemovedMessage)
 		return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
 	}
 
 	// Check to see if binding has failed. If so no need to check disruption budget we can evict.
 	if bindingutils.HasBindingFailed(evictionTargetBinding) {
+		klog.V(2).InfoS("ClusterResourceBinding targeted by eviction is in failed state",
+			"clusterResourcePlacementEviction", evictionName, "clusterResourceBinding", evictionTargetBinding.Name, "targetCluster", eviction.Spec.ClusterName)
 		if err := r.deleteClusterResourceBinding(ctx, evictionTargetBinding); err != nil {
 			return runtime.Result{}, err
 		}

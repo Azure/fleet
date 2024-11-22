@@ -85,7 +85,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 		})
 
 		It("Check eviction status", func() {
-			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: false, msg: "Failed to find scheduler decision for placement in cluster targeted by eviction"}, nil)
+			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: false, msg: evictionInvalidMissingCRBMessage}, nil)
 			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -158,7 +158,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, fu
 		})
 
 		It("Check eviction status", func() {
-			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: false, msg: "Found more than one scheduler decision for placement in cluster targeted by eviction"}, nil)
+			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: false, msg: evictionInvalidMultipleCRBMessage}, nil)
 			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
