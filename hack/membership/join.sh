@@ -60,7 +60,7 @@ then
 fi
 
 REGISTRY="${REGISTRY:-mcr.microsoft.com/aks/fleet}"
-FLEET_VERSION="${FLEET_VERSION:-$(curl "https://api.github.com/repos/Azure/fleet/tags" | jq -r '.[0].name')}"
+FLEET_VERSION="${FLEET_VERSION:-v0.11.3}"
 MEMBER_AGENT_IMAGE="${MEMBER_AGENT_NAME:-member-agent}"
 REFRESH_TOKEN_IMAGE="${REFRESH_TOKEN_NAME:-refresh-token}"
 
