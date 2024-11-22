@@ -35,7 +35,7 @@ const (
 	evictionInvalidMissingCRPMessage       = "Failed to find ClusterResourcePlacement targeted by eviction"
 	evictionValidMessage                   = "Eviction is valid"
 	evictionAllowedNoPDBMessage            = "Eviction Allowed, no ClusterResourcePlacementDisruptionBudget specified"
-	evictionAllowedPlacementRemovedMessage = "Eviction Allowed, placement is currently being removed from cluster targeted bu eviction"
+	evictionAllowedPlacementRemovedMessage = "Eviction Allowed, placement is currently being removed from cluster targeted by eviction"
 	evictionAllowedPlacementFailedMessage  = "Eviction Allowed, placement has failed"
 
 	evictionAllowedPDBSpecifiedFmt = "Eviction is allowed by specified ClusterResourcePlacementDisruptionBudget, availablePlacements: %d, desiredPlacements: %d, totalPlacements: %d"
