@@ -168,7 +168,7 @@ func TestIsEvictionAllowed(t *testing.T) {
 					},
 				},
 			},
-			wantAllowed:           false,
+			wantAllowed:           true,
 			wantAvailableBindings: 1,
 		},
 		{

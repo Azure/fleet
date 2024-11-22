@@ -32,10 +32,11 @@ const (
 	clusterResourcePlacementEvictionExecutedReason    = "ClusterResourcePlacementEvictionExecuted"
 	clusterResourcePlacementEvictionNotExecutedReason = "ClusterResourcePlacementEvictionNotExecuted"
 
-	evictionInvalidMissingCRPMessage      = "Failed to find ClusterResourcePlacement targeted by eviction"
-	evictionValidMessage                  = "Eviction is valid"
-	evictionAllowedNoPDBMessage           = "Eviction Allowed, no ClusterResourcePlacementDisruptionBudget specified"
-	evictionAllowedPlacementFailedMessage = "Eviction Allowed, placement has failed"
+	evictionInvalidMissingCRPMessage       = "Failed to find ClusterResourcePlacement targeted by eviction"
+	evictionValidMessage                   = "Eviction is valid"
+	evictionAllowedNoPDBMessage            = "Eviction Allowed, no ClusterResourcePlacementDisruptionBudget specified"
+	evictionAllowedPlacementRemovedMessage = "Eviction Allowed, placement is currently being removed from cluster targeted bu eviction"
+	evictionAllowedPlacementFailedMessage  = "Eviction Allowed, placement has failed"
 
 	evictionAllowedPDBSpecifiedFmt = "Eviction is allowed by specified ClusterResourcePlacementDisruptionBudget, availablePlacements: %d, desiredPlacements: %d, totalPlacements: %d"
 	evictionBlockedPDBSpecifiedFmt = "Eviction is blocked by specified ClusterResourcePlacementDisruptionBudget, availablePlacements: %d, desiredPlacements: %d, totalPlacements: %d"
@@ -112,6 +113,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	}
 
 	markEvictionValid(&eviction)
+
+	// Check to see if binding is being deleted.
+	if evictionTargetBinding.GetDeletionTimestamp() != nil {
+		markEvictionExecuted(&eviction, evictionAllowedPlacementRemovedMessage)
+		return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
+	}
 
 	// Check to see if binding has failed. If so no need to check disruption budget we can evict.
 	if bindingutils.HasBindingFailed(evictionTargetBinding) {
@@ -199,7 +206,7 @@ func isEvictionAllowed(desiredBindings int, bindings []placementv1beta1.ClusterR
 	switch {
 	case db.Spec.MaxUnavailable != nil:
 		maxUnavailable, _ := intstr.GetScaledValueFromIntOrPercent(db.Spec.MaxUnavailable, desiredBindings, true)
-		unavailableBindings := desiredBindings - availableBindings
+		unavailableBindings := len(bindings) - availableBindings
 		disruptionsAllowed = maxUnavailable - unavailableBindings
 	case db.Spec.MinAvailable != nil:
 		minAvailable, _ := intstr.GetScaledValueFromIntOrPercent(db.Spec.MinAvailable, desiredBindings, true)
