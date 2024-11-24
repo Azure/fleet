@@ -8,11 +8,12 @@ package updaterun
 import (
 	"testing"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 )
 
 func TestHandleClusterApprovalRequest(t *testing.T) {

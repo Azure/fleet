@@ -56,6 +56,7 @@ type OverridePolicy struct {
 	// OverrideRules defines an array of override rules to be applied on the selected resources.
 	// The order of the rules determines the override order.
 	// When there are two rules selecting the same fields on the target cluster, the last one will win.
+	// There can only be one override rule if it is a `Delete` type override rule.
 	// You can have 1-20 rules.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
@@ -66,6 +67,12 @@ type OverridePolicy struct {
 
 // OverrideRule defines how to override the selected resources on the target clusters.
 type OverrideRule struct {
+	// OverrideType defines the type of the override rules.
+	// +kubebuilder:validation:Enum=JSONPatch;Delete
+	// +kubebuilder:default:JSONPatch
+	// +optional
+	OverrideType OverrideType `json:"overrideType,omitempty"`
+
 	// ClusterSelectors selects the target clusters.
 	// The resources will be overridden before applying to the matching clusters.
 	// An empty clusterSelector selects ALL the member clusters.
@@ -78,9 +85,20 @@ type OverrideRule struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=20
-	// +required
-	JSONPatchOverrides []JSONPatchOverride `json:"jsonPatchOverrides"`
+	// +optional
+	JSONPatchOverrides []JSONPatchOverride `json:"jsonPatchOverrides,omitempty"`
 }
+
+// OverrideType defines the type of Override
+type OverrideType string
+
+const (
+	// JSONPatchOverrideType applies a JSON patch on the selected resources following [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
+	JSONPatchOverrideType OverrideType = "JSONPatch"
+
+	// DeleteOverrideType deletes the selected resources on the target clusters.
+	DeleteOverrideType OverrideType = "Delete"
+)
 
 // +genclient
 // +genclient:Namespaced
