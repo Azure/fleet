@@ -56,7 +56,6 @@ type OverridePolicy struct {
 	// OverrideRules defines an array of override rules to be applied on the selected resources.
 	// The order of the rules determines the override order.
 	// When there are two rules selecting the same fields on the target cluster, the last one will win.
-	// There can only be one override rule if it is a `Delete` type override rule.
 	// You can have 1-20 rules.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
@@ -67,12 +66,6 @@ type OverridePolicy struct {
 
 // OverrideRule defines how to override the selected resources on the target clusters.
 type OverrideRule struct {
-	// OverrideType defines the type of the override rules.
-	// +kubebuilder:validation:Enum=JSONPatch;Delete
-	// +kubebuilder:default:JSONPatch
-	// +optional
-	OverrideType OverrideType `json:"overrideType,omitempty"`
-
 	// ClusterSelectors selects the target clusters.
 	// The resources will be overridden before applying to the matching clusters.
 	// An empty clusterSelector selects ALL the member clusters.
@@ -81,7 +74,14 @@ type OverrideRule struct {
 	// +optional
 	ClusterSelector *placementv1beta1.ClusterSelector `json:"clusterSelector,omitempty"`
 
+	// OverrideType defines the type of the override rules.
+	// +kubebuilder:validation:Enum=JSONPatch;Delete
+	// +kubebuilder:default:JSONPatch
+	// +optional
+	OverrideType OverrideType `json:"overrideType,omitempty"`
+
 	// JSONPatchOverrides defines a list of JSON patch override rules.
+	// This field is only allowed when OverrideType is JSONPatch.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=20
