@@ -796,8 +796,8 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 			diffedResourcePlacements = diffedResourcePlacements[0:maxDiffedResourcePlacementLimit]
 		}
 
-		resourceBinding.Status.DiffedPlacements = diffedResourcePlacements
 		if len(diffedResourcePlacements) > 0 {
+			resourceBinding.Status.DiffedPlacements = diffedResourcePlacements
 			klog.V(2).InfoS("Populated diffed manifests", "clusterResourceBinding", bindingRef, "numberOfDiffedPlacements", len(diffedResourcePlacements))
 		}
 
@@ -806,8 +806,8 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 			driftedResourcePlacements = driftedResourcePlacements[0:maxDriftedResourcePlacementLimit]
 		}
 
-		resourceBinding.Status.DriftedPlacements = driftedResourcePlacements
 		if len(driftedResourcePlacements) > 0 {
+			resourceBinding.Status.DriftedPlacements = driftedResourcePlacements
 			klog.V(2).InfoS("Populated drifted manifests", "clusterResourceBinding", bindingRef, "numberOfDriftedPlacements", len(driftedResourcePlacements))
 		}
 	}

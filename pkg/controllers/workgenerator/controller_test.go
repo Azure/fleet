@@ -1225,11 +1225,7 @@ func TestSetBindingStatus(t *testing.T) {
 								Conditions: []metav1.Condition{
 									{
 										Type:   fleetv1beta1.WorkConditionTypeApplied,
-										Status: metav1.ConditionTrue,
-									},
-									{
-										Type:   fleetv1beta1.WorkConditionTypeAvailable,
-										Status: metav1.ConditionTrue,
+										Status: metav1.ConditionFalse,
 									},
 								},
 								DriftDetails: &fleetv1beta1.DriftDetails{
@@ -1249,11 +1245,7 @@ func TestSetBindingStatus(t *testing.T) {
 						Conditions: []metav1.Condition{
 							{
 								Type:   fleetv1beta1.WorkConditionTypeApplied,
-								Status: metav1.ConditionTrue,
-							},
-							{
-								Type:   fleetv1beta1.WorkConditionTypeAvailable,
-								Status: metav1.ConditionTrue,
+								Status: metav1.ConditionFalse,
 							},
 						},
 					},
@@ -1313,17 +1305,27 @@ func TestSetBindingStatus(t *testing.T) {
 						Conditions: []metav1.Condition{
 							{
 								Type:   fleetv1beta1.WorkConditionTypeApplied,
-								Status: metav1.ConditionTrue,
-							},
-							{
-								Type:   fleetv1beta1.WorkConditionTypeAvailable,
-								Status: metav1.ConditionTrue,
+								Status: metav1.ConditionFalse,
 							},
 						},
 					},
 				},
 			},
-			wantFailedResourcePlacements:     nil,
+			wantFailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+					Condition: metav1.Condition{
+						Type:   fleetv1beta1.WorkConditionTypeApplied,
+						Status: metav1.ConditionFalse,
+					},
+				},
+			},
+			maxFailedResourcePlacementLimit:  ptr.To(1),
 			maxDriftedResourcePlacementLimit: ptr.To(1),
 			wantDriftedResourcePlacements: []fleetv1beta1.DriftedResourcePlacement{
 				{
@@ -1365,11 +1367,7 @@ func TestSetBindingStatus(t *testing.T) {
 								Conditions: []metav1.Condition{
 									{
 										Type:   fleetv1beta1.WorkConditionTypeApplied,
-										Status: metav1.ConditionTrue,
-									},
-									{
-										Type:   fleetv1beta1.WorkConditionTypeAvailable,
-										Status: metav1.ConditionTrue,
+										Status: metav1.ConditionFalse,
 									},
 								},
 								DiffDetails: &fleetv1beta1.DiffDetails{
@@ -1389,11 +1387,7 @@ func TestSetBindingStatus(t *testing.T) {
 						Conditions: []metav1.Condition{
 							{
 								Type:   fleetv1beta1.WorkConditionTypeApplied,
-								Status: metav1.ConditionTrue,
-							},
-							{
-								Type:   fleetv1beta1.WorkConditionTypeAvailable,
-								Status: metav1.ConditionTrue,
+								Status: metav1.ConditionFalse,
 							},
 						},
 					},
@@ -1455,15 +1449,24 @@ func TestSetBindingStatus(t *testing.T) {
 								Type:   fleetv1beta1.WorkConditionTypeApplied,
 								Status: metav1.ConditionTrue,
 							},
-							{
-								Type:   fleetv1beta1.WorkConditionTypeAvailable,
-								Status: metav1.ConditionTrue,
-							},
 						},
 					},
 				},
 			},
-			wantFailedResourcePlacements:    nil,
+			wantFailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+					Condition: metav1.Condition{
+						Type:   fleetv1beta1.WorkConditionTypeApplied,
+						Status: metav1.ConditionFalse,
+					},
+				},
+			},
 			wantDriftedResourcePlacements:   nil,
 			maxDiffedResourcePlacementLimit: ptr.To(1),
 			wantDiffedResourcePlacements: []fleetv1beta1.DiffedResourcePlacement{
@@ -1481,179 +1484,6 @@ func TestSetBindingStatus(t *testing.T) {
 					ObservedDiffs: []fleetv1beta1.PatchDetail{
 						{
 							Path:          "/spec/ports/1/port",
-							ValueInHub:    "80",
-							ValueInMember: "90",
-						},
-					},
-				},
-			},
-		},
-		"work has drift and diff": {
-			works: map[string]*fleetv1beta1.Work{
-				"work1": {
-					Status: fleetv1beta1.WorkStatus{
-						ManifestConditions: []fleetv1beta1.ManifestCondition{
-							{
-								Identifier: fleetv1beta1.WorkResourceIdentifier{
-									Ordinal:   0,
-									Group:     "",
-									Version:   "v1",
-									Kind:      "ConfigMap",
-									Name:      "config-name-1",
-									Namespace: "config-namespace",
-								},
-								Conditions: []metav1.Condition{
-									{
-										Type:   fleetv1beta1.WorkConditionTypeApplied,
-										Status: metav1.ConditionTrue,
-									},
-									{
-										Type:   fleetv1beta1.WorkConditionTypeAvailable,
-										Status: metav1.ConditionTrue,
-									},
-								},
-							},
-							{
-								Identifier: fleetv1beta1.WorkResourceIdentifier{
-									Ordinal:   1,
-									Group:     "",
-									Version:   "v1",
-									Kind:      "Service",
-									Name:      "svc-name-1",
-									Namespace: "svc-namespace",
-								},
-								Conditions: []metav1.Condition{
-									{
-										Type:   fleetv1beta1.WorkConditionTypeApplied,
-										Status: metav1.ConditionTrue,
-									},
-									{
-										Type:   fleetv1beta1.WorkConditionTypeAvailable,
-										Status: metav1.ConditionTrue,
-									},
-								},
-								DiffDetails: &fleetv1beta1.DiffDetails{
-									ObservationTime:                   metav1.NewTime(timeNow),
-									ObservedInMemberClusterGeneration: 2,
-									FirstDiffedObservedTime:           metav1.NewTime(timeNow.Add(-time.Hour)),
-									ObservedDiffs: []fleetv1beta1.PatchDetail{
-										{
-											Path:          "/spec/ports/0/targetPort",
-											ValueInHub:    "8080",
-											ValueInMember: "9080",
-										},
-										{
-											Path:          "/spec/ports/0/port",
-											ValueInHub:    "80",
-											ValueInMember: "90",
-										},
-									},
-								},
-							},
-						},
-						Conditions: []metav1.Condition{
-							{
-								Type:   fleetv1beta1.WorkConditionTypeApplied,
-								Status: metav1.ConditionTrue,
-							},
-							{
-								Type:   fleetv1beta1.WorkConditionTypeAvailable,
-								Status: metav1.ConditionTrue,
-							},
-						},
-					},
-				},
-				"work2": {
-					Status: fleetv1beta1.WorkStatus{
-						ManifestConditions: []fleetv1beta1.ManifestCondition{
-							{
-								Identifier: fleetv1beta1.WorkResourceIdentifier{
-									Ordinal:   1,
-									Group:     "",
-									Version:   "v1",
-									Kind:      "Service",
-									Name:      "svc-name",
-									Namespace: "svc-namespace",
-								},
-								Conditions: []metav1.Condition{
-									{
-										Type:   fleetv1beta1.WorkConditionTypeApplied,
-										Status: metav1.ConditionTrue,
-									},
-									{
-										Type:   fleetv1beta1.WorkConditionTypeAvailable,
-										Status: metav1.ConditionTrue,
-									},
-								},
-								DriftDetails: &fleetv1beta1.DriftDetails{
-									ObservationTime:                   metav1.NewTime(timeNow),
-									ObservedInMemberClusterGeneration: 2,
-									FirstDriftedObservedTime:          metav1.NewTime(timeNow.Add(-time.Hour)),
-									ObservedDrifts: []fleetv1beta1.PatchDetail{
-										{
-											Path:          "/spec/ports/1/containerPort",
-											ValueInHub:    "80",
-											ValueInMember: "90",
-										},
-									},
-								},
-							},
-						},
-						Conditions: []metav1.Condition{
-							{
-								Type:   fleetv1beta1.WorkConditionTypeApplied,
-								Status: metav1.ConditionTrue,
-							},
-							{
-								Type:   fleetv1beta1.WorkConditionTypeAvailable,
-								Status: metav1.ConditionTrue,
-							},
-						},
-					},
-				},
-			},
-			wantFailedResourcePlacements: nil,
-			wantDriftedResourcePlacements: []fleetv1beta1.DriftedResourcePlacement{
-				{
-					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
-						Group:     "",
-						Version:   "v1",
-						Kind:      "Service",
-						Name:      "svc-name",
-						Namespace: "svc-namespace",
-					},
-					ObservationTime:                 metav1.NewTime(timeNow),
-					TargetClusterObservedGeneration: 2,
-					FirstDriftedObservedTime:        metav1.NewTime(timeNow.Add(-time.Hour)),
-					ObservedDrifts: []fleetv1beta1.PatchDetail{
-						{
-							Path:          "/spec/ports/1/containerPort",
-							ValueInHub:    "80",
-							ValueInMember: "90",
-						},
-					},
-				},
-			},
-			wantDiffedResourcePlacements: []fleetv1beta1.DiffedResourcePlacement{
-				{
-					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
-						Group:     "",
-						Version:   "v1",
-						Kind:      "Service",
-						Name:      "svc-name-1",
-						Namespace: "svc-namespace",
-					},
-					ObservationTime:                 metav1.NewTime(timeNow),
-					TargetClusterObservedGeneration: 2,
-					FirstDiffedObservedTime:         metav1.NewTime(timeNow.Add(-time.Hour)),
-					ObservedDiffs: []fleetv1beta1.PatchDetail{
-						{
-							Path:          "/spec/ports/0/targetPort",
-							ValueInHub:    "8080",
-							ValueInMember: "9080",
-						},
-						{
-							Path:          "/spec/ports/0/port",
 							ValueInHub:    "80",
 							ValueInMember: "90",
 						},
