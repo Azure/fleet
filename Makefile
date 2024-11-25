@@ -148,7 +148,7 @@ integration-test: $(ENVTEST) ## Run tests.
 	export CGO_ENABLED=1 && \
 	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" && \
 	ginkgo -v -p --race --cover --coverpkg=./pkg/scheduler/... ./test/scheduler && \
-	ginkgo -v -p --race --cover -coverpkg=./... ./test/apis/... && \
+	ginkgo -v -p --race --cover --coverpkg=./... ./test/apis && \
 	go test ./test/integration/... -coverpkg=./...  -race -coverprofile=it-coverage.xml -v
 
 ## local tests & e2e tests
