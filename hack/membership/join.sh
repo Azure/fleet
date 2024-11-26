@@ -115,11 +115,7 @@ echo "Installing the member agent..."
 kubectl config use-context $MEMBER_CLUSTER_CONTEXT
 kubectl delete secret hub-kubeconfig-secret --ignore-not-found --wait
 kubectl create secret generic hub-kubeconfig-secret --from-literal=token=$TOKEN
-if helm list -q | grep -q "^member-agent$"; then
-    helm uninstall member-agent --wait
-else
-    echo "Release 'member-agent' not found. Skipping uninstallation."
-fi
+helm uninstall member-agent --ignore-not-found --wait
 helm install member-agent charts/member-agent/ \
     --set config.hubURL=$HUB_CLUSTER_ADDRESS \
     --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
