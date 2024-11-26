@@ -892,9 +892,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 					State:                fleetv1beta1.BindingStateBound,
 					TargetCluster:        cluster1,
 					ResourceSnapshotName: "snapshot-2",
-					ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-						Type: fleetv1beta1.ApplyStrategyTypeServerSideApply,
-					},
+					// The pickBindingsToRoll method no longer refreshes apply strategy.
 				},
 			},
 			wantNeedRoll: true,

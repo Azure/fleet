@@ -107,7 +107,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		rolloutCRP = clusterResourcePlacementForTest(testCRPName, createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, targetClusterCount))
 		Expect(k8sClient.Create(ctx, rolloutCRP)).Should(Succeed(), "Failed to create CRP")
 
-		// Create a master cluster resource snapstho.
+		// Create a master cluster resource snapshot.
 		resourceSnapshot := generateResourceSnapshot(rolloutCRP.Name, 0, true)
 		Expect(k8sClient.Create(ctx, resourceSnapshot)).Should(Succeed(), "Failed to create cluster resource snapshot")
 
@@ -115,12 +115,22 @@ var _ = Describe("Test the rollout Controller", func() {
 		clusters := make([]string, targetClusterCount)
 		for i := 0; i < int(targetClusterCount); i++ {
 			clusters[i] = "cluster-" + utils.RandStr()
-			binding := generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, resourceSnapshot.Name, clusters[i])
+
+			// Prepare bindings of various states.
+			var binding *fleetv1beta1.ClusterResourceBinding
+			switch {
+			case i%3 == 0:
+				binding = generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, resourceSnapshot.Name, clusters[i])
+			case i%3 == 1:
+				binding = generateClusterResourceBinding(fleetv1beta1.BindingStateBound, resourceSnapshot.Name, clusters[i])
+			default:
+				binding = generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, resourceSnapshot.Name, clusters[i])
+			}
 			Expect(k8sClient.Create(ctx, binding)).Should(Succeed(), "Failed to create cluster resource binding")
 			bindings = append(bindings, binding)
 		}
 
-		// Verify that all the bindings are bound.
+		// Verify that all the bindings are updated per rollout strategy.
 		Eventually(func() error {
 			for _, binding := range bindings {
 				gotBinding := &fleetv1beta1.ClusterResourceBinding{}
@@ -133,9 +143,8 @@ var _ = Describe("Test the rollout Controller", func() {
 						Name: binding.Name,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:                fleetv1beta1.BindingStateBound,
-						ResourceSnapshotName: resourceSnapshot.Name,
-						TargetCluster:        binding.Spec.TargetCluster,
+						State:         binding.Spec.State,
+						TargetCluster: binding.Spec.TargetCluster,
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 							ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
 							WhenToApply:      fleetv1beta1.WhenToApplyTypeAlways,
@@ -143,6 +152,12 @@ var _ = Describe("Test the rollout Controller", func() {
 							Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
 						},
 					},
+				}
+				// The bound binding will have no changes; the scheduled binding, per given
+				// rollout strategy, will be bound with the resource snapshot.
+				if binding.Spec.State == fleetv1beta1.BindingStateBound || binding.Spec.State == fleetv1beta1.BindingStateScheduled {
+					wantBinding.Spec.State = fleetv1beta1.BindingStateBound
+					wantBinding.Spec.ResourceSnapshotName = resourceSnapshot.Name
 				}
 				if diff := cmp.Diff(
 					gotBinding, wantBinding,
@@ -181,9 +196,8 @@ var _ = Describe("Test the rollout Controller", func() {
 						Name: binding.Name,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:                fleetv1beta1.BindingStateBound,
-						ResourceSnapshotName: resourceSnapshot.Name,
-						TargetCluster:        binding.Spec.TargetCluster,
+						State:         binding.Spec.State,
+						TargetCluster: binding.Spec.TargetCluster,
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 							ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
 							WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
@@ -194,6 +208,12 @@ var _ = Describe("Test the rollout Controller", func() {
 							},
 						},
 					},
+				}
+				// The bound binding will have no changes; the scheduled binding, per given
+				// rollout strategy, will be bound with the resource snapshot.
+				if binding.Spec.State == fleetv1beta1.BindingStateBound || binding.Spec.State == fleetv1beta1.BindingStateScheduled {
+					wantBinding.Spec.State = fleetv1beta1.BindingStateBound
+					wantBinding.Spec.ResourceSnapshotName = resourceSnapshot.Name
 				}
 				if diff := cmp.Diff(
 					gotBinding, wantBinding,

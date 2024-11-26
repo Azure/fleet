@@ -102,6 +102,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		allBindings = append(allBindings, binding.DeepCopy())
 	}
 
+	// Process apply strategy updates (if any). This runs independently of the rollout process.
+	//
+	// Apply strategy changes will be immediately applied to all bindings that have not been
+	// marked for deletion yet. Note that even unscheduled bindings will receive this update;
+	// as apply strategy changes might have an effect on its Applied and Available status, and
+	// consequently on the rollout progress.
+	if err := r.processApplyStrategyUpdates(ctx, &crp, allBindings); err != nil {
+		klog.ErrorS(err, "Failed to process apply strategy updates", "clusterResourcePlacement", crpName)
+		return runtime.Result{}, err
+	}
+
 	// handle the case that a cluster was unselected by the scheduler and then selected again but the unselected binding is not completely deleted yet
 	wait, err := waitForResourcesToCleanUp(allBindings, &crp)
 	if err != nil {
@@ -111,17 +122,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		// wait for the deletion to finish
 		klog.V(2).InfoS("Found multiple bindings pointing to the same cluster, wait for the deletion to finish", "clusterResourcePlacement", crpName)
 		return runtime.Result{RequeueAfter: 5 * time.Second}, nil
-	}
-
-	// Process apply strategy updates (if any).
-	//
-	// Apply strategy changes will be immediately applied to all bindings that have not been
-	// marked for deletion yet. Note that even unscheduled bindings will receive this update;
-	// as apply strategy changes might have an effect on its Applied and Available status, and
-	// consequently on the rollout progress.
-	if err := r.processApplyStrategyUpdates(ctx, &crp, allBindings); err != nil {
-		klog.ErrorS(err, "Failed to process apply strategy updates", "clusterResourcePlacement", crpName)
-		return runtime.Result{}, err
 	}
 
 	// find the latest clusterResourceSnapshot.
@@ -285,13 +285,14 @@ type toBeUpdatedBinding struct {
 	desiredBinding *fleetv1beta1.ClusterResourceBinding // only valid for scheduled or bound binding
 }
 
-func createUpdateInfo(binding *fleetv1beta1.ClusterResourceBinding, crp *fleetv1beta1.ClusterResourcePlacement,
+func createUpdateInfo(binding *fleetv1beta1.ClusterResourceBinding,
 	latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, cro []string, ro []fleetv1beta1.NamespacedName) toBeUpdatedBinding {
 	desiredBinding := binding.DeepCopy()
 	desiredBinding.Spec.State = fleetv1beta1.BindingStateBound
 	desiredBinding.Spec.ResourceSnapshotName = latestResourceSnapshot.Name
-	// update the resource apply strategy when controller rolls out the new changes
-	desiredBinding.Spec.ApplyStrategy = crp.Spec.Strategy.ApplyStrategy
+
+	// Apply strategy is updated separately for all bindings.
+
 	// TODO: check the size of the cro and ro to not exceed the limit
 	desiredBinding.Spec.ClusterResourceOverrideSnapshots = cro
 	desiredBinding.Spec.ResourceOverrideSnapshots = ro
@@ -386,7 +387,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			if err != nil {
 				return nil, nil, false, minWaitTime, err
 			}
-			boundingCandidates = append(boundingCandidates, createUpdateInfo(binding, crp, latestResourceSnapshot, cro, ro))
+			boundingCandidates = append(boundingCandidates, createUpdateInfo(binding, latestResourceSnapshot, cro, ro))
 		case fleetv1beta1.BindingStateBound:
 			bindingFailed := false
 			schedulerTargetedBinds = append(schedulerTargetedBinds, binding)
@@ -413,7 +414,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			}
 			// The binding needs update if it's not pointing to the latest resource resourceBinding or the overrides.
 			if binding.Spec.ResourceSnapshotName != latestResourceSnapshot.Name || !equality.Semantic.DeepEqual(binding.Spec.ClusterResourceOverrideSnapshots, cro) || !equality.Semantic.DeepEqual(binding.Spec.ResourceOverrideSnapshots, ro) {
-				updateInfo := createUpdateInfo(binding, crp, latestResourceSnapshot, cro, ro)
+				updateInfo := createUpdateInfo(binding, latestResourceSnapshot, cro, ro)
 				if bindingFailed {
 					// the binding has been applied but failed to apply, we can safely update it to latest resources without affecting max unavailable count
 					applyFailedUpdateCandidates = append(applyFailedUpdateCandidates, updateInfo)
@@ -836,20 +837,20 @@ func (r *Reconciler) processApplyStrategyUpdates(
 // handleCRP handles the update event of a ClusterResourcePlacement, which the rollout controller
 // watches.
 func handleCRP(newCRPObj, oldCRPObj client.Object, q workqueue.RateLimitingInterface) {
-	// Check if the CRP has been deleted.
-	if newCRPObj.GetDeletionTimestamp() != nil {
-		// No need to process a CRP that has been marked for deletion.
-		return
-	}
-
 	// Do some sanity checks. Normally these checks would never fail.
 	if newCRPObj == nil || oldCRPObj == nil {
-		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("CRP object is nil")), "Received an unexpected nil object in the CRP Update event")
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("CRP object is nil")), "Received an unexpected nil object in the CRP Update event", "CRP (new)", klog.KObj(newCRPObj), "CRP (old)", klog.KObj(oldCRPObj))
 	}
 	newCRP, newOK := newCRPObj.(*fleetv1beta1.ClusterResourcePlacement)
 	oldCRP, oldOK := oldCRPObj.(*fleetv1beta1.ClusterResourcePlacement)
 	if !newOK || !oldOK {
-		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("object is not an CRP object")), "Failed to cast the new object in the CRP Update event to a CRP object")
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("object is not an CRP object")), "Failed to cast the new object in the CRP Update event to a CRP object", "CRP (new)", klog.KObj(newCRPObj), "CRP (old)", klog.KObj(oldCRPObj), "canCastNewObj", newOK, "canCastOldObj", oldOK)
+	}
+
+	// Check if the CRP has been deleted.
+	if newCRPObj.GetDeletionTimestamp() != nil {
+		// No need to process a CRP that has been marked for deletion.
+		return
 	}
 
 	// Check if the apply strategy has been updated.
