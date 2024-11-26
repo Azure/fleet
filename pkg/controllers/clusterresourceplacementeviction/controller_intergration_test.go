@@ -68,7 +68,7 @@ var _ = It("Invalid Eviction - ClusterResourcePlacement not found", func() {
 	})
 })
 
-var _ = Describe("Test ClusterResourcePlacementEviction Controller", Ordered, func() {
+var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	evictionName := fmt.Sprintf(evictionNameTemplate, GinkgoParallelProcess())
 
