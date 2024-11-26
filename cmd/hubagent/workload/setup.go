@@ -201,7 +201,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			UncachedReader:          mgr.GetAPIReader(),
 			MaxConcurrentReconciles: int(math.Ceil(float64(opts.MaxFleetSizeSupported)/30) * math.Ceil(float64(opts.MaxConcurrentClusterPlacement)/10)),
 			InformerManager:         dynamicInformerManager,
-		}).SetupWithManager(mgr); err != nil {
+		}).SetupWithManager(ctx, mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up rollout controller")
 			return err
 		}

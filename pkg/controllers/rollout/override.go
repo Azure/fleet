@@ -45,11 +45,20 @@ func (r *Reconciler) fetchAllMatchingOverridesForResourceSnapshot(ctx context.Co
 	if len(croList.Items) == 0 && len(roList.Items) == 0 {
 		return nil, nil, nil // no overrides and nothing to do
 	}
+	return r.findMatchedOverrides(ctx, crp, masterResourceSnapshot, croList.Items, roList.Items)
+}
+
+func (r *Reconciler) findMatchedOverrides(ctx context.Context, crp string, masterResourceSnapshot *placementv1beta1.ClusterResourceSnapshot, croList []placementv1alpha1.ClusterResourceOverrideSnapshot, roList []placementv1alpha1.ResourceOverrideSnapshot) ([]*placementv1alpha1.ClusterResourceOverrideSnapshot, []*placementv1alpha1.ResourceOverrideSnapshot, error) {
+	if len(croList) == 0 && len(roList) == 0 {
+		klog.V(2).InfoS("Empty overrides", "clusterResourcePlacement", crp)
+		return nil, nil, nil
+	}
 
 	resourceSnapshots, err := controller.FetchAllClusterResourceSnapshots(ctx, r.Client, crp, masterResourceSnapshot)
 	if err != nil {
 		return nil, nil, err
 	}
+	klog.V(2).InfoS("Found resourceSnapshots", "clusterResourcePlacement", crp, "resourceSnapshotCount", len(resourceSnapshots))
 
 	possibleCROs := make(map[placementv1beta1.ResourceIdentifier]bool)
 	possibleROs := make(map[placementv1beta1.ResourceIdentifier]bool)
@@ -91,10 +100,10 @@ func (r *Reconciler) fetchAllMatchingOverridesForResourceSnapshot(ctx context.Co
 		}
 	}
 
-	filteredCRO := make([]*placementv1alpha1.ClusterResourceOverrideSnapshot, 0, len(croList.Items))
-	filteredRO := make([]*placementv1alpha1.ResourceOverrideSnapshot, 0, len(roList.Items))
-	for i := range croList.Items {
-		for _, selector := range croList.Items[i].Spec.OverrideSpec.ClusterResourceSelectors {
+	filteredCRO := make([]*placementv1alpha1.ClusterResourceOverrideSnapshot, 0, len(croList))
+	filteredRO := make([]*placementv1alpha1.ResourceOverrideSnapshot, 0, len(roList))
+	for i := range croList {
+		for _, selector := range croList[i].Spec.OverrideSpec.ClusterResourceSelectors {
 			croKey := placementv1beta1.ResourceIdentifier{
 				Group:   selector.Group,
 				Version: selector.Version,
@@ -102,26 +111,27 @@ func (r *Reconciler) fetchAllMatchingOverridesForResourceSnapshot(ctx context.Co
 				Name:    selector.Name,
 			}
 			if possibleCROs[croKey] {
-				filteredCRO = append(filteredCRO, &croList.Items[i])
+				filteredCRO = append(filteredCRO, &croList[i])
 				break
 			}
 		}
 	}
-	for i := range roList.Items {
-		for _, selector := range roList.Items[i].Spec.OverrideSpec.ResourceSelectors {
+	for i := range roList {
+		for _, selector := range roList[i].Spec.OverrideSpec.ResourceSelectors {
 			roKey := placementv1beta1.ResourceIdentifier{
 				Group:     selector.Group,
 				Version:   selector.Version,
 				Kind:      selector.Kind,
-				Namespace: roList.Items[i].Namespace,
+				Namespace: roList[i].Namespace,
 				Name:      selector.Name,
 			}
 			if possibleROs[roKey] {
-				filteredRO = append(filteredRO, &roList.Items[i])
+				filteredRO = append(filteredRO, &roList[i])
 				break
 			}
 		}
 	}
+	klog.V(2).InfoS("Found matched overrides", "clusterResourcePlacement", crp, "matchedCROCount", len(filteredCRO), "matchedROCount", len(filteredRO))
 	return filteredCRO, filteredRO, nil
 }
 
