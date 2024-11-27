@@ -28,10 +28,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 			Labels: map[string]string{placementv1beta1.CRPTrackingLabel: "test-crp"},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
-			State:                        placementv1beta1.BindingStateScheduled,
-			ResourceSnapshotName:         "test-resource-snapshot",
-			SchedulingPolicySnapshotName: "test-scheduling-policy-snapshot",
-			TargetCluster:                "test-cluster-1",
+			State:         placementv1beta1.BindingStateScheduled,
+			TargetCluster: "test-cluster-1",
 		},
 	}
 	boundAvailableBinding := placementv1beta1.ClusterResourceBinding{
@@ -40,10 +38,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 			Labels: map[string]string{placementv1beta1.CRPTrackingLabel: "test-crp"},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
-			State:                        placementv1beta1.BindingStateBound,
-			ResourceSnapshotName:         "test-resource-snapshot",
-			SchedulingPolicySnapshotName: "test-scheduling-policy-snapshot",
-			TargetCluster:                "test-cluster-2",
+			State:         placementv1beta1.BindingStateBound,
+			TargetCluster: "test-cluster-2",
 		},
 		Status: placementv1beta1.ResourceBindingStatus{
 			Conditions: []metav1.Condition{availableCondition},
@@ -55,10 +51,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 			Labels: map[string]string{placementv1beta1.CRPTrackingLabel: "test-crp"},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
-			State:                        placementv1beta1.BindingStateBound,
-			ResourceSnapshotName:         "test-resource-snapshot",
-			SchedulingPolicySnapshotName: "test-scheduling-policy-snapshot",
-			TargetCluster:                "test-cluster-3",
+			State:         placementv1beta1.BindingStateBound,
+			TargetCluster: "test-cluster-3",
 		},
 		Status: placementv1beta1.ResourceBindingStatus{
 			Conditions: []metav1.Condition{availableCondition},
@@ -70,10 +64,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 			Labels: map[string]string{placementv1beta1.CRPTrackingLabel: "test-crp"},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
-			State:                        placementv1beta1.BindingStateBound,
-			ResourceSnapshotName:         "test-resource-snapshot",
-			SchedulingPolicySnapshotName: "test-scheduling-policy-snapshot",
-			TargetCluster:                "test-cluster-4",
+			State:         placementv1beta1.BindingStateBound,
+			TargetCluster: "test-cluster-4",
 		},
 	}
 	unScheduledAvailableBinding := placementv1beta1.ClusterResourceBinding{
@@ -82,10 +74,8 @@ func TestIsEvictionAllowed(t *testing.T) {
 			Labels: map[string]string{placementv1beta1.CRPTrackingLabel: "test-crp"},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
-			State:                        placementv1beta1.BindingStateUnscheduled,
-			ResourceSnapshotName:         "test-resource-snapshot",
-			SchedulingPolicySnapshotName: "test-scheduling-policy-snapshot",
-			TargetCluster:                "test-cluster-5",
+			State:         placementv1beta1.BindingStateUnscheduled,
+			TargetCluster: "test-cluster-5",
 		},
 		Status: placementv1beta1.ResourceBindingStatus{
 			Conditions: []metav1.Condition{availableCondition},

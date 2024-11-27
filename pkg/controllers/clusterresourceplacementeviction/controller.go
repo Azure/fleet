@@ -33,6 +33,7 @@ const (
 	clusterResourcePlacementEvictionNotExecutedReason = "ClusterResourcePlacementEvictionNotExecuted"
 
 	evictionInvalidMissingCRPMessage       = "Failed to find ClusterResourcePlacement targeted by eviction"
+	evictionInvalidDeletingCRPMessage      = "Found deleting ClusterResourcePlacement targeted by eviction"
 	evictionInvalidMissingCRBMessage       = "Failed to find scheduler decision for placement in cluster targeted by eviction"
 	evictionInvalidMultipleCRBMessage      = "Found more than one scheduler decision for placement in cluster targeted by eviction"
 	evictionValidMessage                   = "Eviction is valid"
@@ -77,17 +78,19 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{}, nil
 	}
 
-	isCRPPresent := true
 	var crp placementv1beta1.ClusterResourcePlacement
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: eviction.Spec.PlacementName}, &crp); err != nil {
-		if !errors.IsNotFound(err) {
-			return runtime.Result{}, controller.NewAPIServerError(true, err)
+		if errors.IsNotFound(err) {
+			klog.V(2).InfoS(evictionInvalidMissingCRPMessage, "clusterResourcePlacementEviction", evictionName, "clusterResourcePlacement", eviction.Spec.PlacementName)
+			markEvictionInvalid(&eviction, evictionInvalidMissingCRPMessage)
+			return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
 		}
-		isCRPPresent = false
+		return runtime.Result{}, controller.NewAPIServerError(true, err)
 	}
-	if !isCRPPresent {
-		klog.V(2).InfoS(evictionInvalidMissingCRPMessage, "clusterResourcePlacementEviction", evictionName, "clusterResourcePlacement", eviction.Spec.PlacementName)
-		markEvictionInvalid(&eviction, evictionInvalidMissingCRPMessage)
+
+	if crp.DeletionTimestamp != nil {
+		klog.V(2).InfoS(evictionInvalidDeletingCRPMessage, "clusterResourcePlacementEviction", evictionName, "clusterResourcePlacement", eviction.Spec.PlacementName)
+		markEvictionInvalid(&eviction, evictionInvalidDeletingCRPMessage)
 		return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
 	}
 
