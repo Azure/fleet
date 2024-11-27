@@ -1272,6 +1272,18 @@ func TestSetBindingStatus(t *testing.T) {
 										Status: metav1.ConditionTrue,
 									},
 								},
+								DriftDetails: &fleetv1beta1.DriftDetails{
+									ObservationTime:                   metav1.NewTime(timeNow),
+									ObservedInMemberClusterGeneration: 2,
+									FirstDriftedObservedTime:          metav1.NewTime(timeNow.Add(-time.Second)),
+									ObservedDrifts: []fleetv1beta1.PatchDetail{
+										{
+											Path:          "/metadata/labels/label1",
+											ValueInHub:    "key1",
+											ValueInMember: "key2",
+										},
+									},
+								},
 							},
 							{
 								Identifier: fleetv1beta1.WorkResourceIdentifier{
@@ -1287,17 +1299,9 @@ func TestSetBindingStatus(t *testing.T) {
 										Type:   fleetv1beta1.WorkConditionTypeApplied,
 										Status: metav1.ConditionTrue,
 									},
-								},
-								DriftDetails: &fleetv1beta1.DriftDetails{
-									ObservationTime:                   metav1.NewTime(timeNow),
-									ObservedInMemberClusterGeneration: 2,
-									FirstDriftedObservedTime:          metav1.NewTime(timeNow.Add(-time.Second)),
-									ObservedDrifts: []fleetv1beta1.PatchDetail{
-										{
-											Path:          "/spec/ports/1/port",
-											ValueInHub:    "80",
-											ValueInMember: "90",
-										},
+									{
+										Type:   fleetv1beta1.WorkConditionTypeAvailable,
+										Status: metav1.ConditionTrue,
 									},
 								},
 							},
@@ -1406,11 +1410,19 @@ func TestSetBindingStatus(t *testing.T) {
 								Conditions: []metav1.Condition{
 									{
 										Type:   fleetv1beta1.WorkConditionTypeApplied,
-										Status: metav1.ConditionTrue,
+										Status: metav1.ConditionFalse,
 									},
-									{
-										Type:   fleetv1beta1.WorkConditionTypeAvailable,
-										Status: metav1.ConditionTrue,
+								},
+								DiffDetails: &fleetv1beta1.DiffDetails{
+									ObservationTime:                   metav1.NewTime(timeNow),
+									ObservedInMemberClusterGeneration: 2,
+									FirstDiffedObservedTime:           metav1.NewTime(timeNow.Add(-time.Second)),
+									ObservedDiffs: []fleetv1beta1.PatchDetail{
+										{
+											Path:          "/metadata/labels/label1",
+											ValueInHub:    "key1",
+											ValueInMember: "key2",
+										},
 									},
 								},
 							},
@@ -1426,19 +1438,11 @@ func TestSetBindingStatus(t *testing.T) {
 								Conditions: []metav1.Condition{
 									{
 										Type:   fleetv1beta1.WorkConditionTypeApplied,
-										Status: metav1.ConditionFalse,
+										Status: metav1.ConditionTrue,
 									},
-								},
-								DiffDetails: &fleetv1beta1.DiffDetails{
-									ObservationTime:                   metav1.NewTime(timeNow),
-									ObservedInMemberClusterGeneration: 2,
-									FirstDiffedObservedTime:           metav1.NewTime(timeNow.Add(-time.Second)),
-									ObservedDiffs: []fleetv1beta1.PatchDetail{
-										{
-											Path:          "/spec/ports/0/port",
-											ValueInHub:    "80",
-											ValueInMember: "90",
-										},
+									{
+										Type:   fleetv1beta1.WorkConditionTypeAvailable,
+										Status: metav1.ConditionTrue,
 									},
 								},
 							},
