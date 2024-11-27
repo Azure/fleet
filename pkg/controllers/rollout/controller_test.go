@@ -865,6 +865,22 @@ func TestPickBindingsToRoll(t *testing.T) {
 		},
 	}
 
+	readyUnscheduledDeletingBinding := generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, cluster1)
+	readyUnscheduledDeletingBinding.Generation = 15
+	readyUnscheduledDeletingBinding.Status.Conditions = []metav1.Condition{
+		{
+			Type:               string(fleetv1beta1.ResourceBindingApplied),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: 15,
+		},
+		{
+			Type:               string(fleetv1beta1.ResourceBindingAvailable),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: 15,
+			Reason:             work.WorkAvailableReason, // Make it ready
+		},
+	}
+
 	tests := map[string]struct {
 		allBindings                 []*fleetv1beta1.ClusterResourceBinding
 		latestResourceSnapshotName  string
@@ -1628,6 +1644,25 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: 0,
 		},
+		"test one deleting scheduled binding, one unscheduled binding - rollout blocked, unscheduled binding is not removed": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateScheduled, cluster1),
+				notReadyUnscheduledBinding, // actually ready binding since UnavailablePeriodSeconds is not specified in CRP used.
+			},
+			latestResourceSnapshotName: "snapshot-1",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 2)),
+			wantTobeUpdatedBindings:     []int{},
+			wantStaleUnselectedBindings: []int{},
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				// scheduled deleting binding does not have desired spec, so it's empty.
+				{},
+				// unscheduled deleting binding does not have desired spec, so it's empty.
+				{},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: 0,
+		},
 		"test bound deleting binding - rollout blocked": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateBound, cluster1),
@@ -1661,7 +1696,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: time.Second,
 		},
-		"test one canBeReady bound binding, one deleting canBeReady bound binding, one update candidate - rollout allowed only to update stale binding status": {
+		"test one canBeReady bound binding, one deleting canBeReady bound binding, one update candidate - rollout blocked, only update stale binding status": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				canBeReadyBinding,
 				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateBound, cluster2),
@@ -1683,7 +1718,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: time.Second,
 		},
-		"test one ready bound binding, one deleting ready bound binding, update candidate - rollout allowed to update stale binding status": {
+		"test one ready bound binding, one deleting ready bound binding, update candidate - rollout blocked, only update stale binding status": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				readyBoundDeletingBinding,
 				readyBoundBinding,
@@ -1783,6 +1818,72 @@ func TestPickBindingsToRoll(t *testing.T) {
 			},
 			wantNeedRoll: true,
 			wantWaitTime: time.Second,
+		},
+		"test one ready bound binding, one not ready deleting unscheduled binding - rollout allowed for ready binding": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, cluster1), // not ready unscheduled binding.
+				readyBoundBinding,
+			},
+			latestResourceSnapshotName: "snapshot-3", // readyBoundBinding's snapshot is snapshot-2 to force update.
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
+			wantTobeUpdatedBindings:     []int{1},
+			wantStaleUnselectedBindings: []int{},
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				// unscheduled deleting binding does not have desired spec, so it's empty.
+				{},
+				{
+					State:                fleetv1beta1.BindingStateBound,
+					TargetCluster:        cluster2,
+					ResourceSnapshotName: "snapshot-3",
+				},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: time.Second,
+		},
+		"test one ready bound binding, one ready deleting unscheduled binding - rollout allowed for ready binding": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				readyUnscheduledDeletingBinding,
+				readyBoundBinding,
+			},
+			latestResourceSnapshotName: "snapshot-3", // readyBoundBinding's snapshot is snapshot-2 to force update.
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
+			wantTobeUpdatedBindings:     []int{1},
+			wantStaleUnselectedBindings: []int{},
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				// unscheduled deleting binding does not have desired spec, so it's empty.
+				{},
+				{
+					State:                fleetv1beta1.BindingStateBound,
+					TargetCluster:        cluster2,
+					ResourceSnapshotName: "snapshot-3",
+				},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: 0,
+		},
+		"test one ready bound binding, one ready deleting unscheduled binding - rollout blocked for ready binding": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				readyUnscheduledDeletingBinding,
+				readyBoundBinding,
+			},
+			latestResourceSnapshotName: "snapshot-3", // readyBoundBinding's snapshot is snapshot-2 to force update.
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 2)),
+			wantTobeUpdatedBindings:     []int{},
+			wantStaleUnselectedBindings: []int{1},
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				// unscheduled deleting binding does not have desired spec, so it's empty.
+				{},
+				{
+					State:                fleetv1beta1.BindingStateBound,
+					TargetCluster:        cluster2,
+					ResourceSnapshotName: "snapshot-3",
+				},
+			},
+			wantNeedRoll: true,
+			wantWaitTime: 0,
 		},
 	}
 	for name, tt := range tests {
