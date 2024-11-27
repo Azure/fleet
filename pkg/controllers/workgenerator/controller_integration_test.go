@@ -339,7 +339,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				// mark the work available
 				markWorkAvailable(&work)
 				// check the binding status that it should be marked as available true eventually
-				verifyBindStatusAvail(binding, false)
+				verifyBindStatusAvail(binding, false, false)
 			})
 
 			It("Should treat the unscheduled binding as bound and not remove work", func() {
@@ -435,8 +435,8 @@ var _ = Describe("Test Work Generator Controller", func() {
 					verifyBindStatusNotAppliedWithTwoPlacements(binding, false, true, true, true) // mark the work applied but still not available with failed manifests
 					// mark the work available directly
 					markWorkAvailable(&work)
-					// check the binding status that it should be marked as available true eventually
-					verifyBindStatusAvail(binding, false)
+					// check the binding status that it should be marked as available true eventually with 2 drift placements
+					verifyBindStatusAvail(binding, false, true)
 				})
 
 				It("Should update the binding when the failed placement list has changed but over all condition didn't change", func() {
@@ -445,17 +445,17 @@ var _ = Describe("Test Work Generator Controller", func() {
 					// check the binding status that it should have failed placement
 					verifyBindStatusNotAppliedWithTwoPlacements(binding, false, true, false, false) // mark the work applied but still not available with failed manifests
 					// change one of the failed manifests to be applied
-					markWorkAsAppliedButNotAvailableWithFailedManifest(&work, false, false)
+					markWorkAsAppliedButNotAvailableWithFailedManifest(&work, false)
 					// check the binding status that it should be applied but not available and with two failed placement
-					verifyBindStatusNotAvailableWithTwoPlacements(binding, false, true, false, false)
+					verifyBindStatusNotAvailableWithTwoPlacements(binding, false, true, false)
 					// mark one of the failed manifests as available but no change in the overall condition
-					markOneManifestAvailable(&work, false, false)
+					markOneManifestAvailable(&work, false)
 					// check the binding status that it should be applied but not available and with one failed placement
-					verifyBindStatusNotAvailableWithOnePlacement(binding, false, true, false, false)
+					verifyBindStatusNotAvailableWithOnePlacement(binding, false, true)
 					// mark the work available directly
 					markWorkAvailable(&work)
 					// check the binding status that it should be marked as available true eventually
-					verifyBindStatusAvail(binding, false)
+					verifyBindStatusAvail(binding, false, false)
 				})
 
 				It("Should update the binding when the diffed placement list has changed but over all condition didn't change", func() {
@@ -463,37 +463,33 @@ var _ = Describe("Test Work Generator Controller", func() {
 					markWorkWithFailedToApplyAndNotAvailable(&work, true, false)
 					// check the binding status that it have failed placements and diffed placements
 					verifyBindStatusNotAppliedWithTwoPlacements(binding, false, true, true, false)
-					// change one of the failed manifests to be applied and diff manifest to be aligned
-					markWorkAsAppliedButNotAvailableWithFailedManifest(&work, true, false)
-					// check the binding status that it should be applied but not available and with two failed placement and 2 diffed placement
-					verifyBindStatusNotAvailableWithTwoPlacements(binding, false, true, true, false)
-					// mark one of the failed manifests as available and diffed manifests aligned, but no change in the overall condition
-					markOneManifestAvailable(&work, true, false)
-					// check the binding status that it should be applied but not available and with one failed placement and one diffed placement
-					verifyBindStatusNotAvailableWithOnePlacement(binding, false, true, true, false)
+					// change one of the failed manifests to be applied and diff manifests to be aligned (applied is now true so no diff placements)
+					markWorkAsAppliedButNotAvailableWithFailedManifest(&work, false)
+					// check the binding status that it should be applied but not available and with two failed placement
+					verifyBindStatusNotAvailableWithTwoPlacements(binding, false, true, false)
+					// mark one of the failed manifests as available but no change in the overall condition
+					markOneManifestAvailable(&work, false)
+					// check the binding status that it should be applied but not available and with one failed placement
+					verifyBindStatusNotAvailableWithOnePlacement(binding, false, true)
 					// mark the work available directly
 					markWorkAvailable(&work)
 					// check the binding status that it should be marked as available true eventually
-					verifyBindStatusAvail(binding, false)
+					verifyBindStatusAvail(binding, false, false)
 				})
 
 				It("Should update the binding when the drifted placement list has changed but over all condition didn't change", func() {
-					// mark the work as not applied with failed manifests and diffed manifests
+					// mark the work as not applied with failed manifests and drifted manifests
 					markWorkWithFailedToApplyAndNotAvailable(&work, false, true)
-					// check the binding status that it have failed placements and diffed placements
+					// check the binding status that it have failed placements and drifted placements
 					verifyBindStatusNotAppliedWithTwoPlacements(binding, false, true, false, true)
-					// change one of the failed manifests to be applied and diff manifest to be aligned
-					markWorkAsAppliedButNotAvailableWithFailedManifest(&work, false, true)
-					// check the binding status that it should be applied but not available and with two failed placement and 2 diffed placement
-					verifyBindStatusNotAvailableWithTwoPlacements(binding, false, true, false, true)
-					// mark one of the failed manifests as available and diffed manifests aligned, but no change in the overall condition
-					markOneManifestAvailable(&work, false, true)
-					// check the binding status that it should be applied but not available and with one failed placement and one diffed placement
-					verifyBindStatusNotAvailableWithOnePlacement(binding, false, true, false, true)
+					// change one of the failed manifests to be applied and drift manifest to be aligned
+					markWorkAsAppliedButNotAvailableWithFailedManifest(&work, true)
+					// check the binding status that it should be applied but not available and with two failed placement and 2 drifted placement
+					verifyBindStatusNotAvailableWithTwoPlacements(binding, false, true, true)
 					// mark the work available directly
 					markWorkAvailable(&work)
-					// check the binding status that it should be marked as available true eventually
-					verifyBindStatusAvail(binding, false)
+					// check the binding status that it should be marked as available true eventually with 2 drift placements
+					verifyBindStatusAvail(binding, false, true)
 				})
 
 				It("Should continue to update the binding status even if the master resource snapshot is deleted after the work is synced", func() {
@@ -510,7 +506,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 					// mark the work available which should trigger a reconcile loop and copy the status from the work to the binding even if the work has no annotation
 					markWorkAvailable(&work)
 					// check the binding status that it should be marked as available true eventually
-					verifyBindStatusAvail(binding, false)
+					verifyBindStatusAvail(binding, false, false)
 				})
 
 				It("Should mark the binding as failed to sync if the master resource snapshot does not exist and the work do not sync ", func() {
@@ -669,7 +665,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				markWorkAvailable(&work)
 				markWorkAvailable(&envWork)
 				// check the binding status that it should be marked as available true eventually
-				verifyBindStatusAvail(binding, false)
+				verifyBindStatusAvail(binding, false, false)
 			})
 
 			It("Should modify the enveloped work object with the same name", func() {
@@ -946,7 +942,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				verifyBindStatusAppliedNotAvailable(binding, false)
 				markWorkAvailable(&secondWork)
 				// check the binding status that it should be marked as applied true eventually
-				verifyBindStatusAvail(binding, false)
+				verifyBindStatusAvail(binding, false, false)
 			})
 
 			It("Should create all the work in the target namespace after some failed to apply but eventually succeeded", func() {
@@ -1019,7 +1015,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				verifyBindStatusAppliedNotAvailable(binding, false)
 				markWorkAvailable(&work)
 				// check the binding status that it should be marked as applied true eventually
-				verifyBindStatusAvail(binding, false)
+				verifyBindStatusAvail(binding, false, false)
 			})
 
 			It("Should update existing work and create more work in the target namespace when resource snapshots change", func() {
@@ -1315,7 +1311,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				// mark the work available
 				markWorkAvailable(&work)
 				// check the binding status that it should be marked as available true eventually
-				verifyBindStatusAvail(binding, true)
+				verifyBindStatusAvail(binding, true, false)
 			})
 
 			It("Should treat the unscheduled binding as bound", func() {
@@ -1550,7 +1546,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				// mark the work available
 				markWorkAvailable(&work)
 				// check the binding status that it should be marked as available true eventually
-				verifyBindStatusAvail(binding, false)
+				verifyBindStatusAvail(binding, false, false)
 				checkRolloutStartedNotUpdated(rolloutCond, binding)
 			})
 
@@ -1710,7 +1706,7 @@ func verifyBindStatusAppliedNotAvailable(binding *placementv1beta1.ClusterResour
 	}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
 }
 
-func verifyBindStatusAvail(binding *placementv1beta1.ClusterResourceBinding, hasOverride bool) {
+func verifyBindStatusAvail(binding *placementv1beta1.ClusterResourceBinding, hasOverride, hasDriftPlacements bool) {
 	Eventually(func() string {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 		overrideReason := condition.OverrideNotSpecifiedReason
@@ -1751,6 +1747,49 @@ func verifyBindStatusAvail(binding *placementv1beta1.ClusterResourceBinding, has
 				},
 			},
 			FailedPlacements: nil,
+			DiffedPlacements: nil,
+		}
+		if hasDriftPlacements {
+			wantStatus.DriftedPlacements = []placementv1beta1.DriftedResourcePlacement{
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Name:      "config-name",
+						Namespace: "config-namespace",
+					},
+					ObservationTime:                 metav1.Time{Time: specificTime},
+					FirstDriftedObservedTime:        metav1.Time{Time: specificTime},
+					TargetClusterObservedGeneration: 2,
+					ObservedDrifts: []placementv1beta1.PatchDetail{
+						{
+							Path:          "/data",
+							ValueInMember: "k=1",
+							ValueInHub:    "k=2",
+						},
+					},
+				},
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+					ObservationTime:                 metav1.Time{Time: specificTime},
+					TargetClusterObservedGeneration: 1,
+					FirstDriftedObservedTime:        metav1.Time{Time: specificTime},
+					ObservedDrifts: []placementv1beta1.PatchDetail{
+						{
+							Path:          "/spec/ports/1/containerPort",
+							ValueInHub:    "80",
+							ValueInMember: "90",
+						},
+					},
+				},
+			}
 		}
 		return cmp.Diff(wantStatus, binding.Status, cmpConditionOption)
 	}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got):\n", binding.Name))
@@ -1913,7 +1952,7 @@ func verifyBindStatusNotAppliedWithTwoPlacements(binding *placementv1beta1.Clust
 	}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
 }
 
-func verifyBindStatusNotAvailableWithTwoPlacements(binding *placementv1beta1.ClusterResourceBinding, hasOverride, hasFailedPlacements, hasDiffedPlacements, hasDriftedPlacements bool) {
+func verifyBindStatusNotAvailableWithTwoPlacements(binding *placementv1beta1.ClusterResourceBinding, hasOverride, hasFailedPlacements, hasDriftedPlacements bool) {
 	Eventually(func() string {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 		overrideReason := condition.OverrideNotSpecifiedReason
@@ -1988,48 +2027,6 @@ func verifyBindStatusNotAvailableWithTwoPlacements(binding *placementv1beta1.Clu
 				},
 			}
 		}
-		if hasDiffedPlacements {
-			wantStatus.DiffedPlacements = []placementv1beta1.DiffedResourcePlacement{
-				{
-					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
-						Group:     "",
-						Version:   "v1",
-						Kind:      "ConfigMap",
-						Name:      "config-name",
-						Namespace: "config-namespace",
-					},
-					ObservationTime:                 metav1.Time{Time: specificTime},
-					FirstDiffedObservedTime:         metav1.Time{Time: specificTime},
-					TargetClusterObservedGeneration: 2,
-					ObservedDiffs: []placementv1beta1.PatchDetail{
-						{
-							Path:          "/data",
-							ValueInMember: "k=1",
-							ValueInHub:    "k=2",
-						},
-					},
-				},
-				{
-					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
-						Group:     "",
-						Version:   "v1",
-						Kind:      "Service",
-						Name:      "svc-name",
-						Namespace: "svc-namespace",
-					},
-					ObservationTime:                 metav1.Time{Time: specificTime},
-					TargetClusterObservedGeneration: 1,
-					FirstDiffedObservedTime:         metav1.Time{Time: specificTime},
-					ObservedDiffs: []placementv1beta1.PatchDetail{
-						{
-							Path:          "/spec/ports/1/containerPort",
-							ValueInHub:    "80",
-							ValueInMember: "90",
-						},
-					},
-				},
-			}
-		}
 		if hasDriftedPlacements {
 			wantStatus.DriftedPlacements = []placementv1beta1.DriftedResourcePlacement{
 				{
@@ -2076,7 +2073,7 @@ func verifyBindStatusNotAvailableWithTwoPlacements(binding *placementv1beta1.Clu
 	}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
 }
 
-func verifyBindStatusNotAvailableWithOnePlacement(binding *placementv1beta1.ClusterResourceBinding, hasOverride, hasFailedPlacement, hasDiffedPlacement, hasDriftedPlacement bool) {
+func verifyBindStatusNotAvailableWithOnePlacement(binding *placementv1beta1.ClusterResourceBinding, hasOverride, hasFailedPlacement bool) {
 	Eventually(func() string {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 		overrideReason := condition.OverrideNotSpecifiedReason
@@ -2132,52 +2129,6 @@ func verifyBindStatusNotAvailableWithOnePlacement(binding *placementv1beta1.Clus
 						Status:  metav1.ConditionFalse,
 						Reason:  fakeFailedAvailableReason,
 						Message: fakeFailedAvailableMessage,
-					},
-				},
-			}
-		}
-		if hasDiffedPlacement {
-			wantStatus.DiffedPlacements = []placementv1beta1.DiffedResourcePlacement{
-				{
-					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
-						Group:     "",
-						Version:   "v1",
-						Kind:      "Service",
-						Name:      "svc-name",
-						Namespace: "svc-namespace",
-					},
-					ObservationTime:                 metav1.Time{Time: specificTime},
-					TargetClusterObservedGeneration: 1,
-					FirstDiffedObservedTime:         metav1.Time{Time: specificTime},
-					ObservedDiffs: []placementv1beta1.PatchDetail{
-						{
-							Path:          "/spec/ports/1/containerPort",
-							ValueInHub:    "80",
-							ValueInMember: "90",
-						},
-					},
-				},
-			}
-		}
-		if hasDriftedPlacement {
-			wantStatus.DriftedPlacements = []placementv1beta1.DriftedResourcePlacement{
-				{
-					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
-						Group:     "",
-						Version:   "v1",
-						Kind:      "Service",
-						Name:      "svc-name",
-						Namespace: "svc-namespace",
-					},
-					ObservationTime:                 metav1.Time{Time: specificTime},
-					TargetClusterObservedGeneration: 1,
-					FirstDriftedObservedTime:        metav1.Time{Time: specificTime},
-					ObservedDrifts: []placementv1beta1.PatchDetail{
-						{
-							Path:          "/spec/ports/1/containerPort",
-							ValueInHub:    "80",
-							ValueInMember: "90",
-						},
 					},
 				},
 			}
@@ -2404,7 +2355,7 @@ func markWorkWithFailedToApplyAndNotAvailable(work *placementv1beta1.Work, hasDi
 }
 
 // markWorkAsAppliedButNotAvailableWithFailedManifest marks the work as not available with failedPlacement
-func markWorkAsAppliedButNotAvailableWithFailedManifest(work *placementv1beta1.Work, hasDiffedDetails, hasDriftedDetails bool) {
+func markWorkAsAppliedButNotAvailableWithFailedManifest(work *placementv1beta1.Work, hasDriftedDetails bool) {
 	meta.SetStatusCondition(&work.Status.Conditions, metav1.Condition{
 		Status:             metav1.ConditionTrue,
 		Type:               placementv1beta1.WorkConditionTypeApplied,
@@ -2467,33 +2418,6 @@ func markWorkAsAppliedButNotAvailableWithFailedManifest(work *placementv1beta1.W
 			},
 		},
 	}
-	if hasDiffedDetails {
-		work.Status.ManifestConditions[0].DiffDetails = &placementv1beta1.DiffDetails{
-			ObservationTime:                   metav1.Time{Time: specificTime},
-			FirstDiffedObservedTime:           metav1.Time{Time: specificTime},
-			ObservedInMemberClusterGeneration: 2,
-			ObservedDiffs: []placementv1beta1.PatchDetail{
-				{
-					Path:          "/data",
-					ValueInMember: "k=1",
-					ValueInHub:    "k=2",
-				},
-			},
-		}
-		work.Status.ManifestConditions[1].DiffDetails = &placementv1beta1.DiffDetails{
-			ObservationTime:                   metav1.Time{Time: specificTime},
-			FirstDiffedObservedTime:           metav1.Time{Time: specificTime},
-			ObservedInMemberClusterGeneration: 1,
-			ObservedDiffs: []placementv1beta1.PatchDetail{
-				{
-					Path:          "/spec/ports/1/containerPort",
-					ValueInHub:    "80",
-					ValueInMember: "90",
-				},
-			},
-		}
-	}
-
 	if hasDriftedDetails {
 		work.Status.ManifestConditions[0].DriftDetails = &placementv1beta1.DriftDetails{
 			ObservationTime:                   metav1.Time{Time: specificTime},
@@ -2524,7 +2448,7 @@ func markWorkAsAppliedButNotAvailableWithFailedManifest(work *placementv1beta1.W
 	By(fmt.Sprintf("resource work `%s` is marked as available", work.Name))
 }
 
-func markOneManifestAvailable(work *placementv1beta1.Work, hasDiffedManifest, hasDriftedManifest bool) {
+func markOneManifestAvailable(work *placementv1beta1.Work, hasDriftedManifest bool) {
 	work.Status.ManifestConditions = []placementv1beta1.ManifestCondition{
 		{
 			Identifier: placementv1beta1.WorkResourceIdentifier{
@@ -2578,20 +2502,6 @@ func markOneManifestAvailable(work *placementv1beta1.Work, hasDiffedManifest, ha
 				},
 			},
 		},
-	}
-	if hasDiffedManifest {
-		work.Status.ManifestConditions[1].DiffDetails = &placementv1beta1.DiffDetails{
-			ObservationTime:                   metav1.Time{Time: specificTime},
-			FirstDiffedObservedTime:           metav1.Time{Time: specificTime},
-			ObservedInMemberClusterGeneration: 1,
-			ObservedDiffs: []placementv1beta1.PatchDetail{
-				{
-					Path:          "/spec/ports/1/containerPort",
-					ValueInHub:    "80",
-					ValueInMember: "90",
-				},
-			},
-		}
 	}
 	if hasDriftedManifest {
 		work.Status.ManifestConditions[1].DriftDetails = &placementv1beta1.DriftDetails{

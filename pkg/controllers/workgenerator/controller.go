@@ -764,52 +764,55 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 	resourceBinding.Status.DiffedPlacements = nil
 	resourceBinding.Status.DriftedPlacements = nil
 	// collect and set the failed resource placements to the binding if not all the works are available
-	if appliedCond.Status != metav1.ConditionTrue || availableCond.Status != metav1.ConditionTrue {
-		failedResourcePlacements := make([]fleetv1beta1.FailedResourcePlacement, 0, maxFailedResourcePlacementLimit)    // preallocate the memory
-		diffedResourcePlacements := make([]fleetv1beta1.DiffedResourcePlacement, 0, maxDiffedResourcePlacementLimit)    // preallocate the memory
-		driftedResourcePlacements := make([]fleetv1beta1.DriftedResourcePlacement, 0, maxDriftedResourcePlacementLimit) // preallocate the memory
-		for _, w := range works {
-			if w.DeletionTimestamp != nil {
-				klog.V(2).InfoS("Ignoring the deleting work", "clusterResourceBinding", bindingRef, "work", klog.KObj(w))
-				continue // ignore the deleting work
-			}
+	driftedResourcePlacements := make([]fleetv1beta1.DriftedResourcePlacement, 0, maxDriftedResourcePlacementLimit) // preallocate the memory
+	failedResourcePlacements := make([]fleetv1beta1.FailedResourcePlacement, 0, maxFailedResourcePlacementLimit)    // preallocate the memory
+	diffedResourcePlacements := make([]fleetv1beta1.DiffedResourcePlacement, 0, maxDiffedResourcePlacementLimit)    // preallocate the memory
+	for _, w := range works {
+		if w.DeletionTimestamp != nil {
+			klog.V(2).InfoS("Ignoring the deleting work", "clusterResourceBinding", bindingRef, "work", klog.KObj(w))
+			continue // ignore the deleting work
+		}
+
+		// Failed placements (resources that cannot be applied or failed to get available) will only appear when either
+		// the Applied or Available conditions (on the work object) are set to False
+		if appliedCond.Status != metav1.ConditionTrue || availableCond.Status != metav1.ConditionTrue {
 			failedManifests := extractFailedResourcePlacementsFromWork(w)
 			failedResourcePlacements = append(failedResourcePlacements, failedManifests...)
-
+		}
+		// Diffed placements can only appear when the Applied condition is set to False.
+		if appliedCond.Status == metav1.ConditionFalse {
 			diffedManifests := extractDiffedResourcePlacementsFromWork(w)
 			diffedResourcePlacements = append(diffedResourcePlacements, diffedManifests...)
+		}
+		// Drifted placements can appear in any situation (Applied condition is True or False)
+		driftedManifests := extractDriftedResourcePlacementsFromWork(w)
+		driftedResourcePlacements = append(driftedResourcePlacements, driftedManifests...)
+	}
+	// cut the list to keep only the max limit
+	if len(failedResourcePlacements) > maxFailedResourcePlacementLimit {
+		failedResourcePlacements = failedResourcePlacements[0:maxFailedResourcePlacementLimit]
+	}
+	resourceBinding.Status.FailedPlacements = failedResourcePlacements
+	if len(failedResourcePlacements) > 0 {
+		klog.V(2).InfoS("Populated failed manifests", "clusterResourceBinding", bindingRef, "numberOfFailedPlacements", len(failedResourcePlacements))
+	}
 
-			driftedManifests := extractDriftedResourcePlacementsFromWork(w)
-			driftedResourcePlacements = append(driftedResourcePlacements, driftedManifests...)
-		}
-		// cut the list to keep only the max limit
-		if len(failedResourcePlacements) > maxFailedResourcePlacementLimit {
-			failedResourcePlacements = failedResourcePlacements[0:maxFailedResourcePlacementLimit]
-		}
-		resourceBinding.Status.FailedPlacements = failedResourcePlacements
-		if len(failedResourcePlacements) > 0 {
-			klog.V(2).InfoS("Populated failed manifests", "clusterResourceBinding", bindingRef, "numberOfFailedPlacements", len(failedResourcePlacements))
-		}
+	// cut the list to keep only the max limit
+	if len(diffedResourcePlacements) > maxDiffedResourcePlacementLimit {
+		diffedResourcePlacements = diffedResourcePlacements[0:maxDiffedResourcePlacementLimit]
+	}
+	if len(diffedResourcePlacements) > 0 {
+		resourceBinding.Status.DiffedPlacements = diffedResourcePlacements
+		klog.V(2).InfoS("Populated diffed manifests", "clusterResourceBinding", bindingRef, "numberOfDiffedPlacements", len(diffedResourcePlacements))
+	}
 
-		// cut the list to keep only the max limit
-		if len(diffedResourcePlacements) > maxDiffedResourcePlacementLimit {
-			diffedResourcePlacements = diffedResourcePlacements[0:maxDiffedResourcePlacementLimit]
-		}
-
-		if len(diffedResourcePlacements) > 0 {
-			resourceBinding.Status.DiffedPlacements = diffedResourcePlacements
-			klog.V(2).InfoS("Populated diffed manifests", "clusterResourceBinding", bindingRef, "numberOfDiffedPlacements", len(diffedResourcePlacements))
-		}
-
-		// cut the list to keep only the max limit
-		if len(driftedResourcePlacements) > maxDriftedResourcePlacementLimit {
-			driftedResourcePlacements = driftedResourcePlacements[0:maxDriftedResourcePlacementLimit]
-		}
-
-		if len(driftedResourcePlacements) > 0 {
-			resourceBinding.Status.DriftedPlacements = driftedResourcePlacements
-			klog.V(2).InfoS("Populated drifted manifests", "clusterResourceBinding", bindingRef, "numberOfDriftedPlacements", len(driftedResourcePlacements))
-		}
+	// cut the list to keep only the max limit
+	if len(driftedResourcePlacements) > maxDriftedResourcePlacementLimit {
+		driftedResourcePlacements = driftedResourcePlacements[0:maxDriftedResourcePlacementLimit]
+	}
+	if len(driftedResourcePlacements) > 0 {
+		resourceBinding.Status.DriftedPlacements = driftedResourcePlacements
+		klog.V(2).InfoS("Populated drifted manifests", "clusterResourceBinding", bindingRef, "numberOfDriftedPlacements", len(driftedResourcePlacements))
 	}
 }
 
@@ -1151,17 +1154,22 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 				newAvailableCondition := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 
 				// we try to filter out events, we only need to handle the updated event if the applied or available condition flip between true and false
-				// or the failed placements are changed.
+				// or the failed/diffed/drifted placements are changed.
 				if condition.EqualCondition(oldAppliedCondition, newAppliedCondition) && condition.EqualCondition(oldAvailableCondition, newAvailableCondition) {
+					oldDriftedPlacements := extractDriftedResourcePlacementsFromWork(oldWork)
+					newDriftedPlacements := extractDriftedResourcePlacementsFromWork(newWork)
+					driftsEqual := utils.IsDriftedResourcePlacementsEqual(oldDriftedPlacements, newDriftedPlacements)
 					if condition.IsConditionStatusFalse(newAppliedCondition, newWork.Generation) || condition.IsConditionStatusFalse(newAvailableCondition, newWork.Generation) {
+						diffsEqual := true
+						if condition.IsConditionStatusFalse(newAppliedCondition, newWork.Generation) {
+							oldDiffedPlacements := extractDiffedResourcePlacementsFromWork(oldWork)
+							newDiffedPlacements := extractDiffedResourcePlacementsFromWork(newWork)
+							diffsEqual = utils.IsDiffedResourcePlacementsEqual(oldDiffedPlacements, newDiffedPlacements)
+						}
 						// we need to compare the failed placement if the work is not applied or available
 						oldFailedPlacements := extractFailedResourcePlacementsFromWork(oldWork)
 						newFailedPlacements := extractFailedResourcePlacementsFromWork(newWork)
-						oldDiffedPlacements := extractDiffedResourcePlacementsFromWork(oldWork)
-						newDiffedPlacements := extractDiffedResourcePlacementsFromWork(newWork)
-						oldDriftedPlacements := extractDriftedResourcePlacementsFromWork(oldWork)
-						newDriftedPlacements := extractDriftedResourcePlacementsFromWork(newWork)
-						if utils.IsDriftedResourcePlacementsEqual(oldDriftedPlacements, newDriftedPlacements) && utils.IsDiffedResourcePlacementsEqual(oldDiffedPlacements, newDiffedPlacements) && utils.IsFailedResourcePlacementsEqual(oldFailedPlacements, newFailedPlacements) {
+						if driftsEqual && diffsEqual && utils.IsFailedResourcePlacementsEqual(oldFailedPlacements, newFailedPlacements) {
 							klog.V(2).InfoS("The placement lists didn't change on failed work, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
 							return
 						}
@@ -1179,7 +1187,7 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 						// When the normal update happens, the controller will set the applied condition as false and wait
 						// until the work condition has been changed.
 						// In this edge case, we need to requeue the binding to update the binding status.
-						if oldResourceSnapshot == newResourceSnapshot {
+						if oldResourceSnapshot == newResourceSnapshot && driftsEqual {
 							klog.V(2).InfoS("The work applied or available condition stayed as true, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
 							return
 						}

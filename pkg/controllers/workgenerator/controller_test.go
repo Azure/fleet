@@ -1285,7 +1285,7 @@ func TestSetBindingStatus(t *testing.T) {
 								Conditions: []metav1.Condition{
 									{
 										Type:   fleetv1beta1.WorkConditionTypeApplied,
-										Status: metav1.ConditionFalse,
+										Status: metav1.ConditionTrue,
 									},
 								},
 								DriftDetails: &fleetv1beta1.DriftDetails{
@@ -1305,7 +1305,7 @@ func TestSetBindingStatus(t *testing.T) {
 						Conditions: []metav1.Condition{
 							{
 								Type:   fleetv1beta1.WorkConditionTypeApplied,
-								Status: metav1.ConditionFalse,
+								Status: metav1.ConditionTrue,
 							},
 						},
 					},
@@ -1325,7 +1325,6 @@ func TestSetBindingStatus(t *testing.T) {
 					},
 				},
 			},
-			maxFailedResourcePlacementLimit:  ptr.To(1),
 			maxDriftedResourcePlacementLimit: ptr.To(1),
 			wantDriftedResourcePlacements: []fleetv1beta1.DriftedResourcePlacement{
 				{
