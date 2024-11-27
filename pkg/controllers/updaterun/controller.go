@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/controller"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -27,6 +25,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 // Reconciler reconciles a ClusterStagedUpdateRun object.
