@@ -792,8 +792,8 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 	if len(failedResourcePlacements) > maxFailedResourcePlacementLimit {
 		failedResourcePlacements = failedResourcePlacements[0:maxFailedResourcePlacementLimit]
 	}
-	resourceBinding.Status.FailedPlacements = failedResourcePlacements
 	if len(failedResourcePlacements) > 0 {
+		resourceBinding.Status.FailedPlacements = failedResourcePlacements
 		klog.V(2).InfoS("Populated failed manifests", "clusterResourceBinding", bindingRef, "numberOfFailedPlacements", len(failedResourcePlacements))
 	}
 
