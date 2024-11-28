@@ -1761,7 +1761,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: time.Second,
 		},
-		"test one ready deleting bound binding, one unscheduled binding - rollout allowed, unscheduled binding is not removed": {
+		"test one ready deleting bound binding, one unscheduled binding - rollout blocked, unscheduled binding is not removed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				readyBoundDeletingBinding,
 				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
