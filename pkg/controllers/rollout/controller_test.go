@@ -1577,7 +1577,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: 0,
 		},
-		"test one deleting scheduled binding, one canBeReady bound binding, update candidate - rollout allowed update stale binding": {
+		"test one deleting scheduled binding, one canBeReady bound binding, update candidate - rollout blocked, update stale binding status": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				canBeReadyBinding,
 				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateScheduled, cluster2),
@@ -1599,7 +1599,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: time.Second,
 		},
-		"test one deleting scheduled binding, one ready bound binding, update candidate - rollout allowed update stale binding": {
+		"test one deleting scheduled binding, one ready bound binding, update candidate - rollout blocked, update stale binding status": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateScheduled, cluster1),
 				readyBoundBinding,
@@ -1621,11 +1621,10 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: 0,
 		},
-		// If target number is greater than 1 we block rollout for same case.
 		"test one deleting scheduled binding, one unscheduled binding - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateDeletingClusterResourceBinding(fleetv1beta1.BindingStateScheduled, cluster1),
-				notReadyUnscheduledBinding, // actually ready binding since UnavailablePeriodSeconds is not specified in CRP used.
+				notReadyUnscheduledBinding, // actually ready unscheduled binding since UnavailablePeriodSeconds is not specified in CRP used.
 			},
 			latestResourceSnapshotName: "snapshot-1",
 			crp: clusterResourcePlacementForTest("test",
