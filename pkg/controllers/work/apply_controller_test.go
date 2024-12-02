@@ -1235,6 +1235,134 @@ func TestTrackResourceAvailability(t *testing.T) {
 			expected: manifestNotTrackableAction,
 			err:      nil,
 		},
+		"Test CustomResourceDefinition available": {
+			gvr: utils.CustomResourceDefinitionGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apiextensions.k8s.io/v1",
+					"kind":       "CustomResourceDefinition",
+					"metadata": map[string]interface{}{
+						"name": "testresources.example.com",
+					},
+					"spec": map[string]interface{}{
+						"group": "example.com",
+						"names": map[string]interface{}{
+							"plural":     "testresources",
+							"singular":   "testresource",
+							"kind":       "TestResource",
+							"shortNames": []string{"tr"},
+						},
+						"scope": "Namespaced",
+						"versions": []interface{}{
+							map[string]interface{}{
+								"name":    "v1",
+								"served":  true,
+								"storage": true,
+								"schema": map[string]interface{}{
+									"openAPIV3Schema": map[string]interface{}{
+										"type": "object",
+										"properties": map[string]interface{}{
+											"spec": map[string]interface{}{
+												"type": "object",
+												"properties": map[string]interface{}{
+													"field": map[string]interface{}{
+														"type": "string",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"type":               "Established",
+								"status":             "True",
+								"lastTransitionTime": metav1.Now(),
+								"reason":             "CRDEstablished",
+								"message":            "The CustomResourceDefinition has been established.",
+							},
+							map[string]interface{}{
+								"type":               "NamesAccepted",
+								"status":             "True",
+								"lastTransitionTime": metav1.Now(),
+								"reason":             "NoConflicts",
+								"message":            "The CustomResourceDefinition name was accepted.",
+							},
+						},
+					},
+				},
+			},
+			expected: manifestAvailableAction,
+			err:      nil,
+		},
+		"Test CustomResourceDefinition unavailable": {
+			gvr: utils.CustomResourceDefinitionGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apiextensions.k8s.io/v1",
+					"kind":       "CustomResourceDefinition",
+					"metadata": map[string]interface{}{
+						"name": "testresources.example.com",
+					},
+					"spec": map[string]interface{}{
+						"group": "example.com",
+						"names": map[string]interface{}{
+							"plural":     "testresources",
+							"singular":   "testresource",
+							"kind":       "TestResource",
+							"shortNames": []string{"tr"},
+						},
+						"scope": "Namespaced",
+						"versions": []interface{}{
+							map[string]interface{}{
+								"name":    "v1",
+								"served":  true,
+								"storage": true,
+								"schema": map[string]interface{}{
+									"openAPIV3Schema": map[string]interface{}{
+										"type": "object",
+										"properties": map[string]interface{}{
+											"spec": map[string]interface{}{
+												"type": "object",
+												"properties": map[string]interface{}{
+													"field": map[string]interface{}{
+														"type": "string",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"type":               "Established",
+								"status":             "False",
+								"lastTransitionTime": metav1.Now(),
+								"reason":             "CRDEstablished",
+								"message":            "The CustomResourceDefinition has been established.",
+							},
+							map[string]interface{}{
+								"type":               "NamesAccepted",
+								"status":             "True",
+								"lastTransitionTime": metav1.Now(),
+								"reason":             "NoConflicts",
+								"message":            "The CustomResourceDefinition name was accepted.",
+							},
+						},
+					},
+				},
+			},
+			expected: manifestNotAvailableYetAction,
+			err:      nil,
+		},
 	}
 
 	for name, tt := range tests {
