@@ -7,34 +7,19 @@ package v1beta1
 import (
 	"context"
 	"flag"
-	"path/filepath"
-	"testing"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
+	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	clusterv1 "go.goms.io/fleet/apis/cluster/v1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 )
-
-var (
-	hubTestEnv *envtest.Environment
-	hubClient  client.Client
-	ctx        context.Context
-	cancel     context.CancelFunc
-)
-
-func TestAPIs(t *testing.T) {
-	RegisterFailHandler(Fail)
-
-	RunSpecs(t, "ClusterResourcePlacement Controller Suite")
-}
 
 var _ = BeforeSuite(func() {
 	By("Setup klog")
@@ -56,7 +41,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(hubCfg).NotTo(BeNil())
 
-	Expect(clusterv1.AddToScheme(scheme.Scheme)).Should(Succeed())
+	Expect(clusterv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 
 	klog.InitFlags(flag.CommandLine)
 	flag.Parse()
