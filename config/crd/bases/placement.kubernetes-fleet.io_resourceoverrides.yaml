@@ -44,6 +44,21 @@ spec:
           spec:
             description: The desired state of ResourceOverrideSpec.
             properties:
+              placement:
+                description: |-
+                  Placement defines whether the override is applied to a specific placement or not.
+                  If so, the override will trigger the placement rollout immediately when the rollout strategy type is RollingUpdate.
+                  Otherwise, it will be applied to the next rollout.
+                properties:
+                  name:
+                    description: Name is the reference to the name of placement.
+                    type: string
+                required:
+                - name
+                type: object
+                x-kubernetes-validations:
+                - message: spec.placement is immutable
+                  rule: self == oldSelf
               policy:
                 description: Policy defines how to override the selected resources
                   on the target clusters.
@@ -251,7 +266,10 @@ spec:
                           minItems: 1
                           type: array
                         overrideType:
+<<<<<<< HEAD
                           default: JSONPatch
+=======
+>>>>>>> 683fa05 (interface: support crp attached override)
                           description: OverrideType defines the type of the override
                             rules.
                           enum:
