@@ -129,6 +129,21 @@ spec:
                 maxItems: 20
                 minItems: 1
                 type: array
+              placement:
+                description: |-
+                  Placement defines whether the override is applied to a specific placement or not.
+                  If so, the override will trigger the placement rollout immediately when the rollout strategy type is RollingUpdate.
+                  Otherwise, it will be applied to the next rollout.
+                properties:
+                  name:
+                    description: Name is the reference to the name of placement.
+                    type: string
+                required:
+                - name
+                type: object
+                x-kubernetes-validations:
+                - message: spec.placement is immutable
+                  rule: self == oldSelf
               policy:
                 description: Policy defines how to override the selected resources
                   on the target clusters.
@@ -303,8 +318,9 @@ spec:
                           - clusterSelectorTerms
                           type: object
                         jsonPatchOverrides:
-                          description: JSONPatchOverrides defines a list of JSON patch
-                            override rules.
+                          description: |-
+                            JSONPatchOverrides defines a list of JSON patch override rules.
+                            This field is only allowed when OverrideType is JSONPatch.
                           items:
                             description: JSONPatchOverride applies a JSON patch on
                               the selected resources following [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
@@ -334,8 +350,13 @@ spec:
                           maxItems: 20
                           minItems: 1
                           type: array
-                      required:
-                      - jsonPatchOverrides
+                        overrideType:
+                          description: OverrideType defines the type of the override
+                            rules.
+                          enum:
+                          - JSONPatch
+                          - Delete
+                          type: string
                       type: object
                     maxItems: 20
                     minItems: 1

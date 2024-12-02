@@ -48,6 +48,21 @@ type ClusterResourceOverrideSpec struct {
 	// Policy defines how to override the selected resources on the target clusters.
 	// +required
 	Policy *OverridePolicy `json:"policy"`
+
+	// Placement defines whether the override is applied to a specific placement or not.
+	// If so, the override will trigger the placement rollout immediately when the rollout strategy type is RollingUpdate.
+	// Otherwise, it will be applied to the next rollout.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="spec.placement is immutable"
+	// +optional
+	Placement *PlacementRef `json:"placement,omitempty"`
+}
+
+// PlacementRef is the reference to a placement.
+// For now, we only support ClusterResourcePlacement.
+type PlacementRef struct {
+	// Name is the reference to the name of placement.
+	// +required
+	Name string `json:"name"`
 }
 
 // OverridePolicy defines how to override the selected resources on the target clusters.
@@ -133,6 +148,13 @@ type ResourceOverrideSpec struct {
 	// Policy defines how to override the selected resources on the target clusters.
 	// +required
 	Policy *OverridePolicy `json:"policy"`
+
+	// Placement defines whether the override is applied to a specific placement or not.
+	// If so, the override will trigger the placement rollout immediately when the rollout strategy type is RollingUpdate.
+	// Otherwise, it will be applied to the next rollout.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="spec.placement is immutable"
+	// +optional
+	Placement *PlacementRef `json:"placement,omitempty"`
 }
 
 // ResourceSelector is used to select namespace scoped resources as the target resources to be placed.
