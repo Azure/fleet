@@ -3,29 +3,12 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package v1alpha1
+package v1beta1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-const (
-
-	// OverrideIndexLabel is the label that indicate the policy snapshot index of a cluster policy.
-	OverrideIndexLabel = fleetPrefix + "override-index"
-
-	// OverrideSnapshotNameFmt is clusterResourceOverrideSnapshot name format: {CROName}-{OverrideSnapshotIndex}.
-	OverrideSnapshotNameFmt = "%s-%d"
-
-	// OverrideTrackingLabel is the label that points to the cluster resource override that creates a resource snapshot.
-	OverrideTrackingLabel = fleetPrefix + "parent-resource-override"
-
-	// OverrideFinalizer is a finalizer added by the override controllers to all override, to make sure
-	// that the override controller can react to override deletions if necessary.
-	OverrideFinalizer = fleetPrefix + "override-cleanup"
-)
-
 // +genclient
 // +genclient:nonNamespaced
-// +kubebuilder:storageversion
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope="Cluster",categories={fleet,fleet-placement}
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -61,7 +44,6 @@ type ClusterResourceOverrideSnapshotSpec struct {
 
 // +genclient
 // +genclient:Namespaced
-// +kubebuilder:storageversion
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope="Namespaced",categories={fleet,fleet-placement}
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

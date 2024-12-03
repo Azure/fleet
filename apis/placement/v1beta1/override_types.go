@@ -3,18 +3,15 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package v1alpha1
+package v1beta1
 
 import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 // +genclient
 // +genclient:nonNamespaced
-// +kubebuilder:storageversion
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope="Cluster",categories={fleet,fleet-placement}
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -36,11 +33,9 @@ type ClusterResourceOverride struct {
 // conflicts.
 type ClusterResourceOverrideSpec struct {
 	// Placement defines whether the override is applied to a specific placement or not.
-	// If so, the override will trigger the placement rollout immediately when the rollout strategy type is RollingUpdate.
-	// Otherwise, it will be applied to the next rollout.
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="spec.placement is immutable"
-	// +optional
-	Placement *PlacementRef `json:"placement,omitempty"`
+	// +required
+	Placement *PlacementRef `json:"placement"`
 
 	// ClusterResourceSelectors is an array of selectors used to select cluster scoped resources. The selectors are `ORed`.
 	// If a namespace is selected, ALL the resources under the namespace are selected automatically.
@@ -51,7 +46,7 @@ type ClusterResourceOverrideSpec struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=20
 	// +required
-	ClusterResourceSelectors []placementv1beta1.ClusterResourceSelector `json:"clusterResourceSelectors"`
+	ClusterResourceSelectors []ClusterResourceSelector `json:"clusterResourceSelectors"`
 
 	// Policy defines how to override the selected resources on the target clusters.
 	// +required
@@ -88,7 +83,7 @@ type OverrideRule struct {
 	// A nil clusterSelector selects NO member clusters.
 	// For now, only labelSelector is supported.
 	// +optional
-	ClusterSelector *placementv1beta1.ClusterSelector `json:"clusterSelector,omitempty"`
+	ClusterSelector *ClusterSelector `json:"clusterSelector,omitempty"`
 
 	// OverrideType defines the type of the override rules.
 	// +kubebuilder:validation:Enum=JSONPatch;Delete
@@ -118,7 +113,6 @@ const (
 
 // +genclient
 // +genclient:Namespaced
-// +kubebuilder:storageversion
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope="Namespaced",categories={fleet,fleet-placement}
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -140,11 +134,9 @@ type ResourceOverride struct {
 // conflicts.
 type ResourceOverrideSpec struct {
 	// Placement defines whether the override is applied to a specific placement or not.
-	// If so, the override will trigger the placement rollout immediately when the rollout strategy type is RollingUpdate.
-	// Otherwise, it will be applied to the next rollout.
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="spec.placement is immutable"
-	// +optional
-	Placement *PlacementRef `json:"placement,omitempty"`
+	// +required
+	Placement *PlacementRef `json:"placement"`
 
 	// ResourceSelectors is an array of selectors used to select namespace scoped resources. The selectors are `ORed`.
 	// You can have 1-20 selectors.
