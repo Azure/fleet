@@ -5,88 +5,213 @@ Licensed under the MIT license.
 package v1beta1
 
 import (
-	"context"
-	"flag"
-	"path/filepath"
-	"testing"
+	"errors"
+	"fmt"
+	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/textlogger"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	rbacv1 "k8s.io/api/rbac/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	clusterv1 "go.goms.io/fleet/apis/cluster/v1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 )
 
-var (
-	hubTestEnv *envtest.Environment
-	hubClient  client.Client
-	ctx        context.Context
-	cancel     context.CancelFunc
-)
+var _ = Describe("Test cluster v1 API validation", func() {
+	Context("Test MemberCluster API validation - invalid cases", func() {
+		It("should deny creating API with invalid name size", func() {
+			var name = "abcdef-123456789-123456789-123456789-123456789-123456789-123456789-123456789"
+			// Create the API.
+			memberClusterName := &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Identity: rbacv1.Subject{
+						Name:      "fleet-member-agent-cluster-1",
+						Kind:      "ServiceAccount",
+						Namespace: "fleet-system",
+						APIGroup:  "",
+					},
+				},
+			}
+			By(fmt.Sprintf("expecting denial of CREATE API %s", name))
+			var err = hubClient.Create(ctx, memberClusterName)
+			var statusErr *k8serrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create API call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8serrors.StatusError{})))
+			Expect(statusErr.Status().Message).Should(ContainSubstring("metadata.name max length is 63"))
+		})
 
-func TestAPIs(t *testing.T) {
-	RegisterFailHandler(Fail)
+		It("should deny creating API with invalid name starting with non-alphanumeric character", func() {
+			var name = "-abcdef-123456789-123456789-123456789-123456789-123456789"
+			// Create the API.
+			memberClusterName := &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Identity: rbacv1.Subject{
+						Name:      "fleet-member-agent-cluster-1",
+						Kind:      "ServiceAccount",
+						Namespace: "fleet-system",
+						APIGroup:  "",
+					},
+				},
+			}
+			By(fmt.Sprintf("expecting denial of CREATE API %s", name))
+			err := hubClient.Create(ctx, memberClusterName)
+			var statusErr *k8serrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create API call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8serrors.StatusError{})))
+			Expect(statusErr.Status().Message).Should(ContainSubstring("a lowercase RFC 1123 subdomain"))
+		})
 
-	RunSpecs(t, "ClusterResourcePlacement Controller Suite")
-}
+		It("should deny creating API with invalid name ending with non-alphanumeric character", func() {
+			var name = "abcdef-123456789-123456789-123456789-123456789-123456789-"
+			// Create the API.
+			memberClusterName := &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Identity: rbacv1.Subject{
+						Name:      "fleet-member-agent-cluster-1",
+						Kind:      "ServiceAccount",
+						Namespace: "fleet-system",
+						APIGroup:  "",
+					},
+				},
+			}
+			By(fmt.Sprintf("expecting denial of CREATE API %s", name))
+			err := hubClient.Create(ctx, memberClusterName)
+			var statusErr *k8serrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create API call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8serrors.StatusError{})))
+			Expect(statusErr.Status().Message).Should(ContainSubstring("a lowercase RFC 1123 subdomain"))
+		})
 
-var _ = BeforeSuite(func() {
-	By("Setup klog")
-	fs := flag.NewFlagSet("klog", flag.ContinueOnError)
-	klog.InitFlags(fs)
-	Expect(fs.Parse([]string{"--v", "5", "-add_dir_header", "true"})).Should(Succeed())
-
-	ctx, cancel = context.WithCancel(context.TODO())
-
-	By("bootstrap the test environment")
-	// Start the cluster.
-	hubTestEnv = &envtest.Environment{
-		CRDDirectoryPaths: []string{
-			filepath.Join("..", "..", "..", "..", "config", "crd", "bases"),
-		},
-		ErrorIfCRDPathMissing: true,
-	}
-	hubCfg, err := hubTestEnv.Start()
-	Expect(err).NotTo(HaveOccurred())
-	Expect(hubCfg).NotTo(BeNil())
-
-	Expect(clusterv1.AddToScheme(scheme.Scheme)).Should(Succeed())
-
-	klog.InitFlags(flag.CommandLine)
-	flag.Parse()
-	// Create the hub controller manager.
-	hubCtrlMgr, err := ctrl.NewManager(hubCfg, ctrl.Options{
-		Scheme: scheme.Scheme,
-		Metrics: metricsserver.Options{
-			BindAddress: "0",
-		},
-		Logger: textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(4))),
+		It("should deny creating API with invalid name containing character that is not alphanumeric and not -", func() {
+			var name = "a_bcdef-123456789-123456789-123456789-123456789-123456789-123456789-123456789"
+			// Create the API.
+			memberClusterName := &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Identity: rbacv1.Subject{
+						Name:      "fleet-member-agent-cluster-1",
+						Kind:      "ServiceAccount",
+						Namespace: "fleet-system",
+						APIGroup:  "",
+					},
+				},
+			}
+			By(fmt.Sprintf("expecting denial of CREATE API %s", name))
+			err := hubClient.Create(ctx, memberClusterName)
+			var statusErr *k8serrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create API call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8serrors.StatusError{})))
+			Expect(statusErr.Status().Message).Should(ContainSubstring("a lowercase RFC 1123 subdomain"))
+		})
 	})
-	Expect(err).NotTo(HaveOccurred())
 
-	// Set up the client.
-	// The client must be one with cache (i.e. configured by the controller manager) to make
-	// use of the cache indexes.
-	hubClient = hubCtrlMgr.GetClient()
-	Expect(hubClient).NotTo(BeNil())
+	Context("Test Member Cluster creation API validation - valid cases", func() {
+		It("should allow creating API with valid name size", func() {
+			var name = "abc-123456789-123456789-123456789-123456789-123456789-123456789"
+			// Create the API.
+			memberClusterName := &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Identity: rbacv1.Subject{
+						Name:      "fleet-member-agent-cluster-1",
+						Kind:      "ServiceAccount",
+						Namespace: "fleet-system",
+						APIGroup:  "",
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
+			Expect(hubClient.Delete(ctx, memberClusterName)).Should(Succeed())
+		})
 
-	go func() {
-		defer GinkgoRecover()
-		err = hubCtrlMgr.Start(ctx)
-		Expect(err).ToNot(HaveOccurred(), "failed to start manager for hub")
-	}()
-})
+		It("should allow creating API with valid name starting with alphabet character", func() {
+			var name = "abc-123456789"
+			// Create the API.
+			memberClusterName := &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Identity: rbacv1.Subject{
+						Name:      "fleet-member-agent-cluster-1",
+						Kind:      "ServiceAccount",
+						Namespace: "fleet-system",
+						APIGroup:  "",
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
+			Expect(hubClient.Delete(ctx, memberClusterName)).Should(Succeed())
+		})
 
-var _ = AfterSuite(func() {
-	defer klog.Flush()
-	cancel()
+		It("should allow creating API with valid name starting with numeric character", func() {
+			var name = "123-123456789"
+			// Create the API.
+			memberClusterName := &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Identity: rbacv1.Subject{
+						Name:      "fleet-member-agent-cluster-1",
+						Kind:      "ServiceAccount",
+						Namespace: "fleet-system",
+						APIGroup:  "",
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
+			Expect(hubClient.Delete(ctx, memberClusterName)).Should(Succeed())
+		})
 
-	By("tearing down the test environment")
-	Expect(hubTestEnv.Stop()).Should(Succeed())
+		It("should allow creating API with valid name ending with alphabet character", func() {
+			var name = "123456789-abc"
+			// Create the API.
+			memberClusterName := &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Identity: rbacv1.Subject{
+						Name:      "fleet-member-agent-cluster-1",
+						Kind:      "ServiceAccount",
+						Namespace: "fleet-system",
+						APIGroup:  "",
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
+			Expect(hubClient.Delete(ctx, memberClusterName)).Should(Succeed())
+		})
+
+		It("should allow creating API with valid name ending with numeric character", func() {
+			var name = "123456789-123"
+			// Create the API.
+			memberClusterName := &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Identity: rbacv1.Subject{
+						Name:      "fleet-member-agent-cluster-1",
+						Kind:      "ServiceAccount",
+						Namespace: "fleet-system",
+						APIGroup:  "",
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, memberClusterName)).Should(Succeed())
+			Expect(hubClient.Delete(ctx, memberClusterName)).Should(Succeed())
+		})
+	})
 })
