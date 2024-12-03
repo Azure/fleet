@@ -83,16 +83,16 @@ func TestIsEvictionAllowed(t *testing.T) {
 	}
 	tests := []struct {
 		name                  string
-		targetNumber          int
+		crp                   placementv1beta1.ClusterResourcePlacement
 		bindings              []placementv1beta1.ClusterResourceBinding
 		disruptionBudget      placementv1alpha1.ClusterResourcePlacementDisruptionBudget
 		wantAllowed           bool
 		wantAvailableBindings int
 	}{
 		{
-			name:         "MaxUnavailable specified as Integer zero, one available binding - block eviction",
-			targetNumber: 1,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding},
+			name:     "MaxUnavailable specified as Integer zero, one available binding - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 1),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -108,9 +108,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 1,
 		},
 		{
-			name:         "MaxUnavailable specified as Integer zero, one unavailable bindings - block eviction",
-			targetNumber: 1,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding},
+			name:     "MaxUnavailable specified as Integer zero, one unavailable bindings - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 1),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -126,9 +126,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 0,
 		},
 		{
-			name:         "MaxUnavailable specified as Integer one, one unavailable binding - block eviction",
-			targetNumber: 1,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding},
+			name:     "MaxUnavailable specified as Integer one, one unavailable binding - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 1),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -144,9 +144,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 0,
 		},
 		{
-			name:         "MaxUnavailable specified as Integer one, one available binding, upscaling - allow eviction",
-			targetNumber: 2,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding},
+			name:     "MaxUnavailable specified as Integer one, one available binding, upscaling - allow eviction",
+			crp:      buildTestPickNCRP("test-crp", 2),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -162,9 +162,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 1,
 		},
 		{
-			name:         "MaxUnavailable specified as Integer one, one available, one unavailable binding - block eviction",
-			targetNumber: 2,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, boundUnavailableBinding},
+			name:     "MaxUnavailable specified as Integer one, one available, one unavailable binding - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 2),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, boundUnavailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -180,9 +180,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 1,
 		},
 		{
-			name:         "MaxUnavailable specified as Integer one, two available binding - allow eviction",
-			targetNumber: 1,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, unScheduledAvailableBinding},
+			name:     "MaxUnavailable specified as Integer one, two available binding - allow eviction",
+			crp:      buildTestPickNCRP("test-crp", 1),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -198,9 +198,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 2,
 		},
 		{
-			name:         "MaxUnavailable specified as Integer one, available bindings greater than target, downscaling - allow eviction",
-			targetNumber: 1,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
+			name:     "MaxUnavailable specified as Integer one, available bindings greater than target, downscaling - allow eviction",
+			crp:      buildTestPickNCRP("test-crp", 1),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -216,9 +216,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 3,
 		},
 		{
-			name:         "MaxUnavailable specified as Integer greater than one - block eviction",
-			targetNumber: 4,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, anotherBoundAvailableBinding, boundUnavailableBinding},
+			name:     "MaxUnavailable specified as Integer greater than one - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 4),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, anotherBoundAvailableBinding, boundUnavailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -234,9 +234,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 2,
 		},
 		{
-			name:         "MaxUnavailable specified as Integer greater than one - allow eviction",
-			targetNumber: 3,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, unScheduledAvailableBinding},
+			name:     "MaxUnavailable specified as Integer greater than one - allow eviction",
+			crp:      buildTestPickNCRP("test-crp", 3),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -252,9 +252,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 2,
 		},
 		{
-			name:         "MaxUnavailable specified as Integer large number greater than target number - allows eviction",
-			targetNumber: 4,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, boundUnavailableBinding, unScheduledAvailableBinding},
+			name:     "MaxUnavailable specified as Integer large number greater than target number - allows eviction",
+			crp:      buildTestPickNCRP("test-crp", 4),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, boundUnavailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -270,9 +270,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 2,
 		},
 		{
-			name:         "MaxUnavailable specified as percentage zero - block eviction",
-			targetNumber: 2,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, unScheduledAvailableBinding},
+			name:     "MaxUnavailable specified as percentage zero - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 2),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -288,9 +288,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 2,
 		},
 		{
-			name:         "MaxUnavailable specified as percentage greater than zero, rounds up to 1 - block eviction",
-			targetNumber: 1,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding},
+			name:     "MaxUnavailable specified as percentage greater than zero, rounds up to 1 - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 1),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -306,9 +306,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 0,
 		},
 		{
-			name:         "MaxUnavailable specified as percentage greater than zero, rounds up to 1 - allow eviction",
-			targetNumber: 1,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding},
+			name:     "MaxUnavailable specified as percentage greater than zero, rounds up to 1 - allow eviction",
+			crp:      buildTestPickNCRP("test-crp", 1),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -324,9 +324,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 1,
 		},
 		{
-			name:         "MaxUnavailable specified as percentage greater than zero, rounds up to greater than 1 - block eviction",
-			targetNumber: 4,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, boundUnavailableBinding, unScheduledAvailableBinding},
+			name:     "MaxUnavailable specified as percentage greater than zero, rounds up to greater than 1 - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 4),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, boundUnavailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -342,9 +342,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 2,
 		},
 		{
-			name:         "MaxUnavailable specified as percentage greater than zero, rounds up to greater than 1 - allow eviction",
-			targetNumber: 3,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, unScheduledAvailableBinding},
+			name:     "MaxUnavailable specified as percentage greater than zero, rounds up to greater than 1 - allow eviction",
+			crp:      buildTestPickNCRP("test-crp", 3),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -360,9 +360,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 2,
 		},
 		{
-			name:         "MaxUnavailable specified as percentage hundred, target number greater than bindings - allow eviction",
-			targetNumber: 10,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, boundUnavailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
+			name:     "MaxUnavailable specified as percentage hundred, target number greater than bindings - allow eviction",
+			crp:      buildTestPickNCRP("test-crp", 10),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, boundUnavailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -378,9 +378,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 3,
 		},
 		{
-			name:         "MaxUnavailable specified as percentage hundred, target number equal to bindings - block eviction",
-			targetNumber: 2,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundUnavailableBinding},
+			name:     "MaxUnavailable specified as percentage hundred, target number equal to bindings - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 2),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundUnavailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -396,9 +396,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 0,
 		},
 		{
-			name:         "MaxUnavailable specified as percentage hundred, target number equal to bindings - allow eviction",
-			targetNumber: 4,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, boundUnavailableBinding, unScheduledAvailableBinding},
+			name:     "MaxUnavailable specified as percentage hundred, target number equal to bindings - allow eviction",
+			crp:      buildTestPickNCRP("test-crp", 4),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, boundUnavailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -414,9 +414,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 2,
 		},
 		{
-			name:         "MinAvailable specified as Integer zero, unavailable binding - block eviction",
-			targetNumber: 2,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding},
+			name:     "MinAvailable specified as Integer zero, unavailable binding - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 2),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -432,9 +432,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 0,
 		},
 		{
-			name:         "MinAvailable specified as Integer zero, available binding - allow eviction",
-			targetNumber: 2,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding},
+			name:     "MinAvailable specified as Integer zero, available binding - allow eviction",
+			crp:      buildTestPickNCRP("test-crp", 2),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -450,9 +450,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 1,
 		},
 		{
-			name:         "MinAvailable specified as Integer one, unavailable binding - block eviction",
-			targetNumber: 1,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding},
+			name:     "MinAvailable specified as Integer one, unavailable binding - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 1),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -468,9 +468,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 0,
 		},
 		{
-			name:         "MinAvailable specified as Integer one, available binding, upscaling - block eviction",
-			targetNumber: 1,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding},
+			name:     "MinAvailable specified as Integer one, available binding, upscaling - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 1),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -486,9 +486,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 1,
 		},
 		{
-			name:         "MinAvailable specified as Integer one, one available, one unavailable binding - block eviction",
-			targetNumber: 1,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, boundUnavailableBinding},
+			name:     "MinAvailable specified as Integer one, one available, one unavailable binding - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 1),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, boundUnavailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -504,9 +504,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 1,
 		},
 		{
-			name:         "MinAvailable specified as Integer one, two available bindings - allow eviction",
-			targetNumber: 2,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, unScheduledAvailableBinding},
+			name:     "MinAvailable specified as Integer one, two available bindings - allow eviction",
+			crp:      buildTestPickNCRP("test-crp", 2),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -522,9 +522,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 2,
 		},
 		{
-			name:         "MinAvailable specified as Integer one, available bindings greater than target number, downscaling - allow eviction",
-			targetNumber: 1,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
+			name:     "MinAvailable specified as Integer one, available bindings greater than target number, downscaling - allow eviction",
+			crp:      buildTestPickNCRP("test-crp", 1),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -540,9 +540,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 3,
 		},
 		{
-			name:         "MinAvailable specified as Integer greater than one - block eviction",
-			targetNumber: 2,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, unScheduledAvailableBinding},
+			name:     "MinAvailable specified as Integer greater than one - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 2),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -558,9 +558,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 2,
 		},
 		{
-			name:         "MinAvailable specified as Integer greater than one - allow eviction",
-			targetNumber: 4,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
+			name:     "MinAvailable specified as Integer greater than one - allow eviction",
+			crp:      buildTestPickNCRP("test-crp", 4),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -576,9 +576,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 3,
 		},
 		{
-			name:         "MinAvailable specified as Integer greater than one, available bindings greater than target number, downscaling - block eviction",
-			targetNumber: 1,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
+			name:     "MinAvailable specified as Integer greater than one, available bindings greater than target number, downscaling - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 1),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -594,9 +594,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 3,
 		},
 		{
-			name:         "MinAvailable specified as Integer large number greater than target number - blocks eviction",
-			targetNumber: 5,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, anotherBoundAvailableBinding, boundUnavailableBinding, unScheduledAvailableBinding},
+			name:     "MinAvailable specified as Integer large number greater than target number - blocks eviction",
+			crp:      buildTestPickNCRP("test-crp", 5),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, anotherBoundAvailableBinding, boundUnavailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -612,9 +612,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 3,
 		},
 		{
-			name:         "MinAvailable specified as percentage zero, all bindings are unavailable - block eviction",
-			targetNumber: 2,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundUnavailableBinding},
+			name:     "MinAvailable specified as percentage zero, all bindings are unavailable - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 2),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundUnavailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -630,9 +630,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 0,
 		},
 		{
-			name:         "MinAvailable specified as percentage zero, all bindings are available - allow eviction",
-			targetNumber: 3,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
+			name:     "MinAvailable specified as percentage zero, all bindings are available - allow eviction",
+			crp:      buildTestPickNCRP("test-crp", 3),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -648,9 +648,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 3,
 		},
 		{
-			name:         "MinAvailable specified as percentage rounds upto one - block eviction",
-			targetNumber: 1,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding},
+			name:     "MinAvailable specified as percentage rounds upto one - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 1),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -666,9 +666,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 0,
 		},
 		{
-			name:         "MinAvailable specified as percentage rounds upto one - allow eviction",
-			targetNumber: 2,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, unScheduledAvailableBinding},
+			name:     "MinAvailable specified as percentage rounds upto one - allow eviction",
+			crp:      buildTestPickNCRP("test-crp", 2),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -684,9 +684,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 2,
 		},
 		{
-			name:         "MinAvailable specified as percentage greater than zero, rounds up to greater than 1 - block eviction",
-			targetNumber: 3,
-			bindings:     []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, anotherBoundAvailableBinding},
+			name:     "MinAvailable specified as percentage greater than zero, rounds up to greater than 1 - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 3),
+			bindings: []placementv1beta1.ClusterResourceBinding{scheduledUnavailableBinding, boundAvailableBinding, anotherBoundAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -702,9 +702,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 2,
 		},
 		{
-			name:         "MinAvailable specified as percentage greater than zero, rounds up to greater than 1 - allow eviction",
-			targetNumber: 3,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
+			name:     "MinAvailable specified as percentage greater than zero, rounds up to greater than 1 - allow eviction",
+			crp:      buildTestPickNCRP("test-crp", 3),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -720,9 +720,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 3,
 		},
 		{
-			name:         "MinAvailable specified as percentage hundred, bindings less than target number - block eviction",
-			targetNumber: 10,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding},
+			name:     "MinAvailable specified as percentage hundred, bindings less than target number - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 10),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -738,9 +738,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 2,
 		},
 		{
-			name:         "MinAvailable specified as percentage hundred, bindings equal to target number  - block eviction",
-			targetNumber: 3,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
+			name:     "MinAvailable specified as percentage hundred, bindings equal to target number  - block eviction",
+			crp:      buildTestPickNCRP("test-crp", 3),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -756,9 +756,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 3,
 		},
 		{
-			name:         "MinAvailable specified as percentage hundred, bindings greater than target number - allow eviction",
-			targetNumber: 2,
-			bindings:     []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
+			name:     "MinAvailable specified as percentage hundred, bindings greater than target number - allow eviction",
+			crp:      buildTestPickNCRP("test-crp", 2),
+			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-disruption-budget",
@@ -776,7 +776,7 @@ func TestIsEvictionAllowed(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			gotAllowed, gotAvailableBindings := isEvictionAllowed(tc.targetNumber, tc.bindings, tc.disruptionBudget)
+			gotAllowed, gotAvailableBindings := isEvictionAllowed(tc.bindings, tc.crp, tc.disruptionBudget)
 			if gotAllowed != tc.wantAllowed {
 				t.Errorf("isEvictionAllowed test `%s` failed gotAllowed: %v, wantAllowedAllowed: %v", tc.name, gotAllowed, tc.wantAllowed)
 			}
