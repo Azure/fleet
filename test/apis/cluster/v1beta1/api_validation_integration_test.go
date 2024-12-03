@@ -18,7 +18,7 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 )
 
-var _ = Describe("Test cluster v1 API validation", func() {
+var _ = Describe("Test cluster v1beta1 API validation", func() {
 	Context("Test MemberCluster API validation - invalid cases", func() {
 		It("should deny creating API with invalid name size", func() {
 			var name = "abcdef-123456789-123456789-123456789-123456789-123456789-123456789-123456789"
