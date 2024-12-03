@@ -92,15 +92,21 @@ func (r *Reconciler) fetchResourceOverrideSnapshots(ctx context.Context, resourc
 	return roMap, nil
 }
 
-func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, cluster clusterv1beta1.MemberCluster, croMap map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot, roMap map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot) error {
+// applyOverrides applies the overrides on the selected resources.
+// The resource could be selected by both ClusterResourceOverride and ResourceOverride.
+// It returns
+//   - true if the resource is deleted by the overrides.
+//   - an error if the override rules are invalid.
+func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, cluster clusterv1beta1.MemberCluster,
+	croMap map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot, roMap map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot) (bool, error) {
 	if len(croMap) == 0 && len(roMap) == 0 {
-		return nil
+		return false, nil
 	}
 
 	var uResource unstructured.Unstructured
 	if err := uResource.UnmarshalJSON(resource.Raw); err != nil {
 		klog.ErrorS(err, "Work has invalid content", "selectedResource", resource.Raw)
-		return controller.NewUnexpectedBehaviorError(err)
+		return false, controller.NewUnexpectedBehaviorError(err)
 	}
 	gvk := uResource.GetObjectKind().GroupVersionKind()
 	key := placementv1beta1.ResourceIdentifier{
@@ -131,13 +137,12 @@ func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, 
 		}
 		if err := applyOverrideRules(resource, cluster, snapshot.Spec.OverrideSpec.Policy.OverrideRules); err != nil {
 			klog.ErrorS(err, "Failed to apply the override rules", "clusterResourceOverrideSnapshot", klog.KObj(snapshot))
-			return err
+			return false, err
 		}
 	}
 	klog.V(2).InfoS("Applied clusterResourceOverrideSnapshots", "resource", klog.KObj(&uResource), "numberOfOverrides", len(croMap[key]))
 
-	// If the resource is selected by both ClusterResourceOverride and ResourceOverride, ResourceOverride will win when
-	// resolving conflicts.
+	// If the resource is selected by both ClusterResourceOverride and ResourceOverride, ResourceOverride will win when resolving conflicts.
 	// Apply ResourceOverrideSnapshots.
 	if !isClusterScopeResource {
 		key = placementv1beta1.ResourceIdentifier{
@@ -155,12 +160,12 @@ func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, 
 			}
 			if err := applyOverrideRules(resource, cluster, snapshot.Spec.OverrideSpec.Policy.OverrideRules); err != nil {
 				klog.ErrorS(err, "Failed to apply the override rules", "resourceOverrideSnapshot", klog.KObj(snapshot))
-				return err
+				return false, err
 			}
 		}
 		klog.V(2).InfoS("Applied resourceOverrideSnapshots", "resource", klog.KObj(&uResource), "numberOfOverrides", len(roMap[key]))
 	}
-	return nil
+	return resource.Raw == nil, nil
 }
 
 func applyOverrideRules(resource *placementv1beta1.ResourceContent, cluster clusterv1beta1.MemberCluster, rules []placementv1alpha1.OverrideRule) error {
@@ -173,7 +178,12 @@ func applyOverrideRules(resource *placementv1beta1.ResourceContent, cluster clus
 		if !matched {
 			continue
 		}
-
+		if rule.OverrideType == placementv1alpha1.DeleteOverrideType {
+			// Delete the resource
+			resource.Raw = nil
+			return nil
+		}
+		// Apply JSONPatchOverrides by default
 		if err := applyJSONPatchOverride(resource, rule.JSONPatchOverrides); err != nil {
 			klog.ErrorS(err, "Failed to apply JSON patch override")
 			return controller.NewUserError(err)

@@ -425,17 +425,22 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 		}
 		var simpleManifests []fleetv1beta1.Manifest
 		for j := range snapshot.Spec.SelectedResources {
-			selectedResource := snapshot.Spec.SelectedResources[j]
-			if err := r.applyOverrides(&selectedResource, cluster, croMap, roMap); err != nil {
-				return false, false, err
+			selectedResource := snapshot.Spec.SelectedResources[j].DeepCopy()
+			// TODO: override the content of the wrapped resource instead of the envelope itself
+			resourceDeleted, overrideErr := r.applyOverrides(selectedResource, cluster, croMap, roMap)
+			if overrideErr != nil {
+				return false, false, overrideErr
 			}
-
+			if resourceDeleted {
+				klog.V(2).InfoS("The resource is deleted by the override rules", "snapshot", klog.KObj(snapshot), "selectedResource", snapshot.Spec.SelectedResources[j])
+				continue
+			}
 			// we need to special treat configMap with envelopeConfigMapAnnotation annotation,
 			// so we need to check the GVK and annotation of the selected resource
 			var uResource unstructured.Unstructured
-			if err := uResource.UnmarshalJSON(selectedResource.Raw); err != nil {
-				klog.ErrorS(err, "work has invalid content", "snapshot", klog.KObj(snapshot), "selectedResource", selectedResource.Raw)
-				return true, false, controller.NewUnexpectedBehaviorError(err)
+			if unMarshallErr := uResource.UnmarshalJSON(selectedResource.Raw); unMarshallErr != nil {
+				klog.ErrorS(unMarshallErr, "work has invalid content", "snapshot", klog.KObj(snapshot), "selectedResource", selectedResource.Raw)
+				return true, false, controller.NewUnexpectedBehaviorError(unMarshallErr)
 			}
 			if uResource.GetObjectKind().GroupVersionKind() == utils.ConfigMapGVK &&
 				len(uResource.GetAnnotations()[fleetv1beta1.EnvelopeConfigMapAnnotation]) != 0 {
@@ -447,7 +452,7 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 				activeWork[work.Name] = work
 				newWork = append(newWork, work)
 			} else {
-				simpleManifests = append(simpleManifests, fleetv1beta1.Manifest(selectedResource))
+				simpleManifests = append(simpleManifests, fleetv1beta1.Manifest(*selectedResource))
 			}
 		}
 		if len(simpleManifests) == 0 {

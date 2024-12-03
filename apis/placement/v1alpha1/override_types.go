@@ -74,13 +74,31 @@ type OverrideRule struct {
 	// +optional
 	ClusterSelector *placementv1beta1.ClusterSelector `json:"clusterSelector,omitempty"`
 
+	// OverrideType defines the type of the override rules.
+	// +kubebuilder:validation:Enum=JSONPatch;Delete
+	// +kubebuilder:default=JSONPatch
+	// +optional
+	OverrideType OverrideType `json:"overrideType,omitempty"`
+
 	// JSONPatchOverrides defines a list of JSON patch override rules.
+	// This field is only allowed when OverrideType is JSONPatch.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=20
-	// +required
-	JSONPatchOverrides []JSONPatchOverride `json:"jsonPatchOverrides"`
+	// +optional
+	JSONPatchOverrides []JSONPatchOverride `json:"jsonPatchOverrides,omitempty"`
 }
+
+// OverrideType defines the type of Override
+type OverrideType string
+
+const (
+	// JSONPatchOverrideType applies a JSON patch on the selected resources following [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
+	JSONPatchOverrideType OverrideType = "JSONPatch"
+
+	// DeleteOverrideType deletes the selected resources on the target clusters.
+	DeleteOverrideType OverrideType = "Delete"
+)
 
 // +genclient
 // +genclient:Namespaced
