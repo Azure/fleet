@@ -872,6 +872,14 @@ func buildTestPickNCRP(crpName string, clusterCount int32) placementv1beta1.Clus
 				PlacementType:    placementv1beta1.PickNPlacementType,
 				NumberOfClusters: ptr.To(clusterCount),
 			},
+			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+				{
+					Group:   "",
+					Kind:    "Namespace",
+					Version: "v1",
+					Name:    "test-ns",
+				},
+			},
 		},
 	}
 }
