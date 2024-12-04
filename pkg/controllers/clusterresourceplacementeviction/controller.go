@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 	runtime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/controller"
@@ -201,7 +202,12 @@ func (r *Reconciler) updateEvictionStatus(ctx context.Context, eviction *placeme
 // deleteClusterResourceBinding deletes the specified cluster resource binding.
 func (r *Reconciler) deleteClusterResourceBinding(ctx context.Context, binding *placementv1beta1.ClusterResourceBinding) error {
 	bindingRef := klog.KObj(binding)
-	if err := r.Client.Delete(ctx, binding); err != nil {
+	deleteOptions := &client.DeleteOptions{
+		Preconditions: &metav1.Preconditions{
+			ResourceVersion: ptr.To(binding.ResourceVersion),
+		},
+	}
+	if err := r.Client.Delete(ctx, binding, deleteOptions); err != nil {
 		klog.ErrorS(err, "Failed to delete cluster resource binding", "clusterResourceBinding", bindingRef)
 		return controller.NewDeleteIgnoreNotFoundError(err)
 	}

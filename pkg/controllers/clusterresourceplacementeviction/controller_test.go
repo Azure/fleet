@@ -6,6 +6,8 @@ Licensed under the MIT license.
 package clusterresourceplacementeviction
 
 import (
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -237,6 +239,84 @@ func TestValidateEviction(t *testing.T) {
 					t.Errorf("test case `%s` didn't return the expected error,  want no error, got error = %+v ", tc.name, gotErr)
 				}
 			} else if gotErr == nil || gotErr.Error() != tc.wantErr.Error() {
+				t.Errorf("test case `%s` didn't return the expected error, want error = %+v, got error = %+v", tc.name, tc.wantErr, gotErr)
+			}
+		})
+	}
+}
+
+func TestDeleteClusterResourceBinding(t *testing.T) {
+	tests := []struct {
+		name          string
+		inputBinding  *placementv1beta1.ClusterResourceBinding
+		storedBinding *placementv1beta1.ClusterResourceBinding
+		wantErr       error
+	}{
+		{
+			name: "conflict on delete - pre-conditions don't match",
+			inputBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test-binding",
+					ResourceVersion: "2",
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State: placementv1beta1.BindingStateBound,
+				},
+			},
+			storedBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test-binding",
+					ResourceVersion: "1",
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State: placementv1beta1.BindingStateBound,
+				},
+			},
+			wantErr: errors.New("object might have been modified"),
+		},
+		{
+			name: "successful delete",
+			inputBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test-binding",
+					ResourceVersion: "1",
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State: placementv1beta1.BindingStateBound,
+				},
+			},
+			storedBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test-binding",
+					ResourceVersion: "1",
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State: placementv1beta1.BindingStateBound,
+				},
+			},
+			wantErr: nil,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var objects []client.Object
+			if tc.storedBinding != nil {
+				objects = append(objects, tc.storedBinding)
+			}
+			scheme := serviceScheme(t)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(objects...).
+				Build()
+			r := Reconciler{
+				Client: fakeClient,
+			}
+			gotErr := r.deleteClusterResourceBinding(ctx, tc.inputBinding)
+			if tc.wantErr == nil {
+				if gotErr != nil {
+					t.Errorf("test case `%s` didn't return the expected error,  want no error, got error = %+v ", tc.name, gotErr)
+				}
+			} else if gotErr == nil || !strings.Contains(gotErr.Error(), tc.wantErr.Error()) {
 				t.Errorf("test case `%s` didn't return the expected error, want error = %+v, got error = %+v", tc.name, tc.wantErr, gotErr)
 			}
 		})

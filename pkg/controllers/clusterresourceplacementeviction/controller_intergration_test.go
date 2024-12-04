@@ -62,8 +62,6 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		ensureCRPRemoved(crpName)
 	})
 
-	// TODO: Deleting CRP case.
-
 	It("Eviction Allowed - Deleting ClusterResourceBinding", func() {
 		crbName := fmt.Sprintf(crbNameTemplate, GinkgoParallelProcess())
 
