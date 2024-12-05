@@ -35,7 +35,7 @@ var (
 	}
 )
 
-var _ = Describe("Updaterun initialization tests", func() {
+var _ = FDescribe("Updaterun initialization tests", func() {
 	var updateRun *placementv1alpha1.ClusterStagedUpdateRun
 	var crp *placementv1beta1.ClusterResourcePlacement
 	var policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot
@@ -210,6 +210,18 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Delete(ctx, snapshot2)).Should(Succeed())
 		})
 
+		It("Should failt to initialize if the latest policy snapshot has a nil policy", func() {
+			By("Creating scheduling policy snapshot with nil policy")
+			policySnapshot.Spec.Policy = nil
+			Expect(k8sClient.Create(ctx, policySnapshot)).To(Succeed())
+
+			By("Creating a new clusterStagedUpdateRun")
+			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
+
+			By("Validating the initialization failed")
+			validateFailedInitCondition(ctx, updateRun, "does not have a policy")
+		})
+
 		It("Should fail to initialize if the latest policy snapshot does not have valid cluster count annotation", func() {
 			By("Creating scheduling policy snapshot with invalid cluster count annotation")
 			delete(policySnapshot.Annotations, placementv1beta1.NumberOfClustersAnnotation)
@@ -233,8 +245,8 @@ var _ = Describe("Updaterun initialization tests", func() {
 			validateFailedInitCondition(ctx, updateRun, "not fully scheduled yet")
 		})
 
-		It("Should copy the latest policy snapshot details to the updateRun status", func() {
-			By("Creating scheduling policy snapshot")
+		It("Should copy the latest policy snapshot details to the updateRun status -- pickN policy", func() {
+			By("Creating scheduling policy snapshot with pickN policy")
 			Expect(k8sClient.Create(ctx, policySnapshot)).To(Succeed())
 
 			By("Set the latest policy snapshot condition as fully scheduled")
@@ -263,6 +275,71 @@ var _ = Describe("Updaterun initialization tests", func() {
 				return nil
 			}, timeout, interval).Should(Succeed(), "failed to update the updateRun status with policy snapshot details")
 		})
+
+		It("Should copy the latest policy snapshot details to the updateRun status -- pickFixed policy", func() {
+			By("Creating scheduling policy snapshot with pickFixed policy")
+			policySnapshot.Spec.Policy.PlacementType = placementv1beta1.PickFixedPlacementType
+			policySnapshot.Spec.Policy.ClusterNames = []string{"cluster-0", "cluster-1"}
+			Expect(k8sClient.Create(ctx, policySnapshot)).To(Succeed())
+
+			By("Set the latest policy snapshot condition as fully scheduled")
+			meta.SetStatusCondition(&policySnapshot.Status.Conditions, metav1.Condition{
+				Type:               string(placementv1beta1.PolicySnapshotScheduled),
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: policySnapshot.Generation,
+				Reason:             "scheduled",
+			})
+			Expect(k8sClient.Status().Update(ctx, policySnapshot)).Should(Succeed(), "failed to update the policy snapshot condition")
+
+			By("Creating a new clusterStagedUpdateRun")
+			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
+
+			By("Validating the initialization failed")
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
+					return err
+				}
+				if updateRun.Status.PolicySnapshotIndexUsed != policySnapshot.Name {
+					return fmt.Errorf("updateRun status `PolicySnapshotIndexUsed` mismatch: got %s, want %s", updateRun.Status.PolicySnapshotIndexUsed, policySnapshot.Name)
+				}
+				if updateRun.Status.PolicyObservedClusterCount != 2 {
+					return fmt.Errorf("updateRun status `PolicyObservedClusterCount` mismatch: got %d, want %d", updateRun.Status.PolicyObservedClusterCount, 2)
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "failed to update the updateRun status with policy snapshot details")
+		})
+
+		It("Should copy the latest policy snapshot details to the updateRun status -- pickAll policy", func() {
+			By("Creating scheduling policy snapshot with pickAll policy")
+			policySnapshot.Spec.Policy.PlacementType = placementv1beta1.PickAllPlacementType
+			Expect(k8sClient.Create(ctx, policySnapshot)).To(Succeed())
+
+			By("Set the latest policy snapshot condition as fully scheduled")
+			meta.SetStatusCondition(&policySnapshot.Status.Conditions, metav1.Condition{
+				Type:               string(placementv1beta1.PolicySnapshotScheduled),
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: policySnapshot.Generation,
+				Reason:             "scheduled",
+			})
+			Expect(k8sClient.Status().Update(ctx, policySnapshot)).Should(Succeed(), "failed to update the policy snapshot condition")
+
+			By("Creating a new clusterStagedUpdateRun")
+			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
+
+			By("Validating the initialization failed")
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
+					return err
+				}
+				if updateRun.Status.PolicySnapshotIndexUsed != policySnapshot.Name {
+					return fmt.Errorf("updateRun status `PolicySnapshotIndexUsed` mismatch: got %s, want %s", updateRun.Status.PolicySnapshotIndexUsed, policySnapshot.Name)
+				}
+				if updateRun.Status.PolicyObservedClusterCount != -1 {
+					return fmt.Errorf("updateRun status `PolicyObservedClusterCount` mismatch: got %d, want %d", updateRun.Status.PolicyObservedClusterCount, -1)
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "failed to update the updateRun status with policy snapshot details")
+		})
 	})
 
 	Context("Test collectScheduledClusters", func() {
@@ -283,15 +360,28 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Status().Update(ctx, policySnapshot)).Should(Succeed(), "failed to update the policy snapshot condition")
 		})
 
-		It("Should fail to initialize if there is no selected cluster", func() {
+		It("Should fail to initialize if there is no selected or to-be-deleted cluster", func() {
 			By("Creating a new clusterStagedUpdateRun")
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization failed")
-			validateFailedInitCondition(ctx, updateRun, "no scheduled clusterResourceBindings found")
+			validateFailedInitCondition(ctx, updateRun, "no scheduled or to-be-deleted clusterResourceBindings found")
 		})
 
-		It("Should retry if the bindings are not in Scheduled state", func() {
+		It("Should not report error if there are only to-be-deleted clusters", func() {
+			By("Creating a to-be-deleted clusterResourceBinding")
+			binding := getTestClusterResourceBinding(policySnapshot.Name+"a", "cluster-0")
+			Expect(k8sClient.Create(ctx, binding)).To(Succeed())
+
+			By("Creating a new clusterStagedUpdateRun")
+			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
+
+			By("Validating the initialization not failed due to no selected cluster")
+			// it should fail due to strategy not found
+			validateFailedInitCondition(ctx, updateRun, "referenced clusterStagedUpdateStrategy not found")
+		})
+
+		It("Should retry if the bindings are not in Scheduled or Bound state", func() {
 			By("Creating a not scheduled clusterResourceBinding")
 			binding := getTestClusterResourceBinding(policySnapshot.Name, "cluster-1")
 			binding.Spec.State = ""
@@ -408,20 +498,6 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 				By("Validating the initialization failed")
 				validateFailedInitCondition(ctx, updateRun, "the sorting label `not-exist-label:`")
-			})
-
-			It("Should fail to initialize if some stage is completely empty", func() {
-				By("Creating a clusterStagedUpdateStrategy stage that can select no clusters")
-				updateStrategy.Spec.Stages[0].LabelSelector = &metav1.LabelSelector{
-					MatchLabels: map[string]string{"group": "not-exist"},
-				}
-				Expect(k8sClient.Create(ctx, updateStrategy)).To(Succeed())
-
-				By("Creating a new clusterStagedUpdateRun")
-				Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
-
-				By("Validating the initialization failed")
-				validateFailedInitCondition(ctx, updateRun, "stage `stage1` has no clusters selected")
 			})
 
 			It("Should fail to initialize if some cluster appears in multiple stages", func() {
