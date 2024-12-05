@@ -35,7 +35,7 @@ var (
 	}
 )
 
-var _ = FDescribe("Updaterun initialization tests", func() {
+var _ = Describe("Updaterun initialization tests", func() {
 	var updateRun *placementv1alpha1.ClusterStagedUpdateRun
 	var crp *placementv1beta1.ClusterResourcePlacement
 	var policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot
@@ -210,7 +210,7 @@ var _ = FDescribe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Delete(ctx, snapshot2)).Should(Succeed())
 		})
 
-		It("Should failt to initialize if the latest policy snapshot has a nil policy", func() {
+		It("Should fail to initialize if the latest policy snapshot has a nil policy", func() {
 			By("Creating scheduling policy snapshot with nil policy")
 			policySnapshot.Spec.Policy = nil
 			Expect(k8sClient.Create(ctx, policySnapshot)).To(Succeed())
