@@ -218,8 +218,9 @@ spec:
                           - clusterSelectorTerms
                           type: object
                         jsonPatchOverrides:
-                          description: JSONPatchOverrides defines a list of JSON patch
-                            override rules.
+                          description: |-
+                            JSONPatchOverrides defines a list of JSON patch override rules.
+                            This field is only allowed when OverrideType is JSONPatch.
                           items:
                             description: JSONPatchOverride applies a JSON patch on
                               the selected resources following [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
@@ -249,8 +250,14 @@ spec:
                           maxItems: 20
                           minItems: 1
                           type: array
-                      required:
-                      - jsonPatchOverrides
+                        overrideType:
+                          default: JSONPatch
+                          description: OverrideType defines the type of the override
+                            rules.
+                          enum:
+                          - JSONPatch
+                          - Delete
+                          type: string
                       type: object
                     maxItems: 20
                     minItems: 1

@@ -76,7 +76,7 @@ type OverrideRule struct {
 
 	// OverrideType defines the type of the override rules.
 	// +kubebuilder:validation:Enum=JSONPatch;Delete
-	// +kubebuilder:default:JSONPatch
+	// +kubebuilder:default=JSONPatch
 	// +optional
 	OverrideType OverrideType `json:"overrideType,omitempty"`
 
