@@ -265,7 +265,7 @@ run-memberagent: manifests generate fmt vet ## Run a controllers from your host.
 
 OUTPUT_TYPE ?= type=registry
 BUILDX_BUILDER_NAME ?= img-builder
-QEMU_VERSION ?= 5.2.0-2
+QEMU_VERSION ?= 7.2.0-1
 
 .PHONY: push
 push:
@@ -274,7 +274,7 @@ push:
 .PHONY: docker-buildx-builder
 docker-buildx-builder:
 	@if ! docker buildx ls | grep $(BUILDX_BUILDER_NAME); then \
-		docker run --rm --privileged multiarch/qemu-user-static:$(QEMU_VERSION) --reset -p yes; \
+		docker run --rm --privileged mcr.microsoft.com/mirror/docker/multiarch/qemu-user-static:$(QEMU_VERSION) --reset -p yes; \
 		docker buildx create --name $(BUILDX_BUILDER_NAME) --use; \
 		docker buildx inspect $(BUILDX_BUILDER_NAME) --bootstrap; \
 	fi
