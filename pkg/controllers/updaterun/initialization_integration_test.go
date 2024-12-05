@@ -640,6 +640,18 @@ var _ = Describe("Updaterun initialization tests", func() {
 			validateFailedInitCondition(ctx, updateRun, "resource snapshot `"+testResourceSnapshotName+"` not found")
 		})
 
+		It("Should fail to initialize if the specified resource snapshot is not associated with wanted CRP", func() {
+			By("Creating a new resource snapshot associated with wrong CRP")
+			resourceSnapshot.Labels[placementv1beta1.CRPTrackingLabel] = "not-exist-crp"
+			Expect(k8sClient.Create(ctx, resourceSnapshot)).To(Succeed())
+
+			By("Creating a new clusterStagedUpdateRun")
+			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
+
+			By("Validating the initialization failed")
+			validateFailedInitCondition(ctx, updateRun, "resource snapshot `"+testResourceSnapshotName+"` is not associated with expected clusterResourcePlacement")
+		})
+
 		It("Should fail to initialize if the specified resource snapshot is not master snapshot", func() {
 			By("Creating a new non-master resource snapshot")
 			delete(resourceSnapshot.Annotations, string(placementv1beta1.ResourceGroupHashAnnotation))
