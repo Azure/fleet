@@ -259,6 +259,9 @@ func getTestClusterSchedulingPolicySnapshot(idx int) *placementv1beta1.ClusterSc
 			},
 		},
 		Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+			Policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickNPlacementType,
+			},
 			PolicyHash: []byte("hash"),
 		},
 	}

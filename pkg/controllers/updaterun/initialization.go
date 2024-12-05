@@ -117,13 +117,27 @@ func (r *Reconciler) determinePolicySnapshot(
 
 	latestPolicySnapshot := policySnapshotList.Items[0]
 	updateRun.Status.PolicySnapshotIndexUsed = latestPolicySnapshot.Name
+
 	// Get the cluster count from the policy snapshot.
-	clusterCount, err := annotations.ExtractNumOfClustersFromPolicySnapshot(&latestPolicySnapshot)
-	if err != nil {
-		annErr := fmt.Errorf("%w: the policySnapshot `%s` doesn't have valid cluster count annotation", err, latestPolicySnapshot.Name)
-		klog.ErrorS(controller.NewUnexpectedBehaviorError(annErr), "Failed to get the cluster count from the latestPolicySnapshot", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
+	if latestPolicySnapshot.Spec.Policy == nil {
+		nopolicyErr := fmt.Errorf("policy snapshot `%s` does not have a policy", latestPolicySnapshot.Name)
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(nopolicyErr), "Failed to get the policy from the latestPolicySnapshot", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
 		// no more retries here.
-		return nil, -1, fmt.Errorf("%w, %s", errInitializedFailed, annErr.Error())
+		return nil, -1, fmt.Errorf("%w: %s", errInitializedFailed, nopolicyErr.Error())
+	}
+	// for pickAll policy, the observed cluster count is not included in the policy snapshot. We set it to -1. It will be validated in the binding stages.
+	clusterCount := -1
+	if latestPolicySnapshot.Spec.Policy.PlacementType == placementv1beta1.PickNPlacementType {
+		count, err := annotations.ExtractNumOfClustersFromPolicySnapshot(&latestPolicySnapshot)
+		if err != nil {
+			annErr := fmt.Errorf("%w: the policy snapshot `%s` doesn't have valid cluster count annotation", err, latestPolicySnapshot.Name)
+			klog.ErrorS(controller.NewUnexpectedBehaviorError(annErr), "Failed to get the cluster count from the latestPolicySnapshot", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
+			// no more retries here.
+			return nil, -1, fmt.Errorf("%w, %s", errInitializedFailed, annErr.Error())
+		}
+		clusterCount = count
+	} else if latestPolicySnapshot.Spec.Policy.PlacementType == placementv1beta1.PickFixedPlacementType {
+		clusterCount = len(latestPolicySnapshot.Spec.Policy.ClusterNames)
 	}
 	updateRun.Status.PolicyObservedClusterCount = clusterCount
 	klog.V(2).InfoS("Found the latest policy snapshot", "latestPolicySnapshot", latestPolicySnapshot.Name, "observed cluster count", updateRun.Status.PolicyObservedClusterCount, "clusterStagedUpdateRun", updateRunRef)
@@ -131,7 +145,6 @@ func (r *Reconciler) determinePolicySnapshot(
 	if !condition.IsConditionStatusTrue(latestPolicySnapshot.GetCondition(string(placementv1beta1.PolicySnapshotScheduled)), latestPolicySnapshot.Generation) {
 		scheduleErr := fmt.Errorf("policy snapshot `%s` not fully scheduled yet", latestPolicySnapshot.Name)
 		klog.ErrorS(scheduleErr, "The policy snapshot is not scheduled successfully", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
-		// hmmmm, should we retry and see if the policy snapshot is scheduled later?
 		return nil, -1, fmt.Errorf("%w: %s", errInitializedFailed, scheduleErr.Error())
 	}
 	return &latestPolicySnapshot, clusterCount, nil
@@ -159,8 +172,8 @@ func (r *Reconciler) collectScheduledClusters(
 	var toBeDeletedBindings, selectedBindings []*placementv1beta1.ClusterResourceBinding
 	for i, binding := range bindingList.Items {
 		if binding.Spec.SchedulingPolicySnapshotName == latestPolicySnapshot.Name {
-			if binding.Spec.State != placementv1beta1.BindingStateScheduled {
-				return nil, nil, controller.NewUnexpectedBehaviorError(fmt.Errorf("binding `%s`'s state %s is not scheduled", binding.Name, binding.Spec.State))
+			if binding.Spec.State != placementv1beta1.BindingStateScheduled && binding.Spec.State != placementv1beta1.BindingStateBound {
+				return nil, nil, controller.NewUnexpectedBehaviorError(fmt.Errorf("binding `%s`'s state %s is not scheduled or bound", binding.Name, binding.Spec.State))
 			}
 			klog.V(2).InfoS("Found a scheduled binding", "binding", binding.Name, "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
 			selectedBindings = append(selectedBindings, &bindingList.Items[i])
@@ -170,10 +183,9 @@ func (r *Reconciler) collectScheduledClusters(
 		}
 	}
 
-	// should this be a valid case?
-	if len(selectedBindings) == 0 {
-		nobindingErr := fmt.Errorf("no scheduled clusterResourceBindings found for the latest policy snapshot %s", latestPolicySnapshot.Name)
-		klog.ErrorS(nobindingErr, "Failed to find the scheduled clusterResourceBindings", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
+	if len(selectedBindings) == 0 && len(toBeDeletedBindings) == 0 {
+		nobindingErr := fmt.Errorf("no scheduled or to-be-deleted clusterResourceBindings found for the latest policy snapshot %s", latestPolicySnapshot.Name)
+		klog.ErrorS(nobindingErr, "Failed to collect clusterResourceBindings", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
 		// no more retries here.
 		return nil, nil, fmt.Errorf("%w: %s", errInitializedFailed, nobindingErr.Error())
 	}
@@ -288,24 +300,22 @@ func (r *Reconciler) computeRunStageStatus(
 
 		// Check if the stage is empty.
 		if len(curStageClusters) == 0 {
-			emptyErr := fmt.Errorf("stage `%s` has no clusters selected", stage.Name)
-			klog.ErrorS(emptyErr, "No cluster is selected for the stage", "clusterStagedUpdateStrategy", updateStrategyName, "stage name", stage.Name, "clusterStagedUpdateRun", updateRunRef)
-			// no more retries.
-			return fmt.Errorf("%w: %s", errInitializedFailed, emptyErr.Error())
-		}
-
-		// Sort the clusters in the stage based on the SortingLabelKey and cluster name.
-		sort.Slice(curStageClusters, func(i, j int) bool {
-			if stage.SortingLabelKey == nil {
+			// since we allow no selected bindings, a stage can be empty.
+			klog.InfoS("No cluster is selected for the stage", "clusterStagedUpdateStrategy", updateStrategyName, "stage name", stage.Name, "clusterStagedUpdateRun", updateRunRef)
+		} else {
+			// Sort the clusters in the stage based on the SortingLabelKey and cluster name.
+			sort.Slice(curStageClusters, func(i, j int) bool {
+				if stage.SortingLabelKey == nil {
+					return curStageClusters[i].Name < curStageClusters[j].Name
+				}
+				labelI, _ := strconv.Atoi(curStageClusters[i].Labels[*stage.SortingLabelKey])
+				labelJ, _ := strconv.Atoi(curStageClusters[j].Labels[*stage.SortingLabelKey])
+				if labelI != labelJ {
+					return labelI < labelJ
+				}
 				return curStageClusters[i].Name < curStageClusters[j].Name
-			}
-			labelI, _ := strconv.Atoi(curStageClusters[i].Labels[*stage.SortingLabelKey])
-			labelJ, _ := strconv.Atoi(curStageClusters[j].Labels[*stage.SortingLabelKey])
-			if labelI != labelJ {
-				return labelI < labelJ
-			}
-			return curStageClusters[i].Name < curStageClusters[j].Name
-		})
+			})
+		}
 
 		// Record the clusters in the stage.
 		curStageUpdatingStatus.Clusters = make([]placementv1alpha1.ClusterUpdatingStatus, len(curStageClusters))
