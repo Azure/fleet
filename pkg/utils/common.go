@@ -516,6 +516,17 @@ var LessFuncResourceIdentifier = func(a, b placementv1beta1.ResourceIdentifier) 
 	return aStr < bStr
 }
 
+// LessFuncPatchDetail is a less function for sorting patch details
+var LessFuncPatchDetail = func(a, b placementv1beta1.PatchDetail) bool {
+	if a.Path != b.Path {
+		return a.Path < b.Path
+	}
+	if a.ValueInMember != b.ValueInMember {
+		return a.ValueInMember < b.ValueInMember
+	}
+	return a.ValueInHub < b.ValueInHub
+}
+
 // LessFuncFailedResourcePlacements is a less function for sorting failed resource placements
 var LessFuncFailedResourcePlacements = func(a, b placementv1beta1.FailedResourcePlacement) bool {
 	var aStr, bStr string
@@ -573,32 +584,6 @@ var LessFuncDriftedResourcePlacements = func(a, b placementv1beta1.DriftedResour
 	return aStr < bStr
 }
 
-func IsDriftedResourcePlacementsEqual(oldDriftedResourcePlacements, newDriftedResourcePlacements []placementv1beta1.DriftedResourcePlacement) bool {
-	if len(oldDriftedResourcePlacements) != len(newDriftedResourcePlacements) {
-		return false
-	}
-	sort.Slice(oldDriftedResourcePlacements, func(i, j int) bool {
-		return LessFuncDriftedResourcePlacements(oldDriftedResourcePlacements[i], oldDriftedResourcePlacements[j])
-	})
-	sort.Slice(newDriftedResourcePlacements, func(i, j int) bool {
-		return LessFuncDriftedResourcePlacements(newDriftedResourcePlacements[i], newDriftedResourcePlacements[j])
-	})
-	for i := range oldDriftedResourcePlacements {
-		oldDriftedResourcePlacement := oldDriftedResourcePlacements[i]
-		newDriftedResourcePlacement := newDriftedResourcePlacements[i]
-		if !equality.Semantic.DeepEqual(oldDriftedResourcePlacement.ResourceIdentifier, newDriftedResourcePlacement.ResourceIdentifier) {
-			return false
-		}
-		if &oldDriftedResourcePlacement.TargetClusterObservedGeneration != &newDriftedResourcePlacement.TargetClusterObservedGeneration {
-			return false
-		}
-		if &oldDriftedResourcePlacement.ObservationTime != &newDriftedResourcePlacement.ObservationTime {
-			return false
-		}
-	}
-	return true
-}
-
 // LessFuncDiffedResourcePlacements is a less function for sorting drifted resource placements
 var LessFuncDiffedResourcePlacements = func(a, b placementv1beta1.DiffedResourcePlacement) bool {
 	var aStr, bStr string
@@ -614,32 +599,6 @@ var LessFuncDiffedResourcePlacements = func(a, b placementv1beta1.DiffedResource
 
 	}
 	return aStr < bStr
-}
-
-func IsDiffedResourcePlacementsEqual(oldDiffedResourcePlacements, newDiffedResourcePlacements []placementv1beta1.DiffedResourcePlacement) bool {
-	if len(oldDiffedResourcePlacements) != len(newDiffedResourcePlacements) {
-		return false
-	}
-	sort.Slice(oldDiffedResourcePlacements, func(i, j int) bool {
-		return LessFuncDiffedResourcePlacements(oldDiffedResourcePlacements[i], oldDiffedResourcePlacements[j])
-	})
-	sort.Slice(newDiffedResourcePlacements, func(i, j int) bool {
-		return LessFuncDiffedResourcePlacements(newDiffedResourcePlacements[i], newDiffedResourcePlacements[j])
-	})
-	for i := range oldDiffedResourcePlacements {
-		oldDiffedResourcePlacement := oldDiffedResourcePlacements[i]
-		newDiffedResourcePlacement := newDiffedResourcePlacements[i]
-		if !equality.Semantic.DeepEqual(oldDiffedResourcePlacement.ResourceIdentifier, newDiffedResourcePlacement.ResourceIdentifier) {
-			return false
-		}
-		if &oldDiffedResourcePlacement.TargetClusterObservedGeneration != &newDiffedResourcePlacement.TargetClusterObservedGeneration {
-			return false
-		}
-		if &oldDiffedResourcePlacement.ObservationTime != &newDiffedResourcePlacement.ObservationTime {
-			return false
-		}
-	}
-	return true
 }
 
 // IsFleetAnnotationPresent returns true if a key with fleet prefix is present in the annotations map.

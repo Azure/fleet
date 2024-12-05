@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
@@ -1148,51 +1150,39 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 						"Failed to process an update event for work object")
 					return
 				}
-				oldAppliedCondition := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
-				newAppliedCondition := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
-				oldAvailableCondition := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
-				newAvailableCondition := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 
-				// we try to filter out events, we only need to handle the updated event if the applied or available condition flip between true and false
-				// or the failed/diffed/drifted placements are changed.
-				if condition.EqualCondition(oldAppliedCondition, newAppliedCondition) && condition.EqualCondition(oldAvailableCondition, newAvailableCondition) {
-					oldDriftedPlacements := extractDriftedResourcePlacementsFromWork(oldWork)
-					newDriftedPlacements := extractDriftedResourcePlacementsFromWork(newWork)
-					driftsEqual := utils.IsDriftedResourcePlacementsEqual(oldDriftedPlacements, newDriftedPlacements)
-					if condition.IsConditionStatusFalse(newAppliedCondition, newWork.Generation) || condition.IsConditionStatusFalse(newAvailableCondition, newWork.Generation) {
-						diffsEqual := true
-						if condition.IsConditionStatusFalse(newAppliedCondition, newWork.Generation) {
-							oldDiffedPlacements := extractDiffedResourcePlacementsFromWork(oldWork)
-							newDiffedPlacements := extractDiffedResourcePlacementsFromWork(newWork)
-							diffsEqual = utils.IsDiffedResourcePlacementsEqual(oldDiffedPlacements, newDiffedPlacements)
-						}
-						// we need to compare the failed placement if the work is not applied or available
-						oldFailedPlacements := extractFailedResourcePlacementsFromWork(oldWork)
-						newFailedPlacements := extractFailedResourcePlacementsFromWork(newWork)
-						if driftsEqual && diffsEqual && utils.IsFailedResourcePlacementsEqual(oldFailedPlacements, newFailedPlacements) {
-							klog.V(2).InfoS("The placement lists didn't change on failed work, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
-							return
-						}
-					} else {
-						oldResourceSnapshot := oldWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
-						newResourceSnapshot := newWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
-						if oldResourceSnapshot == "" || newResourceSnapshot == "" {
-							klog.ErrorS(controller.NewUnexpectedBehaviorError(errors.New("found an invalid work without parent-resource-snapshot-index")),
-								"Could not find the parent resource snapshot index label", "oldWork", klog.KObj(oldWork), "oldResourceSnapshotLabelValue", oldResourceSnapshot,
-								"newWork", klog.KObj(newWork), "newResourceSnapshotLabelValue", newResourceSnapshot)
-							return
-						}
-						// There is an edge case that, the work spec is the same but from different resourceSnapshots.
-						// WorkGenerator will update the work because of the label changes, but the generation is the same.
-						// When the normal update happens, the controller will set the applied condition as false and wait
-						// until the work condition has been changed.
-						// In this edge case, we need to requeue the binding to update the binding status.
-						if oldResourceSnapshot == newResourceSnapshot && driftsEqual {
-							klog.V(2).InfoS("The work applied or available condition stayed as true, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
-							return
-						}
+				lessFuncCondition := func(a, b metav1.Condition) bool {
+					return a.Type < b.Type
+				}
+				workStatusCmpOptions := cmp.Options{
+					cmpopts.SortSlices(lessFuncCondition),
+					cmpopts.SortSlices(utils.LessFuncResourceIdentifier),
+					cmpopts.SortSlices(utils.LessFuncPatchDetail),
+					utils.IgnoreConditionLTTAndMessageFields,
+					cmpopts.EquateEmpty(),
+				}
+				if diff := cmp.Diff(oldWork.Status, newWork.Status, workStatusCmpOptions); diff != "" {
+					klog.V(2).InfoS("Work status has been changed", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
+				} else {
+					oldResourceSnapshot := oldWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
+					newResourceSnapshot := newWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
+					if oldResourceSnapshot == "" || newResourceSnapshot == "" {
+						klog.ErrorS(controller.NewUnexpectedBehaviorError(errors.New("found an invalid work without parent-resource-snapshot-index")),
+							"Could not find the parent resource snapshot index label", "oldWork", klog.KObj(oldWork), "oldResourceSnapshotLabelValue", oldResourceSnapshot,
+							"newWork", klog.KObj(newWork), "newResourceSnapshotLabelValue", newResourceSnapshot)
+						return
+					}
+					// There is an edge case that, the work spec is the same but from different resourceSnapshots.
+					// WorkGenerator will update the work because of the label changes, but the generation is the same.
+					// When the normal update happens, the controller will set the applied condition as false and wait
+					// until the work condition has been changed.
+					// In this edge case, we need to requeue the binding to update the binding status.
+					if oldResourceSnapshot == newResourceSnapshot {
+						klog.V(2).InfoS("The work applied or available condition stayed as true, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
+						return
 					}
 				}
+
 				// We need to update the binding status in this case
 				klog.V(2).InfoS("Received a work update event that we need to handle", "work", klog.KObj(newWork), "parentBindingName", parentBindingName)
 				queue.Add(reconcile.Request{NamespacedName: types.NamespacedName{

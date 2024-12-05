@@ -451,7 +451,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 					// mark one of the failed manifests as available but no change in the overall condition
 					markOneManifestAvailable(&work, false)
 					// check the binding status that it should be applied but not available and with one failed placement
-					verifyBindStatusNotAvailableWithOnePlacement(binding, false, true)
+					verifyBindStatusNotAvailableWithOnePlacement(binding, false, true, false)
 					// mark the work available directly
 					markWorkAvailable(&work)
 					// check the binding status that it should be marked as available true eventually
@@ -466,11 +466,12 @@ var _ = Describe("Test Work Generator Controller", func() {
 					// change one of the failed manifests to be applied and diff manifests to be aligned (applied is now true so no diff placements)
 					markWorkAsAppliedButNotAvailableWithFailedManifest(&work, false)
 					// check the binding status that it should be applied but not available and with two failed placement
+					// placement list should be changed
 					verifyBindStatusNotAvailableWithTwoPlacements(binding, false, true, false)
 					// mark one of the failed manifests as available but no change in the overall condition
 					markOneManifestAvailable(&work, false)
 					// check the binding status that it should be applied but not available and with one failed placement
-					verifyBindStatusNotAvailableWithOnePlacement(binding, false, true)
+					verifyBindStatusNotAvailableWithOnePlacement(binding, false, true, false)
 					// mark the work available directly
 					markWorkAvailable(&work)
 					// check the binding status that it should be marked as available true eventually
@@ -486,10 +487,21 @@ var _ = Describe("Test Work Generator Controller", func() {
 					markWorkAsAppliedButNotAvailableWithFailedManifest(&work, true)
 					// check the binding status that it should be applied but not available and with two failed placement and 2 drifted placement
 					verifyBindStatusNotAvailableWithTwoPlacements(binding, false, true, true)
+					// mark one of the failed manifests as available and  no drift placements but no change in the overall condition
+					markOneManifestAvailable(&work, true)
+					// check the binding status that it should be applied but not available and with one failed placement and one drifted placement
+					// placement list should be changed
+					verifyBindStatusNotAvailableWithOnePlacement(binding, false, true, true)
 					// mark the work available directly
 					markWorkAvailable(&work)
-					// check the binding status that it should be marked as available true eventually with 2 drift placements
-					verifyBindStatusAvail(binding, false, true)
+					// check the binding status that it should be marked as available true eventually with one drift placement
+					verifyBindStatusAvailableWithOnePlacement(binding, false)
+					// mark the work with no drift placements
+					markWorkWithNoDrift(&work)
+					// check the binding status that it should be marked as available true eventually with no drift placement
+					// placement list should be changed
+					verifyBindStatusAvail(binding, false, false)
+
 				})
 
 				It("Should continue to update the binding status even if the master resource snapshot is deleted after the work is synced", func() {
@@ -2073,7 +2085,7 @@ func verifyBindStatusNotAvailableWithTwoPlacements(binding *placementv1beta1.Clu
 	}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
 }
 
-func verifyBindStatusNotAvailableWithOnePlacement(binding *placementv1beta1.ClusterResourceBinding, hasOverride, hasFailedPlacement bool) {
+func verifyBindStatusNotAvailableWithOnePlacement(binding *placementv1beta1.ClusterResourceBinding, hasOverride, hasFailedPlacement, hasDriftedPlacement bool) {
 	Eventually(func() string {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 		overrideReason := condition.OverrideNotSpecifiedReason
@@ -2132,6 +2144,96 @@ func verifyBindStatusNotAvailableWithOnePlacement(binding *placementv1beta1.Clus
 					},
 				},
 			}
+		}
+
+		if hasDriftedPlacement {
+			wantStatus.DriftedPlacements = []placementv1beta1.DriftedResourcePlacement{
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+					ObservationTime:                 metav1.Time{Time: specificTime},
+					FirstDriftedObservedTime:        metav1.Time{Time: specificTime},
+					TargetClusterObservedGeneration: 1,
+					ObservedDrifts: []placementv1beta1.PatchDetail{
+						{
+							Path:          "/spec/ports/1/containerPort",
+							ValueInHub:    "80",
+							ValueInMember: "90",
+						},
+					},
+				},
+			}
+		}
+		return cmp.Diff(wantStatus, binding.Status, cmpConditionOption)
+	}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
+}
+
+func verifyBindStatusAvailableWithOnePlacement(binding *placementv1beta1.ClusterResourceBinding, hasOverride bool) {
+	Eventually(func() string {
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
+		overrideReason := condition.OverrideNotSpecifiedReason
+		if hasOverride {
+			overrideReason = condition.OverriddenSucceededReason
+		}
+		wantStatus := placementv1beta1.ResourceBindingStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.RolloutStartedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Type:               string(placementv1beta1.ResourceBindingOverridden),
+					Status:             metav1.ConditionTrue,
+					Reason:             overrideReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Type:               string(placementv1beta1.ResourceBindingWorkSynchronized),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.AllWorkSyncedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Type:               string(placementv1beta1.ResourceBindingApplied),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.AllWorkAppliedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Type:               string(placementv1beta1.ResourceBindingAvailable),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.AllWorkAvailableReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+			},
+			DriftedPlacements: []placementv1beta1.DriftedResourcePlacement{
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+					ObservationTime:                 metav1.Time{Time: specificTime},
+					FirstDriftedObservedTime:        metav1.Time{Time: specificTime},
+					TargetClusterObservedGeneration: 1,
+					ObservedDrifts: []placementv1beta1.PatchDetail{
+						{
+							Path:          "/spec/ports/1/containerPort",
+							ValueInHub:    "80",
+							ValueInMember: "90",
+						},
+					},
+				},
+			},
 		}
 		return cmp.Diff(wantStatus, binding.Status, cmpConditionOption)
 	}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
@@ -2230,6 +2332,67 @@ func markWorkAvailable(work *placementv1beta1.Work) {
 	})
 	Expect(k8sClient.Status().Update(ctx, work)).Should(Succeed())
 	By(fmt.Sprintf("resource work `%s` is marked as available", work.Name))
+}
+
+func markWorkWithNoDrift(work *placementv1beta1.Work) {
+	work.Status.ManifestConditions = []placementv1beta1.ManifestCondition{
+		{
+			Identifier: placementv1beta1.WorkResourceIdentifier{
+				Ordinal:   0,
+				Group:     "",
+				Version:   "v1",
+				Kind:      "ConfigMap",
+				Name:      "config-name",
+				Namespace: "config-namespace",
+			},
+			Conditions: []metav1.Condition{
+				{
+					Type:               placementv1beta1.WorkConditionTypeApplied,
+					Status:             metav1.ConditionTrue,
+					Reason:             "fakeAppliedManifest",
+					Message:            "fake apply manifest",
+					LastTransitionTime: metav1.Now(),
+				},
+				{
+					Type:               placementv1beta1.WorkConditionTypeAvailable,
+					Status:             metav1.ConditionTrue,
+					Reason:             "fakeAvailableManifest",
+					Message:            "fake available manifest",
+					LastTransitionTime: metav1.Now(),
+				},
+			},
+			DriftDetails: nil,
+		},
+		{
+			Identifier: placementv1beta1.WorkResourceIdentifier{
+				Ordinal:   1,
+				Group:     "",
+				Version:   "v1",
+				Kind:      "Service",
+				Name:      "svc-name",
+				Namespace: "svc-namespace",
+			},
+			Conditions: []metav1.Condition{
+				{
+					Type:               placementv1beta1.WorkConditionTypeApplied,
+					Status:             metav1.ConditionTrue,
+					Reason:             "fakeAppliedManifest",
+					Message:            "fake apply manifest",
+					LastTransitionTime: metav1.Now(),
+				},
+				{
+					Type:               placementv1beta1.WorkConditionTypeAvailable,
+					Status:             metav1.ConditionTrue,
+					Reason:             "fakeAvailableManifest",
+					Message:            "fake available manifest",
+					LastTransitionTime: metav1.Now(),
+				},
+			},
+			DriftDetails: nil,
+		},
+	}
+	Expect(k8sClient.Status().Update(ctx, work)).Should(Succeed())
+	By(fmt.Sprintf("resource work `%s` is marked with no drift", work.Name))
 }
 
 // markWorkWithFailedToApplyAndNotAvailable marks the work as not applied with failedPlacement

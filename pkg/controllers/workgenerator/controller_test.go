@@ -723,10 +723,7 @@ func TestSetBindingStatus(t *testing.T) {
 		wantDiffedResourcePlacements     []fleetv1beta1.DiffedResourcePlacement
 	}{
 		"NoWorks": {
-			works:                         map[string]*fleetv1beta1.Work{},
-			wantFailedResourcePlacements:  nil,
-			wantDiffedResourcePlacements:  nil,
-			wantDriftedResourcePlacements: nil,
+			works: map[string]*fleetv1beta1.Work{},
 		},
 		"both work are available": {
 			works: map[string]*fleetv1beta1.Work{
@@ -803,9 +800,6 @@ func TestSetBindingStatus(t *testing.T) {
 					},
 				},
 			},
-			wantFailedResourcePlacements:  nil,
-			wantDiffedResourcePlacements:  nil,
-			wantDriftedResourcePlacements: nil,
 		},
 		"One work has one not available and one work has one not applied": {
 			works: map[string]*fleetv1beta1.Work{
@@ -946,8 +940,6 @@ func TestSetBindingStatus(t *testing.T) {
 					},
 				},
 			},
-			wantDiffedResourcePlacements:  nil,
-			wantDriftedResourcePlacements: nil,
 		},
 		"One work has one not available and one work has one not applied (exceed the maxFailedResourcePlacementLimit)": {
 			works: map[string]*fleetv1beta1.Work{
@@ -1076,8 +1068,6 @@ func TestSetBindingStatus(t *testing.T) {
 					},
 				},
 			},
-			wantDiffedResourcePlacements:  nil,
-			wantDriftedResourcePlacements: nil,
 		},
 		"One work has one not available and one work all available": {
 			works: map[string]*fleetv1beta1.Work{
@@ -1205,8 +1195,6 @@ func TestSetBindingStatus(t *testing.T) {
 					},
 				},
 			},
-			wantDiffedResourcePlacements:  nil,
-			wantDriftedResourcePlacements: nil,
 		},
 		"exceed the maxDriftedResourcePlacementLimit": {
 			works: map[string]*fleetv1beta1.Work{
@@ -1351,7 +1339,6 @@ func TestSetBindingStatus(t *testing.T) {
 					},
 				},
 			},
-			wantDiffedResourcePlacements: nil,
 		},
 		"exceed the maxDiffedResourcePlacementLimit": {
 			works: map[string]*fleetv1beta1.Work{
@@ -1470,7 +1457,6 @@ func TestSetBindingStatus(t *testing.T) {
 					},
 				},
 			},
-			wantDriftedResourcePlacements:   nil,
 			maxDiffedResourcePlacementLimit: ptr.To(1),
 			wantDiffedResourcePlacements: []fleetv1beta1.DiffedResourcePlacement{
 				{
@@ -1559,18 +1545,7 @@ func TestSetBindingStatus(t *testing.T) {
 			gotDrifted := binding.Status.DriftedPlacements
 			if maxDriftedResourcePlacementLimit == len(tt.wantDriftedResourcePlacements) {
 				opt := []cmp.Option{
-					cmpopts.SortSlices(func(s1, s2 string) bool {
-						return s1 < s2
-					}),
-					cmpopts.SortSlices(func(n1, n2 fleetv1beta1.NamespacedName) bool {
-						if n1.Namespace == n2.Namespace {
-							return n1.Name < n2.Name
-						}
-						return n1.Namespace < n2.Namespace
-					}),
-					cmp.Comparer(func(f1, f2 fleetv1beta1.DriftedResourcePlacement) bool {
-						return f1.ResourceIdentifier.Kind == f2.ResourceIdentifier.Kind
-					}),
+					cmpopts.SortSlices(utils.LessFuncDriftedResourcePlacements),
 					cmp.Comparer(func(t1, t2 metav1.Time) bool {
 						if t1.Time.IsZero() || t2.Time.IsZero() {
 							return true // treat them as equal
@@ -1589,15 +1564,7 @@ func TestSetBindingStatus(t *testing.T) {
 			}
 
 			resourceCmpOptions := []cmp.Option{
-				cmpopts.SortSlices(func(i, j fleetv1beta1.DriftedResourcePlacement) bool {
-					if i.Group < j.Group {
-						return true
-					}
-					if i.Kind < j.Kind {
-						return true
-					}
-					return i.Name < j.Name
-				}),
+				cmpopts.SortSlices(utils.LessFuncDriftedResourcePlacements),
 			}
 			if diff := cmp.Diff(gotDrifted, tt.wantDriftedResourcePlacements, resourceCmpOptions...); diff != "" {
 				t.Errorf("setBindingStatus got DriftedPlacements mismatch (-got +want):\n%s", diff)
@@ -1606,18 +1573,7 @@ func TestSetBindingStatus(t *testing.T) {
 			gotDiffed := binding.Status.DiffedPlacements
 			if maxDiffedResourcePlacementLimit == len(tt.wantDiffedResourcePlacements) {
 				opt := []cmp.Option{
-					cmpopts.SortSlices(func(s1, s2 string) bool {
-						return s1 < s2
-					}),
-					cmpopts.SortSlices(func(n1, n2 fleetv1beta1.NamespacedName) bool {
-						if n1.Namespace == n2.Namespace {
-							return n1.Name < n2.Name
-						}
-						return n1.Namespace < n2.Namespace
-					}),
-					cmpopts.SortSlices(func(f1, f2 fleetv1beta1.DiffedResourcePlacement) bool {
-						return f1.ResourceIdentifier.Kind < f2.ResourceIdentifier.Kind
-					}),
+					cmpopts.SortSlices(utils.LessFuncDiffedResourcePlacements),
 					cmp.Comparer(func(t1, t2 metav1.Time) bool {
 						if t1.Time.IsZero() || t2.Time.IsZero() {
 							return true // treat them as equal
@@ -1636,15 +1592,7 @@ func TestSetBindingStatus(t *testing.T) {
 			}
 
 			resourceCmpOptions = []cmp.Option{
-				cmpopts.SortSlices(func(i, j fleetv1beta1.DiffedResourcePlacement) bool {
-					if i.Group < j.Group {
-						return true
-					}
-					if i.Kind < j.Kind {
-						return true
-					}
-					return i.Name < j.Name
-				}),
+				cmpopts.SortSlices(utils.LessFuncDiffedResourcePlacements),
 			}
 			if diff := cmp.Diff(gotDiffed, tt.wantDiffedResourcePlacements, resourceCmpOptions...); diff != "" {
 				t.Errorf("setBindingStatus got DiffedPlacements mismatch (-got +want):\n%s", diff)
