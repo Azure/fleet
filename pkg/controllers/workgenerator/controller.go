@@ -10,13 +10,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
@@ -1151,17 +1150,7 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 					return
 				}
 
-				lessFuncCondition := func(a, b metav1.Condition) bool {
-					return a.Type < b.Type
-				}
-				workStatusCmpOptions := cmp.Options{
-					cmpopts.SortSlices(lessFuncCondition),
-					cmpopts.SortSlices(utils.LessFuncResourceIdentifier),
-					cmpopts.SortSlices(utils.LessFuncPatchDetail),
-					utils.IgnoreConditionLTTAndMessageFields,
-					cmpopts.EquateEmpty(),
-				}
-				if diff := cmp.Diff(oldWork.Status, newWork.Status, workStatusCmpOptions); diff != "" {
+				if !reflect.DeepEqual(oldWork.Status, newWork.Status) {
 					klog.V(2).InfoS("Work status has been changed", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
 				} else {
 					oldResourceSnapshot := oldWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]

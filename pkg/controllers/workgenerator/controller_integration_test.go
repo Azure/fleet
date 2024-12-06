@@ -60,6 +60,18 @@ var (
 
 	// Define a specific time
 	specificTime = time.Date(2024, time.November, 19, 15, 30, 0, 0, time.UTC)
+
+	// Define Drift Details
+	configmapPatchDetail = placementv1beta1.PatchDetail{
+		Path:          "/data",
+		ValueInMember: "k=1",
+		ValueInHub:    "k=2",
+	}
+	servicePatchDetail = placementv1beta1.PatchDetail{
+		Path:          "/spec/ports/1/containerPort",
+		ValueInHub:    "80",
+		ValueInMember: "90",
+	}
 )
 
 const (
@@ -1775,11 +1787,7 @@ func verifyBindStatusAvail(binding *placementv1beta1.ClusterResourceBinding, has
 					FirstDriftedObservedTime:        metav1.Time{Time: specificTime},
 					TargetClusterObservedGeneration: 2,
 					ObservedDrifts: []placementv1beta1.PatchDetail{
-						{
-							Path:          "/data",
-							ValueInMember: "k=1",
-							ValueInHub:    "k=2",
-						},
+						configmapPatchDetail,
 					},
 				},
 				{
@@ -1794,11 +1802,7 @@ func verifyBindStatusAvail(binding *placementv1beta1.ClusterResourceBinding, has
 					TargetClusterObservedGeneration: 1,
 					FirstDriftedObservedTime:        metav1.Time{Time: specificTime},
 					ObservedDrifts: []placementv1beta1.PatchDetail{
-						{
-							Path:          "/spec/ports/1/containerPort",
-							ValueInHub:    "80",
-							ValueInMember: "90",
-						},
+						servicePatchDetail,
 					},
 				},
 			}
@@ -1890,11 +1894,7 @@ func verifyBindStatusNotAppliedWithTwoPlacements(binding *placementv1beta1.Clust
 					FirstDiffedObservedTime:         metav1.Time{Time: specificTime},
 					TargetClusterObservedGeneration: 2,
 					ObservedDiffs: []placementv1beta1.PatchDetail{
-						{
-							Path:          "/data",
-							ValueInMember: "k=1",
-							ValueInHub:    "k=2",
-						},
+						configmapPatchDetail,
 					},
 				},
 				{
@@ -1909,11 +1909,7 @@ func verifyBindStatusNotAppliedWithTwoPlacements(binding *placementv1beta1.Clust
 					TargetClusterObservedGeneration: 1,
 					FirstDiffedObservedTime:         metav1.Time{Time: specificTime},
 					ObservedDiffs: []placementv1beta1.PatchDetail{
-						{
-							Path:          "/spec/ports/1/containerPort",
-							ValueInHub:    "80",
-							ValueInMember: "90",
-						},
+						servicePatchDetail,
 					},
 				},
 			}
@@ -1932,11 +1928,7 @@ func verifyBindStatusNotAppliedWithTwoPlacements(binding *placementv1beta1.Clust
 					FirstDriftedObservedTime:        metav1.Time{Time: specificTime},
 					TargetClusterObservedGeneration: 2,
 					ObservedDrifts: []placementv1beta1.PatchDetail{
-						{
-							Path:          "/data",
-							ValueInMember: "k=1",
-							ValueInHub:    "k=2",
-						},
+						configmapPatchDetail,
 					},
 				},
 				{
@@ -1951,11 +1943,7 @@ func verifyBindStatusNotAppliedWithTwoPlacements(binding *placementv1beta1.Clust
 					TargetClusterObservedGeneration: 1,
 					FirstDriftedObservedTime:        metav1.Time{Time: specificTime},
 					ObservedDrifts: []placementv1beta1.PatchDetail{
-						{
-							Path:          "/spec/ports/1/containerPort",
-							ValueInHub:    "80",
-							ValueInMember: "90",
-						},
+						servicePatchDetail,
 					},
 				},
 			}
@@ -2053,11 +2041,7 @@ func verifyBindStatusNotAvailableWithTwoPlacements(binding *placementv1beta1.Clu
 					FirstDriftedObservedTime:        metav1.Time{Time: specificTime},
 					TargetClusterObservedGeneration: 2,
 					ObservedDrifts: []placementv1beta1.PatchDetail{
-						{
-							Path:          "/data",
-							ValueInMember: "k=1",
-							ValueInHub:    "k=2",
-						},
+						configmapPatchDetail,
 					},
 				},
 				{
@@ -2072,11 +2056,7 @@ func verifyBindStatusNotAvailableWithTwoPlacements(binding *placementv1beta1.Clu
 					TargetClusterObservedGeneration: 1,
 					FirstDriftedObservedTime:        metav1.Time{Time: specificTime},
 					ObservedDrifts: []placementv1beta1.PatchDetail{
-						{
-							Path:          "/spec/ports/1/containerPort",
-							ValueInHub:    "80",
-							ValueInMember: "90",
-						},
+						servicePatchDetail,
 					},
 				},
 			}
@@ -2160,11 +2140,7 @@ func verifyBindStatusNotAvailableWithOnePlacement(binding *placementv1beta1.Clus
 					FirstDriftedObservedTime:        metav1.Time{Time: specificTime},
 					TargetClusterObservedGeneration: 1,
 					ObservedDrifts: []placementv1beta1.PatchDetail{
-						{
-							Path:          "/spec/ports/1/containerPort",
-							ValueInHub:    "80",
-							ValueInMember: "90",
-						},
+						servicePatchDetail,
 					},
 				},
 			}
@@ -2226,11 +2202,7 @@ func verifyBindStatusAvailableWithOnePlacement(binding *placementv1beta1.Cluster
 					FirstDriftedObservedTime:        metav1.Time{Time: specificTime},
 					TargetClusterObservedGeneration: 1,
 					ObservedDrifts: []placementv1beta1.PatchDetail{
-						{
-							Path:          "/spec/ports/1/containerPort",
-							ValueInHub:    "80",
-							ValueInMember: "90",
-						},
+						servicePatchDetail,
 					},
 				},
 			},
@@ -2466,11 +2438,7 @@ func markWorkWithFailedToApplyAndNotAvailable(work *placementv1beta1.Work, hasDi
 			FirstDiffedObservedTime:           metav1.Time{Time: specificTime},
 			ObservedInMemberClusterGeneration: 2,
 			ObservedDiffs: []placementv1beta1.PatchDetail{
-				{
-					Path:          "/data",
-					ValueInMember: "k=1",
-					ValueInHub:    "k=2",
-				},
+				configmapPatchDetail,
 			},
 		}
 		work.Status.ManifestConditions[1].DiffDetails = &placementv1beta1.DiffDetails{
@@ -2478,11 +2446,7 @@ func markWorkWithFailedToApplyAndNotAvailable(work *placementv1beta1.Work, hasDi
 			FirstDiffedObservedTime:           metav1.Time{Time: specificTime},
 			ObservedInMemberClusterGeneration: 1,
 			ObservedDiffs: []placementv1beta1.PatchDetail{
-				{
-					Path:          "/spec/ports/1/containerPort",
-					ValueInHub:    "80",
-					ValueInMember: "90",
-				},
+				servicePatchDetail,
 			},
 		}
 	}
@@ -2493,11 +2457,7 @@ func markWorkWithFailedToApplyAndNotAvailable(work *placementv1beta1.Work, hasDi
 			FirstDriftedObservedTime:          metav1.Time{Time: specificTime},
 			ObservedInMemberClusterGeneration: 2,
 			ObservedDrifts: []placementv1beta1.PatchDetail{
-				{
-					Path:          "/data",
-					ValueInMember: "k=1",
-					ValueInHub:    "k=2",
-				},
+				configmapPatchDetail,
 			},
 		}
 		work.Status.ManifestConditions[1].DriftDetails = &placementv1beta1.DriftDetails{
@@ -2505,11 +2465,7 @@ func markWorkWithFailedToApplyAndNotAvailable(work *placementv1beta1.Work, hasDi
 			FirstDriftedObservedTime:          metav1.Time{Time: specificTime},
 			ObservedInMemberClusterGeneration: 1,
 			ObservedDrifts: []placementv1beta1.PatchDetail{
-				{
-					Path:          "/spec/ports/1/containerPort",
-					ValueInHub:    "80",
-					ValueInMember: "90",
-				},
+				servicePatchDetail,
 			},
 		}
 	}
@@ -2587,11 +2543,7 @@ func markWorkAsAppliedButNotAvailableWithFailedManifest(work *placementv1beta1.W
 			FirstDriftedObservedTime:          metav1.Time{Time: specificTime},
 			ObservedInMemberClusterGeneration: 2,
 			ObservedDrifts: []placementv1beta1.PatchDetail{
-				{
-					Path:          "/data",
-					ValueInMember: "k=1",
-					ValueInHub:    "k=2",
-				},
+				configmapPatchDetail,
 			},
 		}
 		work.Status.ManifestConditions[1].DriftDetails = &placementv1beta1.DriftDetails{
@@ -2599,11 +2551,7 @@ func markWorkAsAppliedButNotAvailableWithFailedManifest(work *placementv1beta1.W
 			FirstDriftedObservedTime:          metav1.Time{Time: specificTime},
 			ObservedInMemberClusterGeneration: 1,
 			ObservedDrifts: []placementv1beta1.PatchDetail{
-				{
-					Path:          "/spec/ports/1/containerPort",
-					ValueInHub:    "80",
-					ValueInMember: "90",
-				},
+				servicePatchDetail,
 			},
 		}
 	}
@@ -2672,11 +2620,7 @@ func markOneManifestAvailable(work *placementv1beta1.Work, hasDriftedManifest bo
 			FirstDriftedObservedTime:          metav1.Time{Time: specificTime},
 			ObservedInMemberClusterGeneration: 1,
 			ObservedDrifts: []placementv1beta1.PatchDetail{
-				{
-					Path:          "/spec/ports/1/containerPort",
-					ValueInHub:    "80",
-					ValueInMember: "90",
-				},
+				servicePatchDetail,
 			},
 		}
 	}
