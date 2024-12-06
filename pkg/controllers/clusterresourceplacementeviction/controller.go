@@ -245,7 +245,7 @@ func isEvictionInTerminalState(eviction *placementv1alpha1.ClusterResourcePlacem
 	return false
 }
 
-// isPlacementPresent checks to see if placement on target cluster is present.
+// isPlacementPresent checks to see if placement on target cluster could be present.
 func isPlacementPresent(binding *placementv1beta1.ClusterResourceBinding) bool {
 	if binding.Spec.State == placementv1beta1.BindingStateBound {
 		return true
@@ -359,7 +359,6 @@ func markEvictionNotExecuted(eviction *placementv1alpha1.ClusterResourcePlacemen
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
-	// TODO(arvind): Increase max concurrent reconcile count, use map in PDB status to keep track of ongoing evictions.
 	return runtime.NewControllerManagedBy(mgr).
 		WithOptions(ctrl.Options{MaxConcurrentReconciles: 1}). // max concurrent reconciles is currently set to 1 for concurrency control.
 		For(&placementv1alpha1.ClusterResourcePlacementEviction{}).
