@@ -1282,15 +1282,15 @@ func TestTrackResourceAvailability(t *testing.T) {
 								"type":               "Established",
 								"status":             "True",
 								"lastTransitionTime": metav1.Now(),
-								"reason":             "CRDEstablished",
-								"message":            "The CustomResourceDefinition has been established.",
+								"reason":             "InitialNamesAccepted",
+								"message":            "the initial names have been accepted",
 							},
 							map[string]interface{}{
 								"type":               "NamesAccepted",
 								"status":             "True",
 								"lastTransitionTime": metav1.Now(),
 								"reason":             "NoConflicts",
-								"message":            "The CustomResourceDefinition name was accepted.",
+								"message":            "no conflicts found",
 							},
 						},
 					},
@@ -1299,7 +1299,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 			expected: manifestAvailableAction,
 			err:      nil,
 		},
-		"Test CustomResourceDefinition unavailable": {
+		"Test CustomResourceDefinition unavailable (not established)": {
 			gvr: utils.CustomResourceDefinitionGVR,
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
@@ -1346,15 +1346,72 @@ func TestTrackResourceAvailability(t *testing.T) {
 								"type":               "Established",
 								"status":             "False",
 								"lastTransitionTime": metav1.Now(),
-								"reason":             "CRDEstablished",
-								"message":            "The CustomResourceDefinition has been established.",
+								"reason":             "Installing",
+								"message":            "the initial names have been accepted",
 							},
 							map[string]interface{}{
 								"type":               "NamesAccepted",
 								"status":             "True",
 								"lastTransitionTime": metav1.Now(),
 								"reason":             "NoConflicts",
-								"message":            "The CustomResourceDefinition name was accepted.",
+								"message":            "no conflicts found",
+							},
+						},
+					},
+				},
+			},
+			expected: manifestNotAvailableYetAction,
+			err:      nil,
+		},
+		"Test CustomResourceDefinition unavailable (name not accepted)": {
+			gvr: utils.CustomResourceDefinitionGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apiextensions.k8s.io/v1",
+					"kind":       "CustomResourceDefinition",
+					"metadata": map[string]interface{}{
+						"name": "testresources.example.com",
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"type":               "NamesAccepted",
+								"status":             "False",
+								"lastTransitionTime": metav1.Now(),
+								"reason":             "NameConflict",
+								"message":            "names conflict",
+							},
+						},
+					},
+				},
+			},
+			expected: manifestNotAvailableYetAction,
+			err:      nil,
+		},
+		"Test CustomResourceDefinition unavailable (established but name not accepted)": {
+			gvr: utils.CustomResourceDefinitionGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apiextensions.k8s.io/v1",
+					"kind":       "CustomResourceDefinition",
+					"metadata": map[string]interface{}{
+						"name": "testresources.example.com",
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"type":               "Established",
+								"status":             "True",
+								"lastTransitionTime": metav1.Now(),
+								"reason":             "InitialNamesAccepted",
+								"message":            "the initial names have been accepted",
+							},
+							map[string]interface{}{
+								"type":               "NamesAccepted",
+								"status":             "False",
+								"lastTransitionTime": metav1.Now(),
+								"reason":             "NotAccepted",
+								"message":            "not all names are accepted",
 							},
 						},
 					},

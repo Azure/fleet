@@ -467,21 +467,26 @@ func trackCRDAvailability(curObj *unstructured.Unstructured) (ApplyAction, error
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &crd); err != nil {
 		return errorApplyAction, controller.NewUnexpectedBehaviorError(err)
 	}
-	// Check if there is a condition of type "Established"
-	var establishedCondition *apiextensionsv1.CustomResourceDefinitionCondition
+
+	// Check if both "Established" and "NamesAccepted" conditions exist and are True
+	var establishedCondition, namesAcceptedCondition *apiextensionsv1.CustomResourceDefinitionCondition
 	for i := range crd.Status.Conditions {
 		condition := crd.Status.Conditions[i] // Create a new variable
-		if condition.Type == apiextensionsv1.Established {
+		switch condition.Type {
+		case apiextensionsv1.Established:
 			establishedCondition = &condition
-			break
+		case apiextensionsv1.NamesAccepted:
+			namesAcceptedCondition = &condition
 		}
 	}
 
-	// If the condition is found, and it is True, the CRD is available
-	if establishedCondition != nil && establishedCondition.Status == apiextensionsv1.ConditionTrue {
+	// If both conditions are True, the CRD is available
+	if establishedCondition != nil && establishedCondition.Status == apiextensionsv1.ConditionTrue &&
+		namesAcceptedCondition != nil && namesAcceptedCondition.Status == apiextensionsv1.ConditionTrue {
 		klog.V(2).InfoS("CustomResourceDefinition is available", "customResourceDefinition", klog.KObj(curObj))
 		return manifestAvailableAction, nil
 	}
+
 	klog.V(2).InfoS("Still need to wait for CustomResourceDefinition to be available", "customResourceDefinition", klog.KObj(curObj))
 	return manifestNotAvailableYetAction, nil
 }
