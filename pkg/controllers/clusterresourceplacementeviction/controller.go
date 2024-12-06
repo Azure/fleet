@@ -75,7 +75,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	validationResult, err := r.validateEviction(ctx, &eviction)
 	if err != nil {
-		return runtime.Result{}, controller.NewAPIServerError(true, err)
+		return runtime.Result{}, err
 	}
 	if !validationResult.isValid {
 		return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
@@ -100,7 +100,7 @@ func (r *Reconciler) validateEviction(ctx context.Context, eviction *placementv1
 			markEvictionInvalid(eviction, evictionInvalidMissingCRPMessage)
 			return validationResult, nil
 		}
-		return nil, err
+		return nil, controller.NewAPIServerError(true, err)
 	}
 	if crp.DeletionTimestamp != nil {
 		klog.V(2).InfoS(evictionInvalidDeletingCRPMessage, "clusterResourcePlacementEviction", eviction.Name, "clusterResourcePlacement", eviction.Spec.PlacementName)
@@ -111,7 +111,7 @@ func (r *Reconciler) validateEviction(ctx context.Context, eviction *placementv1
 
 	var crbList placementv1beta1.ClusterResourceBindingList
 	if err := r.Client.List(ctx, &crbList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
-		return nil, err
+		return nil, controller.NewAPIServerError(true, err)
 	}
 	validationResult.bindings = crbList.Items
 
@@ -170,18 +170,18 @@ func (r *Reconciler) executeEviction(ctx context.Context, validationResult *evic
 	// Unwrap validation result for processing.
 	crp, evictionTargetBinding, bindingList := validationResult.crp, validationResult.crb, validationResult.bindings
 
-	if !isPlacementPresent(evictionTargetBinding) {
-		klog.V(2).InfoS("No resources have been placed for ClusterResourceBinding in target cluster",
-			"clusterResourcePlacementEviction", eviction.Name, "clusterResourceBinding", evictionTargetBinding.Name, "targetCluster", eviction.Spec.ClusterName)
-		markEvictionNotExecuted(eviction, evictionBlockedMissingPlacementMessage)
-		return nil
-	}
-
 	// Check to see if binding is being deleted.
 	if evictionTargetBinding.GetDeletionTimestamp() != nil {
 		klog.V(2).InfoS("ClusterResourceBinding targeted by eviction is being deleted",
 			"clusterResourcePlacementEviction", eviction.Name, "clusterResourceBinding", evictionTargetBinding.Name, "targetCluster", eviction.Spec.ClusterName)
 		markEvictionExecuted(eviction, evictionAllowedPlacementRemovedMessage)
+		return nil
+	}
+
+	if !isPlacementPresent(evictionTargetBinding) {
+		klog.V(2).InfoS("No resources have been placed for ClusterResourceBinding in target cluster",
+			"clusterResourcePlacementEviction", eviction.Name, "clusterResourceBinding", evictionTargetBinding.Name, "targetCluster", eviction.Spec.ClusterName)
+		markEvictionNotExecuted(eviction, evictionBlockedMissingPlacementMessage)
 		return nil
 	}
 
@@ -245,7 +245,7 @@ func isEvictionInTerminalState(eviction *placementv1alpha1.ClusterResourcePlacem
 	return false
 }
 
-// isPlacementPresent checks to see if placement on member cluster is present.
+// isPlacementPresent checks to see if placement on target cluster is present.
 func isPlacementPresent(binding *placementv1beta1.ClusterResourceBinding) bool {
 	if binding.Spec.State == placementv1beta1.BindingStateBound {
 		return true
