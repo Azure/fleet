@@ -29,6 +29,7 @@ import (
 	"go.uber.org/atomic"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	apiextensionshelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -468,21 +469,8 @@ func trackCRDAvailability(curObj *unstructured.Unstructured) (ApplyAction, error
 		return errorApplyAction, controller.NewUnexpectedBehaviorError(err)
 	}
 
-	// Check if both "Established" and "NamesAccepted" conditions exist and are True
-	var establishedCondition, namesAcceptedCondition *apiextensionsv1.CustomResourceDefinitionCondition
-	for i := range crd.Status.Conditions {
-		condition := crd.Status.Conditions[i] // Create a new variable
-		switch condition.Type {
-		case apiextensionsv1.Established:
-			establishedCondition = &condition
-		case apiextensionsv1.NamesAccepted:
-			namesAcceptedCondition = &condition
-		}
-	}
-
 	// If both conditions are True, the CRD is available
-	if establishedCondition != nil && establishedCondition.Status == apiextensionsv1.ConditionTrue &&
-		namesAcceptedCondition != nil && namesAcceptedCondition.Status == apiextensionsv1.ConditionTrue {
+	if apiextensionshelpers.IsCRDConditionTrue(&crd, apiextensionsv1.Established) && apiextensionshelpers.IsCRDConditionTrue(&crd, apiextensionsv1.NamesAccepted) {
 		klog.V(2).InfoS("CustomResourceDefinition is available", "customResourceDefinition", klog.KObj(curObj))
 		return manifestAvailableAction, nil
 	}
