@@ -210,7 +210,7 @@ func (r *Reconciler) executeEviction(ctx context.Context, validationResult *evic
 
 	// handle special case for PickAll CRP.
 	if crp.Spec.Policy.PlacementType == placementv1beta1.PickAllPlacementType {
-		if db.Spec.MaxUnavailable != nil || db.Spec.MinAvailable.Type == intstr.String {
+		if db.Spec.MaxUnavailable != nil || (db.Spec.MinAvailable != nil && db.Spec.MinAvailable.Type == intstr.String) {
 			markEvictionNotExecuted(eviction, evictionBlockedMisconfiguredPDBSpecifiedMessage)
 			return nil
 		}
