@@ -24,14 +24,17 @@ import (
 )
 
 const (
+	testBindingName          = "test-binding"
+	testClusterName          = "test-cluster"
 	testCRPName              = "test-crp"
 	testDisruptionBudgetName = "test-disruption-budget"
+	testEvictionName         = "test-eviction"
 )
 
 func TestValidateEviction(t *testing.T) {
 	testCRP := &placementv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-crp",
+			Name: testCRPName,
 		},
 		Spec: placementv1beta1.ClusterResourcePlacementSpec{
 			Policy: &placementv1beta1.PlacementPolicy{
@@ -69,17 +72,8 @@ func TestValidateEviction(t *testing.T) {
 		wantErr                      error
 	}{
 		{
-			name: "invalid eviction - CRP not found",
-			eviction: &placementv1alpha1.ClusterResourcePlacementEviction{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-eviction",
-					Generation: 1,
-				},
-				Spec: placementv1alpha1.PlacementEvictionSpec{
-					PlacementName: "test-crp",
-					ClusterName:   "test-cluster",
-				},
-			},
+			name:     "invalid eviction - CRP not found",
+			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
 			wantValidationResult: &evictionValidationResult{
 				isValid: false,
 			},
@@ -93,20 +87,11 @@ func TestValidateEviction(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name: "invalid eviction - deleting CRP",
-			eviction: &placementv1alpha1.ClusterResourcePlacementEviction{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-eviction",
-					Generation: 1,
-				},
-				Spec: placementv1alpha1.PlacementEvictionSpec{
-					PlacementName: "test-crp",
-					ClusterName:   "test-cluster",
-				},
-			},
+			name:     "invalid eviction - deleting CRP",
+			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
 			crp: &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:              "test-crp",
+					Name:              testCRPName,
 					DeletionTimestamp: &metav1.Time{Time: time.Now()},
 					Finalizers:        []string{"test-finalizer"},
 				},
@@ -129,18 +114,9 @@ func TestValidateEviction(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name: "invalid eviction - multiple CRBs for same cluster",
-			eviction: &placementv1alpha1.ClusterResourcePlacementEviction{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-eviction",
-					Generation: 1,
-				},
-				Spec: placementv1alpha1.PlacementEvictionSpec{
-					PlacementName: "test-crp",
-					ClusterName:   "test-cluster",
-				},
-			},
-			crp: testCRP,
+			name:     "invalid eviction - multiple CRBs for same cluster",
+			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
+			crp:      testCRP,
 			bindings: []placementv1beta1.ClusterResourceBinding{
 				testBinding1, testBinding2,
 			},
@@ -159,18 +135,9 @@ func TestValidateEviction(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name: "invalid eviction - CRB not found",
-			eviction: &placementv1alpha1.ClusterResourcePlacementEviction{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-eviction",
-					Generation: 1,
-				},
-				Spec: placementv1alpha1.PlacementEvictionSpec{
-					PlacementName: "test-crp",
-					ClusterName:   "test-cluster",
-				},
-			},
-			crp: testCRP,
+			name:     "invalid eviction - CRB not found",
+			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
+			crp:      testCRP,
 			wantValidationResult: &evictionValidationResult{
 				isValid:  false,
 				crp:      testCRP,
@@ -186,17 +153,8 @@ func TestValidateEviction(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name: "valid eviction",
-			eviction: &placementv1alpha1.ClusterResourcePlacementEviction{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-eviction",
-					Generation: 1,
-				},
-				Spec: placementv1alpha1.PlacementEvictionSpec{
-					PlacementName: "test-crp",
-					ClusterName:   "test-cluster",
-				},
-			},
+			name:     "valid eviction",
+			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
 			crp:      testCRP,
 			bindings: []placementv1beta1.ClusterResourceBinding{testBinding2},
 			wantValidationResult: &evictionValidationResult{
@@ -228,11 +186,11 @@ func TestValidateEviction(t *testing.T) {
 			}
 			gotValidationResult, gotErr := r.validateEviction(ctx, tc.eviction)
 			if diff := cmp.Diff(tc.wantValidationResult, gotValidationResult, cmp.AllowUnexported(evictionValidationResult{}), cmpopts.IgnoreFields(placementv1beta1.ClusterResourceBinding{}, "ResourceVersion")); diff != "" {
-				t.Errorf("ValidateEviction() validation result mismatch (-want, +got):\n%s", diff)
+				t.Errorf("validateEviction() validation result mismatch (-want, +got):\n%s", diff)
 			}
 			gotInvalidCondition := tc.eviction.GetCondition(string(placementv1alpha1.PlacementEvictionConditionTypeValid))
 			if diff := cmp.Diff(tc.wantEvictionInvalidCondition, gotInvalidCondition, cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")); diff != "" {
-				t.Errorf("ValidateEviction() eviction invalid condition mismatch (-want, +got):\n%s", diff)
+				t.Errorf("validateEviction() eviction invalid condition mismatch (-want, +got):\n%s", diff)
 			}
 			if tc.wantErr == nil {
 				if gotErr != nil {
@@ -256,7 +214,7 @@ func TestDeleteClusterResourceBinding(t *testing.T) {
 			name: "conflict on delete - pre-conditions don't match",
 			inputBinding: &placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:            "test-binding",
+					Name:            testBindingName,
 					ResourceVersion: "2",
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
@@ -265,7 +223,7 @@ func TestDeleteClusterResourceBinding(t *testing.T) {
 			},
 			storedBinding: &placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:            "test-binding",
+					Name:            testBindingName,
 					ResourceVersion: "1",
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
@@ -278,7 +236,7 @@ func TestDeleteClusterResourceBinding(t *testing.T) {
 			name: "successful delete",
 			inputBinding: &placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:            "test-binding",
+					Name:            testBindingName,
 					ResourceVersion: "1",
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
@@ -287,7 +245,7 @@ func TestDeleteClusterResourceBinding(t *testing.T) {
 			},
 			storedBinding: &placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:            "test-binding",
+					Name:            testBindingName,
 					ResourceVersion: "1",
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
@@ -317,6 +275,327 @@ func TestDeleteClusterResourceBinding(t *testing.T) {
 					t.Errorf("test case `%s` didn't return the expected error,  want no error, got error = %+v ", tc.name, gotErr)
 				}
 			} else if gotErr == nil || !strings.Contains(gotErr.Error(), tc.wantErr.Error()) {
+				t.Errorf("test case `%s` didn't return the expected error, want error = %+v, got error = %+v", tc.name, tc.wantErr, gotErr)
+			}
+		})
+	}
+}
+
+func TestExecuteEviction(t *testing.T) {
+	availableBinding := &placementv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       testBindingName,
+			Generation: 1,
+		},
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateBound,
+		},
+		Status: placementv1beta1.ResourceBindingStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(placementv1beta1.ResourceBindingApplied),
+					Status:             metav1.ConditionTrue,
+					Reason:             "applied",
+					ObservedGeneration: 1,
+				},
+				{
+					Type:               string(placementv1beta1.ResourceBindingAvailable),
+					Status:             metav1.ConditionTrue,
+					Reason:             "available",
+					ObservedGeneration: 1,
+				},
+			},
+		},
+	}
+	tests := []struct {
+		name                          string
+		validationResult              *evictionValidationResult
+		eviction                      *placementv1alpha1.ClusterResourcePlacementEviction
+		pdb                           *placementv1alpha1.ClusterResourcePlacementDisruptionBudget
+		wantEvictionExecutedCondition *metav1.Condition
+		wantErr                       error
+	}{
+		{
+			name: "scheduled binding - eviction not executed",
+			validationResult: &evictionValidationResult{
+				crb: &placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: testBindingName,
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State: placementv1beta1.BindingStateScheduled,
+					},
+				},
+			},
+			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
+			wantEvictionExecutedCondition: &metav1.Condition{
+				Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: 1,
+				Reason:             clusterResourcePlacementEvictionNotExecutedReason,
+				Message:            evictionBlockedMissingPlacementMessage,
+			},
+			wantErr: nil,
+		},
+		{
+			name: "unscheduled binding with previous state annotation doesn't exist - eviction not executed",
+			validationResult: &evictionValidationResult{
+				crb: &placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: testBindingName,
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State: placementv1beta1.BindingStateUnscheduled,
+					},
+				},
+			},
+			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
+			wantEvictionExecutedCondition: &metav1.Condition{
+				Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: 1,
+				Reason:             clusterResourcePlacementEvictionNotExecutedReason,
+				Message:            evictionBlockedMissingPlacementMessage,
+			},
+			wantErr: nil,
+		},
+		{
+			name: "unscheduled binding with previous state as scheduled - eviction not executed",
+			validationResult: &evictionValidationResult{
+				crb: &placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:        testBindingName,
+						Annotations: map[string]string{placementv1beta1.PreviousBindingStateAnnotation: string(placementv1beta1.BindingStateScheduled)},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State: placementv1beta1.BindingStateUnscheduled,
+					},
+				},
+			},
+			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
+			wantEvictionExecutedCondition: &metav1.Condition{
+				Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: 1,
+				Reason:             clusterResourcePlacementEvictionNotExecutedReason,
+				Message:            evictionBlockedMissingPlacementMessage,
+			},
+			wantErr: nil,
+		},
+		{
+			name: "deleting binding - eviction executed",
+			validationResult: &evictionValidationResult{
+				crb: &placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              testBindingName,
+						Annotations:       map[string]string{placementv1beta1.PreviousBindingStateAnnotation: string(placementv1beta1.BindingStateBound)},
+						Finalizers:        []string{"test-finalizer"},
+						DeletionTimestamp: &metav1.Time{Time: time.Now()},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State: placementv1beta1.BindingStateUnscheduled,
+					},
+				},
+			},
+			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
+			wantEvictionExecutedCondition: &metav1.Condition{
+				Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: 1,
+				Reason:             clusterResourcePlacementEvictionExecutedReason,
+				Message:            evictionAllowedPlacementRemovedMessage,
+			},
+			wantErr: nil,
+		},
+		{
+			name: "failed to apply binding - eviction executed",
+			validationResult: &evictionValidationResult{
+				crb: &placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       testBindingName,
+						Generation: 1,
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State: placementv1beta1.BindingStateBound,
+					},
+					Status: placementv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(placementv1beta1.ResourceBindingApplied),
+								Status:             metav1.ConditionFalse,
+								Reason:             "applied",
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+			},
+			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
+			wantEvictionExecutedCondition: &metav1.Condition{
+				Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: 1,
+				Reason:             clusterResourcePlacementEvictionExecutedReason,
+				Message:            evictionAllowedPlacementFailedMessage,
+			},
+			wantErr: nil,
+		},
+		{
+			name: "failed to be available binding - eviction executed",
+			validationResult: &evictionValidationResult{
+				crb: &placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       testBindingName,
+						Generation: 1,
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State: placementv1beta1.BindingStateBound,
+					},
+					Status: placementv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(placementv1beta1.ResourceBindingApplied),
+								Status:             metav1.ConditionTrue,
+								Reason:             "applied",
+								ObservedGeneration: 1,
+							},
+							{
+								Type:               string(placementv1beta1.ResourceBindingAvailable),
+								Status:             metav1.ConditionFalse,
+								Reason:             "available",
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+			},
+			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
+			wantEvictionExecutedCondition: &metav1.Condition{
+				Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: 1,
+				Reason:             clusterResourcePlacementEvictionExecutedReason,
+				Message:            evictionAllowedPlacementFailedMessage,
+			},
+			wantErr: nil,
+		},
+		{
+			name: "pdb not found - eviction executed",
+			validationResult: &evictionValidationResult{
+				crb: availableBinding,
+				crp: &placementv1beta1.ClusterResourcePlacement{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: testCRPName,
+					},
+				},
+			},
+			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
+			wantEvictionExecutedCondition: &metav1.Condition{
+				Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: 1,
+				Reason:             clusterResourcePlacementEvictionExecutedReason,
+				Message:            evictionAllowedNoPDBMessage,
+			},
+			wantErr: nil,
+		},
+		{
+			name: "PickAll CRP, Misconfigured PDB MaxUnavailable specified - eviction not executed",
+			validationResult: &evictionValidationResult{
+				crb: availableBinding,
+				crp: &placementv1beta1.ClusterResourcePlacement{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: testCRPName,
+					},
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						Policy: &placementv1beta1.PlacementPolicy{
+							PlacementType: placementv1beta1.PickAllPlacementType,
+						},
+					},
+				},
+			},
+			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
+			pdb: &placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testCRPName,
+				},
+				Spec: placementv1alpha1.PlacementDisruptionBudgetSpec{
+					MaxUnavailable: &intstr.IntOrString{
+						Type:   intstr.Int,
+						IntVal: 1,
+					},
+				},
+			},
+			wantEvictionExecutedCondition: &metav1.Condition{
+				Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: 1,
+				Reason:             clusterResourcePlacementEvictionNotExecutedReason,
+				Message:            evictionBlockedMisconfiguredPDBSpecifiedMessage,
+			},
+			wantErr: nil,
+		},
+		{
+			name: "PickAll CRP, Misconfigured PDB MinAvailable specified as percentage - eviction not executed",
+			validationResult: &evictionValidationResult{
+				crb: availableBinding,
+				crp: &placementv1beta1.ClusterResourcePlacement{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: testCRPName,
+					},
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						Policy: &placementv1beta1.PlacementPolicy{
+							PlacementType: placementv1beta1.PickAllPlacementType,
+						},
+					},
+				},
+			},
+			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
+			pdb: &placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testCRPName,
+				},
+				Spec: placementv1alpha1.PlacementDisruptionBudgetSpec{
+					MinAvailable: &intstr.IntOrString{
+						Type:   intstr.String,
+						StrVal: "10%",
+					},
+				},
+			},
+			wantEvictionExecutedCondition: &metav1.Condition{
+				Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: 1,
+				Reason:             clusterResourcePlacementEvictionNotExecutedReason,
+				Message:            evictionBlockedMisconfiguredPDBSpecifiedMessage,
+			},
+			wantErr: nil,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var objects []client.Object
+			if tc.pdb != nil {
+				objects = append(objects, tc.pdb)
+			}
+			scheme := serviceScheme(t)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(objects...).
+				Build()
+			r := Reconciler{
+				Client: fakeClient,
+			}
+			gotErr := r.executeEviction(ctx, tc.validationResult, tc.eviction)
+			gotExecutedCondition := tc.eviction.GetCondition(string(placementv1alpha1.PlacementEvictionConditionTypeExecuted))
+			if diff := cmp.Diff(tc.wantEvictionExecutedCondition, gotExecutedCondition, cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")); diff != "" {
+				t.Errorf("executeEviction() eviction executed condition mismatch (-want, +got):\n%s", diff)
+			}
+			if tc.wantErr == nil {
+				if gotErr != nil {
+					t.Errorf("test case `%s` didn't return the expected error,  want no error, got error = %+v ", tc.name, gotErr)
+				}
+			} else if gotErr == nil || gotErr.Error() != tc.wantErr.Error() {
 				t.Errorf("test case `%s` didn't return the expected error, want error = %+v, got error = %+v", tc.name, tc.wantErr, gotErr)
 			}
 		})
