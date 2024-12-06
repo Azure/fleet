@@ -1,9 +1,9 @@
-package workgenerator
-
 /*
 Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
+
+package workgenerator
 
 import (
 	"crypto/sha256"
