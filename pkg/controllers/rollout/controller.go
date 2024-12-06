@@ -369,16 +369,13 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 		case fleetv1beta1.BindingStateScheduled:
 			// the scheduler has picked a cluster for this binding
 			schedulerTargetedBinds = append(schedulerTargetedBinds, binding)
-			// We need to ensure that this binding is not being deleted.
-			if binding.DeletionTimestamp.IsZero() {
-				// this binding has not been bound yet, so it is an update candidate
-				// pickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
-				cro, ro, err := r.pickFromResourceMatchedOverridesForTargetCluster(ctx, binding, matchedCROs, matchedROs)
-				if err != nil {
-					return nil, nil, false, minWaitTime, err
-				}
-				boundingCandidates = append(boundingCandidates, createUpdateInfo(binding, crp, latestResourceSnapshot, cro, ro))
+			// this binding has not been bound yet, so it is an update candidate
+			// pickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
+			cro, ro, err := r.pickFromResourceMatchedOverridesForTargetCluster(ctx, binding, matchedCROs, matchedROs)
+			if err != nil {
+				return nil, nil, false, minWaitTime, err
 			}
+			boundingCandidates = append(boundingCandidates, createUpdateInfo(binding, crp, latestResourceSnapshot, cro, ro))
 		case fleetv1beta1.BindingStateBound:
 			bindingFailed := false
 			schedulerTargetedBinds = append(schedulerTargetedBinds, binding)

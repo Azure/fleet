@@ -607,7 +607,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		}, 5*time.Minute, interval).Should(BeTrue(), "rollout controller should roll all the bindings to use the latest resource snapshot")
 	})
 
-	It("Rollout should be blocked, then unblocked by eviction", func() {
+	It("Rollout should be blocked, then unblocked by eviction - evict unscheduled binding", func() {
 		// create CRP
 		var targetCluster int32 = 2
 		rolloutCRP = clusterResourcePlacementForTest(testCRPName, createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, targetCluster))
