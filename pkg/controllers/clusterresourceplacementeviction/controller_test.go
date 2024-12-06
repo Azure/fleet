@@ -1397,7 +1397,7 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 1,
 		},
 		{
-			name:     "MinAvailable specified as Integer greater than one, available binding, PickAll CRP - block eviction",
+			name:     "MinAvailable specified as Integer greater than one, available binding, PickAll CRP - allow eviction",
 			crp:      buildTestPickAllCRP(testCRPName),
 			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding, anotherBoundAvailableBinding, unScheduledAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
