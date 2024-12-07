@@ -72,9 +72,8 @@ spec:
                   * if the linked Placement object is of the PickFixed placement type,
                     the percentage is against the number of clusters specified in the placement (i.e., the
                     length of ClusterNames field in the placement policy);
-                  * if the linked Placement object is of the PickAll placement type,
-                    the percentage is against the total number of clusters being selected by the scheduler
-                    at the time of the evaluation of the disruption budget;
+                  * if the linked Placement object is of the PickAll placement type, MaxUnavailable cannot
+                    be specified since we cannot derive the total number of clusters selected.
                   * if the linked Placement object is of the PickN placement type,
                     the percentage is against the number of clusters specified in the placement (i.e., the
                     value of the NumberOfClusters fields in the placement policy).
@@ -113,9 +112,8 @@ spec:
                   * if the linked Placement object is of the PickFixed placement type,
                     the percentage is against the number of clusters specified in the placement (i.e., the
                     length of ClusterNames field in the placement policy);
-                  * if the linked Placement object is of the PickAll placement type,
-                    the percentage is against the total number of clusters being selected by the scheduler
-                    at the time of the evaluation of the disruption budget;
+                  * if the linked Placement object is of the PickAll placement type, MinAvailable can be
+                    specified but only as an integer since we cannot derive the total number of clusters selected.
                   * if the linked Placement object is of the PickN placement type,
                     the percentage is against the number of clusters specified in the placement (i.e., the
                     value of the NumberOfClusters fields in the placement policy).
