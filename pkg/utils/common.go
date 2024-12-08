@@ -167,6 +167,12 @@ var (
 		Kind:    "CustomResourceDefinition",
 	}
 
+	CustomResourceDefinitionGVR = schema.GroupVersionResource{
+		Group:    apiextensionsv1.SchemeGroupVersion.Group,
+		Version:  apiextensionsv1.SchemeGroupVersion.Version,
+		Resource: "customresourcedefinitions",
+	}
+
 	EndpointSliceExportMetaGVK = metav1.GroupVersionKind{
 		Group:   fleetnetworkingv1alpha1.GroupVersion.Group,
 		Version: fleetnetworkingv1alpha1.GroupVersion.Version,
