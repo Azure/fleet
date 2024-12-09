@@ -324,6 +324,23 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 						admv1.Create,
 						admv1.Update,
 					},
+					Rule: createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{clusterResourceOverrideName}, &clusterScope),
+				},
+			},
+			TimeoutSeconds: longWebhookTimeout,
+		},
+		{
+			Name:                    "fleet.clusterresourceoverridev1alpha1.validating",
+			ClientConfig:            w.createClientConfig(clusterresourceoverride.V1Alpha1ValidationPath),
+			FailurePolicy:           &failFailurePolicy,
+			SideEffects:             &sideEffortsNone,
+			AdmissionReviewVersions: admissionReviewVersions,
+			Rules: []admv1.RuleWithOperations{
+				{
+					Operations: []admv1.OperationType{
+						admv1.Create,
+						admv1.Update,
+					},
 					Rule: createRule([]string{placementv1alpha1.GroupVersion.Group}, []string{placementv1alpha1.GroupVersion.Version}, []string{clusterResourceOverrideName}, &clusterScope),
 				},
 			},

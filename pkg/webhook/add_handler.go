@@ -19,6 +19,7 @@ func init() {
 	AddToManagerFuncs = append(AddToManagerFuncs, pod.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, replicaset.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, membercluster.Add)
+	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceoverride.AddV1Alpha1)
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceoverride.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, resourceoverride.Add)
 }

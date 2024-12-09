@@ -34,8 +34,9 @@ type ClusterResourceOverride struct {
 type ClusterResourceOverrideSpec struct {
 	// Placement defines whether the override is applied to a specific placement or not.
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="spec.placement is immutable"
-	// +required
-	Placement *PlacementRef `json:"placement"`
+	// Required field and will be rejected if not set.
+	// +optional
+	Placement *PlacementRef `json:"placement, omitempty"`
 
 	// ClusterResourceSelectors is an array of selectors used to select cluster scoped resources. The selectors are `ORed`.
 	// If a namespace is selected, ALL the resources under the namespace are selected automatically.

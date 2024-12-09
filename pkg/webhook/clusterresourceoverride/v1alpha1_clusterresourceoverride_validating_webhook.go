@@ -9,9 +9,10 @@ package clusterresourceoverride
 import (
 	"context"
 	"fmt"
+	"go.goms.io/fleet/pkg/utils/validator"
+	admissionv1 "k8s.io/api/admission/v1"
 	"net/http"
 
-	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -20,32 +21,31 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/validator"
 )
 
 var (
-	// ValidationPath is the webhook service path which admission requests are routed to for validating ClusterResourceOverride resources.
-	ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, fleetv1alpha1.GroupVersion.Group, fleetv1alpha1.GroupVersion.Version, "clusterresourceoverride")
+	// V1Alpha1ValidationPath is the webhook service path which admission requests are routed to for validating ClusterResourceOverride resources.
+	V1Alpha1ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, fleetv1alpha1.GroupVersion.Group, fleetv1alpha1.GroupVersion.Version, "clusterresourceoverride")
 )
 
-type clusterResourceOverrideValidator struct {
+type v1alpha1ClusterResourceOverrideValidator struct {
 	client  client.Client
 	decoder webhook.AdmissionDecoder
 }
 
-// Add registers the webhook for K8s bulit-in object types.
-func Add(mgr manager.Manager) error {
+// AddV1Alpha1 registers the webhook for K8s bulit-in object types.
+func AddV1Alpha1(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
-	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &clusterResourceOverrideValidator{mgr.GetClient(), admission.NewDecoder(mgr.GetScheme())}})
+	hookServer.Register(V1Alpha1ValidationPath, &webhook.Admission{Handler: &v1alpha1ClusterResourceOverrideValidator{mgr.GetClient(), admission.NewDecoder(mgr.GetScheme())}})
 	return nil
 }
 
-// Handle clusterResourceOverrideValidator checks to see if cluster resource override is valid
-func (v *clusterResourceOverrideValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
+// Handle v1alpha1ClusterResourceOverrideValidator checks to see if cluster resource override is valid
+func (v *v1alpha1ClusterResourceOverrideValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	var cro fleetv1alpha1.ClusterResourceOverride
-	klog.V(2).InfoS("Validating webhook handling cluster resource override", "operation", req.Operation)
+	klog.V(2).InfoS("Validating webhook handling v1alpha1 cluster resource override", "operation", req.Operation)
 	if err := v.decoder.Decode(req, &cro); err != nil {
-		klog.ErrorS(err, "Failed to decode cluster resource override object for validating fields", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
+		klog.ErrorS(err, "Failed to decode v1alpha1 cluster resource override object for validating fields", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 

@@ -7,6 +7,22 @@ package v1beta1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+const (
+
+	// OverrideIndexLabel is the label that indicate the policy snapshot index of a cluster policy.
+	OverrideIndexLabel = fleetPrefix + "override-index"
+
+	// OverrideSnapshotNameFmt is clusterResourceOverrideSnapshot name format: {CROName}-{OverrideSnapshotIndex}.
+	OverrideSnapshotNameFmt = "%s-%d"
+
+	// OverrideTrackingLabel is the label that points to the cluster resource override that creates a resource snapshot.
+	OverrideTrackingLabel = fleetPrefix + "parent-resource-override"
+
+	// OverrideFinalizer is a finalizer added by the override controllers to all override, to make sure
+	// that the override controller can react to override deletions if necessary.
+	OverrideFinalizer = fleetPrefix + "override-cleanup"
+)
+
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true

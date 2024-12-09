@@ -518,8 +518,9 @@ spec:
                     minItems: 1
                     type: array
                   placement:
-                    description: Placement defines whether the override is applied
-                      to a specific placement or not.
+                    description: |-
+                      Placement defines whether the override is applied to a specific placement or not.
+                      Required field and will be rejected if not set.
                     properties:
                       name:
                         description: Name is the reference to the name of placement.
@@ -752,7 +753,6 @@ spec:
                     type: object
                 required:
                 - clusterResourceSelectors
-                - placement
                 - policy
                 type: object
             required:
