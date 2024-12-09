@@ -535,6 +535,9 @@ type ApplyStrategy struct {
 	//   differences. No actual apply ops would be executed, and resources will be left alone as they
 	//   are on the member clusters.
 	//
+	//   If configuration differences are found on a resource, Fleet will consider this as an apply
+	//   error, which might block rollout depending on the specified rollout strategy.
+	//
 	//   Use ComparisonOption setting to control how the difference is calculated.
 	//
 	// For a comparison between the different strategies and usage examples, refer to the
@@ -545,10 +548,14 @@ type ApplyStrategy struct {
 	// +kubebuilder:validation:Optional
 	Type ApplyStrategyType `json:"type,omitempty"`
 
-	// AllowCoOwnership defines whether to apply the resource if it already exists in the target cluster and is not
-	// solely owned by fleet (i.e., metadata.ownerReferences contains only fleet custom resources).
-	// If true, apply the resource and add fleet as a co-owner.
-	// If false, leave the resource unchanged and fail the apply.
+	// AllowCoOwnership controls whether co-ownership between Fleet and other agents are allowed
+	// on a Fleet-managed resource. If set to false, Fleet will refuse to apply manifests to
+	// a resource that has been owned by one or more non-Fleet agents.
+	//
+	// Note that Fleet does not support the case where one resource is being placed multiple
+	// times by different CRPs on the same member cluster. An apply error will be returned if
+	// Fleet finds that a resource has been owned by another placement attempt by Fleet, even
+	// with the AllowCoOwnership setting set to true.
 	AllowCoOwnership bool `json:"allowCoOwnership,omitempty"`
 
 	// ServerSideApplyConfig defines the configuration for server side apply. It is honored only when type is ServerSideApply.
@@ -571,8 +578,9 @@ type ApplyStrategy struct {
 	//
 	// * IfNoDiff: with this action, Fleet will apply the hub cluster manifests to the member
 	//   clusters if (and only if) pre-existing resources look the same as the hub cluster manifests.
+	//
 	//   This is a safer option as pre-existing resources that are inconsistent with the hub cluster
-	//   manifests will not be overwritten; in fact, Fleet will ignore them until the inconsistencies
+	//   manifests will not be overwritten; Fleet will ignore them until the inconsistencies
 	//   are resolved properly: any change you make to the hub cluster manifests would not be
 	//   applied, and if you delete the manifests or even the ClusterResourcePlacement itself
 	//   from the hub cluster, these pre-existing resources would not be taken away.
@@ -596,6 +604,14 @@ type ApplyStrategy struct {
 	//
 	//   If appropriate, you may also delete the object from the member cluster; Fleet will recreate
 	//   it using the hub cluster manifest.
+	//
+	// * Never: with this action, Fleet will not apply the hub cluster manifests to the member
+	//   clusters if there are corresponding pre-existing resources.
+	//
+	//   This is the safest option; one will have to remove the pre-existing resources (so that
+	//   Fleet can re-create them) or switch to a different
+	//   WhenToTakeOver option before Fleet starts processing the corresponding hub cluster
+	//   manifests.
 	//
 	// +kubebuilder:default=Always
 	// +kubebuilder:validation:Enum=Always;IfNoDiff
@@ -681,9 +697,13 @@ const (
 	// resources on the member cluster. Otherwise, we will report the difference.
 	WhenToTakeOverTypeIfNoDiff WhenToTakeOverType = "IfNoDiff"
 
-	// WhenToTakeOverTypeAlways will always apply the resource to the member cluster regardless
+	// WhenToTakeOverTypeAlways will always apply manifests to the member cluster regardless
 	// if there are differences between the resource on the hub cluster and the existing resources on the member cluster.
 	WhenToTakeOverTypeAlways WhenToTakeOverType = "Always"
+
+	// WhenToTakeOverTypeNever instructs Fleet to never apply manifests to a member cluster
+	// if there are corresponding pre-existing resources.
+	WhenToTakeOverTypeNever WhenToTakeOverType = "Never"
 )
 
 // +enum
@@ -943,8 +963,11 @@ type DriftedResourcePlacement struct {
 
 	// TargetClusterObservedGeneration is the generation of the resource on the target cluster
 	// that contains the configuration drifts.
-	// +kubebuilder:validation:Required
-	TargetClusterObservedGeneration int64 `json:"targetClusterObservedGeneration"`
+	//
+	// This might be nil if the resource has not been created yet on the target cluster.
+	//
+	// +kubebuilder:validation:Optional
+	TargetClusterObservedGeneration *int64 `json:"targetClusterObservedGeneration"`
 
 	// FirstDriftedObservedTime is the first time the resource on the target cluster is
 	// observed to have configuration drifts.
@@ -978,8 +1001,11 @@ type DiffedResourcePlacement struct {
 
 	// TargetClusterObservedGeneration is the generation of the resource on the target cluster
 	// that contains the configuration differences.
-	// +kubebuilder:validation:Required
-	TargetClusterObservedGeneration int64 `json:"targetClusterObservedGeneration"`
+	//
+	// This might be nil if the resource has not been created yet on the target cluster.
+	//
+	// +kubebuilder:validation:Optional
+	TargetClusterObservedGeneration *int64 `json:"targetClusterObservedGeneration"`
 
 	// FirstDiffedObservedTime is the first time the resource on the target cluster is
 	// observed to have configuration differences.

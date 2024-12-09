@@ -338,10 +338,15 @@ spec:
                 properties:
                   allowCoOwnership:
                     description: |-
-                      AllowCoOwnership defines whether to apply the resource if it already exists in the target cluster and is not
-                      solely owned by fleet (i.e., metadata.ownerReferences contains only fleet custom resources).
-                      If true, apply the resource and add fleet as a co-owner.
-                      If false, leave the resource unchanged and fail the apply.
+                      AllowCoOwnership controls whether co-ownership between Fleet and other agents are allowed
+                      on a Fleet-managed resource. If set to false, Fleet will refuse to apply manifests to
+                      a resource that has been owned by one or more non-Fleet agents.
+
+
+                      Note that Fleet does not support the case where one resource is being placed multiple
+                      times by different CRPs on the same member cluster. An apply error will be returned if
+                      Fleet finds that a resource has been owned by another placement attempt by Fleet, even
+                      with the AllowCoOwnership setting set to true.
                     type: boolean
                   comparisonOption:
                     default: PartialComparison
@@ -441,6 +446,10 @@ spec:
                         are on the member clusters.
 
 
+                        If configuration differences are found on a resource, Fleet will consider this as an apply
+                        error, which might block rollout depending on the specified rollout strategy.
+
+
                         Use ComparisonOption setting to control how the difference is calculated.
 
 
@@ -526,8 +535,10 @@ spec:
 
                       * IfNoDiff: with this action, Fleet will apply the hub cluster manifests to the member
                         clusters if (and only if) pre-existing resources look the same as the hub cluster manifests.
+
+
                         This is a safer option as pre-existing resources that are inconsistent with the hub cluster
-                        manifests will not be overwritten; in fact, Fleet will ignore them until the inconsistencies
+                        manifests will not be overwritten; Fleet will ignore them until the inconsistencies
                         are resolved properly: any change you make to the hub cluster manifests would not be
                         applied, and if you delete the manifests or even the ClusterResourcePlacement itself
                         from the hub cluster, these pre-existing resources would not be taken away.
@@ -555,6 +566,16 @@ spec:
 
                         If appropriate, you may also delete the object from the member cluster; Fleet will recreate
                         it using the hub cluster manifest.
+
+
+                      * Never: with this action, Fleet will not apply the hub cluster manifests to the member
+                        clusters if there are corresponding pre-existing resources.
+
+
+                        This is the safest option; one will have to remove the pre-existing resources (so that
+                        Fleet can re-create them) or switch to a different
+                        WhenToTakeOver option before Fleet starts processing the corresponding hub cluster
+                        manifests.
                     enum:
                     - Always
                     - IfNoDiff
@@ -809,12 +830,14 @@ spec:
                           description: |-
                             ObservedInMemberClusterGeneration is the generation of the applied manifest on the member
                             cluster side.
+
+
+                            This might be nil if the resource has not been created yet in the member cluster.
                           format: int64
                           type: integer
                       required:
                       - firstDiffedObservedTime
                       - observationTime
-                      - observedInMemberClusterGeneration
                       type: object
                     driftDetails:
                       description: |-
@@ -881,12 +904,14 @@ spec:
                           description: |-
                             ObservedInMemberClusterGeneration is the generation of the applied manifest on the member
                             cluster side.
+
+
+                            This might be nil if the resource has not been created yet in the member cluster.
                           format: int64
                           type: integer
                       required:
                       - firstDriftedObservedTime
                       - observationTime
-                      - observedInMemberClusterGeneration
                       type: object
                     identifier:
                       description: resourceId represents a identity of a resource
@@ -899,12 +924,12 @@ spec:
                           description: Kind is the kind of the resource.
                           type: string
                         name:
-                          description: Name is the name of the resource
+                          description: Name is the name of the resource.
                           type: string
                         namespace:
                           description: |-
                             Namespace is the namespace of the resource, the resource is cluster scoped if the value
-                            is empty
+                            is empty.
                           type: string
                         ordinal:
                           description: |-
@@ -912,7 +937,7 @@ spec:
                             to a manifest even though manifest cannot be parsed successfully.
                           type: integer
                         resource:
-                          description: Resource is the resource type of the resource
+                          description: Resource is the resource type of the resource.
                           type: string
                         version:
                           description: Version is the version of the resource.

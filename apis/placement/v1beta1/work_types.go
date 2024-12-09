@@ -102,14 +102,14 @@ type WorkResourceIdentifier struct {
 	// Kind is the kind of the resource.
 	Kind string `json:"kind,omitempty"`
 
-	// Resource is the resource type of the resource
+	// Resource is the resource type of the resource.
 	Resource string `json:"resource,omitempty"`
 
 	// Namespace is the namespace of the resource, the resource is cluster scoped if the value
-	// is empty
+	// is empty.
 	Namespace string `json:"namespace,omitempty"`
 
-	// Name is the name of the resource
+	// Name is the name of the resource.
 	Name string `json:"name,omitempty"`
 }
 
@@ -125,8 +125,10 @@ type DriftDetails struct {
 	// ObservedInMemberClusterGeneration is the generation of the applied manifest on the member
 	// cluster side.
 	//
-	// +kubebuilder:validation:Required
-	ObservedInMemberClusterGeneration int64 `json:"observedInMemberClusterGeneration"`
+	// This might be nil if the resource has not been created yet in the member cluster.
+	//
+	// +kubebuilder:validation:Optional
+	ObservedInMemberClusterGeneration *int64 `json:"observedInMemberClusterGeneration"`
 
 	// FirsftDriftedObservedTime is the timestamp when the drift was first detected.
 	//
@@ -157,8 +159,10 @@ type DiffDetails struct {
 	// ObservedInMemberClusterGeneration is the generation of the applied manifest on the member
 	// cluster side.
 	//
-	// +kubebuilder:validation:Required
-	ObservedInMemberClusterGeneration int64 `json:"observedInMemberClusterGeneration"`
+	// This might be nil if the resource has not been created yet in the member cluster.
+	//
+	// +kubebuilder:validation:Optional
+	ObservedInMemberClusterGeneration *int64 `json:"observedInMemberClusterGeneration"`
 
 	// FirsftDiffedObservedTime is the timestamp when the configuration difference
 	// was first detected.
