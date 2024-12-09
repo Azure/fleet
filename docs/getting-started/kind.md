@@ -75,7 +75,6 @@ kubectl config use-context $HUB_CLUSTER_CONTEXT
 
 # The variables below uses the Fleet images kept in the Microsoft Container Registry (MCR),
 # and will retrieve the latest version from the Fleet GitHub repository.
-# Note: The pre-release version image may not exist in the MCR and is not recommended.
 #
 # You can, however, build the Fleet images of your own; see the repository README for
 # more information.
