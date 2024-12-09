@@ -1074,9 +1074,6 @@ spec:
                       description: |-
                         TargetClusterObservedGeneration is the generation of the resource on the target cluster
                         that contains the configuration drifts.
-
-
-                        This might be nil if the resource has not been created yet on the target cluster.
                       format: int64
                       type: integer
                     version:
@@ -1087,6 +1084,7 @@ spec:
                   - kind
                   - name
                   - observationTime
+                  - targetClusterObservedGeneration
                   - version
                   type: object
                 maxItems: 100

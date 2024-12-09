@@ -124,11 +124,8 @@ type DriftDetails struct {
 
 	// ObservedInMemberClusterGeneration is the generation of the applied manifest on the member
 	// cluster side.
-	//
-	// This might be nil if the resource has not been created yet in the member cluster.
-	//
-	// +kubebuilder:validation:Optional
-	ObservedInMemberClusterGeneration *int64 `json:"observedInMemberClusterGeneration"`
+	// +kubebuilder:validation:Required
+	ObservedInMemberClusterGeneration int64 `json:"observedInMemberClusterGeneration"`
 
 	// FirsftDriftedObservedTime is the timestamp when the drift was first detected.
 	//

@@ -963,11 +963,8 @@ type DriftedResourcePlacement struct {
 
 	// TargetClusterObservedGeneration is the generation of the resource on the target cluster
 	// that contains the configuration drifts.
-	//
-	// This might be nil if the resource has not been created yet on the target cluster.
-	//
-	// +kubebuilder:validation:Optional
-	TargetClusterObservedGeneration *int64 `json:"targetClusterObservedGeneration"`
+	// +kubebuilder:validation:Required
+	TargetClusterObservedGeneration int64 `json:"targetClusterObservedGeneration"`
 
 	// FirstDriftedObservedTime is the first time the resource on the target cluster is
 	// observed to have configuration drifts.

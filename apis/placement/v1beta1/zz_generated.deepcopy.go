@@ -673,11 +673,6 @@ func (in *DiffedResourcePlacement) DeepCopy() *DiffedResourcePlacement {
 func (in *DriftDetails) DeepCopyInto(out *DriftDetails) {
 	*out = *in
 	in.ObservationTime.DeepCopyInto(&out.ObservationTime)
-	if in.ObservedInMemberClusterGeneration != nil {
-		in, out := &in.ObservedInMemberClusterGeneration, &out.ObservedInMemberClusterGeneration
-		*out = new(int64)
-		**out = **in
-	}
 	in.FirstDriftedObservedTime.DeepCopyInto(&out.FirstDriftedObservedTime)
 	if in.ObservedDrifts != nil {
 		in, out := &in.ObservedDrifts, &out.ObservedDrifts
@@ -701,11 +696,6 @@ func (in *DriftedResourcePlacement) DeepCopyInto(out *DriftedResourcePlacement) 
 	*out = *in
 	in.ResourceIdentifier.DeepCopyInto(&out.ResourceIdentifier)
 	in.ObservationTime.DeepCopyInto(&out.ObservationTime)
-	if in.TargetClusterObservedGeneration != nil {
-		in, out := &in.TargetClusterObservedGeneration, &out.TargetClusterObservedGeneration
-		*out = new(int64)
-		**out = **in
-	}
 	in.FirstDriftedObservedTime.DeepCopyInto(&out.FirstDriftedObservedTime)
 	if in.ObservedDrifts != nil {
 		in, out := &in.ObservedDrifts, &out.ObservedDrifts

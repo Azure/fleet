@@ -904,14 +904,12 @@ spec:
                           description: |-
                             ObservedInMemberClusterGeneration is the generation of the applied manifest on the member
                             cluster side.
-
-
-                            This might be nil if the resource has not been created yet in the member cluster.
                           format: int64
                           type: integer
                       required:
                       - firstDriftedObservedTime
                       - observationTime
+                      - observedInMemberClusterGeneration
                       type: object
                     identifier:
                       description: resourceId represents a identity of a resource
