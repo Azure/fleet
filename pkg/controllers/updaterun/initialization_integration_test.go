@@ -54,11 +54,11 @@ var _ = Describe("Updaterun initialization tests", func() {
 		testCROName = "cro-" + utils.RandStr()
 		updateRunNamespacedName = types.NamespacedName{Name: testUpdateRunName}
 
-		updateRun = getTestClusterStagedUpdateRun()
-		crp = getTestClusterResourcePlacement()
-		policySnapshot = getTestClusterSchedulingPolicySnapshot(1)
-		updateStrategy = getTestClusterStagedUpdateStrategy()
-		clusterResourceOverride = getTestClusterResourceOverride()
+		updateRun = generateTestClusterStagedUpdateRun()
+		crp = generateTestClusterResourcePlacement()
+		policySnapshot = generateTestClusterSchedulingPolicySnapshot(1)
+		updateStrategy = generateTestClusterStagedUpdateStrategy()
+		clusterResourceOverride = generateTestClusterResourceOverride()
 
 		resourceBindings = make([]*placementv1beta1.ClusterResourceBinding, numTargetClusters+numUnscheduledClusters)
 		targetClusters = make([]*clusterv1beta1.MemberCluster, numTargetClusters)
@@ -69,15 +69,15 @@ var _ = Describe("Updaterun initialization tests", func() {
 				region = "westus"
 			}
 			// reserse the order of the clusters by index
-			targetClusters[i] = getTestMemberCluster(numTargetClusters-1-i, "cluster-"+strconv.Itoa(i), map[string]string{"group": "prod", "region": region})
-			resourceBindings[i] = getTestClusterResourceBinding(policySnapshot.Name, targetClusters[i].Name)
+			targetClusters[i] = generateTestMemberCluster(numTargetClusters-1-i, "cluster-"+strconv.Itoa(i), map[string]string{"group": "prod", "region": region})
+			resourceBindings[i] = generateTestClusterResourceBinding(policySnapshot.Name, targetClusters[i].Name)
 		}
 
 		unscheduledCluster = make([]*clusterv1beta1.MemberCluster, numUnscheduledClusters)
 		for i := range unscheduledCluster {
-			unscheduledCluster[i] = getTestMemberCluster(i, "unscheduled-cluster-"+strconv.Itoa(i), map[string]string{"group": "staging"})
+			unscheduledCluster[i] = generateTestMemberCluster(i, "unscheduled-cluster-"+strconv.Itoa(i), map[string]string{"group": "staging"})
 			// update the policySnapshot name so that these clusters are considered to-be-deleted
-			resourceBindings[numTargetClusters+i] = getTestClusterResourceBinding(policySnapshot.Name+"a", unscheduledCluster[i].Name)
+			resourceBindings[numTargetClusters+i] = generateTestClusterResourceBinding(policySnapshot.Name+"a", unscheduledCluster[i].Name)
 		}
 
 		var err error
@@ -94,7 +94,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			},
 		})
 		Expect(err).To(Succeed())
-		resourceSnapshot = getTestClusterResourceSnapshot()
+		resourceSnapshot = generateTestClusterResourceSnapshot()
 	})
 
 	AfterEach(func() {
@@ -148,7 +148,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 		})
 
 		It("Should fail to initialize if CRP does not have external rollout strategy type", func() {
-			By("Creating a new clusteResourcePlacement with rolling update strategy")
+			By("Creating a new clusterResourcePlacement with rolling update strategy")
 			crp.Spec.Strategy.Type = placementv1beta1.RollingUpdateRolloutStrategyType
 			Expect(k8sClient.Create(ctx, crp)).To(Succeed())
 
@@ -161,7 +161,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 		})
 
 		It("Should copy the ApplyStrategy in the CRP to the UpdateRun", func() {
-			By("Creating a new clusteResourcePlacement with rolling update strategy")
+			By("Creating a new clusterResourcePlacement")
 			Expect(k8sClient.Create(ctx, crp)).To(Succeed())
 
 			By("Creating a new clusterStagedUpdateRun")
@@ -182,7 +182,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 	Context("Test determinePolicySnapshot", func() {
 		BeforeEach(func() {
-			By("Creating a new clusteResourcePlacement")
+			By("Creating a new clusterResourcePlacement")
 			Expect(k8sClient.Create(ctx, crp)).To(Succeed())
 		})
 
@@ -196,7 +196,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 		It("Should fail to initialize if there are multiple latest policy snapshots", func() {
 			By("Creating 2 scheduling policy snapshots")
-			snapshot2 := getTestClusterSchedulingPolicySnapshot(2)
+			snapshot2 := generateTestClusterSchedulingPolicySnapshot(2)
 			Expect(k8sClient.Create(ctx, policySnapshot)).To(Succeed())
 			Expect(k8sClient.Create(ctx, snapshot2)).To(Succeed())
 
@@ -344,7 +344,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 	Context("Test collectScheduledClusters", func() {
 		BeforeEach(func() {
-			By("Creating a new clusteResourcePlacement")
+			By("Creating a new clusterResourcePlacement")
 			Expect(k8sClient.Create(ctx, crp)).To(Succeed())
 
 			By("Creating scheduling policy snapshot")
@@ -370,7 +370,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 		It("Should not report error if there are only to-be-deleted clusters", func() {
 			By("Creating a to-be-deleted clusterResourceBinding")
-			binding := getTestClusterResourceBinding(policySnapshot.Name+"a", "cluster-0")
+			binding := generateTestClusterResourceBinding(policySnapshot.Name+"a", "cluster-0")
 			Expect(k8sClient.Create(ctx, binding)).To(Succeed())
 
 			By("Creating a new clusterStagedUpdateRun")
@@ -381,35 +381,17 @@ var _ = Describe("Updaterun initialization tests", func() {
 			validateFailedInitCondition(ctx, updateRun, "referenced clusterStagedUpdateStrategy not found")
 		})
 
-		It("Should retry if the bindings are not in Scheduled or Bound state", func() {
+		It("Should fail to initialize if the bindings are not in Scheduled or Bound state", func() {
 			By("Creating a not scheduled clusterResourceBinding")
-			binding := getTestClusterResourceBinding(policySnapshot.Name, "cluster-1")
+			binding := generateTestClusterResourceBinding(policySnapshot.Name, "cluster-1")
 			binding.Spec.State = ""
 			Expect(k8sClient.Create(ctx, binding)).To(Succeed())
 
 			By("Creating a new clusterStagedUpdateRun")
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
-			By("Validating there's no initialization condition on the updateRun")
-			Eventually(func() error {
-				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
-					return err
-				}
-				if len(updateRun.Status.Conditions) > 0 {
-					return fmt.Errorf("unexpected condition found")
-				}
-				return nil
-			}, duration, interval).Should(Succeed(), "failed to validate no initialization condition is added")
-
-			Consistently(func() error {
-				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
-					return err
-				}
-				if len(updateRun.Status.Conditions) > 0 {
-					return fmt.Errorf("unexpected condition found")
-				}
-				return nil
-			}, duration, interval).Should(Succeed(), "failed to consistently validate no initialization condition is added")
+			By("Validating the initialization failed")
+			validateFailedInitCondition(ctx, updateRun, "state  is not scheduled or bound")
 
 			By("Deleting the clusterResourceBinding")
 			Expect(k8sClient.Delete(ctx, binding)).Should(Succeed())
@@ -418,7 +400,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 	Context("Test generateStagesByStrategy", func() {
 		BeforeEach(func() {
-			By("Creating a new clusteResourcePlacement")
+			By("Creating a new clusterResourcePlacement")
 			Expect(k8sClient.Create(ctx, crp)).To(Succeed())
 
 			By("Creating scheduling policy snapshot")
@@ -600,7 +582,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 	Context("Test recordOverrideSnapshots", func() {
 		BeforeEach(func() {
-			By("Creating a new clusteResourcePlacement")
+			By("Creating a new clusterResourcePlacement")
 			Expect(k8sClient.Create(ctx, crp)).To(Succeed())
 
 			By("Creating scheduling policy snapshot")

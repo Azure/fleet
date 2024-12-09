@@ -69,14 +69,16 @@ func (r *Reconciler) validateCRP(ctx context.Context, updateRun *placementv1alph
 		klog.ErrorS(err, "Failed to get ClusterResourcePlacement", "clusterResourcePlacement", placementName, "clusterStagedUpdateRun", updateRunRef)
 		if apierrors.IsNotFound(err) {
 			// we won't continue or retry the initialization if the ClusterResourcePlacement is not found.
-			return "", fmt.Errorf("%w: %s", errInitializedFailed, "parent clusterResourcePlacement not found")
+			crpNotFoundErr := controller.NewUserError(fmt.Errorf("parent clusterResourcePlacement not found"))
+			return "", fmt.Errorf("%w: %s", errInitializedFailed, crpNotFoundErr.Error())
 		}
-		return "", err
+		return "", controller.NewAPIServerError(true, err)
 	}
 	// Check if the ClusterResourcePlacement has an external rollout strategy.
 	if crp.Spec.Strategy.Type != placementv1beta1.ExternalRolloutStrategyType {
 		klog.V(2).InfoS("The clusterResourcePlacement does not have an external rollout strategy", "clusterResourcePlacement", placementName, "clusterStagedUpdateRun", updateRunRef)
-		return "", fmt.Errorf("%w: %s", errInitializedFailed, "parent clusterResourcePlacement does not have an external rollout strategy, current strategy: "+string(crp.Spec.Strategy.Type))
+		wrongRolloutTypeErr := controller.NewUserError(fmt.Errorf("parent clusterResourcePlacement does not have an external rollout strategy, current strategy: " + string(crp.Spec.Strategy.Type)))
+		return "", fmt.Errorf("%w: %s", errInitializedFailed, wrongRolloutTypeErr.Error())
 	}
 	updateRun.Status.ApplyStrategy = crp.Spec.Strategy.ApplyStrategy
 	return crp.Name, nil
@@ -99,7 +101,7 @@ func (r *Reconciler) determinePolicySnapshot(
 	if err := r.Client.List(ctx, &policySnapshotList, latestPolicyMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list the latest policy snapshots", "clusterResourcePlacement", placementName, "clusterStagedUpdateRun", updateRunRef)
 		// err can be retried.
-		return nil, -1, err
+		return nil, -1, controller.NewAPIServerError(true, err)
 	}
 	if len(policySnapshotList.Items) != 1 {
 		if len(policySnapshotList.Items) > 1 {
@@ -167,13 +169,16 @@ func (r *Reconciler) collectScheduledClusters(
 	if err := r.Client.List(ctx, &bindingList, resourceBindingMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list clusterResourceBindings", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
 		// list err can be retried.
-		return nil, nil, err
+		return nil, nil, controller.NewAPIServerError(true, err)
 	}
 	var toBeDeletedBindings, selectedBindings []*placementv1beta1.ClusterResourceBinding
 	for i, binding := range bindingList.Items {
 		if binding.Spec.SchedulingPolicySnapshotName == latestPolicySnapshot.Name {
 			if binding.Spec.State != placementv1beta1.BindingStateScheduled && binding.Spec.State != placementv1beta1.BindingStateBound {
-				return nil, nil, controller.NewUnexpectedBehaviorError(fmt.Errorf("binding `%s`'s state %s is not scheduled or bound", binding.Name, binding.Spec.State))
+				stateErr := fmt.Errorf("binding `%s`'s state %s is not scheduled or bound", binding.Name, binding.Spec.State)
+				klog.ErrorS(stateErr, "Failed to collect clusterResourceBindings", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
+				// no more retries here.
+				return nil, nil, fmt.Errorf("%w: %s", errInitializedFailed, stateErr.Error())
 			}
 			klog.V(2).InfoS("Found a scheduled binding", "binding", binding.Name, "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
 			selectedBindings = append(selectedBindings, &bindingList.Items[i])
@@ -206,10 +211,11 @@ func (r *Reconciler) generateStagesByStrategy(
 		klog.ErrorS(err, "Failed to get StagedUpdateStrategy", "stagedUpdateStrategy", updateRun.Spec.StagedUpdateStrategyName, "clusterStagedUpdateRun", updateRunRef)
 		if apierrors.IsNotFound(err) {
 			// we won't continue or retry the initialization if the StagedUpdateStrategy is not found.
-			return fmt.Errorf("%w: %s", errInitializedFailed, "referenced clusterStagedUpdateStrategy not found: "+updateRun.Spec.StagedUpdateStrategyName)
+			strategyNotFoundErr := controller.NewUserError(fmt.Errorf("referenced clusterStagedUpdateStrategy not found: " + updateRun.Spec.StagedUpdateStrategyName))
+			return fmt.Errorf("%w: %s", errInitializedFailed, strategyNotFoundErr.Error())
 		}
 		// other err can be retried.
-		return err
+		return controller.NewAPIServerError(true, err)
 	}
 	// This won't change even if the stagedUpdateStrategy changes or is deleted after the updateRun is initialized.
 	updateRun.Status.StagedUpdateStrategySnapshot = &updateStrategy.Spec
@@ -255,7 +261,8 @@ func (r *Reconciler) computeRunStageStatus(
 		if err := validateAfterStageTask(stage.AfterStageTasks); err != nil {
 			klog.ErrorS(err, "Failed to validate the after stage tasks", "clusterStagedUpdateStrategy", updateStrategyName, "stage name", stage.Name, "clusterStagedUpdateRun", updateRunRef)
 			// no more retries here.
-			return fmt.Errorf("%w: the after stage tasks are invalid, clusterStagedUpdateStrategy: %s, stage: %s, err: %s", errInitializedFailed, updateStrategyName, stage.Name, err.Error())
+			invalidAfterStageErr := controller.NewUserError(fmt.Errorf("the after stage tasks are invalid, clusterStagedUpdateStrategy: %s, stage: %s, err: %s", updateStrategyName, stage.Name, err.Error()))
+			return fmt.Errorf("%w: %s", errInitializedFailed, invalidAfterStageErr.Error())
 		}
 
 		curStageUpdatingStatus := placementv1alpha1.StageUpdatingStatus{StageName: stage.Name}
@@ -264,14 +271,15 @@ func (r *Reconciler) computeRunStageStatus(
 		if err != nil {
 			klog.ErrorS(err, "Failed to convert label selector", "clusterStagedUpdateStrategy", updateStrategyName, "stage name", stage.Name, "labelSelector", stage.LabelSelector, "clusterStagedUpdateRun", updateRunRef)
 			// no more retries here.
-			return fmt.Errorf("%w: the stage label selector is invalid, clusterStagedUpdateStrategy: %s, stage: %s, err: %s", errInitializedFailed, updateStrategyName, stage.Name, err.Error())
+			invalidLabelErr := controller.NewUserError(fmt.Errorf("the stage label selector is invalid, clusterStagedUpdateStrategy: %s, stage: %s, err: %s", updateStrategyName, stage.Name, err.Error()))
+			return controller.NewUserError(fmt.Errorf("%w: %s", errInitializedFailed, invalidLabelErr.Error()))
 		}
 		// List all the clusters that match the label selector.
 		var clusterList clusterv1beta1.MemberClusterList
 		if err := r.Client.List(ctx, &clusterList, &client.ListOptions{LabelSelector: labelSelector}); err != nil {
 			klog.ErrorS(err, "Failed to list clusters for the stage", "clusterStagedUpdateStrategy", updateStrategyName, "stage name", stage.Name, "labelSelector", stage.LabelSelector, "clusterStagedUpdateRun", updateRunRef)
 			// list err can be retried.
-			return err
+			return controller.NewAPIServerError(true, err)
 		}
 
 		// Intersect the selected clusters with the clusters in the stage.
@@ -279,7 +287,7 @@ func (r *Reconciler) computeRunStageStatus(
 			if _, ok := allSelectedClusters[cluster.Name]; ok {
 				if _, ok := allPlacedClusters[cluster.Name]; ok {
 					// a cluster can only appear in one stage.
-					dupErr := fmt.Errorf("cluster `%s` appears in more than one stages", cluster.Name)
+					dupErr := controller.NewUserError(fmt.Errorf("cluster `%s` appears in more than one stages", cluster.Name))
 					klog.ErrorS(dupErr, "Failed to compute the stage", "clusterStagedUpdateStrategy", updateStrategyName, "stage name", stage.Name, "clusterStagedUpdateRun", updateRunRef)
 					// no more retries here.
 					return fmt.Errorf("%w: %s", errInitializedFailed, dupErr.Error())
@@ -287,7 +295,7 @@ func (r *Reconciler) computeRunStageStatus(
 				if stage.SortingLabelKey != nil {
 					// interpret the label values as integers.
 					if _, err := strconv.Atoi(cluster.Labels[*stage.SortingLabelKey]); err != nil {
-						keyErr := fmt.Errorf("the sorting label `%s:%s` on cluster `%s` is not valid: %s", *stage.SortingLabelKey, cluster.Labels[*stage.SortingLabelKey], cluster.Name, err.Error())
+						keyErr := controller.NewUserError(fmt.Errorf("the sorting label `%s:%s` on cluster `%s` is not valid: %s", *stage.SortingLabelKey, cluster.Labels[*stage.SortingLabelKey], cluster.Name, err.Error()))
 						klog.ErrorS(keyErr, "Failed to sort clusters in the stage", "clusterStagedUpdateStrategy", updateStrategyName, "stage name", stage.Name, "clusterStagedUpdateRun", updateRunRef)
 						// no more retries here.
 						return fmt.Errorf("%w: %s", errInitializedFailed, keyErr.Error())
@@ -337,7 +345,7 @@ func (r *Reconciler) computeRunStageStatus(
 
 	// Check if the clusters are all placed.
 	if len(allPlacedClusters) != len(allSelectedClusters) {
-		missingErr := fmt.Errorf("some clusters are not placed in any stage")
+		missingErr := controller.NewUserError(fmt.Errorf("some clusters are not placed in any stage"))
 		for cluster := range allSelectedClusters {
 			if _, ok := allPlacedClusters[cluster]; !ok {
 				klog.ErrorS(missingErr, "Cluster is missing in any stage", "cluster", cluster, "clusterStagedUpdateStrategy", updateStrategyName, "clusterStagedUpdateRun", updateRunRef)
@@ -372,23 +380,23 @@ func (r *Reconciler) recordOverrideSnapshots(ctx context.Context, placementName 
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: updateRun.Spec.ResourceSnapshotIndex}, &masterResourceSnapshot); err != nil {
 		klog.ErrorS(err, "Failed to get the master resource snapshot", "resourceSnapshot", updateRun.Spec.ResourceSnapshotIndex, "clusterStagedUpdateRun", updateRunRef)
 		if apierrors.IsNotFound(err) {
-			snapshotNotFoundErr := fmt.Errorf("resource snapshot `%s` not found", updateRun.Spec.ResourceSnapshotIndex)
+			snapshotNotFoundErr := controller.NewUserError(fmt.Errorf("resource snapshot `%s` not found", updateRun.Spec.ResourceSnapshotIndex))
 			// we won't continue or retry the initialization if the resource snapshot is not found.
 			return fmt.Errorf("%w: %s", errInitializedFailed, snapshotNotFoundErr.Error())
 		}
 		// err can be retried.
-		return err
+		return controller.NewAPIServerError(true, err)
 	}
 
 	if parentCRP, ok := masterResourceSnapshot.Labels[placementv1beta1.CRPTrackingLabel]; !ok || parentCRP != placementName {
-		wrongCRPErr := fmt.Errorf("resource snapshot `%s` is not associated with expected clusterResourcePlacement `%s`, got: `%s`", updateRun.Spec.ResourceSnapshotIndex, placementName, parentCRP)
+		wrongCRPErr := controller.NewUserError(fmt.Errorf("resource snapshot `%s` is not associated with expected clusterResourcePlacement `%s`, got: `%s`", updateRun.Spec.ResourceSnapshotIndex, placementName, parentCRP))
 		klog.ErrorS(wrongCRPErr, "Failed to get the master resource snapshot", "resourceSnapshot", updateRun.Spec.ResourceSnapshotIndex, "clusterStagedUpdateRun", updateRunRef)
 		// no more retries here.
 		return fmt.Errorf("%w: %s", errInitializedFailed, wrongCRPErr.Error())
 	}
 
 	if hash, ok := masterResourceSnapshot.Annotations[placementv1beta1.ResourceGroupHashAnnotation]; !ok || len(hash) == 0 {
-		nomasterErr := fmt.Errorf("resource snapshot `%s` is not a master snapshot", updateRun.Spec.ResourceSnapshotIndex)
+		nomasterErr := controller.NewUserError(fmt.Errorf("resource snapshot `%s` is not a master snapshot", updateRun.Spec.ResourceSnapshotIndex))
 		klog.ErrorS(nomasterErr, "Failed to get the master resource snapshot", "resourceSnapshot", updateRun.Spec.ResourceSnapshotIndex, "clusterStagedUpdateRun", updateRunRef)
 		// no more retries here.
 		return fmt.Errorf("%w: %s", errInitializedFailed, nomasterErr.Error())
@@ -429,7 +437,7 @@ func (r *Reconciler) recordInitializationSucceeded(ctx context.Context, updateRu
 	if updateErr := r.Client.Status().Update(ctx, updateRun); updateErr != nil {
 		klog.ErrorS(updateErr, "Failed to update the ClusterStagedUpdateRun status as initialized", "clusterStagedUpdateRun", klog.KObj(updateRun))
 		// updateErr can be retried.
-		return updateErr
+		return controller.NewAPIServerError(false, updateErr)
 	}
 	return nil
 }
@@ -446,7 +454,7 @@ func (r *Reconciler) recordInitializationFailed(ctx context.Context, updateRun *
 	if updateErr := r.Client.Status().Update(ctx, updateRun); updateErr != nil {
 		klog.ErrorS(updateErr, "Failed to update the ClusterStagedUpdateRun status as failed to initialize", "clusterStagedUpdateRun", klog.KObj(updateRun))
 		// updateErr can be retried.
-		return updateErr
+		return controller.NewAPIServerError(false, updateErr)
 	}
 	return nil
 }
