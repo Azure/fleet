@@ -618,6 +618,11 @@ func (in *ClusterSelectorTerm) DeepCopy() *ClusterSelectorTerm {
 func (in *DiffDetails) DeepCopyInto(out *DiffDetails) {
 	*out = *in
 	in.ObservationTime.DeepCopyInto(&out.ObservationTime)
+	if in.ObservedInMemberClusterGeneration != nil {
+		in, out := &in.ObservedInMemberClusterGeneration, &out.ObservedInMemberClusterGeneration
+		*out = new(int64)
+		**out = **in
+	}
 	in.FirstDiffedObservedTime.DeepCopyInto(&out.FirstDiffedObservedTime)
 	if in.ObservedDiffs != nil {
 		in, out := &in.ObservedDiffs, &out.ObservedDiffs
@@ -641,6 +646,11 @@ func (in *DiffedResourcePlacement) DeepCopyInto(out *DiffedResourcePlacement) {
 	*out = *in
 	in.ResourceIdentifier.DeepCopyInto(&out.ResourceIdentifier)
 	in.ObservationTime.DeepCopyInto(&out.ObservationTime)
+	if in.TargetClusterObservedGeneration != nil {
+		in, out := &in.TargetClusterObservedGeneration, &out.TargetClusterObservedGeneration
+		*out = new(int64)
+		**out = **in
+	}
 	in.FirstDiffedObservedTime.DeepCopyInto(&out.FirstDiffedObservedTime)
 	if in.ObservedDiffs != nil {
 		in, out := &in.ObservedDiffs, &out.ObservedDiffs

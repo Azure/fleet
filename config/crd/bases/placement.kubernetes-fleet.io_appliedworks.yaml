@@ -189,12 +189,12 @@ spec:
                       description: Kind is the kind of the resource.
                       type: string
                     name:
-                      description: Name is the name of the resource
+                      description: Name is the name of the resource.
                       type: string
                     namespace:
                       description: |-
                         Namespace is the namespace of the resource, the resource is cluster scoped if the value
-                        is empty
+                        is empty.
                       type: string
                     ordinal:
                       description: |-
@@ -202,7 +202,7 @@ spec:
                         to a manifest even though manifest cannot be parsed successfully.
                       type: integer
                     resource:
-                      description: Resource is the resource type of the resource
+                      description: Resource is the resource type of the resource.
                       type: string
                     uid:
                       description: |-
