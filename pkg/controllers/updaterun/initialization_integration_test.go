@@ -261,7 +261,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			By("Creating a new clusterStagedUpdateRun")
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
-			By("Validating the initialization failed")
+			By("Validating policy snapshot details are copied to the updateRun status")
 			Eventually(func() error {
 				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
 					return err
@@ -294,7 +294,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			By("Creating a new clusterStagedUpdateRun")
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
-			By("Validating the initialization failed")
+			By("Validating policy snapshot details are copied to the updateRun status")
 			Eventually(func() error {
 				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
 					return err
@@ -326,7 +326,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			By("Creating a new clusterStagedUpdateRun")
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
-			By("Validating the initialization failed")
+			By("Validating policy snapshot details are copied to the updateRun status")
 			Eventually(func() error {
 				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
 					return err
@@ -384,14 +384,14 @@ var _ = Describe("Updaterun initialization tests", func() {
 		It("Should fail to initialize if the bindings are not in Scheduled or Bound state", func() {
 			By("Creating a not scheduled clusterResourceBinding")
 			binding := generateTestClusterResourceBinding(policySnapshot.Name, "cluster-1")
-			binding.Spec.State = ""
+			binding.Spec.State = placementv1beta1.BindingStateUnscheduled
 			Expect(k8sClient.Create(ctx, binding)).To(Succeed())
 
 			By("Creating a new clusterStagedUpdateRun")
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization failed")
-			validateFailedInitCondition(ctx, updateRun, "state  is not scheduled or bound")
+			validateFailedInitCondition(ctx, updateRun, "state Unscheduled is not scheduled or bound")
 
 			By("Deleting the clusterResourceBinding")
 			Expect(k8sClient.Delete(ctx, binding)).Should(Succeed())

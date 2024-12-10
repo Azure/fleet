@@ -435,16 +435,16 @@ func generateTestApprovalRequest(name string) *placementv1alpha1.ClusterApproval
 }
 
 func validateUpdateRunHasFinalizer(ctx context.Context, updateRun *placementv1alpha1.ClusterStagedUpdateRun) {
-	namepsacedName := types.NamespacedName{Name: updateRun.Name}
+	namespacedName := types.NamespacedName{Name: updateRun.Name}
 	Eventually(func() error {
-		if err := k8sClient.Get(ctx, namepsacedName, updateRun); err != nil {
-			return fmt.Errorf("failed to get clusterStagedUpdateRun %s: %w", namepsacedName, err)
+		if err := k8sClient.Get(ctx, namespacedName, updateRun); err != nil {
+			return fmt.Errorf("failed to get clusterStagedUpdateRun %s: %w", namespacedName, err)
 		}
 		if !controllerutil.ContainsFinalizer(updateRun, placementv1alpha1.ClusterStagedUpdateRunFinalizer) {
-			return fmt.Errorf("finalizer not added to clusterStagedUpdateRun %s", namepsacedName)
+			return fmt.Errorf("finalizer not added to clusterStagedUpdateRun %s", namespacedName)
 		}
 		return nil
-	}, timeout, interval).Should(Succeed(), "failed to add finalizer to clusterStagedUpdateRun %s", namepsacedName)
+	}, timeout, interval).Should(Succeed(), "failed to add finalizer to clusterStagedUpdateRun %s", namespacedName)
 }
 
 func validateUpdateRunIsDeleted(ctx context.Context, name types.NamespacedName) {

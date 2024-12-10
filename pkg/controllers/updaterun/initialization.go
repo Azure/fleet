@@ -105,8 +105,8 @@ func (r *Reconciler) determinePolicySnapshot(
 	}
 	if len(policySnapshotList.Items) != 1 {
 		if len(policySnapshotList.Items) > 1 {
-			err := fmt.Errorf("more than one (%d in actual) latest policy snapshots associated with the clusterResourcePlacement: %s", len(policySnapshotList.Items), placementName)
-			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Failed to find the latest policy snapshot", "clusterResourcePlacement", placementName, "clusterStagedUpdateRun", updateRunRef)
+			err := controller.NewUnexpectedBehaviorError(fmt.Errorf("more than one (%d in actual) latest policy snapshots associated with the clusterResourcePlacement: %s", len(policySnapshotList.Items), placementName))
+			klog.ErrorS(err, "Failed to find the latest policy snapshot", "clusterResourcePlacement", placementName, "clusterStagedUpdateRun", updateRunRef)
 			// no more retries for this error.
 			return nil, -1, fmt.Errorf("%w: %s", errInitializedFailed, err.Error())
 		}
@@ -122,8 +122,8 @@ func (r *Reconciler) determinePolicySnapshot(
 
 	// Get the cluster count from the policy snapshot.
 	if latestPolicySnapshot.Spec.Policy == nil {
-		nopolicyErr := fmt.Errorf("policy snapshot `%s` does not have a policy", latestPolicySnapshot.Name)
-		klog.ErrorS(controller.NewUnexpectedBehaviorError(nopolicyErr), "Failed to get the policy from the latestPolicySnapshot", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
+		nopolicyErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("policy snapshot `%s` does not have a policy", latestPolicySnapshot.Name))
+		klog.ErrorS(nopolicyErr, "Failed to get the policy from the latestPolicySnapshot", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
 		// no more retries here.
 		return nil, -1, fmt.Errorf("%w: %s", errInitializedFailed, nopolicyErr.Error())
 	}
@@ -132,8 +132,8 @@ func (r *Reconciler) determinePolicySnapshot(
 	if latestPolicySnapshot.Spec.Policy.PlacementType == placementv1beta1.PickNPlacementType {
 		count, err := annotations.ExtractNumOfClustersFromPolicySnapshot(&latestPolicySnapshot)
 		if err != nil {
-			annErr := fmt.Errorf("%w: the policy snapshot `%s` doesn't have valid cluster count annotation", err, latestPolicySnapshot.Name)
-			klog.ErrorS(controller.NewUnexpectedBehaviorError(annErr), "Failed to get the cluster count from the latestPolicySnapshot", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
+			annErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("%w: the policy snapshot `%s` doesn't have valid cluster count annotation", err, latestPolicySnapshot.Name))
+			klog.ErrorS(annErr, "Failed to get the cluster count from the latestPolicySnapshot", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
 			// no more retries here.
 			return nil, -1, fmt.Errorf("%w, %s", errInitializedFailed, annErr.Error())
 		}
