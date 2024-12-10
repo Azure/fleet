@@ -692,17 +692,28 @@ type ServerSideApplyConfig struct {
 type WhenToTakeOverType string
 
 const (
-	// WhenToTakeOverTypeIfNoDiff will apply manifests from the hub cluster only if there is no difference
-	// between the current resource snapshot version on the hub cluster and the existing
-	// resources on the member cluster. Otherwise, we will report the difference.
+	// WhenToTakeOverTypeIfNoDiff instructs Fleet to apply a manifest with a corresponding
+	// pre-existing resource on a member cluster if and only if the pre-existing resource
+	// looks the same as the manifest. Should there be any inconsistency, Fleet will skip
+	// the apply op; no change will be made on the resource and Fleet will not claim
+	// ownership on it.
+	//
+	// Note that this will not stop Fleet from processing other manifests in the same
+	// lacement that do not concern the takeover process (e.g., the manifests that have
+	// not been created yet, or that are already under the management of Fleet).
 	WhenToTakeOverTypeIfNoDiff WhenToTakeOverType = "IfNoDiff"
 
-	// WhenToTakeOverTypeAlways will always apply manifests to the member cluster regardless
-	// if there are differences between the resource on the hub cluster and the existing resources on the member cluster.
+	// WhenToTakeOverTypeAlways instructs Fleet to always apply manifests to a member cluster,
+	// even if there are some corresponding pre-existing resources. Some fields on these
+	// resources might be overwritten, and Fleet will claim ownership on them.
 	WhenToTakeOverTypeAlways WhenToTakeOverType = "Always"
 
-	// WhenToTakeOverTypeNever instructs Fleet to never apply manifests to a member cluster
-	// if there are corresponding pre-existing resources.
+	// WhenToTakeOverTypeNever instructs Fleet to never apply a manifest to a member cluster
+	// if there is a corresponding pre-existing resource.
+	//
+	// Note that this will not stop Fleet from processing other manifests in the same placement
+	// that do not concern the takeover process (e.g., the manifests that have not been created
+	// yet, or that are already under the management of Fleet).
 	WhenToTakeOverTypeNever WhenToTakeOverType = "Never"
 )
 
