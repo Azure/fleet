@@ -196,7 +196,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	var imc clusterv1beta1.InternalMemberCluster
 	if err := r.hubClient.Get(ctx, req.NamespacedName, &imc); err != nil {
-		klog.ErrorS(err, "Failed to get internal member cluster: %s", req.NamespacedName)
+		klog.ErrorS(err, "Failed to get internal member cluster", "InternalMemberCluster", req.NamespacedName)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
