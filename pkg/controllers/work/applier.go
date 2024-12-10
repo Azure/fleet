@@ -75,6 +75,9 @@ func findConflictedWork(ctx context.Context, hubClient client.Client, namespace 
 		// * the defaulting webhook failure policy is configured as "fail".
 		// * user cannot update/delete the webhook.
 		defaulter.SetDefaultsWork(work)
+		// Note (chenyu1): set the defaults here to accommodate for new apply strategy fields added in v1beta1
+		// API version.
+		defaulter.SetDefaultsApplyStrategy(strategy)
 		if !equality.Semantic.DeepEqual(strategy, work.Spec.ApplyStrategy) {
 			return work, nil
 		}
