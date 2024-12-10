@@ -8,9 +8,11 @@ package updaterun
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -25,14 +27,27 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/informer"
+)
+
+var (
+	// errStagedUpdatedAborted is the error when the ClusterStagedUpdateRun is aborted.
+	errStagedUpdatedAborted = fmt.Errorf("cannot continue the ClusterStagedUpdateRun")
+	// errInitializedFailed is the error when the ClusterStagedUpdateRun fails to initialize.
+	// It is a wrapped error of errStagedUpdatedAborted, because some initialization functions are reused in the validation step.
+	errInitializedFailed = fmt.Errorf("%w: failed to initialize the clusterStagedUpdateRun", errStagedUpdatedAborted)
 )
 
 // Reconciler reconciles a ClusterStagedUpdateRun object.
 type Reconciler struct {
 	client.Client
 	recorder record.EventRecorder
+	// the informer contains the cache for all the resources we need to check the resource scope.
+	InformerManager informer.Manager
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtime.Result, error) {
@@ -69,7 +84,39 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{}, err
 	}
 
-	// TODO(wantjian): reconcile the clusterStagedUpdateRun.
+	var updatingStageIndex int
+	var toBeUpdatedBindings, toBeDeletedBindings []*placementv1beta1.ClusterResourceBinding
+	var err error
+	initCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1alpha1.StagedUpdateRunConditionInitialized))
+	if !condition.IsConditionStatusTrue(initCond, updateRun.Generation) {
+		if condition.IsConditionStatusFalse(initCond, updateRun.Generation) {
+			klog.V(2).InfoS("The clusterStagedUpdateRun has failed to initialize", "errorMsg", initCond.Message, "clusterStagedUpdateRun", runObjRef)
+			return runtime.Result{}, nil
+		}
+		if toBeUpdatedBindings, toBeDeletedBindings, err = r.initialize(ctx, &updateRun); err != nil {
+			klog.ErrorS(err, "Failed to initialize the clusterStagedUpdateRun", "clusterStagedUpdateRun", runObjRef)
+			// errInitializedFailed cannot be retried.
+			if errors.Is(err, errInitializedFailed) {
+				return runtime.Result{}, r.recordInitializationFailed(ctx, &updateRun, err.Error())
+			}
+			return runtime.Result{}, err
+		}
+		updatingStageIndex = 0 // start from the first stage.
+		klog.V(2).InfoS("Initialized the clusterStagedUpdateRun", "clusterStagedUpdateRun", runObjRef)
+	} else {
+		klog.V(2).InfoS("The clusterStagedUpdateRun is initialized", "clusterStagedUpdateRun", runObjRef)
+		// Check if the clusterStagedUpdateRun is finished.
+		finishedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1alpha1.StagedUpdateRunConditionSucceeded))
+		if condition.IsConditionStatusTrue(finishedCond, updateRun.Generation) || condition.IsConditionStatusFalse(finishedCond, updateRun.Generation) {
+			klog.V(2).InfoS("The clusterStagedUpdateRun is finished", "clusterStagedUpdateRun", runObjRef)
+			return runtime.Result{}, nil
+		}
+		// TODO(wantjian): validate the clusterStagedUpdateRun and generate the updatingStage etc.
+	}
+
+	// TODO(wantjian): execute the clusterStagedUpdateRun.
+	klog.V(2).InfoS("Executing the clusterStagedUpdateRun", "clusterStagedUpdateRun", runObjRef, "updatingStageIndex", updatingStageIndex,
+		"toBeUpdatedBindings count", len(toBeUpdatedBindings), "toBeDeletedBindings count", len(toBeDeletedBindings))
 	return runtime.Result{}, nil
 }
 
