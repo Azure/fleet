@@ -715,7 +715,7 @@ const (
 	// ownership on it.
 	//
 	// Note that this will not stop Fleet from processing other manifests in the same
-	// lacement that do not concern the takeover process (e.g., the manifests that have
+	// placement that do not concern the takeover process (e.g., the manifests that have
 	// not been created yet, or that are already under the management of Fleet).
 	WhenToTakeOverTypeIfNoDiff WhenToTakeOverType = "IfNoDiff"
 

@@ -1892,7 +1892,7 @@ func verifyBindStatusNotAppliedWithTwoPlacements(binding *placementv1beta1.Clust
 					},
 					ObservationTime:                 metav1.Time{Time: specificTime},
 					FirstDiffedObservedTime:         metav1.Time{Time: specificTime},
-					TargetClusterObservedGeneration: 2,
+					TargetClusterObservedGeneration: ptr.To(int64(2)),
 					ObservedDiffs: []placementv1beta1.PatchDetail{
 						configmapPatchDetail,
 					},
@@ -1906,7 +1906,7 @@ func verifyBindStatusNotAppliedWithTwoPlacements(binding *placementv1beta1.Clust
 						Namespace: "svc-namespace",
 					},
 					ObservationTime:                 metav1.Time{Time: specificTime},
-					TargetClusterObservedGeneration: 1,
+					TargetClusterObservedGeneration: ptr.To(int64(1)),
 					FirstDiffedObservedTime:         metav1.Time{Time: specificTime},
 					ObservedDiffs: []placementv1beta1.PatchDetail{
 						servicePatchDetail,
@@ -2436,7 +2436,7 @@ func markWorkWithFailedToApplyAndNotAvailable(work *placementv1beta1.Work, hasDi
 		work.Status.ManifestConditions[0].DiffDetails = &placementv1beta1.DiffDetails{
 			ObservationTime:                   metav1.Time{Time: specificTime},
 			FirstDiffedObservedTime:           metav1.Time{Time: specificTime},
-			ObservedInMemberClusterGeneration: 2,
+			ObservedInMemberClusterGeneration: ptr.To(int64(2)),
 			ObservedDiffs: []placementv1beta1.PatchDetail{
 				configmapPatchDetail,
 			},
@@ -2444,7 +2444,7 @@ func markWorkWithFailedToApplyAndNotAvailable(work *placementv1beta1.Work, hasDi
 		work.Status.ManifestConditions[1].DiffDetails = &placementv1beta1.DiffDetails{
 			ObservationTime:                   metav1.Time{Time: specificTime},
 			FirstDiffedObservedTime:           metav1.Time{Time: specificTime},
-			ObservedInMemberClusterGeneration: 1,
+			ObservedInMemberClusterGeneration: ptr.To(int64(1)),
 			ObservedDiffs: []placementv1beta1.PatchDetail{
 				servicePatchDetail,
 			},
