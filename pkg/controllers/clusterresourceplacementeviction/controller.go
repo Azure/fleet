@@ -209,7 +209,7 @@ func (r *Reconciler) executeEviction(ctx context.Context, validationResult *evic
 	}
 
 	// handle special case for PickAll CRP.
-	if crp.Spec.Policy.PlacementType == placementv1beta1.PickAllPlacementType {
+	if crp.Spec.Policy == nil || crp.Spec.Policy.PlacementType == placementv1beta1.PickAllPlacementType {
 		if db.Spec.MaxUnavailable != nil || (db.Spec.MinAvailable != nil && db.Spec.MinAvailable.Type == intstr.String) {
 			markEvictionNotExecuted(eviction, evictionBlockedMisconfiguredPDBSpecifiedMessage)
 			return nil
@@ -271,7 +271,12 @@ func isEvictionAllowed(bindings []placementv1beta1.ClusterResourceBinding, crp p
 	}
 
 	var desiredBindings int
-	placementType := crp.Spec.Policy.PlacementType
+	var placementType placementv1beta1.PlacementType
+	if crp.Spec.Policy != nil {
+		placementType = crp.Spec.Policy.PlacementType
+	} else {
+		placementType = placementv1beta1.PickAllPlacementType
+	}
 	switch placementType {
 	case placementv1beta1.PickNPlacementType:
 		desiredBindings = int(*crp.Spec.Policy.NumberOfClusters)

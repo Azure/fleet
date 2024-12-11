@@ -536,18 +536,14 @@ func TestExecuteEviction(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name: "PickAll CRP, Misconfigured PDB MinAvailable specified as percentage - eviction not executed",
+			name: "PickAll CRP policy not specified, Misconfigured PDB MinAvailable specified as percentage - eviction not executed",
 			validationResult: &evictionValidationResult{
 				crb: availableBinding,
 				crp: &placementv1beta1.ClusterResourcePlacement{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: testCRPName,
 					},
-					Spec: placementv1beta1.ClusterResourcePlacementSpec{
-						Policy: &placementv1beta1.PlacementPolicy{
-							PlacementType: placementv1beta1.PickAllPlacementType,
-						},
-					},
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{},
 				},
 			},
 			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
@@ -1361,8 +1357,13 @@ func TestIsEvictionAllowed(t *testing.T) {
 			wantAvailableBindings: 3,
 		},
 		{
-			name:     "MinAvailable specified as Integer zero, available binding, PickAll CRP - allow eviction",
-			crp:      buildTestPickAllCRP(testCRPName),
+			name: "MinAvailable specified as Integer zero, available binding, PickAll CRP, no policy specified - allow eviction",
+			crp: placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testCRPName,
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{},
+			},
 			bindings: []placementv1beta1.ClusterResourceBinding{boundAvailableBinding},
 			disruptionBudget: placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
