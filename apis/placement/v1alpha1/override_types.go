@@ -34,6 +34,13 @@ type ClusterResourceOverride struct {
 // If the resource is selected by both ClusterResourceOverride and ResourceOverride, ResourceOverride will win when resolving
 // conflicts.
 type ClusterResourceOverrideSpec struct {
+	// Placement defines whether the override is applied to a specific placement or not.
+	// If set, the override will trigger the placement rollout immediately when the rollout strategy type is RollingUpdate.
+	// Otherwise, it will be applied to the next rollout.
+	// The recommended way is to set the placement so that the override can be rolled out immediately.
+	// +optional
+	Placement *PlacementRef `json:"placement,omitempty"`
+
 	// ClusterResourceSelectors is an array of selectors used to select cluster scoped resources. The selectors are `ORed`.
 	// If a namespace is selected, ALL the resources under the namespace are selected automatically.
 	// LabelSelector is not supported.
@@ -48,6 +55,14 @@ type ClusterResourceOverrideSpec struct {
 	// Policy defines how to override the selected resources on the target clusters.
 	// +required
 	Policy *OverridePolicy `json:"policy"`
+}
+
+// PlacementRef is the reference to a placement.
+// For now, we only support ClusterResourcePlacement.
+type PlacementRef struct {
+	// Name is the reference to the name of placement.
+	// +required
+	Name string `json:"name"`
 }
 
 // OverridePolicy defines how to override the selected resources on the target clusters.
@@ -122,6 +137,13 @@ type ResourceOverride struct {
 // If the resource is selected by both ClusterResourceOverride and ResourceOverride, ResourceOverride will win when resolving
 // conflicts.
 type ResourceOverrideSpec struct {
+	// Placement defines whether the override is applied to a specific placement or not.
+	// If set, the override will trigger the placement rollout immediately when the rollout strategy type is RollingUpdate.
+	// Otherwise, it will be applied to the next rollout.
+	// The recommended way is to set the placement so that the override can be rolled out immediately.
+	// +optional
+	Placement *PlacementRef `json:"placement,omitempty"`
+
 	// ResourceSelectors is an array of selectors used to select namespace scoped resources. The selectors are `ORed`.
 	// You can have 1-20 selectors.
 	// +kubebuilder:validation:Required
