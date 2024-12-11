@@ -19,7 +19,7 @@ import (
 	testutilseviction "go.goms.io/fleet/test/utils/eviction"
 )
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding", Ordered, Serial, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - No PDB specified", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 	taintClusterNames := []string{memberCluster1EastProdName}
