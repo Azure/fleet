@@ -540,6 +540,14 @@ type ApplyStrategy struct {
 	//
 	//   Use ComparisonOption setting to control how the difference is calculated.
 	//
+	// ClientSideApply and ServerSideApply apply strategies only work when Fleet can assume
+	// ownership of a resource (e.g., the resource is created by Fleet, or Fleet has taken over
+	// the resource). See the comments on the WhenToTakeOver field for more information.
+	// ReportDiff apply strategy, however, will function regardless of Fleet's ownership
+	// status. One may set up a CRP with the ReportDiff strategy and the Never takeover option,
+	// and this will turn Fleet into a detection tool that reports only configuration differences
+	// but do not touch any resources on the member cluster side.
+	//
 	// For a comparison between the different strategies and usage examples, refer to the
 	// Fleet documentation.
 	//
@@ -605,16 +613,24 @@ type ApplyStrategy struct {
 	//   If appropriate, you may also delete the object from the member cluster; Fleet will recreate
 	//   it using the hub cluster manifest.
 	//
-	// * Never: with this action, Fleet will not apply the hub cluster manifests to the member
-	//   clusters if there are corresponding pre-existing resources.
+	// * Never: with this action, Fleet will not apply a hub cluster manifest to the member
+	//   clusters if there is a corresponding pre-existing resource. However, if a manifest
+	//   has never been applied yet; or it has a corresponding resource which Fleet has assumed
+	//   ownership, apply op will still be executed.
 	//
 	//   This is the safest option; one will have to remove the pre-existing resources (so that
 	//   Fleet can re-create them) or switch to a different
 	//   WhenToTakeOver option before Fleet starts processing the corresponding hub cluster
 	//   manifests.
 	//
+	//   If you prefer Fleet stop processing all manifests, use this option along with the
+	//   ReportDiff apply strategy type. This setup would instruct Fleet to touch nothing
+	//   on the member cluster side but still report configuration differences between the
+	//   hub cluster and member clusters. Fleet will not give up ownership
+	//   that it has already assumed though.
+	//
 	// +kubebuilder:default=Always
-	// +kubebuilder:validation:Enum=Always;IfNoDiff
+	// +kubebuilder:validation:Enum=Always;IfNoDiff;Never
 	// +kubebuilder:validation:Optional
 	WhenToTakeOver WhenToTakeOverType `json:"whenToTakeOver,omitempty"`
 }
@@ -714,6 +730,12 @@ const (
 	// Note that this will not stop Fleet from processing other manifests in the same placement
 	// that do not concern the takeover process (e.g., the manifests that have not been created
 	// yet, or that are already under the management of Fleet).
+	//
+	// If you would like Fleet to stop processing manifests all together and do not assume
+	// ownership on any pre-existing resources, use this option along with the ReportDiff
+	// apply strategy type. This setup would instruct Fleet to touch nothing on the member
+	// cluster side but still report configuration differences between the hub cluster
+	// and member clusters. Fleet will not give up ownership that it has already assumed, though.
 	WhenToTakeOverTypeNever WhenToTakeOverType = "Never"
 )
 
