@@ -274,15 +274,13 @@ func isEvictionAllowed(bindings []placementv1beta1.ClusterResourceBinding, crp p
 	var placementType placementv1beta1.PlacementType
 	if crp.Spec.Policy != nil {
 		placementType = crp.Spec.Policy.PlacementType
-	} else {
-		placementType = placementv1beta1.PickAllPlacementType
 	}
 	switch placementType {
 	case placementv1beta1.PickNPlacementType:
 		desiredBindings = int(*crp.Spec.Policy.NumberOfClusters)
 	case placementv1beta1.PickFixedPlacementType:
 		desiredBindings = len(crp.Spec.Policy.ClusterNames)
-	case placementv1beta1.PickAllPlacementType:
+	default:
 		// we don't know the desired bindings for PickAll.
 	}
 
