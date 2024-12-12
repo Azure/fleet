@@ -25,6 +25,7 @@ import (
 	bindingutils "go.goms.io/fleet/pkg/utils/binding"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/defaulter"
 )
 
 const (
@@ -102,6 +103,10 @@ func (r *Reconciler) validateEviction(ctx context.Context, eviction *placementv1
 		}
 		return nil, controller.NewAPIServerError(true, err)
 	}
+
+	// set default values for CRP.
+	defaulter.SetDefaultsClusterResourcePlacement(&crp)
+
 	if crp.DeletionTimestamp != nil {
 		klog.V(2).InfoS(evictionInvalidDeletingCRPMessage, "clusterResourcePlacementEviction", eviction.Name, "clusterResourcePlacement", eviction.Spec.PlacementName)
 		markEvictionInvalid(eviction, evictionInvalidDeletingCRPMessage)
@@ -209,7 +214,7 @@ func (r *Reconciler) executeEviction(ctx context.Context, validationResult *evic
 	}
 
 	// handle special case for PickAll CRP.
-	if crp.Spec.Policy == nil || crp.Spec.Policy.PlacementType == placementv1beta1.PickAllPlacementType {
+	if crp.Spec.Policy.PlacementType == placementv1beta1.PickAllPlacementType {
 		if db.Spec.MaxUnavailable != nil || (db.Spec.MinAvailable != nil && db.Spec.MinAvailable.Type == intstr.String) {
 			markEvictionNotExecuted(eviction, evictionBlockedMisconfiguredPDBSpecifiedMessage)
 			return nil
@@ -271,10 +276,7 @@ func isEvictionAllowed(bindings []placementv1beta1.ClusterResourceBinding, crp p
 	}
 
 	var desiredBindings int
-	var placementType placementv1beta1.PlacementType
-	if crp.Spec.Policy != nil {
-		placementType = crp.Spec.Policy.PlacementType
-	}
+	placementType := crp.Spec.Policy.PlacementType
 	switch placementType {
 	case placementv1beta1.PickNPlacementType:
 		desiredBindings = int(*crp.Spec.Policy.NumberOfClusters)
