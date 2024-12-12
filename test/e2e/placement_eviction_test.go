@@ -19,12 +19,10 @@ import (
 	testutilseviction "go.goms.io/fleet/test/utils/eviction"
 )
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - No PDB specified", Ordered, Serial, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding, taint cluster before eviction - No PDB specified", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 	taintClusterNames := []string{memberCluster1EastProdName}
-	selectedClusterNames1 := []string{memberCluster1EastProdName, memberCluster2EastCanaryName, memberCluster3WestProdName}
-	selectedClusterNames2 := []string{memberCluster2EastCanaryName, memberCluster3WestProdName}
 
 	BeforeAll(func() {
 		By("creating work resources")
@@ -53,9 +51,11 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - No PDB sp
 	})
 
 	It("should update cluster resource placement status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), selectedClusterNames1, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
 	})
+
+	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 	It("add taint to member cluster 1", func() {
 		addTaintsToMemberClusters(taintClusterNames, buildTaints(taintClusterNames))
@@ -68,7 +68,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - No PDB sp
 			},
 			Spec: placementv1alpha1.PlacementEvictionSpec{
 				PlacementName: crpName,
-				ClusterName:   memberCluster1EastProdName,
+				ClusterName:   taintClusterNames[0],
 			},
 		}
 		Expect(hubClient.Create(ctx, crpe)).To(Succeed(), "Failed to create CRP eviction %s", crpe.Name)
@@ -91,7 +91,79 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - No PDB sp
 	})
 
 	It("should update cluster resource placement status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), selectedClusterNames2, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster2EastCanaryName, memberCluster3WestProdName}, nil, "0")
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
 	})
+
+	It("should place resources on the selected clusters with no taint", func() {
+		targetClusters := []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd}
+		for _, cluster := range targetClusters {
+			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
+			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the selected clusters")
+		}
+	})
+})
+
+var _ = Describe("ClusterResourcePlacement eviction of bound binding, no taint specified, evicted cluster is picked again by scheduler - No PDB specified", Ordered, Serial, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
+
+	BeforeAll(func() {
+		By("creating work resources")
+		createWorkResources()
+
+		// Create the CRP.
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+				// Add a custom finalizer; this would allow us to better observe
+				// the behavior of the controllers.
+				Finalizers: []string{customDeletionBlockerFinalizer},
+			},
+			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				ResourceSelectors: workResourceSelector(),
+			},
+		}
+		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+	})
+
+	AfterAll(func() {
+		ensureCRPEvictionDeletion(crpEvictionName)
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+	})
+
+	It("should update cluster resource placement status as expected", func() {
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
+	})
+
+	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
+	It("create cluster resource placement eviction targeting member cluster 1", func() {
+		crpe := &placementv1alpha1.ClusterResourcePlacementEviction{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpEvictionName,
+			},
+			Spec: placementv1alpha1.PlacementEvictionSpec{
+				PlacementName: crpName,
+				ClusterName:   memberCluster1EastProdName,
+			},
+		}
+		Expect(hubClient.Create(ctx, crpe)).To(Succeed(), "Failed to create CRP eviction %s", crpe.Name)
+	})
+
+	It("should update cluster resource placement eviction status as expected", func() {
+		crpEvictionStatusUpdatedActual := testutilseviction.StatusUpdatedActual(
+			ctx, hubClient, crpEvictionName,
+			&testutilseviction.IsValidEviction{IsValid: true, Msg: condition.EvictionValidMessage},
+			&testutilseviction.IsExecutedEviction{IsExecuted: true, Msg: condition.EvictionAllowedNoPDBMessage})
+		Eventually(crpEvictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement eviction status as expected")
+	})
+
+	It("should ensure evicted cluster is picked again by scheduler & update cluster resource placement status as expected", func() {
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
+	})
+
+	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
