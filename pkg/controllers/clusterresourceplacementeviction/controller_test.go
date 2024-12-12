@@ -42,7 +42,7 @@ var (
 )
 
 func TestValidateEviction(t *testing.T) {
-	testCRP := placementv1beta1.ClusterResourcePlacement{
+	testCRP := &placementv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testCRPName,
 		},
@@ -138,13 +138,13 @@ func TestValidateEviction(t *testing.T) {
 		{
 			name:     "invalid eviction - multiple CRBs for same cluster",
 			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
-			crp:      &testCRP,
+			crp:      testCRP,
 			bindings: []placementv1beta1.ClusterResourceBinding{
 				testBinding1, testBinding2,
 			},
 			wantValidationResult: &evictionValidationResult{
 				isValid:  false,
-				crp:      &testCRP,
+				crp:      testCRP,
 				bindings: []placementv1beta1.ClusterResourceBinding{testBinding1, testBinding2},
 			},
 			wantEvictionInvalidCondition: &metav1.Condition{
@@ -159,10 +159,10 @@ func TestValidateEviction(t *testing.T) {
 		{
 			name:     "invalid eviction - CRB not found",
 			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
-			crp:      &testCRP,
+			crp:      testCRP,
 			wantValidationResult: &evictionValidationResult{
 				isValid:  false,
-				crp:      &testCRP,
+				crp:      testCRP,
 				bindings: []placementv1beta1.ClusterResourceBinding{},
 			},
 			wantEvictionInvalidCondition: &metav1.Condition{
@@ -175,7 +175,7 @@ func TestValidateEviction(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name:     "CRP with empty policy, strategy & revision history limit - valid eviction",
+			name:     "CRP with empty spec - valid eviction",
 			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
 			crp: &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
@@ -186,7 +186,7 @@ func TestValidateEviction(t *testing.T) {
 			bindings: []placementv1beta1.ClusterResourceBinding{testBinding2},
 			wantValidationResult: &evictionValidationResult{
 				isValid:  true,
-				crp:      &testCRP,
+				crp:      testCRP,
 				crb:      &testBinding2,
 				bindings: []placementv1beta1.ClusterResourceBinding{testBinding2},
 			},
@@ -554,7 +554,7 @@ func TestExecuteEviction(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name: "PickAll CRP policy not specified, Misconfigured PDB MinAvailable specified as percentage - eviction not executed",
+			name: "PickAll CRP, Misconfigured PDB MinAvailable specified as percentage - eviction not executed",
 			validationResult: &evictionValidationResult{
 				crb: availableBinding,
 				crp: ptr.To(buildTestPickAllCRP(testCRPName)),
