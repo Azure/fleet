@@ -104,6 +104,12 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 	filteredCRO := make([]*placementv1alpha1.ClusterResourceOverrideSnapshot, 0, len(croList.Items))
 	filteredRO := make([]*placementv1alpha1.ResourceOverrideSnapshot, 0, len(roList.Items))
 	for i := range croList.Items {
+		placementInOverride := croList.Items[i].Spec.OverrideSpec.Placement
+		if placementInOverride != nil && placementInOverride.Name != crp {
+			klog.V(2).InfoS("Skipping this override which was created for another placement", "clusterResourceOverride", klog.KObj(&croList.Items[i]), "placementInOverride", placementInOverride, "clusterResourcePlacement", crp)
+			continue
+		}
+
 		for _, selector := range croList.Items[i].Spec.OverrideSpec.ClusterResourceSelectors {
 			croKey := placementv1beta1.ResourceIdentifier{
 				Group:   selector.Group,
@@ -118,6 +124,12 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 		}
 	}
 	for i := range roList.Items {
+		placementInOverride := roList.Items[i].Spec.OverrideSpec.Placement
+		if placementInOverride != nil && placementInOverride.Name != crp {
+			klog.V(2).InfoS("Skipping this override which was created for another placement", "resourceOverride", klog.KObj(&roList.Items[i]), "placementInOverride", placementInOverride, "clusterResourcePlacement", crp)
+			continue
+		}
+
 		for _, selector := range roList.Items[i].Spec.OverrideSpec.ResourceSelectors {
 			roKey := placementv1beta1.ResourceIdentifier{
 				Group:     selector.Group,
