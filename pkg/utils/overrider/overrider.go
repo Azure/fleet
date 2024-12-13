@@ -107,7 +107,7 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 	for i := range croList.Items {
 		placementInOverride := croList.Items[i].Spec.OverrideSpec.Placement
 		if placementInOverride != nil && placementInOverride.Name != crp {
-			klog.V(2).InfoS("Skipping this override which was created for another placement", "clusterResourceOverride", klog.KObj(&croList.Items[i]), "placementInOverride", placementInOverride, "clusterResourcePlacement", crp)
+			klog.V(2).InfoS("Skipping this override which was created for another placement", "clusterResourceOverride", klog.KObj(&croList.Items[i]), "placementInOverride", placementInOverride.Name, "clusterResourcePlacement", crp)
 			continue
 		}
 
@@ -127,7 +127,7 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 	for i := range roList.Items {
 		placementInOverride := roList.Items[i].Spec.OverrideSpec.Placement
 		if placementInOverride != nil && placementInOverride.Name != crp {
-			klog.V(2).InfoS("Skipping this override which was created for another placement", "resourceOverride", klog.KObj(&roList.Items[i]), "placementInOverride", placementInOverride, "clusterResourcePlacement", crp)
+			klog.V(2).InfoS("Skipping this override which was created for another placement", "resourceOverride", klog.KObj(&roList.Items[i]), "placementInOverride", placementInOverride.Name, "clusterResourcePlacement", crp)
 			continue
 		}
 
