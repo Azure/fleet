@@ -568,6 +568,237 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 			},
 		},
 		{
+			name: "multiple resource snapshots with matched cro and ro by specifying the placement name",
+			master: &placementv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crpName, 0),
+					Labels: map[string]string{
+						placementv1beta1.ResourceIndexLabel: "0",
+						placementv1beta1.CRPTrackingLabel:   crpName,
+					},
+					Annotations: map[string]string{
+						placementv1beta1.ResourceGroupHashAnnotation:         "abc",
+						placementv1beta1.NumberOfResourceSnapshotsAnnotation: "3",
+					},
+				},
+				Spec: placementv1beta1.ResourceSnapshotSpec{
+					SelectedResources: []placementv1beta1.ResourceContent{
+						*resource.NamespaceResourceContentForTest(t),
+						*resource.ServiceResourceContentForTest(t),
+					},
+				},
+			},
+			snapshots: []placementv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameWithSubindexFmt, crpName, 0, 0),
+						Labels: map[string]string{
+							placementv1beta1.ResourceIndexLabel: "0",
+							placementv1beta1.CRPTrackingLabel:   crpName,
+						},
+						Annotations: map[string]string{
+							placementv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
+						},
+					},
+					Spec: placementv1beta1.ResourceSnapshotSpec{
+						SelectedResources: []placementv1beta1.ResourceContent{
+							*resource.DeploymentResourceContentForTest(t),
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameWithSubindexFmt, crpName, 0, 1),
+						Labels: map[string]string{
+							placementv1beta1.ResourceIndexLabel: "0",
+							placementv1beta1.CRPTrackingLabel:   crpName,
+						},
+						Annotations: map[string]string{
+							placementv1beta1.SubindexOfResourceSnapshotAnnotation: "1",
+						},
+					},
+					Spec: placementv1beta1.ResourceSnapshotSpec{
+						SelectedResources: []placementv1beta1.ResourceContent{
+							*resource.ClusterRoleResourceContentForTest(t),
+						},
+					},
+				},
+			},
+			croList: []placementv1alpha1.ClusterResourceOverrideSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cro-1",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
+					},
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							Placement: &placementv1alpha1.PlacementRef{
+								Name: crpName,
+							},
+							ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+								{
+									Group:   "rbac.authorization.k8s.io",
+									Version: "v1",
+									Kind:    "ClusterRole",
+									Name:    "not-exist",
+								},
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cro-2",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
+					},
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+								{
+									Group:   "rbac.authorization.k8s.io",
+									Version: "v1",
+									Kind:    "ClusterRole",
+									Name:    "clusterrole-name",
+								},
+							},
+						},
+					},
+				},
+			},
+			roList: []placementv1alpha1.ResourceOverrideSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ro-1",
+						Namespace: "svc-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
+					},
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Deployment",
+									Name:    "not-exist",
+								},
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Service",
+									Name:    "svc-name",
+								},
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ro-2",
+						Namespace: "deployment-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
+					},
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							Placement: &placementv1alpha1.PlacementRef{
+								Name: crpName,
+							},
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Deployment",
+									Name:    "deployment-name",
+								},
+							},
+						},
+					},
+				},
+			},
+			wantCRO: []*placementv1alpha1.ClusterResourceOverrideSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cro-2",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
+					},
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+								{
+									Group:   "rbac.authorization.k8s.io",
+									Version: "v1",
+									Kind:    "ClusterRole",
+									Name:    "clusterrole-name",
+								},
+							},
+						},
+					},
+				},
+			},
+			wantRO: []*placementv1alpha1.ResourceOverrideSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ro-2",
+						Namespace: "deployment-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
+					},
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							Placement: &placementv1alpha1.PlacementRef{
+								Name: crpName,
+							},
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Deployment",
+									Name:    "deployment-name",
+								},
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ro-1",
+						Namespace: "svc-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
+					},
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Deployment",
+									Name:    "not-exist",
+								},
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Service",
+									Name:    "svc-name",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			// not supported in the first phase
 			name: "single resource snapshot with multiple matched cro and ro",
 			master: &placementv1beta1.ClusterResourceSnapshot{
@@ -760,6 +991,167 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			name: "no matched cro and ro which are configured to other placement",
+			master: &placementv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crpName, 0),
+					Labels: map[string]string{
+						placementv1beta1.ResourceIndexLabel: "0",
+						placementv1beta1.CRPTrackingLabel:   crpName,
+					},
+					Annotations: map[string]string{
+						placementv1beta1.ResourceGroupHashAnnotation:         "abc",
+						placementv1beta1.NumberOfResourceSnapshotsAnnotation: "3",
+					},
+				},
+				Spec: placementv1beta1.ResourceSnapshotSpec{
+					SelectedResources: []placementv1beta1.ResourceContent{
+						*resource.NamespaceResourceContentForTest(t),
+						*resource.ServiceResourceContentForTest(t),
+					},
+				},
+			},
+			snapshots: []placementv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameWithSubindexFmt, crpName, 0, 0),
+						Labels: map[string]string{
+							placementv1beta1.ResourceIndexLabel: "0",
+							placementv1beta1.CRPTrackingLabel:   crpName,
+						},
+						Annotations: map[string]string{
+							placementv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
+						},
+					},
+					Spec: placementv1beta1.ResourceSnapshotSpec{
+						SelectedResources: []placementv1beta1.ResourceContent{
+							*resource.DeploymentResourceContentForTest(t),
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameWithSubindexFmt, crpName, 0, 1),
+						Labels: map[string]string{
+							placementv1beta1.ResourceIndexLabel: "0",
+							placementv1beta1.CRPTrackingLabel:   crpName,
+						},
+						Annotations: map[string]string{
+							placementv1beta1.SubindexOfResourceSnapshotAnnotation: "1",
+						},
+					},
+					Spec: placementv1beta1.ResourceSnapshotSpec{
+						SelectedResources: []placementv1beta1.ResourceContent{
+							*resource.ClusterRoleResourceContentForTest(t),
+						},
+					},
+				},
+			},
+			croList: []placementv1alpha1.ClusterResourceOverrideSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cro-1",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
+					},
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+								{
+									Group:   "rbac.authorization.k8s.io",
+									Version: "v1",
+									Kind:    "ClusterRole",
+									Name:    "not-exist",
+								},
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cro-2",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
+					},
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							Placement: &placementv1alpha1.PlacementRef{
+								Name: "other-placement",
+							},
+							ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+								{
+									Group:   "rbac.authorization.k8s.io",
+									Version: "v1",
+									Kind:    "ClusterRole",
+									Name:    "clusterrole-name",
+								},
+							},
+						},
+					},
+				},
+			},
+			roList: []placementv1alpha1.ResourceOverrideSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ro-1",
+						Namespace: "svc-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
+					},
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							Placement: &placementv1alpha1.PlacementRef{
+								Name: "other-placement",
+							},
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Deployment",
+									Name:    "not-exist",
+								},
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Service",
+									Name:    "svc-name",
+								},
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ro-2",
+						Namespace: "deployment-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
+					},
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							Placement: &placementv1alpha1.PlacementRef{
+								Name: "other-placement",
+							},
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Deployment",
+									Name:    "deployment-name",
+								},
+							},
+						},
+					},
+				},
+			},
+			wantCRO: []*placementv1alpha1.ClusterResourceOverrideSnapshot{},
+			wantRO:  []*placementv1alpha1.ResourceOverrideSnapshot{},
 		},
 	}
 
