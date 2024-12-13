@@ -37,7 +37,6 @@ var (
 	validationResultCmpOptions = []cmp.Option{
 		cmp.AllowUnexported(evictionValidationResult{}),
 		cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
-		cmpopts.IgnoreFields(placementv1beta1.ClusterResourceBinding{}, "ResourceVersion"),
 	}
 )
 
