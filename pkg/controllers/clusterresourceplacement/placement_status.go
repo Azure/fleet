@@ -260,7 +260,10 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(crp *fleetv1beta1.Clus
 				}
 			case condition.AppliedCondition, condition.AvailableCondition:
 				if bindingCond.Status == metav1.ConditionFalse {
-					status.FailedPlacements = binding.Status.FailedPlacements
+					if crp.Spec.Strategy.ApplyStrategy.Type != fleetv1beta1.ApplyStrategyTypeReportDiff {
+						// Nothing is applied If the apply strategy is reportDiff.
+						status.FailedPlacements = binding.Status.FailedPlacements
+					}
 					status.DiffedPlacements = binding.Status.DiffedPlacements
 					status.DriftedPlacements = binding.Status.DriftedPlacements
 				}
