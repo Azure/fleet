@@ -12,8 +12,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,10 +38,10 @@ var (
 		Resource: "deployments",
 	}
 	*/
-	jobGVR = schema.GroupVersionResource{
-		Group:    "batch",
+	cmGVR = schema.GroupVersionResource{
+		Group:    "",
 		Version:  "v1",
-		Resource: "jobs",
+		Resource: "configmaps",
 	}
 
 	deploy = &appsv1.Deployment{
@@ -84,17 +84,6 @@ var (
 	}
 	deployUnstructured *unstructured.Unstructured
 	deployJSON         []byte
-	/**
-	deployWRI          = &fleetv1beta1.WorkResourceIdentifier{
-		Ordinal:   0,
-		Group:     "apps",
-		Version:   "v1",
-		Kind:      "Deployment",
-		Resource:  "deployments",
-		Name:      deployName,
-		Namespace: nsName,
-	}
-	*/
 
 	ns = &corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{
@@ -107,82 +96,22 @@ var (
 	}
 	nsUnstructured *unstructured.Unstructured
 	nsJSON         []byte
-	nsWRI          = &fleetv1beta1.WorkResourceIdentifier{
-		Ordinal:  1,
-		Group:    "",
-		Version:  "v1",
-		Kind:     "Namespace",
-		Resource: "namespaces",
-		Name:     nsName,
-	}
 
-	nsWithGenerateName = &corev1.Namespace{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Namespace",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: nsGenerateName,
-		},
-	}
-	nsWithGenerateNameUnstructured *unstructured.Unstructured
-	nsWithGenerateNameJSON         []byte
-	/**
-	nsWithGenerateNameWRI          = &fleetv1beta1.WorkResourceIdentifier{
-		Ordinal:      2,
-		Group:        "",
-		Version:      "v1",
-		Kind:         "Namespace",
-		Resource:     "namespaces",
-		GenerateName: nsGenerateName,
-	}
-	*/
-
-	jobWithGenerateName = &batchv1.Job{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Job",
-			APIVersion: "batch/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: jobGenerateName,
-			Namespace:    nsName,
-		},
-		Spec: batchv1.JobSpec{
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "busybox",
-							Image: "busybox",
-						},
-					},
-					RestartPolicy: corev1.RestartPolicyNever,
-				},
-			},
-		},
-	}
-	jobWithGenerateNameUnstructured *unstructured.Unstructured
-	jobWithGenerateNameJSON         []byte
-	jobWithGenerateNameWRI          = &fleetv1beta1.WorkResourceIdentifier{
-		Ordinal:      3,
-		Group:        "batch",
-		Version:      "v1",
-		Kind:         "Job",
-		Resource:     "jobs",
-		GenerateName: jobGenerateName,
-		Namespace:    nsName,
+	dummyOwnerRef = metav1.OwnerReference{
+		APIVersion: "dummy.owner/v1",
+		Kind:       "DummyOwner",
+		Name:       "dummy-owner",
+		UID:        "1234-5678-90",
 	}
 )
 
-/**
 var (
 	lessFuncAppliedResourceMeta = func(i, j fleetv1beta1.AppliedResourceMeta) bool {
-		iStr := fmt.Sprintf("%s/%s/%s/%s/%s/%s", i.Group, i.Version, i.Kind, i.Namespace, i.Name, i.GenerateName)
-		jStr := fmt.Sprintf("%s/%s/%s/%s/%s/%s", j.Group, j.Version, j.Kind, j.Namespace, j.Name, j.GenerateName)
+		iStr := fmt.Sprintf("%s/%s/%s/%s/%s", i.Group, i.Version, i.Kind, i.Namespace, i.Name)
+		jStr := fmt.Sprintf("%s/%s/%s/%s/%s", j.Group, j.Version, j.Kind, j.Namespace, j.Name)
 		return iStr < jStr
 	}
 )
-*/
 
 func TestMain(m *testing.M) {
 	// Add custom APIs to the runtime scheme.
@@ -222,66 +151,40 @@ func initializeVariables() {
 	if err != nil {
 		log.Fatalf("failed to marshal namespace to JSON: %v", err)
 	}
+}
 
-	// Objects with generate names.
-	// Namespace.
-	nsWithGenerateNameGenericMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(nsWithGenerateName)
-	if err != nil {
-		log.Fatalf("failed to convert namespace with GenerateName to unstructured: %v", err)
-	}
-	nsWithGenerateNameUnstructured = &unstructured.Unstructured{Object: nsWithGenerateNameGenericMap}
-	nsWithGenerateNameJSON, err = nsWithGenerateNameUnstructured.MarshalJSON()
-	if err != nil {
-		log.Fatalf("failed to marshal namespace with GenerateName to JSON: %v", err)
-	}
-
-	// Job.
-	jobWithGenerateNameGenericMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(jobWithGenerateName)
-	if err != nil {
-		log.Fatalf("failed to convert job with GenerateName to unstructured: %v", err)
-	}
-	jobWithGenerateNameUnstructured = &unstructured.Unstructured{Object: jobWithGenerateNameGenericMap}
-	jobWithGenerateNameJSON, err = jobWithGenerateNameUnstructured.MarshalJSON()
-	if err != nil {
-		log.Fatalf("failed to marshal job with GenerateName to JSON: %v", err)
+func nsWRI(ordinal int, nsName string) *fleetv1beta1.WorkResourceIdentifier {
+	return &fleetv1beta1.WorkResourceIdentifier{
+		Ordinal:  ordinal,
+		Group:    "",
+		Version:  "v1",
+		Kind:     "Namespace",
+		Resource: "namespaces",
+		Name:     nsName,
 	}
 }
 
-/**
-// getPreparingToProcessAppliedCond returns a manifest condition, which signals that the
-// Fleet is preparing to be process the manifest.
-func getPreparingToProcessAppliedCond(workGeneration int64) metav1.Condition {
-	return metav1.Condition{
-		Type:               fleetv1beta1.WorkConditionTypeApplied,
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: workGeneration,
-		Reason:             ManifestAppliedCondPreparingToProcessReason,
-		Message:            ManifestAppliedCondPreparingToProcessMessage,
+func deployWRI(ordinal int, nsName, deployName string) *fleetv1beta1.WorkResourceIdentifier {
+	return &fleetv1beta1.WorkResourceIdentifier{
+		Ordinal:   ordinal,
+		Group:     "apps",
+		Version:   "v1",
+		Kind:      "Deployment",
+		Resource:  "deployments",
+		Name:      deployName,
+		Namespace: nsName,
 	}
 }
 
-// getAppliedCond returns a manifest condition, which signals that the manifest has been applied.
-func getAppliedCond(workGeneration int64) metav1.Condition {
+func manifestAppliedCond(workGeneration int64, status metav1.ConditionStatus, reason, message string) metav1.Condition {
 	return metav1.Condition{
 		Type:               fleetv1beta1.WorkConditionTypeApplied,
-		Status:             metav1.ConditionTrue,
-		ObservedGeneration: workGeneration,
-		Reason:             string(ManifestProcessingApplyResultTypeApplied),
-		Message:            ManifestProcessingApplyResultTypeAppliedDescription,
-	}
-}
-
-// getFailedToApplyCond returns a manifest condition, which signals that the manifest failed to be applied.
-func getFailedToApplyCond(reason, message string, workGeneration int64) metav1.Condition {
-	return metav1.Condition{
-		Type:               fleetv1beta1.WorkConditionTypeApplied,
-		Status:             metav1.ConditionFalse,
+		Status:             status,
 		ObservedGeneration: workGeneration,
 		Reason:             reason,
 		Message:            message,
 	}
 }
-*/
 
 // TestPrepareManifestProcessingBundles tests the prepareManifestProcessingBundles function.
 func TestPrepareManifestProcessingBundles(t *testing.T) {
@@ -342,21 +245,19 @@ func TestBuildWorkResourceIdentifier(t *testing.T) {
 			},
 		},
 		{
-			name:        "ordinal and manifest object (regular)",
+			name:        "ordinal and manifest object",
 			manifestIdx: 1,
 			manifestObj: nsUnstructured,
 			wantWRI: &fleetv1beta1.WorkResourceIdentifier{
-				Ordinal:      1,
-				Group:        "",
-				Version:      "v1",
-				Kind:         "Namespace",
-				Name:         nsName,
-				Namespace:    "",
-				GenerateName: "",
+				Ordinal: 1,
+				Group:   "",
+				Version: "v1",
+				Kind:    "Namespace",
+				Name:    nsName,
 			},
 		},
 		{
-			name:        "ordinal, manifest object (regular), and GVR",
+			name:        "ordinal, manifest object, and GVR",
 			manifestIdx: 2,
 			gvr: &schema.GroupVersionResource{
 				Group:    "apps",
@@ -364,36 +265,7 @@ func TestBuildWorkResourceIdentifier(t *testing.T) {
 				Resource: "deployments",
 			},
 			manifestObj: deployUnstructured,
-			wantWRI: &fleetv1beta1.WorkResourceIdentifier{
-				Ordinal:      2,
-				Group:        "apps",
-				Version:      "v1",
-				Kind:         "Deployment",
-				Name:         deployName,
-				Namespace:    nsName,
-				GenerateName: "",
-				Resource:     "deployments",
-			},
-		},
-		{
-			name:        "ordinal, manifest object (w/ generate name), and GVR",
-			manifestIdx: 3,
-			gvr: &schema.GroupVersionResource{
-				Group:    "batch",
-				Version:  "v1",
-				Resource: "jobs",
-			},
-			manifestObj: jobWithGenerateNameUnstructured,
-			wantWRI: &fleetv1beta1.WorkResourceIdentifier{
-				Ordinal:      3,
-				Group:        "batch",
-				Version:      "v1",
-				Kind:         "Job",
-				Name:         "",
-				Namespace:    nsName,
-				GenerateName: jobGenerateName,
-				Resource:     "jobs",
-			},
+			wantWRI:     deployWRI(2, nsName, deployName),
 		},
 	}
 
@@ -423,28 +295,8 @@ func TestFormatWRIString(t *testing.T) {
 			wantErred: true,
 		},
 		{
-			name: "object with generate name",
-			wri: &fleetv1beta1.WorkResourceIdentifier{
-				Ordinal:      1,
-				Group:        "",
-				Version:      "v1",
-				Kind:         "Namespace",
-				GenerateName: nsGenerateName,
-				Resource:     "namespaces",
-			},
-			wantWRIString: fmt.Sprintf("GV=/v1, Kind=Namespace, Namespace=, GenerateName=%s", nsGenerateName),
-		},
-		{
-			name: "regular object",
-			wri: &fleetv1beta1.WorkResourceIdentifier{
-				Ordinal:   2,
-				Group:     "apps",
-				Version:   "v1",
-				Kind:      "Deployment",
-				Name:      deployName,
-				Namespace: nsName,
-				Resource:  "deployments",
-			},
+			name:          "regular object",
+			wri:           deployWRI(2, nsName, deployName),
 			wantWRIString: fmt.Sprintf("GV=apps/v1, Kind=Deployment, Namespace=%s, Name=%s", nsName, deployName),
 		},
 	}
@@ -464,6 +316,288 @@ func TestFormatWRIString(t *testing.T) {
 
 			if wriString != tc.wantWRIString {
 				t.Errorf("formatWRIString() mismatches: got %q, want %q", wriString, tc.wantWRIString)
+			}
+		})
+	}
+}
+
+// TestPrepareExistingManifestCondQIdx tests the prepareExistingManifestCondQIdx function.
+func TestPrepareExistingManifestCondQIdx(t *testing.T) {
+	testCases := []struct {
+		name                  string
+		existingManifestConds []fleetv1beta1.ManifestCondition
+		wantQIdx              map[string]int
+	}{
+		{
+			name: "mixed",
+			existingManifestConds: []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: *nsWRI(0, nsName),
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal: 1,
+					},
+				},
+				{
+					Identifier: *deployWRI(2, nsName, deployName),
+				},
+			},
+			wantQIdx: map[string]int{
+				fmt.Sprintf("GV=/v1, Kind=Namespace, Namespace=, Name=%s", nsName):                    0,
+				fmt.Sprintf("GV=apps/v1, Kind=Deployment, Namespace=%s, Name=%s", nsName, deployName): 2,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			qIdx := prepareExistingManifestCondQIdx(tc.existingManifestConds)
+			if diff := cmp.Diff(qIdx, tc.wantQIdx); diff != "" {
+				t.Errorf("prepareExistingManifestCondQIdx() mismatches (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestPrepareManifestCondForWA tests the prepareManifestCondForWA function.
+func TestPrepareManifestCondForWA(t *testing.T) {
+	workGeneration := int64(0)
+
+	testCases := []struct {
+		name                     string
+		wriStr                   string
+		wri                      *fleetv1beta1.WorkResourceIdentifier
+		workGeneration           int64
+		existingManifestCondQIdx map[string]int
+		existingManifestConds    []fleetv1beta1.ManifestCondition
+		wantManifestCondForWA    *fleetv1beta1.ManifestCondition
+	}{
+		{
+			name:           "match found",
+			wriStr:         fmt.Sprintf("GV=/v1, Kind=Namespace, Namespace=, Name=%s", nsName),
+			wri:            nsWRI(0, nsName),
+			workGeneration: workGeneration,
+			existingManifestCondQIdx: map[string]int{
+				fmt.Sprintf("GV=/v1, Kind=Namespace, Namespace=, Name=%s", nsName): 0,
+			},
+			existingManifestConds: []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: *nsWRI(0, nsName),
+					Conditions: []metav1.Condition{
+						manifestAppliedCond(workGeneration, metav1.ConditionTrue, string(ManifestProcessingApplyResultTypeApplied), ManifestProcessingApplyResultTypeAppliedDescription),
+					},
+				},
+			},
+			wantManifestCondForWA: &fleetv1beta1.ManifestCondition{
+				Identifier: *nsWRI(0, nsName),
+				Conditions: []metav1.Condition{
+					manifestAppliedCond(workGeneration, metav1.ConditionTrue, string(ManifestProcessingApplyResultTypeApplied), ManifestProcessingApplyResultTypeAppliedDescription),
+				},
+			},
+		},
+		{
+			name:           "match not found",
+			wriStr:         fmt.Sprintf("GV=apps/v1, Kind=Deployment, Namespace=%s, Name=%s", nsName, deployName),
+			wri:            deployWRI(1, nsName, deployName),
+			workGeneration: workGeneration,
+			wantManifestCondForWA: &fleetv1beta1.ManifestCondition{
+				Identifier: *deployWRI(1, nsName, deployName),
+				Conditions: []metav1.Condition{
+					manifestAppliedCond(workGeneration, metav1.ConditionFalse, ManifestAppliedCondPreparingToProcessReason, ManifestAppliedCondPreparingToProcessMessage),
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			manifestCondForWA := prepareManifestCondForWA(tc.wriStr, tc.wri, tc.workGeneration, tc.existingManifestCondQIdx, tc.existingManifestConds)
+			if diff := cmp.Diff(&manifestCondForWA, tc.wantManifestCondForWA, ignoreFieldConditionLTTMsg); diff != "" {
+				t.Errorf("prepareManifestCondForWA() mismatches (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestFindLeftOverManifests tests the findLeftOverManifests function.
+func TestFindLeftOverManifests(t *testing.T) {
+	workGeneration0 := int64(0)
+	workGeneration1 := int64(1)
+
+	nsName0 := fmt.Sprintf(nsNameTemplate, "0")
+	nsName1 := fmt.Sprintf(nsNameTemplate, "1")
+	nsName2 := fmt.Sprintf(nsNameTemplate, "2")
+	nsName3 := fmt.Sprintf(nsNameTemplate, "3")
+	nsName4 := fmt.Sprintf(nsNameTemplate, "4")
+
+	testCases := []struct {
+		name                       string
+		manifestCondsForWA         []fleetv1beta1.ManifestCondition
+		existingManifestCondQIdx   map[string]int
+		existingManifestConditions []fleetv1beta1.ManifestCondition
+		wantLeftOverManifests      []fleetv1beta1.AppliedResourceMeta
+	}{
+		{
+			name: "mixed",
+			manifestCondsForWA: []fleetv1beta1.ManifestCondition{
+				// New manifest.
+				{
+					Identifier: *nsWRI(0, nsName0),
+					Conditions: []metav1.Condition{
+						manifestAppliedCond(workGeneration1, metav1.ConditionFalse, ManifestAppliedCondPreparingToProcessReason, ManifestAppliedCondPreparingToProcessMessage),
+					},
+				},
+				// Existing manifest.
+				{
+					Identifier: *nsWRI(1, nsName1),
+					Conditions: []metav1.Condition{
+						manifestAppliedCond(workGeneration0, metav1.ConditionTrue, string(ManifestProcessingApplyResultTypeApplied), ManifestProcessingApplyResultTypeAppliedDescription),
+					},
+				},
+			},
+			existingManifestConditions: []fleetv1beta1.ManifestCondition{
+				// Manifest condition that signals a decoding error.
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal: 0,
+					},
+				},
+				// Manifest condition that corresponds to the existing manifest.
+				{
+					Identifier: *nsWRI(1, nsName1),
+					Conditions: []metav1.Condition{
+						manifestAppliedCond(workGeneration0, metav1.ConditionTrue, string(ManifestProcessingApplyResultTypeApplied), ManifestProcessingApplyResultTypeAppliedDescription),
+					},
+				},
+				// Manifest condition that corresponds to a previously applied and now gone manifest.
+				{
+					Identifier: *nsWRI(2, nsName2),
+					Conditions: []metav1.Condition{
+						manifestAppliedCond(workGeneration0, metav1.ConditionTrue, string(ManifestProcessingApplyResultTypeApplied), ManifestProcessingApplyResultTypeAppliedDescription),
+					},
+				},
+				// Manifest condition that corresponds to a gone manifest that failed to be applied.
+				{
+					Identifier: *nsWRI(3, nsName3),
+					Conditions: []metav1.Condition{
+						manifestAppliedCond(workGeneration0, metav1.ConditionFalse, string(ManifestProcessingApplyResultTypeFailedToApply), ""),
+					},
+				},
+				// Manifest condition that corresponds to a gone manifest that has been marked as to be applied (preparing to be processed).
+				{
+					Identifier: *nsWRI(4, nsName4),
+					Conditions: []metav1.Condition{
+						manifestAppliedCond(workGeneration0, metav1.ConditionFalse, ManifestAppliedCondPreparingToProcessReason, ManifestAppliedCondPreparingToProcessMessage),
+					},
+				},
+			},
+			existingManifestCondQIdx: map[string]int{
+				fmt.Sprintf("GV=/v1, Kind=Namespace, Namespace=, Name=%s", nsName1): 1,
+				fmt.Sprintf("GV=/v1, Kind=Namespace, Namespace=, Name=%s", nsName2): 2,
+				fmt.Sprintf("GV=/v1, Kind=Namespace, Namespace=, Name=%s", nsName3): 3,
+				fmt.Sprintf("GV=/v1, Kind=Namespace, Namespace=, Name=%s", nsName4): 4,
+			},
+			wantLeftOverManifests: []fleetv1beta1.AppliedResourceMeta{
+				{
+					WorkResourceIdentifier: *nsWRI(2, nsName2),
+				},
+				{
+					WorkResourceIdentifier: *nsWRI(4, nsName4),
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			leftOverManifests := findLeftOverManifests(tc.manifestCondsForWA, tc.existingManifestCondQIdx, tc.existingManifestConditions)
+			if diff := cmp.Diff(leftOverManifests, tc.wantLeftOverManifests, cmpopts.SortSlices(lessFuncAppliedResourceMeta)); diff != "" {
+				t.Errorf("findLeftOverManifests() mismatches (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestShouldInitiateTakeOverAttempt tests the shouldInitiateTakeOverAttempt function.
+func TestShouldInitiateTakeOverAttempt(t *testing.T) {
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: nsName,
+		},
+	}
+	nsUnstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(ns)
+	if err != nil {
+		t.Fatalf("Namespace ToUnstructured() = %v, want no error", err)
+	}
+	nsUnstructured := &unstructured.Unstructured{Object: nsUnstructuredMap}
+	nsUnstructured.SetAPIVersion("v1")
+	nsUnstructured.SetKind("Namespace")
+
+	nsWithFleetOwnerUnstructured := nsUnstructured.DeepCopy()
+	nsWithFleetOwnerUnstructured.SetOwnerReferences([]metav1.OwnerReference{
+		*appliedWorkOwnerRef,
+	})
+
+	nsWithNonFleetOwnerUnstructured := nsUnstructured.DeepCopy()
+	nsWithNonFleetOwnerUnstructured.SetOwnerReferences([]metav1.OwnerReference{
+		dummyOwnerRef,
+	})
+
+	testCases := []struct {
+		name                        string
+		inMemberClusterObj          *unstructured.Unstructured
+		applyStrategy               *fleetv1beta1.ApplyStrategy
+		expectedAppliedWorkOwnerRef *metav1.OwnerReference
+		wantShouldTakeOver          bool
+	}{
+		{
+			name: "no in member cluster object",
+			applyStrategy: &fleetv1beta1.ApplyStrategy{
+				WhenToTakeOver: fleetv1beta1.WhenToTakeOverTypeAlways,
+			},
+		},
+		{
+			name:               "never take over",
+			inMemberClusterObj: nsUnstructured,
+			applyStrategy: &fleetv1beta1.ApplyStrategy{
+				WhenToTakeOver: fleetv1beta1.WhenToTakeOverTypeNever,
+			},
+			expectedAppliedWorkOwnerRef: appliedWorkOwnerRef,
+		},
+		{
+			name:               "owned by Fleet",
+			inMemberClusterObj: nsWithFleetOwnerUnstructured,
+			applyStrategy: &fleetv1beta1.ApplyStrategy{
+				WhenToTakeOver: fleetv1beta1.WhenToTakeOverTypeAlways,
+			},
+			expectedAppliedWorkOwnerRef: appliedWorkOwnerRef,
+		},
+		{
+			name:               "no owner, always take over",
+			inMemberClusterObj: nsUnstructured,
+			applyStrategy: &fleetv1beta1.ApplyStrategy{
+				WhenToTakeOver: fleetv1beta1.WhenToTakeOverTypeAlways,
+			},
+			expectedAppliedWorkOwnerRef: appliedWorkOwnerRef,
+			wantShouldTakeOver:          true,
+		},
+		{
+			name:               "not owned by Fleet, take over if no diff",
+			inMemberClusterObj: nsWithNonFleetOwnerUnstructured,
+			applyStrategy: &fleetv1beta1.ApplyStrategy{
+				WhenToTakeOver: fleetv1beta1.WhenToTakeOverTypeIfNoDiff,
+			},
+			expectedAppliedWorkOwnerRef: appliedWorkOwnerRef,
+			wantShouldTakeOver:          true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			shouldTakeOver := shouldInitiateTakeOverAttempt(tc.inMemberClusterObj, tc.applyStrategy, tc.expectedAppliedWorkOwnerRef)
+			if shouldTakeOver != tc.wantShouldTakeOver {
+				t.Errorf("shouldInitiateTakeOverAttempt() = %v, want %v", shouldTakeOver, tc.wantShouldTakeOver)
 			}
 		})
 	}

@@ -76,7 +76,6 @@ func buildWorkResourceIdentifier(
 		identifier.Kind = manifestObj.GetKind()
 		identifier.Name = manifestObj.GetName()
 		identifier.Namespace = manifestObj.GetNamespace()
-		identifier.GenerateName = manifestObj.GetGenerateName()
 	}
 
 	// Set the GVR information if the manifest object can be REST mapped.
@@ -96,37 +95,11 @@ func formatWRIString(wri *fleetv1beta1.WorkResourceIdentifier) (string, error) {
 		// This branch is added solely for completeness reasons; normally such objects would not
 		// be included in any cases that would require a WRI string formatting.
 		return "", fmt.Errorf("the manifest object can only be identified by its ordinal")
-	case wri.GenerateName != "":
-		// For a resource with generated name, the string representation includes the generate name
-		// instead of the actual name.
-		return fmt.Sprintf("GV=%s/%s, Kind=%s, Namespace=%s, GenerateName=%s",
-			wri.Group, wri.Version, wri.Kind, wri.Namespace, wri.GenerateName), nil
 	default:
 		// For a regular object, the string representation includes the actual name.
 		return fmt.Sprintf("GV=%s/%s, Kind=%s, Namespace=%s, Name=%s",
 			wri.Group, wri.Version, wri.Kind, wri.Namespace, wri.Name), nil
 	}
-}
-
-// isLiveObjectDerivedFromManifestObjWithGenerateName checks if a live object is connected to a
-// manifest object with a generated name.
-//
-// This is a sanity check that make sures:
-// * the live object's name is derived from the manifest object's generate name; and
-// * the live object is owned by Fleet (specifically the expected AppliedWork object).
-func isInMemberClusterObjectDerivedFromManifestObjWithGenerateName(inMemberClusterObj *unstructured.Unstructured, expectedGenerateName string, expectedAppliedWorkOwnerRef *metav1.OwnerReference) bool {
-	// Do a sanity check.
-	if inMemberClusterObj == nil {
-		return false
-	}
-
-	if !strings.HasPrefix(inMemberClusterObj.GetName(), expectedGenerateName) {
-		// The live object's name is not derived from the manifest object's generate name.
-		return false
-	}
-
-	// Verify if the owner reference still stands.
-	return isInMemberClusterObjectDerivedFromManifestObj(inMemberClusterObj, expectedAppliedWorkOwnerRef)
 }
 
 func isInMemberClusterObjectDerivedFromManifestObj(inMemberClusterObj *unstructured.Unstructured, expectedAppliedWorkOwnerRef *metav1.OwnerReference) bool {
@@ -151,15 +124,18 @@ func isInMemberClusterObjectDerivedFromManifestObj(inMemberClusterObj *unstructu
 //   - An object that matches with the given manifest has been created; but
 //   - The object is not owned by Fleet (more specifically, the object is not owned by the
 //     expected AppliedWork object).
-func shouldInitiateTakeOverAttempt(manifestObj, inMemberClusterObj *unstructured.Unstructured, expectedAppliedWorkOwnerRef *metav1.OwnerReference) bool {
+func shouldInitiateTakeOverAttempt(inMemberClusterObj *unstructured.Unstructured,
+	applyStrategy *fleetv1beta1.ApplyStrategy,
+	expectedAppliedWorkOwnerRef *metav1.OwnerReference,
+) bool {
 	if inMemberClusterObj == nil {
-		// Perform a sanity check. If the corresponding live object is not found, no takeover is
+		// Obviously, if the corresponding live object is not found, no takeover is
 		// needed.
 		return false
 	}
 
-	if manifestObj.GetGenerateName() != "" {
-		// For obvious reasons, no takeover is ever needed for objects with generated names.
+	// Skip the takeover process if the apply strategy forbids so.
+	if applyStrategy.WhenToTakeOver == fleetv1beta1.WhenToTakeOverTypeNever {
 		return false
 	}
 
@@ -430,17 +406,6 @@ func validateOwnerReferences(
 	}
 
 	return nil
-}
-
-// prepareObjectWithGenerateName prepares an object with a generated name for an apply op.
-//
-// Specifically, Fleet will set the manifest object to have the same name as the live object. For
-// regular objects, this is a no-op.
-func prepareObjectWithGenerateName(manifestObj, inMemberClusterObj *unstructured.Unstructured) {
-	if manifestObj.GetGenerateName() != "" {
-		manifestObj.SetGenerateName("")
-		manifestObj.SetName(inMemberClusterObj.GetName())
-	}
 }
 
 // sanitizeManifestObject sanitizes the manifest object before applying it.
@@ -718,6 +683,8 @@ func setWorkAvailableCondition(
 	meta.SetStatusCondition(workStatusConditions, *availableCond)
 }
 
+// prepareExistingManifestCondQIdx returns a map that allows quicker look up of a manifest
+// condition given a work resource identifier.
 func prepareExistingManifestCondQIdx(existingManifestConditions []fleetv1beta1.ManifestCondition) map[string]int {
 	existingManifestConditionQIdx := make(map[string]int)
 	for idx := range existingManifestConditions {
@@ -773,6 +740,7 @@ func prepareManifestCondForWA(
 	}
 }
 
+// findLeftOverManifests returns the manifests that have been left over on the member cluster side.
 func findLeftOverManifests(
 	manifestCondsForWA []fleetv1beta1.ManifestCondition,
 	existingManifestCondQIdx map[string]int,
@@ -845,4 +813,24 @@ func findLeftOverManifests(
 func isWorkObjectAvailable(work *fleetv1beta1.Work) bool {
 	availableCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 	return availableCond != nil && availableCond.Status == metav1.ConditionTrue
+}
+
+// canApplyWithOwnership checks if Fleet can perform an apply op, knowing that Fleet has
+// acquired the ownership of the object, or that the object has not been created yet.
+//
+// Note that this function does not concern co-ownership; such checks are executed elsewhere.
+func canApplyWithOwnership(inMemberClusterObj *unstructured.Unstructured, expectedAppliedWorkOwnerRef *metav1.OwnerReference) bool {
+	if inMemberClusterObj == nil {
+		// The object has not been created yet; Fleet can apply the object.
+		return true
+	}
+
+	// Verify if the object is owned by Fleet.
+	curOwners := inMemberClusterObj.GetOwnerReferences()
+	for idx := range curOwners {
+		if reflect.DeepEqual(curOwners[idx], *expectedAppliedWorkOwnerRef) {
+			return true
+		}
+	}
+	return false
 }

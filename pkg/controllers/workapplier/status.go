@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"go.goms.io/fleet/pkg/utils/controller"
 
@@ -53,9 +54,14 @@ func (r *Reconciler) refreshWorkStatus(
 		}
 		if len(bundle.drifts) > 0 {
 			// Populate drift details if there are drifts found.
+			var observedInMemberClusterGen int64
+			if bundle.inMemberClusterObj != nil {
+				observedInMemberClusterGen = bundle.inMemberClusterObj.GetGeneration()
+			}
+
 			manifestCond.DriftDetails = &fleetv1beta1.DriftDetails{
 				ObservationTime:                   now,
-				ObservedInMemberClusterGeneration: bundle.inMemberClusterObj.GetGeneration(),
+				ObservedInMemberClusterGeneration: observedInMemberClusterGen,
 				FirstDriftedObservedTime:          *firstDriftedTimestamp,
 				ObservedDrifts:                    bundle.drifts,
 			}
@@ -66,11 +72,16 @@ func (r *Reconciler) refreshWorkStatus(
 		if firstDiffedTimestamp == nil {
 			firstDiffedTimestamp = &now
 		}
-		// Populate diff details if there are diffs found.
 		if len(bundle.diffs) > 0 {
+			// Populate diff details if there are diffs found.
+			var observedInMemberClusterGen *int64
+			if bundle.inMemberClusterObj != nil {
+				observedInMemberClusterGen = ptr.To(bundle.inMemberClusterObj.GetGeneration())
+			}
+
 			manifestCond.DiffDetails = &fleetv1beta1.DiffDetails{
 				ObservationTime:                   now,
-				ObservedInMemberClusterGeneration: bundle.inMemberClusterObj.GetGeneration(),
+				ObservedInMemberClusterGeneration: observedInMemberClusterGen,
 				FirstDiffedObservedTime:           *firstDiffedTimestamp,
 				ObservedDiffs:                     bundle.diffs,
 			}

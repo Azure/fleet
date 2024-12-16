@@ -12,15 +12,16 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/parallelizer"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
@@ -29,11 +30,9 @@ import (
 const (
 	workName = "work-1"
 
-	deployName      = "deploy-1"
-	configMapName   = "configmap-1"
-	nsName          = "ns-1"
-	jobGenerateName = "job-"
-	nsGenerateName  = "work-"
+	deployName    = "deploy-1"
+	configMapName = "configmap-1"
+	nsName        = "ns-1"
 )
 
 var (
@@ -41,23 +40,164 @@ var (
 		APIVersion: "placement.kubernetes-fleet.io/v1beta1",
 		Kind:       "AppliedWork",
 		Name:       workName,
-		UID:        "uid",
+		UID:        "0",
 	}
 )
 
 var (
 	ignoreFieldTypeMetaInNamespace = cmpopts.IgnoreFields(corev1.Namespace{}, "TypeMeta")
-	ignoreFieldTypeMetaInJob       = cmpopts.IgnoreFields(batchv1.Job{}, "TypeMeta")
 )
 
-// TestDecodeManifest tests the decodeManifest method.
-func TestDecodeManifest(_ *testing.T) {
-	// Not yet implemented.
-}
-
 // TestRemoveLeftOverManifests tests the removeLeftOverManifests method.
-func TestRemoveLeftOverManifests(_ *testing.T) {
-	// Not yet implemented.
+func TestRemoveLeftOverManifests(t *testing.T) {
+	ctx := context.Background()
+
+	additionalOwnerRef := &metav1.OwnerReference{
+		APIVersion: "v1",
+		Kind:       "SuperNamespace",
+		Name:       "super-ns",
+		UID:        "super-ns-uid",
+	}
+
+	nsName0 := fmt.Sprintf(nsNameTemplate, "0")
+	nsName1 := fmt.Sprintf(nsNameTemplate, "1")
+	nsName2 := fmt.Sprintf(nsNameTemplate, "2")
+	nsName3 := fmt.Sprintf(nsNameTemplate, "3")
+
+	testCases := []struct {
+		name                           string
+		leftOverManifests              []fleetv1beta1.AppliedResourceMeta
+		inMemberClusterObjs            []runtime.Object
+		wantInMemberClusterObjs        []corev1.Namespace
+		wantRemovedInMemberClusterObjs []corev1.Namespace
+	}{
+		{
+			name: "mixed",
+			leftOverManifests: []fleetv1beta1.AppliedResourceMeta{
+				// The object is present.
+				{
+					WorkResourceIdentifier: *nsWRI(0, nsName0),
+				},
+				// The object cannot be found.
+				{
+					WorkResourceIdentifier: *nsWRI(1, nsName1),
+				},
+				// The object is not owned by Fleet.
+				{
+					WorkResourceIdentifier: *nsWRI(2, nsName2),
+				},
+				// The object has multiple owners.
+				{
+					WorkResourceIdentifier: *nsWRI(3, nsName3),
+				},
+			},
+			inMemberClusterObjs: []runtime.Object{
+				&corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: nsName0,
+					},
+				},
+				&corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: nsName2,
+						OwnerReferences: []metav1.OwnerReference{
+							*additionalOwnerRef,
+						},
+					},
+				},
+				&corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: nsName3,
+						OwnerReferences: []metav1.OwnerReference{
+							*additionalOwnerRef,
+							*appliedWorkOwnerRef,
+						},
+					},
+				},
+			},
+			wantInMemberClusterObjs: []corev1.Namespace{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: nsName2,
+						OwnerReferences: []metav1.OwnerReference{
+							*additionalOwnerRef,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: nsName3,
+						OwnerReferences: []metav1.OwnerReference{
+							*additionalOwnerRef,
+						},
+					},
+				},
+			},
+			wantRemovedInMemberClusterObjs: []corev1.Namespace{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: nsName0,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeClient := fake.NewSimpleDynamicClient(scheme.Scheme, tc.inMemberClusterObjs...)
+			r := &Reconciler{
+				spokeDynamicClient: fakeClient,
+				parallelizer:       parallelizer.NewParallelizer(2),
+			}
+			if err := r.removeLeftOverManifests(ctx, tc.leftOverManifests, appliedWorkOwnerRef); err != nil {
+				t.Errorf("removeLeftOverManifests() = %v, want no error", err)
+			}
+
+			for idx := range tc.wantInMemberClusterObjs {
+				wantNS := tc.wantInMemberClusterObjs[idx]
+
+				gotUnstructured, err := fakeClient.
+					Resource(nsGVR).
+					Namespace(wantNS.GetNamespace()).
+					Get(ctx, wantNS.GetName(), metav1.GetOptions{})
+				if err != nil {
+					t.Errorf("Get Namespace(%v) = %v, want no error", klog.KObj(&wantNS), err)
+					continue
+				}
+
+				gotNS := wantNS.DeepCopy()
+				if err := runtime.DefaultUnstructuredConverter.FromUnstructured(gotUnstructured.Object, &gotNS); err != nil {
+					t.Errorf("FromUnstructured() = %v, want no error", err)
+				}
+
+				if diff := cmp.Diff(gotNS, &wantNS, ignoreFieldTypeMetaInNamespace); diff != "" {
+					t.Errorf("NS(%v) mismatches (-got +want):\n%s", klog.KObj(&wantNS), diff)
+				}
+			}
+
+			for idx := range tc.wantRemovedInMemberClusterObjs {
+				wantRemovedNS := tc.wantRemovedInMemberClusterObjs[idx]
+
+				gotUnstructured, err := fakeClient.
+					Resource(nsGVR).
+					Namespace(wantRemovedNS.GetNamespace()).
+					Get(ctx, wantRemovedNS.GetName(), metav1.GetOptions{})
+				if err != nil {
+					t.Errorf("Get Namespace(%v) = %v, want no error", klog.KObj(&wantRemovedNS), err)
+				}
+
+				gotRemovedNS := wantRemovedNS.DeepCopy()
+				if err := runtime.DefaultUnstructuredConverter.FromUnstructured(gotUnstructured.Object, &gotRemovedNS); err != nil {
+					t.Errorf("FromUnstructured() = %v, want no error", err)
+				}
+
+				if !gotRemovedNS.DeletionTimestamp.IsZero() {
+					t.Errorf("Namespace(%v) has not been deleted", klog.KObj(&wantRemovedNS))
+				}
+			}
+		})
+	}
 }
 
 // TestRemoveOneLeftOverManifest tests the removeOneLeftOverManifest method.
@@ -65,7 +205,13 @@ func TestRemoveOneLeftOverManifest(t *testing.T) {
 	ctx := context.Background()
 	now := metav1.Now().Rfc3339Copy()
 	leftOverManifest := fleetv1beta1.AppliedResourceMeta{
-		WorkResourceIdentifier: *nsWRI,
+		WorkResourceIdentifier: *nsWRI(0, nsName),
+	}
+	additionalOwnerRef := &metav1.OwnerReference{
+		APIVersion: "v1",
+		Kind:       "SuperNamespace",
+		Name:       "super-ns",
+		UID:        "super-ns-uid",
 	}
 
 	testCases := []struct {
@@ -98,12 +244,7 @@ func TestRemoveOneLeftOverManifest(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: nsName,
 					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "v1",
-							Kind:       "SuperNamespace",
-							Name:       "super-ns",
-							UID:        "super-ns-uid",
-						},
+						*additionalOwnerRef,
 					},
 				},
 			},
@@ -111,12 +252,7 @@ func TestRemoveOneLeftOverManifest(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: nsName,
 					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "v1",
-							Kind:       "SuperNamespace",
-							Name:       "super-ns",
-							UID:        "super-ns-uid",
-						},
+						*additionalOwnerRef,
 					},
 				},
 			},
@@ -127,12 +263,7 @@ func TestRemoveOneLeftOverManifest(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: nsName,
 					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "v1",
-							Kind:       "SuperNamespace",
-							Name:       "super-ns",
-							UID:        "super-ns-uid",
-						},
+						*additionalOwnerRef,
 						*appliedWorkOwnerRef,
 					},
 				},
@@ -141,12 +272,7 @@ func TestRemoveOneLeftOverManifest(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: nsName,
 					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "v1",
-							Kind:       "SuperNamespace",
-							Name:       "super-ns",
-							UID:        "super-ns-uid",
-						},
+						*additionalOwnerRef,
 					},
 				},
 			},
@@ -209,7 +335,7 @@ func TestRemoveOneLeftOverManifest(t *testing.T) {
 				}
 
 				if diff := cmp.Diff(got, tc.wantInMemberClusterObj, ignoreFieldTypeMetaInNamespace); diff != "" {
-					t.Errorf("Get(%v) mismatches (-got +want):\n%s", klog.KObj(tc.inMemberClusterObj), diff)
+					t.Errorf("NS(%v) mismatches (-got +want):\n%s", klog.KObj(tc.inMemberClusterObj), diff)
 				}
 				return
 			}
@@ -217,273 +343,112 @@ func TestRemoveOneLeftOverManifest(t *testing.T) {
 	}
 }
 
-// TestRemoveOneLeftOverManifestWithGenerateName tests the removeOneLeftOverManifest method.
-func TestRemoveOneLeftOverManifestWithGenerateName(t *testing.T) {
+// TestFindInMemberClusterObjectFor tests the findInMemberClusterObjectFor method.
+func TestFindInMemberClusterObjectFor(t *testing.T) {
 	ctx := context.Background()
-	now := metav1.Now().Rfc3339Copy()
-	leftOverManifest := fleetv1beta1.AppliedResourceMeta{
-		WorkResourceIdentifier: *jobWithGenerateNameWRI,
+
+	ns1 := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: nsName,
+		},
+	}
+	ns2 := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "ns-2",
+		},
+	}
+	cm1 := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: nsName,
+			Name:      configMapName,
+		},
+		Data: map[string]string{
+			"key": "value",
+		},
+	}
+	cm2 := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ns-2",
+			Name:      "configmap-2",
+		},
 	}
 
+	inMemberClusterObjs := []runtime.Object{
+		ns1,
+		cm1,
+	}
+
+	ns1UnstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(ns1)
+	if err != nil {
+		t.Fatalf("Namespace ToUnstructured() = %v, want no error", err)
+	}
+	ns1Unstructured := &unstructured.Unstructured{Object: ns1UnstructuredMap}
+	ns1Unstructured.SetAPIVersion("v1")
+	ns1Unstructured.SetKind("Namespace")
+
+	ns2UnstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(ns2)
+	if err != nil {
+		t.Fatalf("Namespace ToUnstructured() = %v, want no error", err)
+	}
+	ns2Unstrucutred := &unstructured.Unstructured{Object: ns2UnstructuredMap}
+
+	cm1UnstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(cm1)
+	if err != nil {
+		t.Fatalf("ConfigMap ToUnstructured() = %v, want no error", err)
+	}
+	cm1Unstructured := &unstructured.Unstructured{Object: cm1UnstructuredMap}
+	cm1Unstructured.SetAPIVersion("v1")
+	cm1Unstructured.SetKind("ConfigMap")
+
+	cm2UnstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(cm2)
+	if err != nil {
+		t.Fatalf("ConfigMap ToUnstructured() = %v, want no error", err)
+	}
+	cm2Unstructured := &unstructured.Unstructured{Object: cm2UnstructuredMap}
+
 	testCases := []struct {
-		name string
-		// To simplify things, for this test Fleet uses a fixed concrete type.
-		inMemberClusterObjs     []*batchv1.Job
-		wantInMemberClusterObjs []*batchv1.Job
+		name                   string
+		gvr                    *schema.GroupVersionResource
+		manifestObj            *unstructured.Unstructured
+		wantInMemberClusterObj *unstructured.Unstructured
 	}{
 		{
-			name: "not found",
+			name:                   "found (namespace scoped)",
+			gvr:                    &nsGVR,
+			manifestObj:            ns1Unstructured,
+			wantInMemberClusterObj: ns1Unstructured,
 		},
 		{
-			name: "no matching objects (no owner ref)",
-			inMemberClusterObjs: []*batchv1.Job{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: nsName,
-						Name:      fmt.Sprintf("%s%s", jobGenerateName, "1a2b3c"),
-					},
-				},
-			},
-			wantInMemberClusterObjs: []*batchv1.Job{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: nsName,
-						Name:      fmt.Sprintf("%s%s", jobGenerateName, "1a2b3c"),
-					},
-				},
-			},
+			name:                   "found (cluster scoped)",
+			gvr:                    &cmGVR,
+			manifestObj:            cm1Unstructured,
+			wantInMemberClusterObj: cm1Unstructured,
 		},
 		{
-			name: "no matching objects (naming pattern mismatches)",
-			inMemberClusterObjs: []*batchv1.Job{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: nsName,
-						Name:      "otherjob-1a2b3c",
-						OwnerReferences: []metav1.OwnerReference{
-							*appliedWorkOwnerRef,
-						},
-					},
-				},
-			},
-			wantInMemberClusterObjs: []*batchv1.Job{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: nsName,
-						Name:      "otherjob-1a2b3c",
-						OwnerReferences: []metav1.OwnerReference{
-							*appliedWorkOwnerRef,
-						},
-					},
-				},
-			},
+			name:        "not found (namespace scoped)",
+			gvr:         &nsGVR,
+			manifestObj: cm2Unstructured,
 		},
 		{
-			name: "single matched, already deleted",
-			inMemberClusterObjs: []*batchv1.Job{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace:         nsName,
-						Name:              fmt.Sprintf("%s%s", jobGenerateName, "1a2b3c"),
-						DeletionTimestamp: &now,
-						OwnerReferences: []metav1.OwnerReference{
-							*appliedWorkOwnerRef,
-						},
-					},
-				},
-			},
-			wantInMemberClusterObjs: []*batchv1.Job{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace:         nsName,
-						Name:              fmt.Sprintf("%s%s", jobGenerateName, "1a2b3c"),
-						DeletionTimestamp: &now,
-						OwnerReferences: []metav1.OwnerReference{
-							*appliedWorkOwnerRef,
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "single matched, multiple owners",
-			inMemberClusterObjs: []*batchv1.Job{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: nsName,
-						Name:      fmt.Sprintf("%s%s", jobGenerateName, "1a2b3c"),
-						OwnerReferences: []metav1.OwnerReference{
-							*appliedWorkOwnerRef,
-							{
-								APIVersion: "v1",
-								Kind:       "SuperJob",
-								Name:       "super-job",
-								UID:        "super-job-uid",
-							},
-						},
-					},
-				},
-			},
-			wantInMemberClusterObjs: []*batchv1.Job{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: nsName,
-						Name:      fmt.Sprintf("%s%s", jobGenerateName, "1a2b3c"),
-						OwnerReferences: []metav1.OwnerReference{
-							{
-								APIVersion: "v1",
-								Kind:       "SuperJob",
-								Name:       "super-job",
-								UID:        "super-job-uid",
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "single matched, deletion",
-			inMemberClusterObjs: []*batchv1.Job{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: nsName,
-						Name:      fmt.Sprintf("%s%s", jobGenerateName, "1a2b3c"),
-						OwnerReferences: []metav1.OwnerReference{
-							*appliedWorkOwnerRef,
-						},
-					},
-				},
-			},
-			wantInMemberClusterObjs: []*batchv1.Job{},
-		},
-		{
-			// This normally should not occur.
-			name: "multiple matched, mixed",
-			inMemberClusterObjs: []*batchv1.Job{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace:         nsName,
-						Name:              fmt.Sprintf("%s%s", jobGenerateName, "1a2b3c"),
-						DeletionTimestamp: &now,
-						OwnerReferences: []metav1.OwnerReference{
-							*appliedWorkOwnerRef,
-						},
-					},
-				},
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: nsName,
-						Name:      fmt.Sprintf("%s%s", jobGenerateName, "4a5b6c"),
-						OwnerReferences: []metav1.OwnerReference{
-							*appliedWorkOwnerRef,
-						},
-					},
-				},
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: nsName,
-						Name:      fmt.Sprintf("%s%s", jobGenerateName, "7a8b9c"),
-						OwnerReferences: []metav1.OwnerReference{
-							*appliedWorkOwnerRef,
-							{
-								APIVersion: "v1",
-								Kind:       "SuperJob",
-								Name:       "super-job",
-								UID:        "super-job-uid",
-							},
-						},
-					},
-				},
-			},
-			wantInMemberClusterObjs: []*batchv1.Job{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace:         nsName,
-						Name:              fmt.Sprintf("%s%s", jobGenerateName, "1a2b3c"),
-						DeletionTimestamp: &now,
-						OwnerReferences: []metav1.OwnerReference{
-							*appliedWorkOwnerRef,
-						},
-					},
-				},
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: nsName,
-						Name:      fmt.Sprintf("%s%s", jobGenerateName, "7a8b9c"),
-						OwnerReferences: []metav1.OwnerReference{
-							{
-								APIVersion: "v1",
-								Kind:       "SuperJob",
-								Name:       "super-job",
-								UID:        "super-job-uid",
-							},
-						},
-					},
-				},
-			},
+			name:        "not found (cluster scoped)",
+			gvr:         &cmGVR,
+			manifestObj: ns2Unstrucutred,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			var fakeClient *fake.FakeDynamicClient
-			if len(tc.inMemberClusterObjs) > 0 {
-				// Re-pack the slice to []runtime.Object.
-				inMemberClusterObjs := make([]runtime.Object, len(tc.inMemberClusterObjs))
-				for i, obj := range tc.inMemberClusterObjs {
-					inMemberClusterObjs[i] = obj
-				}
-				fakeClient = fake.NewSimpleDynamicClient(scheme.Scheme, inMemberClusterObjs...)
-			} else {
-				fakeClient = fake.NewSimpleDynamicClient(scheme.Scheme)
-			}
-
+			fakeClient := fake.NewSimpleDynamicClient(scheme.Scheme, inMemberClusterObjs...)
 			r := &Reconciler{
 				spokeDynamicClient: fakeClient,
 			}
-			if err := r.removeOneLeftOverManifestWithGenerateName(ctx, leftOverManifest, appliedWorkOwnerRef); err != nil {
-				t.Errorf("removeOneLeftOverManifest() = %v, want no error", err)
+			got, err := r.findInMemberClusterObjectFor(ctx, tc.gvr, tc.manifestObj)
+			if err != nil {
+				t.Errorf("findInMemberClusterObjectFor() = %v, want no error", err)
 			}
 
-			if len(tc.inMemberClusterObjs) > 0 {
-				gotJobs := make([]*batchv1.Job, 0, len(tc.wantInMemberClusterObjs))
-				for idx := range tc.wantInMemberClusterObjs {
-					// Use a copy of the object as placeholder.
-					gotJob := tc.wantInMemberClusterObjs[idx].DeepCopy()
-					gotUnstructured, err := fakeClient.
-						Resource(jobGVR).
-						Namespace(gotJob.GetNamespace()).
-						Get(ctx, gotJob.GetName(), metav1.GetOptions{})
-					switch {
-					case errors.IsNotFound(err):
-						continue
-					case err != nil:
-						t.Errorf("Get(%v) = %v, want no error", klog.KObj(gotJob), err)
-						return
-					}
-
-					err = runtime.DefaultUnstructuredConverter.FromUnstructured(gotUnstructured.Object, gotJob)
-					if err != nil {
-						t.Errorf("FromUnstructured() = %v, want no error", err)
-						return
-					}
-
-					gotJobs = append(gotJobs, gotJob)
-				}
-
-				if len(tc.wantInMemberClusterObjs) > 0 {
-					// The method is expected to modify (some of) the objects.
-					if diff := cmp.Diff(gotJobs, tc.wantInMemberClusterObjs, ignoreFieldTypeMetaInJob); diff != "" {
-						t.Errorf("got jobs mismatches (-got +want):\n%s", diff)
-					}
-					return
-				}
-
-				// The method is expected to delete all of the objects.
-				if len(gotJobs) > 0 {
-					t.Errorf("got jobs = %v, want no jobs", gotJobs)
-				}
-				return
+			if diff := cmp.Diff(got, tc.wantInMemberClusterObj); diff != "" {
+				t.Errorf("findInMemberClusterObjectFor() mismatches (-got +want):\n%s", diff)
 			}
 		})
 	}

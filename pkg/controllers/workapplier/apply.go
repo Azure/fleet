@@ -122,9 +122,6 @@ func (r *Reconciler) apply(
 	// Run the apply op. Note that Fleet will always attempt to apply the manifest, even if
 	// the manifest object hash does not change.
 
-	// Prepare the manifest object for the apply op if it uses a generate name.
-	prepareObjectWithGenerateName(manifestObjCopy, inMemberClusterObj)
-
 	// Optimistic lock is enabled when the apply strategy dictates that an apply op should
 	// not be carries through if a drift has been found (i.e., the WhenToApply field is set
 	// to IfNotDrifted); this helps Fleet guard against
@@ -237,6 +234,7 @@ func (r *Reconciler) threeWayMergePatch(
 	return patchedObj, nil
 }
 
+// serverSideApply uses server-side apply to apply the manifest object.
 func (r *Reconciler) serverSideApply(
 	ctx context.Context,
 	gvr *schema.GroupVersionResource,

@@ -111,9 +111,6 @@ type WorkResourceIdentifier struct {
 
 	// Name is the name of the resource.
 	Name string `json:"name,omitempty"`
-
-	// GenerateName is the generate name of the resource.
-	GenerateName string `json:"generateName,omitempty"`
 }
 
 // DriftDetails describes the observed configuration drifts.
@@ -127,7 +124,6 @@ type DriftDetails struct {
 
 	// ObservedInMemberClusterGeneration is the generation of the applied manifest on the member
 	// cluster side.
-	//
 	// +kubebuilder:validation:Required
 	ObservedInMemberClusterGeneration int64 `json:"observedInMemberClusterGeneration"`
 
@@ -160,8 +156,10 @@ type DiffDetails struct {
 	// ObservedInMemberClusterGeneration is the generation of the applied manifest on the member
 	// cluster side.
 	//
-	// +kubebuilder:validation:Required
-	ObservedInMemberClusterGeneration int64 `json:"observedInMemberClusterGeneration"`
+	// This might be nil if the resource has not been created yet in the member cluster.
+	//
+	// +kubebuilder:validation:Optional
+	ObservedInMemberClusterGeneration *int64 `json:"observedInMemberClusterGeneration"`
 
 	// FirsftDiffedObservedTime is the timestamp when the configuration difference
 	// was first detected.

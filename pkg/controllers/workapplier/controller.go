@@ -54,8 +54,7 @@ import (
 const (
 	patchDetailPerObjLimit = 100
 
-	availabilityCheckRequeueAfter = time.Second * 5
-	driftCheckRequeueAfter        = time.Second * 15
+	minRequestAfterDuration = time.Second * 5
 )
 
 const (
@@ -73,6 +72,9 @@ type Reconciler struct {
 	concurrentReconciles int
 	joined               *atomic.Bool
 	parallelizer         *parallelizer.Parallerlizer
+
+	availabilityCheckRequeueAfter time.Duration
+	driftCheckRequeueAfter        time.Duration
 }
 
 func NewReconciler(
@@ -81,17 +83,33 @@ func NewReconciler(
 	recorder record.EventRecorder,
 	concurrentReconciles int,
 	workerCount int,
+	availabilityCheckRequestAfter time.Duration,
+	driftCheckRequestAfter time.Duration,
 ) *Reconciler {
+	acRequestAfter := availabilityCheckRequestAfter
+	if acRequestAfter < minRequestAfterDuration {
+		klog.V(2).InfoS("Availability check requeue after duration is too short; set to the longer default", "availabilityCheckRequestAfter", acRequestAfter)
+		acRequestAfter = minRequestAfterDuration
+	}
+
+	dcRequestAfter := driftCheckRequestAfter
+	if dcRequestAfter < minRequestAfterDuration {
+		klog.V(2).InfoS("Drift check requeue after duration is too short; set to the longer default", "driftCheckRequestAfter", dcRequestAfter)
+		dcRequestAfter = minRequestAfterDuration
+	}
+
 	return &Reconciler{
-		hubClient:            hubClient,
-		spokeDynamicClient:   spokeDynamicClient,
-		spokeClient:          spokeClient,
-		restMapper:           restMapper,
-		recorder:             recorder,
-		concurrentReconciles: concurrentReconciles,
-		parallelizer:         parallelizer.NewParallelizer(workerCount),
-		workNameSpace:        workNameSpace,
-		joined:               atomic.NewBool(false),
+		hubClient:                     hubClient,
+		spokeDynamicClient:            spokeDynamicClient,
+		spokeClient:                   spokeClient,
+		restMapper:                    restMapper,
+		recorder:                      recorder,
+		concurrentReconciles:          concurrentReconciles,
+		parallelizer:                  parallelizer.NewParallelizer(workerCount),
+		workNameSpace:                 workNameSpace,
+		joined:                        atomic.NewBool(false),
+		availabilityCheckRequeueAfter: acRequestAfter,
+		driftCheckRequeueAfter:        dcRequestAfter,
 	}
 }
 
@@ -110,9 +128,11 @@ type manifestProcessingAppliedResultType string
 const (
 	// The result types and descriptions for processing failures.
 	ManifestProcessingApplyResultTypeDecodingErred                  manifestProcessingAppliedResultType = "DecodingErred"
+	ManifestProcessingApplyResultTypeFoundGenerateNames             manifestProcessingAppliedResultType = "FoundGenerateNames"
 	ManifestProcessingApplyResultTypeDuplicated                     manifestProcessingAppliedResultType = "Duplicated"
 	ManifestProcessingApplyResultTypeFailedToFindObjInMemberCluster manifestProcessingAppliedResultType = "FailedToFindObjInMemberCluster"
 	ManifestProcessingApplyResultTypeFailedToTakeOver               manifestProcessingAppliedResultType = "FailedToTakeOver"
+	ManifestProcessingApplyResultTypeNotTakenOver                   manifestProcessingAppliedResultType = "NotTakenOver"
 	ManifestProcessingApplyResultTypeFailedToReportDiff             manifestProcessingAppliedResultType = "FailedToReportDiff"
 	ManifestProcessingApplyResultTypeFailedToRunDriftDetection      manifestProcessingAppliedResultType = "FailedToRunDriftDetection"
 	ManifestProcessingApplyResultTypeFoundDrifts                    manifestProcessingAppliedResultType = "FoundDrifts"
@@ -160,7 +180,6 @@ type manifestProcessingBundle struct {
 	id                    *fleetv1beta1.WorkResourceIdentifier
 	manifestObj           *unstructured.Unstructured
 	inMemberClusterObj    *unstructured.Unstructured
-	manifestCondIdx       *int
 	gvr                   *schema.GroupVersionResource
 	applyResTyp           manifestProcessingAppliedResultType
 	availabilityResTyp    ManifestProcessingAvailabilityResultType
@@ -175,14 +194,14 @@ type manifestProcessingBundle struct {
 // Reconcile implement the control loop logic for Work object.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	if !r.joined.Load() {
-		klog.V(2).InfoS("Work controller is not started yet, requeue the request", "work", req.NamespacedName)
+		klog.V(2).InfoS("Work applier has not started yet", "work", req.NamespacedName)
 		return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 	}
 	startTime := time.Now()
-	klog.V(2).InfoS("ApplyWork reconciliation starts", "work", req.NamespacedName)
+	klog.V(2).InfoS("Work applier reconciliation starts", "work", req.NamespacedName)
 	defer func() {
 		latency := time.Since(startTime).Milliseconds()
-		klog.V(2).InfoS("ApplyWork reconciliation ends", "work", req.NamespacedName, "latency", latency)
+		klog.V(2).InfoS("Work applier reconciliation ends", "work", req.NamespacedName, "latency", latency)
 	}()
 
 	// Retrieve the Work object.
@@ -190,7 +209,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	err := r.hubClient.Get(ctx, req.NamespacedName, work)
 	switch {
 	case apierrors.IsNotFound(err):
-		klog.V(2).InfoS("The work resource is deleted", "work", req.NamespacedName)
+		klog.V(2).InfoS("Work object has been deleted", "work", req.NamespacedName)
 		return ctrl.Result{}, nil
 	case err != nil:
 		klog.ErrorS(err, "Failed to retrieve the work", "work", req.NamespacedName)
@@ -201,16 +220,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// Garbage collect the AppliedWork object if the Work object has been deleted.
 	if !work.DeletionTimestamp.IsZero() {
-		klog.V(2).InfoS("Resource is in the process of being deleted", work.Kind, workRef)
+		klog.V(2).InfoS("Work object has been marked for deletion; start garbage collection", work.Kind, workRef)
 		return r.garbageCollectAppliedWork(ctx, work)
 	}
-
-	// set default value so that the following call can skip checking nil
-	// TODO, could be removed once we have the defaulting webhook with fail policy.
-	// Make sure these conditions are met before moving
-	// * the defaulting webhook failure policy is configured as "fail".
-	// * user cannot update/delete the webhook.
-	defaulter.SetDefaultsWork(work)
 
 	// ensure that the appliedWork and the finalizer exist
 	appliedWork, err := r.ensureAppliedWork(ctx, work)
@@ -225,14 +237,23 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		BlockOwnerDeletion: ptr.To(false),
 	}
 
+	// Set the default values for the Work object to avoid additional validation logic in the
+	// later steps.
+	defaulter.SetDefaultsWork(work)
+
 	// Note (chenyu1): as of Nov 8, 2024, Fleet has a bug which would assign an identifier with empty
 	// name to an object with generated name; since in earlier versions the identifier struct
 	// itself does not bookkeep generate name information, this would effectively lead to the loss
-	// of track of such objects. When migrating to this version, any status information impacted
-	// by the bug would have an index with invalid identifier strings; Fleet is aware of this
-	// situation and it is still safe to handle manifests with such an erred index as in later
-	// steps the code will attempt to rebuild the association between the manifest object and
-	// the object from the member cluster.
+	// of track of such objects, which would lead to repeatedly creating the same resource and/or
+	// apply failures in the work applier controller.
+	//
+	// In the current version, for simplicity reasons, Fleet has dropped support for objects with
+	// generate names; any attempt to place such objects will yield an apply error. The code
+	// has been updated to automatically ignore identifiers with empty names so that reconciliation
+	// can resume in a previously erred setup.
+	//
+	// TO-DO (chenyu1): evaluate if it is necessary to add support for objects with generate
+	// names.
 
 	// Prepare the bundles.
 	bundles := prepareManifestProcessingBundles(work)
@@ -249,7 +270,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Process the manifests.
+	//
+	// In this step, Fleet will:
+	// a) find if there has been a corresponding object in the member cluster for each manifest;
+	// b) take over the object if applicable;
+	// c) report configuration differences if applicable;
+	// d) check for configuration drifts if applicable;
+	// e) apply each manifest.
 	r.processManifests(ctx, bundles, work, expectedAppliedWorkOwnerRef)
+
 	// Track the availability information.
 	r.trackInMemberClusterObjAvailability(ctx, bundles, &workRef)
 
@@ -267,10 +296,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// If the Work object is not yet available, reconcile again in 5 seconds.
 	if !isWorkObjectAvailable(work) {
-		return ctrl.Result{RequeueAfter: availabilityCheckRequeueAfter}, nil
+		return ctrl.Result{RequeueAfter: r.availabilityCheckRequeueAfter}, nil
 	}
 	// Otherwise, reconcile again in 3 minutes for drift detection purposes.
-	return ctrl.Result{RequeueAfter: driftCheckRequeueAfter}, nil
+	return ctrl.Result{RequeueAfter: r.driftCheckRequeueAfter}, nil
 }
 
 // preProcessManifests pre-processes manifests for the later ops.
@@ -308,8 +337,20 @@ func (r *Reconciler) preProcessManifests(
 			return
 		}
 
+		// Reject objects with generate names.
+		if len(manifestObj.GetGenerateName()) > 0 {
+			klog.V(2).InfoS("Reject objects with generate names", "manifestObj", klog.KObj(manifestObj), "work", klog.KObj(work))
+			bundle.applyErr = fmt.Errorf("objects with generate names are not supported")
+			bundle.applyResTyp = ManifestProcessingApplyResultTypeFoundGenerateNames
+			return
+		}
+
 		bundle.manifestObj = manifestObj
 		bundle.gvr = gvr
+		klog.V(2).InfoS("Decoded a manifest",
+			"manifestObj", klog.KObj(manifestObj),
+			"GVR", *gvr,
+			"work", klog.KObj(work))
 	}
 	r.parallelizer.ParallelizeUntil(childCtx, len(bundles), doWork, "decodingManifests")
 
@@ -329,12 +370,9 @@ func (r *Reconciler) preProcessManifests(
 	// To avoid conflicts (or the hassle of preparing individual patches), the status update is
 	// done in batch.
 	//
-	// Note that during the write-ahead process, Fleet will also perform a duplication check, which
-	// guarantees that
-	// * for regular objects, no object with the same GVK + namespace/name combo would be processed
-	//   twice;
-	// * for objects with generated names, no object with the same GVK + namespace/generate name
-	//   combo would be processed twice.
+	// Note that during the write-ahead process, Fleet will also perform a de-duplication check, which
+	// guarantees that no object with the same GVK + namespace/name combo would be processed
+	// twice.
 	//
 	// This check is done on the Work object scope, and is primarily added to address the case
 	// where duplicate objects might appear in a Fleet resource envelope and lead to unexpected
@@ -353,14 +391,7 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 	work *fleetv1beta1.Work,
 	expectedAppliedWorkOwnerRef *metav1.OwnerReference,
 ) error {
-	// As a shortcut, if there's no spec change in the Work object and the status indicates that
-	// a previous apply attempt has been recorded (**successful or not**), Fleet will skip the write-ahead
-	// op.
-	workAppliedCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
-	if workAppliedCond != nil && workAppliedCond.ObservedGeneration == work.Generation {
-		klog.V(2).InfoS("Fleet has attempted to apply the current set of manifests before and recorded the results; will skip the write-ahead process", "work", klog.KObj(work))
-		return nil
-	}
+	workRef := klog.KObj(work)
 
 	// Prepare the status update (the new manifest conditions) for the write-ahead process.
 	//
@@ -400,11 +431,13 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 		if err != nil {
 			// Normally this branch will never run as all manifests that cannot be decoded has been
 			// skipped in the check above. Here Fleet simply skips the manifest.
-			klog.ErrorS(err, "Failed to format the work resource identifier string", "ordinal", idx, "work", klog.KObj(work))
+			klog.ErrorS(err, "Failed to format the work resource identifier string",
+				"ordinal", idx, "work", workRef)
 			continue
 		}
 		if _, found := checked[wriStr]; found {
-			klog.V(2).InfoS("A duplicate manifest has been found", "ordinal", idx, "work", klog.KObj(work), "workResourceId", wriStr)
+			klog.V(2).InfoS("A duplicate manifest has been found",
+				"ordinal", idx, "work", workRef, "WRI", wriStr)
 			bundle.applyErr = fmt.Errorf("a duplicate manifest has been found")
 			bundle.applyResTyp = ManifestProcessingApplyResultTypeDuplicated
 			continue
@@ -422,6 +455,22 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 		if manifestCondForWA.DiffDetails != nil && !manifestCondForWA.DiffDetails.FirstDiffedObservedTime.IsZero() {
 			bundle.firstDiffedTimestamp = manifestCondForWA.DiffDetails.FirstDiffedObservedTime.DeepCopy()
 		}
+
+		klog.V(2).InfoS("Prepared write-ahead information for a manifest",
+			"manifestObj", klog.KObj(bundle.manifestObj), "WRI", wriStr, "work", workRef)
+	}
+
+	// As a shortcut, if there's no spec change in the Work object and the status indicates that
+	// a previous apply attempt has been recorded (**successful or not**), Fleet will skip the write-ahead
+	// op.
+	//
+	// Note that the shortcut happens after the manifest conditions for the write-ahead process
+	// are prepared; this is a must as Fleet needs to track certain information, specifically the
+	// first drifted/diffed timestamps (if any).
+	workAppliedCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
+	if workAppliedCond != nil && workAppliedCond.ObservedGeneration == work.Generation {
+		klog.V(2).InfoS("Attempt to apply the current set of manifests has been made before and the results have been recorded; will skip the write-ahead process", "work", workRef)
+		return nil
 	}
 
 	// Identify any manifests from previous runs that might have been applied and are now left
@@ -429,9 +478,11 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 	leftOverManifests := findLeftOverManifests(manifestCondsForWA, existingManifestCondQIdx, work.Status.ManifestConditions)
 	if err := r.removeLeftOverManifests(ctx, leftOverManifests, expectedAppliedWorkOwnerRef); err != nil {
 		klog.Errorf("Failed to remove left-over manifests (work=%+v, leftOverManifestCount=%d, removalFailureCount=%d)",
-			klog.KObj(work), len(leftOverManifests), len(err.Errors()))
+			workRef, len(leftOverManifests), len(err.Errors()))
 		return fmt.Errorf("failed to remove left-over manifests: %w", err)
 	}
+	klog.V(2).InfoS("Left-over manifests are found and removed",
+		"leftOverManifestCount", len(leftOverManifests), "work", workRef)
 
 	// Update the status.
 	//
@@ -446,6 +497,10 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 	if err := r.hubClient.Status().Update(ctx, work); err != nil {
 		return controller.NewAPIServerError(false, fmt.Errorf("failed to write ahead manifest processing attempts: %w", err))
 	}
+	klog.V(2).InfoS("Write-ahead process completed", "work", workRef)
+
+	// Set the defaults again as the result yielded by the status update might have changed the object.
+	defaulter.SetDefaultsWork(work)
 	return nil
 }
 
@@ -455,6 +510,8 @@ func (r *Reconciler) processManifests(
 	work *fleetv1beta1.Work,
 	expectedAppliedWorkOwnerRef *metav1.OwnerReference,
 ) {
+	workRef := klog.KObj(work)
+
 	// Process all the manifests in parallel.
 	//
 	// This is concurrency safe as the bundles slice has been pre-allocated.
@@ -472,6 +529,7 @@ func (r *Reconciler) processManifests(
 		}
 
 		r.processOneManifest(childCtx, bundle, work, expectedAppliedWorkOwnerRef)
+		klog.V(2).InfoS("Processed a manifest", "manifestObj", klog.KObj(bundle.manifestObj), "work", workRef)
 	}
 	r.parallelizer.ParallelizeUntil(childCtx, len(bundles), doWork, "processingManifests")
 }
@@ -483,23 +541,34 @@ func (r *Reconciler) processOneManifest(
 	work *fleetv1beta1.Work,
 	expectedAppliedWorkOwnerRef *metav1.OwnerReference,
 ) {
+	workRef := klog.KObj(work)
+	manifestObjRef := klog.KObj(bundle.manifestObj)
+	// Note (chenyu1): Fleet does not track references for objects in the member cluster as
+	// the references should be the same as those of the manifest objects, provided that Fleet
+	// does not support objects with generate names for now.
+
 	// Firstly, attempt to find if an object has been created in the member cluster based on the manifest object.
-	inMemberClusterObj, err := r.findInMemberClusterObjectFor(ctx,
-		bundle.gvr, bundle.manifestObj, bundle.manifestCondIdx,
-		work, expectedAppliedWorkOwnerRef)
+	inMemberClusterObj, err := r.findInMemberClusterObjectFor(ctx, bundle.gvr, bundle.manifestObj)
 	if err != nil {
 		bundle.applyErr = fmt.Errorf("failed to find the corresponding object for the manifest object in the member cluster: %w", err)
 		bundle.applyResTyp = ManifestProcessingApplyResultTypeFailedToFindObjInMemberCluster
 		klog.ErrorS(err,
 			"Failed to find the corresponding object for the manifest object in the member cluster",
-			"work", klog.KObj(work), "GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
+			"work", workRef, "GVR", *bundle.gvr, "manifestObj", manifestObjRef,
 			"expectedAppliedWorkOwnerRef", *expectedAppliedWorkOwnerRef)
 		return
 	}
 	bundle.inMemberClusterObj = inMemberClusterObj
+	klog.V(2).InfoS("Search for in-member cluster object completed",
+		"manifestObj", manifestObjRef, "GVR", *bundle.gvr, "work", workRef)
+
+	applyStrategy := work.Spec.ApplyStrategy
 
 	// Verify if takeover is needed.
-	if shouldInitiateTakeOverAttempt(bundle.manifestObj, bundle.inMemberClusterObj, expectedAppliedWorkOwnerRef) {
+	if shouldInitiateTakeOverAttempt(bundle.inMemberClusterObj, applyStrategy, expectedAppliedWorkOwnerRef) {
+		klog.V(2).InfoS("Take over the object from the member cluster",
+			"manifestObj", manifestObjRef, "GVR", *bundle.gvr, "work", workRef)
+
 		// Take over the object. Note that this steps adds only the owner reference; no other
 		// fields are modified (on the object from the member cluster).
 		takenOverInMemberClusterObj, configDiffs, err := r.takeOverPreExistingObject(ctx,
@@ -519,24 +588,42 @@ func (r *Reconciler) processOneManifest(
 			bundle.applyResTyp = ManifestProcessingApplyResultTypeFailedToTakeOver
 			klog.V(2).InfoS("Cannot take over object as configuration differences are found between the manifest object and the corresponding object in the member cluster",
 				"work", klog.KObj(work), "GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
-				"inMemberClusterObj", klog.KObj(bundle.inMemberClusterObj), "expectedAppliedWorkOwnerRef", *expectedAppliedWorkOwnerRef)
+				"expectedAppliedWorkOwnerRef", *expectedAppliedWorkOwnerRef)
 			return
 		}
 
 		// Update the bundle with the newly refreshed object from the member cluster.
 		bundle.inMemberClusterObj = takenOverInMemberClusterObj
+
+		klog.V(2).InfoS("Takeover process completed",
+			"manifestObj", manifestObjRef, "GVR", *bundle.gvr, "work", workRef)
 	}
 
-	applyStrategy := work.Spec.ApplyStrategy
-	// If the ApplyStrategy has been set to the use the ReportDiff apply mode, Fleet would
+	// If the ApplyStrategy is of the ReportDiff mode, Fleet would
 	// check for the configuration difference now; no drift detection nor apply op will be
 	// executed.
+	//
+	// Note that this runs even if the object is not owned by Fleet.
 	if applyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff {
+		klog.V(2).InfoS("Running in ReportDiff mode",
+			"manifestObj", manifestObjRef, "GVR", *bundle.gvr, "work", workRef)
+
 		if bundle.inMemberClusterObj == nil {
 			// The object has not created in the member cluster yet; Fleet will consider this
 			// as an error.
-			bundle.applyErr = fmt.Errorf("cannot report configuration diffs as the object has not been created in the member cluster yet")
-			bundle.applyResTyp = ManifestProcessingApplyResultTypeFailedToReportDiff
+			bundle.applyErr = fmt.Errorf("the object has not been created in the member cluster yet")
+			bundle.applyResTyp = ManifestProcessingApplyResultTypeFoundDiffs
+
+			// Add a note for full diff here for better clarity.
+			bundle.diffs = []fleetv1beta1.PatchDetail{
+				{
+					// The root path.
+					Path: "/",
+					// For simplicity reason, Fleet reports a placeholder here rather than
+					// including the full JSON representation.
+					ValueInHub: "(the whole object)",
+				},
+			}
 			return
 		}
 
@@ -564,6 +651,22 @@ func (r *Reconciler) processOneManifest(
 			// successful apply op.
 			bundle.applyResTyp = ManifestProcessingApplyResultTypeNoDiffFound
 		}
+
+		klog.V(2).InfoS("ReportDiff process completed",
+			"manifestObj", manifestObjRef, "GVR", *bundle.gvr, "work", workRef)
+		return
+	}
+
+	// For ClientSideApply and ServerSideApply apply strategies, ownership is a hard requirement.
+	// Skip the rest of the processing step if the resource has been created in the member cluster
+	// but Fleet is not listed as an owner of the resource in the member cluster yet (i.e., the
+	// takeover process does not run). This check is necessary as Fleet now supports the
+	// WhenToTakeOver option Never.
+	if !canApplyWithOwnership(bundle.inMemberClusterObj, expectedAppliedWorkOwnerRef) {
+		klog.V(2).InfoS("Ownership is not established yet; skip the apply op",
+			"manifestObj", manifestObjRef, "GVR", *bundle.gvr, "work", workRef)
+		bundle.applyErr = fmt.Errorf("no ownership of the object in the member cluster; takeover is needed")
+		bundle.applyResTyp = ManifestProcessingApplyResultTypeNotTakenOver
 		return
 	}
 
@@ -579,6 +682,9 @@ func (r *Reconciler) processOneManifest(
 			"inMemberClusterObj", klog.KObj(bundle.inMemberClusterObj), "expectedAppliedWorkOwnerRef", *expectedAppliedWorkOwnerRef)
 		return
 	case isPreApplyDriftDetectionNeeded:
+		klog.V(2).InfoS("Running pre-apply drift detection",
+			"manifestObj", manifestObjRef, "GVR", *bundle.gvr, "work", workRef)
+
 		drifts, err := r.diffBetweenManifestAndInMemberClusterObjects(ctx,
 			bundle.gvr,
 			bundle.manifestObj, bundle.inMemberClusterObj,
@@ -603,6 +709,8 @@ func (r *Reconciler) processOneManifest(
 		}
 
 		// No drifts are found; carry on with the apply op.
+		klog.V(2).InfoS("Pre-apply drift detection completed",
+			"manifestObj", manifestObjRef, "GVR", *bundle.gvr, "work", workRef)
 	}
 
 	// Perform the apply op.
@@ -619,11 +727,8 @@ func (r *Reconciler) processOneManifest(
 		// Update the bundle with the newly applied object, if an apply op has been run.
 		bundle.inMemberClusterObj = appliedObj
 	}
-	// For objects with generated names, Fleet would need to update the bundle identifier to include
-	// the actual name of the applied object.
-	if bundle.id.GenerateName != "" && bundle.id.Name == "" {
-		bundle.id.Name = bundle.inMemberClusterObj.GetName()
-	}
+	klog.V(2).InfoS("Apply process completed",
+		"manifestObj", manifestObjRef, "GVR", *bundle.gvr, "work", workRef)
 
 	// Perform another round of drift detection after the apply op, if the ApplyStrategy dictates
 	// that drift detection should be done in full comparison mode.
@@ -636,6 +741,9 @@ func (r *Reconciler) processOneManifest(
 	// be any change made on the unmanaged fields; and Fleet would need to perform another
 	// round of drift detection.
 	if shouldPerformPostApplyDriftDetection(work.Spec.ApplyStrategy) {
+		klog.V(2).InfoS("Running post-apply drift detection",
+			"manifestObj", manifestObjRef, "GVR", *bundle.gvr, "work", workRef)
+
 		drifts, err := r.diffBetweenManifestAndInMemberClusterObjects(ctx,
 			bundle.gvr,
 			bundle.manifestObj, bundle.inMemberClusterObj,
@@ -655,10 +763,15 @@ func (r *Reconciler) processOneManifest(
 			bundle.drifts = drifts
 			// The presence of such drifts are not considered as an error.
 		}
+
+		klog.V(2).InfoS("Post-apply drift detection completed",
+			"manifestObj", manifestObjRef, "GVR", *bundle.gvr, "work", workRef)
 	}
 
 	// All done.
 	bundle.applyResTyp = ManifestProcessingApplyResultTypeApplied
+	klog.V(2).InfoS("Manifest processing completed",
+		"manifestObj", manifestObjRef, "GVR", *bundle.gvr, "work", workRef)
 }
 
 // findInMemberClusterObjectFor attempts to find the corresponding object in the member cluster
@@ -670,19 +783,7 @@ func (r *Reconciler) findInMemberClusterObjectFor(
 	ctx context.Context,
 	gvr *schema.GroupVersionResource,
 	manifestObj *unstructured.Unstructured,
-	manifestCondIdx *int,
-	work *fleetv1beta1.Work,
-	expectedAppliedWorkOwnerRef *metav1.OwnerReference,
 ) (*unstructured.Unstructured, error) {
-	// If the manifest object is an object with generated name, Fleet would need to handle the
-	// object searching process in the member cluster differently as the object's name might
-	// not have been tracked yet.
-	if manifestObj.GetGenerateName() != "" {
-		return r.findInMemberClusterObjectForObjWithGenerateName(ctx, gvr, manifestObj, manifestCondIdx, work, expectedAppliedWorkOwnerRef)
-	}
-
-	// For regular objects, i.e., objects with no generate names, Fleet will look up the object
-	// in the member cluster directly.
 	inMemberClusterObj, err := r.spokeDynamicClient.
 		Resource(*gvr).
 		Namespace(manifestObj.GetNamespace()).
@@ -691,83 +792,6 @@ func (r *Reconciler) findInMemberClusterObjectFor(
 		return inMemberClusterObj, nil
 	}
 	return nil, client.IgnoreNotFound(err)
-}
-
-// findInMemberClusterObjectForObjWithGenerateName attempts to find the object in the member cluster
-// for a given manifest object with a generated name.
-func (r *Reconciler) findInMemberClusterObjectForObjWithGenerateName(
-	ctx context.Context,
-	gvr *schema.GroupVersionResource,
-	manifestObj *unstructured.Unstructured,
-	manifestCondIdx *int,
-	work *fleetv1beta1.Work,
-	expectedAppliedWorkOwnerRef *metav1.OwnerReference,
-) (*unstructured.Unstructured, error) {
-	// As a shortcut, if the Work object already keeps a manifest condition for the object, and
-	// the manifest condition features a valid name, Fleet would use the association directly.
-	if manifestCondIdx != nil {
-		manifestCondIdentifier := work.Status.ManifestConditions[*manifestCondIdx].Identifier
-		if manifestCondIdentifier.Name != "" {
-			inMemberClusterObj, err := r.spokeDynamicClient.
-				Resource(*gvr).
-				Namespace(manifestObj.GetNamespace()).
-				Get(ctx, manifestCondIdentifier.Name, metav1.GetOptions{})
-			switch {
-			case err == nil && isInMemberClusterObjectDerivedFromManifestObjWithGenerateName(inMemberClusterObj, manifestObj.GetGenerateName(), expectedAppliedWorkOwnerRef):
-				// The object has been found; Fleet also performs a sanity check to ensure
-				// that object found in the member cluster can be associated with the manifest object.
-				return inMemberClusterObj, nil
-			case err == nil:
-				// The object has been found in the member cluster but the sanity check fails.
-				// Normally this would not occur; Fleet would assume that the record in the status
-				// is stale/inconsistent and create a new object in the member cluster.
-				klog.V(2).InfoS("A corresponding object has been found in the member cluster given the name in the status records but it is not derived from the manifest object",
-					"manifestObj", klog.KObj(manifestObj), "inMemberClusterObj", klog.KObj(inMemberClusterObj), "work", klog.KObj(work))
-				return nil, nil
-			case apierrors.IsNotFound(err):
-				// The object cannot be found in the member cluster; this normally would not
-				// occur either, as a name has been written in the status, unless the user has
-				// deleted the object manually. Fleet would assume that the record in the status
-				// is stale/inconsistent and create a new object in the member cluster.
-				klog.V(2).InfoS("Failed to find the corresponding object in the member cluster despite that a name has been recorded in the status",
-					"manifestObj", klog.KObj(manifestObj), "work", klog.KObj(work))
-				return nil, nil
-			default:
-				// An unexpected error has occurred.
-				return nil, err
-			}
-		}
-	}
-
-	// If the Work object does not keep a manifest condition for the object, Fleet would need
-	// to do the lookup the hardway, listing all objects and check if any fits the description
-	// in the manifest object.
-	//
-	// This is a relatively expensive op, but it should only happen once for each object with
-	// generated name.
-	inMemberClusterObjCandidates, err := r.spokeDynamicClient.
-		Resource(*gvr).
-		Namespace(manifestObj.GetNamespace()).
-		List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	for idx := range inMemberClusterObjCandidates.Items {
-		inMemberClusterObjCandidate := inMemberClusterObjCandidates.Items[idx]
-		if isInMemberClusterObjectDerivedFromManifestObjWithGenerateName(&inMemberClusterObjCandidate, manifestObj.GetGenerateName(), expectedAppliedWorkOwnerRef) {
-			// A matching object has been found in the member cluster. Normally there should be
-			// at most one matching object, so here in the code flow Fleet takes the first one that matched and
-			// skips the rest. Should there be multiple matches, to avoid unexpected interruptions,
-			// no cleanup should be performed.
-			klog.V(2).InfoS("Found an object derived from the manifest object",
-				"manifestObj", klog.KObj(manifestObj), "inMemberClusterObj", klog.KObj(&inMemberClusterObjCandidate), "work", klog.KObj(work))
-			return &inMemberClusterObjCandidate, nil
-		}
-	}
-	// No matching object has been found in the member cluster; Fleet will need to apply the
-	// manifest to create one.
-	return nil, nil
 }
 
 // garbageCollectAppliedWork deletes the appliedWork and all the manifests associated with it from the cluster.
@@ -873,21 +897,9 @@ func (r *Reconciler) removeLeftOverManifests(
 	doWork := func(pieces int) {
 		appliedManifestMeta := leftOverManifests[pieces]
 
-		var err error
-		switch {
-		case appliedManifestMeta.GenerateName != "" && appliedManifestMeta.Name == "":
-			// The object has a generated name but the name is not set; this can happen in cases
-			// where the manifest condition entry describes a write-ahead attempt. In this case
-			// Fleet would need to look up matching objects to complete the cleanup.
-			//
-			// This is a relatively expensive op, but it happens only in cases where the Fleet
-			// agent is interrupted untimely during a reconciliation loop, which should be
-			// fairly rare.
-			err = r.removeOneLeftOverManifestWithGenerateName(ctx, appliedManifestMeta, expectedAppliedWorkOwnerRef)
-			errs[pieces] = fmt.Errorf("failed to remove the left-over manifest (object with generated name): %w", err)
-		default:
-			// The object has a regular name; Fleet can look up the object directly.
-			err = r.removeOneLeftOverManifest(ctx, appliedManifestMeta, expectedAppliedWorkOwnerRef)
+		// Remove the left-over manifest.
+		err := r.removeOneLeftOverManifest(ctx, appliedManifestMeta, expectedAppliedWorkOwnerRef)
+		if err != nil {
 			errs[pieces] = fmt.Errorf("failed to remove the left-over manifest (regular object): %w", err)
 		}
 	}
@@ -978,98 +990,6 @@ func (r *Reconciler) removeOneLeftOverManifest(
 			// Failed to delete the object from the member cluster.
 			return fmt.Errorf("failed to delete the object (gvr=%+v, manifestObj=%+v, inMemberClusterObj=%+v, expectedAppliedWorkOwnerRef=%+v): %w",
 				gvr, klog.KRef(manifestNamespace, manifestName), klog.KObj(inMemberClusterObj), *expectedAppliedWorkOwnerRef, err)
-		}
-	}
-	return nil
-}
-
-// removeOneLeftOverManifestWithGenerateName removes an applied manifest object with a generated
-// name only that might be left over in the member cluster.
-func (r *Reconciler) removeOneLeftOverManifestWithGenerateName(
-	ctx context.Context,
-	leftOverManifest fleetv1beta1.AppliedResourceMeta,
-	expectedAppliedWorkOwnerRef *metav1.OwnerReference,
-) error {
-	// Build the GVR.
-	gvr := schema.GroupVersionResource{
-		Group:    leftOverManifest.Group,
-		Version:  leftOverManifest.Version,
-		Resource: leftOverManifest.Resource,
-	}
-	manifestNamespace := leftOverManifest.Namespace
-
-	// The object has only a generate name; Fleet would need to filter out matching objects by
-	// an list op.
-	inMemberClusterObjCandidates, err := r.spokeDynamicClient.
-		Resource(gvr).
-		Namespace(manifestNamespace).
-		List(ctx, metav1.ListOptions{})
-	switch {
-	case err != nil:
-		// Failed to list objects in the member cluster.
-		return fmt.Errorf("failed to list objects (gvr=%+v, manifestObjNamespace=%+v): %w", gvr, manifestNamespace, err)
-	case len(inMemberClusterObjCandidates.Items) == 0:
-		// No objects found in the member cluster.
-		return nil
-	}
-
-	// Pre-allocation a slice to hold matching objects; use a smaller size as normally there should
-	// be at most one matching object.
-	inMemberClusterObjs := make([]*unstructured.Unstructured, 0, 1)
-	for idx := range inMemberClusterObjCandidates.Items {
-		inMemberClusterObjCandidate := inMemberClusterObjCandidates.Items[idx]
-		if isInMemberClusterObjectDerivedFromManifestObjWithGenerateName(&inMemberClusterObjCandidate, leftOverManifest.GenerateName, expectedAppliedWorkOwnerRef) {
-			inMemberClusterObjs = append(inMemberClusterObjs, &inMemberClusterObjCandidate)
-		}
-	}
-	if len(inMemberClusterObjs) == 0 {
-		// No matching objects found in the member cluster.
-		return nil
-	}
-
-	// Remove all the matching objects.
-	for idx := range inMemberClusterObjs {
-		inMemberClusterObj := inMemberClusterObjs[idx]
-
-		switch {
-		case inMemberClusterObj.GetDeletionTimestamp() != nil:
-			// The object has been marked for deletion; no further action is needed.
-			continue
-		case len(inMemberClusterObj.GetOwnerReferences()) > 1:
-			// Fleet is not the sole owner of the object; in this case, Fleet will only drop the
-			// ownership.
-			klog.V(2).InfoS("The object to remove is co-owned by other sources; Fleet will drop the ownership",
-				"gvr", gvr, "inMemberClusterObj", klog.KObj(inMemberClusterObj),
-				"expectedAppliedWorkOwnerRef", *expectedAppliedWorkOwnerRef)
-			removeOwnerRef(inMemberClusterObj, expectedAppliedWorkOwnerRef)
-			if _, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestNamespace).Update(ctx, inMemberClusterObj, metav1.UpdateOptions{}); err != nil && !apierrors.IsNotFound(err) {
-				// Failed to drop the ownership.
-				return fmt.Errorf("failed to drop the ownership of the object (gvr=%+v, inMemberClusterObj=%+v, expectedAppliedWorkOwnerRef=%+v): %w",
-					gvr, klog.KObj(inMemberClusterObj), *expectedAppliedWorkOwnerRef, err)
-			}
-		default:
-			// Fleet is the sole owner of the object; in this case, Fleet will delete the object.
-			klog.V(2).InfoS("The object to remove is solely owned by Fleet; Fleet will delete the object",
-				"gvr", gvr, "inMemberClusterObj", klog.KObj(inMemberClusterObj),
-				"expectedAppliedWorkOwnerRef", *expectedAppliedWorkOwnerRef)
-			inMemberClusterObjUID := inMemberClusterObj.GetUID()
-			deleteOpts := metav1.DeleteOptions{
-				Preconditions: &metav1.Preconditions{
-					// Add a UID pre-condition to guard against the case where the object has changed
-					// right before the deletion request is sent.
-					//
-					// Technically speaking resource version based concurrency control should also be
-					// enabled here; Fleet drops the check to avoid conflicts; this is safe as the Fleet
-					// ownership is considered to be a reserved field and other changes on the object are
-					// irrelevant to this step.
-					UID: &inMemberClusterObjUID,
-				},
-			}
-			if err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestNamespace).Delete(ctx, inMemberClusterObj.GetName(), deleteOpts); err != nil && !apierrors.IsNotFound(err) {
-				// Failed to delete the object from the member cluster.
-				return fmt.Errorf("failed to delete the object (gvr=%+v, inMemberClusterObj=%+v, expectedAppliedWorkOwnerRef=%+v): %w",
-					gvr, klog.KObj(inMemberClusterObj), *expectedAppliedWorkOwnerRef, err)
-			}
 		}
 	}
 	return nil
