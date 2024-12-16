@@ -626,6 +626,26 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 				handleResourceSnapshot(e.Object, q)
 			},
 		}).
+		Watches(&fleetv1alpha1.ClusterResourceOverrideSnapshot{}, handler.Funcs{
+			CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+				klog.V(2).InfoS("Handling a clusterResourceOverrideSnapshot create event", "clusterResourceOverrideSnapshot", klog.KObj(e.Object))
+				handleClusterResourceOverrideSnapshot(e.Object, q)
+			},
+			GenericFunc: func(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
+				klog.V(2).InfoS("Handling a clusterResourceOverrideSnapshot generic event", "clusterResourceOverrideSnapshot", klog.KObj(e.Object))
+				handleClusterResourceOverrideSnapshot(e.Object, q)
+			},
+		}).
+		Watches(&fleetv1alpha1.ResourceOverrideSnapshot{}, handler.Funcs{
+			CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+				klog.V(2).InfoS("Handling a resourceOverrideSnapshot create event", "resourceOverrideSnapshot", klog.KObj(e.Object))
+				handleResourceOverrideSnapshot(e.Object, q)
+			},
+			GenericFunc: func(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
+				klog.V(2).InfoS("Handling a resourceOverrideSnapshot generic event", "resourceOverrideSnapshot", klog.KObj(e.Object))
+				handleResourceOverrideSnapshot(e.Object, q)
+			},
+		}).
 		Watches(&fleetv1beta1.ClusterResourceBinding{}, handler.Funcs{
 			CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
 				klog.V(2).InfoS("Handling a resourceBinding create event", "resourceBinding", klog.KObj(e.Object))
@@ -643,6 +663,72 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 		Complete(r)
 }
 
+// handleClusterResourceOverrideSnapshot parse the clusterResourceOverrideSnapshot label and enqueue the CRP name associated
+// with the clusterResourceOverrideSnapshot if set.
+func handleClusterResourceOverrideSnapshot(o client.Object, q workqueue.RateLimitingInterface) {
+	snapshot, ok := o.(*fleetv1alpha1.ClusterResourceOverrideSnapshot)
+	if !ok {
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("non ClusterResourceOverrideSnapshot type resource: %+v", o)),
+			"Rollout controller received invalid ClusterResourceOverrideSnapshot event", "object", klog.KObj(o))
+		return
+	}
+
+	snapshotKRef := klog.KObj(snapshot)
+	// check if it is the latest resource resourceBinding
+	isLatest, err := strconv.ParseBool(snapshot.GetLabels()[fleetv1beta1.IsLatestSnapshotLabel])
+	if err != nil {
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("invalid annotation value %s : %w", fleetv1beta1.IsLatestSnapshotLabel, err)),
+			"Resource clusterResourceOverrideSnapshot has does not have a valid islatest label", "clusterResourceOverrideSnapshot", snapshotKRef)
+		return
+	}
+	if !isLatest {
+		// All newly created resource snapshots should start with the latest label to be true.
+		// However, this can happen if the label is removed fast by the time this reconcile loop is triggered.
+		klog.V(2).InfoS("Newly created resource clusterResourceOverrideSnapshot %s is not the latest", "clusterResourceOverrideSnapshot", snapshotKRef)
+		return
+	}
+	if snapshot.Spec.OverrideSpec.Placement == nil {
+		return
+	}
+	// enqueue the CRP to the rollout controller queue
+	q.Add(reconcile.Request{
+		NamespacedName: types.NamespacedName{Name: snapshot.Spec.OverrideSpec.Placement.Name},
+	})
+}
+
+// handleResourceOverrideSnapshot parse the resourceOverrideSnapshot label and enqueue the CRP name associated with the
+// resourceOverrideSnapshot if set.
+func handleResourceOverrideSnapshot(o client.Object, q workqueue.RateLimitingInterface) {
+	snapshot, ok := o.(*fleetv1alpha1.ResourceOverrideSnapshot)
+	if !ok {
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("non ResourceOverrideSnapshot type resource: %+v", o)),
+			"Rollout controller received invalid ResourceOverrideSnapshot event", "object", klog.KObj(o))
+		return
+	}
+
+	snapshotKRef := klog.KObj(snapshot)
+	// check if it is the latest resource resourceBinding
+	isLatest, err := strconv.ParseBool(snapshot.GetLabels()[fleetv1beta1.IsLatestSnapshotLabel])
+	if err != nil {
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("invalid annotation value %s : %w", fleetv1beta1.IsLatestSnapshotLabel, err)),
+			"Resource resourceOverrideSnapshot has does not have a valid islatest annotation", "resourceOverrideSnapshot", snapshotKRef)
+		return
+	}
+	if !isLatest {
+		// All newly created resource snapshots should start with the latest label to be true.
+		// However, this can happen if the label is removed fast by the time this reconcile loop is triggered.
+		klog.V(2).InfoS("Newly created resource resourceOverrideSnapshot %s is not the latest", "resourceOverrideSnapshot", snapshotKRef)
+		return
+	}
+	if snapshot.Spec.OverrideSpec.Placement == nil {
+		return
+	}
+	// enqueue the CRP to the rollout controller queue
+	q.Add(reconcile.Request{
+		NamespacedName: types.NamespacedName{Name: snapshot.Spec.OverrideSpec.Placement.Name},
+	})
+}
+
 // handleResourceSnapshot parse the resourceBinding label and annotation and enqueue the CRP name associated with the resource resourceBinding
 func handleResourceSnapshot(snapshot client.Object, q workqueue.RateLimitingInterface) {
 	snapshotKRef := klog.KObj(snapshot)
@@ -656,14 +742,14 @@ func handleResourceSnapshot(snapshot client.Object, q workqueue.RateLimitingInte
 	// check if it is the latest resource resourceBinding
 	isLatest, err := strconv.ParseBool(snapshot.GetLabels()[fleetv1beta1.IsLatestSnapshotLabel])
 	if err != nil {
-		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("invalid annotation value %s : %w", fleetv1beta1.IsLatestSnapshotLabel, err)),
-			"Resource resourceBinding has does not have a valid islatest annotation", "clusterResourceSnapshot", snapshotKRef)
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("invalid label value %s : %w", fleetv1beta1.IsLatestSnapshotLabel, err)),
+			"Resource clusterResourceSnapshot has does not have a valid islatest annotation", "clusterResourceSnapshot", snapshotKRef)
 		return
 	}
 	if !isLatest {
 		// All newly created resource snapshots should start with the latest label to be true.
 		// However, this can happen if the label is removed fast by the time this reconcile loop is triggered.
-		klog.V(2).InfoS("Newly created resource resourceBinding %s is not the latest", "clusterResourceSnapshot", snapshotKRef)
+		klog.V(2).InfoS("Newly created resource clusterResourceSnapshot %s is not the latest", "clusterResourceSnapshot", snapshotKRef)
 		return
 	}
 	// get the CRP name from the label
