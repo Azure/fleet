@@ -115,6 +115,9 @@ func (r *Reconciler) executeUpdatingStage(
 					return 0, controller.NewUpdateIgnoreConflictError(err)
 				}
 				klog.V(2).InfoS("Updated the status of a binding to bound", "binding", klog.KObj(binding), "cluster", clusterStatus.ClusterName, "stage", updatingStageStatus.StageName, "clusterStagedUpdateRun", updateRunRef)
+				if err := r.updateBindingRolloutStarted(ctx, binding); err != nil {
+					return 0, err
+				}
 			} else {
 				klog.V(2).InfoS("Found the first binding that is updating but the cluster status has not been updated", "cluster", clusterStatus.ClusterName, "stage", updatingStageStatus.StageName, "clusterStagedUpdateRun", updateRunRef)
 				if binding.Spec.State != placementv1beta1.BindingStateBound {
@@ -124,6 +127,14 @@ func (r *Reconciler) executeUpdatingStage(
 						return 0, controller.NewUpdateIgnoreConflictError(err)
 					}
 					klog.V(2).InfoS("Updated the status of a binding to bound", "binding", klog.KObj(binding), "cluster", clusterStatus.ClusterName, "stage", updatingStageStatus.StageName, "clusterStagedUpdateRun", updateRunRef)
+					if err := r.updateBindingRolloutStarted(ctx, binding); err != nil {
+						return 0, err
+					}
+				} else if !condition.IsConditionStatusTrue(meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingRolloutStarted)), binding.Generation) {
+					klog.V(2).InfoS("The binding is bound and up-to-date but the generation is updated by the scheduler, update rolloutStarted status again", "binding", klog.KObj(binding), "cluster", clusterStatus.ClusterName, "stage", updatingStageStatus.StageName, "clusterStagedUpdateRun", updateRunRef)
+					if err := r.updateBindingRolloutStarted(ctx, binding); err != nil {
+						return 0, err
+					}
 				} else {
 					if _, updateErr := checkClusterUpdateResult(binding, clusterStatus, updatingStageStatus, updateRun); updateErr != nil {
 						return clusterUpdatingWaitTime, updateErr
@@ -139,8 +150,10 @@ func (r *Reconciler) executeUpdatingStage(
 		}
 
 		// Now the cluster has to be updating, the binding should point to the right resource snapshot and the binding should be bound.
-		if !isBindingSyncedWithClusterStatus(updateRun, binding, clusterStatus) || binding.Spec.State != placementv1beta1.BindingStateBound {
-			unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the updating cluster `%s` in the stage %s does not match the cluster status: %+v, binding: %+v", clusterStatus.ClusterName, updatingStageStatus.StageName, clusterStatus, binding.Spec))
+		if !isBindingSyncedWithClusterStatus(updateRun, binding, clusterStatus) || binding.Spec.State != placementv1beta1.BindingStateBound ||
+			!condition.IsConditionStatusTrue(meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingRolloutStarted)), binding.Generation) {
+			unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the updating cluster `%s` in the stage %s does not match the cluster status: %+v, binding: %+v, condition: %+v",
+				clusterStatus.ClusterName, updatingStageStatus.StageName, clusterStatus, binding.Spec, binding.GetCondition(string(placementv1beta1.ResourceBindingRolloutStarted))))
 			klog.ErrorS(unexpectedErr, "The binding has been changed during updating, please check if there's concurrent clusterStagedUpdateRun", "clusterStagedUpdateRun", updateRunRef)
 			markClusterUpdatingFailed(clusterStatus, updateRun.Generation, unexpectedErr.Error())
 			return 0, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
@@ -314,6 +327,24 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 	return true, nil
 }
 
+// updateBindingRolloutStarted updates the binding status to indicate the rollout has started.
+func (r *Reconciler) updateBindingRolloutStarted(ctx context.Context, binding *placementv1beta1.ClusterResourceBinding) error {
+	cond := metav1.Condition{
+		Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: binding.Generation,
+		Reason:             condition.RolloutStartedReason,
+		Message:            "Detected the new changes on the resources and started the rollout process",
+	}
+	binding.SetConditions(cond)
+	if err := r.Client.Status().Update(ctx, binding); err != nil {
+		klog.ErrorS(err, "Failed to update binding status", "clusterResourceBinding", klog.KObj(binding), "condition", cond)
+		return controller.NewUpdateIgnoreConflictError(err)
+	}
+	klog.V(2).InfoS("Updated binding as rolloutStarted", "clusterResourceBinding", klog.KObj(binding), "condition", cond)
+	return nil
+}
+
 // isBindingSyncedWithClusterStatus checks if the binding is up-to-date with the cluster status.
 func isBindingSyncedWithClusterStatus(updateRun *placementv1alpha1.ClusterStagedUpdateRun, binding *placementv1beta1.ClusterResourceBinding, cluster *placementv1alpha1.ClusterUpdatingStatus) bool {
 	if binding.Spec.ResourceSnapshotName != updateRun.Spec.ResourceSnapshotIndex {
@@ -335,8 +366,8 @@ func isBindingSyncedWithClusterStatus(updateRun *placementv1alpha1.ClusterStaged
 	return true
 }
 
-// checkClusterUpdateResult checks if the cluster has been updated successfully.
-// It returns if the cluster has been updated successfully and the error if the cluster update failed.
+// checkClusterUpdateResult checks if the resources have been updated successfully on a given cluster.
+// It returns true if the resources have been updated successfully or any error if the update failed.
 func checkClusterUpdateResult(
 	binding *placementv1beta1.ClusterResourceBinding,
 	clusterStatus *placementv1alpha1.ClusterUpdatingStatus,
