@@ -220,7 +220,7 @@ func (r *Reconciler) generateStagesByStrategy(
 	// This won't change even if the stagedUpdateStrategy changes or is deleted after the updateRun is initialized.
 	updateRun.Status.StagedUpdateStrategySnapshot = &updateStrategy.Spec
 
-	// Compute the stages including the deletion stage.
+	// Compute the update stages.
 	if err := r.computeRunStageStatus(ctx, scheduledBindings, updateRun); err != nil {
 		return err
 	}
@@ -439,7 +439,7 @@ func (r *Reconciler) recordInitializationSucceeded(ctx context.Context, updateRu
 	if updateErr := r.Client.Status().Update(ctx, updateRun); updateErr != nil {
 		klog.ErrorS(updateErr, "Failed to update the ClusterStagedUpdateRun status as initialized", "clusterStagedUpdateRun", klog.KObj(updateRun))
 		// updateErr can be retried.
-		return controller.NewAPIServerError(false, updateErr)
+		return controller.NewUpdateIgnoreConflictError(updateErr)
 	}
 	return nil
 }
@@ -456,7 +456,7 @@ func (r *Reconciler) recordInitializationFailed(ctx context.Context, updateRun *
 	if updateErr := r.Client.Status().Update(ctx, updateRun); updateErr != nil {
 		klog.ErrorS(updateErr, "Failed to update the ClusterStagedUpdateRun status as failed to initialize", "clusterStagedUpdateRun", klog.KObj(updateRun))
 		// updateErr can be retried.
-		return controller.NewAPIServerError(false, updateErr)
+		return controller.NewUpdateIgnoreConflictError(updateErr)
 	}
 	return nil
 }

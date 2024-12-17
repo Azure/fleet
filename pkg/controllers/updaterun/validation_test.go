@@ -9,12 +9,14 @@ import (
 	"fmt"
 	"testing"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
-	"go.goms.io/fleet/pkg/utils/controller"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
-func TestDetermineUpdatingStage(t *testing.T) {
+func TestValidateClusterUpdatingStatus(t *testing.T) {
 	updateRun := &placementv1alpha1.ClusterStagedUpdateRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "test-run",
@@ -33,7 +35,7 @@ func TestDetermineUpdatingStage(t *testing.T) {
 		wantLastFinishedStageIndex int
 	}{
 		{
-			name:                   "determineUpdatingStage should return error if some stage finished after the updating stage",
+			name:                   "validateClusterUpdatingStatus should return error if some stage finished after the updating stage",
 			curStage:               2,
 			updatingStageIndex:     1,
 			lastFinishedStageIndex: -1,
@@ -46,7 +48,7 @@ func TestDetermineUpdatingStage(t *testing.T) {
 			wantLastFinishedStageIndex: -1,
 		},
 		{
-			name:                   "determineUpdatingStage should return error if some cluster has not succeeded but the stage has succeeded",
+			name:                   "validateClusterUpdatingStatus should return error if some cluster has not succeeded but the stage has succeeded",
 			curStage:               0,
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: -1,
@@ -65,7 +67,7 @@ func TestDetermineUpdatingStage(t *testing.T) {
 			wantLastFinishedStageIndex: -1,
 		},
 		{
-			name:                   "determineUpdatingStage should return error if some cluster has not finished but the stage has succeeded",
+			name:                   "validateClusterUpdatingStatus should return error if some cluster has not finished but the stage has succeeded",
 			curStage:               0,
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: -1,
@@ -81,7 +83,7 @@ func TestDetermineUpdatingStage(t *testing.T) {
 			wantLastFinishedStageIndex: -1,
 		},
 		{
-			name:                   "determineUpdatingStage should return error if the finished stage is not right after the last finished stage",
+			name:                   "validateClusterUpdatingStatus should return error if the finished stage is not right after the last finished stage",
 			curStage:               2,
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: 0,
@@ -94,7 +96,7 @@ func TestDetermineUpdatingStage(t *testing.T) {
 			wantLastFinishedStageIndex: -1,
 		},
 		{
-			name:                   "determineUpdatingStage should return error if some stage has failed",
+			name:                   "validateClusterUpdatingStatus should return error if some stage has failed",
 			curStage:               0,
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: -1,
@@ -107,7 +109,7 @@ func TestDetermineUpdatingStage(t *testing.T) {
 			wantLastFinishedStageIndex: -1,
 		},
 		{
-			name:                   "determineUpdatingStage should return error if there are multiple stages updating",
+			name:                   "validateClusterUpdatingStatus should return error if there are multiple stages updating",
 			curStage:               1,
 			updatingStageIndex:     0,
 			lastFinishedStageIndex: -1,
@@ -156,7 +158,7 @@ func TestDetermineUpdatingStage(t *testing.T) {
 			wantLastFinishedStageIndex: -1,
 		},
 		{
-			name:                   "determineUpdatingStage should return -1 as the updatingStageIndex if no stage is updating",
+			name:                   "validateClusterUpdatingStatus should return -1 as the updatingStageIndex if no stage is updating",
 			curStage:               0,
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: -1,
@@ -168,7 +170,7 @@ func TestDetermineUpdatingStage(t *testing.T) {
 			wantLastFinishedStageIndex: -1,
 		},
 		{
-			name:                   "determineUpdatingStage should return the index of the updating stage in updatingStageIndex",
+			name:                   "validateClusterUpdatingStatus should return the index of the updating stage in updatingStageIndex",
 			curStage:               2,
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: 1,
@@ -181,7 +183,7 @@ func TestDetermineUpdatingStage(t *testing.T) {
 			wantLastFinishedStageIndex: 1,
 		},
 		{
-			name:                   "determineUpdatingStage should return the index of the succeeded stage in lastFinishedStageIndex",
+			name:                   "validateClusterUpdatingStatus should return the index of the succeeded stage in lastFinishedStageIndex",
 			curStage:               2,
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: 1,
@@ -201,19 +203,19 @@ func TestDetermineUpdatingStage(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			gotUpdatingStageIndex, gotLastFinishedStageIndex, err :=
-				determineUpdatingStage(test.curStage, test.updatingStageIndex, test.lastFinishedStageIndex, test.stageStatus, updateRun)
+				validateClusterUpdatingStatus(test.curStage, test.updatingStageIndex, test.lastFinishedStageIndex, test.stageStatus, updateRun)
 			if test.wantErr == nil {
 				if err != nil {
-					t.Fatalf("determineUpdatingStage() got error = %+v, want error = nil", err)
+					t.Fatalf("validateClusterUpdatingStatus() got error = %+v, want error = nil", err)
 				}
 			} else if err == nil || err.Error() != test.wantErr.Error() {
-				t.Fatalf("determineUpdatingStage() got error = %+v, want error = %+v", err, test.wantErr)
+				t.Fatalf("validateClusterUpdatingStatus() got error = %+v, want error = %+v", err, test.wantErr)
 			}
 			if gotUpdatingStageIndex != test.wantUpdatingStageIndex {
-				t.Fatalf("determineUpdatingStage() got updatingStageIndex = %d, want updatingStageIndex = %d", gotUpdatingStageIndex, test.wantUpdatingStageIndex)
+				t.Fatalf("validateClusterUpdatingStatus() got updatingStageIndex = %d, want updatingStageIndex = %d", gotUpdatingStageIndex, test.wantUpdatingStageIndex)
 			}
 			if gotLastFinishedStageIndex != test.wantLastFinishedStageIndex {
-				t.Fatalf("determineUpdatingStage() got lastFinishedStageIndex = %d, want lastFinishedStageIndex = %d", gotLastFinishedStageIndex, test.wantLastFinishedStageIndex)
+				t.Fatalf("validateClusterUpdatingStatus() got lastFinishedStageIndex = %d, want lastFinishedStageIndex = %d", gotLastFinishedStageIndex, test.wantLastFinishedStageIndex)
 			}
 		})
 	}
@@ -232,6 +234,7 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 		name                   string
 		updatingStageIndex     int
 		lastFinishedStageIndex int
+		toBeDeletedBindings    []*placementv1beta1.ClusterResourceBinding
 		deleteStageStatus      *placementv1alpha1.StageUpdatingStatus
 		wantErr                error
 		wantUpdatingStageIndex int
@@ -241,6 +244,74 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 			deleteStageStatus:      nil,
 			wantErr:                wrapErr(true, fmt.Errorf("the clusterStagedUpdateRun has nil deletionStageStatus")),
 			wantUpdatingStageIndex: -1,
+		},
+		{
+			name: "validateDeleteStageStatus should return error if there's new to-be-deleted bindings",
+			toBeDeletedBindings: []*placementv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "binding-1"},
+					Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: "cluster-1"},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "binding-2"},
+					Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: "cluster-2"},
+				},
+			},
+			deleteStageStatus: &placementv1alpha1.StageUpdatingStatus{
+				StageName: "delete-stage",
+				Clusters: []placementv1alpha1.ClusterUpdatingStatus{
+					{ClusterName: "cluster-1"},
+				},
+			},
+			wantErr:                wrapErr(true, fmt.Errorf("the cluster `cluster-2` to be deleted is not in the delete stage")),
+			wantUpdatingStageIndex: -1,
+		},
+		{
+			name:                   "validateDeleteStageStatus should not return error if there's fewer to-be-deleted bindings",
+			updatingStageIndex:     -1,
+			lastFinishedStageIndex: -1,
+			toBeDeletedBindings: []*placementv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "binding-1"},
+					Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: "cluster-1"},
+				},
+			},
+			deleteStageStatus: &placementv1alpha1.StageUpdatingStatus{
+				StageName: "delete-stage",
+				Clusters: []placementv1alpha1.ClusterUpdatingStatus{
+					{ClusterName: "cluster-1"},
+					{ClusterName: "cluster-2"},
+				},
+			},
+			wantErr:                nil,
+			wantUpdatingStageIndex: 0,
+		},
+		{
+			name:                   "validateDeleteStageStatus should not return error if there are equal to-be-deleted bindings",
+			updatingStageIndex:     -1,
+			lastFinishedStageIndex: -1,
+			toBeDeletedBindings: []*placementv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "binding-1"},
+					Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: "cluster-1"},
+				},
+			},
+			deleteStageStatus: &placementv1alpha1.StageUpdatingStatus{
+				StageName: "delete-stage",
+				Clusters: []placementv1alpha1.ClusterUpdatingStatus{
+					{ClusterName: "cluster-1"},
+				},
+			},
+			wantErr:                nil,
+			wantUpdatingStageIndex: 0,
+		},
+		{
+			name:                   "validateDeleteStageStatus should return 0 when both updatingStageIndex and lastFinishedStageIndex are -1",
+			updatingStageIndex:     -1,
+			lastFinishedStageIndex: -1,
+			deleteStageStatus:      &placementv1alpha1.StageUpdatingStatus{StageName: "delete-stage"},
+			wantErr:                nil,
+			wantUpdatingStageIndex: 0,
 		},
 		{
 			name:                   "validateDeleteStageStatus should return error if there's stage updating but the delete stage has started",
@@ -335,7 +406,7 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			updateRun.Status.DeletionStageStatus = test.deleteStageStatus
-			gotUpdatingStageIndex, err := validateDeleteStageStatus(test.updatingStageIndex, test.lastFinishedStageIndex, totalStages, updateRun)
+			gotUpdatingStageIndex, err := validateDeleteStageStatus(test.updatingStageIndex, test.lastFinishedStageIndex, totalStages, test.toBeDeletedBindings, updateRun)
 			if test.wantErr == nil {
 				if err != nil {
 					t.Fatalf("validateDeleteStageStatus() got error = %+v, want error = nil", err)

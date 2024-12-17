@@ -37,6 +37,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 	var unscheduledCluster []*clusterv1beta1.MemberCluster
 	var resourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 	var clusterResourceOverride *placementv1alpha1.ClusterResourceOverrideSnapshot
+	var wantStatus *placementv1alpha1.StagedUpdateRunStatus
 
 	BeforeEach(func() {
 		testUpdateRunName = "updaterun-" + utils.RandStr()
@@ -127,6 +128,13 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 		By("Creating a new cluster resource override")
 		Expect(k8sClient.Create(ctx, clusterResourceOverride)).To(Succeed())
+
+		By("Creating a new clusterStagedUpdateRun")
+		Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
+
+		By("Validating the initialization succeeded")
+		wantStatus = generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
+		validateSucceededInitializationStatus(ctx, updateRun, wantStatus)
 	})
 
 	AfterEach(func() {
@@ -172,82 +180,47 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 	Context("Test validateCRP", func() {
 		It("Should fail to validate if the CRP is not found", func() {
-			By("Creating a new clusterStagedUpdateRun")
-			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
-
-			By("Validating the initialization succeeded")
-			want := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
-			validateSucceededInitializationStatus(ctx, updateRun, want)
-
 			By("Deleting the clusterResourcePlacement")
 			Expect(k8sClient.Delete(ctx, crp)).Should(Succeed())
 
 			By("Validating the validation failed")
-			want = generateFailedValidationStatus(updateRun, want)
-			validateFailedValidationStatus(ctx, updateRun, want, "parent clusterResourcePlacement not found")
+			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
+			validateFailedValidationStatus(ctx, updateRun, wantStatus, "parent clusterResourcePlacement not found")
 		})
 
 		It("Should fail to validate if CRP does not have external rollout strategy type", func() {
-			By("Creating a new clusterStagedUpdateRun")
-			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
-
-			By("Validating the initialization succeeded")
-			want := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
-			validateSucceededInitializationStatus(ctx, updateRun, want)
-
 			By("Updating CRP's rollout strategy type")
 			crp.Spec.Strategy.Type = placementv1beta1.RollingUpdateRolloutStrategyType
 			Expect(k8sClient.Update(ctx, crp)).To(Succeed())
 
 			By("Validating the validation failed")
-			want = generateFailedValidationStatus(updateRun, want)
-			validateFailedValidationStatus(ctx, updateRun, want,
+			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
+			validateFailedValidationStatus(ctx, updateRun, wantStatus,
 				"parent clusterResourcePlacement does not have an external rollout strategy")
 		})
 
 		It("Should fail to valdiate if the ApplyStrategy in the CRP has changed", func() {
-			By("Creating a new clusterStagedUpdateRun")
-			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
-
-			By("Validating the initialization succeeded")
-			want := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
-			validateSucceededInitializationStatus(ctx, updateRun, want)
-
 			By("Updating CRP's ApplyStrategy")
 			crp.Spec.Strategy.ApplyStrategy.Type = placementv1beta1.ApplyStrategyTypeClientSideApply
 			Expect(k8sClient.Update(ctx, crp)).To(Succeed())
 
 			By("Validating the validation failed")
-			want = generateFailedValidationStatus(updateRun, want)
-			validateFailedValidationStatus(ctx, updateRun, want, "the applyStrategy in the clusterStagedUpdateRun is outdated")
+			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
+			validateFailedValidationStatus(ctx, updateRun, wantStatus, "the applyStrategy in the clusterStagedUpdateRun is outdated")
 		})
 	})
 
 	Context("Test determinePolicySnapshot", func() {
 		It("Should fail to validate if the latest policySnapshot is not found", func() {
-			By("Creating a new clusterStagedUpdateRun")
-			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
-
-			By("Validating the initialization succeeded")
-			want := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
-			validateSucceededInitializationStatus(ctx, updateRun, want)
-
 			By("Deleting the policySnapshot")
 			Expect(k8sClient.Delete(ctx, policySnapshot)).Should(Succeed())
 
 			By("Validating the validation failed")
-			want = generateFailedValidationStatus(updateRun, want)
-			validateFailedValidationStatus(ctx, updateRun, want, "no latest policy snapshot associated")
+			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
+			validateFailedValidationStatus(ctx, updateRun, wantStatus, "no latest policy snapshot associated")
 		})
 
 		It("Should fail to validate if the latest policySnapshot has changed", func() {
-			By("Creating a new clusterStagedUpdateRun")
-			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
-
-			By("Validating the initialization succeeded")
-			want := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
-			validateSucceededInitializationStatus(ctx, updateRun, want)
-
 			By("Deleting the old policySnapshot")
 			Expect(k8sClient.Delete(ctx, policySnapshot)).Should(Succeed())
 
@@ -265,8 +238,8 @@ var _ = Describe("UpdateRun validation tests", func() {
 			Expect(k8sClient.Status().Update(ctx, newPolicySnapshot)).Should(Succeed(), "failed to update the policy snapshot condition")
 
 			By("Validating the validation failed")
-			want = generateFailedValidationStatus(updateRun, want)
-			validateFailedValidationStatus(ctx, updateRun, want,
+			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
+			validateFailedValidationStatus(ctx, updateRun, wantStatus,
 				"the policy snapshot index used in the clusterStagedUpdateRun is outdated")
 
 			By("Deleting the new policySnapshot")
@@ -274,87 +247,52 @@ var _ = Describe("UpdateRun validation tests", func() {
 		})
 
 		It("Should fail to validate if the cluster count has changed", func() {
-			By("Creating a new clusterStagedUpdateRun")
-			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
-
-			By("Validating the initialization succeeded")
-			want := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
-			validateSucceededInitializationStatus(ctx, updateRun, want)
-
 			By("Updating the cluster count in the policySnapshot")
 			policySnapshot.Annotations["kubernetes-fleet.io/number-of-clusters"] = strconv.Itoa(numberOfClustersAnnotation + 1)
 			Expect(k8sClient.Update(ctx, policySnapshot)).Should(Succeed())
 
 			By("Validating the validation failed")
-			want = generateFailedValidationStatus(updateRun, want)
-			validateFailedValidationStatus(ctx, updateRun, want,
+			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
+			validateFailedValidationStatus(ctx, updateRun, wantStatus,
 				"the cluster count initialized in the clusterStagedUpdateRun is outdated")
 		})
 	})
 
 	Context("Test validateStagesStatus", func() {
 		It("Should fail to validate if the StagedUpdateStrategySnapshot is nil", func() {
-			By("Creating a new clusterStagedUpdateRun")
-			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
-
-			By("Validating the initialization succeeded")
-			want := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
-			validateSucceededInitializationStatus(ctx, updateRun, want)
-
 			By("Updating the status.StagedUpdateStrategySnapshot to nil")
 			updateRun.Status.StagedUpdateStrategySnapshot = nil
 			Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed())
 
 			By("Validating the validation failed")
-			want = generateFailedValidationStatus(updateRun, want)
-			want.StagedUpdateStrategySnapshot = nil
-			validateFailedValidationStatus(ctx, updateRun, want, "the clusterStagedUpdateRun has nil stagedUpdateStrategySnapshot")
+			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
+			wantStatus.StagedUpdateStrategySnapshot = nil
+			validateFailedValidationStatus(ctx, updateRun, wantStatus, "the clusterStagedUpdateRun has nil stagedUpdateStrategySnapshot")
 		})
 
 		It("Should fail to validate if the StagesStatus is nil", func() {
-			By("Creating a new clusterStagedUpdateRun")
-			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
-
-			By("Validating the initialization succeeded")
-			want := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
-			validateSucceededInitializationStatus(ctx, updateRun, want)
-
 			By("Updating the status.StagesStatus to nil")
 			updateRun.Status.StagesStatus = nil
 			Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed())
 
 			By("Validating the validation failed")
-			want = generateFailedValidationStatus(updateRun, want)
-			want.StagesStatus = nil
-			validateFailedValidationStatus(ctx, updateRun, want, "the clusterStagedUpdateRun has nil stagesStatus")
+			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
+			wantStatus.StagesStatus = nil
+			validateFailedValidationStatus(ctx, updateRun, wantStatus, "the clusterStagedUpdateRun has nil stagesStatus")
 		})
 
 		It("Should fail to validate if the DeletionStageStatus is nil", func() {
-			By("Creating a new clusterStagedUpdateRun")
-			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
-
-			By("Validating the initialization succeeded")
-			want := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
-			validateSucceededInitializationStatus(ctx, updateRun, want)
-
 			By("Updating the status.DeletionStageStatus to nil")
 			updateRun.Status.DeletionStageStatus = nil
 			Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed())
 
 			By("Validating the validation failed")
-			want = generateFailedValidationStatus(updateRun, want)
-			want.DeletionStageStatus = nil
-			validateFailedValidationStatus(ctx, updateRun, want, "the clusterStagedUpdateRun has nil deletionStageStatus")
+			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
+			wantStatus.DeletionStageStatus = nil
+			validateFailedValidationStatus(ctx, updateRun, wantStatus, "the clusterStagedUpdateRun has nil deletionStageStatus")
 		})
 
 		It("Should fail to validate if the number of stages has changed", func() {
-			By("Creating a new clusterStagedUpdateRun")
-			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
-
-			By("Validating the initialization succeeded")
-			want := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
-			validateSucceededInitializationStatus(ctx, updateRun, want)
-
 			By("Adding a stage to the updateRun status")
 			updateRun.Status.StagedUpdateStrategySnapshot.Stages = append(updateRun.Status.StagedUpdateStrategySnapshot.Stages, placementv1alpha1.StageConfig{
 				Name: "stage3",
@@ -368,8 +306,8 @@ var _ = Describe("UpdateRun validation tests", func() {
 			Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed())
 
 			By("Validating the validation failed")
-			want = generateFailedValidationStatus(updateRun, want)
-			want.StagedUpdateStrategySnapshot.Stages = append(want.StagedUpdateStrategySnapshot.Stages, placementv1alpha1.StageConfig{
+			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
+			wantStatus.StagedUpdateStrategySnapshot.Stages = append(wantStatus.StagedUpdateStrategySnapshot.Stages, placementv1alpha1.StageConfig{
 				Name: "stage3",
 				LabelSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{
@@ -378,51 +316,30 @@ var _ = Describe("UpdateRun validation tests", func() {
 					},
 				},
 			})
-			validateFailedValidationStatus(ctx, updateRun, want, "the number of stages in the clusterStagedUpdateRun has changed")
+			validateFailedValidationStatus(ctx, updateRun, wantStatus, "the number of stages in the clusterStagedUpdateRun has changed")
 		})
 
 		It("Should fail to validate if stage name has changed", func() {
-			By("Creating a new clusterStagedUpdateRun")
-			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
-
-			By("Validating the initialization succeeded")
-			want := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
-			validateSucceededInitializationStatus(ctx, updateRun, want)
-
 			By("Changing the name of a stage")
 			updateRun.Status.StagedUpdateStrategySnapshot.Stages[0].Name = "stage3"
 			Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed())
 
 			By("Validating the validation failed")
-			want = generateFailedValidationStatus(updateRun, want)
-			want.StagedUpdateStrategySnapshot.Stages[0].Name = "stage3"
-			validateFailedValidationStatus(ctx, updateRun, want, "index `0` stage name in the clusterStagedUpdateRun has changed")
+			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
+			wantStatus.StagedUpdateStrategySnapshot.Stages[0].Name = "stage3"
+			validateFailedValidationStatus(ctx, updateRun, wantStatus, "index `0` stage name in the clusterStagedUpdateRun has changed")
 		})
 
 		It("Should fail to validate if the number of clusters has changed in a stage", func() {
-			By("Creating a new clusterStagedUpdateRun")
-			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
-
-			By("Validating the initialization succeeded")
-			want := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
-			validateSucceededInitializationStatus(ctx, updateRun, want)
-
 			By("Deleting a cluster resource binding")
 			Expect(k8sClient.Delete(ctx, resourceBindings[0])).Should(Succeed())
 
 			By("Validating the validation failed")
-			want = generateFailedValidationStatus(updateRun, want)
-			validateFailedValidationStatus(ctx, updateRun, want, "the number of clusters in index `1` stage has changed")
+			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
+			validateFailedValidationStatus(ctx, updateRun, wantStatus, "the number of clusters in index `1` stage has changed")
 		})
 
 		It("Should fail to validate if the cluster name has changed in a stage", func() {
-			By("Creating a new clusterStagedUpdateRun")
-			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
-
-			By("Validating the initialization succeeded")
-			want := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
-			validateSucceededInitializationStatus(ctx, updateRun, want)
-
 			By("Changing the sorting key value to reorder the clusters")
 			// Swap the index of cluster 1 and 3.
 			targetClusters[1].Labels["index"], targetClusters[3].Labels["index"] =
@@ -431,8 +348,8 @@ var _ = Describe("UpdateRun validation tests", func() {
 			Expect(k8sClient.Update(ctx, targetClusters[3])).Should(Succeed())
 
 			By("Validating the validation failed")
-			want = generateFailedValidationStatus(updateRun, want)
-			validateFailedValidationStatus(ctx, updateRun, want, "the `3` cluster in the `0` stage has changed")
+			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
+			validateFailedValidationStatus(ctx, updateRun, wantStatus, "the `3` cluster in the `0` stage has changed")
 		})
 	})
 })
