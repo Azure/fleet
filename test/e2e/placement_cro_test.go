@@ -93,6 +93,54 @@ var _ = Describe("creating clusterResourceOverride (selecting all clusters) to o
 		want := map[string]string{croTestAnnotationKey: croTestAnnotationValue}
 		checkIfOverrideAnnotationsOnAllMemberClusters(true, want)
 	})
+
+	It("update cro attached to this CRP only and change annotation value", func() {
+		Eventually(func() error {
+			cro := &placementv1alpha1.ClusterResourceOverride{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: croName}, cro); err != nil {
+				return err
+			}
+			cro.Spec = placementv1alpha1.ClusterResourceOverrideSpec{
+				Placement: &placementv1alpha1.PlacementRef{
+					Name: crpName, // assigned CRP name
+				},
+				ClusterResourceSelectors: workResourceSelector(),
+				Policy: &placementv1alpha1.OverridePolicy{
+					OverrideRules: []placementv1alpha1.OverrideRule{
+						{
+							ClusterSelector: &placementv1beta1.ClusterSelector{
+								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
+							},
+							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+								{
+									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Path:     "/metadata/annotations",
+									// changed the annotation value to croTestAnnotationValue1
+									Value: apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s"}`, croTestAnnotationKey, croTestAnnotationValue1))},
+								},
+							},
+						},
+					},
+				},
+			}
+			return hubClient.Update(ctx, cro)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cro as expected", crpName)
+	})
+
+	It("should update CRP status as expected", func() {
+		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 1)}
+		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
+		// use the long duration to wait until the rollout is finished.
+		Eventually(crpStatusUpdatedActual, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	// This check will ignore the annotation of resources.
+	It("should place the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
+	It("should have new override annotation value on the placed resources", func() {
+		want := map[string]string{croTestAnnotationKey: croTestAnnotationValue1}
+		checkIfOverrideAnnotationsOnAllMemberClusters(true, want)
+	})
 })
 
 var _ = Describe("creating clusterResourceOverride with multiple jsonPatchOverrides", Ordered, func() {
@@ -172,6 +220,25 @@ var _ = Describe("creating clusterResourceOverride with multiple jsonPatchOverri
 	It("should have annotations on all member clusters", func() {
 		wantAnnotations := map[string]string{croTestAnnotationKey: croTestAnnotationValue, croTestAnnotationKey1: croTestAnnotationValue1}
 		checkIfOverrideAnnotationsOnAllMemberClusters(true, wantAnnotations)
+	})
+
+	It("update cro attached to an invalid CRP", func() {
+		Eventually(func() error {
+			cro := &placementv1alpha1.ClusterResourceOverride{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: croName}, cro); err != nil {
+				return err
+			}
+			cro.Spec.Placement = &placementv1alpha1.PlacementRef{
+				Name: "invalid-crp", // assigned CRP name
+			}
+			return hubClient.Update(ctx, cro)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cro as expected", crpName)
+	})
+
+	It("CRP status should not be changed", func() {
+		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)}
+		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
+		Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "CRP %s status has been changed", crpName)
 	})
 })
 
