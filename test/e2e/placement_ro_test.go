@@ -98,7 +98,7 @@ var _ = Describe("creating resourceOverride (selecting all clusters) to override
 		checkIfOverrideAnnotationsOnAllMemberClusters(false, want)
 	})
 
-	It("update ro attached to this CRP only and annotation value", func() {
+	It("update ro attached to this CRP only and change annotation value", func() {
 		Eventually(func() error {
 			ro := &placementv1alpha1.ResourceOverride{}
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: roName, Namespace: roNamespace}, ro); err != nil {
