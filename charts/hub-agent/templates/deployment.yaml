@@ -30,6 +30,7 @@ spec:
             - -add_dir_header
             - --enable-v1alpha1-apis={{ .Values.enableV1Alpha1APIs }}
             - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
+            - --enable-cluster-inventory-apis={{ .Values.enableClusterInventoryAPI }}
             - --max-concurrent-cluster-placement={{ .Values.MaxConcurrentClusterPlacement }}
             - --concurrent-resource-change-syncs={{ .Values.ConcurrentResourceChangeSyncs }}
             - --log_file_max_size={{ .Values.logFileMaxSize }}
@@ -37,6 +38,7 @@ spec:
             - --hub-api-qps={{ .Values.hubAPIQPS }}
             - --hub-api-burst={{ .Values.hubAPIBurst }}
             - --force-delete-wait-time={{ .Values.forceDeleteWaitTime }}
+            - --cluster-unhealthy-threshold={{ .Values.clusterUnhealthyThreshold }}
           ports:
             - name: metrics
               containerPort: 8080

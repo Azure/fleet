@@ -182,9 +182,6 @@ spec:
                     AppliedResourceMeta represents the group, version, resource, name and namespace of a resource.
                     Since these resources have been created, they must have valid group, version, resource, namespace, and name.
                   properties:
-                    generateName:
-                      description: GenerateName is the generate name of the resource.
-                      type: string
                     group:
                       description: Group is the group of the resource.
                       type: string

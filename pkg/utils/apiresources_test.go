@@ -288,6 +288,21 @@ func TestDefaultResourceConfigGroupVersionKindParse(t *testing.T) {
 			Version: "v1beta1",
 			Kind:    "Event",
 		},
+		{
+			Group:   "networking.fleet.azure.com",
+			Version: "v1alpha1",
+			Kind:    "ServiceImport",
+		},
+		{
+			Group:   "networking.fleet.azure.com",
+			Version: "v1alpha1",
+			Kind:    "TrafficManagerProfile",
+		},
+		{
+			Group:   "networking.fleet.azure.com",
+			Version: "v1alpha1",
+			Kind:    "TrafficManagerBackend",
+		},
 	}
 
 	resourcesNotInDefaultResourcesList := []schema.GroupVersionKind{
@@ -305,6 +320,11 @@ func TestDefaultResourceConfigGroupVersionKindParse(t *testing.T) {
 			Group:   "",
 			Version: "v1",
 			Kind:    "Event",
+		},
+		{
+			Group:   "networking.fleet.azure.com",
+			Version: "v1alpha1",
+			Kind:    "ServiceExport",
 		},
 	}
 

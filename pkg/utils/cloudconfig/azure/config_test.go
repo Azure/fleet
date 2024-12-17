@@ -133,22 +133,6 @@ func TestValidate(t *testing.T) {
 			},
 			wantPass: false,
 		},
-		"VnetName empty": {
-			config: &CloudConfig{
-				ARMClientConfig: azclient.ARMClientConfig{
-					Cloud: "c",
-				},
-				AzureAuthConfig: azclient.AzureAuthConfig{
-					UseManagedIdentityExtension: true,
-					UserAssignedIdentityID:      "a",
-				},
-				Location:       "l",
-				SubscriptionID: "s",
-				ResourceGroup:  "v",
-				VnetName:       "",
-			},
-			wantPass: false,
-		},
 		"VnetResourceGroup empty": {
 			config: &CloudConfig{
 				ARMClientConfig: azclient.ARMClientConfig{
@@ -559,8 +543,9 @@ func TestNewCloudConfigFromFile(t *testing.T) {
 			filePath: "./test/azure_valid_config.json",
 			wantConfig: &CloudConfig{
 				ARMClientConfig: azclient.ARMClientConfig{
-					Cloud:    "AzurePublicCloud",
-					TenantID: "00000000-0000-0000-0000-000000000000",
+					Cloud:     "AzurePublicCloud",
+					TenantID:  "00000000-0000-0000-0000-000000000000",
+					UserAgent: "fleet-member-agent",
 				},
 				AzureAuthConfig: azclient.AzureAuthConfig{
 					UseManagedIdentityExtension: true,

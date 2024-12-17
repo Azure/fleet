@@ -26,6 +26,7 @@ import (
 // +kubebuilder:printcolumn:JSONPath=`.status.resourceUsage.allocatable.memory`,name="Allocatable-Memory", priority=1, type=string
 
 // MemberCluster is a resource created in the hub cluster to represent a member cluster within a fleet.
+// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) < 64",message="metadata.name max length is 63"
 type MemberCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

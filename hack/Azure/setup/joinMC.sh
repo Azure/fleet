@@ -87,7 +87,7 @@ helm install member-agent charts/member-agent/ \
         --set image.pullPolicy=Always \
         --set refreshtoken.pullPolicy=Always \
         --set config.memberClusterName=$MEMBER_CLUSTER \
-        --set logVerbosity=8 \
+        --set logVerbosity=5 \
         --set namespace=fleet-system \
         --set enableV1Alpha1APIs=false \
         --set enableV1Beta1APIs=true

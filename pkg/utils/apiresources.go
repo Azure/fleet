@@ -40,6 +40,18 @@ var (
 		Kind:    "ServiceImport",
 	}
 
+	trafficManagerProfileGVK = schema.GroupVersionKind{
+		Group:   NetworkingGroupName,
+		Version: "v1alpha1",
+		Kind:    "TrafficManagerProfile",
+	}
+
+	trafficManagerBackendGVK = schema.GroupVersionKind{
+		Group:   NetworkingGroupName,
+		Version: "v1alpha1",
+		Kind:    "TrafficManagerBackend",
+	}
+
 	// we use `;` to separate the different api groups
 	apiGroupSepToken = ";"
 )
@@ -81,7 +93,10 @@ func NewResourceConfig(isAllowList bool) *ResourceConfig {
 	r.AddGroup(metricsV1beta1.GroupName)
 	r.AddGroupVersionKind(corev1PodGVK)
 	r.AddGroupVersionKind(corev1NodeGVK)
+	// disable networking resources
 	r.AddGroupVersionKind(serviceImportGVK)
+	r.AddGroupVersionKind(trafficManagerProfileGVK)
+	r.AddGroupVersionKind(trafficManagerBackendGVK)
 	return r
 }
 

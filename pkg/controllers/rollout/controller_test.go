@@ -15,6 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/ptr"
@@ -63,6 +64,20 @@ var (
 		}),
 	}
 )
+
+func serviceScheme(t *testing.T) *runtime.Scheme {
+	scheme := runtime.NewScheme()
+	if err := fleetv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("Failed to add placement v1beta1 scheme: %v", err)
+	}
+	if err := clusterv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("Failed to add cluster v1beta1 scheme: %v", err)
+	}
+	if err := fleetv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("Failed to add placement v1alpha1 scheme: %v", err)
+	}
+	return scheme
+}
 
 func TestReconcilerHandleResourceSnapshot(t *testing.T) {
 	tests := map[string]struct {
@@ -744,13 +759,14 @@ func TestPickBindingsToRoll(t *testing.T) {
 	crpWithApplyStrategy.Spec.Strategy.ApplyStrategy = &fleetv1beta1.ApplyStrategy{
 		Type: fleetv1beta1.ApplyStrategyTypeServerSideApply,
 	}
+	// crpWithUnavailablePeriod has a 60s unavailable period
 	crpWithUnavailablePeriod := clusterResourcePlacementForTest("test",
 		createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 3))
 	crpWithUnavailablePeriod.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds = ptr.To(60)
 
-	readyBinding := generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1)
-	readyBinding.Generation = 15
-	readyBinding.Status.Conditions = []metav1.Condition{
+	canBeReadyBinding := generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1)
+	canBeReadyBinding.Generation = 15
+	canBeReadyBinding.Status.Conditions = []metav1.Condition{
 		{
 			Type:               string(fleetv1beta1.ResourceBindingApplied),
 			Status:             metav1.ConditionTrue,
@@ -760,6 +776,8 @@ func TestPickBindingsToRoll(t *testing.T) {
 			},
 		},
 	}
+
+	// create bindings below to test different wait times
 	notReadyUnscheduledBinding := generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2)
 	notReadyUnscheduledBinding.Generation = 15
 	notReadyUnscheduledBinding.Status.Conditions = []metav1.Condition{
@@ -775,7 +793,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			LastTransitionTime: metav1.Time{
 				Time: now.Add(-1 * time.Minute),
 			},
-			Reason: work.WorkNotTrackableReason,
+			Reason: work.WorkNotTrackableReason, // Make it not ready
 		},
 	}
 
@@ -794,13 +812,13 @@ func TestPickBindingsToRoll(t *testing.T) {
 			LastTransitionTime: metav1.Time{
 				Time: now.Add(-35 * time.Second),
 			},
-			Reason: work.WorkNotTrackableReason,
+			Reason: work.WorkNotTrackableReason, // Make it not ready
 		},
 	}
 
-	notReadyBoundBinding := generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-2", cluster2)
-	notReadyBoundBinding.Generation = 15
-	notReadyBoundBinding.Status.Conditions = []metav1.Condition{
+	readyBoundBinding := generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-2", cluster2)
+	readyBoundBinding.Generation = 15
+	readyBoundBinding.Status.Conditions = []metav1.Condition{
 		{
 			Type:               string(fleetv1beta1.ResourceBindingApplied),
 			Status:             metav1.ConditionTrue,
@@ -810,13 +828,13 @@ func TestPickBindingsToRoll(t *testing.T) {
 			Type:               string(fleetv1beta1.ResourceBindingAvailable),
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: 15,
-			Reason:             work.WorkAvailableReason,
+			Reason:             work.WorkAvailableReason, // Make it ready
 		},
 	}
 
-	notReadyBoundBinding2 := generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3)
-	notReadyUnscheduledBinding2.Generation = 15
-	notReadyUnscheduledBinding2.Status.Conditions = []metav1.Condition{
+	notReadyBoundBinding := generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3)
+	notReadyBoundBinding.Generation = 15
+	notReadyBoundBinding.Status.Conditions = []metav1.Condition{
 		{
 			Type:               string(fleetv1beta1.ResourceBindingApplied),
 			Status:             metav1.ConditionTrue,
@@ -829,7 +847,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			LastTransitionTime: metav1.Time{
 				Time: now.Add(-35 * time.Second),
 			},
-			Reason: work.WorkNotTrackableReason,
+			Reason: work.WorkNotTrackableReason, // Make it not ready
 		},
 	}
 	tests := map[string]struct {
@@ -1365,7 +1383,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 		},
 		"test with scheduled bindings (always update the scheduled binding first)": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
-				readyBinding,
+				canBeReadyBinding,
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster2),
 			},
 			latestResourceSnapshotName:  "snapshot-2",
@@ -1457,18 +1475,19 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantErr: controller.ErrExpectedBehavior,
 		},
 		"test bound bindings with different waitTimes": {
+			// want the min wait time of bound bindings that are not ready
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
-				notReadyBoundBinding,
-				readyBinding,
-				notReadyBoundBinding2,
+				notReadyBoundBinding, // notReady, waitTime = t - 35s
+				canBeReadyBinding,    // notReady, no wait time because it does not have available condition yet
+				readyBoundBinding,    // Ready
 			},
 			latestResourceSnapshotName:  "snapshot-2",
-			crp:                         crpWithUnavailablePeriod,
-			wantStaleUnselectedBindings: []int{1, 2},
+			crp:                         crpWithUnavailablePeriod, // UnavailablePeriodSeconds is 60s -> readyTimeCutOff = t - 60s
+			wantStaleUnselectedBindings: []int{0, 1},
 			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
 				{
 					State:                fleetv1beta1.BindingStateBound,
-					TargetCluster:        cluster2,
+					TargetCluster:        cluster3,
 					ResourceSnapshotName: "snapshot-2",
 				},
 				{
@@ -1476,36 +1495,23 @@ func TestPickBindingsToRoll(t *testing.T) {
 					TargetCluster:        cluster1,
 					ResourceSnapshotName: "snapshot-2",
 				},
-				{
-					State:                fleetv1beta1.BindingStateBound,
-					TargetCluster:        cluster3,
-					ResourceSnapshotName: "snapshot-2",
-				},
+				{}, // bound binding is ready and up-to-date pointing to the latest resource snapshot.
 			},
 			wantNeedRoll: true,
-			wantWaitTime: 60 * time.Second,
+			wantWaitTime: 25 * time.Second, // minWaitTime = (t - 35 seconds) - (t - 60 seconds) = 25 seconds
 		},
 		"test unscheduled bindings with different waitTimes": {
+			// want the min wait time of unscheduled bindings that are not ready
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
-				notReadyUnscheduledBinding,
-				notReadyUnscheduledBinding2,
+				notReadyUnscheduledBinding,  // NotReady, waitTime = t - 60s
+				notReadyUnscheduledBinding2, // NotReady,  waitTime = t - 35s
 			},
-			latestResourceSnapshotName: "snapshot-2",
-			crp:                        crpWithUnavailablePeriod,
-			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
-				{
-					State:                fleetv1beta1.BindingStateBound,
-					TargetCluster:        cluster2,
-					ResourceSnapshotName: "snapshot-2",
-				},
-				{
-					State:                fleetv1beta1.BindingStateBound,
-					TargetCluster:        cluster3,
-					ResourceSnapshotName: "snapshot-2",
-				},
-			},
-			wantNeedRoll: true,
-			wantWaitTime: 25 * time.Second,
+			latestResourceSnapshotName:  "snapshot-2",
+			crp:                         crpWithUnavailablePeriod,             // UnavailablePeriodSeconds is 60s -> readyTimeCutOff = t - 60s
+			wantStaleUnselectedBindings: []int{},                              // empty list as unscheduled bindings will be removed and are not tracked in the CRP today.
+			wantDesiredBindingsSpec:     []fleetv1beta1.ResourceBindingSpec{}, // unscheduled binding does not have desired spec so that putting the empty here
+			wantNeedRoll:                true,
+			wantWaitTime:                25 * time.Second, // minWaitTime = (t - 35 seconds) - (t - 60 seconds) = 25 seconds
 		},
 	}
 	for name, tt := range tests {

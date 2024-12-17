@@ -102,9 +102,16 @@ func validateOverridePolicy(policy *fleetv1alpha1.OverridePolicy) error {
 				}
 			}
 		}
+		switch rule.OverrideType {
+		case fleetv1alpha1.DeleteOverrideType:
+			if len(rule.JSONPatchOverrides) != 0 {
+				return errors.New("invalid JSONPatchOverrides: JSONPatchOverrides cannot be set when the override type is Delete")
+			}
 
-		if err := validateJSONPatchOverride(rule.JSONPatchOverrides); err != nil {
-			allErr = append(allErr, err)
+		case fleetv1alpha1.JSONPatchOverrideType:
+			if err := validateJSONPatchOverride(rule.JSONPatchOverrides); err != nil {
+				allErr = append(allErr, err)
+			}
 		}
 	}
 	return apierrors.NewAggregate(allErr)

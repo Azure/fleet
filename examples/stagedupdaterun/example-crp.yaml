@@ -1,0 +1,17 @@
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourcePlacement
+metadata:
+  name: example-placement
+spec:
+  resourceSelectors:
+    - group: ""
+      kind: Namespace
+      name: test-namespace
+      version: v1
+  policy:
+    placementType: PickAll
+    tolerations:
+      - key: gpu-workload
+        operator: Exists
+  strategy:
+    type: External

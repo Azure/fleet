@@ -762,7 +762,8 @@ type RollingUpdateConfig struct {
 	// Absolute number is calculated from percentage by rounding up.
 	// We consider a resource unavailable when we either remove it from a cluster or in-place
 	// upgrade the resources content on the same cluster.
-	// The minimum of MaxUnavailable is 1 to avoid rolling out stuck during in-place resource update.
+	// The minimum of MaxUnavailable is 0 to allow no downtime moving a placement from one cluster to another.
+	// Please set it to be greater than 0 to avoid rolling out stuck during in-place resource update.
 	// Defaults to 25%.
 	// +kubebuilder:default="25%"
 	// +kubebuilder:validation:XIntOrString

@@ -442,6 +442,7 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 		croMap          map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot
 		wantClusterRole rbacv1.ClusterRole
 		wantErr         error
+		wantDeleted     bool
 	}{
 		{
 			name: "empty overrides",
@@ -520,13 +521,109 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 			},
 		},
 		{
-			name: "selected by clusterResourceOverride",
+			name: "selected by clusterResourceOverride but only one rule matched the cluster",
 			clusterRole: rbacv1.ClusterRole{
 				TypeMeta: clusterRoleType,
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "clusterrole-name",
 					Labels: map[string]string{
 						"app": "app1",
+					},
+				},
+			},
+			cluster: clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+					Labels: map[string]string{
+						"key1": "value1",
+						"key2": "value2",
+					},
+				},
+			},
+			croMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot{
+				{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "clusterrole-name",
+				}: {
+					{
+						Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+							OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+								Policy: &placementv1alpha1.OverridePolicy{
+									OverrideRules: []placementv1alpha1.OverrideRule{
+										{
+											// matching rule
+											ClusterSelector: &placementv1beta1.ClusterSelector{
+												ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+													{
+														LabelSelector: &metav1.LabelSelector{
+															MatchLabels: map[string]string{
+																"key1": "value1",
+															},
+														},
+													},
+												},
+											},
+											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+												{
+													Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+													Path:     "/metadata/labels/new-label",
+													Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
+												},
+											},
+										},
+										{
+											// non matching rule
+											ClusterSelector: &placementv1beta1.ClusterSelector{
+												ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+													{
+														LabelSelector: &metav1.LabelSelector{
+															MatchLabels: map[string]string{
+																"key2": "value1",
+															},
+														},
+													},
+												},
+											},
+											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+												{
+													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+													Path:     "/metadata/labels/new-label",
+													Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value1"`)},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantClusterRole: rbacv1.ClusterRole{
+				TypeMeta: clusterRoleType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "clusterrole-name",
+					Labels: map[string]string{
+						"app":       "app1",
+						"new-label": "new-value",
+					},
+				},
+			},
+		},
+		{
+			name: "selected by clusterResourceOverride with two rules that don't conflict",
+			clusterRole: rbacv1.ClusterRole{
+				TypeMeta: clusterRoleType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "clusterrole-name",
+				},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups: []string{"authorization.k8s.io"},
+						Resources: []string{"selfsubjectaccessreviews", "selfsubjectrulesreviews"},
+						Verbs:     []string{"create"},
 					},
 				},
 			},
@@ -566,8 +663,8 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 												{
 													Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
-													Path:     "/metadata/labels/new-label",
-													Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
+													Path:     "/rules/0/verbs/1",
+													Value:    apiextensionsv1.JSON{Raw: []byte(`"read"`)},
 												},
 											},
 										},
@@ -577,7 +674,7 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 													{
 														LabelSelector: &metav1.LabelSelector{
 															MatchLabels: map[string]string{
-																"key2": "value1",
+																"key2": "value2",
 															},
 														},
 													},
@@ -585,9 +682,8 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 											},
 											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 												{
-													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
-													Path:     "/metadata/labels/new-label",
-													Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value1"`)},
+													Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+													Path:     "/rules/0/verbs/0",
 												},
 											},
 										},
@@ -602,12 +698,195 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 				TypeMeta: clusterRoleType,
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "clusterrole-name",
-					Labels: map[string]string{
-						"app":       "app1",
-						"new-label": "new-value",
+				},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups: []string{"authorization.k8s.io"},
+						Resources: []string{"selfsubjectaccessreviews", "selfsubjectrulesreviews"},
+						Verbs:     []string{"read"},
 					},
 				},
 			},
+		},
+		{
+			name: "selected by clusterResourceOverride with two rules that conflict but still a valid patch",
+			clusterRole: rbacv1.ClusterRole{
+				TypeMeta: clusterRoleType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "clusterrole-name",
+				},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups: []string{"authorization.k8s.io"},
+						Resources: []string{"selfsubjectaccessreviews", "selfsubjectrulesreviews"},
+						Verbs:     []string{"create"},
+					},
+				},
+			},
+			cluster: clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+					Labels: map[string]string{
+						"key1": "value1",
+						"key2": "value2",
+					},
+				},
+			},
+			croMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot{
+				{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "clusterrole-name",
+				}: {
+					{
+						Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+							OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+								Policy: &placementv1alpha1.OverridePolicy{
+									OverrideRules: []placementv1alpha1.OverrideRule{
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{
+												ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+													{
+														LabelSelector: &metav1.LabelSelector{
+															MatchLabels: map[string]string{
+																"key1": "value1",
+															},
+														},
+													},
+												},
+											},
+											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+												{
+													Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+													Path:     "/rules/0/verbs/1",
+													Value:    apiextensionsv1.JSON{Raw: []byte(`"read"`)},
+												},
+											},
+										},
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{
+												ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+													{
+														LabelSelector: &metav1.LabelSelector{
+															MatchLabels: map[string]string{
+																"key2": "value2",
+															},
+														},
+													},
+												},
+											},
+											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+												{
+													Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+													Path:     "/rules/0/verbs/1",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantClusterRole: rbacv1.ClusterRole{
+				TypeMeta: clusterRoleType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "clusterrole-name",
+				},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups: []string{"authorization.k8s.io"},
+						Resources: []string{"selfsubjectaccessreviews", "selfsubjectrulesreviews"},
+						Verbs:     []string{"create"},
+					},
+				},
+			},
+		},
+		{
+			name: "selected by clusterResourceOverride with two rules that conflict and result in error",
+			clusterRole: rbacv1.ClusterRole{
+				TypeMeta: clusterRoleType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "clusterrole-name",
+				},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups: []string{"authorization.k8s.io"},
+						Resources: []string{"selfsubjectaccessreviews", "selfsubjectrulesreviews"},
+						Verbs:     []string{"create"},
+					},
+				},
+			},
+			cluster: clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+					Labels: map[string]string{
+						"key1": "value1",
+						"key2": "value2",
+					},
+				},
+			},
+			croMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot{
+				{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "clusterrole-name",
+				}: {
+					{
+						Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+							OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+								Policy: &placementv1alpha1.OverridePolicy{
+									OverrideRules: []placementv1alpha1.OverrideRule{
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{
+												ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+													{
+														LabelSelector: &metav1.LabelSelector{
+															MatchLabels: map[string]string{
+																"key1": "value1",
+															},
+														},
+													},
+												},
+											},
+											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+												{
+													Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+													Path:     "/rules/0/verbs",
+												},
+											},
+										},
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{
+												ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+													{
+														LabelSelector: &metav1.LabelSelector{
+															MatchLabels: map[string]string{
+																"key2": "value2",
+															},
+														},
+													},
+												},
+											},
+											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+												{
+													Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+													Path:     "/rules/0/verbs/1",
+													Value:    apiextensionsv1.JSON{Raw: []byte(`"read"`)},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: controller.ErrUserError,
 		},
 		{
 			name: "invalid json patch of clusterResourceOverride",
@@ -658,13 +937,65 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 												},
 											},
 										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: controller.ErrUserError,
+		},
+		{
+			name: "delete during the clusterResourceOverride",
+			clusterRole: rbacv1.ClusterRole{
+				TypeMeta: clusterRoleType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "clusterrole-name",
+				},
+			},
+			cluster: clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+					Labels: map[string]string{
+						"key1": "value1",
+						"key2": "value2",
+					},
+				},
+			},
+			croMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot{
+				{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "clusterrole-name",
+				}: {
+					{
+						Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+							OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+								Policy: &placementv1alpha1.OverridePolicy{
+									OverrideRules: []placementv1alpha1.OverrideRule{
 										{
 											ClusterSelector: &placementv1beta1.ClusterSelector{
 												ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 													{
 														LabelSelector: &metav1.LabelSelector{
 															MatchLabels: map[string]string{
-																"key2": "value1",
+																"key1": "value1",
+															},
+														},
+													},
+												},
+											},
+											OverrideType: placementv1alpha1.DeleteOverrideType,
+										},
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{
+												ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+													{
+														LabelSelector: &metav1.LabelSelector{
+															MatchLabels: map[string]string{
+																"key1": "value1",
 															},
 														},
 													},
@@ -673,7 +1004,7 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 												{
 													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
-													Path:     "/metadata/labels/new-label",
+													Path:     "/metadata/labels/key1",
 													Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value1"`)},
 												},
 											},
@@ -685,7 +1016,83 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 					},
 				},
 			},
-			wantErr: controller.ErrUserError,
+			wantDeleted: true,
+		},
+		{
+			name: "delete after patching the clusterResourceOverride",
+			clusterRole: rbacv1.ClusterRole{
+				TypeMeta: clusterRoleType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "clusterrole-name",
+					Labels: map[string]string{
+						"key1": "value1",
+						"key2": "value2",
+					},
+				},
+			},
+			cluster: clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+					Labels: map[string]string{
+						"key1": "value1",
+						"key2": "value2",
+					},
+				},
+			},
+			croMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot{
+				{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "clusterrole-name",
+				}: {
+					{
+						Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+							OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+								Policy: &placementv1alpha1.OverridePolicy{
+									OverrideRules: []placementv1alpha1.OverrideRule{
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{
+												ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+													{
+														LabelSelector: &metav1.LabelSelector{
+															MatchLabels: map[string]string{
+																"key2": "value2",
+															},
+														},
+													},
+												},
+											},
+											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+												{
+													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+													Path:     "/metadata/labels/key1",
+													Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value1"`)},
+												},
+											},
+										},
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{
+												ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+													{
+														LabelSelector: &metav1.LabelSelector{
+															MatchLabels: map[string]string{
+																"key1": "value1",
+															},
+														},
+													},
+												},
+											},
+											OverrideType: placementv1alpha1.DeleteOverrideType,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantDeleted: true,
 		},
 	}
 
@@ -695,12 +1102,17 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 				InformerManager: &fakeInformer,
 			}
 			rc := resource.CreateResourceContentForTest(t, tc.clusterRole)
-			err := r.applyOverrides(rc, tc.cluster, tc.croMap, nil)
+			gotDeleted, err := r.applyOverrides(rc, tc.cluster, tc.croMap, nil)
 			if gotErr, wantErr := err != nil, tc.wantErr != nil; gotErr != wantErr || !errors.Is(err, tc.wantErr) {
 				t.Fatalf("applyOverrides() got error %v, want error %v", err, tc.wantErr)
 			}
-
+			if gotDeleted != tc.wantDeleted {
+				t.Fatalf("applyOverrides() gotDeleted %v, want %v", gotDeleted, tc.wantDeleted)
+			}
 			if tc.wantErr != nil {
+				return
+			}
+			if tc.wantDeleted {
 				return
 			}
 
@@ -711,7 +1123,7 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 
 			var clusterRole rbacv1.ClusterRole
 			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &clusterRole); err != nil {
-				t.Fatalf("Failed to convert the result to deployment: %v, want nil", err)
+				t.Fatalf("Failed to convert the result to clusterole: %v, want nil", err)
 			}
 
 			if diff := cmp.Diff(tc.wantClusterRole, clusterRole); diff != "" {
@@ -725,16 +1137,16 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 	fakeInformer := informer.FakeManager{
 		APIResources: map[schema.GroupVersionKind]bool{
 			{
-				Group:   "",
-				Version: "v1",
-				Kind:    "Deployment",
+				Group:   utils.DeploymentGVK.Group,
+				Version: utils.DeploymentGVK.Version,
+				Kind:    utils.DeploymentGVK.Kind,
 			}: true,
 		},
 		IsClusterScopedResource: false,
 	}
 	deploymentType := metav1.TypeMeta{
-		APIVersion: "v1",
-		Kind:       "Deployment",
+		APIVersion: utils.DeploymentGVK.GroupVersion().String(),
+		Kind:       utils.DeploymentGVK.Kind,
 	}
 
 	tests := []struct {
@@ -745,6 +1157,7 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 		roMap          map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot
 		wantDeployment appsv1.Deployment
 		wantErr        error
+		wantDelete     bool
 	}{
 		{
 			name: "empty overrides",
@@ -777,7 +1190,76 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 			},
 		},
 		{
-			name: "no matched overrides",
+			name: "no matched overrides on clusters",
+			deployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "nginx",
+					},
+				},
+			},
+			cluster: clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+				},
+			},
+			croMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot{
+				{
+					Group:   utils.NamespaceMetaGVK.Group,
+					Version: utils.NamespaceMetaGVK.Version,
+					Kind:    utils.NamespaceMetaGVK.Kind,
+					Name:    "invalid-namespace",
+				}: {
+					{
+						Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+							OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+								Policy: &placementv1alpha1.OverridePolicy{
+									OverrideRules: []placementv1alpha1.OverrideRule{
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{
+												ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+													{
+														LabelSelector: &metav1.LabelSelector{
+															MatchLabels: map[string]string{
+																"key1": "value1",
+															},
+														},
+													},
+												},
+											},
+											OverrideType: placementv1alpha1.JSONPatchOverrideType,
+											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+												{
+													Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+													Path:     "/metadata/labels/new-label",
+													Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			roMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot{},
+			wantDeployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "nginx",
+					},
+				},
+			},
+		},
+		{
+			name: "no matched overrides on resources",
 			deployment: appsv1.Deployment{
 				TypeMeta: deploymentType,
 				ObjectMeta: metav1.ObjectMeta{
@@ -809,6 +1291,7 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 													},
 												},
 											},
+											OverrideType: placementv1alpha1.JSONPatchOverrideType,
 											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 												{
 													Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
@@ -839,6 +1322,7 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 									OverrideRules: []placementv1alpha1.OverrideRule{
 										{
 											ClusterSelector: nil, // matching all the clusters
+											OverrideType:    placementv1alpha1.JSONPatchOverrideType,
 											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 												{
 													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
@@ -927,6 +1411,7 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 													},
 												},
 											},
+											OverrideType: placementv1alpha1.JSONPatchOverrideType,
 											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 												{
 													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
@@ -977,9 +1462,9 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 			},
 			roMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot{
 				{
-					Group:     "",
-					Version:   "v1",
-					Kind:      "Deployment",
+					Group:     utils.DeploymentGVK.Group,
+					Version:   utils.DeploymentGVK.Version,
+					Kind:      utils.DeploymentGVK.Kind,
 					Name:      "deployment-name",
 					Namespace: "deployment-namespace",
 				}: {
@@ -1000,6 +1485,7 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 													},
 												},
 											},
+											OverrideType: placementv1alpha1.JSONPatchOverrideType,
 											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 												{
 													Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
@@ -1010,6 +1496,7 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 										},
 										{
 											ClusterSelector: &placementv1beta1.ClusterSelector{}, // selecting all the clusters
+											OverrideType:    placementv1alpha1.JSONPatchOverrideType,
 											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 												{
 													Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
@@ -1082,6 +1569,7 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 													},
 												},
 											},
+											OverrideType: placementv1alpha1.JSONPatchOverrideType,
 											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 												{
 													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
@@ -1099,9 +1587,9 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 			},
 			roMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot{
 				{
-					Group:     "",
-					Version:   "v1",
-					Kind:      "Deployment",
+					Group:     utils.DeploymentGVK.Group,
+					Version:   utils.DeploymentGVK.Version,
+					Kind:      utils.DeploymentGVK.Kind,
 					Name:      "deployment-name",
 					Namespace: "deployment-namespace",
 				}: {
@@ -1112,6 +1600,7 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 									OverrideRules: []placementv1alpha1.OverrideRule{
 										{
 											ClusterSelector: &placementv1beta1.ClusterSelector{}, // matching all the clusters
+											OverrideType:    placementv1alpha1.JSONPatchOverrideType,
 											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 												{
 													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
@@ -1183,6 +1672,7 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 													},
 												},
 											},
+											OverrideType: placementv1alpha1.JSONPatchOverrideType,
 											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 												{
 													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
@@ -1223,9 +1713,9 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 			},
 			roMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot{
 				{
-					Group:     "",
-					Version:   "v1",
-					Kind:      "Deployment",
+					Group:     utils.DeploymentGVK.Group,
+					Version:   utils.DeploymentGVK.Version,
+					Kind:      utils.DeploymentGVK.Kind,
 					Name:      "deployment-name",
 					Namespace: "deployment-namespace",
 				}: {
@@ -1236,10 +1726,11 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 									OverrideRules: []placementv1alpha1.OverrideRule{
 										{
 											ClusterSelector: &placementv1beta1.ClusterSelector{}, // matching all the clusters
+											OverrideType:    placementv1alpha1.JSONPatchOverrideType,
 											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 												{
 													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
-													Path:     "/metadata/label/app",
+													Path:     "/metadata/spec",
 													Value:    apiextensionsv1.JSON{Raw: []byte(`"app3"`)},
 												},
 											},
@@ -1253,6 +1744,226 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 			},
 			wantErr: controller.ErrUserError,
 		},
+		{
+			name: "delete type of resourceOverride",
+			deployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "app1",
+					},
+				},
+			},
+			cluster: clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+					Labels: map[string]string{
+						"key1": "value1",
+						"key2": "value2",
+					},
+				},
+			},
+			roMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot{
+				{
+					Group:     utils.DeploymentGVK.Group,
+					Version:   utils.DeploymentGVK.Version,
+					Kind:      utils.DeploymentGVK.Kind,
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+				}: {
+					{
+						Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+							OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+								Policy: &placementv1alpha1.OverridePolicy{
+									OverrideRules: []placementv1alpha1.OverrideRule{
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{}, // matching all the clusters
+											OverrideType:    placementv1alpha1.DeleteOverrideType,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantDelete: true,
+		},
+		{
+			name: "resourceOverride delete the cro override",
+			deployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "app1",
+					},
+				},
+			},
+			cluster: clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+					Labels: map[string]string{
+						"key1": "value1",
+						"key2": "value2",
+					},
+				},
+			},
+			croMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot{
+				{
+					Group:   utils.NamespaceMetaGVK.Group,
+					Version: utils.NamespaceMetaGVK.Version,
+					Kind:    utils.NamespaceMetaGVK.Kind,
+					Name:    "deployment-namespace",
+				}: {
+					{
+						Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+							OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+								Policy: &placementv1alpha1.OverridePolicy{
+									OverrideRules: []placementv1alpha1.OverrideRule{
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{
+												ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+													{
+														LabelSelector: &metav1.LabelSelector{
+															MatchLabels: map[string]string{
+																"key1": "value1",
+															},
+														},
+													},
+												},
+											},
+											OverrideType: placementv1alpha1.JSONPatchOverrideType,
+											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+												{
+													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+													Path:     "/metadata/labels/app",
+													Value:    apiextensionsv1.JSON{Raw: []byte(`"app2"`)},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			roMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot{
+				{
+					Group:     utils.DeploymentGVK.Group,
+					Version:   utils.DeploymentGVK.Version,
+					Kind:      utils.DeploymentGVK.Kind,
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+				}: {
+					{
+						Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+							OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+								Policy: &placementv1alpha1.OverridePolicy{
+									OverrideRules: []placementv1alpha1.OverrideRule{
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{}, // matching all the clusters
+											OverrideType:    placementv1alpha1.DeleteOverrideType,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantDelete: true,
+		},
+		{
+			name: "resourceOverride no-op when the cro delete",
+			deployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "app1",
+					},
+				},
+			},
+			cluster: clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+					Labels: map[string]string{
+						"key1": "value1",
+						"key2": "value2",
+					},
+				},
+			},
+			croMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot{
+				{
+					Group:   utils.NamespaceMetaGVK.Group,
+					Version: utils.NamespaceMetaGVK.Version,
+					Kind:    utils.NamespaceMetaGVK.Kind,
+					Name:    "deployment-namespace",
+				}: {
+					{
+						Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+							OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+								Policy: &placementv1alpha1.OverridePolicy{
+									OverrideRules: []placementv1alpha1.OverrideRule{
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{
+												ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+													{
+														LabelSelector: &metav1.LabelSelector{
+															MatchLabels: map[string]string{
+																"key1": "value1",
+															},
+														},
+													},
+												},
+											},
+											OverrideType: placementv1alpha1.DeleteOverrideType,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			roMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot{
+				{
+					Group:     utils.DeploymentGVK.Group,
+					Version:   utils.DeploymentGVK.Version,
+					Kind:      utils.DeploymentGVK.Kind,
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+				}: {
+					{
+						Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+							OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+								Policy: &placementv1alpha1.OverridePolicy{
+									OverrideRules: []placementv1alpha1.OverrideRule{
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{}, // matching all the clusters
+											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+												{
+													Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+													Path:     "/metadata/labels/new-label",
+													Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantDelete: true,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1260,12 +1971,17 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 				InformerManager: &fakeInformer,
 			}
 			rc := resource.CreateResourceContentForTest(t, tc.deployment)
-			err := r.applyOverrides(rc, tc.cluster, tc.croMap, tc.roMap)
+			gotDeleted, err := r.applyOverrides(rc, tc.cluster, tc.croMap, tc.roMap)
 			if gotErr, wantErr := err != nil, tc.wantErr != nil; gotErr != wantErr || !errors.Is(err, tc.wantErr) {
 				t.Fatalf("applyOverrides() got error %v, want error %v", err, tc.wantErr)
 			}
-
+			if gotDeleted != tc.wantDelete {
+				t.Fatalf("applyOverrides() gotDeleted %v, want %v", gotDeleted, tc.wantDelete)
+			}
 			if tc.wantErr != nil {
+				return
+			}
+			if tc.wantDelete {
 				return
 			}
 

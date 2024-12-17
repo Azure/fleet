@@ -28,6 +28,11 @@ import (
 )
 
 const (
+	// ClusterManagerName is the name of KubeFleet cluster manager.
+	ClusterManagerName = "KubeFleet"
+)
+
+const (
 	labelError        = "error"
 	labelRequeueAfter = "requeue_after"
 	labelRequeue      = "requeue"
@@ -351,7 +356,7 @@ type MemberController interface {
 	// Join describes the process of joining the fleet as a member.
 	Join(ctx context.Context) error
 
-	// Leaves describes the process of leaving the fleet as a member.
+	// Leave describes the process of leaving the fleet as a member.
 	// For example, delete all the resources created by the member controller.
 	Leave(ctx context.Context) error
 }
