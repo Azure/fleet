@@ -50,6 +50,9 @@ func (r *Reconciler) trackInMemberClusterObjAvailability(ctx context.Context, bu
 			return
 		}
 		bundle.availabilityResTyp = availabilityResTyp
+		klog.V(2).InfoS("Tracked availability of a resource",
+			"work", *workRef, "GVR", *bundle.gvr, "inMemberClusterObj", klog.KObj(bundle.inMemberClusterObj),
+			"availabilityResTyp", availabilityResTyp)
 	}
 
 	// Run the availability check in parallel.

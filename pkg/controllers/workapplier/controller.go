@@ -294,11 +294,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, err
 	}
 
-	// If the Work object is not yet available, reconcile again in 5 seconds.
+	// If the Work object is not yet available, reconcile again.
 	if !isWorkObjectAvailable(work) {
+		klog.V(2).InfoS("Work object is not yet in an available state; requeue to monitor its availability", "work", workRef)
 		return ctrl.Result{RequeueAfter: r.availabilityCheckRequeueAfter}, nil
 	}
-	// Otherwise, reconcile again in 3 minutes for drift detection purposes.
+	// Otherwise, reconcile again for drift detection purposes.
+	klog.V(2).InfoS("Work object is available; requeue to check for drifts", "work", workRef)
 	return ctrl.Result{RequeueAfter: r.driftCheckRequeueAfter}, nil
 }
 

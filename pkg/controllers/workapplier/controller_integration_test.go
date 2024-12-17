@@ -51,6 +51,14 @@ var (
 	}
 )
 
+var (
+	dummyLabelKey    = "foo"
+	dummyLabelValue1 = "bar"
+	dummyLabelValue2 = "baz"
+	dummyLabelValue3 = "quz"
+	dummyLabelValue4 = "qux"
+)
+
 // createWorkObject creates a new Work object with the given name, manifests, and apply strategy.
 func createWorkObject(workName string, applyStrategy *fleetv1beta1.ApplyStrategy, rawManifestJSON ...[]byte) {
 	manifests := make([]fleetv1beta1.Manifest, len(rawManifestJSON))
@@ -1094,7 +1102,7 @@ var _ = Describe("drift detection and takeover", func() {
 			// Labels is not a managed field; with partial comparison this variance will be
 			// ignored.
 			regularNS.Labels = map[string]string{
-				"foo": "bar",
+				dummyLabelKey: dummyLabelValue1,
 			}
 			// Replicas is a managed field; with partial comparison this variance will be noted.
 			regularDeploy.Spec.Replicas = ptr.To(int32(2))
@@ -1132,7 +1140,7 @@ var _ = Describe("drift detection and takeover", func() {
 			wantNS.TypeMeta = metav1.TypeMeta{}
 			wantNS.Name = nsName
 			wantNS.Labels = map[string]string{
-				"foo": "bar",
+				dummyLabelKey: dummyLabelValue1,
 				// The label below is added by K8s itself (system-managed well-known label).
 				"kubernetes.io/metadata.name": "ns-b2",
 			}
@@ -1357,7 +1365,7 @@ var _ = Describe("drift detection and takeover", func() {
 			// Labels is not a managed field; with partial comparison this variance will be
 			// ignored.
 			regularNS.Labels = map[string]string{
-				"foo": "bar",
+				dummyLabelKey: dummyLabelValue1,
 			}
 			// Replicas is a managed field; with partial comparison this variance will be noted.
 			regularDeploy.Spec.Replicas = ptr.To(int32(2))
@@ -1392,7 +1400,7 @@ var _ = Describe("drift detection and takeover", func() {
 			wantNS.TypeMeta = metav1.TypeMeta{}
 			wantNS.Name = nsName
 			wantNS.Labels = map[string]string{
-				"foo": "bar",
+				dummyLabelKey: dummyLabelValue1,
 				// The label below is added by K8s itself (system-managed well-known label).
 				"kubernetes.io/metadata.name": "ns-b3",
 			}
@@ -1513,7 +1521,7 @@ var _ = Describe("drift detection and takeover", func() {
 						ObservedDiffs: []fleetv1beta1.PatchDetail{
 							{
 								Path:          "/metadata/labels/foo",
-								ValueInMember: "bar",
+								ValueInMember: dummyLabelValue1,
 							},
 							// TO-DO (chenyu1): This is a namespace specific field; consider
 							// if this should be added as an exception which allows ignoring
@@ -1606,10 +1614,6 @@ var _ = Describe("drift detection and takeover", func() {
 			// deletion; consequently this test suite would not attempt so verify its deletion.
 		})
 	})
-
-	Context("take over pre-existing resources (always take over, with diff, full comparison)", Ordered, func() {})
-
-	Context("take over pre-existing resources (always take over, with diff, partial comparison)", Ordered, func() {})
 
 	Context("detect drifts (apply if no drift, drift occurred, partial comparison)", Ordered, func() {
 		workName := fmt.Sprintf(workNameTemplate, "b6")
@@ -1800,7 +1804,7 @@ var _ = Describe("drift detection and takeover", func() {
 				if updatedNS.Labels == nil {
 					updatedNS.Labels = map[string]string{}
 				}
-				updatedNS.Labels["foo"] = "bar"
+				updatedNS.Labels[dummyLabelKey] = dummyLabelValue1
 
 				// Update the NS object.
 				if err := memberClient.Update(ctx, updatedNS); err != nil {
@@ -1817,7 +1821,7 @@ var _ = Describe("drift detection and takeover", func() {
 			wantNS.TypeMeta = metav1.TypeMeta{}
 			wantNS.Name = nsName
 			wantNS.Labels = map[string]string{
-				"foo": "bar",
+				dummyLabelKey: dummyLabelValue1,
 				// The label below is added by K8s itself (system-managed well-known label).
 				"kubernetes.io/metadata.name": "ns-b6",
 			}
@@ -2141,7 +2145,7 @@ var _ = Describe("drift detection and takeover", func() {
 				if updatedNS.Labels == nil {
 					updatedNS.Labels = map[string]string{}
 				}
-				updatedNS.Labels["foo"] = "bar"
+				updatedNS.Labels[dummyLabelKey] = dummyLabelValue1
 
 				// Update the NS object.
 				if err := memberClient.Update(ctx, updatedNS); err != nil {
@@ -2160,7 +2164,7 @@ var _ = Describe("drift detection and takeover", func() {
 				*appliedWorkOwnerRef,
 			}
 			wantNS.Labels = map[string]string{
-				"foo": "bar",
+				dummyLabelKey: dummyLabelValue1,
 				// The label below is added by K8s itself (system-managed well-known label).
 				"kubernetes.io/metadata.name": "ns-b7",
 			}
@@ -2228,7 +2232,7 @@ var _ = Describe("drift detection and takeover", func() {
 						ObservedDrifts: []fleetv1beta1.PatchDetail{
 							{
 								Path:          "/metadata/labels/foo",
-								ValueInMember: "bar",
+								ValueInMember: dummyLabelValue1,
 							},
 						},
 					},
@@ -2273,7 +2277,7 @@ var _ = Describe("drift detection and takeover", func() {
 			regularNS = ns.DeepCopy()
 			regularNS.Name = nsName
 			regularNS.Labels = map[string]string{
-				"foo": "bar",
+				dummyLabelKey: dummyLabelValue1,
 			}
 			regularNSJSON := marshalK8sObjJSON(regularNS)
 
@@ -2380,7 +2384,7 @@ var _ = Describe("drift detection and takeover", func() {
 				if updatedNS.Labels == nil {
 					updatedNS.Labels = map[string]string{}
 				}
-				updatedNS.Labels["foo"] = "baz"
+				updatedNS.Labels[dummyLabelKey] = dummyLabelValue2
 
 				// Update the NS object.
 				if err := memberClient.Update(ctx, updatedNS); err != nil {
@@ -2397,7 +2401,7 @@ var _ = Describe("drift detection and takeover", func() {
 			wantNS.TypeMeta = metav1.TypeMeta{}
 			wantNS.Name = nsName
 			wantNS.Labels = map[string]string{
-				"foo": "bar",
+				dummyLabelKey: dummyLabelValue1,
 				// The label below is added by K8s itself (system-managed well-known label).
 				"kubernetes.io/metadata.name": "ns-b8",
 			}
@@ -2520,7 +2524,7 @@ var _ = Describe("drift detection and takeover", func() {
 			regularNS = ns.DeepCopy()
 			regularNS.Name = nsName
 			regularNS.Labels = map[string]string{
-				"foo": "bar",
+				dummyLabelKey: dummyLabelValue1,
 			}
 
 			// Create a new Work object with all the manifest JSONs and proper apply strategy.
@@ -2626,7 +2630,7 @@ var _ = Describe("drift detection and takeover", func() {
 				if updatedNS.Labels == nil {
 					updatedNS.Labels = map[string]string{}
 				}
-				updatedNS.Labels["foo"] = "baz"
+				updatedNS.Labels[dummyLabelKey] = dummyLabelValue2
 
 				// Update the NS object.
 				if err := memberClient.Update(ctx, updatedNS); err != nil {
@@ -2645,7 +2649,7 @@ var _ = Describe("drift detection and takeover", func() {
 				*appliedWorkOwnerRef,
 			}
 			wantNS.Labels = map[string]string{
-				"foo": "baz",
+				dummyLabelKey: dummyLabelValue2,
 				// The label below is added by K8s itself (system-managed well-known label).
 				"kubernetes.io/metadata.name": "ns-b9",
 			}
@@ -2713,8 +2717,8 @@ var _ = Describe("drift detection and takeover", func() {
 						ObservedDrifts: []fleetv1beta1.PatchDetail{
 							{
 								Path:          "/metadata/labels/foo",
-								ValueInMember: "baz",
-								ValueInHub:    "bar",
+								ValueInMember: dummyLabelValue2,
+								ValueInHub:    dummyLabelValue1,
 							},
 						},
 					},
@@ -2736,7 +2740,7 @@ var _ = Describe("drift detection and takeover", func() {
 			regularNS = ns.DeepCopy()
 			regularNS.Name = nsName
 			regularNS.Labels = map[string]string{
-				"foo": "quz",
+				dummyLabelKey: dummyLabelValue3,
 			}
 
 			// Create a new Work object with all the manifest JSONs and proper apply strategy.
@@ -2753,7 +2757,7 @@ var _ = Describe("drift detection and takeover", func() {
 			wantNS.TypeMeta = metav1.TypeMeta{}
 			wantNS.Name = nsName
 			wantNS.Labels = map[string]string{
-				"foo": "quz",
+				dummyLabelKey: dummyLabelValue3,
 				// The label below is added by K8s itself (system-managed well-known label).
 				"kubernetes.io/metadata.name": "ns-b9",
 			}
@@ -2874,7 +2878,7 @@ var _ = Describe("drift detection and takeover", func() {
 			regularNS = ns.DeepCopy()
 			regularNS.Name = nsName
 			regularNS.Labels = map[string]string{
-				"foo": "bar",
+				dummyLabelKey: dummyLabelValue1,
 			}
 
 			// Create a new Work object with all the manifest JSONs and proper apply strategy.
@@ -2980,7 +2984,7 @@ var _ = Describe("drift detection and takeover", func() {
 				if updatedNS.Labels == nil {
 					updatedNS.Labels = map[string]string{}
 				}
-				updatedNS.Labels["foo"] = "baz"
+				updatedNS.Labels[dummyLabelKey] = dummyLabelValue2
 
 				// Update the NS object.
 				if err := memberClient.Update(ctx, updatedNS); err != nil {
@@ -3033,8 +3037,8 @@ var _ = Describe("drift detection and takeover", func() {
 						ObservedDrifts: []fleetv1beta1.PatchDetail{
 							{
 								Path:          "/metadata/labels/foo",
-								ValueInHub:    "bar",
-								ValueInMember: "baz",
+								ValueInHub:    dummyLabelValue1,
+								ValueInMember: dummyLabelValue2,
 							},
 						},
 					},
@@ -3060,7 +3064,7 @@ var _ = Describe("drift detection and takeover", func() {
 				if updatedNS.Labels == nil {
 					updatedNS.Labels = map[string]string{}
 				}
-				updatedNS.Labels["foo"] = "qux"
+				updatedNS.Labels[dummyLabelKey] = dummyLabelValue4
 
 				// Update the NS object.
 				if err := memberClient.Update(ctx, updatedNS); err != nil {
@@ -3111,8 +3115,8 @@ var _ = Describe("drift detection and takeover", func() {
 						ObservedDrifts: []fleetv1beta1.PatchDetail{
 							{
 								Path:          "/metadata/labels/foo",
-								ValueInMember: "qux",
-								ValueInHub:    "bar",
+								ValueInMember: dummyLabelValue4,
+								ValueInHub:    dummyLabelValue1,
 							},
 						},
 					},
@@ -3123,8 +3127,6 @@ var _ = Describe("drift detection and takeover", func() {
 			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
 		})
 	})
-
-	Context("first diffed time preservation", Ordered, func() {})
 
 	Context("never take over", Ordered, func() {
 		workName := fmt.Sprintf(workNameTemplate, "b12")
@@ -3793,12 +3795,6 @@ var _ = Describe("report diff", func() {
 			// deletion; consequently this test suite would not attempt so verify its deletion.
 		})
 	})
-
-	Context("report diff only (with diff present, full comparison)", Ordered, func() {})
-
-	Context("report diff only (with no diff present, full comparison)", Ordered, func() {})
-
-	Context("report diff only (diff disappears later, partial comparison)", Ordered, func() {})
 
 	Context("report diff only (w/ not taken over resources, partial comparison, a.k.a. do not touch anything and just report diff)", Ordered, func() {
 		workName := fmt.Sprintf(workNameTemplate, "c6")

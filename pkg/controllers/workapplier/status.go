@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -149,5 +150,7 @@ func (r *Reconciler) refreshAppliedWorkStatus(
 	if err := r.spokeClient.Status().Update(ctx, appliedWork); err != nil {
 		return controller.NewAPIServerError(false, err)
 	}
+	klog.V(2).InfoS("Refreshed AppliedWork object status",
+		klog.KObj(appliedWork))
 	return nil
 }
