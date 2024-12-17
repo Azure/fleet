@@ -11,7 +11,6 @@ import (
 	"reflect"
 
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
@@ -305,30 +304,6 @@ func validateDeleteStageStatus(
 		klog.ErrorS(failedErr, "The delete stage has failed", "stageCond", deleteStageFinishedCond, "clusterStagedUpdateRun", updateRunRef)
 		return -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, failedErr.Error())
 	}
-	// The delete stage is still updating.
-	if condition.IsConditionStatusTrue(deleteStageProgressingCond, updateRun.Generation) {
-		klog.InfoS("The delete stage is updating", "clusterStagedUpdateRun", updateRunRef)
-		return totalStages, nil
-	}
-	// All stages have finished, but the delete stage is not active or finished.
-	unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the delete stage is not active, but all stages finished"))
-	klog.ErrorS(unexpectedErr, "There is no stage active", "clusterStagedUpdateRun", updateRunRef)
-	return -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
-}
-
-// recordUpdateRunFailed records the failed condition in the ClusterStagedUpdateRun status.
-func (r *Reconciler) recordUpdateRunFailed(ctx context.Context, updateRun *placementv1alpha1.ClusterStagedUpdateRun, message string) error {
-	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
-		Type:               string(placementv1alpha1.StagedUpdateRunConditionSucceeded),
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: updateRun.Generation,
-		Reason:             condition.UpdateRunFailedReason,
-		Message:            message,
-	})
-	if updateErr := r.Client.Status().Update(ctx, updateRun); updateErr != nil {
-		klog.ErrorS(updateErr, "Failed to update the ClusterStagedUpdateRun status as failed", "clusterStagedUpdateRun", klog.KObj(updateRun))
-		// updateErr can be retried.
-		return controller.NewUpdateIgnoreConflictError(updateErr)
-	}
-	return nil
+	// The delete stage is still updating or just to start.
+	return totalStages, nil
 }

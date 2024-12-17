@@ -57,9 +57,9 @@ var _ = Describe("UpdateRun validation tests", func() {
 		targetClusters = make([]*clusterv1beta1.MemberCluster, numTargetClusters)
 		for i := range targetClusters {
 			// split the clusters into 2 regions
-			region := "eastus"
+			region := regionEastus
 			if i%2 == 0 {
-				region = "westus"
+				region = regionWestus
 			}
 			// reserse the order of the clusters by index
 			targetClusters[i] = generateTestMemberCluster(numTargetClusters-1-i, "cluster-"+strconv.Itoa(i), map[string]string{"group": "prod", "region": region})
@@ -90,7 +90,8 @@ var _ = Describe("UpdateRun validation tests", func() {
 		resourceSnapshot = generateTestClusterResourceSnapshot()
 
 		// Set smaller wait time for testing
-		stageUpdatingWaitTime = time.Second * 2
+		stageUpdatingWaitTime = time.Second * 3
+		clusterUpdatingWaitTime = time.Second * 2
 
 		By("Creating a new clusterResourcePlacement")
 		Expect(k8sClient.Create(ctx, crp)).To(Succeed())
@@ -133,8 +134,9 @@ var _ = Describe("UpdateRun validation tests", func() {
 		Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 		By("Validating the initialization succeeded")
-		wantStatus = generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
-		validateSucceededInitializationStatus(ctx, updateRun, wantStatus)
+		initialized := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
+		wantStatus = generateExecutionStartedStatus(updateRun, initialized)
+		validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 	})
 
 	AfterEach(func() {
@@ -185,7 +187,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 			By("Validating the validation failed")
 			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
-			validateFailedValidationStatus(ctx, updateRun, wantStatus, "parent clusterResourcePlacement not found")
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "parent clusterResourcePlacement not found")
 		})
 
 		It("Should fail to validate if CRP does not have external rollout strategy type", func() {
@@ -195,7 +197,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 			By("Validating the validation failed")
 			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
-			validateFailedValidationStatus(ctx, updateRun, wantStatus,
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus,
 				"parent clusterResourcePlacement does not have an external rollout strategy")
 		})
 
@@ -206,7 +208,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 			By("Validating the validation failed")
 			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
-			validateFailedValidationStatus(ctx, updateRun, wantStatus, "the applyStrategy in the clusterStagedUpdateRun is outdated")
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the applyStrategy in the clusterStagedUpdateRun is outdated")
 		})
 	})
 
@@ -217,7 +219,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 			By("Validating the validation failed")
 			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
-			validateFailedValidationStatus(ctx, updateRun, wantStatus, "no latest policy snapshot associated")
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "no latest policy snapshot associated")
 		})
 
 		It("Should fail to validate if the latest policySnapshot has changed", func() {
@@ -239,7 +241,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 			By("Validating the validation failed")
 			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
-			validateFailedValidationStatus(ctx, updateRun, wantStatus,
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus,
 				"the policy snapshot index used in the clusterStagedUpdateRun is outdated")
 
 			By("Deleting the new policySnapshot")
@@ -253,7 +255,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 			By("Validating the validation failed")
 			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
-			validateFailedValidationStatus(ctx, updateRun, wantStatus,
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus,
 				"the cluster count initialized in the clusterStagedUpdateRun is outdated")
 		})
 	})
@@ -267,7 +269,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 			By("Validating the validation failed")
 			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
 			wantStatus.StagedUpdateStrategySnapshot = nil
-			validateFailedValidationStatus(ctx, updateRun, wantStatus, "the clusterStagedUpdateRun has nil stagedUpdateStrategySnapshot")
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the clusterStagedUpdateRun has nil stagedUpdateStrategySnapshot")
 		})
 
 		It("Should fail to validate if the StagesStatus is nil", func() {
@@ -278,7 +280,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 			By("Validating the validation failed")
 			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
 			wantStatus.StagesStatus = nil
-			validateFailedValidationStatus(ctx, updateRun, wantStatus, "the clusterStagedUpdateRun has nil stagesStatus")
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the clusterStagedUpdateRun has nil stagesStatus")
 		})
 
 		It("Should fail to validate if the DeletionStageStatus is nil", func() {
@@ -289,7 +291,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 			By("Validating the validation failed")
 			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
 			wantStatus.DeletionStageStatus = nil
-			validateFailedValidationStatus(ctx, updateRun, wantStatus, "the clusterStagedUpdateRun has nil deletionStageStatus")
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the clusterStagedUpdateRun has nil deletionStageStatus")
 		})
 
 		It("Should fail to validate if the number of stages has changed", func() {
@@ -316,7 +318,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 					},
 				},
 			})
-			validateFailedValidationStatus(ctx, updateRun, wantStatus, "the number of stages in the clusterStagedUpdateRun has changed")
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the number of stages in the clusterStagedUpdateRun has changed")
 		})
 
 		It("Should fail to validate if stage name has changed", func() {
@@ -327,7 +329,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 			By("Validating the validation failed")
 			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
 			wantStatus.StagedUpdateStrategySnapshot.Stages[0].Name = "stage3"
-			validateFailedValidationStatus(ctx, updateRun, wantStatus, "index `0` stage name in the clusterStagedUpdateRun has changed")
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "index `0` stage name in the clusterStagedUpdateRun has changed")
 		})
 
 		It("Should fail to validate if the number of clusters has changed in a stage", func() {
@@ -336,7 +338,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 			By("Validating the validation failed")
 			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
-			validateFailedValidationStatus(ctx, updateRun, wantStatus, "the number of clusters in index `1` stage has changed")
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the number of clusters in index `1` stage has changed")
 		})
 
 		It("Should fail to validate if the cluster name has changed in a stage", func() {
@@ -349,29 +351,12 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 			By("Validating the validation failed")
 			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
-			validateFailedValidationStatus(ctx, updateRun, wantStatus, "the `3` cluster in the `0` stage has changed")
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the `3` cluster in the `0` stage has changed")
 		})
 	})
 })
 
-func validateSucceededInitializationStatus(
-	ctx context.Context,
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
-	want *placementv1alpha1.StagedUpdateRunStatus,
-) {
-	Eventually(func() error {
-		if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
-			return err
-		}
-
-		if diff := cmp.Diff(*want, updateRun.Status, cmpOptions...); diff != "" {
-			return fmt.Errorf("status mismatch: (-want +got):\n%s", diff)
-		}
-		return nil
-	}, timeout, interval).Should(Succeed(), "failed to validate the clusterStagedUpdateRun initialized successfully")
-}
-
-func validateFailedValidationStatus(
+func validateClusterStagedUpdateRunStatus(
 	ctx context.Context,
 	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
 	want *placementv1alpha1.StagedUpdateRunStatus,
@@ -385,12 +370,38 @@ func validateFailedValidationStatus(
 		if diff := cmp.Diff(*want, updateRun.Status, cmpOptions...); diff != "" {
 			return fmt.Errorf("status mismatch: (-want +got):\n%s", diff)
 		}
-		succeedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1alpha1.StagedUpdateRunConditionSucceeded))
-		if !strings.Contains(succeedCond.Message, message) {
-			return fmt.Errorf("condition message mismatch: got %s, want %s", succeedCond.Message, message)
+		if message != "" {
+			succeedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1alpha1.StagedUpdateRunConditionSucceeded))
+			if !strings.Contains(succeedCond.Message, message) {
+				return fmt.Errorf("condition message mismatch: got %s, want %s", succeedCond.Message, message)
+			}
 		}
 		return nil
-	}, timeout, interval).Should(Succeed(), "failed to validate the clusterStagedUpdateRun failed to validate")
+	}, timeout, interval).Should(Succeed(), "failed to validate the clusterStagedUpdateRun status")
+}
+
+func validateClusterStagedUpdateRunStatusConsistently(
+	ctx context.Context,
+	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
+	want *placementv1alpha1.StagedUpdateRunStatus,
+	message string,
+) {
+	Consistently(func() error {
+		if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
+			return err
+		}
+
+		if diff := cmp.Diff(*want, updateRun.Status, cmpOptions...); diff != "" {
+			return fmt.Errorf("status mismatch: (-want +got):\n%s", diff)
+		}
+		if message != "" {
+			succeedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1alpha1.StagedUpdateRunConditionSucceeded))
+			if !strings.Contains(succeedCond.Message, message) {
+				return fmt.Errorf("condition message mismatch: got %s, want %s", succeedCond.Message, message)
+			}
+		}
+		return nil
+	}, duration, interval).Should(Succeed(), "failed to validate the clusterStagedUpdateRun status consistently")
 }
 
 func generateFailedValidationStatus(

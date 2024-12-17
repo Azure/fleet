@@ -32,7 +32,13 @@ var (
 	cmpOptions = []cmp.Option{
 		cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime"),
 		cmpopts.IgnoreFields(metav1.Condition{}, "Message"),
+		cmpopts.IgnoreFields(placementv1alpha1.StageUpdatingStatus{}, "StartTime", "EndTime"),
 	}
+)
+
+const (
+	regionEastus = "eastus"
+	regionWestus = "westus"
 )
 
 var _ = Describe("Updaterun initialization tests", func() {
@@ -64,9 +70,9 @@ var _ = Describe("Updaterun initialization tests", func() {
 		targetClusters = make([]*clusterv1beta1.MemberCluster, numTargetClusters)
 		for i := range targetClusters {
 			// split the clusters into 2 regions
-			region := "eastus"
+			region := regionEastus
 			if i%2 == 0 {
-				region = "westus"
+				region = regionWestus
 			}
 			// reserse the order of the clusters by index
 			targetClusters[i] = generateTestMemberCluster(numTargetClusters-1-i, "cluster-"+strconv.Itoa(i), map[string]string{"group": "prod", "region": region})
@@ -97,7 +103,8 @@ var _ = Describe("Updaterun initialization tests", func() {
 		resourceSnapshot = generateTestClusterResourceSnapshot()
 
 		// Set smaller wait time for testing
-		stageUpdatingWaitTime = time.Second * 2
+		stageUpdatingWaitTime = time.Second * 3
+		clusterUpdatingWaitTime = time.Second * 2
 	})
 
 	AfterEach(func() {
@@ -620,29 +627,12 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the clusterStagedUpdateRun stats")
-			want := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
-			Eventually(func() error {
-				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
-					return err
-				}
-
-				if diff := cmp.Diff(*want, updateRun.Status, cmpOptions...); diff != "" {
-					return fmt.Errorf("status mismatch: (-want +got):\n%s", diff)
-				}
-
-				return nil
-			}, timeout, interval).Should(Succeed(), "failed to validate the clusterStagedUpdateRun initialized successfully")
+			initialized := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
+			want := generateExecutionStartedStatus(updateRun, initialized)
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, want, "")
 
 			By("Validating the clusterStagedUpdateRun initialized consistently")
-			Consistently(func() error {
-				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
-					return err
-				}
-				if diff := cmp.Diff(*want, updateRun.Status, cmpOptions...); diff != "" {
-					return fmt.Errorf("status mismatch: (-want +got):\n%s", diff)
-				}
-				return nil
-			}, duration, interval).Should(Succeed(), "failed to validate the clusterStagedUpdateRun initialized consistently")
+			validateClusterStagedUpdateRunStatusConsistently(ctx, updateRun, want, "")
 		})
 	})
 })
@@ -720,4 +710,17 @@ func generateSucceededInitializationStatus(
 			generateTrueCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionInitialized),
 		},
 	}
+}
+
+func generateExecutionStartedStatus(
+	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
+	initialized *placementv1alpha1.StagedUpdateRunStatus,
+) *placementv1alpha1.StagedUpdateRunStatus {
+	// Mark updateRun execution has started.
+	initialized.Conditions = append(initialized.Conditions, generateTrueCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionProgressing))
+	// Mark updateRun 1st stage has started.
+	initialized.StagesStatus[0].Conditions = append(initialized.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionProgressing))
+	// Mark updateRun 1st cluster in the 1st stage has started.
+	initialized.StagesStatus[0].Clusters[0].Conditions = []metav1.Condition{generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionStarted)}
+	return initialized
 }
