@@ -20,7 +20,7 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
-func (r *Reconciler) trackInMemberClusterObjAvailability(ctx context.Context, bundles []*manifestProcessingBundle, workRef *klog.ObjectRef) {
+func (r *Reconciler) trackInMemberClusterObjAvailability(ctx context.Context, bundles []*manifestProcessingBundle, workRef klog.ObjectRef) {
 	// Track the availability of all the applied objects in the member cluster in parallel.
 	//
 	// This is concurrency-safe as the bundles slice has been pre-allocated.
@@ -46,12 +46,12 @@ func (r *Reconciler) trackInMemberClusterObjAvailability(ctx context.Context, bu
 			bundle.availabilityResTyp = ManifestProcessingAvailabilityResultTypeFailed
 			klog.ErrorS(err,
 				"Failed to track the availability of the applied object in the member cluster",
-				"work", *workRef, "GVR", *bundle.gvr, "inMemberClusterObj", klog.KObj(bundle.inMemberClusterObj))
+				"work", workRef, "GVR", *bundle.gvr, "inMemberClusterObj", klog.KObj(bundle.inMemberClusterObj))
 			return
 		}
 		bundle.availabilityResTyp = availabilityResTyp
 		klog.V(2).InfoS("Tracked availability of a resource",
-			"work", *workRef, "GVR", *bundle.gvr, "inMemberClusterObj", klog.KObj(bundle.inMemberClusterObj),
+			"work", workRef, "GVR", *bundle.gvr, "inMemberClusterObj", klog.KObj(bundle.inMemberClusterObj),
 			"availabilityResTyp", availabilityResTyp)
 	}
 

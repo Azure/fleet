@@ -473,8 +473,9 @@ func shouldPerformPreApplyDriftDetection(manifestObj, inMemberClusterObj *unstru
 	// * Fleet reports that the manifest has been applied before (i.e., inMemberClusterObj exists); and
 	// * The apply strategy dictates that an apply op should only run if there is no
 	//   detected drift; and
-	// * The hash of the manifest object is consistently with that bookkept in the live object
-	//   annotations (i.e., the manifest object has been applied before).
+	// * The hash of the manifest object is consistent with the last applied manifest object hash
+	//   annotation on the corresponding resource in the member cluster (i.e., the same manifest
+	//   object has been applied before).
 	if applyStrategy.WhenToApply != fleetv1beta1.WhenToApplyTypeIfNotDrifted || inMemberClusterObj == nil {
 		// A shortcut to save some overhead.
 		return false, nil

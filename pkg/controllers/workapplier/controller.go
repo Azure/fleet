@@ -280,7 +280,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	r.processManifests(ctx, bundles, work, expectedAppliedWorkOwnerRef)
 
 	// Track the availability information.
-	r.trackInMemberClusterObjAvailability(ctx, bundles, &workRef)
+	r.trackInMemberClusterObjAvailability(ctx, bundles, workRef)
 
 	trackWorkApplyLatencyMetric(work)
 
@@ -322,11 +322,8 @@ func (r *Reconciler) preProcessManifests(
 	defer cancel()
 
 	doWork := func(pieces int) {
+		// At this moment the bundles are just created.
 		bundle := bundles[pieces]
-		if bundle.applyErr != nil {
-			// Skip a manifest if it cannot be processed.
-			return
-		}
 
 		gvr, manifestObj, err := r.decodeManifest(bundle.manifest)
 		// Build the identifier. Note that this would return an identifier even if the decoding

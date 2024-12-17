@@ -89,7 +89,9 @@ func (r *Reconciler) diffBetweenManifestAndInMemberClusterObjects(
 	case fleetv1beta1.ComparisonOptionTypePartialComparison:
 		return r.partialDiffBetweenManifestAndInMemberClusterObjects(ctx, gvr, manifestObj, inMemberClusterObj)
 	case fleetv1beta1.ComparisonOptionTypeFullComparison:
-		return fullDiffBetweenManifestAndInMemberClusterObjects(manifestObj, inMemberClusterObj)
+		// For the full comparison, Fleet compares directly the JSON representations of the
+		// manifest object and the object in the member cluster.
+		return preparePatchDetails(manifestObj, inMemberClusterObj)
 	default:
 		return nil, fmt.Errorf("an invalid comparison option is specified")
 	}
@@ -115,64 +117,8 @@ func (r *Reconciler) partialDiffBetweenManifestAndInMemberClusterObjects(
 	// imply that running an actual apply op would lead to unexpected changes, which signifies
 	// the presence of partial drifts (drifts in managed fields).
 
-	// Discard certain fields from both objects before comparison.
-	inMemberClusterObjCopy := discardFieldsIrrelevantInComparisonFrom(inMemberClusterObj)
-	appliedObjCopy := discardFieldsIrrelevantInComparisonFrom(appliedObj)
-
-	// Marshal the objects into JSON.
-	inMemberClusterObjCopyJSONBytes, err := inMemberClusterObjCopy.MarshalJSON()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal the object from the member cluster into JSON: %w", err)
-	}
-	appliedObjJSONBytes, err := appliedObjCopy.MarshalJSON()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal the object returned by the dry-run apply op into JSON: %w", err)
-	}
-
-	// Compare the JSON representations.
-	patch, err := jsondiff.CompareJSON(appliedObjJSONBytes, inMemberClusterObjCopyJSONBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compare the JSON representations of the the object from the member cluster and the object returned by the dry-run apply op: %w", err)
-	}
-
-	details, err := organizeJSONPatchIntoFleetPatchDetails(patch, appliedObjCopy.Object, inMemberClusterObj.Object)
-	if err != nil {
-		return nil, fmt.Errorf("failed to organize the JSON patch into Fleet patch details: %w", err)
-	}
-	return details, nil
-}
-
-func fullDiffBetweenManifestAndInMemberClusterObjects(
-	manifestObj, inMemberClusterObj *unstructured.Unstructured,
-) ([]fleetv1beta1.PatchDetail, error) {
-	// Fleet calculates the full diff between two objects by directly comparing their JSON
-	// representations.
-
-	// Discard certain fields from both objects before comparison.
-	manifestObjCopy := discardFieldsIrrelevantInComparisonFrom(manifestObj)
-	inMemberClusterObjCopy := discardFieldsIrrelevantInComparisonFrom(inMemberClusterObj)
-
-	// Marshal the objects into JSON.
-	manifestObjJSONBytes, err := manifestObjCopy.MarshalJSON()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal the manifest object into JSON: %w", err)
-	}
-	inMemberClusterObjJSONBytes, err := inMemberClusterObjCopy.MarshalJSON()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal the object from the member cluster into JSON: %w", err)
-	}
-
-	// Compare the JSON representations.
-	patch, err := jsondiff.CompareJSON(manifestObjJSONBytes, inMemberClusterObjJSONBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compare the JSON representations of the manifest object and the object from the member cluster: %w", err)
-	}
-
-	details, err := organizeJSONPatchIntoFleetPatchDetails(patch, manifestObjCopy.Object, inMemberClusterObj.Object)
-	if err != nil {
-		return nil, fmt.Errorf("failed to organize JSON patch operations into Fleet patch details: %w", err)
-	}
-	return details, nil
+	// Prepare the patch details.
+	return preparePatchDetails(appliedObj, inMemberClusterObj)
 }
 
 func organizeJSONPatchIntoFleetPatchDetails(patch jsondiff.Patch, manifestObjMap, inMemberClusterObjMap map[string]interface{}) ([]fleetv1beta1.PatchDetail, error) {
@@ -261,5 +207,34 @@ func organizeJSONPatchIntoFleetPatchDetails(patch jsondiff.Patch, manifestObjMap
 		}
 	}
 
+	return details, nil
+}
+
+func preparePatchDetails(srcObj, destObj *unstructured.Unstructured) ([]fleetv1beta1.PatchDetail, error) {
+	// Discard certain fields from both objects before comparison.
+	srcObjCopy := discardFieldsIrrelevantInComparisonFrom(srcObj)
+	destObjCopy := discardFieldsIrrelevantInComparisonFrom(destObj)
+
+	// Marshal the objects into JSON.
+	srcObjJSONBytes, err := srcObjCopy.MarshalJSON()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal the source object into JSON: %w", err)
+	}
+
+	destObjJSONBytes, err := destObjCopy.MarshalJSON()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal the destination object into JSON: %w", err)
+	}
+
+	// Compare the JSON representations.
+	patch, err := jsondiff.CompareJSON(srcObjJSONBytes, destObjJSONBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compare the JSON representations of the source and destination objects: %w", err)
+	}
+
+	details, err := organizeJSONPatchIntoFleetPatchDetails(patch, srcObjCopy.Object, destObjCopy.Object)
+	if err != nil {
+		return nil, fmt.Errorf("failed to organize JSON patch operations into Fleet patch details: %w", err)
+	}
 	return details, nil
 }
