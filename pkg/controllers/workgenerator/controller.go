@@ -805,6 +805,10 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 
 	// cut the list to keep only the max limit
 	if len(diffedResourcePlacements) > maxDiffedResourcePlacementLimit {
+		// Sort the slice
+		sort.Slice(diffedResourcePlacements, func(i, j int) bool {
+			return utils.LessFuncDiffedResourcePlacements(diffedResourcePlacements[i], diffedResourcePlacements[j])
+		})
 		diffedResourcePlacements = diffedResourcePlacements[0:maxDiffedResourcePlacementLimit]
 	}
 	if len(diffedResourcePlacements) > 0 {
@@ -814,6 +818,10 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 
 	// cut the list to keep only the max limit
 	if len(driftedResourcePlacements) > maxDriftedResourcePlacementLimit {
+		// Sort the slice
+		sort.Slice(driftedResourcePlacements, func(i, j int) bool {
+			return utils.LessFuncDriftedResourcePlacements(driftedResourcePlacements[i], driftedResourcePlacements[j])
+		})
 		driftedResourcePlacements = driftedResourcePlacements[0:maxDriftedResourcePlacementLimit]
 	}
 	if len(driftedResourcePlacements) > 0 {

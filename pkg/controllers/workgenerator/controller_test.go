@@ -1323,18 +1323,18 @@ func TestSetBindingStatus(t *testing.T) {
 					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
 						Group:     "",
 						Version:   "v1",
-						Kind:      "Service",
-						Name:      "svc-name",
-						Namespace: "svc-namespace",
+						Kind:      "ConfigMap",
+						Name:      "config-name-1",
+						Namespace: "config-namespace",
 					},
 					ObservationTime:                 metav1.NewTime(timeNow),
 					TargetClusterObservedGeneration: 2,
-					FirstDriftedObservedTime:        metav1.NewTime(timeNow.Add(-time.Hour)),
+					FirstDriftedObservedTime:        metav1.NewTime(timeNow.Add(-time.Second)),
 					ObservedDrifts: []fleetv1beta1.PatchDetail{
 						{
-							Path:          "/spec/ports/0/port",
-							ValueInHub:    "80",
-							ValueInMember: "90",
+							Path:          "/metadata/labels/label1",
+							ValueInHub:    "key1",
+							ValueInMember: "key2",
 						},
 					},
 				},
@@ -1437,13 +1437,25 @@ func TestSetBindingStatus(t *testing.T) {
 						Conditions: []metav1.Condition{
 							{
 								Type:   fleetv1beta1.WorkConditionTypeApplied,
-								Status: metav1.ConditionTrue,
+								Status: metav1.ConditionFalse,
 							},
 						},
 					},
 				},
 			},
 			wantFailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Name:      "config-name-1",
+						Namespace: "config-namespace",
+					},
+					Condition: metav1.Condition{
+						Type:   fleetv1beta1.WorkConditionTypeApplied,
+						Status: metav1.ConditionFalse,
+					},
+				},
 				{
 					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
 						Version:   "v1",
@@ -1463,18 +1475,18 @@ func TestSetBindingStatus(t *testing.T) {
 					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
 						Group:     "",
 						Version:   "v1",
-						Kind:      "Service",
-						Name:      "svc-name",
-						Namespace: "svc-namespace",
+						Kind:      "ConfigMap",
+						Name:      "config-name-1",
+						Namespace: "config-namespace",
 					},
 					ObservationTime:                 metav1.NewTime(timeNow),
 					TargetClusterObservedGeneration: ptr.To(int64(2)),
-					FirstDiffedObservedTime:         metav1.NewTime(timeNow.Add(-time.Hour)),
+					FirstDiffedObservedTime:         metav1.NewTime(timeNow.Add(-time.Second)),
 					ObservedDiffs: []fleetv1beta1.PatchDetail{
 						{
-							Path:          "/spec/ports/1/port",
-							ValueInHub:    "80",
-							ValueInMember: "90",
+							Path:          "/metadata/labels/label1",
+							ValueInHub:    "key1",
+							ValueInMember: "key2",
 						},
 					},
 				},
