@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	jsonpatch "github.com/evanphx/json-patch/v5"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -97,7 +98,7 @@ func (r *Reconciler) fetchResourceOverrideSnapshots(ctx context.Context, resourc
 // It returns
 //   - true if the resource is deleted by the overrides.
 //   - an error if the override rules are invalid.
-func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, cluster clusterv1beta1.MemberCluster,
+func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, cluster *clusterv1beta1.MemberCluster,
 	croMap map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot, roMap map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot) (bool, error) {
 	if len(croMap) == 0 && len(roMap) == 0 {
 		return false, nil
@@ -168,7 +169,7 @@ func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, 
 	return resource.Raw == nil, nil
 }
 
-func applyOverrideRules(resource *placementv1beta1.ResourceContent, cluster clusterv1beta1.MemberCluster, rules []placementv1alpha1.OverrideRule) error {
+func applyOverrideRules(resource *placementv1beta1.ResourceContent, cluster *clusterv1beta1.MemberCluster, rules []placementv1alpha1.OverrideRule) error {
 	for _, rule := range rules {
 		matched, err := overrider.IsClusterMatched(cluster, rule)
 		if err != nil {
@@ -184,7 +185,7 @@ func applyOverrideRules(resource *placementv1beta1.ResourceContent, cluster clus
 			return nil
 		}
 		// Apply JSONPatchOverrides by default
-		if err := applyJSONPatchOverride(resource, rule.JSONPatchOverrides); err != nil {
+		if err := applyJSONPatchOverride(resource, cluster, rule.JSONPatchOverrides); err != nil {
 			klog.ErrorS(err, "Failed to apply JSON patch override")
 			return controller.NewUserError(err)
 		}
@@ -193,7 +194,7 @@ func applyOverrideRules(resource *placementv1beta1.ResourceContent, cluster clus
 }
 
 // applyJSONPatchOverride applies a JSON patch on the selected resources following [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
-func applyJSONPatchOverride(resourceContent *placementv1beta1.ResourceContent, overrides []placementv1alpha1.JSONPatchOverride) error {
+func applyJSONPatchOverride(resourceContent *placementv1beta1.ResourceContent, cluster *clusterv1beta1.MemberCluster, overrides []placementv1alpha1.JSONPatchOverride) error {
 	if len(overrides) == 0 { // do nothing
 		return nil
 	}
@@ -203,8 +204,10 @@ func applyJSONPatchOverride(resourceContent *placementv1beta1.ResourceContent, o
 		klog.ErrorS(err, "Failed to marshal JSON Patch overrides")
 		return err
 	}
+	// Process the JSON patch to treat a few special built-in variables
+	processedJSONStr := strings.ReplaceAll(string(jsonPatchBytes), placementv1alpha1.OverrideClusterNameVariable, cluster.Name)
 
-	patch, err := jsonpatch.DecodePatch(jsonPatchBytes)
+	patch, err := jsonpatch.DecodePatch([]byte(processedJSONStr))
 	if err != nil {
 		klog.ErrorS(err, "Failed to decode the passed JSON document as an RFC 6902 patch")
 		return err

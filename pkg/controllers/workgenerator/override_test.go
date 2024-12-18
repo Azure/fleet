@@ -1102,7 +1102,7 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 				InformerManager: &fakeInformer,
 			}
 			rc := resource.CreateResourceContentForTest(t, tc.clusterRole)
-			gotDeleted, err := r.applyOverrides(rc, tc.cluster, tc.croMap, nil)
+			gotDeleted, err := r.applyOverrides(rc, &tc.cluster, tc.croMap, nil)
 			if gotErr, wantErr := err != nil, tc.wantErr != nil; gotErr != wantErr || !errors.Is(err, tc.wantErr) {
 				t.Fatalf("applyOverrides() got error %v, want error %v", err, tc.wantErr)
 			}
@@ -1964,6 +1964,79 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 			},
 			wantDelete: true,
 		},
+		{
+			name: "cluster name as value in json patch of resourceOverride",
+			deployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app":  "app1",
+						"key2": "value2",
+					},
+				},
+			},
+			cluster: clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+					Labels: map[string]string{
+						"app": "value1",
+					},
+				},
+			},
+			roMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot{
+				{
+					Group:     utils.DeploymentGVK.Group,
+					Version:   utils.DeploymentGVK.Version,
+					Kind:      utils.DeploymentGVK.Kind,
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+				}: {
+					{
+						Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+							OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+								Policy: &placementv1alpha1.OverridePolicy{
+									OverrideRules: []placementv1alpha1.OverrideRule{
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{}, // matching all the clusters
+											OverrideType:    placementv1alpha1.JSONPatchOverrideType,
+											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+												{
+													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+													Path:     "/metadata/labels/app",
+													Value:    apiextensionsv1.JSON{Raw: []byte(`"$CLUSTER-NAME"`)},
+												},
+												{
+													Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+													Path:     "/metadata/annotations",
+													Value:    apiextensionsv1.JSON{Raw: []byte(`{"app": "$CLUSTER-NAME", "test": "nginx"}`)},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantDeployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app":  "cluster-1",
+						"key2": "value2",
+					},
+					Annotations: map[string]string{
+						"app":  "cluster-1",
+						"test": "nginx",
+					},
+				},
+			},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1971,7 +2044,7 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 				InformerManager: &fakeInformer,
 			}
 			rc := resource.CreateResourceContentForTest(t, tc.deployment)
-			gotDeleted, err := r.applyOverrides(rc, tc.cluster, tc.croMap, tc.roMap)
+			gotDeleted, err := r.applyOverrides(rc, &tc.cluster, tc.croMap, tc.roMap)
 			if gotErr, wantErr := err != nil, tc.wantErr != nil; gotErr != wantErr || !errors.Is(err, tc.wantErr) {
 				t.Fatalf("applyOverrides() got error %v, want error %v", err, tc.wantErr)
 			}
@@ -2012,6 +2085,7 @@ func TestApplyJSONPatchOverride(t *testing.T) {
 		name           string
 		deployment     appsv1.Deployment
 		overrides      []placementv1alpha1.JSONPatchOverride
+		cluster        *clusterv1beta1.MemberCluster
 		wantDeployment appsv1.Deployment
 		wantErr        bool
 	}{
@@ -2070,6 +2144,7 @@ func TestApplyJSONPatchOverride(t *testing.T) {
 				},
 			},
 		},
+
 		{
 			name: "remove a label",
 			deployment: appsv1.Deployment{
@@ -2208,12 +2283,99 @@ func TestApplyJSONPatchOverride(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "typo in template variable should just be ignored",
+			deployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "nginx",
+					},
+				},
+			},
+			overrides: []placementv1alpha1.JSONPatchOverride{
+				{
+					Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+					Path:     "/metadata/labels/app",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`"$CLUSTER_NAME"`)},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+				},
+			},
+			wantDeployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "$CLUSTER_NAME",
+					},
+				},
+			},
+		},
+		{
+			name: "multiple rules with cluster name template",
+			deployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "nginx",
+					},
+				},
+			},
+			overrides: []placementv1alpha1.JSONPatchOverride{
+				{
+					Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+					Path:     "/metadata/labels/app",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`"$CLUSTER-NAME"`)},
+				},
+				{
+					Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+					Path:     "/metadata/annotations",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`{"app": "$CLUSTER-NAME", "test": "nginx"}`)},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+				},
+			},
+			wantDeployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "cluster-1",
+					},
+					Annotations: map[string]string{
+						"app":  "cluster-1",
+						"test": "nginx",
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			rc := resource.CreateResourceContentForTest(t, tc.deployment)
-			err := applyJSONPatchOverride(rc, tc.overrides)
+			cluster := tc.cluster
+			if cluster == nil {
+				cluster = &clusterv1beta1.MemberCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cluster-1",
+					},
+				}
+			}
+			err := applyJSONPatchOverride(rc, cluster, tc.overrides)
 			if gotErr := err != nil; gotErr != tc.wantErr {
 				t.Fatalf("applyJSONPatchOverride() = error %v, want %v", err, tc.wantErr)
 			}
