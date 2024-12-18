@@ -28,6 +28,7 @@ import (
 	"go.goms.io/fleet/pkg/controllers/clusterinventory/clusterprofile"
 	"go.goms.io/fleet/pkg/controllers/clusterresourcebindingwatcher"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
+	"go.goms.io/fleet/pkg/controllers/clusterresourceplacementeviction"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacementwatcher"
 	"go.goms.io/fleet/pkg/controllers/clusterschedulingpolicysnapshot"
 	"go.goms.io/fleet/pkg/controllers/memberclusterplacement"
@@ -203,6 +204,14 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			InformerManager:         dynamicInformerManager,
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up rollout controller")
+			return err
+		}
+
+		klog.Info("Setting up cluster resource placement eviction controller")
+		if err := (&clusterresourceplacementeviction.Reconciler{
+			Client: mgr.GetClient(),
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "Unable to set up cluster resource placement eviction controller")
 			return err
 		}
 
