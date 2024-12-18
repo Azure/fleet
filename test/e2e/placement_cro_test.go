@@ -378,6 +378,9 @@ var _ = Describe("creating clusterResourceOverride with different rules for each
 				Name: croName,
 			},
 			Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+				Placement: &placementv1alpha1.PlacementRef{
+					Name: crpName, // assigned CRP name
+				},
 				ClusterResourceSelectors: workResourceSelector(),
 				Policy: &placementv1alpha1.OverridePolicy{
 					OverrideRules: []placementv1alpha1.OverrideRule{

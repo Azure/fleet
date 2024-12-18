@@ -37,6 +37,9 @@ var _ = Describe("creating resourceOverride (selecting all clusters) to override
 				Namespace: roNamespace,
 			},
 			Spec: placementv1alpha1.ResourceOverrideSpec{
+				Placement: &placementv1alpha1.PlacementRef{
+					Name: crpName, // assigned CRP name
+				},
 				ResourceSelectors: configMapSelector(),
 				Policy: &placementv1alpha1.OverridePolicy{
 					OverrideRules: []placementv1alpha1.OverrideRule{
@@ -245,6 +248,9 @@ var _ = Describe("creating resourceOverride with different rules for each cluste
 				Namespace: roNamespace,
 			},
 			Spec: placementv1alpha1.ResourceOverrideSpec{
+				Placement: &placementv1alpha1.PlacementRef{
+					Name: crpName, // assigned CRP name
+				},
 				ResourceSelectors: configMapSelector(),
 				Policy: &placementv1alpha1.OverridePolicy{
 					OverrideRules: []placementv1alpha1.OverrideRule{
@@ -459,6 +465,9 @@ var _ = Describe("creating resourceOverride with incorrect path", Ordered, func(
 				Namespace: roNamespace,
 			},
 			Spec: placementv1alpha1.ResourceOverrideSpec{
+				Placement: &placementv1alpha1.PlacementRef{
+					Name: crpName, // assigned CRP name
+				},
 				ResourceSelectors: configMapSelector(),
 				Policy: &placementv1alpha1.OverridePolicy{
 					OverrideRules: []placementv1alpha1.OverrideRule{
@@ -519,6 +528,9 @@ var _ = Describe("creating resourceOverride and resource becomes invalid after o
 				Namespace: roNamespace,
 			},
 			Spec: placementv1alpha1.ResourceOverrideSpec{
+				Placement: &placementv1alpha1.PlacementRef{
+					Name: crpName, // assigned CRP name
+				},
 				ResourceSelectors: configMapSelector(),
 				Policy: &placementv1alpha1.OverridePolicy{
 					OverrideRules: []placementv1alpha1.OverrideRule{
