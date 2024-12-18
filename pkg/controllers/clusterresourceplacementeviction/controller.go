@@ -25,6 +25,7 @@ import (
 	bindingutils "go.goms.io/fleet/pkg/utils/binding"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/defaulter"
 )
 
 const (
@@ -102,6 +103,10 @@ func (r *Reconciler) validateEviction(ctx context.Context, eviction *placementv1
 		}
 		return nil, controller.NewAPIServerError(true, err)
 	}
+
+	// set default values for CRP.
+	defaulter.SetDefaultsClusterResourcePlacement(&crp)
+
 	if crp.DeletionTimestamp != nil {
 		klog.V(2).InfoS(evictionInvalidDeletingCRPMessage, "clusterResourcePlacementEviction", eviction.Name, "clusterResourcePlacement", eviction.Spec.PlacementName)
 		markEvictionInvalid(eviction, evictionInvalidDeletingCRPMessage)
@@ -277,7 +282,7 @@ func isEvictionAllowed(bindings []placementv1beta1.ClusterResourceBinding, crp p
 		desiredBindings = int(*crp.Spec.Policy.NumberOfClusters)
 	case placementv1beta1.PickFixedPlacementType:
 		desiredBindings = len(crp.Spec.Policy.ClusterNames)
-	case placementv1beta1.PickAllPlacementType:
+	default:
 		// we don't know the desired bindings for PickAll.
 	}
 
