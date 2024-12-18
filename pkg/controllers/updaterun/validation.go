@@ -258,7 +258,7 @@ func validateDeleteStageStatus(
 	}
 
 	// Validate whether toBeDeletedBindings are a subnet of the clusters in the delete stage status.
-	// We only validate if it's a subnet because clusters can unjoin from the fleet and we allow that.
+	// We only validate if it's a subnet because we will delete the bindings during the deleteStage execution so they can disappear.
 	// We only need to check the existence, not the order, because clusters are always sorted by name in the delete stage.
 	deletingClusterMap := make(map[string]struct{}, len(existingDeleteStageStatus.Clusters))
 	for _, cluster := range existingDeleteStageStatus.Clusters {
