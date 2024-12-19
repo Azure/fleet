@@ -33,6 +33,7 @@ const (
 	internalServiceExportNameTemplate = "ise-%d"
 	internalServiceImportNameTemplate = "isi-%d"
 	endpointSliceExportNameTemplate   = "ep-%d"
+	crpEvictionNameTemplate           = "crpe-%d"
 
 	customDeletionBlockerFinalizer = "custom-deletion-blocker-finalizer"
 	workNamespaceLabelName         = "process"
