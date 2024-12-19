@@ -456,8 +456,6 @@ var _ = Describe("creating resourceOverride with incorrect path", Ordered, func(
 	BeforeAll(func() {
 		By("creating work resources")
 		createWorkResources()
-		// Create the CRP.
-		createCRP(crpName)
 		// Create the ro.
 		ro := &placementv1alpha1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
@@ -489,6 +487,9 @@ var _ = Describe("creating resourceOverride with incorrect path", Ordered, func(
 		}
 		By(fmt.Sprintf("creating resourceOverride %s", roName))
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
+
+		// Create the CRP later so that failed override won't block the rollout
+		createCRP(crpName)
 	})
 
 	AfterAll(func() {
