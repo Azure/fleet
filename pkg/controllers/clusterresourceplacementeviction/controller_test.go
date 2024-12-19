@@ -624,7 +624,8 @@ func TestExecuteEviction(t *testing.T) {
 				WithObjects(objects...).
 				Build()
 			r := Reconciler{
-				Client: fakeClient,
+				Client:         fakeClient,
+				UncachedReader: fakeClient,
 			}
 			gotErr := r.executeEviction(ctx, tc.validationResult, tc.eviction)
 			gotExecutedCondition := tc.eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeExecuted))

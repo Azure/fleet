@@ -145,7 +145,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 
@@ -224,7 +224,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 
@@ -307,7 +307,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 
@@ -390,7 +390,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 
@@ -469,7 +469,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 
@@ -625,7 +625,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 
@@ -701,7 +701,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 
@@ -808,7 +808,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd})
 		})
 	})
 
@@ -936,7 +936,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 })

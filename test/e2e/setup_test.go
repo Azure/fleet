@@ -95,6 +95,7 @@ var (
 
 	allMemberClusters     []*framework.Cluster
 	allMemberClusterNames = []string{}
+	allMemberClustersMap  = map[string]*framework.Cluster{}
 )
 
 var (
@@ -308,8 +309,9 @@ func beforeSuiteForAllProcesses() {
 	once.Do(func() {
 		// Set these arrays only once; this is necessary as for the first spawned Ginkgo process,
 		// the `beforeSuiteForAllProcesses` function is called twice.
-		for _, cluster := range allMemberClusters {
-			allMemberClusterNames = append(allMemberClusterNames, cluster.ClusterName)
+		for i := range allMemberClusters {
+			allMemberClusterNames = append(allMemberClusterNames, allMemberClusters[i].ClusterName)
+			allMemberClustersMap[allMemberClusters[i].ClusterName] = allMemberClusters[i]
 		}
 	})
 }

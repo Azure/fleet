@@ -30,6 +30,8 @@ import (
 // Reconciler reconciles a ClusterResourcePlacementEviction object.
 type Reconciler struct {
 	client.Client
+	// UncachedReader is only used to read disruption budget objects directly from the API server to ensure we can enforce the disruption budget for eviction.
+	UncachedReader client.Reader
 }
 
 // Reconcile triggers a single eviction reconcile round.
@@ -185,7 +187,7 @@ func (r *Reconciler) executeEviction(ctx context.Context, validationResult *evic
 	}
 
 	var db placementv1beta1.ClusterResourcePlacementDisruptionBudget
-	if err := r.Client.Get(ctx, types.NamespacedName{Name: crp.Name}, &db); err != nil {
+	if err := r.UncachedReader.Get(ctx, types.NamespacedName{Name: crp.Name}, &db); err != nil {
 		if k8serrors.IsNotFound(err) {
 			if err = r.deleteClusterResourceBinding(ctx, evictionTargetBinding); err != nil {
 				return err

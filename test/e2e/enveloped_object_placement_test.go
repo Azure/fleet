@@ -165,7 +165,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 
 		AfterAll(func() {
 			By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 
@@ -324,7 +324,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 
 		AfterAll(func() {
 			By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 })
