@@ -18,7 +18,7 @@ import (
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
-	equality "k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -145,7 +145,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 	works, syncErr := r.listAllWorksAssociated(ctx, &resourceBinding)
 	if syncErr == nil {
 		// generate and apply the workUpdated works if we have all the works
-		overrideSucceeded, workUpdated, syncErr = r.syncAllWork(ctx, &resourceBinding, works, cluster)
+		overrideSucceeded, workUpdated, syncErr = r.syncAllWork(ctx, &resourceBinding, works, &cluster)
 	}
 	// Reset the conditions and failed placements.
 	for i := condition.OverriddenCondition; i < condition.TotalCondition; i++ {
@@ -379,7 +379,7 @@ func (r *Reconciler) listAllWorksAssociated(ctx context.Context, resourceBinding
 // it returns
 // 1: if we apply the overrides successfully
 // 2: if we actually made any changes on the hub cluster
-func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding, existingWorks map[string]*fleetv1beta1.Work, cluster clusterv1beta1.MemberCluster) (bool, bool, error) {
+func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding, existingWorks map[string]*fleetv1beta1.Work, cluster *clusterv1beta1.MemberCluster) (bool, bool, error) {
 	updateAny := atomic.NewBool(false)
 	resourceBindingRef := klog.KObj(resourceBinding)
 	// the hash256 function can can handle empty list https://go.dev/play/p/_4HW17fooXM
