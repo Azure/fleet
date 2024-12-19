@@ -60,7 +60,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 
 			// Create the CRP.
 			strategy := &placementv1beta1.ApplyStrategy{AllowCoOwnership: true}
-			createCRP(crpName, strategy)
+			createCRPWithApplyStrategy(crpName, strategy)
 		})
 
 		AfterAll(func() {
@@ -122,7 +122,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 
 			// Create the CRP.
 			strategy := &placementv1beta1.ApplyStrategy{AllowCoOwnership: false}
-			createCRP(crpName, strategy)
+			createCRPWithApplyStrategy(crpName, strategy)
 		})
 
 		AfterAll(func() {
@@ -175,7 +175,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				Type:             placementv1beta1.ApplyStrategyTypeServerSideApply,
 				AllowCoOwnership: false,
 			}
-			createCRP(crpName, strategy)
+			createCRPWithApplyStrategy(crpName, strategy)
 		})
 
 		AfterAll(func() {
@@ -233,7 +233,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				Type:             placementv1beta1.ApplyStrategyTypeServerSideApply,
 				AllowCoOwnership: false,
 			}
-			createCRP(crpName, strategy)
+			createCRPWithApplyStrategy(crpName, strategy)
 		})
 
 		AfterAll(func() {
@@ -368,7 +368,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				ServerSideApplyConfig: &placementv1beta1.ServerSideApplyConfig{ForceConflicts: false},
 				AllowCoOwnership:      true,
 			}
-			createCRP(crpName, strategy)
+			createCRPWithApplyStrategy(crpName, strategy)
 		})
 
 		AfterAll(func() {
@@ -515,7 +515,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				ServerSideApplyConfig: &placementv1beta1.ServerSideApplyConfig{ForceConflicts: true},
 				AllowCoOwnership:      true,
 			}
-			createCRP(crpName, strategy)
+			createCRPWithApplyStrategy(crpName, strategy)
 		})
 
 		AfterAll(func() {
@@ -584,7 +584,7 @@ var _ = Describe("validating two CRP selecting the same resources", Ordered, fun
 		BeforeAll(func() {
 			for i := 0; i < 2; i++ {
 				crpName := fmt.Sprintf(crpNameWithSubIndexTemplate, GinkgoParallelProcess(), i)
-				createCRP(crpName, nil)
+				createCRPWithApplyStrategy(crpName, nil)
 			}
 		})
 
@@ -620,7 +620,7 @@ var _ = Describe("validating two CRP selecting the same resources", Ordered, fun
 
 		It("add a new CRP and selecting the same resources", func() {
 			crpName := fmt.Sprintf(crpNameWithSubIndexTemplate, GinkgoParallelProcess(), 2)
-			createCRP(crpName, nil)
+			createCRPWithApplyStrategy(crpName, nil)
 		})
 
 		It("should update CRP status as expected", func() {
@@ -660,7 +660,7 @@ var _ = Describe("validating two CRP selecting the same resources", Ordered, fun
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		conflictCRPName := fmt.Sprintf(crpNameWithSubIndexTemplate, GinkgoParallelProcess(), 0)
 		BeforeAll(func() {
-			createCRP(crpName, nil)
+			createCRPWithApplyStrategy(crpName, nil)
 		})
 
 		AfterAll(func() {
@@ -680,7 +680,7 @@ var _ = Describe("validating two CRP selecting the same resources", Ordered, fun
 		It("should place the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 		It("create another CRP with different apply strategy", func() {
-			createCRP(conflictCRPName, &placementv1beta1.ApplyStrategy{AllowCoOwnership: true})
+			createCRPWithApplyStrategy(conflictCRPName, &placementv1beta1.ApplyStrategy{AllowCoOwnership: true})
 		})
 
 		It("should update conflicted CRP status as expected", func() {
@@ -739,25 +739,6 @@ var _ = Describe("validating two CRP selecting the same resources", Ordered, fun
 		})
 	})
 })
-
-func createCRP(crpName string, applyStrategy *placementv1beta1.ApplyStrategy) {
-	crp := &placementv1beta1.ClusterResourcePlacement{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: crpName,
-			// Add a custom finalizer; this would allow us to better observe
-			// the behavior of the controllers.
-			Finalizers: []string{customDeletionBlockerFinalizer},
-		},
-		Spec: placementv1beta1.ClusterResourcePlacementSpec{
-			ResourceSelectors: workResourceSelector(),
-			Strategy: placementv1beta1.RolloutStrategy{
-				ApplyStrategy: applyStrategy,
-			},
-		},
-	}
-	By(fmt.Sprintf("creating placement %s", crpName))
-	Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
-}
 
 func buildApplyConflictFailedPlacements(generation int64, cluster []string) []placementv1beta1.ResourcePlacementStatus {
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())

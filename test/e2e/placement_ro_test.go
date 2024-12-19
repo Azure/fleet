@@ -29,7 +29,7 @@ var _ = Describe("creating resourceOverride (selecting all clusters) to override
 		By("creating work resources")
 		createWorkResources()
 		// Create the CRP.
-		CreateCRP(crpName)
+		createCRP(crpName)
 		// Create the ro.
 		ro := &placementv1alpha1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
@@ -181,7 +181,7 @@ var _ = Describe("creating resourceOverride with multiple jsonPatchOverrides to 
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
 
 		// Create the CRP.
-		CreateCRP(crpName)
+		createCRP(crpName)
 	})
 
 	AfterAll(func() {
@@ -240,7 +240,7 @@ var _ = Describe("creating resourceOverride with different rules for each cluste
 		By("creating work resources")
 		createWorkResources()
 		// Create the CRP.
-		CreateCRP(crpName)
+		createCRP(crpName)
 		// Create the ro.
 		ro := &placementv1alpha1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
@@ -408,7 +408,7 @@ var _ = Describe("creating resourceOverride and clusterResourceOverride, resourc
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
 
 		// Create the CRP.
-		CreateCRP(crpName)
+		createCRP(crpName)
 	})
 
 	AfterAll(func() {
@@ -457,7 +457,7 @@ var _ = Describe("creating resourceOverride with incorrect path", Ordered, func(
 		By("creating work resources")
 		createWorkResources()
 		// Create the CRP.
-		CreateCRP(crpName)
+		createCRP(crpName)
 		// Create the ro.
 		ro := &placementv1alpha1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
@@ -520,7 +520,7 @@ var _ = Describe("creating resourceOverride and resource becomes invalid after o
 		By("creating work resources")
 		createWorkResources()
 		// Create the CRP.
-		CreateCRP(crpName)
+		createCRP(crpName)
 		// Create the ro.
 		ro := &placementv1alpha1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
@@ -629,7 +629,7 @@ var _ = Describe("creating resourceOverride with a templated rules with cluster 
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
 
 		// Create the CRP.
-		CreateCRP(crpName)
+		createCRP(crpName)
 	})
 
 	AfterAll(func() {
@@ -725,7 +725,7 @@ var _ = Describe("creating resourceOverride with delete configMap", Ordered, fun
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
 
 		// Create the CRP.
-		CreateCRP(crpName)
+		createCRP(crpName)
 	})
 
 	AfterAll(func() {

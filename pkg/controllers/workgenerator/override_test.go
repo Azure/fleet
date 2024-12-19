@@ -2285,7 +2285,7 @@ func TestApplyJSONPatchOverride(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "typo in template variable should just be ignored",
+			name: "typo in template variable should just be rendered as is",
 			deployment: appsv1.Deployment{
 				TypeMeta: deploymentType,
 				ObjectMeta: metav1.ObjectMeta{
@@ -2302,6 +2302,11 @@ func TestApplyJSONPatchOverride(t *testing.T) {
 					Path:     "/metadata/labels/app",
 					Value:    apiextensionsv1.JSON{Raw: []byte(`"$CLUSTER_NAME"`)},
 				},
+				{
+					Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+					Path:     "/metadata/labels/${Member-Cluster-Name}",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`"${CLUSTER-NAME}"`)},
+				},
 			},
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -2314,7 +2319,8 @@ func TestApplyJSONPatchOverride(t *testing.T) {
 					Name:      "deployment-name",
 					Namespace: "deployment-namespace",
 					Labels: map[string]string{
-						"app": "$CLUSTER_NAME",
+						"app":                    "$CLUSTER_NAME",
+						"${Member-Cluster-Name}": "${CLUSTER-NAME}",
 					},
 				},
 			},
@@ -2340,7 +2346,7 @@ func TestApplyJSONPatchOverride(t *testing.T) {
 				{
 					Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
 					Path:     "/metadata/annotations",
-					Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf("{\"app\": \"%s\", \"test\": \"nginx\"}", placementv1alpha1.OverrideClusterNameVariable))},
+					Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf("{\"app\": \"workload-%s\", \"test\": \"nginx\"}", placementv1alpha1.OverrideClusterNameVariable))},
 				},
 			},
 			cluster: &clusterv1beta1.MemberCluster{
@@ -2357,7 +2363,7 @@ func TestApplyJSONPatchOverride(t *testing.T) {
 						"app": "cluster-1",
 					},
 					Annotations: map[string]string{
-						"app":  "cluster-1",
+						"app":  "workload-cluster-1",
 						"test": "nginx",
 					},
 				},

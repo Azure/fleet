@@ -194,7 +194,7 @@ type JSONPatchOverride struct {
 	// We have reserved a few variables in this field that will be replaced by the actual values.
 	// Those variables all start with `$` and are case sensitive.
 	// Here is the list of currently supported variables:
-	// `${MEMBER-CLUSTER-NAME}`:  this will be replaced by the actual cluster name.
+	// `${MEMBER-CLUSTER-NAME}`:  this will be replaced by the name of the memberCluster CR that represents this cluster.
 	// +optional
 	Value apiextensionsv1.JSON `json:"value,omitempty"`
 }

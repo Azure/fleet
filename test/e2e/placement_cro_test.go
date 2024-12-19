@@ -372,7 +372,7 @@ var _ = Describe("creating clusterResourceOverride with different rules for each
 	BeforeAll(func() {
 		By("creating work resources")
 		createWorkResources()
-		CreateCRP(crpName)
+		createCRP(crpName)
 		cro := &placementv1alpha1.ClusterResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: croName,
@@ -439,24 +439,6 @@ var _ = Describe("creating clusterResourceOverride with different rules for each
 		}
 	})
 })
-
-// CreateCRP creates a ClusterResourcePlacement with the given name.
-func CreateCRP(crpName string) {
-	// Create the CRP.
-	crp := &placementv1beta1.ClusterResourcePlacement{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: crpName,
-			// Add a custom finalizer; this would allow us to better observe
-			// the behavior of the controllers.
-			Finalizers: []string{customDeletionBlockerFinalizer},
-		},
-		Spec: placementv1beta1.ClusterResourcePlacementSpec{
-			ResourceSelectors: workResourceSelector(),
-		},
-	}
-	By(fmt.Sprintf("creating placement %s", crpName))
-	Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
-}
 
 var _ = Describe("creating clusterResourceOverride with incorrect path", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
