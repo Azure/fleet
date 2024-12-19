@@ -74,7 +74,11 @@ func findConflictedWork(ctx context.Context, hubClient client.Client, namespace 
 		// Make sure these conditions are met before moving
 		// * the defaulting webhook failure policy is configured as "fail".
 		// * user cannot update/delete the webhook.
+
+		// After the latest API change, Fleet needs to set default values before doing the
+		// full comparison.
 		defaulter.SetDefaultsWork(work)
+		defaulter.SetDefaultsApplyStrategy(strategy)
 		if !equality.Semantic.DeepEqual(strategy, work.Spec.ApplyStrategy) {
 			return work, nil
 		}
