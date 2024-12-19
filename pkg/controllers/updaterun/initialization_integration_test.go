@@ -95,6 +95,9 @@ var _ = Describe("Updaterun initialization tests", func() {
 		})
 		Expect(err).To(Succeed())
 		resourceSnapshot = generateTestClusterResourceSnapshot()
+
+		// Set smaller wait time for testing
+		stageUpdatingWaitTime = time.Second * 2
 	})
 
 	AfterEach(func() {
@@ -249,7 +252,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			By("Creating scheduling policy snapshot with pickN policy")
 			Expect(k8sClient.Create(ctx, policySnapshot)).To(Succeed())
 
-			By("Set the latest policy snapshot condition as fully scheduled")
+			By("Setting the latest policy snapshot condition as fully scheduled")
 			meta.SetStatusCondition(&policySnapshot.Status.Conditions, metav1.Condition{
 				Type:               string(placementv1beta1.PolicySnapshotScheduled),
 				Status:             metav1.ConditionTrue,
@@ -282,7 +285,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			policySnapshot.Spec.Policy.ClusterNames = []string{"cluster-0", "cluster-1"}
 			Expect(k8sClient.Create(ctx, policySnapshot)).To(Succeed())
 
-			By("Set the latest policy snapshot condition as fully scheduled")
+			By("Setting the latest policy snapshot condition as fully scheduled")
 			meta.SetStatusCondition(&policySnapshot.Status.Conditions, metav1.Condition{
 				Type:               string(placementv1beta1.PolicySnapshotScheduled),
 				Status:             metav1.ConditionTrue,
@@ -314,7 +317,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			policySnapshot.Spec.Policy.PlacementType = placementv1beta1.PickAllPlacementType
 			Expect(k8sClient.Create(ctx, policySnapshot)).To(Succeed())
 
-			By("Set the latest policy snapshot condition as fully scheduled")
+			By("Setting the latest policy snapshot condition as fully scheduled")
 			meta.SetStatusCondition(&policySnapshot.Status.Conditions, metav1.Condition{
 				Type:               string(placementv1beta1.PolicySnapshotScheduled),
 				Status:             metav1.ConditionTrue,
@@ -350,7 +353,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			By("Creating scheduling policy snapshot")
 			Expect(k8sClient.Create(ctx, policySnapshot)).To(Succeed())
 
-			By("Set the latest policy snapshot condition as fully scheduled")
+			By("Setting the latest policy snapshot condition as fully scheduled")
 			meta.SetStatusCondition(&policySnapshot.Status.Conditions, metav1.Condition{
 				Type:               string(placementv1beta1.PolicySnapshotScheduled),
 				Status:             metav1.ConditionTrue,
@@ -406,7 +409,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			By("Creating scheduling policy snapshot")
 			Expect(k8sClient.Create(ctx, policySnapshot)).To(Succeed())
 
-			By("Set the latest policy snapshot condition as fully scheduled")
+			By("Setting the latest policy snapshot condition as fully scheduled")
 			meta.SetStatusCondition(&policySnapshot.Status.Conditions, metav1.Condition{
 				Type:               string(placementv1beta1.PolicySnapshotScheduled),
 				Status:             metav1.ConditionTrue,
@@ -522,59 +525,19 @@ var _ = Describe("Updaterun initialization tests", func() {
 					return err
 				}
 
-				want := placementv1alpha1.StagedUpdateRunStatus{
-					PolicySnapshotIndexUsed:      policySnapshot.Name,
-					PolicyObservedClusterCount:   numberOfClustersAnnotation,
-					ApplyStrategy:                crp.Spec.Strategy.ApplyStrategy,
-					StagedUpdateStrategySnapshot: &updateStrategy.Spec,
-					StagesStatus: []placementv1alpha1.StageUpdatingStatus{
-						{
-							StageName: "stage1",
-							Clusters: []placementv1alpha1.ClusterUpdatingStatus{
-								{ClusterName: "cluster-9"},
-								{ClusterName: "cluster-7"},
-								{ClusterName: "cluster-5"},
-								{ClusterName: "cluster-3"},
-								{ClusterName: "cluster-1"},
-							},
-							AfterStageTaskStatus: []placementv1alpha1.AfterStageTaskStatus{
-								{Type: placementv1alpha1.AfterStageTaskTypeTimedWait},
-							},
-						},
-						{
-							StageName: "stage2",
-							Clusters: []placementv1alpha1.ClusterUpdatingStatus{
-								{ClusterName: "cluster-0"},
-								{ClusterName: "cluster-2"},
-								{ClusterName: "cluster-4"},
-								{ClusterName: "cluster-6"},
-								{ClusterName: "cluster-8"},
-							},
-							AfterStageTaskStatus: []placementv1alpha1.AfterStageTaskStatus{
-								{
-									Type:                placementv1alpha1.AfterStageTaskTypeApproval,
-									ApprovalRequestName: updateRun.Name + "-stage2",
-								},
-							},
-						},
-					},
-					DeletionStageStatus: &placementv1alpha1.StageUpdatingStatus{
-						StageName: "kubernetes-fleet.io/deleteStage",
-						Clusters: []placementv1alpha1.ClusterUpdatingStatus{
-							{ClusterName: "unscheduled-cluster-0"},
-							{ClusterName: "unscheduled-cluster-1"},
-							{ClusterName: "unscheduled-cluster-2"},
-						},
-					},
-					Conditions: []metav1.Condition{
-						getFalseCondition(updateRun, string(placementv1alpha1.StagedUpdateRunConditionInitialized)),
-					},
+				want := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
+				for i := range want.StagesStatus[0].Clusters {
+					// Remove the CROs, as they are not added in this test.
+					want.StagesStatus[0].Clusters[i].ClusterResourceOverrideSnapshots = nil
+				}
+				// initialization should fail.
+				want.Conditions = []metav1.Condition{
+					generateFalseCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionInitialized),
 				}
 
-				if diff := cmp.Diff(want, updateRun.Status, cmpOptions...); diff != "" {
+				if diff := cmp.Diff(*want, updateRun.Status, cmpOptions...); diff != "" {
 					return fmt.Errorf("status mismatch: (-want +got):\n%s", diff)
 				}
-
 				return nil
 			}, timeout, interval).Should(Succeed(), "failed to validate the clusterStagedUpdateRun in the status")
 		})
@@ -588,7 +551,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			By("Creating scheduling policy snapshot")
 			Expect(k8sClient.Create(ctx, policySnapshot)).To(Succeed())
 
-			By("Set the latest policy snapshot condition as fully scheduled")
+			By("Setting the latest policy snapshot condition as fully scheduled")
 			meta.SetStatusCondition(&policySnapshot.Status.Conditions, metav1.Condition{
 				Type:               string(placementv1beta1.PolicySnapshotScheduled),
 				Status:             metav1.ConditionTrue,
@@ -657,67 +620,29 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the clusterStagedUpdateRun stats")
+			want := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
 			Eventually(func() error {
 				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
 					return err
 				}
 
-				want := placementv1alpha1.StagedUpdateRunStatus{
-					PolicySnapshotIndexUsed:      policySnapshot.Name,
-					PolicyObservedClusterCount:   numberOfClustersAnnotation,
-					ApplyStrategy:                crp.Spec.Strategy.ApplyStrategy,
-					StagedUpdateStrategySnapshot: &updateStrategy.Spec,
-					StagesStatus: []placementv1alpha1.StageUpdatingStatus{
-						{
-							StageName: "stage1",
-							Clusters: []placementv1alpha1.ClusterUpdatingStatus{
-								{ClusterName: "cluster-9", ClusterResourceOverrideSnapshots: []string{clusterResourceOverride.Name}},
-								{ClusterName: "cluster-7", ClusterResourceOverrideSnapshots: []string{clusterResourceOverride.Name}},
-								{ClusterName: "cluster-5", ClusterResourceOverrideSnapshots: []string{clusterResourceOverride.Name}},
-								{ClusterName: "cluster-3", ClusterResourceOverrideSnapshots: []string{clusterResourceOverride.Name}},
-								{ClusterName: "cluster-1", ClusterResourceOverrideSnapshots: []string{clusterResourceOverride.Name}},
-							},
-							AfterStageTaskStatus: []placementv1alpha1.AfterStageTaskStatus{
-								{Type: placementv1alpha1.AfterStageTaskTypeTimedWait},
-							},
-						},
-						{
-							StageName: "stage2",
-							Clusters: []placementv1alpha1.ClusterUpdatingStatus{
-								{ClusterName: "cluster-0"},
-								{ClusterName: "cluster-2"},
-								{ClusterName: "cluster-4"},
-								{ClusterName: "cluster-6"},
-								{ClusterName: "cluster-8"},
-							},
-							AfterStageTaskStatus: []placementv1alpha1.AfterStageTaskStatus{
-								{
-									Type:                placementv1alpha1.AfterStageTaskTypeApproval,
-									ApprovalRequestName: updateRun.Name + "-stage2",
-								},
-							},
-						},
-					},
-					DeletionStageStatus: &placementv1alpha1.StageUpdatingStatus{
-						StageName: "kubernetes-fleet.io/deleteStage",
-						Clusters: []placementv1alpha1.ClusterUpdatingStatus{
-							{ClusterName: "unscheduled-cluster-0"},
-							{ClusterName: "unscheduled-cluster-1"},
-							{ClusterName: "unscheduled-cluster-2"},
-						},
-					},
-					Conditions: []metav1.Condition{
-						// initialization should succeed!
-						getTrueCondition(updateRun, string(placementv1alpha1.StagedUpdateRunConditionInitialized)),
-					},
-				}
-
-				if diff := cmp.Diff(want, updateRun.Status, cmpOptions...); diff != "" {
+				if diff := cmp.Diff(*want, updateRun.Status, cmpOptions...); diff != "" {
 					return fmt.Errorf("status mismatch: (-want +got):\n%s", diff)
 				}
 
 				return nil
-			}, timeout, interval).Should(Succeed(), "failed to validate the clusterStagedUpdateRun in the status")
+			}, timeout, interval).Should(Succeed(), "failed to validate the clusterStagedUpdateRun initialized successfully")
+
+			By("Validating the clusterStagedUpdateRun initialized consistently")
+			Consistently(func() error {
+				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
+					return err
+				}
+				if diff := cmp.Diff(*want, updateRun.Status, cmpOptions...); diff != "" {
+					return fmt.Errorf("status mismatch: (-want +got):\n%s", diff)
+				}
+				return nil
+			}, duration, interval).Should(Succeed(), "failed to validate the clusterStagedUpdateRun initialized consistently")
 		})
 	})
 })
@@ -727,7 +652,7 @@ func validateFailedInitCondition(ctx context.Context, updateRun *placementv1alph
 		if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
 			return err
 		}
-		wantConditions := []metav1.Condition{getFalseCondition(updateRun, string(placementv1alpha1.StagedUpdateRunConditionInitialized))}
+		wantConditions := []metav1.Condition{generateFalseCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionInitialized)}
 		if diff := cmp.Diff(wantConditions, updateRun.Status.Conditions, cmpOptions...); diff != "" {
 			return fmt.Errorf("condition mismatch: (-want +got):\n%s", diff)
 		}
@@ -737,4 +662,62 @@ func validateFailedInitCondition(ctx context.Context, updateRun *placementv1alph
 		}
 		return nil
 	}, timeout, interval).Should(Succeed(), "failed to validate the failed initialization condition")
+}
+
+func generateSucceededInitializationStatus(
+	crp *placementv1beta1.ClusterResourcePlacement,
+	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
+	policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	updateStrategy *placementv1alpha1.ClusterStagedUpdateStrategy,
+	clusterResourceOverride *placementv1alpha1.ClusterResourceOverrideSnapshot,
+) *placementv1alpha1.StagedUpdateRunStatus {
+	return &placementv1alpha1.StagedUpdateRunStatus{
+		PolicySnapshotIndexUsed:      policySnapshot.Name,
+		PolicyObservedClusterCount:   numberOfClustersAnnotation,
+		ApplyStrategy:                crp.Spec.Strategy.ApplyStrategy.DeepCopy(),
+		StagedUpdateStrategySnapshot: &updateStrategy.Spec,
+		StagesStatus: []placementv1alpha1.StageUpdatingStatus{
+			{
+				StageName: "stage1",
+				Clusters: []placementv1alpha1.ClusterUpdatingStatus{
+					{ClusterName: "cluster-9", ClusterResourceOverrideSnapshots: []string{clusterResourceOverride.Name}},
+					{ClusterName: "cluster-7", ClusterResourceOverrideSnapshots: []string{clusterResourceOverride.Name}},
+					{ClusterName: "cluster-5", ClusterResourceOverrideSnapshots: []string{clusterResourceOverride.Name}},
+					{ClusterName: "cluster-3", ClusterResourceOverrideSnapshots: []string{clusterResourceOverride.Name}},
+					{ClusterName: "cluster-1", ClusterResourceOverrideSnapshots: []string{clusterResourceOverride.Name}},
+				},
+				AfterStageTaskStatus: []placementv1alpha1.AfterStageTaskStatus{
+					{Type: placementv1alpha1.AfterStageTaskTypeTimedWait},
+				},
+			},
+			{
+				StageName: "stage2",
+				Clusters: []placementv1alpha1.ClusterUpdatingStatus{
+					{ClusterName: "cluster-0"},
+					{ClusterName: "cluster-2"},
+					{ClusterName: "cluster-4"},
+					{ClusterName: "cluster-6"},
+					{ClusterName: "cluster-8"},
+				},
+				AfterStageTaskStatus: []placementv1alpha1.AfterStageTaskStatus{
+					{
+						Type:                placementv1alpha1.AfterStageTaskTypeApproval,
+						ApprovalRequestName: updateRun.Name + "-stage2",
+					},
+				},
+			},
+		},
+		DeletionStageStatus: &placementv1alpha1.StageUpdatingStatus{
+			StageName: "kubernetes-fleet.io/deleteStage",
+			Clusters: []placementv1alpha1.ClusterUpdatingStatus{
+				{ClusterName: "unscheduled-cluster-0"},
+				{ClusterName: "unscheduled-cluster-1"},
+				{ClusterName: "unscheduled-cluster-2"},
+			},
+		},
+		Conditions: []metav1.Condition{
+			// initialization should succeed!
+			generateTrueCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionInitialized),
+		},
+	}
 }

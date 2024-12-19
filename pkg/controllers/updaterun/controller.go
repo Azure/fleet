@@ -40,6 +40,10 @@ var (
 	// errInitializedFailed is the error when the ClusterStagedUpdateRun fails to initialize.
 	// It is a wrapped error of errStagedUpdatedAborted, because some initialization functions are reused in the validation step.
 	errInitializedFailed = fmt.Errorf("%w: failed to initialize the clusterStagedUpdateRun", errStagedUpdatedAborted)
+
+	// stageUpdatingWaitTime is the time to wait before rechecking the stage update status.
+	// Put it as a variable for convenient testing.
+	stageUpdatingWaitTime = 60 * time.Second
 )
 
 // Reconciler reconciles a ClusterStagedUpdateRun object.
@@ -108,16 +112,25 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		// Check if the clusterStagedUpdateRun is finished.
 		finishedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1alpha1.StagedUpdateRunConditionSucceeded))
 		if condition.IsConditionStatusTrue(finishedCond, updateRun.Generation) || condition.IsConditionStatusFalse(finishedCond, updateRun.Generation) {
-			klog.V(2).InfoS("The clusterStagedUpdateRun is finished", "clusterStagedUpdateRun", runObjRef)
+			klog.V(2).InfoS("The clusterStagedUpdateRun is finished", "finishedSuccessfully", finishedCond.Status, "clusterStagedUpdateRun", runObjRef)
 			return runtime.Result{}, nil
 		}
-		// TODO(wantjian): validate the clusterStagedUpdateRun and generate the updatingStage etc.
+
+		// Validate the clusterStagedUpdateRun status to ensure the update can be continued and get the updating stage index and cluster indices.
+		if updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings, err = r.validate(ctx, &updateRun); err != nil {
+			// errStagedUpdatedAborted cannot be retried.
+			if errors.Is(err, errStagedUpdatedAborted) {
+				return runtime.Result{}, r.recordUpdateRunFailed(ctx, &updateRun, err.Error())
+			}
+			return runtime.Result{}, err
+		}
+		klog.V(2).InfoS("The clusterStagedUpdateRun is validated", "clusterStagedUpdateRun", runObjRef)
 	}
 
-	// TODO(wantjian): execute the clusterStagedUpdateRun.
+	// TODO(wantjian): execute the clusterStagedUpdateRun and fix the requeue time.
 	klog.V(2).InfoS("Executing the clusterStagedUpdateRun", "clusterStagedUpdateRun", runObjRef, "updatingStageIndex", updatingStageIndex,
 		"toBeUpdatedBindings count", len(toBeUpdatedBindings), "toBeDeletedBindings count", len(toBeDeletedBindings))
-	return runtime.Result{}, nil
+	return runtime.Result{RequeueAfter: stageUpdatingWaitTime}, nil
 }
 
 // handleDelete handles the deletion of the clusterStagedUpdateRun object.

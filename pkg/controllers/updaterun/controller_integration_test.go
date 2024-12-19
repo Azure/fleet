@@ -35,6 +35,8 @@ const (
 	timeout = time.Second * 10
 	// interval is the time to wait between retries for Eventually and Consistently
 	interval = time.Millisecond * 250
+	// duration is the time to duration to check for Consistently
+	duration = time.Second * 20
 
 	// numTargetClusters is the number of scheduled clusters
 	numTargetClusters = 10
@@ -107,8 +109,8 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 			validateUpdateRunHasFinalizer(ctx, updateRun)
 
 			By("Updating the clusterStagedUpdateRun to failed")
-			startedcond := getTrueCondition(updateRun, string(placementv1alpha1.StagedUpdateRunConditionProgressing))
-			finishedcond := getFalseCondition(updateRun, string(placementv1alpha1.StagedUpdateRunConditionSucceeded))
+			startedcond := generateTrueCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionProgressing)
+			finishedcond := generateFalseCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionSucceeded)
 			meta.SetStatusCondition(&updateRun.Status.Conditions, startedcond)
 			meta.SetStatusCondition(&updateRun.Status.Conditions, finishedcond)
 			Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed(), "failed to update the clusterStagedUpdateRun")
@@ -136,7 +138,7 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 			validateUpdateRunHasFinalizer(ctx, updateRun)
 
 			By("Updating the clusterStagedUpdateRun status to processing")
-			startedcond := getTrueCondition(updateRun, string(placementv1alpha1.StagedUpdateRunConditionProgressing))
+			startedcond := generateTrueCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionProgressing)
 			meta.SetStatusCondition(&updateRun.Status.Conditions, startedcond)
 			Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed(), "failed to add condition to the clusterStagedUpdateRun")
 
@@ -467,35 +469,71 @@ func validateApprovalRequestCount(ctx context.Context, count int) {
 	}, timeout, interval).Should(Equal(count), "approval requests count mismatch")
 }
 
-func getTrueCondition(updateRun *placementv1alpha1.ClusterStagedUpdateRun, condType string) metav1.Condition {
-	reason := ""
-	switch condType {
-	case string(placementv1alpha1.StagedUpdateRunConditionInitialized):
-		reason = condition.UpdateRunInitializeSucceededReason
-	case string(placementv1alpha1.StagedUpdateRunConditionProgressing):
-		reason = condition.UpdateRunStartedReason
-	case string(placementv1alpha1.StagedUpdateRunConditionSucceeded):
-		reason = condition.UpdateRunSucceededReason
+func generateTrueCondition(updateRun *placementv1alpha1.ClusterStagedUpdateRun, condType any) metav1.Condition {
+	reason, typeStr := "", ""
+	switch cond := condType.(type) {
+	case placementv1alpha1.StagedUpdateRunConditionType:
+		switch cond {
+		case placementv1alpha1.StagedUpdateRunConditionInitialized:
+			reason = condition.UpdateRunInitializeSucceededReason
+		case placementv1alpha1.StagedUpdateRunConditionProgressing:
+			reason = condition.UpdateRunStartedReason
+		case placementv1alpha1.StagedUpdateRunConditionSucceeded:
+			reason = condition.UpdateRunSucceededReason
+		}
+		typeStr = string(cond)
+	case placementv1alpha1.StageUpdatingConditionType:
+		switch cond {
+		case placementv1alpha1.StageUpdatingConditionProgressing:
+			reason = condition.StageUpdatingStartedReason
+		case placementv1alpha1.StageUpdatingConditionSucceeded:
+			reason = condition.StageUpdatingSucceededReason
+		}
+		typeStr = string(cond)
+	case placementv1alpha1.ClusterUpdatingStatusConditionType:
+		switch cond {
+		case placementv1alpha1.ClusterUpdatingConditionStarted:
+			reason = condition.ClusterUpdatingStartedReason
+		case placementv1alpha1.ClusterUpdatingConditionSucceeded:
+			reason = condition.ClusterUpdatingSucceededReason
+		}
+		typeStr = string(cond)
 	}
 	return metav1.Condition{
 		Status:             metav1.ConditionTrue,
-		Type:               condType,
+		Type:               typeStr,
 		ObservedGeneration: updateRun.Generation,
 		Reason:             reason,
 	}
 }
 
-func getFalseCondition(updateRun *placementv1alpha1.ClusterStagedUpdateRun, condType string) metav1.Condition {
-	reason := ""
-	switch condType {
-	case string(placementv1alpha1.StagedUpdateRunConditionInitialized):
-		reason = condition.UpdateRunInitializeFailedReason
-	case string(placementv1alpha1.StagedUpdateRunConditionSucceeded):
-		reason = condition.UpdateRunFailedReason
+func generateFalseCondition(updateRun *placementv1alpha1.ClusterStagedUpdateRun, condType any) metav1.Condition {
+	reason, typeStr := "", ""
+	switch cond := condType.(type) {
+	case placementv1alpha1.StagedUpdateRunConditionType:
+		switch cond {
+		case placementv1alpha1.StagedUpdateRunConditionInitialized:
+			reason = condition.UpdateRunInitializeFailedReason
+		case placementv1alpha1.StagedUpdateRunConditionSucceeded:
+			reason = condition.UpdateRunFailedReason
+		}
+		typeStr = string(cond)
+	case placementv1alpha1.StageUpdatingConditionType:
+		switch cond {
+		case placementv1alpha1.StageUpdatingConditionSucceeded:
+			reason = condition.StageUpdatingFailedReason
+		}
+		typeStr = string(cond)
+	case placementv1alpha1.ClusterUpdatingStatusConditionType:
+		switch cond {
+		case placementv1alpha1.ClusterUpdatingConditionSucceeded:
+			reason = condition.ClusterUpdatingFailedReason
+		}
+		typeStr = string(cond)
 	}
 	return metav1.Condition{
 		Status:             metav1.ConditionFalse,
-		Type:               condType,
+		Type:               typeStr,
 		ObservedGeneration: updateRun.Generation,
 		Reason:             reason,
 	}

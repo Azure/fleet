@@ -16,11 +16,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/defaulter"
 )
 
 const (
@@ -29,6 +31,13 @@ const (
 	testCRPName              = "test-crp"
 	testDisruptionBudgetName = "test-disruption-budget"
 	testEvictionName         = "test-eviction"
+)
+
+var (
+	validationResultCmpOptions = []cmp.Option{
+		cmp.AllowUnexported(evictionValidationResult{}),
+		cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
+	}
 )
 
 func TestValidateEviction(t *testing.T) {
@@ -40,6 +49,18 @@ func TestValidateEviction(t *testing.T) {
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickAllPlacementType,
 			},
+			Strategy: placementv1beta1.RolloutStrategy{
+				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+					MaxUnavailable:           ptr.To(intstr.FromString(defaulter.DefaultMaxUnavailableValue)),
+					MaxSurge:                 ptr.To(intstr.FromString(defaulter.DefaultMaxSurgeValue)),
+					UnavailablePeriodSeconds: ptr.To(defaulter.DefaultUnavailablePeriodSeconds),
+				},
+				ApplyStrategy: &placementv1beta1.ApplyStrategy{
+					Type: placementv1beta1.ApplyStrategyTypeClientSideApply,
+				},
+			},
+			RevisionHistoryLimit: ptr.To(int32(defaulter.DefaultRevisionHistoryLimitValue)),
 		},
 	}
 	testBinding1 := placementv1beta1.ClusterResourceBinding{
@@ -153,9 +174,14 @@ func TestValidateEviction(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name:     "valid eviction",
+			name:     "CRP with empty spec - valid eviction",
 			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
-			crp:      testCRP,
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{},
+			},
 			bindings: []placementv1beta1.ClusterResourceBinding{testBinding2},
 			wantValidationResult: &evictionValidationResult{
 				isValid:  true,
@@ -185,7 +211,7 @@ func TestValidateEviction(t *testing.T) {
 				Client: fakeClient,
 			}
 			gotValidationResult, gotErr := r.validateEviction(ctx, tc.eviction)
-			if diff := cmp.Diff(tc.wantValidationResult, gotValidationResult, cmp.AllowUnexported(evictionValidationResult{}), cmpopts.IgnoreFields(placementv1beta1.ClusterResourceBinding{}, "ResourceVersion")); diff != "" {
+			if diff := cmp.Diff(tc.wantValidationResult, gotValidationResult, validationResultCmpOptions...); diff != "" {
 				t.Errorf("validateEviction() validation result mismatch (-want, +got):\n%s", diff)
 			}
 			gotInvalidCondition := tc.eviction.GetCondition(string(placementv1alpha1.PlacementEvictionConditionTypeValid))
@@ -503,16 +529,7 @@ func TestExecuteEviction(t *testing.T) {
 			name: "PickAll CRP, Misconfigured PDB MaxUnavailable specified - eviction not executed",
 			validationResult: &evictionValidationResult{
 				crb: availableBinding,
-				crp: &placementv1beta1.ClusterResourcePlacement{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: testCRPName,
-					},
-					Spec: placementv1beta1.ClusterResourcePlacementSpec{
-						Policy: &placementv1beta1.PlacementPolicy{
-							PlacementType: placementv1beta1.PickAllPlacementType,
-						},
-					},
-				},
+				crp: ptr.To(buildTestPickAllCRP(testCRPName)),
 			},
 			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
 			pdb: &placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
@@ -539,16 +556,7 @@ func TestExecuteEviction(t *testing.T) {
 			name: "PickAll CRP, Misconfigured PDB MinAvailable specified as percentage - eviction not executed",
 			validationResult: &evictionValidationResult{
 				crb: availableBinding,
-				crp: &placementv1beta1.ClusterResourcePlacement{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: testCRPName,
-					},
-					Spec: placementv1beta1.ClusterResourcePlacementSpec{
-						Policy: &placementv1beta1.PlacementPolicy{
-							PlacementType: placementv1beta1.PickAllPlacementType,
-						},
-					},
-				},
+				crp: ptr.To(buildTestPickAllCRP(testCRPName)),
 			},
 			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
 			pdb: &placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
