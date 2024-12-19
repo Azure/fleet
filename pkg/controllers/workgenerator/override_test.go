@@ -8,6 +8,7 @@ package workgenerator
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -2005,12 +2006,12 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 												{
 													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
 													Path:     "/metadata/labels/app",
-													Value:    apiextensionsv1.JSON{Raw: []byte(`"$CLUSTER-NAME"`)},
+													Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s"`, placementv1alpha1.OverrideClusterNameVariable))},
 												},
 												{
 													Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
 													Path:     "/metadata/annotations",
-													Value:    apiextensionsv1.JSON{Raw: []byte(`{"app": "$CLUSTER-NAME", "test": "nginx"}`)},
+													Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf("{\"app\": \"%s\", \"test\": \"nginx\"}", placementv1alpha1.OverrideClusterNameVariable))},
 												},
 											},
 										},
@@ -2334,12 +2335,12 @@ func TestApplyJSONPatchOverride(t *testing.T) {
 				{
 					Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
 					Path:     "/metadata/labels/app",
-					Value:    apiextensionsv1.JSON{Raw: []byte(`"$CLUSTER-NAME"`)},
+					Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s"`, placementv1alpha1.OverrideClusterNameVariable))},
 				},
 				{
 					Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
 					Path:     "/metadata/annotations",
-					Value:    apiextensionsv1.JSON{Raw: []byte(`{"app": "$CLUSTER-NAME", "test": "nginx"}`)},
+					Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf("{\"app\": \"%s\", \"test\": \"nginx\"}", placementv1alpha1.OverrideClusterNameVariable))},
 				},
 			},
 			cluster: &clusterv1beta1.MemberCluster{

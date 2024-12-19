@@ -35,5 +35,5 @@ const (
 	ApprovalTaskNameFmt = "%s-%s"
 
 	// OverrideClusterNameVariable is the reserved variable in the override value that will be replaced by the actual cluster name.
-	OverrideClusterNameVariable = "$CLUSTER-NAME"
+	OverrideClusterNameVariable = "${MEMBER-CLUSTER-NAME}"
 )

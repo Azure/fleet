@@ -198,16 +198,27 @@ func applyJSONPatchOverride(resourceContent *placementv1beta1.ResourceContent, c
 	if len(overrides) == 0 { // do nothing
 		return nil
 	}
+	// go through the JSON patch overrides to replace the built-in variables
+	var processedOverrides []placementv1alpha1.JSONPatchOverride
+	for _, override := range overrides {
+		// Replace the built-in variable with the actual cluster name
+		processedOverride := placementv1alpha1.JSONPatchOverride{
+			Operator: override.Operator,
+			Path:     override.Path,
+		}
+		// find and replace a few special built-in variables
+		processedJSONStr := []byte(strings.ReplaceAll(string(override.Value.Raw), placementv1alpha1.OverrideClusterNameVariable, cluster.Name))
+		processedOverride.Value.Raw = processedJSONStr
+		processedOverrides = append(processedOverrides, processedOverride)
+	}
 
-	jsonPatchBytes, err := json.Marshal(overrides)
+	jsonPatchBytes, err := json.Marshal(processedOverrides)
 	if err != nil {
 		klog.ErrorS(err, "Failed to marshal JSON Patch overrides")
 		return err
 	}
-	// Process the JSON patch to treat a few special built-in variables
-	processedJSONStr := strings.ReplaceAll(string(jsonPatchBytes), placementv1alpha1.OverrideClusterNameVariable, cluster.Name)
 
-	patch, err := jsonpatch.DecodePatch([]byte(processedJSONStr))
+	patch, err := jsonpatch.DecodePatch([]byte(jsonPatchBytes))
 	if err != nil {
 		klog.ErrorS(err, "Failed to decode the passed JSON document as an RFC 6902 patch")
 		return err
