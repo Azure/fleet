@@ -172,7 +172,7 @@ func PickFromResourceMatchedOverridesForTargetCluster(
 
 	croFiltered := make([]*placementv1alpha1.ClusterResourceOverrideSnapshot, 0, len(croList))
 	for i, cro := range croList {
-		matched, err := isClusterMatched(cluster, cro.Spec.OverrideSpec.Policy)
+		matched, err := isClusterMatched(&cluster, cro.Spec.OverrideSpec.Policy)
 		if err != nil {
 			klog.ErrorS(err, "Invalid clusterResourceOverride", "clusterResourceOverride", klog.KObj(cro))
 			return nil, nil, controller.NewUnexpectedBehaviorError(err)
@@ -188,7 +188,7 @@ func PickFromResourceMatchedOverridesForTargetCluster(
 
 	roFiltered := make([]*placementv1alpha1.ResourceOverrideSnapshot, 0, len(roList))
 	for i, ro := range roList {
-		matched, err := isClusterMatched(cluster, ro.Spec.OverrideSpec.Policy)
+		matched, err := isClusterMatched(&cluster, ro.Spec.OverrideSpec.Policy)
 		if err != nil {
 			klog.ErrorS(err, "Invalid resourceOverride", "resourceOverride", klog.KObj(ro))
 			return nil, nil, controller.NewUnexpectedBehaviorError(err)
@@ -216,7 +216,7 @@ func PickFromResourceMatchedOverridesForTargetCluster(
 	return croNames, roNames, nil
 }
 
-func isClusterMatched(cluster clusterv1beta1.MemberCluster, policy *placementv1alpha1.OverridePolicy) (bool, error) {
+func isClusterMatched(cluster *clusterv1beta1.MemberCluster, policy *placementv1alpha1.OverridePolicy) (bool, error) {
 	if policy == nil {
 		return false, errors.New("policy is nil")
 	}
@@ -233,7 +233,7 @@ func isClusterMatched(cluster clusterv1beta1.MemberCluster, policy *placementv1a
 }
 
 // IsClusterMatched checks if the cluster is matched with the override rules.
-func IsClusterMatched(cluster clusterv1beta1.MemberCluster, rule placementv1alpha1.OverrideRule) (bool, error) {
+func IsClusterMatched(cluster *clusterv1beta1.MemberCluster, rule placementv1alpha1.OverrideRule) (bool, error) {
 	if rule.ClusterSelector == nil { // it means matching no member clusters
 		return false, nil
 	}

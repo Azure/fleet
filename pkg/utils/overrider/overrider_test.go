@@ -1886,7 +1886,7 @@ func TestIsClusterMatched(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := IsClusterMatched(tc.cluster, tc.rule)
+			got, err := IsClusterMatched(&tc.cluster, tc.rule)
 			if err != nil {
 				t.Fatalf("IsClusterMatched() got error %v, want nil", err)
 			}
