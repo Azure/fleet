@@ -91,6 +91,11 @@ func (r *Reconciler) validateEviction(ctx context.Context, eviction *placementv1
 		markEvictionInvalid(eviction, condition.EvictionInvalidDeletingCRPMessage)
 		return validationResult, nil
 	}
+	if crp.Spec.Policy.PlacementType == placementv1beta1.PickFixedPlacementType {
+		klog.V(2).InfoS(condition.EvictionInvalidPickFixedCRPMessage, "clusterResourcePlacementEviction", eviction.Name, "clusterResourcePlacement", eviction.Spec.PlacementName)
+		markEvictionInvalid(eviction, condition.EvictionInvalidPickFixedCRPMessage)
+		return validationResult, nil
+	}
 	validationResult.crp = &crp
 
 	var crbList placementv1beta1.ClusterResourceBindingList

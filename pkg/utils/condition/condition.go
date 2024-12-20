@@ -165,6 +165,9 @@ const (
 	// EvictionInvalidDeletingCRPMessage is the message string of invalid eviction condition when CRP is deleting.
 	EvictionInvalidDeletingCRPMessage = "Found deleting ClusterResourcePlacement targeted by eviction"
 
+	// EvictionInvalidPickFixedCRPMessage is the message string of invalid eviction condition when CRP placement type is PickFixed.
+	EvictionInvalidPickFixedCRPMessage = "Found ClusterResourcePlacement with PickFixed placement type targeted by eviction"
+
 	// EvictionInvalidMissingCRBMessage is the message string of invalid eviction condition when CRB is missing.
 	EvictionInvalidMissingCRBMessage = "Failed to find scheduler decision for placement in cluster targeted by eviction"
 
