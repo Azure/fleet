@@ -63,6 +63,9 @@ func TestValidateEviction(t *testing.T) {
 			RevisionHistoryLimit: ptr.To(int32(defaulter.DefaultRevisionHistoryLimitValue)),
 		},
 	}
+	// Must set default values here as the test target method will set them.
+	defaulter.SetDefaultsClusterResourcePlacement(testCRP)
+
 	testBinding1 := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "test-binding-1",
