@@ -36,6 +36,7 @@ const (
 
 	evictionInvalidMissingCRPMessage                = "Failed to find ClusterResourcePlacement targeted by eviction"
 	evictionInvalidDeletingCRPMessage               = "Found deleting ClusterResourcePlacement targeted by eviction"
+	evictionInvalidPickFixedCRPMessage              = "Found ClusterResourcePlacement with PickFixed placement type targeted by eviction"
 	evictionInvalidMissingCRBMessage                = "Failed to find scheduler decision for placement in cluster targeted by eviction"
 	evictionInvalidMultipleCRBMessage               = "Found more than one scheduler decision for placement in cluster targeted by eviction"
 	evictionValidMessage                            = "Eviction is valid"
@@ -110,6 +111,11 @@ func (r *Reconciler) validateEviction(ctx context.Context, eviction *placementv1
 	if crp.DeletionTimestamp != nil {
 		klog.V(2).InfoS(evictionInvalidDeletingCRPMessage, "clusterResourcePlacementEviction", eviction.Name, "clusterResourcePlacement", eviction.Spec.PlacementName)
 		markEvictionInvalid(eviction, evictionInvalidDeletingCRPMessage)
+		return validationResult, nil
+	}
+	if crp.Spec.Policy.PlacementType == placementv1beta1.PickFixedPlacementType {
+		klog.V(2).InfoS(evictionInvalidPickFixedCRPMessage, "clusterResourcePlacementEviction", eviction.Name, "clusterResourcePlacement", eviction.Spec.PlacementName)
+		markEvictionInvalid(eviction, evictionInvalidPickFixedCRPMessage)
 		return validationResult, nil
 	}
 	validationResult.crp = &crp
@@ -277,13 +283,9 @@ func isEvictionAllowed(bindings []placementv1beta1.ClusterResourceBinding, crp p
 
 	var desiredBindings int
 	placementType := crp.Spec.Policy.PlacementType
-	switch placementType {
-	case placementv1beta1.PickNPlacementType:
+	// we don't know the desired bindings for PickAll and we won't evict a binding for PickFixed CRP.
+	if placementType == placementv1beta1.PickNPlacementType {
 		desiredBindings = int(*crp.Spec.Policy.NumberOfClusters)
-	case placementv1beta1.PickFixedPlacementType:
-		desiredBindings = len(crp.Spec.Policy.ClusterNames)
-	default:
-		// we don't know the desired bindings for PickAll.
 	}
 
 	var disruptionsAllowed int
