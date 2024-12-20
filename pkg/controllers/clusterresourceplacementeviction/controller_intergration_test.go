@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -23,6 +21,8 @@ import (
 
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/condition"
+	testutilseviction "go.goms.io/fleet/test/utils/eviction"
 )
 
 const (
@@ -30,18 +30,6 @@ const (
 	anotherCRBNameTemplate = "another-crb-%d"
 	crpNameTemplate        = "crp-%d"
 	evictionNameTemplate   = "eviction-%d"
-)
-
-var (
-	lessFuncCondition = func(a, b metav1.Condition) bool {
-		return a.Type < b.Type
-	}
-
-	evictionStatusCmpOptions = cmp.Options{
-		cmpopts.SortSlices(lessFuncCondition),
-		cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime"),
-		cmpopts.EquateEmpty(),
-	}
 )
 
 const (
@@ -121,7 +109,10 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		})
 
 		By("Check eviction status", func() {
-			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValidMessage}, &isExecutedEviction{bool: false, msg: fmt.Sprintf(evictionBlockedPDBSpecifiedFmt, 0, 1)})
+			evictionStatusUpdatedActual := testutilseviction.StatusUpdatedActual(
+				ctx, k8sClient, evictionName,
+				&testutilseviction.IsValidEviction{IsValid: true, Msg: condition.EvictionValidMessage},
+				&testutilseviction.IsExecutedEviction{IsExecuted: false, Msg: fmt.Sprintf(condition.EvictionBlockedPDBSpecifiedMessageFmt, 0, 1)})
 			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -211,7 +202,10 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		})
 
 		By("Check eviction status", func() {
-			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValidMessage}, &isExecutedEviction{bool: true, msg: fmt.Sprintf(evictionAllowedPDBSpecifiedFmt, 1, 1)})
+			evictionStatusUpdatedActual := testutilseviction.StatusUpdatedActual(
+				ctx, k8sClient, evictionName,
+				&testutilseviction.IsValidEviction{IsValid: true, Msg: condition.EvictionValidMessage},
+				&testutilseviction.IsExecutedEviction{IsExecuted: true, Msg: fmt.Sprintf(condition.EvictionAllowedPDBSpecifiedMessageFmt, 1, 1)})
 			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -286,7 +280,10 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		})
 
 		By("Check eviction status", func() {
-			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValidMessage}, &isExecutedEviction{bool: false, msg: fmt.Sprintf(evictionBlockedPDBSpecifiedFmt, 0, 1)})
+			evictionStatusUpdatedActual := testutilseviction.StatusUpdatedActual(
+				ctx, k8sClient, evictionName,
+				&testutilseviction.IsValidEviction{IsValid: true, Msg: condition.EvictionValidMessage},
+				&testutilseviction.IsExecutedEviction{IsExecuted: false, Msg: fmt.Sprintf(condition.EvictionBlockedPDBSpecifiedMessageFmt, 0, 1)})
 			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -399,7 +396,10 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		})
 
 		By("Check eviction status", func() {
-			evictionStatusUpdatedActual := evictionStatusUpdatedActual(&isValidEviction{bool: true, msg: evictionValidMessage}, &isExecutedEviction{bool: true, msg: fmt.Sprintf(evictionAllowedPDBSpecifiedFmt, 2, 2)})
+			evictionStatusUpdatedActual := testutilseviction.StatusUpdatedActual(
+				ctx, k8sClient, evictionName,
+				&testutilseviction.IsValidEviction{IsValid: true, Msg: condition.EvictionValidMessage},
+				&testutilseviction.IsExecutedEviction{IsExecuted: true, Msg: fmt.Sprintf(condition.EvictionAllowedPDBSpecifiedMessageFmt, 2, 2)})
 			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
@@ -422,66 +422,6 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		})
 	})
 })
-
-func evictionStatusUpdatedActual(isValid *isValidEviction, isExecuted *isExecutedEviction) func() error {
-	evictionName := fmt.Sprintf(evictionNameTemplate, GinkgoParallelProcess())
-	return func() error {
-		var eviction placementv1alpha1.ClusterResourcePlacementEviction
-		if err := k8sClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
-			return err
-		}
-		var conditions []metav1.Condition
-		if isValid != nil {
-			if isValid.bool {
-				validCondition := metav1.Condition{
-					Type:               string(placementv1alpha1.PlacementEvictionConditionTypeValid),
-					Status:             metav1.ConditionTrue,
-					ObservedGeneration: eviction.GetGeneration(),
-					Reason:             clusterResourcePlacementEvictionValidReason,
-					Message:            isValid.msg,
-				}
-				conditions = append(conditions, validCondition)
-			} else {
-				invalidCondition := metav1.Condition{
-					Type:               string(placementv1alpha1.PlacementEvictionConditionTypeValid),
-					Status:             metav1.ConditionFalse,
-					ObservedGeneration: eviction.GetGeneration(),
-					Reason:             clusterResourcePlacementEvictionInvalidReason,
-					Message:            isValid.msg,
-				}
-				conditions = append(conditions, invalidCondition)
-			}
-		}
-		if isExecuted != nil {
-			if isExecuted.bool {
-				executedCondition := metav1.Condition{
-					Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
-					Status:             metav1.ConditionTrue,
-					ObservedGeneration: eviction.GetGeneration(),
-					Reason:             clusterResourcePlacementEvictionExecutedReason,
-					Message:            isExecuted.msg,
-				}
-				conditions = append(conditions, executedCondition)
-			} else {
-				notExecutedCondition := metav1.Condition{
-					Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
-					Status:             metav1.ConditionFalse,
-					ObservedGeneration: eviction.GetGeneration(),
-					Reason:             clusterResourcePlacementEvictionNotExecutedReason,
-					Message:            isExecuted.msg,
-				}
-				conditions = append(conditions, notExecutedCondition)
-			}
-		}
-		wantStatus := placementv1alpha1.PlacementEvictionStatus{
-			Conditions: conditions,
-		}
-		if diff := cmp.Diff(eviction.Status, wantStatus, evictionStatusCmpOptions...); diff != "" {
-			return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
-		}
-		return nil
-	}
-}
 
 func buildTestPickNCRP(crpName string, clusterCount int32) placementv1beta1.ClusterResourcePlacement {
 	return placementv1beta1.ClusterResourcePlacement{
@@ -596,14 +536,4 @@ func ensureAllBindingsAreRemoved(crpName string) {
 	for i := range bindingList.Items {
 		ensureCRBRemoved(bindingList.Items[i].Name)
 	}
-}
-
-type isValidEviction struct {
-	bool
-	msg string
-}
-
-type isExecutedEviction struct {
-	bool
-	msg string
 }
