@@ -74,7 +74,10 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
 							UnavailablePeriodSeconds: ptr.To(2),
 						},
-						ApplyStrategy: &placementv1beta1.ApplyStrategy{AllowCoOwnership: true},
+						ApplyStrategy: &placementv1beta1.ApplyStrategy{
+							AllowCoOwnership: true,
+							WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeAlways,
+						},
 					},
 				},
 			}
@@ -83,7 +86,7 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 
 		It("should update CRP status as expected", func() {
 			// resourceQuota is not trackable yet
-			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", true)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -115,7 +118,7 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 		})
 
 		It("should update CRP status to applied to all clusters again automatically after rejoining", func() {
-			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", true)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 	})

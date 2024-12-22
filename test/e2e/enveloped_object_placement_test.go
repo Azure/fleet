@@ -22,7 +22,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -91,7 +91,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 
 		It("should update CRP status as expected", func() {
 			// resourceQuota is enveloped so it's not trackable yet
-			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", true)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -135,7 +135,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 		})
 
 		It("should update CRP status as success again", func() {
-			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "2", false)
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "2", true)
 			Eventually(crpStatusUpdatedActual, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -294,7 +294,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 							Condition: metav1.Condition{
 								Type:               string(placementv1beta1.ResourcesAvailableConditionType),
 								Status:             metav1.ConditionFalse,
-								Reason:             "ManifestNotAvailableYet",
+								Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeNotYetAvailable),
 								ObservedGeneration: 1,
 							},
 						},
@@ -401,7 +401,7 @@ func checkForRolloutStuckOnOneFailedClusterStatus(wantSelectedResources []placem
 			Condition: metav1.Condition{
 				Type:   placementv1beta1.WorkConditionTypeApplied,
 				Status: metav1.ConditionFalse,
-				Reason: work.ManifestApplyFailedReason,
+				Reason: string(workapplier.ManifestProcessingApplyResultTypeFailedToApply),
 			},
 		},
 	}

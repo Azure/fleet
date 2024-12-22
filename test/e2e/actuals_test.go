@@ -18,7 +18,7 @@ import (
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
-	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	scheduler "go.goms.io/fleet/pkg/scheduler/framework"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -371,7 +371,7 @@ func resourcePlacementApplyFailedConditions(generation int64) []metav1.Condition
 }
 
 func resourcePlacementRolloutCompletedConditions(generation int64, resourceIsTrackable bool, hasOverride bool) []metav1.Condition {
-	availableConditionReason := work.WorkNotTrackableReason
+	availableConditionReason := workapplier.ManifestProcessingAvailabilityResultTypeNotTrackable
 	if resourceIsTrackable {
 		availableConditionReason = condition.AllWorkAvailableReason
 	}
@@ -414,7 +414,7 @@ func resourcePlacementRolloutCompletedConditions(generation int64, resourceIsTra
 		{
 			Type:               string(placementv1beta1.ResourcesAvailableConditionType),
 			Status:             metav1.ConditionTrue,
-			Reason:             availableConditionReason,
+			Reason:             string(availableConditionReason),
 			ObservedGeneration: generation,
 		},
 	}
@@ -789,7 +789,7 @@ func safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResourceIdentifiers [
 					Condition: metav1.Condition{
 						Type:               string(placementv1beta1.ResourcesAvailableConditionType),
 						Status:             metav1.ConditionFalse,
-						Reason:             "ManifestNotAvailableYet",
+						Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeNotYetAvailable),
 						ObservedGeneration: failedResourceObservedGeneration,
 					},
 				},
