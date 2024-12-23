@@ -632,6 +632,7 @@ func crpStatusWithOverrideUpdatedFailedActual(
 		return nil
 	}
 }
+
 func crpStatusWithWorkSynchronizedUpdatedFailedActual(
 	wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier,
 	wantSelectedClusters []string,

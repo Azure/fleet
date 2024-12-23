@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
@@ -1211,4 +1212,23 @@ func checkIfStatusErrorWithMessage(err error, errorMsg string) error {
 		}
 	}
 	return fmt.Errorf("error message %s not found in error %w", errorMsg, err)
+}
+
+// buildOwnerReference builds an owner reference given a cluster and a CRP name.
+//
+// This function assumes that the CRP has only one associated Work object (no resource snapshot
+// sub-index, no envelope object used).
+func buildOwnerReference(cluster *framework.Cluster, crpName string) *metav1.OwnerReference {
+	workName := fmt.Sprintf("%s-work", crpName)
+
+	appliedWork := placementv1beta1.AppliedWork{}
+	Expect(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName}, &appliedWork)).Should(Succeed(), "Failed to get applied work object")
+
+	return &metav1.OwnerReference{
+		APIVersion:         placementv1beta1.GroupVersion.String(),
+		Kind:               "AppliedWork",
+		Name:               workName,
+		UID:                appliedWork.UID,
+		BlockOwnerDeletion: ptr.To(false),
+	}
 }
