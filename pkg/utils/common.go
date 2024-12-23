@@ -590,6 +590,27 @@ var LessFuncDriftedResourcePlacements = func(a, b placementv1beta1.DriftedResour
 	return aStr < bStr
 }
 
+func IsDriftedResourcePlacementEqual(oldDrifted, newDrifted []placementv1beta1.DriftedResourcePlacement) bool {
+	if len(oldDrifted) != len(newDrifted) {
+		return false
+	}
+
+	sort.Slice(oldDrifted, func(i, j int) bool {
+		return LessFuncDriftedResourcePlacements(oldDrifted[i], oldDrifted[j])
+	})
+	sort.Slice(newDrifted, func(i, j int) bool {
+		return LessFuncDriftedResourcePlacements(newDrifted[i], newDrifted[j])
+	})
+	for i := range oldDrifted {
+		oldPlacement := oldDrifted[i]
+		newPlacement := newDrifted[i]
+		if !equality.Semantic.DeepEqual(oldPlacement, newPlacement) {
+			return false
+		}
+	}
+	return true
+}
+
 // LessFuncDiffedResourcePlacements is a less function for sorting drifted resource placements
 var LessFuncDiffedResourcePlacements = func(a, b placementv1beta1.DiffedResourcePlacement) bool {
 	var aStr, bStr string
@@ -605,6 +626,27 @@ var LessFuncDiffedResourcePlacements = func(a, b placementv1beta1.DiffedResource
 
 	}
 	return aStr < bStr
+}
+
+func IsDiffedResourcePlacementEqual(oldDiffed, newDiffed []placementv1beta1.DiffedResourcePlacement) bool {
+	if len(oldDiffed) != len(newDiffed) {
+		return false
+	}
+
+	sort.Slice(oldDiffed, func(i, j int) bool {
+		return LessFuncDiffedResourcePlacements(oldDiffed[i], oldDiffed[j])
+	})
+	sort.Slice(newDiffed, func(i, j int) bool {
+		return LessFuncDiffedResourcePlacements(newDiffed[i], newDiffed[j])
+	})
+	for i := range oldDiffed {
+		oldPlacement := oldDiffed[i]
+		newPlacement := newDiffed[i]
+		if !equality.Semantic.DeepEqual(oldPlacement, newPlacement) {
+			return false
+		}
+	}
+	return true
 }
 
 // IsFleetAnnotationPresent returns true if a key with fleet prefix is present in the annotations map.

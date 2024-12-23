@@ -200,6 +200,8 @@ var (
 		cmpopts.SortSlices(lessFuncPlacementStatus),
 		cmpopts.SortSlices(utils.LessFuncResourceIdentifier),
 		cmpopts.SortSlices(utils.LessFuncFailedResourcePlacements),
+		cmpopts.SortSlices(utils.LessFuncDiffedResourcePlacements),
+		cmpopts.SortSlices(utils.LessFuncDriftedResourcePlacements),
 		utils.IgnoreConditionLTTAndMessageFields,
 		ignoreCRPStatusDriftedPlacementsTimestampFields,
 		ignoreCRPStatusDiffedPlacementsTimestampFields,

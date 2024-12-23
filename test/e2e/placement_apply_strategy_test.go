@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -418,6 +419,196 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				ns := &corev1.Namespace{}
 				return allMemberClusters[0].KubeClient.Get(ctx, types.NamespacedName{Name: workNamespaceName}, ns)
 			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Namespace which is not owned by the CRP should not be deleted")
+		})
+	})
+
+	Context("no dual placement", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		conflictedCRPName := "crp-conflicted"
+		nsName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+		cmName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
+
+		BeforeAll(func() {
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: ptr.To(2),
+						},
+						ApplyStrategy: &placementv1beta1.ApplyStrategy{
+							AllowCoOwnership: true,
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+		})
+
+		It("should update CRP status as expected", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("can create a CRP in conflict", func() {
+			conflictedCRP := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: conflictedCRPName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: ptr.To(2),
+						},
+						ApplyStrategy: &placementv1beta1.ApplyStrategy{
+							AllowCoOwnership: true,
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, conflictedCRP)).To(Succeed(), "Failed to create conflicted CRP")
+		})
+
+		It("should update conflicted CRP status as expected", func() {
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
+				return &placementv1beta1.ClusterResourcePlacementStatus{
+					Conditions:        crpAppliedFailedConditions(crpGeneration),
+					SelectedResources: workResourceIdentifiers(),
+					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+						{
+							ClusterName: memberCluster1EastProdName,
+							Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
+							FailedPlacements: []placementv1beta1.FailedResourcePlacement{
+								{
+									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+										Version: "v1",
+										Kind:    "Namespace",
+										Name:    nsName,
+									},
+									Condition: metav1.Condition{
+										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+										Status:             metav1.ConditionFalse,
+										ObservedGeneration: 1,
+										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
+									},
+								},
+								{
+									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+										Version:   "v1",
+										Kind:      "ConfigMap",
+										Name:      cmName,
+										Namespace: nsName,
+									},
+									Condition: metav1.Condition{
+										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+										Status:             metav1.ConditionFalse,
+										ObservedGeneration: 1,
+										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
+									},
+								},
+							},
+						},
+						{
+							ClusterName: memberCluster2EastCanaryName,
+							Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
+							FailedPlacements: []placementv1beta1.FailedResourcePlacement{
+								{
+									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+										Version: "v1",
+										Kind:    "Namespace",
+										Name:    nsName,
+									},
+									Condition: metav1.Condition{
+										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+										Status:             metav1.ConditionFalse,
+										ObservedGeneration: 1,
+										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
+									},
+								},
+								{
+									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+										Version:   "v1",
+										Kind:      "ConfigMap",
+										Name:      cmName,
+										Namespace: nsName,
+									},
+									Condition: metav1.Condition{
+										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+										Status:             metav1.ConditionFalse,
+										ObservedGeneration: 1,
+										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
+									},
+								},
+							},
+						},
+						{
+							ClusterName: memberCluster3WestProdName,
+							Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
+							FailedPlacements: []placementv1beta1.FailedResourcePlacement{
+								{
+									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+										Version: "v1",
+										Kind:    "Namespace",
+										Name:    nsName,
+									},
+									Condition: metav1.Condition{
+										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+										Status:             metav1.ConditionFalse,
+										ObservedGeneration: 1,
+										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
+									},
+								},
+								{
+									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+										Version:   "v1",
+										Kind:      "ConfigMap",
+										Name:      cmName,
+										Namespace: nsName,
+									},
+									Condition: metav1.Condition{
+										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+										Status:             metav1.ConditionFalse,
+										ObservedGeneration: 1,
+										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
+									},
+								},
+							},
+						},
+					},
+					ObservedResourceIndex: "0",
+				}
+			}
+
+			Eventually(func() error {
+				conflictedCRP := &placementv1beta1.ClusterResourcePlacement{}
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: conflictedCRPName}, conflictedCRP); err != nil {
+					return err
+				}
+				wantCRPStatus := buildWantCRPStatus(conflictedCRP.Generation)
+
+				if diff := cmp.Diff(conflictedCRP.Status, *wantCRPStatus, crpStatusCmpOptions...); diff != "" {
+					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		AfterAll(func() {
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+
+			ensureCRPAndRelatedResourcesDeletion(conflictedCRPName, allMemberClusters)
 		})
 	})
 })

@@ -123,6 +123,16 @@ func isBindingStatusUpdated(oldBinding, newBinding *fleetv1beta1.ClusterResource
 		klog.V(2).InfoS("The binding failed placement has changed, need to update the corresponding CRP", "oldBinding", klog.KObj(oldBinding), "newBinding", klog.KObj(newBinding))
 		return true
 	}
+
+	if !utils.IsDriftedResourcePlacementEqual(oldBinding.Status.DriftedPlacements, newBinding.Status.DriftedPlacements) {
+		klog.V(2).InfoS("The binding drifted placement has changed, need to update the corresponding CRP", "oldBinding", klog.KObj(oldBinding), "newBinding", klog.KObj(newBinding))
+		return true
+	}
+
+	if !utils.IsDiffedResourcePlacementEqual(oldBinding.Status.DiffedPlacements, newBinding.Status.DiffedPlacements) {
+		klog.V(2).InfoS("The binding diffed placement has changed, need to update the corresponding CRP", "oldBinding", klog.KObj(oldBinding), "newBinding", klog.KObj(newBinding))
+		return true
+	}
 	klog.V(5).InfoS("The binding status has not changed, no need to update the corresponding CRP", "oldBinding", klog.KObj(oldBinding), "newBinding", klog.KObj(newBinding))
 	return false
 }

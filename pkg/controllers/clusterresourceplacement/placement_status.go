@@ -262,9 +262,10 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(crp *fleetv1beta1.Clus
 				if bindingCond.Status == metav1.ConditionFalse {
 					status.FailedPlacements = binding.Status.FailedPlacements
 					status.DiffedPlacements = binding.Status.DiffedPlacements
-					status.DriftedPlacements = binding.Status.DriftedPlacements
 				}
 			}
+			// Drifts are reported regardless of the status of the Applied condition.
+			status.DriftedPlacements = binding.Status.DriftedPlacements
 			cond := metav1.Condition{
 				Type:               string(i.ResourcePlacementConditionType()),
 				Status:             bindingCond.Status,
