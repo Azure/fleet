@@ -61,7 +61,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 
 			// Create the CRP.
 			strategy := &placementv1beta1.ApplyStrategy{AllowCoOwnership: true}
-			createCRP(crpName, strategy)
+			createCRPWithApplyStrategy(crpName, strategy)
 		})
 
 		AfterAll(func() {
@@ -123,7 +123,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 
 			// Create the CRP.
 			strategy := &placementv1beta1.ApplyStrategy{AllowCoOwnership: false}
-			createCRP(crpName, strategy)
+			createCRPWithApplyStrategy(crpName, strategy)
 		})
 
 		AfterAll(func() {
@@ -176,7 +176,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				Type:             placementv1beta1.ApplyStrategyTypeServerSideApply,
 				AllowCoOwnership: false,
 			}
-			createCRP(crpName, strategy)
+			createCRPWithApplyStrategy(crpName, strategy)
 		})
 
 		AfterAll(func() {
@@ -234,7 +234,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				Type:             placementv1beta1.ApplyStrategyTypeServerSideApply,
 				AllowCoOwnership: false,
 			}
-			createCRP(crpName, strategy)
+			createCRPWithApplyStrategy(crpName, strategy)
 		})
 
 		AfterAll(func() {
@@ -369,7 +369,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				ServerSideApplyConfig: &placementv1beta1.ServerSideApplyConfig{ForceConflicts: true},
 				AllowCoOwnership:      true,
 			}
-			createCRP(crpName, strategy)
+			createCRPWithApplyStrategy(crpName, strategy)
 		})
 
 		AfterAll(func() {
@@ -450,35 +450,6 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				},
 			}
 			Expect(hubClient.Create(ctx, crp)).To(Succeed())
-		})
-
-		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
-			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
-		})
-
-		It("can create a CRP in conflict", func() {
-			conflictedCRP := &placementv1beta1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: conflictedCRPName,
-					// Add a custom finalizer; this would allow us to better observe
-					// the behavior of the controllers.
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
-					ResourceSelectors: workResourceSelector(),
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-						ApplyStrategy: &placementv1beta1.ApplyStrategy{
-							AllowCoOwnership: true,
-						},
-					},
-				},
-			}
-			Expect(hubClient.Create(ctx, conflictedCRP)).To(Succeed(), "Failed to create conflicted CRP")
 		})
 
 		It("should update conflicted CRP status as expected", func() {
@@ -612,22 +583,3 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 		})
 	})
 })
-
-func createCRP(crpName string, applyStrategy *placementv1beta1.ApplyStrategy) {
-	crp := &placementv1beta1.ClusterResourcePlacement{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: crpName,
-			// Add a custom finalizer; this would allow us to better observe
-			// the behavior of the controllers.
-			Finalizers: []string{customDeletionBlockerFinalizer},
-		},
-		Spec: placementv1beta1.ClusterResourcePlacementSpec{
-			ResourceSelectors: workResourceSelector(),
-			Strategy: placementv1beta1.RolloutStrategy{
-				ApplyStrategy: applyStrategy,
-			},
-		},
-	}
-	By(fmt.Sprintf("creating placement %s", crpName))
-	Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
-}

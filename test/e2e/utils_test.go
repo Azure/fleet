@@ -1232,3 +1232,28 @@ func buildOwnerReference(cluster *framework.Cluster, crpName string) *metav1.Own
 		BlockOwnerDeletion: ptr.To(false),
 	}
 }
+
+// createCRPWithApplyStrategy creates a ClusterResourcePlacement with the given name and apply strategy.
+func createCRPWithApplyStrategy(crpName string, applyStrategy *placementv1beta1.ApplyStrategy) {
+	crp := &placementv1beta1.ClusterResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: crpName,
+			// Add a custom finalizer; this would allow us to better observe
+			// the behavior of the controllers.
+			Finalizers: []string{customDeletionBlockerFinalizer},
+		},
+		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			ResourceSelectors: workResourceSelector(),
+		},
+	}
+	if applyStrategy != nil {
+		crp.Spec.Strategy.ApplyStrategy = applyStrategy
+	}
+	By(fmt.Sprintf("creating placement %s", crpName))
+	Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+}
+
+// createCRP creates a ClusterResourcePlacement with the given name.
+func createCRP(crpName string) {
+	createCRPWithApplyStrategy(crpName, nil)
+}
