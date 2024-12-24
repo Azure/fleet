@@ -11,9 +11,12 @@ import (
 
 	"github.com/qri-io/jsonpointer"
 	"github.com/wI2L/jsondiff"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
@@ -25,10 +28,23 @@ func (r *Reconciler) takeOverPreExistingObject(
 	applyStrategy *fleetv1beta1.ApplyStrategy,
 	expectedAppliedWorkOwnerRef *metav1.OwnerReference,
 ) (*unstructured.Unstructured, []fleetv1beta1.PatchDetail, error) {
-	// Check this object is already owned by another object (or controller); if so, Fleet will only
-	// add itself as an additional owner if co-ownership is allowed.
 	inMemberClusterObjCopy := inMemberClusterObj.DeepCopy()
 	existingOwnerRefs := inMemberClusterObjCopy.GetOwnerReferences()
+
+	// At this moment Fleet is set to leave applied resources in the member cluster if the cluster
+	// decides to leave its fleet; when this happens, the resources will be owned by an AppliedWork
+	// object that might not have a corresponding Work object anymore as the cluster might have
+	// been de-selected. If the cluster decides to re-join the fleet, and the same set of manifests
+	// are being applied again, one may encounter unexpected errors due to the presence of the
+	// left behind AppliedWork object. To address this issue, Fleet here will perform a cleanup,
+	// removing any owner reference that points to an orphaned AppliedWork object.
+	existingOwnerRefs, err := r.removeLeftBehindAppliedWorkOwnerRefs(ctx, existingOwnerRefs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to remove left-behind AppliedWork owner references: %w", err)
+	}
+
+	// Check this object is already owned by another object (or controller); if so, Fleet will only
+	// add itself as an additional owner if co-ownership is allowed.
 	if len(existingOwnerRefs) >= 1 && !applyStrategy.AllowCoOwnership {
 		// The object is already owned by another object, and co-ownership is forbidden.
 		// No takeover will be performed.
@@ -40,7 +56,7 @@ func (r *Reconciler) takeOverPreExistingObject(
 	// Check if the object is already owned by Fleet, but the owner is a different AppliedWork
 	// object, i.e., the object has been placed in duplicate.
 	//
-	// Note: originally Fleet does allow placing the same object multiple times; each placement
+	// Originally Fleet does allow placing the same object multiple times; each placement
 	// attempt might have its own object spec (envelopes might be used and in each envelope
 	// the object looks different). This would lead to the object being constantly overwritten,
 	// but no error would be raised on the user-end. With the drift detection feature, however,
@@ -237,4 +253,36 @@ func preparePatchDetails(srcObj, destObj *unstructured.Unstructured) ([]fleetv1b
 		return nil, fmt.Errorf("failed to organize JSON patch operations into Fleet patch details: %w", err)
 	}
 	return details, nil
+}
+
+func (r *Reconciler) removeLeftBehindAppliedWorkOwnerRefs(ctx context.Context, ownerRefs []metav1.OwnerReference) ([]metav1.OwnerReference, error) {
+	updatedOwnerRefs := make([]metav1.OwnerReference, 0, len(ownerRefs))
+	for idx := range ownerRefs {
+		ownerRef := ownerRefs[idx]
+		if ownerRef.APIVersion != fleetv1beta1.GroupVersion.String() || ownerRef.Kind != fleetv1beta1.AppliedWorkKind {
+			// Skip non AppliedWork owner references.
+			updatedOwnerRefs = append(updatedOwnerRefs, ownerRef)
+			continue
+		}
+
+		// Check if the AppliedWork object has a corresponding Work object.
+		workObj := &fleetv1beta1.Work{}
+		err := r.hubClient.Get(ctx, types.NamespacedName{Namespace: r.workNameSpace, Name: ownerRef.Name}, workObj)
+		switch {
+		case err != nil && !errors.IsNotFound(err):
+			// An unexpected error occurred.
+			return nil, fmt.Errorf("failed to get the Work object: %w", err)
+		case err == nil && workObj.UID == ownerRef.UID:
+			// The AppliedWork owner reference is valid; no need for removal.
+			updatedOwnerRefs = append(updatedOwnerRefs, ownerRef)
+			continue
+		default:
+			// The AppliedWork owner reference is invalid; either the Work object does not exist or
+			// the UIDs do not match. Remove the owner reference.
+			klog.V(2).InfoS("Found an owner reference that points to an orphaned AppliedWork object", "ownerRef", ownerRef)
+			continue
+		}
+	}
+
+	return updatedOwnerRefs, nil
 }

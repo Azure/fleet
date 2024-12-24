@@ -517,7 +517,7 @@ func setManifestAppliedCondition(
 	manifestCond *fleetv1beta1.ManifestCondition,
 	appliedResTyp manifestProcessingAppliedResultType,
 	applyError error,
-	workGeneration int64,
+	inMemberClusterObjGeneration int64,
 ) {
 	var appliedCond *metav1.Condition
 	switch {
@@ -528,7 +528,7 @@ func setManifestAppliedCondition(
 			Status:             metav1.ConditionTrue,
 			Reason:             string(ManifestProcessingApplyResultTypeApplied),
 			Message:            ManifestProcessingApplyResultTypeAppliedDescription,
-			ObservedGeneration: workGeneration,
+			ObservedGeneration: inMemberClusterObjGeneration,
 		}
 	case appliedResTyp == ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetection:
 		// The manifest has been successfully applied, but drift detection has failed.
@@ -540,7 +540,7 @@ func setManifestAppliedCondition(
 			Status:             metav1.ConditionTrue,
 			Reason:             string(ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetection),
 			Message:            ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetectionDescription,
-			ObservedGeneration: workGeneration,
+			ObservedGeneration: inMemberClusterObjGeneration,
 		}
 	case appliedResTyp == ManifestProcessingApplyResultTypeNoDiffFound:
 		// No configuration diff has been found between the manifest and the corresponding
@@ -550,7 +550,7 @@ func setManifestAppliedCondition(
 			Status:             metav1.ConditionTrue,
 			Reason:             string(ManifestProcessingApplyResultTypeNoDiffFound),
 			Message:            ManifestProcessingApplyResultTypeNoDiffFoundDescription,
-			ObservedGeneration: workGeneration,
+			ObservedGeneration: inMemberClusterObjGeneration,
 		}
 	default:
 		// The apply op fails.
@@ -559,7 +559,7 @@ func setManifestAppliedCondition(
 			Status:             metav1.ConditionFalse,
 			Reason:             string(appliedResTyp),
 			Message:            fmt.Sprintf("Failed to applied the manifest (error: %s)", applyError),
-			ObservedGeneration: workGeneration,
+			ObservedGeneration: inMemberClusterObjGeneration,
 		}
 	}
 
@@ -570,7 +570,7 @@ func setManifestAvailableCondition(
 	manifestCond *fleetv1beta1.ManifestCondition,
 	availabilityResTyp ManifestProcessingAvailabilityResultType,
 	availabilityError error,
-	workGeneration int64,
+	inMemberClusterObjGeneration int64,
 ) {
 	var availableCond *metav1.Condition
 	switch {
@@ -585,7 +585,7 @@ func setManifestAvailableCondition(
 			Status:             metav1.ConditionFalse,
 			Reason:             string(ManifestProcessingAvailabilityResultTypeFailed),
 			Message:            fmt.Sprintf(ManifestProcessingAvailabilityResultTypeFailedDescription, availabilityError),
-			ObservedGeneration: workGeneration,
+			ObservedGeneration: inMemberClusterObjGeneration,
 		}
 	case availabilityResTyp == ManifestProcessingAvailabilityResultTypeNotYetAvailable:
 		// The manifest is not yet available.
@@ -594,7 +594,7 @@ func setManifestAvailableCondition(
 			Status:             metav1.ConditionFalse,
 			Reason:             string(ManifestProcessingAvailabilityResultTypeNotYetAvailable),
 			Message:            ManifestProcessingAvailabilityResultTypeNotYetAvailableDescription,
-			ObservedGeneration: workGeneration,
+			ObservedGeneration: inMemberClusterObjGeneration,
 		}
 	case availabilityResTyp == ManifestProcessingAvailabilityResultTypeNotTrackable:
 		// Fleet cannot track the availability of the manifest.
@@ -603,7 +603,7 @@ func setManifestAvailableCondition(
 			Status:             metav1.ConditionTrue,
 			Reason:             string(ManifestProcessingAvailabilityResultTypeNotTrackable),
 			Message:            ManifestProcessingAvailabilityResultTypeNotTrackableDescription,
-			ObservedGeneration: workGeneration,
+			ObservedGeneration: inMemberClusterObjGeneration,
 		}
 	default:
 		// The manifest is available.
@@ -612,7 +612,7 @@ func setManifestAvailableCondition(
 			Status:             metav1.ConditionTrue,
 			Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
 			Message:            ManifestProcessingAvailabilityResultTypeAvailableDescription,
-			ObservedGeneration: workGeneration,
+			ObservedGeneration: inMemberClusterObjGeneration,
 		}
 	}
 
