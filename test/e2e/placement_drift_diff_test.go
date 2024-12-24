@@ -217,7 +217,7 @@ var _ = Describe("take over existing resources", func() {
 									Condition: metav1.Condition{
 										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
 										Status:             metav1.ConditionFalse,
-										ObservedGeneration: 1,
+										ObservedGeneration: 0,
 										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
 									},
 								},
@@ -402,7 +402,7 @@ var _ = Describe("take over existing resources", func() {
 									Condition: metav1.Condition{
 										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
 										Status:             metav1.ConditionFalse,
-										ObservedGeneration: 1,
+										ObservedGeneration: 0,
 										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
 									},
 								},
@@ -416,7 +416,7 @@ var _ = Describe("take over existing resources", func() {
 									Condition: metav1.Condition{
 										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
 										Status:             metav1.ConditionFalse,
-										ObservedGeneration: 1,
+										ObservedGeneration: 0,
 										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
 									},
 								},
@@ -773,7 +773,7 @@ var _ = Describe("detect drifts on placed resources", func() {
 									Condition: metav1.Condition{
 										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
 										Status:             metav1.ConditionFalse,
-										ObservedGeneration: 1,
+										ObservedGeneration: 0,
 										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFoundDrifts),
 									},
 								},
@@ -962,7 +962,7 @@ var _ = Describe("report diff mode", func() {
 									Condition: metav1.Condition{
 										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
 										Status:             metav1.ConditionFalse,
-										ObservedGeneration: 1,
+										ObservedGeneration: 0,
 										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFoundDiffs),
 									},
 								},
@@ -976,7 +976,7 @@ var _ = Describe("report diff mode", func() {
 									Condition: metav1.Condition{
 										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
 										Status:             metav1.ConditionFalse,
-										ObservedGeneration: 1,
+										ObservedGeneration: 0,
 										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFoundDiffs),
 									},
 								},
@@ -1027,7 +1027,7 @@ var _ = Describe("report diff mode", func() {
 									Condition: metav1.Condition{
 										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
 										Status:             metav1.ConditionFalse,
-										ObservedGeneration: 1,
+										ObservedGeneration: 0,
 										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFoundDiffs),
 									},
 								},
@@ -1041,7 +1041,7 @@ var _ = Describe("report diff mode", func() {
 									Condition: metav1.Condition{
 										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
 										Status:             metav1.ConditionFalse,
-										ObservedGeneration: 1,
+										ObservedGeneration: 0,
 										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFoundDiffs),
 									},
 								},
@@ -1089,7 +1089,7 @@ var _ = Describe("report diff mode", func() {
 									Condition: metav1.Condition{
 										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
 										Status:             metav1.ConditionFalse,
-										ObservedGeneration: 1,
+										ObservedGeneration: 0,
 										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFoundDiffs),
 									},
 								},
@@ -1103,7 +1103,7 @@ var _ = Describe("report diff mode", func() {
 									Condition: metav1.Condition{
 										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
 										Status:             metav1.ConditionFalse,
-										ObservedGeneration: 1,
+										ObservedGeneration: 0,
 										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFoundDiffs),
 									},
 								},
@@ -1210,7 +1210,7 @@ var _ = Describe("report diff mode", func() {
 				Consistently(func() error {
 					ns := &corev1.Namespace{}
 					if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: nsName}, ns); !errors.IsNotFound(err) {
-						return fmt.Errorf("the namespace is placed or an unexpected error occurred: %v", err)
+						return fmt.Errorf("the namespace is placed or an unexpected error occurred: %w", err)
 					}
 
 					return nil
