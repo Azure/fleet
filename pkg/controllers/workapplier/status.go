@@ -45,8 +45,15 @@ func (r *Reconciler) refreshWorkStatus(
 		manifestCond := &rebuiltManifestConds[idx]
 		manifestCond.Identifier = *bundle.id
 		manifestCond.Conditions = []metav1.Condition{}
-		setManifestAppliedCondition(manifestCond, bundle.applyResTyp, bundle.applyErr, work.Generation)
-		setManifestAvailableCondition(manifestCond, bundle.availabilityResTyp, bundle.availabilityErr, work.Generation)
+
+		// Note that per API definition, the observed generation of a manifest condition is that
+		// of the applied resource, not that of the Work object.
+		inMemberClusterObjGeneration := int64(0)
+		if bundle.inMemberClusterObj != nil {
+			inMemberClusterObjGeneration = bundle.inMemberClusterObj.GetGeneration()
+		}
+		setManifestAppliedCondition(manifestCond, bundle.applyResTyp, bundle.applyErr, inMemberClusterObjGeneration)
+		setManifestAvailableCondition(manifestCond, bundle.availabilityResTyp, bundle.availabilityErr, inMemberClusterObjGeneration)
 
 		// Check if a first drifted timestamp has been set; if not, set it to the current time.
 		firstDriftedTimestamp := bundle.firstDriftedTimestamp
