@@ -1473,7 +1473,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll:                true,
 			wantWaitTime:                25 * time.Second, // minWaitTime = (t - 35 seconds) - (t - 60 seconds) = 25 seconds
 		},
-		"test bound deleting binding - rollout blocked": {
+		"test only one bound but is deleting binding - rollout blocked": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				setDeletionTimeStampForBinding(generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1)),
 			},
@@ -1703,8 +1703,8 @@ func TestPickBindingsToRoll(t *testing.T) {
 		},
 		"test upscale with policy change MaxSurge specified, evict resources from canBeReady bound binding - rollout allowed for three new scheduled bindings": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
-				setDeletionTimeStampForBinding(generateCanBeReadyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1)),
-				generateCanBeReadyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
+				setDeletionTimeStampForBinding(generateCanBeReadyClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1)),
+				generateCanBeReadyClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster3),
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster4),
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster5),

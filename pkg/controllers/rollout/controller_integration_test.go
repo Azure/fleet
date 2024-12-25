@@ -99,11 +99,10 @@ var _ = Describe("Test the rollout Controller", func() {
 	It("Should rollout all the selected bindings when the rollout strategy is not set", func() {
 		// create CRP
 		var targetCluster int32 = 11
+		// rolloutStrategy not set.
 		rolloutCRP = clusterResourcePlacementForTest(testCRPName,
 			createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, targetCluster),
-			createPlacementRolloutStrategyForTest(fleetv1beta1.RollingUpdateRolloutStrategyType, generateDefaultRollingUpdateConfig(), nil))
-		// remove the strategy
-		rolloutCRP.Spec.Strategy = fleetv1beta1.RolloutStrategy{}
+			fleetv1beta1.RolloutStrategy{})
 		Expect(k8sClient.Create(ctx, rolloutCRP)).Should(Succeed())
 		// create master resource snapshot that is latest
 		masterSnapshot := generateResourceSnapshot(rolloutCRP.Name, 0, true)
