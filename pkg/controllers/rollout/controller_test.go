@@ -1505,8 +1505,8 @@ func TestPickBindingsToRoll(t *testing.T) {
 					ResourceSnapshotName: "snapshot-1",
 				},
 			},
-			wantTobeUpdatedBindings:     []int{2}, // specified MaxSurge helps us pick one scheduled binding to rollout. we don't have any ready binding so we don't remove any binding.
-			wantStaleUnselectedBindings: []int{3},
+			wantTobeUpdatedBindings:     []int{2}, // specified MaxSurge helps us pick only one scheduled binding to rollout. we don't have any ready unscheduled bindings so we don't remove any binding.
+			wantStaleUnselectedBindings: []int{3}, // remove candidates i.e. unscheduled bindings are not added to the stale unselected bindings.
 			wantNeedRoll:                true,
 			wantWaitTime:                time.Second,
 		},
@@ -1545,8 +1545,8 @@ func TestPickBindingsToRoll(t *testing.T) {
 					ResourceSnapshotName: "snapshot-1",
 				},
 			},
-			wantTobeUpdatedBindings:     []int{1}, // specified MaxUnavailable helps us remove unscheduled binding, deleting unscheduled binding even though ready is a canBeUnavailable binding.
-			wantStaleUnselectedBindings: []int{2, 3},
+			wantTobeUpdatedBindings:     []int{1},    // specified MaxUnavailable helps us remove ready unscheduled binding, even though we have a deleting canBeUnavailable ready unscheduled binding.
+			wantStaleUnselectedBindings: []int{2, 3}, // since we have two canBeReady unscheduled bindings and maxSurge is set to zero, scheduled bindings are not bound.
 			wantNeedRoll:                true,
 			wantWaitTime:                0,
 		},
@@ -1577,7 +1577,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 					ResourceSnapshotName: "snapshot-2",
 				},
 			},
-			wantTobeUpdatedBindings:     []int{1}, // specified MaxUnavailable helps us update bound binding, deleting bound binding even though ready is a canBeUnavailable binding.
+			wantTobeUpdatedBindings:     []int{1}, // specified MaxUnavailable helps us update bound binding, even though we have deleting canBeUnavailable ready bound binding.
 			wantStaleUnselectedBindings: []int{},
 			wantNeedRoll:                true,
 			wantWaitTime:                0,
@@ -1610,7 +1610,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantTobeUpdatedBindings:     []int{},
-			wantStaleUnselectedBindings: []int{1}, // even with specified MaxUnavailable, we have no ready bindings to allow update. Deleting bound binding even though ready is a canBeUnavailable binding
+			wantStaleUnselectedBindings: []int{1}, // even with specified MaxUnavailable, we have no ready bindings to allow update.
 			wantNeedRoll:                true,
 			wantWaitTime:                time.Second,
 		},
@@ -1733,8 +1733,8 @@ func TestPickBindingsToRoll(t *testing.T) {
 					ResourceSnapshotName: "snapshot-1",
 				},
 			},
-			wantTobeUpdatedBindings:     []int{2, 3, 4}, // specified MaxSurge helps us pick three new scheduled bindings, target number + MaxSurge is greater than canBeReady bindings.
-			wantStaleUnselectedBindings: []int{5},
+			wantTobeUpdatedBindings:     []int{2, 3, 4}, // specified MaxSurge helps us pick three new scheduled bindings out of four, target number + MaxSurge is greater than canBeReady bindings.
+			wantStaleUnselectedBindings: []int{5},       // unscheduled binding is a canBeReady binding & maxUnavailable is set to zero.
 			wantNeedRoll:                true,
 			wantWaitTime:                time.Second,
 		},
@@ -1777,7 +1777,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 					ResourceSnapshotName: "snapshot-2",
 				},
 			},
-			wantTobeUpdatedBindings:     []int{1, 2, 3}, // both new scheduled bindings are picked because target number is greater than canBeReady bindings, specified MaxUnavailable helps pick bound binding to updates, deleting ready bound binding is canBeUnavailable binding.
+			wantTobeUpdatedBindings:     []int{1, 2, 3}, // both new scheduled bindings are picked because target number is greater than canBeReady bindings, specified MaxUnavailable helps pick bound binding to update even though deleting ready bound binding is a canBeUnavailable binding.
 			wantStaleUnselectedBindings: []int{},
 			wantNeedRoll:                true,
 			wantWaitTime:                0,
@@ -1885,8 +1885,8 @@ func TestPickBindingsToRoll(t *testing.T) {
 					ResourceSnapshotName: "snapshot-1",
 				},
 			},
-			wantTobeUpdatedBindings:     []int{1}, // more ready bindings than required we remove one unscheduled binding, since two bindings are already canBeReady we don't roll out new scheduled bindings.
-			wantStaleUnselectedBindings: []int{4, 5},
+			wantTobeUpdatedBindings:     []int{1},    // more ready bindings than required we remove one unscheduled binding, since two bindings are already canBeReady we don't roll out new scheduled bindings.
+			wantStaleUnselectedBindings: []int{4, 5}, // more canBeReady bindings than target number + maxSurge so scheduled bindings are not rolled out.
 			wantNeedRoll:                true,
 			wantWaitTime:                0,
 		},
@@ -1974,7 +1974,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantTobeUpdatedBindings:     []int{2}, // remove candidates (unscheduled bindings) are chosen before update candidates (bound bindings)
-			wantStaleUnselectedBindings: []int{1},
+			wantStaleUnselectedBindings: []int{1}, // since maxUnavailable is set to zero, we can't remove the ready unscheduled and ready bound binding (remove candidates aren't added to stale bindings)
 			wantNeedRoll:                true,
 			wantWaitTime:                0,
 		},
@@ -2017,8 +2017,8 @@ func TestPickBindingsToRoll(t *testing.T) {
 					ResourceSnapshotName: "snapshot-2",
 				},
 			},
-			wantTobeUpdatedBindings:     []int{3, 0}, // remove candidates (unscheduled bindings) are chosen before update candidates (bound bindings), MaxUnavailable helps us pick bound binding to update.
-			wantStaleUnselectedBindings: []int{1},
+			wantTobeUpdatedBindings:     []int{3, 0}, // remove candidates (unscheduled bindings) are chosen before update candidates (bound bindings), MaxUnavailable helps us pick one bound binding to update.
+			wantStaleUnselectedBindings: []int{1},    // with the maxUnavailable specified we can't pick the remaining ready bound binding to update.
 			wantNeedRoll:                true,
 			wantWaitTime:                0,
 		},
