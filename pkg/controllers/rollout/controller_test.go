@@ -758,7 +758,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 		wantErr                     error
 	}{
 		// TODO: add more tests
-		"test bound with out dated bindings and nil overrides": {
+		"test scheduled binding to bound, outdated resources and nil overrides - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
 			},
@@ -777,7 +777,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: 0,
 		},
-		"test bound with out dated bindings and updated apply strategy": {
+		"test scheduled binding to bound, outdated resources and updated apply strategy - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
 			},
@@ -802,7 +802,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: 0,
 		},
-		"test bound with out dated bindings and empty overrides": {
+		"test scheduled binding to bound, outdated resources and empty overrides - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
 			},
@@ -823,7 +823,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: 0,
 		},
-		"test bound with out dated bindings and matched overrides": {
+		"test scheduled binding to bound, outdated resources with overrides matching cluster - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
 			},
@@ -917,7 +917,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: 0,
 		},
-		"test bound with out dated bindings and no matched overrides": {
+		"test scheduled binding to bound, outdated resources with overrides not matching any cluster - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
 			},
@@ -1000,7 +1000,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: 0,
 		},
-		"test bound with out dated bindings and stale overrides": {
+		"test scheduled binding to bound, overrides matching cluster - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
 			},
@@ -1094,7 +1094,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: 0,
 		},
-		"test bound with latest resources": {
+		"test bound binding with latest resources - rollout blocked": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
 			},
@@ -1107,7 +1107,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll:                false,
 			wantWaitTime:                time.Second,
 		},
-		"test bound with only failed to apply binding": {
+		"test failed to apply bound binding, outdated resources - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
 			},
@@ -1126,7 +1126,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: time.Second,
 		},
-		"test bound with failed to apply binding, unselected bound bindings": {
+		"test one failed to apply bound binding and four failed non ready bound bindings, outdated resources with maxUnavailable specified - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
 				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
@@ -1137,9 +1137,9 @@ func TestPickBindingsToRoll(t *testing.T) {
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
 				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 5),
-				createPlacementRolloutStrategyForTest(fleetv1beta1.RollingUpdateRolloutStrategyType, generateDefaultRollingUpdateConfig(), nil)),
-			wantTobeUpdatedBindings:     []int{0},
-			wantStaleUnselectedBindings: []int{1, 2, 3, 4},
+				createPlacementRolloutStrategyForTest(fleetv1beta1.RollingUpdateRolloutStrategyType, generateDefaultRollingUpdateConfig(), nil)), // maxUnavailable is 1.
+			wantTobeUpdatedBindings:     []int{0},          // failed to apply bound binding is always chosen as update candidate to be rolled out.
+			wantStaleUnselectedBindings: []int{1, 2, 3, 4}, // there are no other ready bound bindings hence they are not rolled out, even with maxUnavailable specified.
 			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
 				{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1170,20 +1170,20 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: time.Second,
 		},
-		"test bound with failed to apply bindings when there is no max unavailable allowed": {
+		"test three failed to apply bound binding, two ready bound binding, outdated resources with maxUnavailable specified - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
 				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
 				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
+				generateReadyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
+				generateReadyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
 				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 5),
-				createPlacementRolloutStrategyForTest(fleetv1beta1.RollingUpdateRolloutStrategyType, generateDefaultRollingUpdateConfig(), nil)),
-			wantTobeUpdatedBindings:     []int{0, 1, 2},
-			wantStaleUnselectedBindings: []int{3, 4},
+				createPlacementRolloutStrategyForTest(fleetv1beta1.RollingUpdateRolloutStrategyType, generateDefaultRollingUpdateConfig(), nil)), // maxUnavailable is 1.
+			wantTobeUpdatedBindings:     []int{0, 1, 2}, // all failed to apply bound bindings are always chosen as update candidates
+			wantStaleUnselectedBindings: []int{3, 4},    // there are only two ready bindings out of five target bindings so these ready bindings cannot be updated.
 			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
 				{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1214,13 +1214,13 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: time.Second,
 		},
-		"test no binding when there is no max unavailable allowed": {
+		"test bound ready bindings, maxUnavailable is set to zero - rollout blocked": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
-				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
+				generateReadyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
+				generateReadyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
+				generateReadyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
+				generateReadyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
+				generateReadyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -1237,7 +1237,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 					UnavailablePeriodSeconds: ptr.To(1),
 				}, nil)),
 			wantTobeUpdatedBindings:     []int{},
-			wantStaleUnselectedBindings: []int{0, 1, 2, 3, 4},
+			wantStaleUnselectedBindings: []int{0, 1, 2, 3, 4}, // since maxUnavailable is set to zero no ready binding is updated.
 			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
 				{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1266,7 +1266,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
-			wantWaitTime: time.Second,
+			wantWaitTime: 0,
 		},
 		"test with no bindings": {
 			allBindings:                []*fleetv1beta1.ClusterResourceBinding{},
@@ -1278,10 +1278,10 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll:            false,
 			wantWaitTime:            0,
 		},
-		"test with scheduled bindings (one of them is failed)": {
+		"test two scheduled bindings, outdated resources - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
-				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster2),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster2),
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -1303,7 +1303,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: 0,
 		},
-		"test with scheduled bindings (always update the scheduled binding first)": {
+		"test canBeReady bound and scheduled binding - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateCanBeReadyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster2),
@@ -1322,8 +1322,8 @@ func TestPickBindingsToRoll(t *testing.T) {
 					},
 					UnavailablePeriodSeconds: ptr.To(60),
 				}, nil)),
-			wantTobeUpdatedBindings:     []int{1},
-			wantStaleUnselectedBindings: []int{0},
+			wantTobeUpdatedBindings:     []int{1}, // scheduled binding is rolled out.
+			wantStaleUnselectedBindings: []int{0}, // bound canBeReady binding cannot be rolled out because number of ready bindings is less than required.
 			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
 				{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1339,38 +1339,23 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: 60 * time.Second,
 		},
-		"test remove unscheduled bindings": {
+		"test two unscheduled bindings, maxUnavailable specified - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
-				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster3),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
+				generateReadyClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1),
+				generateReadyClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
 			},
 			latestResourceSnapshotName: "snapshot-1",
 			crp: clusterResourcePlacementForTest("test",
-				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 4),
-				createPlacementRolloutStrategyForTest(fleetv1beta1.RollingUpdateRolloutStrategyType, generateDefaultRollingUpdateConfig(), nil)),
-			wantTobeUpdatedBindings: []int{0, 2},
-			// empty list as unscheduled bindings will be removed and are not tracked in the CRP today.
-			wantStaleUnselectedBindings: []int{},
+				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 2),
+				createPlacementRolloutStrategyForTest(fleetv1beta1.RollingUpdateRolloutStrategyType, generateDefaultRollingUpdateConfig(), nil)), // maxUnavailable is set to 1.
+			wantTobeUpdatedBindings:     []int{0}, // one ready unscheduled binding is removed since maxUnavailable is set to 1.
+			wantStaleUnselectedBindings: []int{},  //  remove candidate doesn't get appended as stale binding.
 			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
-				{
-					State:                fleetv1beta1.BindingStateBound,
-					TargetCluster:        cluster1,
-					ResourceSnapshotName: "snapshot-1",
-				},
-				// unscheduled binding does not have desired spec so that putting the empty here.
 				{},
-				{
-					State:                fleetv1beta1.BindingStateBound,
-					TargetCluster:        cluster3,
-					ResourceSnapshotName: "snapshot-1",
-				},
-				// unscheduled binding does not have desired spec so that putting the empty here.
 				{},
 			},
 			wantNeedRoll: true,
-			wantWaitTime: time.Second,
+			wantWaitTime: 0,
 		},
 		"test overrides and the cluster is not found": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
