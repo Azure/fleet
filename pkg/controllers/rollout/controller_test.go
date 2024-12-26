@@ -1733,8 +1733,8 @@ func TestPickBindingsToRoll(t *testing.T) {
 					ResourceSnapshotName: "snapshot-1",
 				},
 			},
-			wantTobeUpdatedBindings:     []int{2, 3, 4}, // specified MaxSurge helps us pick three new scheduled bindings out of four, target number + MaxSurge is greater than canBeReady bindings.
-			wantStaleUnselectedBindings: []int{5},       // unscheduled binding is a canBeReady binding & maxUnavailable is set to zero.
+			wantTobeUpdatedBindings:     []int{2, 3, 4}, // specified MaxSurge helps us pick three new scheduled bindings out of four, target number + MaxSurge is greater than canBeReady bindings, unscheduled binding is a canBeReady binding & maxUnavailable is set to zero.
+			wantStaleUnselectedBindings: []int{5},
 			wantNeedRoll:                true,
 			wantWaitTime:                time.Second,
 		},
@@ -1885,8 +1885,8 @@ func TestPickBindingsToRoll(t *testing.T) {
 					ResourceSnapshotName: "snapshot-1",
 				},
 			},
-			wantTobeUpdatedBindings:     []int{1},    // more ready bindings than required we remove one unscheduled binding, since two bindings are already canBeReady we don't roll out new scheduled bindings.
-			wantStaleUnselectedBindings: []int{4, 5}, // more canBeReady bindings than target number + maxSurge so scheduled bindings are not rolled out.
+			wantTobeUpdatedBindings:     []int{1},    // more ready bindings than required we remove one unscheduled binding
+			wantStaleUnselectedBindings: []int{4, 5}, // since three unscheduled bindings are already canBeReady we don't roll out new scheduled bindings.
 			wantNeedRoll:                true,
 			wantWaitTime:                0,
 		},
