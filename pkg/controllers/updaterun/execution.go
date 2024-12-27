@@ -35,6 +35,8 @@ var (
 )
 
 // execute executes the update run by updating the clusters in the updating stage specified by updatingStageIndex.
+// It returns a boolean indicating if the clusterStageUpdateRun execution is completed,
+// the time to wait before rechecking the cluster update status, and any error encountered.
 func (r *Reconciler) execute(
 	ctx context.Context,
 	updateRun *placementv1alpha1.ClusterStagedUpdateRun,

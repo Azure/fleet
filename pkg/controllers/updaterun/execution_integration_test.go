@@ -182,7 +182,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 	})
 
 	Context("Cluster staged update run should update clusters one by one", Ordered, func() {
-		It("Should mark the 1st cluster in the 1st stage as succeeded", func() {
+		It("Should mark the 1st cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 1st clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[numTargetClusters-1] // cluster-9
 			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
@@ -200,7 +200,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(updateRun.Status.StagesStatus[0].StartTime).ShouldNot(BeNil())
 		})
 
-		It("Should mark the 2nd cluster in the 1st stage as succeeded", func() {
+		It("Should mark the 2nd cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 2nd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[numTargetClusters-3] // cluster-7
 			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
@@ -230,7 +230,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
 
-		It("Should mark the 4th cluster in the 1st stage as succeeded", func() {
+		It("Should mark the 4th cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 4th clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[numTargetClusters-7] // cluster-3
 			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
@@ -245,7 +245,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
 
-		It("Should mark the 5th cluster in the 1st stage as succeeded", func() {
+		It("Should mark the 5th cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 5th clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[numTargetClusters-9] // cluster-1
 			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
@@ -286,7 +286,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(waitStartTime.Add(updateStrategy.Spec.Stages[0].AfterStageTasks[0].WaitTime.Duration).Before(waitEndTime)).Should(BeTrue())
 		})
 
-		It("Should mark the 1st cluster in the 2nd stage as succeeded", func() {
+		It("Should mark the 1st cluster in the 2nd stage as succeeded after marking the binding available", func() {
 			By("Validating the 1st clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[0] // cluster-0
 			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 1)
@@ -304,7 +304,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(updateRun.Status.StagesStatus[0].StartTime).ShouldNot(BeNil())
 		})
 
-		It("Should mark the 2nd cluster in the 2nd stage as succeeded", func() {
+		It("Should mark the 2nd cluster in the 2nd stage as succeeded after marking the binding available", func() {
 			By("Validating the 2nd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[2] // cluster-2
 			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 1)
@@ -319,7 +319,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
 
-		It("Should mark the 3rd cluster in the 2nd stage as succeeded", func() {
+		It("Should mark the 3rd cluster in the 2nd stage as succeeded after marking the binding available", func() {
 			By("Validating the 3rd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[4] // cluster-4
 			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 1)
@@ -334,7 +334,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
 
-		It("Should mark the 4th cluster in the 2nd stage as succeeded", func() {
+		It("Should mark the 4th cluster in the 2nd stage as succeeded after marking the binding available", func() {
 			By("Validating the 4th clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[6] // cluster-6
 			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 1)
@@ -349,7 +349,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
 
-		It("Should mark the 5th cluster in the 2nd stage as succeeded", func() {
+		It("Should mark the 5th cluster in the 2nd stage as succeeded after marking the binding available", func() {
 			By("Validating the 5th clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[8] // cluster-8
 			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 1)
