@@ -392,7 +392,8 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 		case fleetv1beta1.BindingStateBound:
 			bindingFailed := false
 			schedulerTargetedBinds = append(schedulerTargetedBinds, binding)
-			if waitTime, bindingReady := isBindingReady(binding, readyTimeCutOff); bindingReady {
+			waitTime, bindingReady := isBindingReady(binding, readyTimeCutOff)
+			if bindingReady {
 				klog.V(3).InfoS("Found a ready bound binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 				readyBindings = append(readyBindings, binding)
 			} else {
@@ -408,20 +409,27 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			} else {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
 			}
-			// PickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
-			cro, ro, err := overrider.PickFromResourceMatchedOverridesForTargetCluster(ctx, r.Client, binding.Spec.TargetCluster, matchedCROs, matchedROs)
-			if err != nil {
-				return nil, nil, false, 0, err
-			}
-			// The binding needs update if it's not pointing to the latest resource resourceBinding or the overrides.
-			if binding.Spec.ResourceSnapshotName != latestResourceSnapshot.Name || !equality.Semantic.DeepEqual(binding.Spec.ClusterResourceOverrideSnapshots, cro) || !equality.Semantic.DeepEqual(binding.Spec.ResourceOverrideSnapshots, ro) {
-				updateInfo := createUpdateInfo(binding, crp, latestResourceSnapshot, cro, ro)
-				if bindingFailed {
-					// the binding has been applied but failed to apply, we can safely update it to latest resources without affecting max unavailable count
-					applyFailedUpdateCandidates = append(applyFailedUpdateCandidates, updateInfo)
-				} else {
-					updateCandidates = append(updateCandidates, updateInfo)
+
+			// check to see if binding is not being deleted.
+			if binding.DeletionTimestamp.IsZero() {
+				// PickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
+				cro, ro, err := overrider.PickFromResourceMatchedOverridesForTargetCluster(ctx, r.Client, binding.Spec.TargetCluster, matchedCROs, matchedROs)
+				if err != nil {
+					return nil, nil, false, 0, err
 				}
+				// The binding needs update if it's not pointing to the latest resource resourceBinding or the overrides.
+				if binding.Spec.ResourceSnapshotName != latestResourceSnapshot.Name || !equality.Semantic.DeepEqual(binding.Spec.ClusterResourceOverrideSnapshots, cro) || !equality.Semantic.DeepEqual(binding.Spec.ResourceOverrideSnapshots, ro) {
+					updateInfo := createUpdateInfo(binding, crp, latestResourceSnapshot, cro, ro)
+					if bindingFailed {
+						// the binding has been applied but failed to apply, we can safely update it to latest resources without affecting max unavailable count
+						applyFailedUpdateCandidates = append(applyFailedUpdateCandidates, updateInfo)
+					} else {
+						updateCandidates = append(updateCandidates, updateInfo)
+					}
+				}
+			} else if bindingReady {
+				// it is being deleted, it can be removed from the cluster at any time, so it can be unavailable at any time
+				canBeUnavailableBindings = append(canBeUnavailableBindings, binding)
 			}
 		}
 	}
