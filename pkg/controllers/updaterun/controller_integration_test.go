@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
@@ -327,7 +328,7 @@ func generateTestClusterStagedUpdateStrategy() *placementv1alpha1.ClusterStagedU
 						{
 							Type: placementv1alpha1.AfterStageTaskTypeTimedWait,
 							WaitTime: metav1.Duration{
-								Duration: time.Minute * 10,
+								Duration: time.Second * 4,
 							},
 						},
 					},
@@ -469,7 +470,7 @@ func validateApprovalRequestCount(ctx context.Context, count int) {
 	}, timeout, interval).Should(Equal(count), "approval requests count mismatch")
 }
 
-func generateTrueCondition(updateRun *placementv1alpha1.ClusterStagedUpdateRun, condType any) metav1.Condition {
+func generateTrueCondition(obj client.Object, condType any) metav1.Condition {
 	reason, typeStr := "", ""
 	switch cond := condType.(type) {
 	case placementv1alpha1.StagedUpdateRunConditionType:
@@ -498,16 +499,38 @@ func generateTrueCondition(updateRun *placementv1alpha1.ClusterStagedUpdateRun, 
 			reason = condition.ClusterUpdatingSucceededReason
 		}
 		typeStr = string(cond)
+	case placementv1alpha1.AfterStageTaskConditionType:
+		switch cond {
+		case placementv1alpha1.AfterStageTaskConditionWaitTimeElapsed:
+			reason = condition.AfterStageTaskWaitTimeElapsedReason
+		case placementv1alpha1.AfterStageTaskConditionApprovalRequestCreated:
+			reason = condition.AfterStageTaskApprovalRequestCreatedReason
+		case placementv1alpha1.AfterStageTaskConditionApprovalRequestApproved:
+			reason = condition.AfterStageTaskApprovalRequestApprovedReason
+		}
+		typeStr = string(cond)
+	case placementv1alpha1.ApprovalRequestConditionType:
+		switch cond {
+		case placementv1alpha1.ApprovalRequestConditionApproved:
+			reason = "LGTM"
+		}
+		typeStr = string(cond)
+	case placementv1beta1.ResourceBindingConditionType:
+		switch cond {
+		case placementv1beta1.ResourceBindingAvailable:
+			reason = condition.AvailableReason
+		}
+		typeStr = string(cond)
 	}
 	return metav1.Condition{
 		Status:             metav1.ConditionTrue,
 		Type:               typeStr,
-		ObservedGeneration: updateRun.Generation,
+		ObservedGeneration: obj.GetGeneration(),
 		Reason:             reason,
 	}
 }
 
-func generateFalseCondition(updateRun *placementv1alpha1.ClusterStagedUpdateRun, condType any) metav1.Condition {
+func generateFalseCondition(obj client.Object, condType any) metav1.Condition {
 	reason, typeStr := "", ""
 	switch cond := condType.(type) {
 	case placementv1alpha1.StagedUpdateRunConditionType:
@@ -530,11 +553,17 @@ func generateFalseCondition(updateRun *placementv1alpha1.ClusterStagedUpdateRun,
 			reason = condition.ClusterUpdatingFailedReason
 		}
 		typeStr = string(cond)
+	case placementv1beta1.ResourceBindingConditionType:
+		switch cond {
+		case placementv1beta1.ResourceBindingApplied:
+			reason = condition.ApplyFailedReason
+		}
+		typeStr = string(cond)
 	}
 	return metav1.Condition{
 		Status:             metav1.ConditionFalse,
 		Type:               typeStr,
-		ObservedGeneration: updateRun.Generation,
+		ObservedGeneration: obj.GetGeneration(),
 		Reason:             reason,
 	}
 }

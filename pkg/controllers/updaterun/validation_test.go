@@ -384,7 +384,7 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 			wantUpdatingStageIndex: -1,
 		},
 		{
-			name:                   "validateDeleteStageStatus should return totalStaged if the delete stage is still running",
+			name:                   "validateDeleteStageStatus should return totalStages if the delete stage is still running",
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: totalStages - 1,
 			deleteStageStatus: &placementv1alpha1.StageUpdatingStatus{
@@ -395,12 +395,12 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 			wantUpdatingStageIndex: totalStages,
 		},
 		{
-			name:                   "validateDeleteStageStatus should return error if all updating stages have finished but the delete stage is not active or finished",
+			name:                   "validateDeleteStageStatus should return totalStages if all updating stages have finished but the delete stage is not active or finished",
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: totalStages - 1,
 			deleteStageStatus:      &placementv1alpha1.StageUpdatingStatus{StageName: "delete-stage"},
-			wantErr:                wrapErr(true, fmt.Errorf("the delete stage is not active, but all stages finished")),
-			wantUpdatingStageIndex: -1,
+			wantErr:                nil,
+			wantUpdatingStageIndex: totalStages,
 		},
 	}
 	for _, test := range tests {
