@@ -30,21 +30,57 @@ func (r *Reconciler) refreshWorkStatus(
 	manifestCount := len(bundles)
 	appliedManifestsCount := 0
 	availableAppliedObjectsCount := 0
+	untrackableAppliedObjectsCount := 0
 
 	// Use the now timestamp as the observation time.
 	now := metav1.Now()
 
-	// Rebuild the manifest conditions.
+	// Refresh the manifest conditions.
 
 	// Pre-allocate the slice.
 	rebuiltManifestConds := make([]fleetv1beta1.ManifestCondition, len(bundles))
+
+	// Port back existing manifest conditions to the pre-allocated slice.
+	//
+	// This step is necessary at the moment primarily for two reasons:
+	// a) manifest condtion uses metav1.Condition, the LastTransitionTime field of which requires
+	//    that Fleet track the last known condition;
+	// b) part of the Fleet rollout process uses the LastTransitionTime of the Available condition
+	//    to calculate the minimum wait period for an untrackable Work object (a Work object with
+	//    one or more untrackable manifests).
+
+	// Prepare an index for quicker lookup.
+	rebuiltManifestCondQIdx := prepareRebuiltManifestCondQIdx(bundles)
+
+	// Port back existing manifest conditions using the index.
+	for idx := range work.Status.ManifestConditions {
+		existingManifestCond := work.Status.ManifestConditions[idx]
+
+		existingManifestCondWRIStr, err := formatWRIString(&existingManifestCond.Identifier)
+		if err != nil {
+			// It is OK for an existing manifest condition to not have a valid identifer; this
+			// happens when the manifest condition was previously associated with a manifest
+			// that cannot be decoded. For obvious reasons Fleet does not need to port back
+			// such manifest conditions any way.
+			continue
+		}
+
+		// Check if the WRI string has a match in the index.
+		if rebuiltManifestCondIdx, ok := rebuiltManifestCondQIdx[existingManifestCondWRIStr]; ok {
+			// Port back the existing manifest condition.
+			rebuiltManifestConds[rebuiltManifestCondIdx] = *existingManifestCond.DeepCopy()
+		}
+	}
+
 	for idx := range bundles {
 		bundle := bundles[idx]
 
 		// Update the manifest condition based on the bundle processing results.
 		manifestCond := &rebuiltManifestConds[idx]
 		manifestCond.Identifier = *bundle.id
-		manifestCond.Conditions = []metav1.Condition{}
+		if manifestCond.Conditions == nil {
+			manifestCond.Conditions = []metav1.Condition{}
+		}
 
 		// Note that per API definition, the observed generation of a manifest condition is that
 		// of the applied resource, not that of the Work object.
@@ -60,6 +96,8 @@ func (r *Reconciler) refreshWorkStatus(
 		if firstDriftedTimestamp == nil {
 			firstDriftedTimestamp = &now
 		}
+		// Reset the drift details (such details need no port-back).
+		manifestCond.DriftDetails = nil
 		if len(bundle.drifts) > 0 {
 			// Populate drift details if there are drifts found.
 			var observedInMemberClusterGen int64
@@ -80,6 +118,8 @@ func (r *Reconciler) refreshWorkStatus(
 		if firstDiffedTimestamp == nil {
 			firstDiffedTimestamp = &now
 		}
+		// Reset the diff details (such details need no port-back).
+		manifestCond.DiffDetails = nil
 		if len(bundle.diffs) > 0 {
 			// Populate diff details if there are diffs found.
 			var observedInMemberClusterGen *int64
@@ -102,6 +142,9 @@ func (r *Reconciler) refreshWorkStatus(
 		if isAppliedObjectAvailable(bundle.availabilityResTyp) {
 			availableAppliedObjectsCount++
 		}
+		if bundle.availabilityResTyp == ManifestProcessingAvailabilityResultTypeNotTrackable {
+			untrackableAppliedObjectsCount++
+		}
 	}
 
 	// Refresh the Work object status conditions.
@@ -115,7 +158,7 @@ func (r *Reconciler) refreshWorkStatus(
 	}
 
 	setWorkAppliedCondition(&work.Status.Conditions, manifestCount, appliedManifestsCount, work.Generation)
-	setWorkAvailableCondition(&work.Status.Conditions, manifestCount, availableAppliedObjectsCount, work.Generation)
+	setWorkAvailableCondition(&work.Status.Conditions, manifestCount, availableAppliedObjectsCount, untrackableAppliedObjectsCount, work.Generation)
 	work.Status.ManifestConditions = rebuiltManifestConds
 
 	// Update the Work object status.

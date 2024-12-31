@@ -618,6 +618,10 @@ func setManifestAvailableCondition(
 
 	if availableCond != nil {
 		meta.SetStatusCondition(&manifestCond.Conditions, *availableCond)
+	} else {
+		// As the conditions are port back; removal must be performed if the Available
+		// condition is not set.
+		meta.RemoveStatusCondition(&manifestCond.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 	}
 }
 
@@ -657,18 +661,27 @@ func setWorkAppliedCondition(
 // setWorkAvailableCondition sets the available condition for a Work object.
 func setWorkAvailableCondition(
 	workStatusConditions *[]metav1.Condition,
-	manifestCount, availableManifestCount int,
+	manifestCount, availableManifestCount, untrackableManifestCount int,
 	workGeneration int64,
 ) {
 	var availableCond *metav1.Condition
 	switch {
-	case availableManifestCount == manifestCount:
+	case availableManifestCount == manifestCount && untrackableManifestCount == 0:
 		// All manifests are available.
 		availableCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeAvailable,
 			Status:             metav1.ConditionTrue,
 			Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
 			Message:            allAppliedObjectAvailableMessage,
+			ObservedGeneration: workGeneration,
+		}
+	case availableManifestCount == manifestCount:
+		// Some manifests are not trackable.
+		availableCond = &metav1.Condition{
+			Type:               fleetv1beta1.WorkConditionTypeAvailable,
+			Status:             metav1.ConditionTrue,
+			Reason:             string(ManifestProcessingAvailabilityResultTypeNotTrackable),
+			Message:            someAppliedObjectUntrackableMessage,
 			ObservedGeneration: workGeneration,
 		}
 	default:
@@ -702,6 +715,28 @@ func prepareExistingManifestCondQIdx(existingManifestConditions []fleetv1beta1.M
 		existingManifestConditionQIdx[wriStr] = idx
 	}
 	return existingManifestConditionQIdx
+}
+
+// prepareRebuiltManifestCondQIdx returns a map that allows quicker look up of a manifest
+// condition given a work resource identifier.
+func prepareRebuiltManifestCondQIdx(bundles []*manifestProcessingBundle) map[string]int {
+	rebuiltManifestCondQIdx := make(map[string]int)
+	for idx := range bundles {
+		bundle := bundles[idx]
+
+		wriStr, err := formatWRIString(bundle.id)
+		if err != nil {
+			// There might be manifest conditions without a valid identifier in the bundle set
+			// (e.g., decoding error has occurred when processing a bundle).
+			// Fleet will skip these bundles, as there is no need to port back
+			// information for such manifests any way for obvious reasons (manifest itself is not
+			// identifiable). This is not considered as an error.
+			continue
+		}
+
+		rebuiltManifestCondQIdx[wriStr] = idx
+	}
+	return rebuiltManifestCondQIdx
 }
 
 func prepareManifestCondForWA(

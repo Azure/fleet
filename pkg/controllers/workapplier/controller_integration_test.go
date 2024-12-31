@@ -1238,7 +1238,9 @@ var _ = Describe("drift detection and takeover", func() {
 		})
 
 		It("should update the Work object status", func() {
-			noLaterThanTimestamp := metav1.Now()
+			noLaterThanTimestamp := metav1.Time{
+				Time: time.Now().Add(time.Second * 30),
+			}
 
 			// Prepare the status information.
 			workConds := []metav1.Condition{
@@ -1496,7 +1498,9 @@ var _ = Describe("drift detection and takeover", func() {
 		})
 
 		It("should update the Work object status", func() {
-			noLaterThanTimestamp := metav1.Now()
+			noLaterThanTimestamp := metav1.Time{
+				Time: time.Now().Add(time.Second * 30),
+			}
 
 			// Prepare the status information.
 			workConds := []metav1.Condition{
@@ -3601,7 +3605,9 @@ var _ = Describe("report diff", func() {
 		})
 
 		It("should update the Work object status", func() {
-			noLaterThanTimestamp := metav1.Now()
+			noLaterThanTimestamp := metav1.Time{
+				Time: time.Now().Add(time.Second * 30),
+			}
 
 			// Prepare the status information.
 			workConds := []metav1.Condition{

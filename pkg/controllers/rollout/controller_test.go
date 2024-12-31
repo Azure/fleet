@@ -27,6 +27,7 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
@@ -666,7 +667,7 @@ func TestIsBindingReady(t *testing.T) {
 							LastTransitionTime: metav1.Time{
 								Time: now.Add(-time.Millisecond),
 							},
-							Reason: work.WorkNotTrackableReason,
+							Reason: workapplier.WorkNotTrackableReason,
 						},
 					},
 				},
@@ -689,7 +690,7 @@ func TestIsBindingReady(t *testing.T) {
 							LastTransitionTime: metav1.Time{
 								Time: now.Add(time.Millisecond),
 							},
-							Reason: work.WorkNotTrackableReason,
+							Reason: workapplier.WorkNotTrackableReason,
 						},
 					},
 				},
@@ -2192,7 +2193,7 @@ func generateNotReadyClusterResourceBinding(state fleetv1beta1.BindingState, res
 			Type:               string(fleetv1beta1.ResourceBindingAvailable),
 			Status:             metav1.ConditionTrue,
 			LastTransitionTime: lastTransitionTime,
-			Reason:             work.WorkNotTrackableReason, // Make it not ready
+			Reason:             workapplier.WorkNotTrackableReason, // Make it not ready
 		},
 	}
 	return binding

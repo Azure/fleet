@@ -438,6 +438,12 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				},
 				Spec: placementv1beta1.ClusterResourcePlacementSpec{
 					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+						ClusterNames: []string{
+							memberCluster1EastProdName,
+						},
+					},
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
@@ -450,6 +456,45 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				},
 			}
 			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+		})
+
+		It("should update CRP status as expected", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1EastProdName}, nil, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should place the resources on member clusters", func() {
+			workResourcesPlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster1EastProd)
+			Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster1EastProdName)
+
+		})
+
+		It("can create a conflicted CRP", func() {
+			conflictedCRP := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: conflictedCRPName,
+					// No need for the custom deletion blocker finalizer.
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+						ClusterNames: []string{
+							memberCluster1EastProdName,
+						},
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: ptr.To(2),
+						},
+						ApplyStrategy: &placementv1beta1.ApplyStrategy{
+							AllowCoOwnership: true,
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, conflictedCRP)).To(Succeed())
 		})
 
 		It("should update conflicted CRP status as expected", func() {
@@ -469,10 +514,9 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 										Name:    nsName,
 									},
 									Condition: metav1.Condition{
-										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
-										Status:             metav1.ConditionFalse,
-										ObservedGeneration: 1,
-										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
+										Type:   string(placementv1beta1.ResourcesAppliedConditionType),
+										Status: metav1.ConditionFalse,
+										Reason: string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
 									},
 								},
 								{
@@ -483,76 +527,9 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 										Namespace: nsName,
 									},
 									Condition: metav1.Condition{
-										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
-										Status:             metav1.ConditionFalse,
-										ObservedGeneration: 1,
-										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
-									},
-								},
-							},
-						},
-						{
-							ClusterName: memberCluster2EastCanaryName,
-							Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
-							FailedPlacements: []placementv1beta1.FailedResourcePlacement{
-								{
-									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
-										Version: "v1",
-										Kind:    "Namespace",
-										Name:    nsName,
-									},
-									Condition: metav1.Condition{
-										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
-										Status:             metav1.ConditionFalse,
-										ObservedGeneration: 1,
-										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
-									},
-								},
-								{
-									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
-										Version:   "v1",
-										Kind:      "ConfigMap",
-										Name:      cmName,
-										Namespace: nsName,
-									},
-									Condition: metav1.Condition{
-										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
-										Status:             metav1.ConditionFalse,
-										ObservedGeneration: 1,
-										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
-									},
-								},
-							},
-						},
-						{
-							ClusterName: memberCluster3WestProdName,
-							Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
-							FailedPlacements: []placementv1beta1.FailedResourcePlacement{
-								{
-									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
-										Version: "v1",
-										Kind:    "Namespace",
-										Name:    nsName,
-									},
-									Condition: metav1.Condition{
-										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
-										Status:             metav1.ConditionFalse,
-										ObservedGeneration: 1,
-										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
-									},
-								},
-								{
-									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
-										Version:   "v1",
-										Kind:      "ConfigMap",
-										Name:      cmName,
-										Namespace: nsName,
-									},
-									Condition: metav1.Condition{
-										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
-										Status:             metav1.ConditionFalse,
-										ObservedGeneration: 1,
-										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
+										Type:   string(placementv1beta1.ResourcesAppliedConditionType),
+										Status: metav1.ConditionFalse,
+										Reason: string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
 									},
 								},
 							},
@@ -574,6 +551,53 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				}
 				return nil
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should have no effect on previously created CRP", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1EastProdName}, nil, "0")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should not add additional owner reference to affected resources", func() {
+			expectedOwnerRef := buildOwnerReference(memberCluster1EastProd, crpName)
+
+			ns := &corev1.Namespace{}
+			nsName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+			Expect(memberCluster1EastProdClient.Get(ctx, client.ObjectKey{Name: nsName}, ns)).To(Succeed())
+
+			wantNS := ptr.To(appNamespace()).DeepCopy()
+			if wantNS.Labels == nil {
+				wantNS.Labels = make(map[string]string)
+			}
+			wantNS.Labels["kubernetes.io/metadata.name"] = nsName
+			wantNS.Labels[workNamespaceLabelName] = fmt.Sprintf("%d", GinkgoParallelProcess())
+			wantNS.OwnerReferences = []metav1.OwnerReference{*expectedOwnerRef}
+
+			// No need to use an Eventually block as this spec runs after the CRP status has been verified.
+			diff := cmp.Diff(
+				ns, wantNS,
+				ignoreNamespaceSpecField,
+				ignoreNamespaceStatusField,
+				ignoreObjectMetaAutoGenExceptOwnerRefFields,
+				ignoreObjectMetaAnnotationField,
+			)
+			Expect(diff).To(BeEmpty(), "Namespace diff (-got +want):\n%s", diff)
+
+			cm := &corev1.ConfigMap{}
+			cmName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
+			Expect(memberCluster1EastProdClient.Get(ctx, client.ObjectKey{Name: cmName, Namespace: nsName}, cm)).To(Succeed())
+
+			// The difference has been overwritten.
+			wantCM := appConfigMap()
+			wantCM.OwnerReferences = []metav1.OwnerReference{*expectedOwnerRef}
+
+			// No need to use an Eventually block as this spec runs after the CRP status has been verified.
+			diff = cmp.Diff(
+				cm, &wantCM,
+				ignoreObjectMetaAutoGenExceptOwnerRefFields,
+				ignoreObjectMetaAnnotationField,
+			)
+			Expect(diff).To(BeEmpty(), "ConfigMap diff (-got +want):\n%s", diff)
 		})
 
 		AfterAll(func() {

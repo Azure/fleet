@@ -393,7 +393,7 @@ func resourcePlacementApplyFailedConditions(generation int64) []metav1.Condition
 }
 
 func resourcePlacementRolloutCompletedConditions(generation int64, resourceIsTrackable bool, hasOverride bool) []metav1.Condition {
-	availableConditionReason := workapplier.ManifestProcessingAvailabilityResultTypeNotTrackable
+	availableConditionReason := workapplier.WorkNotTrackableReason
 	if resourceIsTrackable {
 		availableConditionReason = condition.AllWorkAvailableReason
 	}

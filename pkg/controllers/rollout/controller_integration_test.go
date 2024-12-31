@@ -22,7 +22,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -106,7 +106,14 @@ var _ = Describe("Test the rollout Controller", func() {
 	It("should push apply strategy changes to all the bindings (if applicable)", func() {
 		// Create a CRP.
 		targetClusterCount := int32(3)
-		rolloutCRP = clusterResourcePlacementForTest(testCRPName, createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, targetClusterCount))
+		rolloutCRP = clusterResourcePlacementForTest(
+			testCRPName,
+			createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, targetClusterCount),
+			createPlacementRolloutStrategyForTest(
+				fleetv1beta1.RollingUpdateRolloutStrategyType,
+				generateDefaultRollingUpdateConfig(),
+				nil,
+			))
 		Expect(k8sClient.Create(ctx, rolloutCRP)).Should(Succeed(), "Failed to create CRP")
 
 		// Create a master cluster resource snapstho.
@@ -944,7 +951,7 @@ func markBindingAvailable(binding *fleetv1beta1.ClusterResourceBinding, trackabl
 	Eventually(func() error {
 		reason := "trackable"
 		if !trackable {
-			reason = work.WorkNotTrackableReason
+			reason = workapplier.WorkNotTrackableReason
 		}
 		binding.SetConditions(metav1.Condition{
 			Type:               string(fleetv1beta1.ResourceBindingAvailable),

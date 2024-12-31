@@ -259,7 +259,7 @@ func (r *Reconciler) removeLeftBehindAppliedWorkOwnerRefs(ctx context.Context, o
 	updatedOwnerRefs := make([]metav1.OwnerReference, 0, len(ownerRefs))
 	for idx := range ownerRefs {
 		ownerRef := ownerRefs[idx]
-		if ownerRef.APIVersion != fleetv1beta1.GroupVersion.String() || ownerRef.Kind != fleetv1beta1.AppliedWorkKind {
+		if ownerRef.APIVersion != fleetv1beta1.GroupVersion.String() && ownerRef.Kind != fleetv1beta1.AppliedWorkKind {
 			// Skip non AppliedWork owner references.
 			updatedOwnerRefs = append(updatedOwnerRefs, ownerRef)
 			continue
@@ -272,8 +272,13 @@ func (r *Reconciler) removeLeftBehindAppliedWorkOwnerRefs(ctx context.Context, o
 		case err != nil && !errors.IsNotFound(err):
 			// An unexpected error occurred.
 			return nil, fmt.Errorf("failed to get the Work object: %w", err)
-		case err == nil && workObj.UID == ownerRef.UID:
+		case err == nil:
 			// The AppliedWork owner reference is valid; no need for removal.
+			//
+			// Note that no UID check is performed here; Fleet can (and will) re-use the same AppliedWork
+			// as long as it has the same name as a Work object, even if the AppliedWork object is not
+			// originally derived from it. This is safe as the AppliedWork object is in essence a delegate
+			// and does not keep any additional information.
 			updatedOwnerRefs = append(updatedOwnerRefs, ownerRef)
 			continue
 		default:

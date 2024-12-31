@@ -114,13 +114,19 @@ func NewReconciler(
 }
 
 const (
-	allManifestsAppliedMessage       = "All the specified manifests have been applied"
-	allAppliedObjectAvailableMessage = "All of the applied manifests are available"
+	allManifestsAppliedMessage          = "All the specified manifests have been applied"
+	allAppliedObjectAvailableMessage    = "All of the applied manifests are available"
+	someAppliedObjectUntrackableMessage = "Some of the applied manifests cannot be tracked for availability"
 
 	notAllManifestsAppliedReason         = "FailedToApplyAllManifests"
 	notAllManifestsAppliedMessage        = "Failed to apply all the specified manifests (%d of %d manifests are applied)"
 	notAllAppliedObjectsAvailableReason  = "NotAllAppliedObjectAreAvailable"
 	notAllAppliedObjectsAvailableMessage = "Not all of the applied manifests are available (%d of %d manifests are available)"
+)
+
+var (
+	// Some exported reasons. Currently only the untrackable reason is being actively used.
+	WorkNotTrackableReason = string(ManifestProcessingAvailabilityResultTypeNotTrackable)
 )
 
 type manifestProcessingAppliedResultType string

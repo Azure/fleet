@@ -39,7 +39,7 @@ const (
 )
 
 // Note that this container will run in parallel with other containers.
-var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
+var _ = Describe("placing wrapped resources using a CRP", func() {
 	Context("Test a CRP place enveloped objects successfully", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		workNamespace := appNamespace()

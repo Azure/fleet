@@ -44,7 +44,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -871,7 +871,7 @@ func buildAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding
 			notAvailableWork = w.Name
 			break
 		}
-		if cond.Reason == work.WorkNotTrackableReason {
+		if cond.Reason == workapplier.WorkNotTrackableReason {
 			notTrackableWork = w.Name
 		}
 	}
@@ -880,7 +880,7 @@ func buildAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding
 		reason := condition.AllWorkAvailableReason
 		message := "All corresponding work objects are available"
 		if len(notTrackableWork) > 0 {
-			reason = work.WorkNotTrackableReason
+			reason = workapplier.WorkNotTrackableReason
 			message = fmt.Sprintf("The availability of work object %s is not trackable", notTrackableWork)
 		}
 
