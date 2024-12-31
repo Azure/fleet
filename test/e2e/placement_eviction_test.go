@@ -37,8 +37,8 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding, taint clus
 	AfterAll(func() {
 		// Remove taint from member cluster 1.
 		removeTaintsFromMemberClusters(taintClusterNames)
-		ensureCRPEvictionDeletion(crpEvictionName)
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPEvictionDeleted(crpEvictionName)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 
 	It("should update cluster resource placement status as expected", func() {
@@ -108,8 +108,8 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding, no taint s
 	})
 
 	AfterAll(func() {
-		ensureCRPEvictionDeletion(crpEvictionName)
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPEvictionDeleted(crpEvictionName)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 
 	It("should update cluster resource placement status as expected", func() {
@@ -161,9 +161,9 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 	})
 
 	AfterAll(func() {
-		ensureCRPEvictionDeletion(crpEvictionName)
-		ensureCRPDisruptionBudgetDeletion(crpName)
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPEvictionDeleted(crpEvictionName)
+		ensureCRPDisruptionBudgetDeleted(crpName)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 
 	It("should update cluster resource placement status as expected", func() {
@@ -232,9 +232,9 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 
 	AfterAll(func() {
 		removeTaintsFromMemberClusters(taintClusterNames)
-		ensureCRPEvictionDeletion(crpEvictionName)
-		ensureCRPDisruptionBudgetDeletion(crpName)
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPEvictionDeleted(crpEvictionName)
+		ensureCRPDisruptionBudgetDeleted(crpName)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 
 	It("should update cluster resource placement status as expected", func() {
@@ -334,9 +334,9 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	AfterAll(func() {
-		ensureCRPEvictionDeletion(crpEvictionName)
-		ensureCRPDisruptionBudgetDeletion(crpName)
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPEvictionDeleted(crpEvictionName)
+		ensureCRPDisruptionBudgetDeleted(crpName)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 
 	It("should update cluster resource placement status as expected", func() {
@@ -420,9 +420,9 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 
 	AfterAll(func() {
 		removeTaintsFromMemberClusters(taintClusterNames)
-		ensureCRPEvictionDeletion(crpEvictionName)
-		ensureCRPDisruptionBudgetDeletion(crpName)
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPEvictionDeleted(crpEvictionName)
+		ensureCRPDisruptionBudgetDeleted(crpName)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 
 	It("should update cluster resource placement status as expected", func() {
@@ -522,9 +522,9 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	AfterAll(func() {
-		ensureCRPEvictionDeletion(crpEvictionName)
-		ensureCRPDisruptionBudgetDeletion(crpName)
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPEvictionDeleted(crpEvictionName)
+		ensureCRPDisruptionBudgetDeleted(crpName)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 
 	It("should update cluster resource placement status as expected", func() {

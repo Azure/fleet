@@ -65,7 +65,7 @@ var _ = Describe("creating resourceOverride (selecting all clusters) to override
 
 	AfterAll(func() {
 		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 
 		By(fmt.Sprintf("deleting resourceOverride %s", roName))
 		cleanupResourceOverride(roName, roNamespace)
@@ -186,7 +186,7 @@ var _ = Describe("creating resourceOverride with multiple jsonPatchOverrides to 
 
 	AfterAll(func() {
 		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 
 		By(fmt.Sprintf("deleting resourceOverride %s", roName))
 		cleanupResourceOverride(roName, roNamespace)
@@ -318,7 +318,7 @@ var _ = Describe("creating resourceOverride with different rules for each cluste
 
 	AfterAll(func() {
 		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 
 		By(fmt.Sprintf("deleting resourceOverride %s", roName))
 		cleanupResourceOverride(roName, roNamespace)
@@ -413,7 +413,7 @@ var _ = Describe("creating resourceOverride and clusterResourceOverride, resourc
 
 	AfterAll(func() {
 		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 
 		By(fmt.Sprintf("deleting resourceOverride %s", roName))
 		cleanupResourceOverride(roName, roNamespace)
@@ -494,7 +494,7 @@ var _ = Describe("creating resourceOverride with incorrect path", Ordered, func(
 
 	AfterAll(func() {
 		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 
 		By(fmt.Sprintf("deleting resourceOverride %s", roName))
 		cleanupResourceOverride(roName, roNamespace)
@@ -557,7 +557,7 @@ var _ = Describe("creating resourceOverride and resource becomes invalid after o
 
 	AfterAll(func() {
 		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 
 		By(fmt.Sprintf("deleting resourceOverride %s", roName))
 		cleanupResourceOverride(roName, roNamespace)
@@ -635,7 +635,7 @@ var _ = Describe("creating resourceOverride with a templated rules with cluster 
 
 	AfterAll(func() {
 		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 
 		By(fmt.Sprintf("deleting resourceOverride %s", roName))
 		cleanupResourceOverride(roName, roNamespace)
@@ -731,7 +731,7 @@ var _ = Describe("creating resourceOverride with delete configMap", Ordered, fun
 
 	AfterAll(func() {
 		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 
 		By(fmt.Sprintf("deleting resourceOverride %s", roName))
 		cleanupResourceOverride(roName, roNamespace)

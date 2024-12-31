@@ -889,7 +889,7 @@ func createClusterResourceOverrides(number int) {
 	}
 }
 
-func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*framework.Cluster) {
+func ensureCRPAndRelatedResourcesDeleted(crpName string, memberClusters []*framework.Cluster) {
 	// Delete the CRP.
 	crp := &placementv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
@@ -917,7 +917,7 @@ func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*fram
 	cleanupWorkResources()
 }
 
-func ensureCRPEvictionDeletion(crpEvictionName string) {
+func ensureCRPEvictionDeleted(crpEvictionName string) {
 	crpe := &placementv1alpha1.ClusterResourcePlacementEviction{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crpEvictionName,
@@ -928,7 +928,7 @@ func ensureCRPEvictionDeletion(crpEvictionName string) {
 	Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "CRP eviction still exists")
 }
 
-func ensureCRPDisruptionBudgetDeletion(crpDisruptionBudgetName string) {
+func ensureCRPDisruptionBudgetDeleted(crpDisruptionBudgetName string) {
 	crpdb := &placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crpDisruptionBudgetName,

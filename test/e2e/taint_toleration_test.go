@@ -55,7 +55,7 @@ var _ = Describe("placing resource using a cluster resource placement with pickF
 	AfterAll(func() {
 		// Remove taint from all member clusters.
 		removeTaintsFromMemberClusters(allMemberClusterNames)
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 })
 
@@ -124,7 +124,7 @@ var _ = Describe("placing resources using a cluster resource placement with no p
 	AfterAll(func() {
 		// Remove taint from member cluster 1,2.
 		removeTaintsFromMemberClusters(taintClusterNames)
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 })
 
@@ -191,7 +191,7 @@ var _ = Describe("placing resources using a cluster resource placement with no p
 	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 	AfterAll(func() {
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 })
 
@@ -284,7 +284,7 @@ var _ = Describe("picking N clusters with affinities and topology spread constra
 	AfterAll(func() {
 		// Remove taint from member cluster 1, 2.
 		removeTaintsFromMemberClusters(taintClusterNames)
-		ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd})
+		ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd})
 	})
 })
 
@@ -336,6 +336,6 @@ var _ = Describe("picking all clusters using pickAll placement policy, add taint
 	AfterAll(func() {
 		// Remove taint from member cluster 1.
 		removeTaintsFromMemberClusters(taintClusterNames)
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 })
