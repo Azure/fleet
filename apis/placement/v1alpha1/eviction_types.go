@@ -37,6 +37,10 @@ import (
 // (e.g., the CRP object or the placement appears later). To fix the situation, re-create the
 // Eviction object.
 //
+// Note: Eviction of resources from a cluster propagated by a PickFixed CRP is not allowed.
+// If the user wants to remove resources from a cluster propagated by a PickFixed CRP simply
+// remove the cluster name from cluster names field from the CRP spec.
+//
 // Executed evictions might be kept around for a while for auditing purposes; the Fleet controllers might
 // have a TTL set up for such objects and will garbage collect them automatically. For further
 // information, see the Fleet documentation.

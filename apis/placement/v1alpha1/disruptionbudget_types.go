@@ -44,8 +44,7 @@ type PlacementDisruptionBudgetSpec struct {
 	// If a percentage is specified, Fleet will calculate the corresponding absolute values
 	// as follows:
 	// * if the linked Placement object is of the PickFixed placement type,
-	//   the percentage is against the number of clusters specified in the placement (i.e., the
-	//   length of ClusterNames field in the placement policy);
+	//   we don't perform any calculation because eviction is not allowed for PickFixed CRP.
 	// * if the linked Placement object is of the PickAll placement type, MaxUnavailable cannot
 	//   be specified since we cannot derive the total number of clusters selected.
 	// * if the linked Placement object is of the PickN placement type,
@@ -74,8 +73,7 @@ type PlacementDisruptionBudgetSpec struct {
 	// If a percentage is specified, Fleet will calculate the corresponding absolute values
 	// as follows:
 	// * if the linked Placement object is of the PickFixed placement type,
-	//   the percentage is against the number of clusters specified in the placement (i.e., the
-	//   length of ClusterNames field in the placement policy);
+	//   we don't perform any calculation because eviction is not allowed for PickFixed CRP.
 	// * if the linked Placement object is of the PickAll placement type, MinAvailable can be
 	//   specified but only as an integer since we cannot derive the total number of clusters selected.
 	// * if the linked Placement object is of the PickN placement type,
