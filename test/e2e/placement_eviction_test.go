@@ -82,13 +82,15 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding, taint clus
 	})
 
 	It("should update cluster resource placement status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster2EastCanaryName, memberCluster3WestProdName}, nil, "0")
+		// allMemberClusterNames - taintClusterNames
+		noTaintClusterNames := []string{memberCluster2EastCanaryName, memberCluster3WestProdName}
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), noTaintClusterNames, nil, "0")
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
 	})
 
 	It("should place resources on the selected clusters with no taint", func() {
-		targetClusters := []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd}
-		for _, cluster := range targetClusters {
+		noTaintClusters := []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd}
+		for _, cluster := range noTaintClusters {
 			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the selected clusters")
 		}
@@ -293,13 +295,15 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 	})
 
 	It("should update cluster resource placement status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster2EastCanaryName, memberCluster3WestProdName}, nil, "0")
+		// allMemberClusterNames - taintClusterNames
+		noTaintClusterNames := []string{memberCluster2EastCanaryName, memberCluster3WestProdName}
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), noTaintClusterNames, nil, "0")
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
 	})
 
 	It("should place resources on the selected clusters with no taint", func() {
-		targetClusters := []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd}
-		for _, cluster := range targetClusters {
+		noTaintClusters := []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd}
+		for _, cluster := range noTaintClusters {
 			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the selected clusters")
 		}
@@ -481,13 +485,15 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should update cluster resource placement status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster2EastCanaryName, memberCluster3WestProdName}, []string{memberCluster1EastProdName}, "0")
+		// allMemberClusterNames - taintClusterNames
+		noTaintClusterNames := []string{memberCluster2EastCanaryName, memberCluster3WestProdName}
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), noTaintClusterNames, nil, "0")
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
 	})
 
 	It("should place resources on the selected clusters with no taint", func() {
-		targetClusters := []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd}
-		for _, cluster := range targetClusters {
+		noTaintClusters := []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd}
+		for _, cluster := range noTaintClusters {
 			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the selected clusters")
 		}
