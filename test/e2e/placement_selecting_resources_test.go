@@ -22,7 +22,7 @@ import (
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
-	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
 )
@@ -741,7 +741,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 								Condition: metav1.Condition{
 									Type:               placementv1beta1.WorkConditionTypeApplied,
 									Status:             metav1.ConditionFalse,
-									Reason:             work.ManifestsAlreadyOwnedByOthersReason,
+									Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
 									ObservedGeneration: 0,
 								},
 							},

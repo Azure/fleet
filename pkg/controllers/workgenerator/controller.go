@@ -44,7 +44,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -700,7 +700,7 @@ func (r *Reconciler) upsertWork(ctx context.Context, newWork, existingWork *flee
 	} else {
 		// we already checked the label in fetchAllResourceSnapShots function so no need to check again
 		resourceIndex, _ := labels.ExtractResourceIndexFromClusterResourceSnapshot(resourceSnapshot)
-		if workResourceIndex == resourceIndex {
+		if workResourceIndex == resourceIndex && equality.Semantic.DeepEqual(existingWork.Spec.ApplyStrategy, newWork.Spec.ApplyStrategy) {
 			// no need to do anything if the work is generated from the same resource/override snapshots
 			if existingWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] == newWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] &&
 				existingWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] == newWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] {
@@ -723,6 +723,7 @@ func (r *Reconciler) upsertWork(ctx context.Context, newWork, existingWork *flee
 	existingWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] = newWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation]
 	existingWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] = newWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation]
 	existingWork.Spec.Workload.Manifests = newWork.Spec.Workload.Manifests
+	existingWork.Spec.ApplyStrategy = newWork.Spec.ApplyStrategy
 	if err := r.Client.Update(ctx, existingWork); err != nil {
 		klog.ErrorS(err, "Failed to update the work associated with the resourceSnapshot", "resourceSnapshot", resourceSnapshotObj, "work", workObj)
 		return true, controller.NewUpdateIgnoreConflictError(err)
@@ -870,7 +871,7 @@ func buildAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding
 			notAvailableWork = w.Name
 			break
 		}
-		if cond.Reason == work.WorkNotTrackableReason {
+		if cond.Reason == workapplier.WorkNotTrackableReason {
 			notTrackableWork = w.Name
 		}
 	}
@@ -879,7 +880,7 @@ func buildAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding
 		reason := condition.AllWorkAvailableReason
 		message := "All corresponding work objects are available"
 		if len(notTrackableWork) > 0 {
-			reason = work.WorkNotTrackableReason
+			reason = workapplier.WorkNotTrackableReason
 			message = fmt.Sprintf("The availability of work object %s is not trackable", notTrackableWork)
 		}
 

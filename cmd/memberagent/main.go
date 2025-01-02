@@ -43,7 +43,7 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	imcv1alpha1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1alpha1"
 	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	workv1alpha1controller "go.goms.io/fleet/pkg/controllers/workv1alpha1"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/propertyprovider"
@@ -68,12 +68,14 @@ var (
 	metricsAddr          = flag.String("metrics-bind-address", ":8090", "The address the metric endpoint binds to.")
 	enableLeaderElection = flag.Bool("leader-elect", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
-	leaderElectionNamespace = flag.String("leader-election-namespace", "kube-system", "The namespace in which the leader election resource will be created.")
-	enableV1Alpha1APIs      = flag.Bool("enable-v1alpha1-apis", true, "If set, the agents will watch for the v1alpha1 APIs.")
-	enableV1Beta1APIs       = flag.Bool("enable-v1beta1-apis", false, "If set, the agents will watch for the v1beta1 APIs.")
-	propertyProvider        = flag.String("property-provider", "none", "The property provider to use for the agent.")
-	region                  = flag.String("region", "", "The region where the member cluster resides.")
-	cloudConfigFile         = flag.String("cloud-config", "/etc/kubernetes/provider/config.json", "The path to the cloud cloudconfig file.")
+	leaderElectionNamespace   = flag.String("leader-election-namespace", "kube-system", "The namespace in which the leader election resource will be created.")
+	enableV1Alpha1APIs        = flag.Bool("enable-v1alpha1-apis", true, "If set, the agents will watch for the v1alpha1 APIs.")
+	enableV1Beta1APIs         = flag.Bool("enable-v1beta1-apis", false, "If set, the agents will watch for the v1beta1 APIs.")
+	propertyProvider          = flag.String("property-provider", "none", "The property provider to use for the agent.")
+	region                    = flag.String("region", "", "The region where the member cluster resides.")
+	cloudConfigFile           = flag.String("cloud-config", "/etc/kubernetes/provider/config.json", "The path to the cloud cloudconfig file.")
+	availabilityCheckInterval = flag.Int("availability-check-interval", 5, "The interval in seconds between attempts to check for resource availability when resources are not yet available.")
+	driftDetectionInterval    = flag.Int("drift-detection-interval", 15, "The interval in seconds between attempts to detect configuration drifts in the cluster.")
 )
 
 func init() {
@@ -348,15 +350,22 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 			klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
 			return err
 		}
-		// create the work controller, so we can pass it to the internal member cluster reconciler
-		workController := work.NewApplyWorkReconciler(
+
+		// Prepare the work applier.
+		workApplier := workapplier.NewReconciler(
 			hubMgr.GetClient(),
+			targetNS,
 			spokeDynamicClient,
 			memberMgr.GetClient(),
-			restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, targetNS)
-
-		if err = workController.SetupWithManager(hubMgr); err != nil {
-			klog.ErrorS(err, "Failed to create v1beta1 controller", "controller", "work")
+			restMapper,
+			hubMgr.GetEventRecorderFor("work_applier"),
+			5,
+			4,
+			time.Second*time.Duration(*availabilityCheckInterval),
+			time.Second*time.Duration(*driftDetectionInterval),
+		)
+		if err = workApplier.SetupWithManager(hubMgr); err != nil {
+			klog.ErrorS(err, "Failed to create work applier controller", "controller", "workapplier")
 			return err
 		}
 
@@ -383,7 +392,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 			ctx,
 			hubMgr.GetClient(),
 			memberMgr.GetConfig(), memberMgr.GetClient(),
-			workController,
+			workApplier,
 			pp)
 		if err != nil {
 			klog.ErrorS(err, "Failed to create InternalMemberCluster v1beta1 reconciler")

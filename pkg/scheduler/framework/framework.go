@@ -29,10 +29,10 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
-	"go.goms.io/fleet/pkg/scheduler/framework/parallelizer"
 	"go.goms.io/fleet/pkg/utils/annotations"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/parallelizer"
 )
 
 const (
