@@ -91,6 +91,11 @@ func (r *Reconciler) validateEviction(ctx context.Context, eviction *placementv1
 		markEvictionInvalid(eviction, condition.EvictionInvalidDeletingCRPMessage)
 		return validationResult, nil
 	}
+	if crp.Spec.Policy.PlacementType == placementv1beta1.PickFixedPlacementType {
+		klog.V(2).InfoS(condition.EvictionInvalidPickFixedCRPMessage, "clusterResourcePlacementEviction", eviction.Name, "clusterResourcePlacement", eviction.Spec.PlacementName)
+		markEvictionInvalid(eviction, condition.EvictionInvalidPickFixedCRPMessage)
+		return validationResult, nil
+	}
 	validationResult.crp = &crp
 
 	var crbList placementv1beta1.ClusterResourceBindingList
@@ -256,13 +261,9 @@ func isEvictionAllowed(bindings []placementv1beta1.ClusterResourceBinding, crp p
 
 	var desiredBindings int
 	placementType := crp.Spec.Policy.PlacementType
-	switch placementType {
-	case placementv1beta1.PickNPlacementType:
+	// we don't know the desired bindings for PickAll and we won't evict a binding for PickFixed CRP.
+	if placementType == placementv1beta1.PickNPlacementType {
 		desiredBindings = int(*crp.Spec.Policy.NumberOfClusters)
-	case placementv1beta1.PickFixedPlacementType:
-		desiredBindings = len(crp.Spec.Policy.ClusterNames)
-	default:
-		// we don't know the desired bindings for PickAll.
 	}
 
 	var disruptionsAllowed int

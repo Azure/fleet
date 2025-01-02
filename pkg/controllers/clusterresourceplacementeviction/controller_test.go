@@ -136,6 +136,31 @@ func TestValidateEviction(t *testing.T) {
 			wantErr: nil,
 		},
 		{
+			name:     "invalid eviction - pickFixed CRP",
+			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testCRPName,
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+					},
+				},
+			},
+			wantValidationResult: &evictionValidationResult{
+				isValid: false,
+			},
+			wantEvictionInvalidCondition: &metav1.Condition{
+				Type:               string(placementv1alpha1.PlacementEvictionConditionTypeValid),
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: 1,
+				Reason:             condition.ClusterResourcePlacementEvictionInvalidReason,
+				Message:            condition.EvictionInvalidPickFixedCRPMessage,
+			},
+			wantErr: nil,
+		},
+		{
 			name:     "invalid eviction - multiple CRBs for same cluster",
 			eviction: buildTestEviction(testEvictionName, testCRPName, testClusterName),
 			crp:      testCRP,
