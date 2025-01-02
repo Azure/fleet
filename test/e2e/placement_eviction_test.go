@@ -17,16 +17,18 @@ import (
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
-	"go.goms.io/fleet/test/e2e/framework"
 	testutilseviction "go.goms.io/fleet/test/utils/eviction"
 )
 
 var _ = Describe("ClusterResourcePlacement eviction of bound binding, taint cluster before eviction - No PDB specified", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
-	taintClusterNames := []string{memberCluster1EastProdName}
+	var taintClusterNames, noTaintClusterNames []string
 
 	BeforeAll(func() {
+		taintClusterNames = []string{memberCluster1EastProdName}
+		noTaintClusterNames = buildClusterNamesWithoutTaints(taintClusterNames)
+
 		By("creating work resources")
 		createWorkResources()
 
@@ -74,22 +76,20 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding, taint clus
 	})
 
 	It("should ensure no resources exist on evicted member cluster with taint", func() {
-		unSelectedClusters := []*framework.Cluster{memberCluster1EastProd}
-		for _, cluster := range unSelectedClusters {
+		taintClusters := buildClustersFromNames(taintClusterNames)
+		for _, cluster := range taintClusters {
 			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
 			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
 		}
 	})
 
 	It("should update cluster resource placement status as expected", func() {
-		// allMemberClusterNames - taintClusterNames
-		noTaintClusterNames := []string{memberCluster2EastCanaryName, memberCluster3WestProdName}
 		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), noTaintClusterNames, nil, "0")
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
 	})
 
 	It("should place resources on the selected clusters with no taint", func() {
-		noTaintClusters := []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd}
+		noTaintClusters := buildClustersFromNames(noTaintClusterNames)
 		for _, cluster := range noTaintClusters {
 			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the selected clusters")
@@ -222,9 +222,12 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB specified to protect resources in all but one cluster, eviction allowed", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
-	taintClusterNames := []string{memberCluster1EastProdName}
+	var taintClusterNames, noTaintClusterNames []string
 
 	BeforeAll(func() {
+		taintClusterNames = []string{memberCluster1EastProdName}
+		noTaintClusterNames = buildClusterNamesWithoutTaints(taintClusterNames)
+
 		By("creating work resources")
 		createWorkResources()
 
@@ -287,22 +290,20 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 	})
 
 	It("should ensure no resources exist on evicted member cluster with taint", func() {
-		unSelectedClusters := []*framework.Cluster{memberCluster1EastProd}
-		for _, cluster := range unSelectedClusters {
+		taintClusters := buildClustersFromNames(taintClusterNames)
+		for _, cluster := range taintClusters {
 			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
 			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
 		}
 	})
 
 	It("should update cluster resource placement status as expected", func() {
-		// allMemberClusterNames - taintClusterNames
-		noTaintClusterNames := []string{memberCluster2EastCanaryName, memberCluster3WestProdName}
 		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), noTaintClusterNames, nil, "0")
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
 	})
 
 	It("should place resources on the selected clusters with no taint", func() {
-		noTaintClusters := []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd}
+		noTaintClusters := buildClustersFromNames(noTaintClusterNames)
 		for _, cluster := range noTaintClusters {
 			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the selected clusters")
@@ -397,9 +398,12 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as percentage to protect all clusters but one, eviction allowed", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
-	taintClusterNames := []string{memberCluster1EastProdName}
+	var taintClusterNames, noTaintClusterNames []string
 
 	BeforeAll(func() {
+		taintClusterNames = []string{memberCluster1EastProdName}
+		noTaintClusterNames = buildClusterNamesWithoutTaints(taintClusterNames)
+
 		By("creating work resources")
 		createWorkResources()
 
@@ -477,22 +481,20 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should ensure no resources exist on evicted member cluster with taint", func() {
-		unSelectedClusters := []*framework.Cluster{memberCluster1EastProd}
-		for _, cluster := range unSelectedClusters {
+		taintClusters := buildClustersFromNames(taintClusterNames)
+		for _, cluster := range taintClusters {
 			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
 			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
 		}
 	})
 
 	It("should update cluster resource placement status as expected", func() {
-		// allMemberClusterNames - taintClusterNames
-		noTaintClusterNames := []string{memberCluster2EastCanaryName, memberCluster3WestProdName}
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), noTaintClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), noTaintClusterNames, taintClusterNames, "0")
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
 	})
 
 	It("should place resources on the selected clusters with no taint", func() {
-		noTaintClusters := []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd}
+		noTaintClusters := buildClustersFromNames(noTaintClusterNames)
 		for _, cluster := range noTaintClusters {
 			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the selected clusters")
