@@ -19,6 +19,9 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
+// TODO: Add more tests to cover the negative cases that override failed, need to make sure
+// the CRP status has all the information to debug the issue.
+
 // Note that this container will run in parallel with other containers.
 var _ = Describe("creating clusterResourceOverride (selecting all clusters) to override all resources under the namespace", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
@@ -91,6 +94,54 @@ var _ = Describe("creating clusterResourceOverride (selecting all clusters) to o
 
 	It("should have override annotations on the placed resources", func() {
 		want := map[string]string{croTestAnnotationKey: croTestAnnotationValue}
+		checkIfOverrideAnnotationsOnAllMemberClusters(true, want)
+	})
+
+	It("update cro attached to this CRP only and change annotation value", func() {
+		Eventually(func() error {
+			cro := &placementv1alpha1.ClusterResourceOverride{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: croName}, cro); err != nil {
+				return err
+			}
+			cro.Spec = placementv1alpha1.ClusterResourceOverrideSpec{
+				Placement: &placementv1alpha1.PlacementRef{
+					Name: crpName, // assigned CRP name
+				},
+				ClusterResourceSelectors: workResourceSelector(),
+				Policy: &placementv1alpha1.OverridePolicy{
+					OverrideRules: []placementv1alpha1.OverrideRule{
+						{
+							ClusterSelector: &placementv1beta1.ClusterSelector{
+								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
+							},
+							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+								{
+									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Path:     "/metadata/annotations",
+									// changed the annotation value to croTestAnnotationValue1
+									Value: apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s"}`, croTestAnnotationKey, croTestAnnotationValue1))},
+								},
+							},
+						},
+					},
+				},
+			}
+			return hubClient.Update(ctx, cro)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cro as expected", crpName)
+	})
+
+	It("should update CRP status as expected", func() {
+		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 1)}
+		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
+		// use the long duration to wait until the rollout is finished.
+		Eventually(crpStatusUpdatedActual, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	// This check will ignore the annotation of resources.
+	It("should place the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
+	It("should have new override annotation value on the placed resources", func() {
+		want := map[string]string{croTestAnnotationKey: croTestAnnotationValue1}
 		checkIfOverrideAnnotationsOnAllMemberClusters(true, want)
 	})
 })
@@ -172,6 +223,25 @@ var _ = Describe("creating clusterResourceOverride with multiple jsonPatchOverri
 	It("should have annotations on all member clusters", func() {
 		wantAnnotations := map[string]string{croTestAnnotationKey: croTestAnnotationValue, croTestAnnotationKey1: croTestAnnotationValue1}
 		checkIfOverrideAnnotationsOnAllMemberClusters(true, wantAnnotations)
+	})
+
+	It("update cro attached to an invalid CRP", func() {
+		Eventually(func() error {
+			cro := &placementv1alpha1.ClusterResourceOverride{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: croName}, cro); err != nil {
+				return err
+			}
+			cro.Spec.Placement = &placementv1alpha1.PlacementRef{
+				Name: "invalid-crp", // assigned CRP name
+			}
+			return hubClient.Update(ctx, cro)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cro as expected", crpName)
+	})
+
+	It("CRP status should not be changed", func() {
+		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)}
+		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
+		Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "CRP %s status has been changed", crpName)
 	})
 })
 
@@ -289,6 +359,81 @@ var _ = Describe("creating clusterResourceOverride with different rules for each
 	It("should have override annotations on the member clusters", func() {
 		for i, cluster := range allMemberClusters {
 			wantAnnotations := map[string]string{croTestAnnotationKey: fmt.Sprintf("%s-%d", croTestAnnotationValue, i)}
+			Expect(validateAnnotationOfWorkNamespaceOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of work namespace on %s", cluster.ClusterName)
+			Expect(validateOverrideAnnotationOfConfigMapOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", cluster.ClusterName)
+		}
+	})
+})
+
+var _ = Describe("creating clusterResourceOverride with different rules for each cluster", Ordered, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
+
+	BeforeAll(func() {
+		By("creating work resources")
+		createWorkResources()
+		createCRP(crpName)
+		cro := &placementv1alpha1.ClusterResourceOverride{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: croName,
+			},
+			Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+				Placement: &placementv1alpha1.PlacementRef{
+					Name: crpName, // assigned CRP name
+				},
+				ClusterResourceSelectors: workResourceSelector(),
+				Policy: &placementv1alpha1.OverridePolicy{
+					OverrideRules: []placementv1alpha1.OverrideRule{
+						{
+							ClusterSelector: &placementv1beta1.ClusterSelector{
+								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+									{
+										LabelSelector: &metav1.LabelSelector{
+											MatchExpressions: []metav1.LabelSelectorRequirement{
+												{
+													Key:      regionLabelName,
+													Operator: metav1.LabelSelectorOpExists,
+												},
+											},
+										},
+									},
+								},
+							},
+							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+								{
+									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Path:     "/metadata/annotations",
+									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "test-%s"}`, croTestAnnotationKey, placementv1alpha1.OverrideClusterNameVariable))},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		By(fmt.Sprintf("creating clusterResourceOverride %s", croName))
+		Expect(hubClient.Create(ctx, cro)).To(Succeed(), "Failed to create clusterResourceOverride %s", croName)
+	})
+
+	AfterAll(func() {
+		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+
+		By(fmt.Sprintf("deleting clusterResourceOverride %s", croName))
+		cleanupClusterResourceOverride(croName)
+	})
+
+	It("should update CRP status as expected", func() {
+		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)}
+		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	It("should place the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
+	It("should have override annotations on the member clusters", func() {
+		for _, cluster := range allMemberClusters {
+			wantAnnotations := map[string]string{croTestAnnotationKey: fmt.Sprintf("test-%s", cluster.ClusterName)}
 			Expect(validateAnnotationOfWorkNamespaceOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of work namespace on %s", cluster.ClusterName)
 			Expect(validateOverrideAnnotationOfConfigMapOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", cluster.ClusterName)
 		}

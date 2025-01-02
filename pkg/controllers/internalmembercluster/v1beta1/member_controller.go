@@ -188,15 +188,15 @@ func NewReconciler(globalCtx context.Context,
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	startTime := time.Now()
-	klog.V(2).InfoS("InternalMemberCluster reconciliation starts", "InternalMemberCluster", req.NamespacedName)
+	klog.V(2).InfoS("InternalMemberCluster reconciliation starts", "internalMemberCluster", req.NamespacedName)
 	defer func() {
 		latency := time.Since(startTime).Milliseconds()
-		klog.V(2).InfoS("InternalMemberCluster reconciliation ends", "InternalMemberCluster", req.NamespacedName, "latency", latency)
+		klog.V(2).InfoS("InternalMemberCluster reconciliation ends", "internalMemberCluster", req.NamespacedName, "latency", latency)
 	}()
 
 	var imc clusterv1beta1.InternalMemberCluster
 	if err := r.hubClient.Get(ctx, req.NamespacedName, &imc); err != nil {
-		klog.ErrorS(err, "Failed to get internal member cluster: %s", req.NamespacedName)
+		klog.ErrorS(err, "Failed to get internal member cluster", "internalMemberCluster", req.NamespacedName)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -277,18 +277,18 @@ func (r *Reconciler) stopAgents(ctx context.Context, imc *clusterv1beta1.Interna
 
 // updateHealth collects and updates member cluster resource stats and set ConditionTypeInternalMemberClusterHealth.
 func (r *Reconciler) updateHealth(ctx context.Context, imc *clusterv1beta1.InternalMemberCluster) error {
-	klog.V(2).InfoS("Updating health status", "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("Updating health status", "internalMemberCluster", klog.KObj(imc))
 
 	probeRes := r.rawMemberClientSet.Discovery().RESTClient().Get().AbsPath(healthProbePath).Do(ctx)
 	var statusCode int
 	if probeRes.StatusCode(&statusCode); statusCode != 200 {
 		err := fmt.Errorf("health probe failed with status code %d", statusCode)
-		klog.ErrorS(err, "Failed to probe health", "InternalMemberCluster", klog.KObj(imc))
+		klog.ErrorS(err, "Failed to probe health", "internalMemberCluster", klog.KObj(imc))
 		r.markInternalMemberClusterUnhealthy(imc, err)
 		return err
 	}
 
-	klog.V(2).InfoS("Health probe succeeded", "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("Health probe succeeded", "internalMemberCluster", klog.KObj(imc))
 	r.markInternalMemberClusterHealthy(imc)
 	return nil
 }
@@ -310,7 +310,7 @@ func (r *Reconciler) connectToPropertyProvider(ctx context.Context, imc *cluster
 		go func() {
 			defer close(startedCh)
 			if err := r.propertyProviderCfg.propertyProvider.Start(r.globalCtx, r.propertyProviderCfg.memberConfig); err != nil {
-				klog.ErrorS(err, "Failed to start property provider", "InternalMemberCluster", klog.KObj(imc))
+				klog.ErrorS(err, "Failed to start property provider", "internalMemberCluster", klog.KObj(imc))
 				startedCh <- err
 			}
 		}()
@@ -320,16 +320,16 @@ func (r *Reconciler) connectToPropertyProvider(ctx context.Context, imc *cluster
 		select {
 		case <-childCtx.Done():
 			err := fmt.Errorf("property provider startup deadline exceeded")
-			klog.ErrorS(err, "Failed to start property provider within the startup deadline", "InternalMemberCluster", klog.KObj(imc))
+			klog.ErrorS(err, "Failed to start property provider within the startup deadline", "internalMemberCluster", klog.KObj(imc))
 			reportPropertyProviderStartedCondition(imc, metav1.ConditionFalse, ClusterPropertyProviderStartedTimedOutReason, ClusterPropertyProviderStartedTimedOutMessage)
 			r.recorder.Event(imc, corev1.EventTypeWarning, ClusterPropertyProviderStartedTimedOutReason, ClusterPropertyProviderStartedTimedOutMessage)
 		case err := <-startedCh:
 			if err != nil {
-				klog.ErrorS(err, "Failed to start property provider", "InternalMemberCluster", klog.KObj(imc))
+				klog.ErrorS(err, "Failed to start property provider", "internalMemberCluster", klog.KObj(imc))
 				reportPropertyProviderStartedCondition(imc, metav1.ConditionFalse, ClusterPropertyProviderStartedFailedReason, fmt.Sprintf(ClusterPropertyProviderStartedFailedMessage, err))
 				r.recorder.Event(imc, corev1.EventTypeWarning, ClusterPropertyProviderStartedFailedReason, fmt.Sprintf(ClusterPropertyProviderStartedFailedMessage, err))
 			} else {
-				klog.V(2).InfoS("Property provider started", "InternalMemberCluster", klog.KObj(imc))
+				klog.V(2).InfoS("Property provider started", "internalMemberCluster", klog.KObj(imc))
 				reportPropertyProviderStartedCondition(imc, metav1.ConditionTrue, ClusterPropertyProviderStartedReason, ClusterPropertyProviderStartedMessage)
 				r.recorder.Event(imc, corev1.EventTypeNormal, ClusterPropertyProviderStartedReason, ClusterPropertyProviderStartedMessage)
 				r.propertyProviderCfg.isPropertyProviderStarted = true
@@ -339,18 +339,18 @@ func (r *Reconciler) connectToPropertyProvider(ctx context.Context, imc *cluster
 
 	if r.propertyProviderCfg.propertyProvider != nil && r.propertyProviderCfg.isPropertyProviderStarted {
 		// Attempt to collect latest cluster properties via the property provider.
-		klog.V(2).InfoS("Calling property provider for latest cluster properties", "InternalMemberCluster", klog.KObj(imc))
+		klog.V(2).InfoS("Calling property provider for latest cluster properties", "internalMemberCluster", klog.KObj(imc))
 		return r.reportClusterPropertiesWithPropertyProvider(ctx, imc)
 	}
 
 	// Fall back to the built-in default behavior.
 	klog.V(2).InfoS("Falling back to the built-in default behavior for cluster property collection",
-		"InternalMemberCluster", klog.KObj(imc),
-		"IsPropertyProviderInstalled", r.propertyProviderCfg.propertyProvider != nil,
-		"IsPropertyProviderStarted", r.propertyProviderCfg.isPropertyProviderStarted,
+		"internalMemberCluster", klog.KObj(imc),
+		"isPropertyProviderInstalled", r.propertyProviderCfg.propertyProvider != nil,
+		"isPropertyProviderStarted", r.propertyProviderCfg.isPropertyProviderStarted,
 	)
 	if err := r.updateResourceStats(ctx, imc); err != nil {
-		klog.ErrorS(err, "Failed to report cluster properties using built-in mechanism", "InternalMemberCluster", klog.KObj(imc))
+		klog.ErrorS(err, "Failed to report cluster properties using built-in mechanism", "internalMemberCluster", klog.KObj(imc))
 		return err
 	}
 	return nil
@@ -393,7 +393,7 @@ func (r *Reconciler) reportClusterPropertiesWithPropertyProvider(ctx context.Con
 			ClusterPropertyCollectionFailedTooManyCallsMessage,
 		)
 		err := fmt.Errorf("too many on-going calls to the property provider; skipping this collection attempt")
-		klog.ErrorS(err, "Failed to collect cluster properties", "InternalMemberCluster", klog.KObj(imc))
+		klog.ErrorS(err, "Failed to collect cluster properties", "internalMemberCluster", klog.KObj(imc))
 		return err
 	}
 
@@ -427,13 +427,13 @@ func (r *Reconciler) reportClusterPropertiesWithPropertyProvider(ctx context.Con
 			ClusterPropertyCollectionTimedOutMessage,
 		)
 		err := fmt.Errorf("property provider collection deadline exceeded")
-		klog.ErrorS(err, "Failed to collect cluster properties", "InternalMemberCluster", klog.KObj(imc))
+		klog.ErrorS(err, "Failed to collect cluster properties", "internalMemberCluster", klog.KObj(imc))
 		r.recorder.Event(imc, corev1.EventTypeWarning, ClusterPropertyCollectionTimedOutReason, ClusterPropertyCollectionTimedOutMessage)
 		return err
 	case <-collectedCh:
 		// The property provider has returned the latest cluster properties; update the
 		// internal member cluster object with the collected properties.
-		klog.V(2).InfoS("Property provider cluster property collection completed", "InternalMemberCluster", klog.KObj(imc))
+		klog.V(2).InfoS("Property provider cluster property collection completed", "internalMemberCluster", klog.KObj(imc))
 		reportPropertyProviderCollectionCondition(imc,
 			metav1.ConditionTrue,
 			ClusterPropertyCollectionSucceededReason,
@@ -453,7 +453,7 @@ func (r *Reconciler) reportClusterPropertiesWithPropertyProvider(ctx context.Con
 
 // updateResourceStats collects and updates resource usage stats of the member cluster.
 func (r *Reconciler) updateResourceStats(ctx context.Context, imc *clusterv1beta1.InternalMemberCluster) error {
-	klog.V(2).InfoS("Updating resource usage status", "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("Updating resource usage status", "internalMemberCluster", klog.KObj(imc))
 	// List all the nodes.
 	var nodes corev1.NodeList
 	if err := r.memberClient.List(ctx, &nodes); err != nil {
@@ -541,7 +541,7 @@ func (r *Reconciler) updateResourceStats(ctx context.Context, imc *clusterv1beta
 
 // updateInternalMemberClusterWithRetry updates InternalMemberCluster status.
 func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, imc *clusterv1beta1.InternalMemberCluster) error {
-	klog.V(2).InfoS("Updating InternalMemberCluster status with retries", "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("Updating InternalMemberCluster status with retries", "internalMemberCluster", klog.KObj(imc))
 	backOffPeriod := retry.DefaultBackoff
 	backOffPeriod.Cap = time.Second * time.Duration(imc.Spec.HeartbeatPeriodSeconds)
 
@@ -556,7 +556,7 @@ func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, i
 
 // updateMemberAgentHeartBeat is used to update member agent heart beat for Internal member cluster.
 func updateMemberAgentHeartBeat(imc *clusterv1beta1.InternalMemberCluster) {
-	klog.V(2).InfoS("Updating Internal member cluster heartbeat", "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("Updating Internal member cluster heartbeat", "internalMemberCluster", klog.KObj(imc))
 	desiredAgentStatus := imc.GetAgentStatus(clusterv1beta1.MemberAgent)
 	if desiredAgentStatus != nil {
 		desiredAgentStatus.LastReceivedHeartbeat = metav1.Now()
@@ -564,7 +564,7 @@ func updateMemberAgentHeartBeat(imc *clusterv1beta1.InternalMemberCluster) {
 }
 
 func (r *Reconciler) markInternalMemberClusterHealthy(imc clusterv1beta1.ConditionedAgentObj) {
-	klog.V(2).InfoS("Marking InternalMemberCluster as healthy", "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("Marking InternalMemberCluster as healthy", "internalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.AgentHealthy),
 		Status:             metav1.ConditionTrue,
@@ -575,7 +575,7 @@ func (r *Reconciler) markInternalMemberClusterHealthy(imc clusterv1beta1.Conditi
 	// Healthy status changed.
 	existingCondition := imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
-		klog.V(2).InfoS("InternalMemberCluster is healthy", "InternalMemberCluster", klog.KObj(imc))
+		klog.V(2).InfoS("InternalMemberCluster is healthy", "internalMemberCluster", klog.KObj(imc))
 		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterHealthy, "internal member cluster healthy")
 	}
 
@@ -583,7 +583,7 @@ func (r *Reconciler) markInternalMemberClusterHealthy(imc clusterv1beta1.Conditi
 }
 
 func (r *Reconciler) markInternalMemberClusterUnhealthy(imc clusterv1beta1.ConditionedAgentObj, err error) {
-	klog.V(2).InfoS("Marking InternalMemberCluster as unhealthy", "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("Marking InternalMemberCluster as unhealthy", "internalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.AgentHealthy),
 		Status:             metav1.ConditionFalse,
@@ -595,7 +595,7 @@ func (r *Reconciler) markInternalMemberClusterUnhealthy(imc clusterv1beta1.Condi
 	// Healthy status changed.
 	existingCondition := imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
-		klog.V(2).InfoS("InternalMemberCluster is unhealthy", "InternalMemberCluster", klog.KObj(imc))
+		klog.V(2).InfoS("InternalMemberCluster is unhealthy", "internalMemberCluster", klog.KObj(imc))
 		r.recorder.Event(imc, corev1.EventTypeWarning, EventReasonInternalMemberClusterUnhealthy, "internal member cluster unhealthy")
 	}
 
@@ -603,7 +603,7 @@ func (r *Reconciler) markInternalMemberClusterUnhealthy(imc clusterv1beta1.Condi
 }
 
 func (r *Reconciler) markInternalMemberClusterJoined(imc clusterv1beta1.ConditionedAgentObj) {
-	klog.V(2).InfoS("Marking InternalMemberCluster as joined", "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("Marking InternalMemberCluster as joined", "internalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.AgentJoined),
 		Status:             metav1.ConditionTrue,
@@ -615,7 +615,7 @@ func (r *Reconciler) markInternalMemberClusterJoined(imc clusterv1beta1.Conditio
 	existingCondition := imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
 		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterJoined, "internal member cluster joined")
-		klog.V(2).InfoS("InternalMemberCluster has joined", "InternalMemberCluster", klog.KObj(imc))
+		klog.V(2).InfoS("InternalMemberCluster has joined", "internalMemberCluster", klog.KObj(imc))
 		metrics.ReportJoinResultMetric()
 	}
 
@@ -623,7 +623,7 @@ func (r *Reconciler) markInternalMemberClusterJoined(imc clusterv1beta1.Conditio
 }
 
 func (r *Reconciler) markInternalMemberClusterJoinFailed(imc clusterv1beta1.ConditionedAgentObj, err error) {
-	klog.V(2).InfoS("Marking InternalMemberCluster as failed to join", "error", err, "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("Marking InternalMemberCluster as failed to join", "error", err, "internalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.AgentJoined),
 		Status:             metav1.ConditionUnknown,
@@ -636,14 +636,14 @@ func (r *Reconciler) markInternalMemberClusterJoinFailed(imc clusterv1beta1.Cond
 	existingCondition := imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
 		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterFailedToJoin, "internal member cluster failed to join")
-		klog.ErrorS(err, "Agent failed to join", "InternalMemberCluster", klog.KObj(imc))
+		klog.ErrorS(err, "Agent failed to join", "internalMemberCluster", klog.KObj(imc))
 	}
 
 	imc.SetConditionsWithType(clusterv1beta1.MemberAgent, newCondition)
 }
 
 func (r *Reconciler) markInternalMemberClusterLeft(imc clusterv1beta1.ConditionedAgentObj) {
-	klog.V(2).InfoS("Marking InternalMemberCluster as left", "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("Marking InternalMemberCluster as left", "internalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.AgentJoined),
 		Status:             metav1.ConditionFalse,
@@ -655,7 +655,7 @@ func (r *Reconciler) markInternalMemberClusterLeft(imc clusterv1beta1.Conditione
 	existingCondition := imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
 		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterLeft, "internal member cluster left")
-		klog.V(2).InfoS("InternalMemberCluster has left", "InternalMemberCluster", klog.KObj(imc))
+		klog.V(2).InfoS("InternalMemberCluster has left", "internalMemberCluster", klog.KObj(imc))
 		metrics.ReportLeaveResultMetric()
 	}
 
@@ -663,7 +663,7 @@ func (r *Reconciler) markInternalMemberClusterLeft(imc clusterv1beta1.Conditione
 }
 
 func (r *Reconciler) markInternalMemberClusterLeaveFailed(imc clusterv1beta1.ConditionedAgentObj, err error) {
-	klog.V(2).InfoS("Marking InternalMemberCluster as failed to leave", "error", err, "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("Marking InternalMemberCluster as failed to leave", "error", err, "internalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.AgentJoined),
 		Status:             metav1.ConditionUnknown,
@@ -675,7 +675,7 @@ func (r *Reconciler) markInternalMemberClusterLeaveFailed(imc clusterv1beta1.Con
 	// Joined status changed.
 	if !condition.IsConditionStatusTrue(imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type), imc.GetGeneration()) {
 		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterFailedToLeave, "internal member cluster failed to leave")
-		klog.ErrorS(err, "Agent leave failed", "InternalMemberCluster", klog.KObj(imc))
+		klog.ErrorS(err, "Agent leave failed", "internalMemberCluster", klog.KObj(imc))
 	}
 
 	imc.SetConditionsWithType(clusterv1beta1.MemberAgent, newCondition)

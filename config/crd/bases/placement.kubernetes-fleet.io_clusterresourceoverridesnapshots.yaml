@@ -143,6 +143,19 @@ spec:
                     maxItems: 20
                     minItems: 1
                     type: array
+                  placement:
+                    description: |-
+                      Placement defines whether the override is applied to a specific placement or not.
+                      If set, the override will trigger the placement rollout immediately when the rollout strategy type is RollingUpdate.
+                      Otherwise, it will be applied to the next rollout.
+                      The recommended way is to set the placement so that the override can be rolled out immediately.
+                    properties:
+                      name:
+                        description: Name is the reference to the name of placement.
+                        type: string
+                    required:
+                    - name
+                    type: object
                   policy:
                     description: Policy defines how to override the selected resources
                       on the target clusters.

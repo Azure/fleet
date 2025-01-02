@@ -29,6 +29,8 @@ import (
 	"go.uber.org/atomic"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	apiextensionshelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -448,6 +450,9 @@ func trackResourceAvailability(gvr schema.GroupVersionResource, curObj *unstruct
 	case utils.ServiceGVR:
 		return trackServiceAvailability(curObj)
 
+	case utils.CustomResourceDefinitionGVR:
+		return trackCRDAvailability(curObj)
+
 	default:
 		if isDataResource(gvr) {
 			klog.V(2).InfoS("Data resources are available immediately", "gvr", gvr, "resource", klog.KObj(curObj))
@@ -456,6 +461,22 @@ func trackResourceAvailability(gvr schema.GroupVersionResource, curObj *unstruct
 		klog.V(2).InfoS("We don't know how to track the availability of the resource", "gvr", gvr, "resource", klog.KObj(curObj))
 		return manifestNotTrackableAction, nil
 	}
+}
+
+func trackCRDAvailability(curObj *unstructured.Unstructured) (ApplyAction, error) {
+	var crd apiextensionsv1.CustomResourceDefinition
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &crd); err != nil {
+		return errorApplyAction, controller.NewUnexpectedBehaviorError(err)
+	}
+
+	// If both conditions are True, the CRD is available
+	if apiextensionshelpers.IsCRDConditionTrue(&crd, apiextensionsv1.Established) && apiextensionshelpers.IsCRDConditionTrue(&crd, apiextensionsv1.NamesAccepted) {
+		klog.V(2).InfoS("CustomResourceDefinition is available", "customResourceDefinition", klog.KObj(curObj))
+		return manifestAvailableAction, nil
+	}
+
+	klog.V(2).InfoS("Still need to wait for CustomResourceDefinition to be available", "customResourceDefinition", klog.KObj(curObj))
+	return manifestNotAvailableYetAction, nil
 }
 
 func trackDeploymentAvailability(curObj *unstructured.Unstructured) (ApplyAction, error) {

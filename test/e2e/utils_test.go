@@ -917,6 +917,17 @@ func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*fram
 	cleanupWorkResources()
 }
 
+func ensureCRPEvictionDeletion(crpEvictionName string) {
+	crpe := &placementv1alpha1.ClusterResourcePlacementEviction{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: crpEvictionName,
+		},
+	}
+	Expect(hubClient.Delete(ctx, crpe)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete CRP eviction")
+	removedActual := crpEvictionRemovedActual(crpEvictionName)
+	Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "CRP eviction still exists")
+}
+
 // verifyWorkPropagationAndMarkAsAvailable verifies that works derived from a specific CPR have been created
 // for a specific cluster, and marks these works in the specific member cluster's
 // reserved namespace as applied and available.
@@ -1211,4 +1222,29 @@ func checkIfStatusErrorWithMessage(err error, errorMsg string) error {
 		}
 	}
 	return fmt.Errorf("error message %s not found in error %w", errorMsg, err)
+}
+
+// createCRPWithApplyStrategy creates a ClusterResourcePlacement with the given name and apply strategy.
+func createCRPWithApplyStrategy(crpName string, applyStrategy *placementv1beta1.ApplyStrategy) {
+	crp := &placementv1beta1.ClusterResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: crpName,
+			// Add a custom finalizer; this would allow us to better observe
+			// the behavior of the controllers.
+			Finalizers: []string{customDeletionBlockerFinalizer},
+		},
+		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			ResourceSelectors: workResourceSelector(),
+		},
+	}
+	if applyStrategy != nil {
+		crp.Spec.Strategy.ApplyStrategy = applyStrategy
+	}
+	By(fmt.Sprintf("creating placement %s", crpName))
+	Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+}
+
+// createCRP creates a ClusterResourcePlacement with the given name.
+func createCRP(crpName string) {
+	createCRPWithApplyStrategy(crpName, nil)
 }

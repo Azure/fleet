@@ -38,6 +38,7 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/defaulter"
 	"go.goms.io/fleet/pkg/utils/informer"
+	"go.goms.io/fleet/pkg/utils/overrider"
 )
 
 // Reconciler recomputes the cluster resource binding.
@@ -126,7 +127,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	// fill out all the default values for CRP just in case the mutation webhook is not enabled.
 	defaulter.SetDefaultsClusterResourcePlacement(&crp)
 
-	matchedCRO, matchedRO, err := r.fetchAllMatchingOverridesForResourceSnapshot(ctx, crp.Name, latestResourceSnapshot)
+	matchedCRO, matchedRO, err := overrider.FetchAllMatchingOverridesForResourceSnapshot(ctx, r.Client, r.InformerManager, crp.Name, latestResourceSnapshot)
 	if err != nil {
 		klog.ErrorS(err, "Failed to find all matching overrides for the clusterResourcePlacement", "clusterResourcePlacement", crpName)
 		return runtime.Result{}, err
@@ -371,8 +372,8 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			// the scheduler has picked a cluster for this binding
 			schedulerTargetedBinds = append(schedulerTargetedBinds, binding)
 			// this binding has not been bound yet, so it is an update candidate
-			// pickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
-			cro, ro, err := r.pickFromResourceMatchedOverridesForTargetCluster(ctx, binding, matchedCROs, matchedROs)
+			// PickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
+			cro, ro, err := overrider.PickFromResourceMatchedOverridesForTargetCluster(ctx, r.Client, binding.Spec.TargetCluster, matchedCROs, matchedROs)
 			if err != nil {
 				return nil, nil, false, minWaitTime, err
 			}
@@ -380,7 +381,8 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 		case fleetv1beta1.BindingStateBound:
 			bindingFailed := false
 			schedulerTargetedBinds = append(schedulerTargetedBinds, binding)
-			if waitTime, bindingReady := isBindingReady(binding, readyTimeCutOff); bindingReady {
+			waitTime, bindingReady := isBindingReady(binding, readyTimeCutOff)
+			if bindingReady {
 				klog.V(3).InfoS("Found a ready bound binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 				readyBindings = append(readyBindings, binding)
 			} else {
@@ -396,20 +398,27 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			} else {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
 			}
-			// pickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
-			cro, ro, err := r.pickFromResourceMatchedOverridesForTargetCluster(ctx, binding, matchedCROs, matchedROs)
-			if err != nil {
-				return nil, nil, false, 0, err
-			}
-			// The binding needs update if it's not pointing to the latest resource resourceBinding or the overrides.
-			if binding.Spec.ResourceSnapshotName != latestResourceSnapshot.Name || !equality.Semantic.DeepEqual(binding.Spec.ClusterResourceOverrideSnapshots, cro) || !equality.Semantic.DeepEqual(binding.Spec.ResourceOverrideSnapshots, ro) {
-				updateInfo := createUpdateInfo(binding, crp, latestResourceSnapshot, cro, ro)
-				if bindingFailed {
-					// the binding has been applied but failed to apply, we can safely update it to latest resources without affecting max unavailable count
-					applyFailedUpdateCandidates = append(applyFailedUpdateCandidates, updateInfo)
-				} else {
-					updateCandidates = append(updateCandidates, updateInfo)
+
+			// check to see if binding is not being deleted.
+			if binding.DeletionTimestamp.IsZero() {
+				// PickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
+				cro, ro, err := overrider.PickFromResourceMatchedOverridesForTargetCluster(ctx, r.Client, binding.Spec.TargetCluster, matchedCROs, matchedROs)
+				if err != nil {
+					return nil, nil, false, 0, err
 				}
+				// The binding needs update if it's not pointing to the latest resource resourceBinding or the overrides.
+				if binding.Spec.ResourceSnapshotName != latestResourceSnapshot.Name || !equality.Semantic.DeepEqual(binding.Spec.ClusterResourceOverrideSnapshots, cro) || !equality.Semantic.DeepEqual(binding.Spec.ResourceOverrideSnapshots, ro) {
+					updateInfo := createUpdateInfo(binding, crp, latestResourceSnapshot, cro, ro)
+					if bindingFailed {
+						// the binding has been applied but failed to apply, we can safely update it to latest resources without affecting max unavailable count
+						applyFailedUpdateCandidates = append(applyFailedUpdateCandidates, updateInfo)
+					} else {
+						updateCandidates = append(updateCandidates, updateInfo)
+					}
+				}
+			} else if bindingReady {
+				// it is being deleted, it can be removed from the cluster at any time, so it can be unavailable at any time
+				canBeUnavailableBindings = append(canBeUnavailableBindings, binding)
 			}
 		}
 	}
@@ -625,6 +634,26 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 				handleResourceSnapshot(e.Object, q)
 			},
 		}).
+		Watches(&fleetv1alpha1.ClusterResourceOverrideSnapshot{}, handler.Funcs{
+			CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+				klog.V(2).InfoS("Handling a clusterResourceOverrideSnapshot create event", "clusterResourceOverrideSnapshot", klog.KObj(e.Object))
+				handleClusterResourceOverrideSnapshot(e.Object, q)
+			},
+			GenericFunc: func(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
+				klog.V(2).InfoS("Handling a clusterResourceOverrideSnapshot generic event", "clusterResourceOverrideSnapshot", klog.KObj(e.Object))
+				handleClusterResourceOverrideSnapshot(e.Object, q)
+			},
+		}).
+		Watches(&fleetv1alpha1.ResourceOverrideSnapshot{}, handler.Funcs{
+			CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+				klog.V(2).InfoS("Handling a resourceOverrideSnapshot create event", "resourceOverrideSnapshot", klog.KObj(e.Object))
+				handleResourceOverrideSnapshot(e.Object, q)
+			},
+			GenericFunc: func(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
+				klog.V(2).InfoS("Handling a resourceOverrideSnapshot generic event", "resourceOverrideSnapshot", klog.KObj(e.Object))
+				handleResourceOverrideSnapshot(e.Object, q)
+			},
+		}).
 		Watches(&fleetv1beta1.ClusterResourceBinding{}, handler.Funcs{
 			CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
 				klog.V(2).InfoS("Handling a resourceBinding create event", "resourceBinding", klog.KObj(e.Object))
@@ -642,6 +671,72 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 		Complete(r)
 }
 
+// handleClusterResourceOverrideSnapshot parse the clusterResourceOverrideSnapshot label and enqueue the CRP name associated
+// with the clusterResourceOverrideSnapshot if set.
+func handleClusterResourceOverrideSnapshot(o client.Object, q workqueue.RateLimitingInterface) {
+	snapshot, ok := o.(*fleetv1alpha1.ClusterResourceOverrideSnapshot)
+	if !ok {
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("non ClusterResourceOverrideSnapshot type resource: %+v", o)),
+			"Rollout controller received invalid ClusterResourceOverrideSnapshot event", "object", klog.KObj(o))
+		return
+	}
+
+	snapshotKRef := klog.KObj(snapshot)
+	// check if it is the latest resource resourceBinding
+	isLatest, err := strconv.ParseBool(snapshot.GetLabels()[fleetv1beta1.IsLatestSnapshotLabel])
+	if err != nil {
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("invalid label value %s : %w", fleetv1beta1.IsLatestSnapshotLabel, err)),
+			"Resource clusterResourceOverrideSnapshot has does not have a valid islatest label", "clusterResourceOverrideSnapshot", snapshotKRef)
+		return
+	}
+	if !isLatest {
+		// All newly created resource snapshots should start with the latest label to be true.
+		// However, this can happen if the label is removed fast by the time this reconcile loop is triggered.
+		klog.V(2).InfoS("Newly created resource clusterResourceOverrideSnapshot %s is not the latest", "clusterResourceOverrideSnapshot", snapshotKRef)
+		return
+	}
+	if snapshot.Spec.OverrideSpec.Placement == nil {
+		return
+	}
+	// enqueue the CRP to the rollout controller queue
+	q.Add(reconcile.Request{
+		NamespacedName: types.NamespacedName{Name: snapshot.Spec.OverrideSpec.Placement.Name},
+	})
+}
+
+// handleResourceOverrideSnapshot parse the resourceOverrideSnapshot label and enqueue the CRP name associated with the
+// resourceOverrideSnapshot if set.
+func handleResourceOverrideSnapshot(o client.Object, q workqueue.RateLimitingInterface) {
+	snapshot, ok := o.(*fleetv1alpha1.ResourceOverrideSnapshot)
+	if !ok {
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("non ResourceOverrideSnapshot type resource: %+v", o)),
+			"Rollout controller received invalid ResourceOverrideSnapshot event", "object", klog.KObj(o))
+		return
+	}
+
+	snapshotKRef := klog.KObj(snapshot)
+	// check if it is the latest resource resourceBinding
+	isLatest, err := strconv.ParseBool(snapshot.GetLabels()[fleetv1beta1.IsLatestSnapshotLabel])
+	if err != nil {
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("invalid label value %s : %w", fleetv1beta1.IsLatestSnapshotLabel, err)),
+			"Resource resourceOverrideSnapshot has does not have a valid islatest annotation", "resourceOverrideSnapshot", snapshotKRef)
+		return
+	}
+	if !isLatest {
+		// All newly created resource snapshots should start with the latest label to be true.
+		// However, this can happen if the label is removed fast by the time this reconcile loop is triggered.
+		klog.V(2).InfoS("Newly created resource resourceOverrideSnapshot %s is not the latest", "resourceOverrideSnapshot", snapshotKRef)
+		return
+	}
+	if snapshot.Spec.OverrideSpec.Placement == nil {
+		return
+	}
+	// enqueue the CRP to the rollout controller queue
+	q.Add(reconcile.Request{
+		NamespacedName: types.NamespacedName{Name: snapshot.Spec.OverrideSpec.Placement.Name},
+	})
+}
+
 // handleResourceSnapshot parse the resourceBinding label and annotation and enqueue the CRP name associated with the resource resourceBinding
 func handleResourceSnapshot(snapshot client.Object, q workqueue.RateLimitingInterface) {
 	snapshotKRef := klog.KObj(snapshot)
@@ -655,14 +750,14 @@ func handleResourceSnapshot(snapshot client.Object, q workqueue.RateLimitingInte
 	// check if it is the latest resource resourceBinding
 	isLatest, err := strconv.ParseBool(snapshot.GetLabels()[fleetv1beta1.IsLatestSnapshotLabel])
 	if err != nil {
-		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("invalid annotation value %s : %w", fleetv1beta1.IsLatestSnapshotLabel, err)),
-			"Resource resourceBinding has does not have a valid islatest annotation", "clusterResourceSnapshot", snapshotKRef)
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("invalid label value %s : %w", fleetv1beta1.IsLatestSnapshotLabel, err)),
+			"Resource clusterResourceSnapshot has does not have a valid islatest annotation", "clusterResourceSnapshot", snapshotKRef)
 		return
 	}
 	if !isLatest {
 		// All newly created resource snapshots should start with the latest label to be true.
 		// However, this can happen if the label is removed fast by the time this reconcile loop is triggered.
-		klog.V(2).InfoS("Newly created resource resourceBinding %s is not the latest", "clusterResourceSnapshot", snapshotKRef)
+		klog.V(2).InfoS("Newly created resource clusterResourceSnapshot %s is not the latest", "clusterResourceSnapshot", snapshotKRef)
 		return
 	}
 	// get the CRP name from the label
