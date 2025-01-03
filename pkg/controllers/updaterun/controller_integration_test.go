@@ -110,8 +110,8 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 			validateUpdateRunHasFinalizer(ctx, updateRun)
 
 			By("Updating the clusterStagedUpdateRun to failed")
-			startedcond := generateTrueCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionProgressing)
-			finishedcond := generateFalseCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionSucceeded)
+			startedcond := generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing)
+			finishedcond := generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded)
 			meta.SetStatusCondition(&updateRun.Status.Conditions, startedcond)
 			meta.SetStatusCondition(&updateRun.Status.Conditions, finishedcond)
 			Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed(), "failed to update the clusterStagedUpdateRun")
@@ -139,7 +139,7 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 			validateUpdateRunHasFinalizer(ctx, updateRun)
 
 			By("Updating the clusterStagedUpdateRun status to processing")
-			startedcond := generateTrueCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionProgressing)
+			startedcond := generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing)
 			meta.SetStatusCondition(&updateRun.Status.Conditions, startedcond)
 			Expect(k8sClient.Status().Update(ctx, updateRun)).Should(Succeed(), "failed to add condition to the clusterStagedUpdateRun")
 
@@ -163,12 +163,12 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).Should(Succeed())
 
 			By("Creating ClusterApprovalRequests")
-			approvalRequests := []*placementv1alpha1.ClusterApprovalRequest{
+			approvalRequests := []*placementv1beta1.ClusterApprovalRequest{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "req1",
 						Labels: map[string]string{
-							placementv1alpha1.TargetUpdateRunLabel: testUpdateRunName,
+							placementv1beta1.TargetUpdateRunLabel: testUpdateRunName,
 						},
 					},
 				},
@@ -176,7 +176,7 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "req2",
 						Labels: map[string]string{
-							placementv1alpha1.TargetUpdateRunLabel: testUpdateRunName,
+							placementv1beta1.TargetUpdateRunLabel: testUpdateRunName,
 						},
 					},
 				},
@@ -184,7 +184,7 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "req3",
 						Labels: map[string]string{
-							placementv1alpha1.TargetUpdateRunLabel: testUpdateRunName + "1", // different update run
+							placementv1beta1.TargetUpdateRunLabel: testUpdateRunName + "1", // different update run
 						},
 					},
 				},
@@ -209,12 +209,12 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 	})
 })
 
-func generateTestClusterStagedUpdateRun() *placementv1alpha1.ClusterStagedUpdateRun {
-	return &placementv1alpha1.ClusterStagedUpdateRun{
+func generateTestClusterStagedUpdateRun() *placementv1beta1.ClusterStagedUpdateRun {
+	return &placementv1beta1.ClusterStagedUpdateRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testUpdateRunName,
 		},
-		Spec: placementv1alpha1.StagedUpdateRunSpec{
+		Spec: placementv1beta1.StagedUpdateRunSpec{
 			PlacementName:            testCRPName,
 			ResourceSnapshotIndex:    testResourceSnapshotName,
 			StagedUpdateStrategyName: testUpdateStrategyName,
@@ -307,14 +307,14 @@ func generateTestMemberCluster(idx int, clusterName string, labels map[string]st
 	}
 }
 
-func generateTestClusterStagedUpdateStrategy() *placementv1alpha1.ClusterStagedUpdateStrategy {
+func generateTestClusterStagedUpdateStrategy() *placementv1beta1.ClusterStagedUpdateStrategy {
 	sortingKey := "index"
-	return &placementv1alpha1.ClusterStagedUpdateStrategy{
+	return &placementv1beta1.ClusterStagedUpdateStrategy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testUpdateStrategyName,
 		},
-		Spec: placementv1alpha1.StagedUpdateStrategySpec{
-			Stages: []placementv1alpha1.StageConfig{
+		Spec: placementv1beta1.StagedUpdateStrategySpec{
+			Stages: []placementv1beta1.StageConfig{
 				{
 					Name: "stage1",
 					LabelSelector: &metav1.LabelSelector{
@@ -324,9 +324,9 @@ func generateTestClusterStagedUpdateStrategy() *placementv1alpha1.ClusterStagedU
 						},
 					},
 					SortingLabelKey: &sortingKey,
-					AfterStageTasks: []placementv1alpha1.AfterStageTask{
+					AfterStageTasks: []placementv1beta1.AfterStageTask{
 						{
-							Type: placementv1alpha1.AfterStageTaskTypeTimedWait,
+							Type: placementv1beta1.AfterStageTaskTypeTimedWait,
 							WaitTime: metav1.Duration{
 								Duration: time.Second * 4,
 							},
@@ -342,9 +342,9 @@ func generateTestClusterStagedUpdateStrategy() *placementv1alpha1.ClusterStagedU
 						},
 					},
 					// no sortingLabelKey, should sort by cluster name
-					AfterStageTasks: []placementv1alpha1.AfterStageTask{
+					AfterStageTasks: []placementv1beta1.AfterStageTask{
 						{
-							Type: placementv1alpha1.AfterStageTaskTypeApproval,
+							Type: placementv1beta1.AfterStageTaskTypeApproval,
 						},
 					},
 				},
@@ -426,24 +426,24 @@ func generateTestClusterResourceOverride() *placementv1alpha1.ClusterResourceOve
 	}
 }
 
-func generateTestApprovalRequest(name string) *placementv1alpha1.ClusterApprovalRequest {
-	return &placementv1alpha1.ClusterApprovalRequest{
+func generateTestApprovalRequest(name string) *placementv1beta1.ClusterApprovalRequest {
+	return &placementv1beta1.ClusterApprovalRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 			Labels: map[string]string{
-				placementv1alpha1.TargetUpdateRunLabel: testUpdateRunName,
+				placementv1beta1.TargetUpdateRunLabel: testUpdateRunName,
 			},
 		},
 	}
 }
 
-func validateUpdateRunHasFinalizer(ctx context.Context, updateRun *placementv1alpha1.ClusterStagedUpdateRun) {
+func validateUpdateRunHasFinalizer(ctx context.Context, updateRun *placementv1beta1.ClusterStagedUpdateRun) {
 	namespacedName := types.NamespacedName{Name: updateRun.Name}
 	Eventually(func() error {
 		if err := k8sClient.Get(ctx, namespacedName, updateRun); err != nil {
 			return fmt.Errorf("failed to get clusterStagedUpdateRun %s: %w", namespacedName, err)
 		}
-		if !controllerutil.ContainsFinalizer(updateRun, placementv1alpha1.ClusterStagedUpdateRunFinalizer) {
+		if !controllerutil.ContainsFinalizer(updateRun, placementv1beta1.ClusterStagedUpdateRunFinalizer) {
 			return fmt.Errorf("finalizer not added to clusterStagedUpdateRun %s", namespacedName)
 		}
 		return nil
@@ -452,7 +452,7 @@ func validateUpdateRunHasFinalizer(ctx context.Context, updateRun *placementv1al
 
 func validateUpdateRunIsDeleted(ctx context.Context, name types.NamespacedName) {
 	Eventually(func() error {
-		updateRun := &placementv1alpha1.ClusterStagedUpdateRun{}
+		updateRun := &placementv1beta1.ClusterStagedUpdateRun{}
 		if err := k8sClient.Get(ctx, name, updateRun); !errors.IsNotFound(err) {
 			return fmt.Errorf("clusterStagedUpdateRun %s still exists or an unexpected error occurred: %w", name, err)
 		}
@@ -462,7 +462,7 @@ func validateUpdateRunIsDeleted(ctx context.Context, name types.NamespacedName) 
 
 func validateApprovalRequestCount(ctx context.Context, count int) {
 	Eventually(func() (int, error) {
-		appReqList := &placementv1alpha1.ClusterApprovalRequestList{}
+		appReqList := &placementv1beta1.ClusterApprovalRequestList{}
 		if err := k8sClient.List(ctx, appReqList); err != nil {
 			return -1, err
 		}
@@ -473,45 +473,45 @@ func validateApprovalRequestCount(ctx context.Context, count int) {
 func generateTrueCondition(obj client.Object, condType any) metav1.Condition {
 	reason, typeStr := "", ""
 	switch cond := condType.(type) {
-	case placementv1alpha1.StagedUpdateRunConditionType:
+	case placementv1beta1.StagedUpdateRunConditionType:
 		switch cond {
-		case placementv1alpha1.StagedUpdateRunConditionInitialized:
+		case placementv1beta1.StagedUpdateRunConditionInitialized:
 			reason = condition.UpdateRunInitializeSucceededReason
-		case placementv1alpha1.StagedUpdateRunConditionProgressing:
+		case placementv1beta1.StagedUpdateRunConditionProgressing:
 			reason = condition.UpdateRunStartedReason
-		case placementv1alpha1.StagedUpdateRunConditionSucceeded:
+		case placementv1beta1.StagedUpdateRunConditionSucceeded:
 			reason = condition.UpdateRunSucceededReason
 		}
 		typeStr = string(cond)
-	case placementv1alpha1.StageUpdatingConditionType:
+	case placementv1beta1.StageUpdatingConditionType:
 		switch cond {
-		case placementv1alpha1.StageUpdatingConditionProgressing:
+		case placementv1beta1.StageUpdatingConditionProgressing:
 			reason = condition.StageUpdatingStartedReason
-		case placementv1alpha1.StageUpdatingConditionSucceeded:
+		case placementv1beta1.StageUpdatingConditionSucceeded:
 			reason = condition.StageUpdatingSucceededReason
 		}
 		typeStr = string(cond)
-	case placementv1alpha1.ClusterUpdatingStatusConditionType:
+	case placementv1beta1.ClusterUpdatingStatusConditionType:
 		switch cond {
-		case placementv1alpha1.ClusterUpdatingConditionStarted:
+		case placementv1beta1.ClusterUpdatingConditionStarted:
 			reason = condition.ClusterUpdatingStartedReason
-		case placementv1alpha1.ClusterUpdatingConditionSucceeded:
+		case placementv1beta1.ClusterUpdatingConditionSucceeded:
 			reason = condition.ClusterUpdatingSucceededReason
 		}
 		typeStr = string(cond)
-	case placementv1alpha1.AfterStageTaskConditionType:
+	case placementv1beta1.AfterStageTaskConditionType:
 		switch cond {
-		case placementv1alpha1.AfterStageTaskConditionWaitTimeElapsed:
+		case placementv1beta1.AfterStageTaskConditionWaitTimeElapsed:
 			reason = condition.AfterStageTaskWaitTimeElapsedReason
-		case placementv1alpha1.AfterStageTaskConditionApprovalRequestCreated:
+		case placementv1beta1.AfterStageTaskConditionApprovalRequestCreated:
 			reason = condition.AfterStageTaskApprovalRequestCreatedReason
-		case placementv1alpha1.AfterStageTaskConditionApprovalRequestApproved:
+		case placementv1beta1.AfterStageTaskConditionApprovalRequestApproved:
 			reason = condition.AfterStageTaskApprovalRequestApprovedReason
 		}
 		typeStr = string(cond)
-	case placementv1alpha1.ApprovalRequestConditionType:
+	case placementv1beta1.ApprovalRequestConditionType:
 		switch cond {
-		case placementv1alpha1.ApprovalRequestConditionApproved:
+		case placementv1beta1.ApprovalRequestConditionApproved:
 			reason = "LGTM"
 		}
 		typeStr = string(cond)
@@ -533,23 +533,23 @@ func generateTrueCondition(obj client.Object, condType any) metav1.Condition {
 func generateFalseCondition(obj client.Object, condType any) metav1.Condition {
 	reason, typeStr := "", ""
 	switch cond := condType.(type) {
-	case placementv1alpha1.StagedUpdateRunConditionType:
+	case placementv1beta1.StagedUpdateRunConditionType:
 		switch cond {
-		case placementv1alpha1.StagedUpdateRunConditionInitialized:
+		case placementv1beta1.StagedUpdateRunConditionInitialized:
 			reason = condition.UpdateRunInitializeFailedReason
-		case placementv1alpha1.StagedUpdateRunConditionSucceeded:
+		case placementv1beta1.StagedUpdateRunConditionSucceeded:
 			reason = condition.UpdateRunFailedReason
 		}
 		typeStr = string(cond)
-	case placementv1alpha1.StageUpdatingConditionType:
+	case placementv1beta1.StageUpdatingConditionType:
 		switch cond {
-		case placementv1alpha1.StageUpdatingConditionSucceeded:
+		case placementv1beta1.StageUpdatingConditionSucceeded:
 			reason = condition.StageUpdatingFailedReason
 		}
 		typeStr = string(cond)
-	case placementv1alpha1.ClusterUpdatingStatusConditionType:
+	case placementv1beta1.ClusterUpdatingStatusConditionType:
 		switch cond {
-		case placementv1alpha1.ClusterUpdatingConditionSucceeded:
+		case placementv1beta1.ClusterUpdatingConditionSucceeded:
 			reason = condition.ClusterUpdatingFailedReason
 		}
 		typeStr = string(cond)

@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
 )
@@ -19,15 +18,15 @@ import (
 func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 	tests := []struct {
 		name      string
-		updateRun *placementv1alpha1.ClusterStagedUpdateRun
+		updateRun *placementv1beta1.ClusterStagedUpdateRun
 		binding   *placementv1beta1.ClusterResourceBinding
-		cluster   *placementv1alpha1.ClusterUpdatingStatus
+		cluster   *placementv1beta1.ClusterUpdatingStatus
 		wantEqual bool
 	}{
 		{
 			name: "isBindingSyncedWithClusterStatus should return false if binding and updateRun have different resourceSnapshot",
-			updateRun: &placementv1alpha1.ClusterStagedUpdateRun{
-				Spec: placementv1alpha1.StagedUpdateRunSpec{
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Spec: placementv1beta1.StagedUpdateRunSpec{
 					ResourceSnapshotIndex: "test-snapshot",
 				},
 			},
@@ -40,8 +39,8 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 		},
 		{
 			name: "isBindingSyncedWithClusterStatus should return false if binding and cluster status have different resourceOverrideSnapshot list",
-			updateRun: &placementv1alpha1.ClusterStagedUpdateRun{
-				Spec: placementv1alpha1.StagedUpdateRunSpec{
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Spec: placementv1beta1.StagedUpdateRunSpec{
 					ResourceSnapshotIndex: "test-snapshot",
 				},
 			},
@@ -60,7 +59,7 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 					},
 				},
 			},
-			cluster: &placementv1alpha1.ClusterUpdatingStatus{
+			cluster: &placementv1beta1.ClusterUpdatingStatus{
 				ResourceOverrideSnapshots: []placementv1beta1.NamespacedName{
 					{
 						Name:      "ro1",
@@ -76,8 +75,8 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 		},
 		{
 			name: "isBindingSyncedWithClusterStatus should return false if binding and cluster status have different clusterResourceOverrideSnapshot list",
-			updateRun: &placementv1alpha1.ClusterStagedUpdateRun{
-				Spec: placementv1alpha1.StagedUpdateRunSpec{
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Spec: placementv1beta1.StagedUpdateRunSpec{
 					ResourceSnapshotIndex: "test-snapshot",
 				},
 			},
@@ -91,7 +90,7 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 					ClusterResourceOverrideSnapshots: []string{"cr1", "cr2"},
 				},
 			},
-			cluster: &placementv1alpha1.ClusterUpdatingStatus{
+			cluster: &placementv1beta1.ClusterUpdatingStatus{
 				ResourceOverrideSnapshots: []placementv1beta1.NamespacedName{
 					{Name: "ro1", Namespace: "ns1"},
 					{Name: "ro2", Namespace: "ns2"},
@@ -102,11 +101,11 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 		},
 		{
 			name: "isBindingSyncedWithClusterStatus should return false if binding and updateRun have different applyStrategy",
-			updateRun: &placementv1alpha1.ClusterStagedUpdateRun{
-				Spec: placementv1alpha1.StagedUpdateRunSpec{
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Spec: placementv1beta1.StagedUpdateRunSpec{
 					ResourceSnapshotIndex: "test-snapshot",
 				},
-				Status: placementv1alpha1.StagedUpdateRunStatus{
+				Status: placementv1beta1.StagedUpdateRunStatus{
 					ApplyStrategy: &placementv1beta1.ApplyStrategy{
 						Type: placementv1beta1.ApplyStrategyTypeClientSideApply,
 					},
@@ -125,7 +124,7 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 					},
 				},
 			},
-			cluster: &placementv1alpha1.ClusterUpdatingStatus{
+			cluster: &placementv1beta1.ClusterUpdatingStatus{
 				ResourceOverrideSnapshots: []placementv1beta1.NamespacedName{
 					{Name: "ro1", Namespace: "ns1"},
 					{Name: "ro2", Namespace: "ns2"},
@@ -136,11 +135,11 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 		},
 		{
 			name: "isBindingSyncedWithClusterStatus should return true if resourceSnapshot, applyStrategy, and override lists are all deep equal",
-			updateRun: &placementv1alpha1.ClusterStagedUpdateRun{
-				Spec: placementv1alpha1.StagedUpdateRunSpec{
+			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Spec: placementv1beta1.StagedUpdateRunSpec{
 					ResourceSnapshotIndex: "test-snapshot",
 				},
-				Status: placementv1alpha1.StagedUpdateRunStatus{
+				Status: placementv1beta1.StagedUpdateRunStatus{
 					ApplyStrategy: &placementv1beta1.ApplyStrategy{
 						Type: placementv1beta1.ApplyStrategyTypeReportDiff,
 					},
@@ -159,7 +158,7 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 					},
 				},
 			},
-			cluster: &placementv1alpha1.ClusterUpdatingStatus{
+			cluster: &placementv1beta1.ClusterUpdatingStatus{
 				ResourceOverrideSnapshots: []placementv1beta1.NamespacedName{
 					{Name: "ro1", Namespace: "ns1"},
 					{Name: "ro2", Namespace: "ns2"},
@@ -180,10 +179,10 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 }
 
 func TestCheckClusterUpdateResult(t *testing.T) {
-	updatingStage := &placementv1alpha1.StageUpdatingStatus{
+	updatingStage := &placementv1beta1.StageUpdatingStatus{
 		StageName: "test-stage",
 	}
-	updateRun := &placementv1alpha1.ClusterStagedUpdateRun{
+	updateRun := &placementv1beta1.ClusterStagedUpdateRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Generation: 1,
 		},
@@ -191,7 +190,7 @@ func TestCheckClusterUpdateResult(t *testing.T) {
 	tests := []struct {
 		name          string
 		binding       *placementv1beta1.ClusterResourceBinding
-		clusterStatus *placementv1alpha1.ClusterUpdatingStatus
+		clusterStatus *placementv1beta1.ClusterUpdatingStatus
 		wantSucceeded bool
 		wantErr       bool
 	}{
@@ -210,7 +209,7 @@ func TestCheckClusterUpdateResult(t *testing.T) {
 					},
 				},
 			},
-			clusterStatus: &placementv1alpha1.ClusterUpdatingStatus{ClusterName: "test-cluster"},
+			clusterStatus: &placementv1beta1.ClusterUpdatingStatus{ClusterName: "test-cluster"},
 			wantSucceeded: true,
 			wantErr:       false,
 		},
@@ -229,7 +228,7 @@ func TestCheckClusterUpdateResult(t *testing.T) {
 					},
 				},
 			},
-			clusterStatus: &placementv1alpha1.ClusterUpdatingStatus{ClusterName: "test-cluster"},
+			clusterStatus: &placementv1beta1.ClusterUpdatingStatus{ClusterName: "test-cluster"},
 			wantSucceeded: false,
 			wantErr:       true,
 		},
@@ -248,7 +247,7 @@ func TestCheckClusterUpdateResult(t *testing.T) {
 					},
 				},
 			},
-			clusterStatus: &placementv1alpha1.ClusterUpdatingStatus{ClusterName: "test-cluster"},
+			clusterStatus: &placementv1beta1.ClusterUpdatingStatus{ClusterName: "test-cluster"},
 			wantSucceeded: false,
 			wantErr:       true,
 		},
@@ -267,7 +266,7 @@ func TestCheckClusterUpdateResult(t *testing.T) {
 					},
 				},
 			},
-			clusterStatus: &placementv1alpha1.ClusterUpdatingStatus{ClusterName: "test-cluster"},
+			clusterStatus: &placementv1beta1.ClusterUpdatingStatus{ClusterName: "test-cluster"},
 			wantSucceeded: false,
 			wantErr:       true,
 		},
@@ -298,7 +297,7 @@ func TestCheckClusterUpdateResult(t *testing.T) {
 					},
 				},
 			},
-			clusterStatus: &placementv1alpha1.ClusterUpdatingStatus{ClusterName: "test-cluster"},
+			clusterStatus: &placementv1beta1.ClusterUpdatingStatus{ClusterName: "test-cluster"},
 			wantSucceeded: false,
 			wantErr:       false,
 		},
@@ -310,7 +309,7 @@ func TestCheckClusterUpdateResult(t *testing.T) {
 					Conditions: []metav1.Condition{},
 				},
 			},
-			clusterStatus: &placementv1alpha1.ClusterUpdatingStatus{ClusterName: "test-cluster"},
+			clusterStatus: &placementv1beta1.ClusterUpdatingStatus{ClusterName: "test-cluster"},
 			wantSucceeded: false,
 			wantErr:       false,
 		},
@@ -325,7 +324,7 @@ func TestCheckClusterUpdateResult(t *testing.T) {
 				t.Fatalf("checkClusterUpdateResult() got error %v; want error %v", gotErr, test.wantErr)
 			}
 			if test.wantSucceeded {
-				if !condition.IsConditionStatusTrue(meta.FindStatusCondition(test.clusterStatus.Conditions, string(placementv1alpha1.ClusterUpdatingConditionSucceeded)), updateRun.Generation) {
+				if !condition.IsConditionStatusTrue(meta.FindStatusCondition(test.clusterStatus.Conditions, string(placementv1beta1.ClusterUpdatingConditionSucceeded)), updateRun.Generation) {
 					t.Fatalf("checkClusterUpdateResult() failed to set ClusterUpdatingConditionSucceeded condition")
 				}
 			}
