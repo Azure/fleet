@@ -115,7 +115,7 @@ func (r *Reconciler) executeUpdatingStage(
 					return 0, controller.NewUpdateIgnoreConflictError(err)
 				}
 				klog.V(2).InfoS("Updated the status of a binding to bound", "binding", klog.KObj(binding), "cluster", clusterStatus.ClusterName, "stage", updatingStageStatus.StageName, "clusterStagedUpdateRun", updateRunRef)
-				if err := r.updateBindingRolloutStarted(ctx, binding); err != nil {
+				if err := r.updateBindingRolloutStarted(ctx, binding, updateRun); err != nil {
 					return 0, err
 				}
 			} else {
@@ -127,12 +127,12 @@ func (r *Reconciler) executeUpdatingStage(
 						return 0, controller.NewUpdateIgnoreConflictError(err)
 					}
 					klog.V(2).InfoS("Updated the status of a binding to bound", "binding", klog.KObj(binding), "cluster", clusterStatus.ClusterName, "stage", updatingStageStatus.StageName, "clusterStagedUpdateRun", updateRunRef)
-					if err := r.updateBindingRolloutStarted(ctx, binding); err != nil {
+					if err := r.updateBindingRolloutStarted(ctx, binding, updateRun); err != nil {
 						return 0, err
 					}
 				} else if !condition.IsConditionStatusTrue(meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingRolloutStarted)), binding.Generation) {
 					klog.V(2).InfoS("The binding is bound and up-to-date but the generation is updated by the scheduler, update rolloutStarted status again", "binding", klog.KObj(binding), "cluster", clusterStatus.ClusterName, "stage", updatingStageStatus.StageName, "clusterStagedUpdateRun", updateRunRef)
-					if err := r.updateBindingRolloutStarted(ctx, binding); err != nil {
+					if err := r.updateBindingRolloutStarted(ctx, binding, updateRun); err != nil {
 						return 0, err
 					}
 				} else {
@@ -328,13 +328,15 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 }
 
 // updateBindingRolloutStarted updates the binding status to indicate the rollout has started.
-func (r *Reconciler) updateBindingRolloutStarted(ctx context.Context, binding *placementv1beta1.ClusterResourceBinding) error {
+func (r *Reconciler) updateBindingRolloutStarted(ctx context.Context, binding *placementv1beta1.ClusterResourceBinding, updateRun *placementv1alpha1.ClusterStagedUpdateRun) error {
+	// first reset the condition to reflect the latest lastTransitionTime
+	binding.RemoveCondition(string(placementv1beta1.ResourceBindingRolloutStarted))
 	cond := metav1.Condition{
 		Type:               string(placementv1beta1.ResourceBindingRolloutStarted),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: binding.Generation,
 		Reason:             condition.RolloutStartedReason,
-		Message:            "Detected the new changes on the resources and started the rollout process",
+		Message:            fmt.Sprintf("Detected the new changes on the resources and started the rollout process, resourceSnapshotName: %s, clusterStagedUpdateRun: %s", updateRun.Spec.ResourceSnapshotIndex, updateRun.Name),
 	}
 	binding.SetConditions(cond)
 	if err := r.Client.Status().Update(ctx, binding); err != nil {
