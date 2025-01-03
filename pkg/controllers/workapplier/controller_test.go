@@ -6,24 +6,24 @@ Licensed under the MIT license.
 package workapplier
 
 import (
-	"context"
 	"fmt"
+	"log"
+	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils/parallelizer"
 
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/dynamic/fake"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/klog/v2"
 )
 
 const (
@@ -32,8 +32,74 @@ const (
 	deployName    = "deploy-1"
 	configMapName = "configmap-1"
 	nsName        = "ns-1"
+)
 
-	nsNameTemplate = "ns-%s"
+var (
+	nsGVR = schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "namespaces",
+	}
+
+	deploy = &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Deployment",
+			APIVersion: "apps/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deployName,
+			Namespace: nsName,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: ptr.To(int32(1)),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "nginx",
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": "nginx",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx",
+							Ports: []corev1.ContainerPort{
+								{
+									ContainerPort: 80,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	deployUnstructured *unstructured.Unstructured
+	deployJSON         []byte
+
+	ns = &corev1.Namespace{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Namespace",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: nsName,
+		},
+	}
+	nsUnstructured *unstructured.Unstructured
+	nsJSON         []byte
+
+	dummyOwnerRef = metav1.OwnerReference{
+		APIVersion: "dummy.owner/v1",
+		Kind:       "DummyOwner",
+		Name:       "dummy-owner",
+		UID:        "1234-5678-90",
+	}
 )
 
 var (
@@ -47,299 +113,126 @@ var (
 
 var (
 	ignoreFieldTypeMetaInNamespace = cmpopts.IgnoreFields(corev1.Namespace{}, "TypeMeta")
+
+	lessFuncAppliedResourceMeta = func(i, j fleetv1beta1.AppliedResourceMeta) bool {
+		iStr := fmt.Sprintf("%s/%s/%s/%s/%s", i.Group, i.Version, i.Kind, i.Namespace, i.Name)
+		jStr := fmt.Sprintf("%s/%s/%s/%s/%s", j.Group, j.Version, j.Kind, j.Namespace, j.Name)
+		return iStr < jStr
+	}
 )
 
-// TestRemoveLeftOverManifests tests the removeLeftOverManifests method.
-func TestRemoveLeftOverManifests(t *testing.T) {
-	ctx := context.Background()
-
-	additionalOwnerRef := &metav1.OwnerReference{
-		APIVersion: "v1",
-		Kind:       "SuperNamespace",
-		Name:       "super-ns",
-		UID:        "super-ns-uid",
-	}
-
-	nsName0 := fmt.Sprintf(nsNameTemplate, "0")
-	nsName1 := fmt.Sprintf(nsNameTemplate, "1")
-	nsName2 := fmt.Sprintf(nsNameTemplate, "2")
-	nsName3 := fmt.Sprintf(nsNameTemplate, "3")
-
-	testCases := []struct {
-		name                           string
-		leftOverManifests              []fleetv1beta1.AppliedResourceMeta
-		inMemberClusterObjs            []runtime.Object
-		wantInMemberClusterObjs        []corev1.Namespace
-		wantRemovedInMemberClusterObjs []corev1.Namespace
-	}{
-		{
-			name: "mixed",
-			leftOverManifests: []fleetv1beta1.AppliedResourceMeta{
-				// The object is present.
-				{
-					WorkResourceIdentifier: *nsWRI(0, nsName0),
-				},
-				// The object cannot be found.
-				{
-					WorkResourceIdentifier: *nsWRI(1, nsName1),
-				},
-				// The object is not owned by Fleet.
-				{
-					WorkResourceIdentifier: *nsWRI(2, nsName2),
-				},
-				// The object has multiple owners.
-				{
-					WorkResourceIdentifier: *nsWRI(3, nsName3),
-				},
-			},
-			inMemberClusterObjs: []runtime.Object{
-				&corev1.Namespace{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: nsName0,
-					},
-				},
-				&corev1.Namespace{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: nsName2,
-						OwnerReferences: []metav1.OwnerReference{
-							*additionalOwnerRef,
-						},
-					},
-				},
-				&corev1.Namespace{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: nsName3,
-						OwnerReferences: []metav1.OwnerReference{
-							*additionalOwnerRef,
-							*appliedWorkOwnerRef,
-						},
-					},
-				},
-			},
-			wantInMemberClusterObjs: []corev1.Namespace{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: nsName2,
-						OwnerReferences: []metav1.OwnerReference{
-							*additionalOwnerRef,
-						},
-					},
-				},
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: nsName3,
-						OwnerReferences: []metav1.OwnerReference{
-							*additionalOwnerRef,
-						},
-					},
-				},
-			},
-			wantRemovedInMemberClusterObjs: []corev1.Namespace{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: nsName0,
-					},
-				},
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			fakeClient := fake.NewSimpleDynamicClient(scheme.Scheme, tc.inMemberClusterObjs...)
-			r := &Reconciler{
-				spokeDynamicClient: fakeClient,
-				parallelizer:       parallelizer.NewParallelizer(2),
-			}
-			if err := r.removeLeftOverManifests(ctx, tc.leftOverManifests, appliedWorkOwnerRef); err != nil {
-				t.Errorf("removeLeftOverManifests() = %v, want no error", err)
-			}
-
-			for idx := range tc.wantInMemberClusterObjs {
-				wantNS := tc.wantInMemberClusterObjs[idx]
-
-				gotUnstructured, err := fakeClient.
-					Resource(nsGVR).
-					Namespace(wantNS.GetNamespace()).
-					Get(ctx, wantNS.GetName(), metav1.GetOptions{})
-				if err != nil {
-					t.Errorf("Get Namespace(%v) = %v, want no error", klog.KObj(&wantNS), err)
-					continue
-				}
-
-				gotNS := wantNS.DeepCopy()
-				if err := runtime.DefaultUnstructuredConverter.FromUnstructured(gotUnstructured.Object, &gotNS); err != nil {
-					t.Errorf("FromUnstructured() = %v, want no error", err)
-				}
-
-				if diff := cmp.Diff(gotNS, &wantNS, ignoreFieldTypeMetaInNamespace); diff != "" {
-					t.Errorf("NS(%v) mismatches (-got +want):\n%s", klog.KObj(&wantNS), diff)
-				}
-			}
-
-			for idx := range tc.wantRemovedInMemberClusterObjs {
-				wantRemovedNS := tc.wantRemovedInMemberClusterObjs[idx]
-
-				gotUnstructured, err := fakeClient.
-					Resource(nsGVR).
-					Namespace(wantRemovedNS.GetNamespace()).
-					Get(ctx, wantRemovedNS.GetName(), metav1.GetOptions{})
-				if err != nil {
-					t.Errorf("Get Namespace(%v) = %v, want no error", klog.KObj(&wantRemovedNS), err)
-				}
-
-				gotRemovedNS := wantRemovedNS.DeepCopy()
-				if err := runtime.DefaultUnstructuredConverter.FromUnstructured(gotUnstructured.Object, &gotRemovedNS); err != nil {
-					t.Errorf("FromUnstructured() = %v, want no error", err)
-				}
-
-				if !gotRemovedNS.DeletionTimestamp.IsZero() {
-					t.Errorf("Namespace(%v) has not been deleted", klog.KObj(&wantRemovedNS))
-				}
-			}
-		})
+func nsWRI(ordinal int, nsName string) *fleetv1beta1.WorkResourceIdentifier {
+	return &fleetv1beta1.WorkResourceIdentifier{
+		Ordinal:  ordinal,
+		Group:    "",
+		Version:  "v1",
+		Kind:     "Namespace",
+		Resource: "namespaces",
+		Name:     nsName,
 	}
 }
 
-// TestRemoveOneLeftOverManifest tests the removeOneLeftOverManifest method.
-func TestRemoveOneLeftOverManifest(t *testing.T) {
-	ctx := context.Background()
-	now := metav1.Now().Rfc3339Copy()
-	leftOverManifest := fleetv1beta1.AppliedResourceMeta{
-		WorkResourceIdentifier: *nsWRI(0, nsName),
+func deployWRI(ordinal int, nsName, deployName string) *fleetv1beta1.WorkResourceIdentifier {
+	return &fleetv1beta1.WorkResourceIdentifier{
+		Ordinal:   ordinal,
+		Group:     "apps",
+		Version:   "v1",
+		Kind:      "Deployment",
+		Resource:  "deployments",
+		Name:      deployName,
+		Namespace: nsName,
 	}
-	additionalOwnerRef := &metav1.OwnerReference{
-		APIVersion: "v1",
-		Kind:       "SuperNamespace",
-		Name:       "super-ns",
-		UID:        "super-ns-uid",
-	}
+}
 
-	testCases := []struct {
-		name string
-		// To simplify things, for this test Fleet uses a fixed concrete type.
-		inMemberClusterObj     *corev1.Namespace
-		wantInMemberClusterObj *corev1.Namespace
-	}{
-		{
-			name: "not found",
-		},
-		{
-			name: "already deleted",
-			inMemberClusterObj: &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              nsName,
-					DeletionTimestamp: &now,
-				},
-			},
-			wantInMemberClusterObj: &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              nsName,
-					DeletionTimestamp: &now,
-				},
-			},
-		},
-		{
-			name: "not derived from manifest object",
-			inMemberClusterObj: &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: nsName,
-					OwnerReferences: []metav1.OwnerReference{
-						*additionalOwnerRef,
-					},
-				},
-			},
-			wantInMemberClusterObj: &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: nsName,
-					OwnerReferences: []metav1.OwnerReference{
-						*additionalOwnerRef,
-					},
-				},
-			},
-		},
-		{
-			name: "multiple owners",
-			inMemberClusterObj: &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: nsName,
-					OwnerReferences: []metav1.OwnerReference{
-						*additionalOwnerRef,
-						*appliedWorkOwnerRef,
-					},
-				},
-			},
-			wantInMemberClusterObj: &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: nsName,
-					OwnerReferences: []metav1.OwnerReference{
-						*additionalOwnerRef,
-					},
-				},
-			},
-		},
-		{
-			name: "deletion",
-			inMemberClusterObj: &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: nsName,
-					OwnerReferences: []metav1.OwnerReference{
-						*appliedWorkOwnerRef,
-					},
-				},
-			},
-		},
+func manifestAppliedCond(workGeneration int64, status metav1.ConditionStatus, reason, message string) metav1.Condition {
+	return metav1.Condition{
+		Type:               fleetv1beta1.WorkConditionTypeApplied,
+		Status:             status,
+		ObservedGeneration: workGeneration,
+		Reason:             reason,
+		Message:            message,
+	}
+}
+
+func TestMain(m *testing.M) {
+	// Add custom APIs to the runtime scheme.
+	if err := fleetv1beta1.AddToScheme(scheme.Scheme); err != nil {
+		log.Fatalf("failed to add custom APIs (placement/v1beta1) to the runtime scheme: %v", err)
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			var fakeClient *fake.FakeDynamicClient
-			if tc.inMemberClusterObj != nil {
-				fakeClient = fake.NewSimpleDynamicClient(scheme.Scheme, tc.inMemberClusterObj)
-			} else {
-				fakeClient = fake.NewSimpleDynamicClient(scheme.Scheme)
-			}
+	// Initialize the variables.
+	initializeVariables()
 
-			r := &Reconciler{
-				spokeDynamicClient: fakeClient,
-			}
-			if err := r.removeOneLeftOverManifest(ctx, leftOverManifest, appliedWorkOwnerRef); err != nil {
-				t.Errorf("removeOneLeftOverManifest() = %v, want no error", err)
-			}
+	os.Exit(m.Run())
+}
 
-			if tc.inMemberClusterObj != nil {
-				var gotUnstructured *unstructured.Unstructured
-				var err error
-				// The method is expected to modify the object.
-				gotUnstructured, err = fakeClient.
-					Resource(nsGVR).
-					Namespace(tc.inMemberClusterObj.GetNamespace()).
-					Get(ctx, tc.inMemberClusterObj.GetName(), metav1.GetOptions{})
-				switch {
-				case errors.IsNotFound(err) && tc.wantInMemberClusterObj == nil:
-					// The object is expected to be deleted.
-					return
-				case errors.IsNotFound(err):
-					// An object is expected to be found.
-					t.Errorf("Get(%v) = %v, want no error", klog.KObj(tc.inMemberClusterObj), err)
-					return
-				case err != nil:
-					// An unexpected error occurred.
-					t.Errorf("Get(%v) = %v, want no error", klog.KObj(tc.inMemberClusterObj), err)
-					return
-				}
+func initializeVariables() {
+	var err error
 
-				got := tc.wantInMemberClusterObj.DeepCopy()
-				if err := runtime.DefaultUnstructuredConverter.FromUnstructured(gotUnstructured.Object, &got); err != nil {
-					t.Errorf("FromUnstructured() = %v, want no error", err)
-					return
-				}
+	// Regular objects.
+	// Deployment.
+	deployGenericMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(deploy)
+	if err != nil {
+		log.Fatalf("failed to convert deployment to unstructured: %v", err)
+	}
+	deployUnstructured = &unstructured.Unstructured{Object: deployGenericMap}
 
-				if diff := cmp.Diff(got, tc.wantInMemberClusterObj, ignoreFieldTypeMetaInNamespace); diff != "" {
-					t.Errorf("NS(%v) mismatches (-got +want):\n%s", klog.KObj(tc.inMemberClusterObj), diff)
-				}
-				return
-			}
-		})
+	deployJSON, err = deployUnstructured.MarshalJSON()
+	if err != nil {
+		log.Fatalf("failed to marshal deployment to JSON: %v", err)
+	}
+
+	// Namespace.
+	nsGenericMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(ns)
+	if err != nil {
+		log.Fatalf("failed to convert namespace to unstructured: %v", err)
+	}
+	nsUnstructured = &unstructured.Unstructured{Object: nsGenericMap}
+	nsJSON, err = nsUnstructured.MarshalJSON()
+	if err != nil {
+		log.Fatalf("failed to marshal namespace to JSON: %v", err)
+	}
+}
+
+// TestPrepareManifestProcessingBundles tests the prepareManifestProcessingBundles function.
+func TestPrepareManifestProcessingBundles(t *testing.T) {
+	deployJSON := deployJSON
+	nsJSON := nsJSON
+	memberReservedNSName := "fleet-member-experimental"
+
+	work := &fleetv1beta1.Work{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      workName,
+			Namespace: memberReservedNSName,
+		},
+		Spec: fleetv1beta1.WorkSpec{
+			Workload: fleetv1beta1.WorkloadTemplate{
+				Manifests: []fleetv1beta1.Manifest{
+					{
+						RawExtension: runtime.RawExtension{
+							Raw: nsJSON,
+						},
+					},
+					{
+						RawExtension: runtime.RawExtension{
+							Raw: deployJSON,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	bundles := prepareManifestProcessingBundles(work)
+	wantBundles := []*manifestProcessingBundle{
+		{
+			manifest: &work.Spec.Workload.Manifests[0],
+		},
+		{
+			manifest: &work.Spec.Workload.Manifests[1],
+		},
+	}
+	if diff := cmp.Diff(bundles, wantBundles, cmp.AllowUnexported(manifestProcessingBundle{})); diff != "" {
+		t.Errorf("prepareManifestProcessingBundles() mismatches (-got +want):\n%s", diff)
 	}
 }
