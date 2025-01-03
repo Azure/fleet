@@ -345,7 +345,7 @@ func TestGetFleetLastAppliedAnnotation(t *testing.T) {
 			inMemberClusterObj: toUnstructured(t, nsInMemberClusterObj1),
 		},
 		{
-			name:               "no last applied annoation",
+			name:               "no last applied annotation",
 			inMemberClusterObj: toUnstructured(t, nsInMemberClusterObj2),
 		},
 		{
@@ -440,7 +440,7 @@ func TestSetFleetLastAppliedAnnotation(t *testing.T) {
 			}
 
 			if gotSetFlag != tc.wantSetFlag {
-				t.Errorf("isLastAppliedAnnoationSet flag mismatches, got %t, want %t", gotSetFlag, tc.wantSetFlag)
+				t.Errorf("isLastAppliedAnnotationSet flag mismatches, got %t, want %t", gotSetFlag, tc.wantSetFlag)
 			}
 			if diff := cmp.Diff(tc.manifestObj, tc.wantManifestObj); diff != "" {
 				t.Errorf("manifest obj mismatches (-got +want):\n%s", diff)

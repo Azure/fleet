@@ -72,7 +72,7 @@ func (r *Reconciler) processOneManifest(
 	// Take over the object in the member cluster that corresponds to the manifest object
 	// if applicable.
 	//
-	// Fleet will preform the takeover if:
+	// Fleet will perform the takeover if:
 	// a) Fleet can find an object in the member cluster that corresponds to the manifest object, and
 	//    it is not currently owned by Fleet (specifically the expected AppliedWork object); and
 	// b) takeover is allowed (i.e., the WhenToTakeOver option in the apply strategy is not set to Never).
@@ -104,7 +104,7 @@ func (r *Reconciler) processOneManifest(
 
 	// Perform a round of drift detection before running the apply op, if the ApplyStrategy
 	// dictates that an apply op can only be run when there are no drifts found.
-	if shouldSkipProcessing := r.preformPreApplyDriftDetectionIfApplicable(ctx, bundle, work, expectedAppliedWorkOwnerRef); shouldSkipProcessing {
+	if shouldSkipProcessing := r.performPreApplyDriftDetectionIfApplicable(ctx, bundle, work, expectedAppliedWorkOwnerRef); shouldSkipProcessing {
 		return
 	}
 
@@ -351,9 +351,9 @@ func canApplyWithOwnership(inMemberClusterObj *unstructured.Unstructured, expect
 	return false
 }
 
-// preformPreApplyDriftDetectionIfApplicable checks if pre-apply drift detection is needed and
+// performPreApplyDriftDetectionIfApplicable checks if pre-apply drift detection is needed and
 // runs the drift detection process if applicable.
-func (r *Reconciler) preformPreApplyDriftDetectionIfApplicable(
+func (r *Reconciler) performPreApplyDriftDetectionIfApplicable(
 	ctx context.Context,
 	bundle *manifestProcessingBundle,
 	work *fleetv1beta1.Work,

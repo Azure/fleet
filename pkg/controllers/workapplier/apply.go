@@ -349,16 +349,16 @@ func setFleetLastAppliedAnnotation(manifestObj *unstructured.Unstructured) (bool
 		return false, fmt.Errorf("failed to marshal the manifest object into JSON: %w", err)
 	}
 	annotations[fleetv1beta1.LastAppliedConfigAnnotation] = string(lastAppliedManifestJSONBytes)
-	isLastAppliedAnnoationSet := true
+	isLastAppliedAnnotationSet := true
 
 	if err := validation.ValidateAnnotationsSize(annotations); err != nil {
 		// If the annotation size exceeds the limit, Fleet will set the annotation to an empty string.
 		annotations[fleetv1beta1.LastAppliedConfigAnnotation] = ""
-		isLastAppliedAnnoationSet = false
+		isLastAppliedAnnotationSet = false
 	}
 
 	manifestObj.SetAnnotations(annotations)
-	return isLastAppliedAnnoationSet, nil
+	return isLastAppliedAnnotationSet, nil
 }
 
 // getFleetLastAppliedAnnotation returns the last applied annotation of a manifest object.

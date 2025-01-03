@@ -295,7 +295,7 @@ func (r *Reconciler) removeLeftBehindAppliedWorkOwnerRefs(ctx context.Context, o
 		case err == nil:
 			// The AppliedWork owner reference is valid; no need for removal.
 			//
-			// Note that no UID check is performed here; Fleet can (and will) re-use the same AppliedWork
+			// Note that no UID check is performed here; Fleet can (and will) reuse the same AppliedWork
 			// as long as it has the same name as a Work object, even if the AppliedWork object is not
 			// originally derived from it. This is safe as the AppliedWork object is in essence a delegate
 			// and does not keep any additional information.

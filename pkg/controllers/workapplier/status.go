@@ -45,7 +45,7 @@ func (r *Reconciler) refreshWorkStatus(
 	// Port back existing manifest conditions to the pre-allocated slice.
 	//
 	// This step is necessary at the moment primarily for two reasons:
-	// a) manifest condtion uses metav1.Condition, the LastTransitionTime field of which requires
+	// a) manifest condition uses metav1.Condition, the LastTransitionTime field of which requires
 	//    that Fleet track the last known condition;
 	// b) part of the Fleet rollout process uses the LastTransitionTime of the Available condition
 	//    to calculate the minimum wait period for an untrackable Work object (a Work object with
@@ -402,7 +402,7 @@ func setWorkAppliedCondition(
 		appliedCond = &metav1.Condition{
 			Type:   fleetv1beta1.WorkConditionTypeApplied,
 			Status: metav1.ConditionTrue,
-			// Here Fleet re-uses the same reason for individual manifests.
+			// Here Fleet reuses the same reason for individual manifests.
 			Reason:             string(ManifestProcessingApplyResultTypeApplied),
 			Message:            allManifestsAppliedMessage,
 			ObservedGeneration: work.Generation,
