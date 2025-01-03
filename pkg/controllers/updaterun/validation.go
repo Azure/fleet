@@ -13,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/klog/v2"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -26,7 +25,7 @@ import (
 // If the updating stage index is len(updateRun.Status.StagesStatus), the next stage to be updated will be the delete stage.
 func (r *Reconciler) validate(
 	ctx context.Context,
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 ) (int, []*placementv1beta1.ClusterResourceBinding, []*placementv1beta1.ClusterResourceBinding, error) {
 	// Some of the validating function changes the object, so we need to make a copy of the object.
 	updateRunRef := klog.KObj(updateRun)
@@ -85,7 +84,7 @@ func (r *Reconciler) validate(
 func (r *Reconciler) validateStagesStatus(
 	ctx context.Context,
 	scheduledBindings, toBeDeletedBindings []*placementv1beta1.ClusterResourceBinding,
-	updateRun, updateRunCopy *placementv1alpha1.ClusterStagedUpdateRun,
+	updateRun, updateRunCopy *placementv1beta1.ClusterStagedUpdateRun,
 ) (int, error) {
 	updateRunRef := klog.KObj(updateRun)
 
@@ -119,7 +118,7 @@ func (r *Reconciler) validateStagesStatus(
 // validateUpdateStagesStatus is a helper function to validate the updating stages in the clusterStagedUpdateRun.
 // It compares the existing stage status with the latest list of clusters to be updated.
 // It returns the index of the updating stage, the index of the last finished stage and any error encountered.
-func validateUpdateStagesStatus(existingStageStatus []placementv1alpha1.StageUpdatingStatus, updateRun *placementv1alpha1.ClusterStagedUpdateRun) (int, int, error) {
+func validateUpdateStagesStatus(existingStageStatus []placementv1beta1.StageUpdatingStatus, updateRun *placementv1beta1.ClusterStagedUpdateRun) (int, int, error) {
 	updatingStageIndex := -1
 	lastFinishedStageIndex := -1
 	// Remember the newly computed stage status.
@@ -166,11 +165,11 @@ func validateUpdateStagesStatus(existingStageStatus []placementv1alpha1.StageUpd
 // It returns `curStage` as updatingStageIndex if the stage is updating or advances `lastFinishedStageIndex` if the stage has finished.
 func validateClusterUpdatingStatus(
 	curStage, updatingStageIndex, lastFinishedStageIndex int,
-	stageStatus *placementv1alpha1.StageUpdatingStatus,
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
+	stageStatus *placementv1beta1.StageUpdatingStatus,
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 ) (int, int, error) {
-	stageSucceedCond := meta.FindStatusCondition(stageStatus.Conditions, string(placementv1alpha1.StageUpdatingConditionSucceeded))
-	stageStartedCond := meta.FindStatusCondition(stageStatus.Conditions, string(placementv1alpha1.StageUpdatingConditionProgressing))
+	stageSucceedCond := meta.FindStatusCondition(stageStatus.Conditions, string(placementv1beta1.StageUpdatingConditionSucceeded))
+	stageStartedCond := meta.FindStatusCondition(stageStatus.Conditions, string(placementv1beta1.StageUpdatingConditionProgressing))
 	if condition.IsConditionStatusTrue(stageSucceedCond, updateRun.Generation) {
 		// The stage has finished.
 		if updatingStageIndex != -1 && curStage > updatingStageIndex {
@@ -184,7 +183,7 @@ func validateClusterUpdatingStatus(
 			// Check if the cluster is still updating.
 			if !condition.IsConditionStatusTrue(meta.FindStatusCondition(
 				stageStatus.Clusters[curCluster].Conditions,
-				string(placementv1alpha1.ClusterUpdatingConditionSucceeded)),
+				string(placementv1beta1.ClusterUpdatingConditionSucceeded)),
 				updateRun.Generation) {
 				// The clusters in the finished stage should all have finished too.
 				unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("cluster `%s` in the finished stage `%s` has not succeeded", stageStatus.Clusters[curCluster].ClusterName, stageStatus.StageName))
@@ -223,8 +222,8 @@ func validateClusterUpdatingStatus(
 		// Collect the updating clusters.
 		var updatingClusters []string
 		for j := range stageStatus.Clusters {
-			clusterStartedCond := meta.FindStatusCondition(stageStatus.Clusters[j].Conditions, string(placementv1alpha1.ClusterUpdatingConditionStarted))
-			clusterFinishedCond := meta.FindStatusCondition(stageStatus.Clusters[j].Conditions, string(placementv1alpha1.ClusterUpdatingConditionSucceeded))
+			clusterStartedCond := meta.FindStatusCondition(stageStatus.Clusters[j].Conditions, string(placementv1beta1.ClusterUpdatingConditionStarted))
+			clusterFinishedCond := meta.FindStatusCondition(stageStatus.Clusters[j].Conditions, string(placementv1beta1.ClusterUpdatingConditionSucceeded))
 			if condition.IsConditionStatusTrue(clusterStartedCond, updateRun.Generation) &&
 				!(condition.IsConditionStatusTrue(clusterFinishedCond, updateRun.Generation) || condition.IsConditionStatusFalse(clusterFinishedCond, updateRun.Generation)) {
 				updatingClusters = append(updatingClusters, stageStatus.Clusters[j].ClusterName)
@@ -246,7 +245,7 @@ func validateClusterUpdatingStatus(
 func validateDeleteStageStatus(
 	updatingStageIndex, lastFinishedStageIndex, totalStages int,
 	toBeDeletedBindings []*placementv1beta1.ClusterResourceBinding,
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 ) (int, error) {
 	updateRunRef := klog.KObj(updateRun)
 	existingDeleteStageStatus := updateRun.Status.DeletionStageStatus
@@ -271,8 +270,8 @@ func validateDeleteStageStatus(
 		}
 	}
 
-	deleteStageFinishedCond := meta.FindStatusCondition(existingDeleteStageStatus.Conditions, string(placementv1alpha1.StagedUpdateRunConditionSucceeded))
-	deleteStageProgressingCond := meta.FindStatusCondition(existingDeleteStageStatus.Conditions, string(placementv1alpha1.StagedUpdateRunConditionProgressing))
+	deleteStageFinishedCond := meta.FindStatusCondition(existingDeleteStageStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionSucceeded))
+	deleteStageProgressingCond := meta.FindStatusCondition(existingDeleteStageStatus.Conditions, string(placementv1beta1.StagedUpdateRunConditionProgressing))
 	// Check if there is any active updating stage
 	if updatingStageIndex != -1 || lastFinishedStageIndex < totalStages-1 {
 		// There are still stages updating before the delete stage, make sure the delete stage is not active/finished.
