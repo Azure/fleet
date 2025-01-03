@@ -199,7 +199,7 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 
 	AfterAll(func() {
 		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 
 	It("should deny update on CRP with invalid label selector", func() {
@@ -319,7 +319,7 @@ var _ = Describe("webhook tests for CRP tolerations", Ordered, func() {
 
 	AfterAll(func() {
 		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 
 	It("should deny update on CRP with invalid toleration", func() {
