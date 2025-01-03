@@ -35,6 +35,7 @@ import (
 	"go.goms.io/fleet/pkg/controllers/overrider"
 	"go.goms.io/fleet/pkg/controllers/resourcechange"
 	"go.goms.io/fleet/pkg/controllers/rollout"
+	"go.goms.io/fleet/pkg/controllers/updaterun"
 	"go.goms.io/fleet/pkg/controllers/workgenerator"
 	"go.goms.io/fleet/pkg/resourcewatcher"
 	"go.goms.io/fleet/pkg/scheduler"
@@ -85,13 +86,20 @@ var (
 		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ResourceOverrideSnapshotKind),
 	}
 
+	clusterStagedUpdateRunGVKs = []schema.GroupVersionKind{
+		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ClusterStagedUpdateRunKind),
+		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ClusterStagedUpdateStrategyKind),
+		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ClusterApprovalRequestKind),
+	}
+
 	clusterInventoryGVKs = []schema.GroupVersionKind{
 		clusterinventory.GroupVersion.WithKind("ClusterProfile"),
 	}
 )
 
 // SetupControllers set up the customized controllers we developed
-func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager, config *rest.Config, opts *options.Options) error {
+func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager, config *rest.Config, opts *options.Options) error { //nolint:gocyclo
+	// TODO: Try to reduce the complexity of this last measured at 33 (failing at > 30) and remove the // nolint:gocyclo
 	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
 		klog.ErrorS(err, "unable to create the dynamic client")
@@ -195,7 +203,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			return err
 		}
 
-		// Set up  a new controller to do rollout resources according to CRP rollout strategy
+		// Set up a new controller to do rollout resources according to CRP rollout strategy
 		klog.Info("Setting up rollout controller")
 		if err := (&rollout.Reconciler{
 			Client:                  mgr.GetClient(),
@@ -213,6 +221,24 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up cluster resource placement eviction controller")
 			return err
+		}
+
+		// Set up a controller to do staged update run, rolling out resources to clusters in a stage by stage manner.
+		if opts.EnableStagedUpdateRunAPIs {
+			for _, gvk := range clusterStagedUpdateRunGVKs {
+				if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
+					klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
+					return err
+				}
+			}
+			klog.Info("Setting up clusterStagedUpdateRun controller")
+			if err = (&updaterun.Reconciler{
+				Client:          mgr.GetClient(),
+				InformerManager: dynamicInformerManager,
+			}).SetupWithManager(mgr); err != nil {
+				klog.ErrorS(err, "unable to set up clusterStagedUpdateRun controller")
+				return err
+			}
 		}
 
 		// Set up the work generator
@@ -327,7 +353,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		}
 	}
 
-	// Set up  a new controller to reconcile any resources in the cluster
+	// Set up a new controller to reconcile any resources in the cluster
 	klog.Info("Setting up resource change controller")
 	rcr := &resourcechange.Reconciler{
 		DynamicClient:               dynamicClient,

@@ -268,7 +268,7 @@ func generateTestClusterSchedulingPolicySnapshot(idx int) *placementv1beta1.Clus
 	}
 }
 
-func generateTestClusterResourceBinding(policySnapshotName, targetCluster string) *placementv1beta1.ClusterResourceBinding {
+func generateTestClusterResourceBinding(policySnapshotName, targetCluster string, state placementv1beta1.BindingState) *placementv1beta1.ClusterResourceBinding {
 	binding := &placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "binding-" + testResourceSnapshotName + "-" + targetCluster,
@@ -277,7 +277,7 @@ func generateTestClusterResourceBinding(policySnapshotName, targetCluster string
 			},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
-			State:                        placementv1beta1.BindingStateScheduled,
+			State:                        state,
 			TargetCluster:                targetCluster,
 			SchedulingPolicySnapshotName: policySnapshotName,
 		},

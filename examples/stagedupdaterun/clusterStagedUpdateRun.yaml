@@ -4,10 +4,10 @@ metadata:
   name: example-run
 spec:
   placementName: example-placement
-  resourceSnapshotIndex: "1"
+  resourceSnapshotIndex: example-placement-0-snapshot
   stagedRolloutStrategyName: example-strategy
 status:
-  policySnapshotIndexUsed: "1"
+  policySnapshotIndexUsed: example-placement-0
   policyObservedClusterCount: 3
   appliedStrategy:
     type: Immediate

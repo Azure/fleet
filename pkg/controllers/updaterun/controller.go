@@ -133,7 +133,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	// Execute the updateRun.
 	klog.V(2).InfoS("Continue to execute the clusterStagedUpdateRun", "updatingStageIndex", updatingStageIndex, "clusterStagedUpdateRun", runObjRef)
 	finished, waitTime, execErr := r.execute(ctx, &updateRun, updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings)
-	if execErr != nil && errors.Is(execErr, errStagedUpdatedAborted) {
+	if errors.Is(execErr, errStagedUpdatedAborted) {
 		// errStagedUpdatedAborted cannot be retried.
 		return runtime.Result{}, r.recordUpdateRunFailed(ctx, &updateRun, execErr.Error())
 	}
