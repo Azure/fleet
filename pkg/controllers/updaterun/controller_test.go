@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 func TestHandleClusterApprovalRequest(t *testing.T) {
@@ -23,20 +23,20 @@ func TestHandleClusterApprovalRequest(t *testing.T) {
 		queuedName    string
 	}{
 		"it should not enqueue anything if the obj is not a ClusterApprovalRequest": {
-			obj:           &placementv1alpha1.ClusterStagedUpdateRun{},
+			obj:           &placementv1beta1.ClusterStagedUpdateRun{},
 			shouldEnqueue: false,
 		},
 		"it should not enqueue anything if targetUpdateRun in spec is empty": {
-			obj: &placementv1alpha1.ClusterApprovalRequest{
-				Spec: placementv1alpha1.ApprovalRequestSpec{
+			obj: &placementv1beta1.ClusterApprovalRequest{
+				Spec: placementv1beta1.ApprovalRequestSpec{
 					TargetUpdateRun: "",
 				},
 			},
 			shouldEnqueue: false,
 		},
 		"it should enqueue the targetUpdateRun if it is not empty": {
-			obj: &placementv1alpha1.ClusterApprovalRequest{
-				Spec: placementv1alpha1.ApprovalRequestSpec{
+			obj: &placementv1beta1.ClusterApprovalRequest{
+				Spec: placementv1beta1.ApprovalRequestSpec{
 					TargetUpdateRun: "test",
 				},
 			},

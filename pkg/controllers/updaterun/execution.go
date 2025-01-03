@@ -18,7 +18,6 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -39,7 +38,7 @@ var (
 // the time to wait before rechecking the cluster update status, and any error encountered.
 func (r *Reconciler) execute(
 	ctx context.Context,
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 	updatingStageIndex int,
 	toBeUpdatedBindings, toBeDeletedBindings []*placementv1beta1.ClusterResourceBinding,
 ) (bool, time.Duration, error) {
@@ -68,7 +67,7 @@ func (r *Reconciler) execute(
 // executeUpdatingStage executes a single updating stage by updating the clusterResourceBindings.
 func (r *Reconciler) executeUpdatingStage(
 	ctx context.Context,
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 	updatingStageIndex int,
 	toBeUpdatedBindings []*placementv1beta1.ClusterResourceBinding,
 ) (time.Duration, error) {
@@ -85,8 +84,8 @@ func (r *Reconciler) executeUpdatingStage(
 	// Go through each cluster in the stage and check if it's updated.
 	for i := range updatingStageStatus.Clusters {
 		clusterStatus := &updatingStageStatus.Clusters[i]
-		clusterStartedCond := meta.FindStatusCondition(clusterStatus.Conditions, string(placementv1alpha1.ClusterUpdatingConditionStarted))
-		clusterUpdateSucceededCond := meta.FindStatusCondition(clusterStatus.Conditions, string(placementv1alpha1.ClusterUpdatingConditionSucceeded))
+		clusterStartedCond := meta.FindStatusCondition(clusterStatus.Conditions, string(placementv1beta1.ClusterUpdatingConditionStarted))
+		clusterUpdateSucceededCond := meta.FindStatusCondition(clusterStatus.Conditions, string(placementv1beta1.ClusterUpdatingConditionSucceeded))
 		if condition.IsConditionStatusFalse(clusterUpdateSucceededCond, updateRun.Generation) {
 			// The cluster is marked as failed to update.
 			failedErr := fmt.Errorf("the cluster `%s` in the stage %s has failed", clusterStatus.ClusterName, updatingStageStatus.StageName)
@@ -189,12 +188,12 @@ func (r *Reconciler) executeUpdatingStage(
 // executeDeleteStage executes the delete stage by deleting the clusterResourceBindings.
 func (r *Reconciler) executeDeleteStage(
 	ctx context.Context,
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 	toBeDeletedBindings []*placementv1beta1.ClusterResourceBinding,
 ) (bool, error) {
 	updateRunRef := klog.KObj(updateRun)
 	existingDeleteStageStatus := updateRun.Status.DeletionStageStatus
-	existingDeleteStageClusterMap := make(map[string]*placementv1alpha1.ClusterUpdatingStatus, len(existingDeleteStageStatus.Clusters))
+	existingDeleteStageClusterMap := make(map[string]*placementv1beta1.ClusterUpdatingStatus, len(existingDeleteStageStatus.Clusters))
 	for i := range existingDeleteStageStatus.Clusters {
 		existingDeleteStageClusterMap[existingDeleteStageStatus.Clusters[i].ClusterName] = &existingDeleteStageStatus.Clusters[i]
 	}
@@ -210,12 +209,12 @@ func (r *Reconciler) executeDeleteStage(
 		// In validation, we already check the binding must exist in the status.
 		delete(existingDeleteStageClusterMap, binding.Spec.TargetCluster)
 		// Make sure the cluster is not marked as deleted as the binding is still there.
-		if condition.IsConditionStatusTrue(meta.FindStatusCondition(curCluster.Conditions, string(placementv1alpha1.ClusterUpdatingConditionSucceeded)), updateRun.Generation) {
+		if condition.IsConditionStatusTrue(meta.FindStatusCondition(curCluster.Conditions, string(placementv1beta1.ClusterUpdatingConditionSucceeded)), updateRun.Generation) {
 			unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the deleted cluster `%s` in the deleting stage still has a clusterResourceBinding", binding.Spec.TargetCluster))
 			klog.ErrorS(unexpectedErr, "The cluster in the deleting stage is not removed yet but marked as deleted", "cluster", curCluster.ClusterName, "clusterStagedUpdateRun", updateRunRef)
 			return false, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 		}
-		if condition.IsConditionStatusTrue(meta.FindStatusCondition(curCluster.Conditions, string(placementv1alpha1.ClusterUpdatingConditionStarted)), updateRun.Generation) {
+		if condition.IsConditionStatusTrue(meta.FindStatusCondition(curCluster.Conditions, string(placementv1beta1.ClusterUpdatingConditionStarted)), updateRun.Generation) {
 			// The cluster status is marked as being deleted.
 			if binding.DeletionTimestamp.IsZero() {
 				// The cluster is marked as deleting but the binding is not deleting.
@@ -241,7 +240,7 @@ func (r *Reconciler) executeDeleteStage(
 	// The rest of the clusters in the stage are not in the toBeDeletedBindings so it should be marked as delete succeeded.
 	for _, clusterStatus := range existingDeleteStageClusterMap {
 		// Make sure the cluster is marked as deleted.
-		if !condition.IsConditionStatusTrue(meta.FindStatusCondition(clusterStatus.Conditions, string(placementv1alpha1.ClusterUpdatingConditionStarted)), updateRun.Generation) {
+		if !condition.IsConditionStatusTrue(meta.FindStatusCondition(clusterStatus.Conditions, string(placementv1beta1.ClusterUpdatingConditionStarted)), updateRun.Generation) {
 			markClusterUpdatingStarted(clusterStatus, updateRun.Generation)
 		}
 		markClusterUpdatingSucceeded(clusterStatus, updateRun.Generation)
@@ -255,7 +254,7 @@ func (r *Reconciler) executeDeleteStage(
 
 // checkAfterStageTasksStatus checks if the after stage tasks have finished.
 // Tt returns if the after stage tasks have finished or error if the after stage tasks failed.
-func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingStageIndex int, updateRun *placementv1alpha1.ClusterStagedUpdateRun) (bool, error) {
+func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingStageIndex int, updateRun *placementv1beta1.ClusterStagedUpdateRun) (bool, error) {
 	updateRunRef := klog.KObj(updateRun)
 	updatingStageStatus := &updateRun.Status.StagesStatus[updatingStageIndex]
 	updatingStage := &updateRun.Status.StagedUpdateStrategySnapshot.Stages[updatingStageIndex]
@@ -265,8 +264,8 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 	}
 	for i, task := range updatingStage.AfterStageTasks {
 		switch task.Type {
-		case placementv1alpha1.AfterStageTaskTypeTimedWait:
-			waitStartTime := meta.FindStatusCondition(updatingStageStatus.Conditions, string(placementv1alpha1.StageUpdatingConditionProgressing)).LastTransitionTime.Time
+		case placementv1beta1.AfterStageTaskTypeTimedWait:
+			waitStartTime := meta.FindStatusCondition(updatingStageStatus.Conditions, string(placementv1beta1.StageUpdatingConditionProgressing)).LastTransitionTime.Time
 			// Check if the wait time has passed.
 			if waitStartTime.Add(task.WaitTime.Duration).After(time.Now()) {
 				klog.V(2).InfoS("The after stage task still need to wait", "waitStartTime", waitStartTime, "waitTime", task.WaitTime, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
@@ -274,18 +273,18 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 			}
 			markAfterStageWaitTimeElapsed(&updatingStageStatus.AfterStageTaskStatus[i], updateRun.Generation)
 			klog.V(2).InfoS("The after stage wait task has completed", "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
-		case placementv1alpha1.AfterStageTaskTypeApproval:
+		case placementv1beta1.AfterStageTaskTypeApproval:
 			// Check if the approval request has been created.
-			approvalRequest := placementv1alpha1.ClusterApprovalRequest{
+			approvalRequest := placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: updatingStageStatus.AfterStageTaskStatus[i].ApprovalRequestName,
 					Labels: map[string]string{
-						placementv1alpha1.TargetUpdatingStageNameLabel:   updatingStage.Name,
-						placementv1alpha1.TargetUpdateRunLabel:           updateRun.Name,
-						placementv1alpha1.IsLatestUpdateRunApprovalLabel: "true",
+						placementv1beta1.TargetUpdatingStageNameLabel:   updatingStage.Name,
+						placementv1beta1.TargetUpdateRunLabel:           updateRun.Name,
+						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
 					},
 				},
-				Spec: placementv1alpha1.ApprovalRequestSpec{
+				Spec: placementv1beta1.ApprovalRequestSpec{
 					TargetUpdateRun: updateRun.Name,
 					TargetStage:     updatingStage.Name,
 				},
@@ -304,7 +303,7 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 						klog.ErrorS(unexpectedErr, "Found an approval request targeting wrong stage", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
 						return false, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 					}
-					if !condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequest.Status.Conditions, string(placementv1alpha1.ApprovalRequestConditionApproved)), approvalRequest.Generation) {
+					if !condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequest.Status.Conditions, string(placementv1beta1.ApprovalRequestConditionApproved)), approvalRequest.Generation) {
 						klog.V(2).InfoS("The approval request has not been approved yet", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
 						return false, nil
 					}
@@ -328,7 +327,7 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 }
 
 // updateBindingRolloutStarted updates the binding status to indicate the rollout has started.
-func (r *Reconciler) updateBindingRolloutStarted(ctx context.Context, binding *placementv1beta1.ClusterResourceBinding, updateRun *placementv1alpha1.ClusterStagedUpdateRun) error {
+func (r *Reconciler) updateBindingRolloutStarted(ctx context.Context, binding *placementv1beta1.ClusterResourceBinding, updateRun *placementv1beta1.ClusterStagedUpdateRun) error {
 	// first reset the condition to reflect the latest lastTransitionTime
 	binding.RemoveCondition(string(placementv1beta1.ResourceBindingRolloutStarted))
 	cond := metav1.Condition{
@@ -348,7 +347,7 @@ func (r *Reconciler) updateBindingRolloutStarted(ctx context.Context, binding *p
 }
 
 // isBindingSyncedWithClusterStatus checks if the binding is up-to-date with the cluster status.
-func isBindingSyncedWithClusterStatus(updateRun *placementv1alpha1.ClusterStagedUpdateRun, binding *placementv1beta1.ClusterResourceBinding, cluster *placementv1alpha1.ClusterUpdatingStatus) bool {
+func isBindingSyncedWithClusterStatus(updateRun *placementv1beta1.ClusterStagedUpdateRun, binding *placementv1beta1.ClusterResourceBinding, cluster *placementv1beta1.ClusterUpdatingStatus) bool {
 	if binding.Spec.ResourceSnapshotName != updateRun.Spec.ResourceSnapshotIndex {
 		klog.ErrorS(fmt.Errorf("binding has different resourceSnapshotName, want: %s, got: %s", updateRun.Spec.ResourceSnapshotIndex, binding.Spec.ResourceSnapshotName), "ClusterResourceBinding is not up-to-date", "clusterResourceBinding", klog.KObj(binding), "clusterStagedUpdateRun", klog.KObj(updateRun))
 		return false
@@ -372,9 +371,9 @@ func isBindingSyncedWithClusterStatus(updateRun *placementv1alpha1.ClusterStaged
 // It returns true if the resources have been updated successfully or any error if the update failed.
 func checkClusterUpdateResult(
 	binding *placementv1beta1.ClusterResourceBinding,
-	clusterStatus *placementv1alpha1.ClusterUpdatingStatus,
-	updatingStage *placementv1alpha1.StageUpdatingStatus,
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
+	clusterStatus *placementv1beta1.ClusterUpdatingStatus,
+	updatingStage *placementv1beta1.StageUpdatingStatus,
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 ) (bool, error) {
 	availCond := binding.GetCondition(string(placementv1beta1.ResourceBindingAvailable))
 	if condition.IsConditionStatusTrue(availCond, binding.Generation) {
@@ -396,9 +395,9 @@ func checkClusterUpdateResult(
 }
 
 // markUpdateRunStarted marks the update run as started in memory.
-func markUpdateRunStarted(updateRun *placementv1alpha1.ClusterStagedUpdateRun) {
+func markUpdateRunStarted(updateRun *placementv1beta1.ClusterStagedUpdateRun) {
 	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
-		Type:               string(placementv1alpha1.StagedUpdateRunConditionProgressing),
+		Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: updateRun.Generation,
 		Reason:             condition.UpdateRunStartedReason,
@@ -406,12 +405,12 @@ func markUpdateRunStarted(updateRun *placementv1alpha1.ClusterStagedUpdateRun) {
 }
 
 // markStageUpdatingStarted marks the stage updating status as started in memory.
-func markStageUpdatingStarted(stageUpdatingStatus *placementv1alpha1.StageUpdatingStatus, generation int64) {
+func markStageUpdatingStarted(stageUpdatingStatus *placementv1beta1.StageUpdatingStatus, generation int64) {
 	if stageUpdatingStatus.StartTime == nil {
 		stageUpdatingStatus.StartTime = &metav1.Time{Time: time.Now()}
 	}
 	meta.SetStatusCondition(&stageUpdatingStatus.Conditions, metav1.Condition{
-		Type:               string(placementv1alpha1.StageUpdatingConditionProgressing),
+		Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.StageUpdatingStartedReason,
@@ -419,9 +418,9 @@ func markStageUpdatingStarted(stageUpdatingStatus *placementv1alpha1.StageUpdati
 }
 
 // markStageUpdatingWaiting marks the stage updating status as waiting in memory.
-func markStageUpdatingWaiting(stageUpdatingStatus *placementv1alpha1.StageUpdatingStatus, generation int64) {
+func markStageUpdatingWaiting(stageUpdatingStatus *placementv1beta1.StageUpdatingStatus, generation int64) {
 	meta.SetStatusCondition(&stageUpdatingStatus.Conditions, metav1.Condition{
-		Type:               string(placementv1alpha1.StageUpdatingConditionProgressing),
+		Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: generation,
 		Reason:             condition.StageUpdatingWaitingReason,
@@ -429,12 +428,12 @@ func markStageUpdatingWaiting(stageUpdatingStatus *placementv1alpha1.StageUpdati
 }
 
 // markStageUpdatingSucceeded marks the stage updating status as succeeded in memory.
-func markStageUpdatingSucceeded(stageUpdatingStatus *placementv1alpha1.StageUpdatingStatus, generation int64) {
+func markStageUpdatingSucceeded(stageUpdatingStatus *placementv1beta1.StageUpdatingStatus, generation int64) {
 	if stageUpdatingStatus.EndTime == nil {
 		stageUpdatingStatus.EndTime = &metav1.Time{Time: time.Now()}
 	}
 	meta.SetStatusCondition(&stageUpdatingStatus.Conditions, metav1.Condition{
-		Type:               string(placementv1alpha1.StageUpdatingConditionSucceeded),
+		Type:               string(placementv1beta1.StageUpdatingConditionSucceeded),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.StageUpdatingSucceededReason,
@@ -442,12 +441,12 @@ func markStageUpdatingSucceeded(stageUpdatingStatus *placementv1alpha1.StageUpda
 }
 
 // markStageUpdatingFailed marks the stage updating status as failed in memory.
-func markStageUpdatingFailed(stageUpdatingStatus *placementv1alpha1.StageUpdatingStatus, generation int64, message string) {
+func markStageUpdatingFailed(stageUpdatingStatus *placementv1beta1.StageUpdatingStatus, generation int64, message string) {
 	if stageUpdatingStatus.EndTime == nil {
 		stageUpdatingStatus.EndTime = &metav1.Time{Time: time.Now()}
 	}
 	meta.SetStatusCondition(&stageUpdatingStatus.Conditions, metav1.Condition{
-		Type:               string(placementv1alpha1.StageUpdatingConditionSucceeded),
+		Type:               string(placementv1beta1.StageUpdatingConditionSucceeded),
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: generation,
 		Reason:             condition.StageUpdatingFailedReason,
@@ -456,9 +455,9 @@ func markStageUpdatingFailed(stageUpdatingStatus *placementv1alpha1.StageUpdatin
 }
 
 // markClusterUpdatingStarted marks the cluster updating status as started in memory.
-func markClusterUpdatingStarted(clusterUpdatingStatus *placementv1alpha1.ClusterUpdatingStatus, generation int64) {
+func markClusterUpdatingStarted(clusterUpdatingStatus *placementv1beta1.ClusterUpdatingStatus, generation int64) {
 	meta.SetStatusCondition(&clusterUpdatingStatus.Conditions, metav1.Condition{
-		Type:               string(placementv1alpha1.ClusterUpdatingConditionStarted),
+		Type:               string(placementv1beta1.ClusterUpdatingConditionStarted),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.ClusterUpdatingStartedReason,
@@ -466,9 +465,9 @@ func markClusterUpdatingStarted(clusterUpdatingStatus *placementv1alpha1.Cluster
 }
 
 // markClusterUpdatingSucceeded marks the cluster updating status as succeeded in memory.
-func markClusterUpdatingSucceeded(clusterUpdatingStatus *placementv1alpha1.ClusterUpdatingStatus, generation int64) {
+func markClusterUpdatingSucceeded(clusterUpdatingStatus *placementv1beta1.ClusterUpdatingStatus, generation int64) {
 	meta.SetStatusCondition(&clusterUpdatingStatus.Conditions, metav1.Condition{
-		Type:               string(placementv1alpha1.ClusterUpdatingConditionSucceeded),
+		Type:               string(placementv1beta1.ClusterUpdatingConditionSucceeded),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.ClusterUpdatingSucceededReason,
@@ -476,9 +475,9 @@ func markClusterUpdatingSucceeded(clusterUpdatingStatus *placementv1alpha1.Clust
 }
 
 // markClusterUpdatingFailed marks the cluster updating status as failed in memory.
-func markClusterUpdatingFailed(clusterUpdatingStatus *placementv1alpha1.ClusterUpdatingStatus, generation int64, message string) {
+func markClusterUpdatingFailed(clusterUpdatingStatus *placementv1beta1.ClusterUpdatingStatus, generation int64, message string) {
 	meta.SetStatusCondition(&clusterUpdatingStatus.Conditions, metav1.Condition{
-		Type:               string(placementv1alpha1.ClusterUpdatingConditionSucceeded),
+		Type:               string(placementv1beta1.ClusterUpdatingConditionSucceeded),
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: generation,
 		Reason:             condition.ClusterUpdatingFailedReason,
@@ -487,9 +486,9 @@ func markClusterUpdatingFailed(clusterUpdatingStatus *placementv1alpha1.ClusterU
 }
 
 // markAfterStageRequestCreated marks the Approval after stage task as ApprovalRequestCreated in memory.
-func markAfterStageRequestCreated(afterStageTaskStatus *placementv1alpha1.AfterStageTaskStatus, generation int64) {
+func markAfterStageRequestCreated(afterStageTaskStatus *placementv1beta1.AfterStageTaskStatus, generation int64) {
 	meta.SetStatusCondition(&afterStageTaskStatus.Conditions, metav1.Condition{
-		Type:               string(placementv1alpha1.AfterStageTaskConditionApprovalRequestCreated),
+		Type:               string(placementv1beta1.AfterStageTaskConditionApprovalRequestCreated),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.AfterStageTaskApprovalRequestCreatedReason,
@@ -497,9 +496,9 @@ func markAfterStageRequestCreated(afterStageTaskStatus *placementv1alpha1.AfterS
 }
 
 // markAfterStageRequestApproved marks the Approval after stage task as Approved in memory.
-func markAfterStageRequestApproved(afterStageTaskStatus *placementv1alpha1.AfterStageTaskStatus, generation int64) {
+func markAfterStageRequestApproved(afterStageTaskStatus *placementv1beta1.AfterStageTaskStatus, generation int64) {
 	meta.SetStatusCondition(&afterStageTaskStatus.Conditions, metav1.Condition{
-		Type:               string(placementv1alpha1.AfterStageTaskConditionApprovalRequestApproved),
+		Type:               string(placementv1beta1.AfterStageTaskConditionApprovalRequestApproved),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.AfterStageTaskApprovalRequestApprovedReason,
@@ -507,9 +506,9 @@ func markAfterStageRequestApproved(afterStageTaskStatus *placementv1alpha1.After
 }
 
 // markAfterStageWaitTimeElapsed marks the TimeWait after stage task as TimeElapsed in memory.
-func markAfterStageWaitTimeElapsed(afterStageTaskStatus *placementv1alpha1.AfterStageTaskStatus, generation int64) {
+func markAfterStageWaitTimeElapsed(afterStageTaskStatus *placementv1beta1.AfterStageTaskStatus, generation int64) {
 	meta.SetStatusCondition(&afterStageTaskStatus.Conditions, metav1.Condition{
-		Type:               string(placementv1alpha1.AfterStageTaskConditionWaitTimeElapsed),
+		Type:               string(placementv1beta1.AfterStageTaskConditionWaitTimeElapsed),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.AfterStageTaskWaitTimeElapsedReason,

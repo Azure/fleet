@@ -29,16 +29,16 @@ import (
 )
 
 var _ = Describe("UpdateRun execution tests", func() {
-	var updateRun *placementv1alpha1.ClusterStagedUpdateRun
+	var updateRun *placementv1beta1.ClusterStagedUpdateRun
 	var crp *placementv1beta1.ClusterResourcePlacement
 	var policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot
-	var updateStrategy *placementv1alpha1.ClusterStagedUpdateStrategy
+	var updateStrategy *placementv1beta1.ClusterStagedUpdateStrategy
 	var resourceBindings []*placementv1beta1.ClusterResourceBinding
 	var targetClusters []*clusterv1beta1.MemberCluster
 	var unscheduledCluster []*clusterv1beta1.MemberCluster
 	var resourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 	var clusterResourceOverride *placementv1alpha1.ClusterResourceOverrideSnapshot
-	var wantStatus *placementv1alpha1.StagedUpdateRunStatus
+	var wantStatus *placementv1beta1.StagedUpdateRunStatus
 
 	BeforeEach(OncePerOrdered, func() {
 		testUpdateRunName = "updaterun-" + utils.RandStr()
@@ -192,8 +192,8 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "failed to update the binding status")
 
 			By("Validating the 1st cluster has succeeded and 2nd cluster has started")
-			wantStatus.StagesStatus[0].Clusters[0].Conditions = append(wantStatus.StagesStatus[0].Clusters[0].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionSucceeded))
-			wantStatus.StagesStatus[0].Clusters[1].Conditions = append(wantStatus.StagesStatus[0].Clusters[1].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionStarted))
+			wantStatus.StagesStatus[0].Clusters[0].Conditions = append(wantStatus.StagesStatus[0].Clusters[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
+			wantStatus.StagesStatus[0].Clusters[1].Conditions = append(wantStatus.StagesStatus[0].Clusters[1].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Validating the 1st stage has startTime set")
@@ -210,8 +210,8 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "failed to update the binding status")
 
 			By("Validating the 2nd cluster has succeeded and 3rd cluster has started")
-			wantStatus.StagesStatus[0].Clusters[1].Conditions = append(wantStatus.StagesStatus[0].Clusters[1].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionSucceeded))
-			wantStatus.StagesStatus[0].Clusters[2].Conditions = append(wantStatus.StagesStatus[0].Clusters[2].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionStarted))
+			wantStatus.StagesStatus[0].Clusters[1].Conditions = append(wantStatus.StagesStatus[0].Clusters[1].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
+			wantStatus.StagesStatus[0].Clusters[2].Conditions = append(wantStatus.StagesStatus[0].Clusters[2].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
 
@@ -225,8 +225,8 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "failed to update the binding status")
 
 			By("Validating the 3rd cluster has succeeded and 4th cluster has started")
-			wantStatus.StagesStatus[0].Clusters[2].Conditions = append(wantStatus.StagesStatus[0].Clusters[2].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionSucceeded))
-			wantStatus.StagesStatus[0].Clusters[3].Conditions = append(wantStatus.StagesStatus[0].Clusters[3].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionStarted))
+			wantStatus.StagesStatus[0].Clusters[2].Conditions = append(wantStatus.StagesStatus[0].Clusters[2].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
+			wantStatus.StagesStatus[0].Clusters[3].Conditions = append(wantStatus.StagesStatus[0].Clusters[3].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
 
@@ -240,8 +240,8 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "failed to update the binding status")
 
 			By("Validating the 4th cluster has succeeded and 5th cluster has started")
-			wantStatus.StagesStatus[0].Clusters[3].Conditions = append(wantStatus.StagesStatus[0].Clusters[3].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionSucceeded))
-			wantStatus.StagesStatus[0].Clusters[4].Conditions = append(wantStatus.StagesStatus[0].Clusters[4].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionStarted))
+			wantStatus.StagesStatus[0].Clusters[3].Conditions = append(wantStatus.StagesStatus[0].Clusters[3].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
+			wantStatus.StagesStatus[0].Clusters[4].Conditions = append(wantStatus.StagesStatus[0].Clusters[4].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
 
@@ -255,9 +255,9 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "failed to update the binding status")
 
 			By("Validating the 5th cluster has succeeded and stage waiting for AfterStageTask")
-			stageWaitingCondition := generateFalseCondition(updateRun, placementv1alpha1.StageUpdatingConditionProgressing)
+			stageWaitingCondition := generateFalseCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing)
 			stageWaitingCondition.Reason = condition.StageUpdatingWaitingReason
-			wantStatus.StagesStatus[0].Clusters[4].Conditions = append(wantStatus.StagesStatus[0].Clusters[4].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionSucceeded))
+			wantStatus.StagesStatus[0].Clusters[4].Conditions = append(wantStatus.StagesStatus[0].Clusters[4].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
 			wantStatus.StagesStatus[0].Conditions[0] = stageWaitingCondition // The progressing condition now becomes false with waiting reason.
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
@@ -266,21 +266,21 @@ var _ = Describe("UpdateRun execution tests", func() {
 			By("Validating the waitTime after stage task has completed and 2nd stage has started")
 			// AfterStageTask completed.
 			wantStatus.StagesStatus[0].AfterStageTaskStatus[0].Conditions = append(wantStatus.StagesStatus[0].AfterStageTaskStatus[0].Conditions,
-				generateTrueCondition(updateRun, placementv1alpha1.AfterStageTaskConditionWaitTimeElapsed))
+				generateTrueCondition(updateRun, placementv1beta1.AfterStageTaskConditionWaitTimeElapsed))
 			// 1st stage completed.
-			wantStatus.StagesStatus[0].Conditions = append(wantStatus.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionSucceeded))
+			wantStatus.StagesStatus[0].Conditions = append(wantStatus.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// 2nd stage started.
-			wantStatus.StagesStatus[1].Conditions = append(wantStatus.StagesStatus[1].Conditions, generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionProgressing))
+			wantStatus.StagesStatus[1].Conditions = append(wantStatus.StagesStatus[1].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing))
 			// 1st cluster in 2nd stage started.
-			wantStatus.StagesStatus[1].Clusters[0].Conditions = append(wantStatus.StagesStatus[1].Clusters[0].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionStarted))
+			wantStatus.StagesStatus[1].Clusters[0].Conditions = append(wantStatus.StagesStatus[1].Clusters[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Validating the 1st stage has endTime set")
 			Expect(updateRun.Status.StagesStatus[0].EndTime).ShouldNot(BeNil())
 
 			By("Validating the waitTime after stage task only completes after the wait time")
-			waitStartTime := meta.FindStatusCondition(updateRun.Status.StagesStatus[0].Conditions, string(placementv1alpha1.StageUpdatingConditionProgressing)).LastTransitionTime.Time
-			waitEndTime := meta.FindStatusCondition(updateRun.Status.StagesStatus[0].AfterStageTaskStatus[0].Conditions, string(placementv1alpha1.AfterStageTaskConditionWaitTimeElapsed)).LastTransitionTime.Time
+			waitStartTime := meta.FindStatusCondition(updateRun.Status.StagesStatus[0].Conditions, string(placementv1beta1.StageUpdatingConditionProgressing)).LastTransitionTime.Time
+			waitEndTime := meta.FindStatusCondition(updateRun.Status.StagesStatus[0].AfterStageTaskStatus[0].Conditions, string(placementv1beta1.AfterStageTaskConditionWaitTimeElapsed)).LastTransitionTime.Time
 			// In this test, I set wait time to be 4 seconds, while stageClusterUpdatingWaitTime is 3 seconds.
 			// So it needs 2 rounds of reconcile to wait for the waitTime to elapse, waitEndTime - waitStartTime should be around 6 seconds.
 			Expect(waitStartTime.Add(updateStrategy.Spec.Stages[0].AfterStageTasks[0].WaitTime.Duration).Before(waitEndTime)).Should(BeTrue())
@@ -296,8 +296,8 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "failed to update the binding status")
 
 			By("Validating the 1st cluster has succeeded and 2nd cluster has started")
-			wantStatus.StagesStatus[1].Clusters[0].Conditions = append(wantStatus.StagesStatus[1].Clusters[0].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionSucceeded))
-			wantStatus.StagesStatus[1].Clusters[1].Conditions = append(wantStatus.StagesStatus[1].Clusters[1].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionStarted))
+			wantStatus.StagesStatus[1].Clusters[0].Conditions = append(wantStatus.StagesStatus[1].Clusters[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
+			wantStatus.StagesStatus[1].Clusters[1].Conditions = append(wantStatus.StagesStatus[1].Clusters[1].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Validating the 2nd stage has startTime set")
@@ -314,8 +314,8 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "failed to update the binding status")
 
 			By("Validating the 2nd cluster has succeeded and 3rd cluster has started")
-			wantStatus.StagesStatus[1].Clusters[1].Conditions = append(wantStatus.StagesStatus[1].Clusters[1].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionSucceeded))
-			wantStatus.StagesStatus[1].Clusters[2].Conditions = append(wantStatus.StagesStatus[1].Clusters[2].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionStarted))
+			wantStatus.StagesStatus[1].Clusters[1].Conditions = append(wantStatus.StagesStatus[1].Clusters[1].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
+			wantStatus.StagesStatus[1].Clusters[2].Conditions = append(wantStatus.StagesStatus[1].Clusters[2].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
 
@@ -329,8 +329,8 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "failed to update the binding status")
 
 			By("Validating the 3rd cluster has succeeded and 4th cluster has started")
-			wantStatus.StagesStatus[1].Clusters[2].Conditions = append(wantStatus.StagesStatus[1].Clusters[2].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionSucceeded))
-			wantStatus.StagesStatus[1].Clusters[3].Conditions = append(wantStatus.StagesStatus[1].Clusters[3].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionStarted))
+			wantStatus.StagesStatus[1].Clusters[2].Conditions = append(wantStatus.StagesStatus[1].Clusters[2].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
+			wantStatus.StagesStatus[1].Clusters[3].Conditions = append(wantStatus.StagesStatus[1].Clusters[3].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
 
@@ -344,8 +344,8 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "failed to update the binding status")
 
 			By("Validating the 4th cluster has succeeded and 5th cluster has started")
-			wantStatus.StagesStatus[1].Clusters[3].Conditions = append(wantStatus.StagesStatus[1].Clusters[3].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionSucceeded))
-			wantStatus.StagesStatus[1].Clusters[4].Conditions = append(wantStatus.StagesStatus[1].Clusters[4].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionStarted))
+			wantStatus.StagesStatus[1].Clusters[3].Conditions = append(wantStatus.StagesStatus[1].Clusters[3].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
+			wantStatus.StagesStatus[1].Clusters[4].Conditions = append(wantStatus.StagesStatus[1].Clusters[4].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
 
@@ -359,28 +359,28 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "failed to update the binding status")
 
 			By("Validating the 5th cluster has succeeded and the stage waiting for AfterStageTask")
-			wantStatus.StagesStatus[1].Clusters[4].Conditions = append(wantStatus.StagesStatus[1].Clusters[4].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionSucceeded))
-			stageWaitingCondition := generateFalseCondition(updateRun, placementv1alpha1.StageUpdatingConditionProgressing)
+			wantStatus.StagesStatus[1].Clusters[4].Conditions = append(wantStatus.StagesStatus[1].Clusters[4].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
+			stageWaitingCondition := generateFalseCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing)
 			stageWaitingCondition.Reason = condition.StageUpdatingWaitingReason
 			wantStatus.StagesStatus[1].Conditions[0] = stageWaitingCondition // The progressing condition now becomes false with waiting reason.
 			wantStatus.StagesStatus[1].AfterStageTaskStatus[0].Conditions = append(wantStatus.StagesStatus[1].AfterStageTaskStatus[0].Conditions,
-				generateTrueCondition(updateRun, placementv1alpha1.AfterStageTaskConditionApprovalRequestCreated))
+				generateTrueCondition(updateRun, placementv1beta1.AfterStageTaskConditionApprovalRequestCreated))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
 
 		It("Should complete the 2nd stage after the ApprovalRequest is approved and move on to the delete stage", func() {
 			By("Validating the approvalRequest has been created")
-			approvalRequest := &placementv1alpha1.ClusterApprovalRequest{}
-			wantApprovalRequest := &placementv1alpha1.ClusterApprovalRequest{
+			approvalRequest := &placementv1beta1.ClusterApprovalRequest{}
+			wantApprovalRequest := &placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: updateRun.Status.StagesStatus[1].AfterStageTaskStatus[0].ApprovalRequestName,
 					Labels: map[string]string{
-						placementv1alpha1.TargetUpdatingStageNameLabel:   updateRun.Status.StagesStatus[1].StageName,
-						placementv1alpha1.TargetUpdateRunLabel:           updateRun.Name,
-						placementv1alpha1.IsLatestUpdateRunApprovalLabel: "true",
+						placementv1beta1.TargetUpdatingStageNameLabel:   updateRun.Status.StagesStatus[1].StageName,
+						placementv1beta1.TargetUpdateRunLabel:           updateRun.Name,
+						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
 					},
 				},
-				Spec: placementv1alpha1.ApprovalRequestSpec{
+				Spec: placementv1beta1.ApprovalRequestSpec{
 					TargetUpdateRun: updateRun.Name,
 					TargetStage:     updateRun.Status.StagesStatus[1].StageName,
 				},
@@ -399,17 +399,17 @@ var _ = Describe("UpdateRun execution tests", func() {
 			}, timeout, interval).Should(Succeed(), "failed to validate the approvalRequest")
 
 			By("Approving the approvalRequest")
-			meta.SetStatusCondition(&approvalRequest.Status.Conditions, generateTrueCondition(approvalRequest, placementv1alpha1.ApprovalRequestConditionApproved))
+			meta.SetStatusCondition(&approvalRequest.Status.Conditions, generateTrueCondition(approvalRequest, placementv1beta1.ApprovalRequestConditionApproved))
 			Expect(k8sClient.Status().Update(ctx, approvalRequest)).Should(Succeed(), "failed to update the approvalRequest status")
 
 			By("Validating the 2nd stage has completed and the delete stage has started")
 			wantStatus.StagesStatus[1].AfterStageTaskStatus[0].Conditions = append(wantStatus.StagesStatus[1].AfterStageTaskStatus[0].Conditions,
-				generateTrueCondition(updateRun, placementv1alpha1.AfterStageTaskConditionApprovalRequestApproved))
-			wantStatus.StagesStatus[1].Conditions = append(wantStatus.StagesStatus[1].Conditions, generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionSucceeded))
+				generateTrueCondition(updateRun, placementv1beta1.AfterStageTaskConditionApprovalRequestApproved))
+			wantStatus.StagesStatus[1].Conditions = append(wantStatus.StagesStatus[1].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 
-			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionProgressing))
+			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing))
 			for i := range wantStatus.DeletionStageStatus.Clusters {
-				wantStatus.DeletionStageStatus.Clusters[i].Conditions = append(wantStatus.DeletionStageStatus.Clusters[i].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionStarted))
+				wantStatus.DeletionStageStatus.Clusters[i].Conditions = append(wantStatus.DeletionStageStatus.Clusters[i].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
 			}
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
@@ -432,10 +432,10 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Validating the delete stage and the clusterStagedUpdateRun has completed")
 			for i := range wantStatus.DeletionStageStatus.Clusters {
-				wantStatus.DeletionStageStatus.Clusters[i].Conditions = append(wantStatus.DeletionStageStatus.Clusters[i].Conditions, generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionSucceeded))
+				wantStatus.DeletionStageStatus.Clusters[i].Conditions = append(wantStatus.DeletionStageStatus.Clusters[i].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
 			}
-			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionSucceeded))
-			wantStatus.Conditions = append(wantStatus.Conditions, generateTrueCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionSucceeded))
+			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
+			wantStatus.Conditions = append(wantStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
 	})
@@ -465,15 +465,15 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(k8sClient.Update(ctx, binding)).Should(Succeed(), "failed to update the binding state")
 
 			By("Validating the updateRun has failed")
-			wantStatus.StagesStatus[0].Clusters[0].Conditions = append(wantStatus.StagesStatus[0].Clusters[0].Conditions, generateFalseCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionSucceeded))
-			wantStatus.StagesStatus[0].Conditions = append(wantStatus.StagesStatus[0].Conditions, generateFalseCondition(updateRun, placementv1alpha1.StageUpdatingConditionSucceeded))
-			wantStatus.Conditions = append(wantStatus.Conditions, generateFalseCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionSucceeded))
+			wantStatus.StagesStatus[0].Clusters[0].Conditions = append(wantStatus.StagesStatus[0].Clusters[0].Conditions, generateFalseCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
+			wantStatus.StagesStatus[0].Conditions = append(wantStatus.StagesStatus[0].Conditions, generateFalseCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
+			wantStatus.Conditions = append(wantStatus.Conditions, generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
 	})
 })
 
-func validateBindingState(ctx context.Context, binding *placementv1beta1.ClusterResourceBinding, resourceSnapshotName string, updateRun *placementv1alpha1.ClusterStagedUpdateRun, stage int) {
+func validateBindingState(ctx context.Context, binding *placementv1beta1.ClusterResourceBinding, resourceSnapshotName string, updateRun *placementv1beta1.ClusterStagedUpdateRun, stage int) {
 	Eventually(func() error {
 		if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding); err != nil {
 			return err
