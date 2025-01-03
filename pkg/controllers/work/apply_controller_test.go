@@ -1025,7 +1025,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 			err:      nil,
 		},
 		"Test StatefulSet available": {
-			gvr: utils.StatefulSettGVR,
+			gvr: utils.StatefulSetGVR,
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "apps/v1",
@@ -1049,7 +1049,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 			err:      nil,
 		},
 		"Test StatefulSet not available": {
-			gvr: utils.StatefulSettGVR,
+			gvr: utils.StatefulSetGVR,
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "apps/v1",
@@ -1073,7 +1073,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 			err:      nil,
 		},
 		"Test StatefulSet observed old generation": {
-			gvr: utils.StatefulSettGVR,
+			gvr: utils.StatefulSetGVR,
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "apps/v1",
@@ -1097,7 +1097,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 			err:      nil,
 		},
 		"Test DaemonSet Available": {
-			gvr: utils.DaemonSettGVR,
+			gvr: utils.DaemonSetGVR,
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "apps/v1",
@@ -1118,7 +1118,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 			err:      nil,
 		},
 		"Test DaemonSet not available": {
-			gvr: utils.DaemonSettGVR,
+			gvr: utils.DaemonSetGVR,
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "apps/v1",
@@ -1139,7 +1139,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 			err:      nil,
 		},
 		"Test DaemonSet not observe current generation": {
-			gvr: utils.DaemonSettGVR,
+			gvr: utils.DaemonSetGVR,
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "apps/v1",

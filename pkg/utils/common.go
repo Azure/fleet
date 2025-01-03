@@ -329,13 +329,13 @@ var (
 		Kind:    DeploymentKind,
 	}
 
-	DaemonSettGVR = schema.GroupVersionResource{
+	DaemonSetGVR = schema.GroupVersionResource{
 		Group:    appv1.GroupName,
 		Version:  appv1.SchemeGroupVersion.Version,
 		Resource: "daemonsets",
 	}
 
-	StatefulSettGVR = schema.GroupVersionResource{
+	StatefulSetGVR = schema.GroupVersionResource{
 		Group:    appv1.GroupName,
 		Version:  appv1.SchemeGroupVersion.Version,
 		Resource: "statefulsets",

@@ -39,6 +39,10 @@ const (
 
 	// WorkConditionTypeAvailable represents workload in Work is available on the spoke cluster.
 	WorkConditionTypeAvailable = "Available"
+
+	// WorkConditionTypeDiffReported reports whether Fleet has successfully reported the
+	// configuration difference between the states in the hub cluster and a member cluster.
+	WorkConditionTypeDiffReported = "DiffReported"
 )
 
 // This api is copied from https://github.com/kubernetes-sigs/work-api/blob/master/pkg/apis/v1alpha1/work_types.go.

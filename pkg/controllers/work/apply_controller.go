@@ -441,10 +441,10 @@ func trackResourceAvailability(gvr schema.GroupVersionResource, curObj *unstruct
 	case utils.DeploymentGVR:
 		return trackDeploymentAvailability(curObj)
 
-	case utils.StatefulSettGVR:
+	case utils.StatefulSetGVR:
 		return trackStatefulSetAvailability(curObj)
 
-	case utils.DaemonSettGVR:
+	case utils.DaemonSetGVR:
 		return trackDaemonSetAvailability(curObj)
 
 	case utils.ServiceGVR:
