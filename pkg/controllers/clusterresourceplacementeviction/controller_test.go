@@ -237,6 +237,13 @@ func TestValidateEviction(t *testing.T) {
 				Client: fakeClient,
 			}
 			gotValidationResult, gotErr := r.validateEviction(ctx, tc.eviction)
+
+			// Since default values are applied to the affected CRP in the eviction controller; the
+			// the same must be done on the expected result as well.
+			if tc.wantValidationResult.crp != nil {
+				defaulter.SetDefaultsClusterResourcePlacement(tc.wantValidationResult.crp)
+			}
+
 			if diff := cmp.Diff(tc.wantValidationResult, gotValidationResult, validationResultCmpOptions...); diff != "" {
 				t.Errorf("validateEviction() validation result mismatch (-want, +got):\n%s", diff)
 			}
