@@ -12,8 +12,17 @@ const (
 	// ResourceOverrideKind is the kind of the ResourceOverride.
 	ResourceOverrideKind = "ResourceOverride"
 
-	// ResourceOverrideSnapshotKind is the kind of the ResourceOverrideSnapshotKind.
+	// ResourceOverrideSnapshotKind is the kind of the ResourceOverrideSnapshot.
 	ResourceOverrideSnapshotKind = "ResourceOverrideSnapshot"
+
+	// ClusterStagedUpdateRunKind is the kind of the ClusterStagedUpdateRun.
+	ClusterStagedUpdateRunKind = "ClusterStagedUpdateRun"
+
+	// ClusterStagedUpdateStrategyKind is the kind of the ClusterStagedUpdateStrategy.
+	ClusterStagedUpdateStrategyKind = "ClusterStagedUpdateStrategy"
+
+	// ClusterApprovalRequestKind is the kind of the ClusterApprovalRequest.
+	ClusterApprovalRequestKind = "ClusterApprovalRequest"
 
 	// ClusterStagedUpdateRunFinalizer is used by the ClusterStagedUpdateRun controller to make sure that the ClusterStagedUpdateRun
 	// object is not deleted until all its dependent resources are deleted.

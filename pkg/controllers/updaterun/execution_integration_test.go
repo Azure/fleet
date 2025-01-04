@@ -64,14 +64,14 @@ var _ = Describe("UpdateRun execution tests", func() {
 			}
 			// reserse the order of the clusters by index
 			targetClusters[i] = generateTestMemberCluster(numTargetClusters-1-i, "cluster-"+strconv.Itoa(i), map[string]string{"group": "prod", "region": region})
-			resourceBindings[i] = generateTestClusterResourceBinding(policySnapshot.Name, targetClusters[i].Name)
+			resourceBindings[i] = generateTestClusterResourceBinding(policySnapshot.Name, targetClusters[i].Name, placementv1beta1.BindingStateScheduled)
 		}
 
 		unscheduledCluster = make([]*clusterv1beta1.MemberCluster, numUnscheduledClusters)
 		for i := range unscheduledCluster {
 			unscheduledCluster[i] = generateTestMemberCluster(i, "unscheduled-cluster-"+strconv.Itoa(i), map[string]string{"group": "staging"})
 			// update the policySnapshot name so that these clusters are considered to-be-deleted
-			resourceBindings[numTargetClusters+i] = generateTestClusterResourceBinding(policySnapshot.Name+"a", unscheduledCluster[i].Name)
+			resourceBindings[numTargetClusters+i] = generateTestClusterResourceBinding(policySnapshot.Name+"a", unscheduledCluster[i].Name, placementv1beta1.BindingStateUnscheduled)
 		}
 
 		var err error
@@ -215,7 +215,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
 
-		It("Should mark the 3rd cluster in the 1st stage as succeeded", func() {
+		It("Should mark the 3rd cluster in the 1st stage as succeeded after marking the binding available", func() {
 			By("Validating the 3rd clusterResourceBinding is updated to Bound")
 			binding := resourceBindings[numTargetClusters-5] // cluster-5
 			validateBindingState(ctx, binding, resourceSnapshot.Name, updateRun, 0)
@@ -493,6 +493,11 @@ func validateBindingState(ctx context.Context, binding *placementv1beta1.Cluster
 		}
 		if diff := cmp.Diff(binding.Spec.ApplyStrategy, updateRun.Status.ApplyStrategy); diff != "" {
 			return fmt.Errorf("binding %s has different applyStrategy (-want +got):\n%s", binding.Name, diff)
+		}
+
+		rolloutStartedCond := binding.GetCondition(string(placementv1beta1.ResourceBindingRolloutStarted))
+		if !condition.IsConditionStatusTrue(rolloutStartedCond, binding.Generation) {
+			return fmt.Errorf("binding %s does not have RolloutStarted condition", binding.Name)
 		}
 		return nil
 	}, timeout, interval).Should(Succeed(), "failed to validate the binding state")
