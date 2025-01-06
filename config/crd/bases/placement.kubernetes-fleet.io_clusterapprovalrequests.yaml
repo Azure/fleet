@@ -19,7 +19,20 @@ spec:
     singular: clusterapprovalrequest
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.parentStageRollout
+      name: UpdateRun
+      type: string
+    - jsonPath: .spec.targetStage
+      name: Stage
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Approved")].status
+      name: Approved
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: |-
@@ -150,7 +163,20 @@ spec:
     storage: false
     subresources:
       status: {}
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.parentStageRollout
+      name: UpdateRun
+      type: string
+    - jsonPath: .spec.targetStage
+      name: Stage
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Approved")].status
+      name: Approved
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: |-

@@ -19,7 +19,30 @@ spec:
     singular: clusterstagedupdaterun
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.placementName
+      name: Placement
+      type: string
+    - jsonPath: .spec.resourceSnapshotIndex
+      name: ResourceSnapshot
+      type: string
+    - jsonPath: .spec.stagedRolloutStrategyName
+      name: Strategy
+      priority: 1
+      type: string
+    - jsonPath: .status.policySnapshotIndexUsed
+      name: PolicySnapshot
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Initialized")].status
+      name: Initialized
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Succeeded")].status
+      name: Succeeded
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: |-
@@ -1213,7 +1236,30 @@ spec:
     storage: false
     subresources:
       status: {}
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.placementName
+      name: Placement
+      type: string
+    - jsonPath: .spec.resourceSnapshotIndex
+      name: ResourceSnapshot
+      type: string
+    - jsonPath: .spec.stagedRolloutStrategyName
+      name: Strategy
+      priority: 1
+      type: string
+    - jsonPath: .status.policySnapshotIndexUsed
+      name: PolicySnapshot
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Initialized")].status
+      name: Initialized
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Succeeded")].status
+      name: Succeeded
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: |-
