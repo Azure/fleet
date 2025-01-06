@@ -32,7 +32,7 @@ var (
 	cmpOptions = []cmp.Option{
 		cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime"),
 		cmpopts.IgnoreFields(metav1.Condition{}, "Message"),
-		cmpopts.IgnoreFields(placementv1alpha1.StageUpdatingStatus{}, "StartTime", "EndTime"),
+		cmpopts.IgnoreFields(placementv1beta1.StageUpdatingStatus{}, "StartTime", "EndTime"),
 	}
 )
 
@@ -42,10 +42,10 @@ const (
 )
 
 var _ = Describe("Updaterun initialization tests", func() {
-	var updateRun *placementv1alpha1.ClusterStagedUpdateRun
+	var updateRun *placementv1beta1.ClusterStagedUpdateRun
 	var crp *placementv1beta1.ClusterResourcePlacement
 	var policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot
-	var updateStrategy *placementv1alpha1.ClusterStagedUpdateStrategy
+	var updateStrategy *placementv1beta1.ClusterStagedUpdateStrategy
 	var resourceBindings []*placementv1beta1.ClusterResourceBinding
 	var targetClusters []*clusterv1beta1.MemberCluster
 	var unscheduledCluster []*clusterv1beta1.MemberCluster
@@ -465,9 +465,9 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Context("Test validateAfterStageTask", func() {
 				It("Should fail to initialize if any after stage task has 2 same tasks", func() {
 					By("Creating a clusterStagedUpdateStrategy with 2 same after stage tasks")
-					updateStrategy.Spec.Stages[0].AfterStageTasks = []placementv1alpha1.AfterStageTask{
-						{Type: placementv1alpha1.AfterStageTaskTypeTimedWait},
-						{Type: placementv1alpha1.AfterStageTaskTypeTimedWait},
+					updateStrategy.Spec.Stages[0].AfterStageTasks = []placementv1beta1.AfterStageTask{
+						{Type: placementv1beta1.AfterStageTaskTypeTimedWait},
+						{Type: placementv1beta1.AfterStageTaskTypeTimedWait},
 					}
 					Expect(k8sClient.Create(ctx, updateStrategy)).To(Succeed())
 
@@ -480,8 +480,8 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 				It("Should fail to initialize if the wait time is not valid", func() {
 					By("Creating a clusterStagedUpdateStrategy with invalid wait time duration")
-					updateStrategy.Spec.Stages[0].AfterStageTasks = []placementv1alpha1.AfterStageTask{
-						{Type: placementv1alpha1.AfterStageTaskTypeTimedWait, WaitTime: metav1.Duration{Duration: time.Second * 0}},
+					updateStrategy.Spec.Stages[0].AfterStageTasks = []placementv1beta1.AfterStageTask{
+						{Type: placementv1beta1.AfterStageTaskTypeTimedWait, WaitTime: metav1.Duration{Duration: time.Second * 0}},
 					}
 					Expect(k8sClient.Create(ctx, updateStrategy)).To(Succeed())
 
@@ -553,7 +553,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 				}
 				// initialization should fail.
 				want.Conditions = []metav1.Condition{
-					generateFalseCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionInitialized),
+					generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionInitialized),
 				}
 
 				if diff := cmp.Diff(*want, updateRun.Status, cmpOptions...); diff != "" {
@@ -651,16 +651,16 @@ var _ = Describe("Updaterun initialization tests", func() {
 	})
 })
 
-func validateFailedInitCondition(ctx context.Context, updateRun *placementv1alpha1.ClusterStagedUpdateRun, message string) {
+func validateFailedInitCondition(ctx context.Context, updateRun *placementv1beta1.ClusterStagedUpdateRun, message string) {
 	Eventually(func() error {
 		if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
 			return err
 		}
-		wantConditions := []metav1.Condition{generateFalseCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionInitialized)}
+		wantConditions := []metav1.Condition{generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionInitialized)}
 		if diff := cmp.Diff(wantConditions, updateRun.Status.Conditions, cmpOptions...); diff != "" {
 			return fmt.Errorf("condition mismatch: (-want +got):\n%s", diff)
 		}
-		initCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1alpha1.StagedUpdateRunConditionInitialized))
+		initCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
 		if !strings.Contains(initCond.Message, message) {
 			return fmt.Errorf("condition message mismatch: got %s, want %s", initCond.Message, message)
 		}
@@ -670,50 +670,50 @@ func validateFailedInitCondition(ctx context.Context, updateRun *placementv1alph
 
 func generateSucceededInitializationStatus(
 	crp *placementv1beta1.ClusterResourcePlacement,
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 	policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot,
-	updateStrategy *placementv1alpha1.ClusterStagedUpdateStrategy,
+	updateStrategy *placementv1beta1.ClusterStagedUpdateStrategy,
 	clusterResourceOverride *placementv1alpha1.ClusterResourceOverrideSnapshot,
-) *placementv1alpha1.StagedUpdateRunStatus {
-	return &placementv1alpha1.StagedUpdateRunStatus{
+) *placementv1beta1.StagedUpdateRunStatus {
+	return &placementv1beta1.StagedUpdateRunStatus{
 		PolicySnapshotIndexUsed:      policySnapshot.Name,
 		PolicyObservedClusterCount:   numberOfClustersAnnotation,
 		ApplyStrategy:                crp.Spec.Strategy.ApplyStrategy.DeepCopy(),
 		StagedUpdateStrategySnapshot: &updateStrategy.Spec,
-		StagesStatus: []placementv1alpha1.StageUpdatingStatus{
+		StagesStatus: []placementv1beta1.StageUpdatingStatus{
 			{
 				StageName: "stage1",
-				Clusters: []placementv1alpha1.ClusterUpdatingStatus{
+				Clusters: []placementv1beta1.ClusterUpdatingStatus{
 					{ClusterName: "cluster-9", ClusterResourceOverrideSnapshots: []string{clusterResourceOverride.Name}},
 					{ClusterName: "cluster-7", ClusterResourceOverrideSnapshots: []string{clusterResourceOverride.Name}},
 					{ClusterName: "cluster-5", ClusterResourceOverrideSnapshots: []string{clusterResourceOverride.Name}},
 					{ClusterName: "cluster-3", ClusterResourceOverrideSnapshots: []string{clusterResourceOverride.Name}},
 					{ClusterName: "cluster-1", ClusterResourceOverrideSnapshots: []string{clusterResourceOverride.Name}},
 				},
-				AfterStageTaskStatus: []placementv1alpha1.AfterStageTaskStatus{
-					{Type: placementv1alpha1.AfterStageTaskTypeTimedWait},
+				AfterStageTaskStatus: []placementv1beta1.AfterStageTaskStatus{
+					{Type: placementv1beta1.AfterStageTaskTypeTimedWait},
 				},
 			},
 			{
 				StageName: "stage2",
-				Clusters: []placementv1alpha1.ClusterUpdatingStatus{
+				Clusters: []placementv1beta1.ClusterUpdatingStatus{
 					{ClusterName: "cluster-0"},
 					{ClusterName: "cluster-2"},
 					{ClusterName: "cluster-4"},
 					{ClusterName: "cluster-6"},
 					{ClusterName: "cluster-8"},
 				},
-				AfterStageTaskStatus: []placementv1alpha1.AfterStageTaskStatus{
+				AfterStageTaskStatus: []placementv1beta1.AfterStageTaskStatus{
 					{
-						Type:                placementv1alpha1.AfterStageTaskTypeApproval,
+						Type:                placementv1beta1.AfterStageTaskTypeApproval,
 						ApprovalRequestName: updateRun.Name + "-stage2",
 					},
 				},
 			},
 		},
-		DeletionStageStatus: &placementv1alpha1.StageUpdatingStatus{
+		DeletionStageStatus: &placementv1beta1.StageUpdatingStatus{
 			StageName: "kubernetes-fleet.io/deleteStage",
-			Clusters: []placementv1alpha1.ClusterUpdatingStatus{
+			Clusters: []placementv1beta1.ClusterUpdatingStatus{
 				{ClusterName: "unscheduled-cluster-0"},
 				{ClusterName: "unscheduled-cluster-1"},
 				{ClusterName: "unscheduled-cluster-2"},
@@ -721,20 +721,20 @@ func generateSucceededInitializationStatus(
 		},
 		Conditions: []metav1.Condition{
 			// initialization should succeed!
-			generateTrueCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionInitialized),
+			generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionInitialized),
 		},
 	}
 }
 
 func generateExecutionStartedStatus(
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
-	initialized *placementv1alpha1.StagedUpdateRunStatus,
-) *placementv1alpha1.StagedUpdateRunStatus {
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
+	initialized *placementv1beta1.StagedUpdateRunStatus,
+) *placementv1beta1.StagedUpdateRunStatus {
 	// Mark updateRun execution has started.
-	initialized.Conditions = append(initialized.Conditions, generateTrueCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionProgressing))
+	initialized.Conditions = append(initialized.Conditions, generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing))
 	// Mark updateRun 1st stage has started.
-	initialized.StagesStatus[0].Conditions = append(initialized.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionProgressing))
+	initialized.StagesStatus[0].Conditions = append(initialized.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing))
 	// Mark updateRun 1st cluster in the 1st stage has started.
-	initialized.StagesStatus[0].Clusters[0].Conditions = []metav1.Condition{generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionStarted)}
+	initialized.StagesStatus[0].Clusters[0].Conditions = []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted)}
 	return initialized
 }

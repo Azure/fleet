@@ -28,16 +28,16 @@ import (
 )
 
 var _ = Describe("UpdateRun validation tests", func() {
-	var updateRun *placementv1alpha1.ClusterStagedUpdateRun
+	var updateRun *placementv1beta1.ClusterStagedUpdateRun
 	var crp *placementv1beta1.ClusterResourcePlacement
 	var policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot
-	var updateStrategy *placementv1alpha1.ClusterStagedUpdateStrategy
+	var updateStrategy *placementv1beta1.ClusterStagedUpdateStrategy
 	var resourceBindings []*placementv1beta1.ClusterResourceBinding
 	var targetClusters []*clusterv1beta1.MemberCluster
 	var unscheduledCluster []*clusterv1beta1.MemberCluster
 	var resourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 	var clusterResourceOverride *placementv1alpha1.ClusterResourceOverrideSnapshot
-	var wantStatus *placementv1alpha1.StagedUpdateRunStatus
+	var wantStatus *placementv1beta1.StagedUpdateRunStatus
 
 	BeforeEach(func() {
 		testUpdateRunName = "updaterun-" + utils.RandStr()
@@ -296,7 +296,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 		It("Should fail to validate if the number of stages has changed", func() {
 			By("Adding a stage to the updateRun status")
-			updateRun.Status.StagedUpdateStrategySnapshot.Stages = append(updateRun.Status.StagedUpdateStrategySnapshot.Stages, placementv1alpha1.StageConfig{
+			updateRun.Status.StagedUpdateStrategySnapshot.Stages = append(updateRun.Status.StagedUpdateStrategySnapshot.Stages, placementv1beta1.StageConfig{
 				Name: "stage3",
 				LabelSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{
@@ -309,7 +309,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 			By("Validating the validation failed")
 			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
-			wantStatus.StagedUpdateStrategySnapshot.Stages = append(wantStatus.StagedUpdateStrategySnapshot.Stages, placementv1alpha1.StageConfig{
+			wantStatus.StagedUpdateStrategySnapshot.Stages = append(wantStatus.StagedUpdateStrategySnapshot.Stages, placementv1beta1.StageConfig{
 				Name: "stage3",
 				LabelSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{
@@ -358,8 +358,8 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 func validateClusterStagedUpdateRunStatus(
 	ctx context.Context,
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
-	want *placementv1alpha1.StagedUpdateRunStatus,
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
+	want *placementv1beta1.StagedUpdateRunStatus,
 	message string,
 ) {
 	Eventually(func() error {
@@ -371,7 +371,7 @@ func validateClusterStagedUpdateRunStatus(
 			return fmt.Errorf("status mismatch: (-want +got):\n%s", diff)
 		}
 		if message != "" {
-			succeedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1alpha1.StagedUpdateRunConditionSucceeded))
+			succeedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionSucceeded))
 			if !strings.Contains(succeedCond.Message, message) {
 				return fmt.Errorf("condition message mismatch: got %s, want %s", succeedCond.Message, message)
 			}
@@ -382,8 +382,8 @@ func validateClusterStagedUpdateRunStatus(
 
 func validateClusterStagedUpdateRunStatusConsistently(
 	ctx context.Context,
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
-	want *placementv1alpha1.StagedUpdateRunStatus,
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
+	want *placementv1beta1.StagedUpdateRunStatus,
 	message string,
 ) {
 	Consistently(func() error {
@@ -395,7 +395,7 @@ func validateClusterStagedUpdateRunStatusConsistently(
 			return fmt.Errorf("status mismatch: (-want +got):\n%s", diff)
 		}
 		if message != "" {
-			succeedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1alpha1.StagedUpdateRunConditionSucceeded))
+			succeedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionSucceeded))
 			if !strings.Contains(succeedCond.Message, message) {
 				return fmt.Errorf("condition message mismatch: got %s, want %s", succeedCond.Message, message)
 			}
@@ -405,9 +405,9 @@ func validateClusterStagedUpdateRunStatusConsistently(
 }
 
 func generateFailedValidationStatus(
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
-	initialized *placementv1alpha1.StagedUpdateRunStatus,
-) *placementv1alpha1.StagedUpdateRunStatus {
-	initialized.Conditions = append(initialized.Conditions, generateFalseCondition(updateRun, placementv1alpha1.StagedUpdateRunConditionSucceeded))
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
+	initialized *placementv1beta1.StagedUpdateRunStatus,
+) *placementv1beta1.StagedUpdateRunStatus {
+	initialized.Conditions = append(initialized.Conditions, generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
 	return initialized
 }

@@ -87,9 +87,9 @@ var (
 	}
 
 	clusterStagedUpdateRunGVKs = []schema.GroupVersionKind{
-		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ClusterStagedUpdateRunKind),
-		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ClusterStagedUpdateStrategyKind),
-		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ClusterApprovalRequestKind),
+		placementv1alpha1.GroupVersion.WithKind(placementv1beta1.ClusterStagedUpdateRunKind),
+		placementv1alpha1.GroupVersion.WithKind(placementv1beta1.ClusterStagedUpdateStrategyKind),
+		placementv1alpha1.GroupVersion.WithKind(placementv1beta1.ClusterApprovalRequestKind),
 	}
 
 	clusterInventoryGVKs = []schema.GroupVersionKind{

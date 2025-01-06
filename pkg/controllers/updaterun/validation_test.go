@@ -11,13 +11,12 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 func TestValidateClusterUpdatingStatus(t *testing.T) {
-	updateRun := &placementv1alpha1.ClusterStagedUpdateRun{
+	updateRun := &placementv1beta1.ClusterStagedUpdateRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "test-run",
 			Generation: 1,
@@ -29,7 +28,7 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 		curStage                   int
 		updatingStageIndex         int
 		lastFinishedStageIndex     int
-		stageStatus                *placementv1alpha1.StageUpdatingStatus
+		stageStatus                *placementv1beta1.StageUpdatingStatus
 		wantErr                    error
 		wantUpdatingStageIndex     int
 		wantLastFinishedStageIndex int
@@ -39,9 +38,9 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 			curStage:               2,
 			updatingStageIndex:     1,
 			lastFinishedStageIndex: -1,
-			stageStatus: &placementv1alpha1.StageUpdatingStatus{
+			stageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName:  "test-stage",
-				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionSucceeded)},
+				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded)},
 			},
 			wantErr:                    wrapErr(true, fmt.Errorf("the finished stage `2` is after the updating stage `1`")),
 			wantUpdatingStageIndex:     -1,
@@ -52,13 +51,13 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 			curStage:               0,
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: -1,
-			stageStatus: &placementv1alpha1.StageUpdatingStatus{
+			stageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName:  "test-stage",
-				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionSucceeded)},
-				Clusters: []placementv1alpha1.ClusterUpdatingStatus{
+				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded)},
+				Clusters: []placementv1beta1.ClusterUpdatingStatus{
 					{
 						ClusterName: "cluster-1",
-						Conditions:  []metav1.Condition{generateFalseCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionSucceeded)},
+						Conditions:  []metav1.Condition{generateFalseCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded)},
 					},
 				},
 			},
@@ -71,10 +70,10 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 			curStage:               0,
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: -1,
-			stageStatus: &placementv1alpha1.StageUpdatingStatus{
+			stageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName:  "test-stage",
-				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionSucceeded)},
-				Clusters: []placementv1alpha1.ClusterUpdatingStatus{
+				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded)},
+				Clusters: []placementv1beta1.ClusterUpdatingStatus{
 					{ClusterName: "cluster-1"},
 				},
 			},
@@ -87,9 +86,9 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 			curStage:               2,
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: 0,
-			stageStatus: &placementv1alpha1.StageUpdatingStatus{
+			stageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName:  "test-stage",
-				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionSucceeded)},
+				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded)},
 			},
 			wantErr:                    wrapErr(true, fmt.Errorf("the finished stage `test-stage` is not right after the last finished stage with index `0`")),
 			wantUpdatingStageIndex:     -1,
@@ -100,9 +99,9 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 			curStage:               0,
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: -1,
-			stageStatus: &placementv1alpha1.StageUpdatingStatus{
+			stageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName:  "test-stage",
-				Conditions: []metav1.Condition{generateFalseCondition(updateRun, placementv1alpha1.StageUpdatingConditionSucceeded)},
+				Conditions: []metav1.Condition{generateFalseCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded)},
 			},
 			wantErr:                    wrapErr(false, fmt.Errorf("the stage `test-stage` has failed, err: ")),
 			wantUpdatingStageIndex:     -1,
@@ -113,9 +112,9 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 			curStage:               1,
 			updatingStageIndex:     0,
 			lastFinishedStageIndex: -1,
-			stageStatus: &placementv1alpha1.StageUpdatingStatus{
+			stageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName:  "test-stage",
-				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionProgressing)},
+				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing)},
 			},
 			wantErr:                    wrapErr(true, fmt.Errorf("the stage `test-stage` is updating, but there is already a stage with index `0` updating")),
 			wantUpdatingStageIndex:     -1,
@@ -126,9 +125,9 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 			curStage:               1,
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: -1,
-			stageStatus: &placementv1alpha1.StageUpdatingStatus{
+			stageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName:  "test-stage",
-				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionProgressing)},
+				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing)},
 			},
 			wantErr:                    wrapErr(true, fmt.Errorf("the updating stage `test-stage` is not right after the last finished stage with index `-1`")),
 			wantUpdatingStageIndex:     -1,
@@ -139,17 +138,17 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 			curStage:               0,
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: -1,
-			stageStatus: &placementv1alpha1.StageUpdatingStatus{
+			stageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName:  "test-stage",
-				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionProgressing)},
-				Clusters: []placementv1alpha1.ClusterUpdatingStatus{
+				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing)},
+				Clusters: []placementv1beta1.ClusterUpdatingStatus{
 					{
 						ClusterName: "cluster-1",
-						Conditions:  []metav1.Condition{generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionStarted)},
+						Conditions:  []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted)},
 					},
 					{
 						ClusterName: "cluster-2",
-						Conditions:  []metav1.Condition{generateTrueCondition(updateRun, placementv1alpha1.ClusterUpdatingConditionStarted)},
+						Conditions:  []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted)},
 					},
 				},
 			},
@@ -162,7 +161,7 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 			curStage:               0,
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: -1,
-			stageStatus: &placementv1alpha1.StageUpdatingStatus{
+			stageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName: "test-stage",
 			},
 			wantErr:                    nil,
@@ -174,9 +173,9 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 			curStage:               2,
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: 1,
-			stageStatus: &placementv1alpha1.StageUpdatingStatus{
+			stageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName:  "test-stage",
-				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionProgressing)},
+				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing)},
 			},
 			wantErr:                    nil,
 			wantUpdatingStageIndex:     2,
@@ -187,11 +186,11 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 			curStage:               2,
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: 1,
-			stageStatus: &placementv1alpha1.StageUpdatingStatus{
+			stageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName: "test-stage",
 				Conditions: []metav1.Condition{
-					generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionProgressing),
-					generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionSucceeded),
+					generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing),
+					generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded),
 				},
 			},
 			wantErr:                    nil,
@@ -223,7 +222,7 @@ func TestValidateClusterUpdatingStatus(t *testing.T) {
 
 func TestValidateDeleteStageStatus(t *testing.T) {
 	totalStages := 3
-	updateRun := &placementv1alpha1.ClusterStagedUpdateRun{
+	updateRun := &placementv1beta1.ClusterStagedUpdateRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "test-run",
 			Generation: 1,
@@ -235,7 +234,7 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 		updatingStageIndex     int
 		lastFinishedStageIndex int
 		toBeDeletedBindings    []*placementv1beta1.ClusterResourceBinding
-		deleteStageStatus      *placementv1alpha1.StageUpdatingStatus
+		deleteStageStatus      *placementv1beta1.StageUpdatingStatus
 		wantErr                error
 		wantUpdatingStageIndex int
 	}{
@@ -257,9 +256,9 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 					Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: "cluster-2"},
 				},
 			},
-			deleteStageStatus: &placementv1alpha1.StageUpdatingStatus{
+			deleteStageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName: "delete-stage",
-				Clusters: []placementv1alpha1.ClusterUpdatingStatus{
+				Clusters: []placementv1beta1.ClusterUpdatingStatus{
 					{ClusterName: "cluster-1"},
 				},
 			},
@@ -276,9 +275,9 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 					Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: "cluster-1"},
 				},
 			},
-			deleteStageStatus: &placementv1alpha1.StageUpdatingStatus{
+			deleteStageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName: "delete-stage",
-				Clusters: []placementv1alpha1.ClusterUpdatingStatus{
+				Clusters: []placementv1beta1.ClusterUpdatingStatus{
 					{ClusterName: "cluster-1"},
 					{ClusterName: "cluster-2"},
 				},
@@ -296,9 +295,9 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 					Spec:       placementv1beta1.ResourceBindingSpec{TargetCluster: "cluster-1"},
 				},
 			},
-			deleteStageStatus: &placementv1alpha1.StageUpdatingStatus{
+			deleteStageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName: "delete-stage",
-				Clusters: []placementv1alpha1.ClusterUpdatingStatus{
+				Clusters: []placementv1beta1.ClusterUpdatingStatus{
 					{ClusterName: "cluster-1"},
 				},
 			},
@@ -309,7 +308,7 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 			name:                   "validateDeleteStageStatus should return 0 when both updatingStageIndex and lastFinishedStageIndex are -1",
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: -1,
-			deleteStageStatus:      &placementv1alpha1.StageUpdatingStatus{StageName: "delete-stage"},
+			deleteStageStatus:      &placementv1beta1.StageUpdatingStatus{StageName: "delete-stage"},
 			wantErr:                nil,
 			wantUpdatingStageIndex: 0,
 		},
@@ -317,9 +316,9 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 			name:                   "validateDeleteStageStatus should return error if there's stage updating but the delete stage has started",
 			updatingStageIndex:     2,
 			lastFinishedStageIndex: 1,
-			deleteStageStatus: &placementv1alpha1.StageUpdatingStatus{
+			deleteStageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName:  "delete-stage",
-				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionProgressing)},
+				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing)},
 			},
 			wantErr:                wrapErr(true, fmt.Errorf("the delete stage is active, but there are still stages updating, updatingStageIndex: 2, lastFinishedStageIndex: 1")),
 			wantUpdatingStageIndex: -1,
@@ -328,9 +327,9 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 			name:                   "validateDeleteStageStatus should return error if there's stage not started yet but the delete stage has finished",
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: 1, // < totalStages - 1
-			deleteStageStatus: &placementv1alpha1.StageUpdatingStatus{
+			deleteStageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName:  "delete-stage",
-				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionSucceeded)},
+				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded)},
 			},
 			wantErr:                wrapErr(true, fmt.Errorf("the delete stage is active, but there are still stages updating, updatingStageIndex: -1, lastFinishedStageIndex: 1")),
 			wantUpdatingStageIndex: -1,
@@ -339,9 +338,9 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 			name:                   "validateDeleteStageStatus should return error if there's stage not started yet but the delete stage has failed",
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: 1, // < totalStages - 1
-			deleteStageStatus: &placementv1alpha1.StageUpdatingStatus{
+			deleteStageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName:  "delete-stage",
-				Conditions: []metav1.Condition{generateFalseCondition(updateRun, placementv1alpha1.StageUpdatingConditionSucceeded)},
+				Conditions: []metav1.Condition{generateFalseCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded)},
 			},
 			wantErr:                wrapErr(true, fmt.Errorf("the delete stage is active, but there are still stages updating, updatingStageIndex: -1, lastFinishedStageIndex: 1")),
 			wantUpdatingStageIndex: -1,
@@ -349,7 +348,7 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 		{
 			name:                   "validateDeleteStageStatus should return the updatingStageIndex if there's still stage updating",
 			updatingStageIndex:     2,
-			deleteStageStatus:      &placementv1alpha1.StageUpdatingStatus{StageName: "delete-stage"},
+			deleteStageStatus:      &placementv1beta1.StageUpdatingStatus{StageName: "delete-stage"},
 			wantErr:                nil,
 			wantUpdatingStageIndex: 2,
 		},
@@ -357,7 +356,7 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 			name:                   "validateDeleteStageStatus should return the next stage after lastUpdatingStageIndex if there's no stage updating but stage not started yet",
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: 0,
-			deleteStageStatus:      &placementv1alpha1.StageUpdatingStatus{StageName: "delete-stage"},
+			deleteStageStatus:      &placementv1beta1.StageUpdatingStatus{StageName: "delete-stage"},
 			wantErr:                nil,
 			wantUpdatingStageIndex: 1,
 		},
@@ -365,9 +364,9 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 			name:                   "validateDeleteStageStatus should return -1 if all stages have finished",
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: totalStages - 1,
-			deleteStageStatus: &placementv1alpha1.StageUpdatingStatus{
+			deleteStageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName:  "delete-stage",
-				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionSucceeded)},
+				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded)},
 			},
 			wantErr:                nil,
 			wantUpdatingStageIndex: -1,
@@ -376,9 +375,9 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 			name:                   "validateDeleteStageStatus should return error if the delete stage has failed",
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: totalStages - 1,
-			deleteStageStatus: &placementv1alpha1.StageUpdatingStatus{
+			deleteStageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName:  "delete-stage",
-				Conditions: []metav1.Condition{generateFalseCondition(updateRun, placementv1alpha1.StageUpdatingConditionSucceeded)},
+				Conditions: []metav1.Condition{generateFalseCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded)},
 			},
 			wantErr:                wrapErr(false, fmt.Errorf("the delete stage has failed, err: ")),
 			wantUpdatingStageIndex: -1,
@@ -387,9 +386,9 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 			name:                   "validateDeleteStageStatus should return totalStages if the delete stage is still running",
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: totalStages - 1,
-			deleteStageStatus: &placementv1alpha1.StageUpdatingStatus{
+			deleteStageStatus: &placementv1beta1.StageUpdatingStatus{
 				StageName:  "delete-stage",
-				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1alpha1.StageUpdatingConditionProgressing)},
+				Conditions: []metav1.Condition{generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing)},
 			},
 			wantErr:                nil,
 			wantUpdatingStageIndex: totalStages,
@@ -398,7 +397,7 @@ func TestValidateDeleteStageStatus(t *testing.T) {
 			name:                   "validateDeleteStageStatus should return totalStages if all updating stages have finished but the delete stage is not active or finished",
 			updatingStageIndex:     -1,
 			lastFinishedStageIndex: totalStages - 1,
-			deleteStageStatus:      &placementv1alpha1.StageUpdatingStatus{StageName: "delete-stage"},
+			deleteStageStatus:      &placementv1beta1.StageUpdatingStatus{StageName: "delete-stage"},
 			wantErr:                nil,
 			wantUpdatingStageIndex: totalStages,
 		},

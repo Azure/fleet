@@ -18,7 +18,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/annotations"
 	"go.goms.io/fleet/pkg/utils/condition"
@@ -30,7 +29,7 @@ import (
 // This function is called only once during the initialization of the ClusterStagedUpdateRun.
 func (r *Reconciler) initialize(
 	ctx context.Context,
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 ) ([]*placementv1beta1.ClusterResourceBinding, []*placementv1beta1.ClusterResourceBinding, error) {
 	// Validate the ClusterResourcePlace object referenced by the ClusterStagedUpdateRun.
 	placementName, err := r.validateCRP(ctx, updateRun)
@@ -60,7 +59,7 @@ func (r *Reconciler) initialize(
 }
 
 // validateCRP validates the ClusterResourcePlacement object referenced by the ClusterStagedUpdateRun.
-func (r *Reconciler) validateCRP(ctx context.Context, updateRun *placementv1alpha1.ClusterStagedUpdateRun) (string, error) {
+func (r *Reconciler) validateCRP(ctx context.Context, updateRun *placementv1beta1.ClusterStagedUpdateRun) (string, error) {
 	updateRunRef := klog.KObj(updateRun)
 	// Fetch the ClusterResourcePlacement object.
 	placementName := updateRun.Spec.PlacementName
@@ -89,7 +88,7 @@ func (r *Reconciler) validateCRP(ctx context.Context, updateRun *placementv1alph
 func (r *Reconciler) determinePolicySnapshot(
 	ctx context.Context,
 	placementName string,
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 ) (*placementv1beta1.ClusterSchedulingPolicySnapshot, int, error) {
 	updateRunRef := klog.KObj(updateRun)
 	// Get the latest policy snapshot.
@@ -158,7 +157,7 @@ func (r *Reconciler) collectScheduledClusters(
 	ctx context.Context,
 	placementName string,
 	latestPolicySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot,
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 ) ([]*placementv1beta1.ClusterResourceBinding, []*placementv1beta1.ClusterResourceBinding, error) {
 	updateRunRef := klog.KObj(updateRun)
 	// List all the bindings according to the ClusterResourcePlacement.
@@ -208,11 +207,11 @@ func (r *Reconciler) generateStagesByStrategy(
 	ctx context.Context,
 	scheduledBindings []*placementv1beta1.ClusterResourceBinding,
 	toBeDeletedBindings []*placementv1beta1.ClusterResourceBinding,
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 ) error {
 	updateRunRef := klog.KObj(updateRun)
 	// Fetch the StagedUpdateStrategy referenced by StagedUpdateStrategyName.
-	var updateStrategy placementv1alpha1.ClusterStagedUpdateStrategy
+	var updateStrategy placementv1beta1.ClusterStagedUpdateStrategy
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: updateRun.Spec.StagedUpdateStrategyName}, &updateStrategy); err != nil {
 		klog.ErrorS(err, "Failed to get StagedUpdateStrategy", "stagedUpdateStrategy", updateRun.Spec.StagedUpdateStrategyName, "clusterStagedUpdateRun", updateRunRef)
 		if apierrors.IsNotFound(err) {
@@ -230,7 +229,7 @@ func (r *Reconciler) generateStagesByStrategy(
 	if err := r.computeRunStageStatus(ctx, scheduledBindings, updateRun); err != nil {
 		return err
 	}
-	toBeDeletedClusters := make([]placementv1alpha1.ClusterUpdatingStatus, len(toBeDeletedBindings))
+	toBeDeletedClusters := make([]placementv1beta1.ClusterUpdatingStatus, len(toBeDeletedBindings))
 	for i, binding := range toBeDeletedBindings {
 		klog.V(2).InfoS("Adding a cluster to the delete stage", "cluster", binding.Spec.TargetCluster, "clusterStagedUpdateStrategy", updateStrategy.Name, "clusterStagedUpdateRun", updateRunRef)
 		toBeDeletedClusters[i].ClusterName = binding.Spec.TargetCluster
@@ -239,8 +238,8 @@ func (r *Reconciler) generateStagesByStrategy(
 	sort.Slice(toBeDeletedClusters, func(i, j int) bool {
 		return toBeDeletedClusters[i].ClusterName < toBeDeletedClusters[j].ClusterName
 	})
-	updateRun.Status.DeletionStageStatus = &placementv1alpha1.StageUpdatingStatus{
-		StageName: placementv1alpha1.UpdateRunDeleteStageName,
+	updateRun.Status.DeletionStageStatus = &placementv1beta1.StageUpdatingStatus{
+		StageName: placementv1beta1.UpdateRunDeleteStageName,
 		Clusters:  toBeDeletedClusters,
 	}
 	return nil
@@ -250,7 +249,7 @@ func (r *Reconciler) generateStagesByStrategy(
 func (r *Reconciler) computeRunStageStatus(
 	ctx context.Context,
 	scheduledBindings []*placementv1beta1.ClusterResourceBinding,
-	updateRun *placementv1alpha1.ClusterStagedUpdateRun,
+	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 ) error {
 	updateRunRef := klog.KObj(updateRun)
 	updateStrategyName := updateRun.Spec.StagedUpdateStrategyName
@@ -261,7 +260,7 @@ func (r *Reconciler) computeRunStageStatus(
 	for _, binding := range scheduledBindings {
 		allSelectedClusters[binding.Spec.TargetCluster] = struct{}{}
 	}
-	stagesStatus := make([]placementv1alpha1.StageUpdatingStatus, 0, len(updateRun.Status.StagedUpdateStrategySnapshot.Stages))
+	stagesStatus := make([]placementv1beta1.StageUpdatingStatus, 0, len(updateRun.Status.StagedUpdateStrategySnapshot.Stages))
 
 	// Apply the label selectors from the ClusterStagedUpdateStrategy to filter the clusters.
 	for _, stage := range updateRun.Status.StagedUpdateStrategySnapshot.Stages {
@@ -272,7 +271,7 @@ func (r *Reconciler) computeRunStageStatus(
 			return fmt.Errorf("%w: %s", errInitializedFailed, invalidAfterStageErr.Error())
 		}
 
-		curStageUpdatingStatus := placementv1alpha1.StageUpdatingStatus{StageName: stage.Name}
+		curStageUpdatingStatus := placementv1beta1.StageUpdatingStatus{StageName: stage.Name}
 		var curStageClusters []clusterv1beta1.MemberCluster
 		labelSelector, err := metav1.LabelSelectorAsSelector(stage.LabelSelector)
 		if err != nil {
@@ -333,18 +332,18 @@ func (r *Reconciler) computeRunStageStatus(
 		}
 
 		// Record the clusters in the stage.
-		curStageUpdatingStatus.Clusters = make([]placementv1alpha1.ClusterUpdatingStatus, len(curStageClusters))
+		curStageUpdatingStatus.Clusters = make([]placementv1beta1.ClusterUpdatingStatus, len(curStageClusters))
 		for i, cluster := range curStageClusters {
 			klog.V(2).InfoS("Adding a cluster to the stage", "cluster", cluster.Name, "clusterStagedUpdateStrategy", updateStrategyName, "stage name", stage.Name, "clusterStagedUpdateRun", updateRunRef)
 			curStageUpdatingStatus.Clusters[i].ClusterName = cluster.Name
 		}
 
 		// Create the after stage tasks.
-		curStageUpdatingStatus.AfterStageTaskStatus = make([]placementv1alpha1.AfterStageTaskStatus, len(stage.AfterStageTasks))
+		curStageUpdatingStatus.AfterStageTaskStatus = make([]placementv1beta1.AfterStageTaskStatus, len(stage.AfterStageTasks))
 		for i, task := range stage.AfterStageTasks {
 			curStageUpdatingStatus.AfterStageTaskStatus[i].Type = task.Type
-			if task.Type == placementv1alpha1.AfterStageTaskTypeApproval {
-				curStageUpdatingStatus.AfterStageTaskStatus[i].ApprovalRequestName = fmt.Sprintf(placementv1alpha1.ApprovalTaskNameFmt, updateRun.Name, stage.Name)
+			if task.Type == placementv1beta1.AfterStageTaskTypeApproval {
+				curStageUpdatingStatus.AfterStageTaskStatus[i].ApprovalRequestName = fmt.Sprintf(placementv1beta1.ApprovalTaskNameFmt, updateRun.Name, stage.Name)
 			}
 		}
 		stagesStatus = append(stagesStatus, curStageUpdatingStatus)
@@ -367,12 +366,12 @@ func (r *Reconciler) computeRunStageStatus(
 
 // validateAfterStageTask valides the afterStageTasks in the stage defined in the clusterStagedUpdateStrategy.
 // The error returned from this function is not retryable.
-func validateAfterStageTask(tasks []placementv1alpha1.AfterStageTask) error {
+func validateAfterStageTask(tasks []placementv1beta1.AfterStageTask) error {
 	if len(tasks) == 2 && tasks[0].Type == tasks[1].Type {
 		return fmt.Errorf("afterStageTasks cannot have two tasks of the same type: %s", tasks[0].Type)
 	}
 	for i, task := range tasks {
-		if task.Type == placementv1alpha1.AfterStageTaskTypeTimedWait {
+		if task.Type == placementv1beta1.AfterStageTaskTypeTimedWait {
 			if task.WaitTime.Duration <= 0 {
 				return fmt.Errorf("task %d has wait duration <= 0", i)
 			}
@@ -382,7 +381,7 @@ func validateAfterStageTask(tasks []placementv1alpha1.AfterStageTask) error {
 }
 
 // recordOverrideSnapshots finds all the override snapshots that are associated with each cluster and record them in the ClusterStagedUpdateRun status.
-func (r *Reconciler) recordOverrideSnapshots(ctx context.Context, placementName string, updateRun *placementv1alpha1.ClusterStagedUpdateRun) error {
+func (r *Reconciler) recordOverrideSnapshots(ctx context.Context, placementName string, updateRun *placementv1beta1.ClusterStagedUpdateRun) error {
 	updateRunRef := klog.KObj(updateRun)
 	var masterResourceSnapshot placementv1beta1.ClusterResourceSnapshot
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: updateRun.Spec.ResourceSnapshotIndex}, &masterResourceSnapshot); err != nil {
@@ -434,9 +433,9 @@ func (r *Reconciler) recordOverrideSnapshots(ctx context.Context, placementName 
 }
 
 // recordInitializationSucceeded records the successful initialization condition in the ClusterStagedUpdateRun status.
-func (r *Reconciler) recordInitializationSucceeded(ctx context.Context, updateRun *placementv1alpha1.ClusterStagedUpdateRun) error {
+func (r *Reconciler) recordInitializationSucceeded(ctx context.Context, updateRun *placementv1beta1.ClusterStagedUpdateRun) error {
 	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
-		Type:               string(placementv1alpha1.StagedUpdateRunConditionInitialized),
+		Type:               string(placementv1beta1.StagedUpdateRunConditionInitialized),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: updateRun.Generation,
 		Reason:             condition.UpdateRunInitializeSucceededReason,
@@ -451,9 +450,9 @@ func (r *Reconciler) recordInitializationSucceeded(ctx context.Context, updateRu
 }
 
 // recordInitializationFailed records the failed initialization condition in the ClusterStagedUpdateRun status.
-func (r *Reconciler) recordInitializationFailed(ctx context.Context, updateRun *placementv1alpha1.ClusterStagedUpdateRun, message string) error {
+func (r *Reconciler) recordInitializationFailed(ctx context.Context, updateRun *placementv1beta1.ClusterStagedUpdateRun, message string) error {
 	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
-		Type:               string(placementv1alpha1.StagedUpdateRunConditionInitialized),
+		Type:               string(placementv1beta1.StagedUpdateRunConditionInitialized),
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: updateRun.Generation,
 		Reason:             condition.UpdateRunInitializeFailedReason,
