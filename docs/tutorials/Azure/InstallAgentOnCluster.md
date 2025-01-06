@@ -31,12 +31,12 @@ The latest fleet image tag could be found here in [fleet releases](https://githu
 > **Note:** Please ensure kubectl can access the kube-config of the hub cluster and all the clusters.
 
 Ex:
-- `./hack/membership/joinMC.sh v0.1.0 hub test-cluster-1`
-- `./hack/membership/joinMC.sh v0.1.0 hub test-cluster-1 test-cluster-2`
+- `./hack/membership/installAgentOnCluster.sh v0.1.0 hub test-cluster-1`
+- `./hack/membership/installAgentOnCluster.sh v0.1.0 hub test-cluster-1 test-cluster-2`
 
 ```shell
-chmod +x ./hack/membership/joinMC.sh
-./hack/membership/joinMC.sh <FLEET-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
+chmod +x ./hack/membership/installAgentOnCluster.sh
+./hack/membership/installAgentOnCluster.sh <FLEET-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
 ```
 
 The output should look like:
@@ -65,12 +65,12 @@ Run the following script to install the fleet networking member agents on each c
 The latest fleet-networking image tag could be found here [fleet-networking releases](https://github.com/Azure/fleet-networking/releases).
 
 Ex:
-- `./hack/membership/joinMC.sh v0.1.0 v0.2.0 hub test-cluster-1`
-- `./hack/membership/joinMC.sh v0.1.0 v0.2.0 hub test-cluster-1 test-cluster-2`
+- `./hack/membership/installAgentOnCluster.sh v0.1.0 v0.2.0 hub test-cluster-1`
+- `./hack/membership/installAgentOnCluster.sh v0.1.0 v0.2.0 hub test-cluster-1 test-cluster-2`
 
 ```shell
-chmod +x ./hack/membership/joinMC.sh
-./hack/membership/joinMC.sh <FLEET-IMAGE-TAG> <FLEET-NETWORKING-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
+chmod +x ./hack/membership/installAgentOnCluster.sh
+./hack/membership/installAgentOnCluster.sh <FLEET-IMAGE-TAG> <FLEET-NETWORKING-IMAGE-TAG> <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> ...
 ```
 
 The output should look like:
