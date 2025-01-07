@@ -1420,7 +1420,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 			expected: manifestNotAvailableYetAction,
 			err:      nil,
 		},
-		"Test PodDisruptionBudget available": {
+		"Test PodDisruptionBudget available (sufficient pods)": {
 			gvr: utils.PodDisruptionBudgetGVR,
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
@@ -1487,7 +1487,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 			expected: manifestNotAvailableYetAction,
 			err:      nil,
 		},
-		"Test PodDisruptionBudget unavailable": {
+		"Test PodDisruptionBudget available (insufficient pods)": {
 			gvr: utils.PodDisruptionBudgetGVR,
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
@@ -1502,22 +1502,23 @@ func TestTrackResourceAvailability(t *testing.T) {
 						"minAvailable": 1,
 					},
 					"status": map[string]interface{}{
-						"currentHealthy":     1,
+						"currentHealthy":     2,
 						"desiredHealthy":     1,
 						"observedGeneration": 2,
-						"disruptionsAllowed": 1,
+						"disruptionsAllowed": 0,
 						"expectedPods":       1,
 						"conditions": []interface{}{
 							map[string]interface{}{
-								"type":   "DisruptionAllowed",
-								"status": "False",
-								"reason": "InsufficientPods",
+								"type":               "DisruptionAllowed",
+								"status":             "False",
+								"reason":             "InsufficientPods",
+								"observedGeneration": 2,
 							},
 						},
 					},
 				},
 			},
-			expected: manifestNotAvailableYetAction,
+			expected: manifestAvailableAction,
 			err:      nil,
 		},
 	}

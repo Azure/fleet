@@ -475,12 +475,8 @@ func trackPDBAvailability(curObj *unstructured.Unstructured) (ApplyAction, error
 	}
 	// Check if conditions are up-to-date
 	if poddisruptionbudget.ConditionsAreUpToDate(&pdb) {
-		if cond := meta.FindStatusCondition(pdb.Status.Conditions, policyv1.DisruptionAllowedCondition); cond != nil {
-			if cond.Status == metav1.ConditionTrue && cond.Reason == policyv1.SufficientPodsReason {
-				klog.V(2).InfoS("PodDisruptionBudget is available", "pdb", klog.KObj(curObj))
-				return manifestAvailableAction, nil
-			}
-		}
+		klog.V(2).InfoS("PodDisruptionBudget is available", "pdb", klog.KObj(curObj))
+		return manifestAvailableAction, nil
 	}
 	klog.V(2).InfoS("Still need to wait for PodDisruptionBudget to be available", "pdb", klog.KObj(curObj))
 	return manifestNotAvailableYetAction, nil
