@@ -17,7 +17,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,6 +40,8 @@ var (
 	cluster4 = "cluster-4"
 	cluster5 = "cluster-5"
 	cluster6 = "cluster-6"
+
+	crpName = "test-crp"
 
 	cmpOptions = []cmp.Option{
 		cmp.AllowUnexported(toBeUpdatedBinding{}),
@@ -2798,7 +2799,7 @@ func TestProcessApplyStrategyUpdates(t *testing.T) {
 			}
 
 			fakeClient := fake.NewClientBuilder().
-				WithScheme(scheme.Scheme).
+				WithScheme(serviceScheme(t)).
 				WithObjects(objs...).
 				Build()
 			r := &Reconciler{

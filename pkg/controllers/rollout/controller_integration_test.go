@@ -106,7 +106,10 @@ var _ = Describe("Test the rollout Controller", func() {
 	It("should push apply strategy changes to all the bindings (if applicable)", func() {
 		// Create a CRP.
 		targetClusterCount := int32(3)
-		rolloutCRP = clusterResourcePlacementForTest(testCRPName, createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, targetClusterCount))
+		rolloutCRP = clusterResourcePlacementForTest(
+			testCRPName,
+			createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, targetClusterCount),
+			createPlacementRolloutStrategyForTest(fleetv1beta1.RollingUpdateRolloutStrategyType, generateDefaultRollingUpdateConfig(), nil))
 		Expect(k8sClient.Create(ctx, rolloutCRP)).Should(Succeed(), "Failed to create CRP")
 
 		// Create a master cluster resource snapshot.

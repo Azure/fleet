@@ -420,7 +420,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 				}
 				// The binding needs update if it's not pointing to the latest resource resourceBinding or the overrides.
 				if binding.Spec.ResourceSnapshotName != latestResourceSnapshot.Name || !equality.Semantic.DeepEqual(binding.Spec.ClusterResourceOverrideSnapshots, cro) || !equality.Semantic.DeepEqual(binding.Spec.ResourceOverrideSnapshots, ro) {
-					updateInfo := createUpdateInfo(binding, crp, latestResourceSnapshot, cro, ro)
+					updateInfo := createUpdateInfo(binding, latestResourceSnapshot, cro, ro)
 					if bindingFailed {
 						// the binding has been applied but failed to apply, we can safely update it to latest resources without affecting max unavailable count
 						applyFailedUpdateCandidates = append(applyFailedUpdateCandidates, updateInfo)
