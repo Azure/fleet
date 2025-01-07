@@ -37,13 +37,37 @@ var _ = Describe("Test placement v1alpha1 API validation", func() {
 			Expect(hubClient.Create(ctx, &crpdb)).Should(Succeed())
 		})
 
-		It("should allow creation of ClusterPlacementDisruptionBudget with valid maxUnavailable - string", func() {
+		It("should allow creation of ClusterPlacementDisruptionBudget with valid maxUnavailable less than 10% - string", func() {
+			crpdb := placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(crpdbNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1alpha1.PlacementDisruptionBudgetSpec{
+					MaxUnavailable: &intstr.IntOrString{Type: intstr.String, StrVal: "02%"},
+				},
+			}
+			Expect(hubClient.Create(ctx, &crpdb)).Should(Succeed())
+		})
+
+		It("should allow creation of ClusterPlacementDisruptionBudget with valid maxUnavailable greater than or equal to 10% and less than 100% - string", func() {
 			crpdb := placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(crpdbNameTemplate, GinkgoParallelProcess()),
 				},
 				Spec: placementv1alpha1.PlacementDisruptionBudgetSpec{
 					MaxUnavailable: &intstr.IntOrString{Type: intstr.String, StrVal: "10%"},
+				},
+			}
+			Expect(hubClient.Create(ctx, &crpdb)).Should(Succeed())
+		})
+
+		It("should allow creation of ClusterPlacementDisruptionBudget with valid maxUnavailable equal to 100% - string", func() {
+			crpdb := placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(crpdbNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1alpha1.PlacementDisruptionBudgetSpec{
+					MaxUnavailable: &intstr.IntOrString{Type: intstr.String, StrVal: "100%"},
 				},
 			}
 			Expect(hubClient.Create(ctx, &crpdb)).Should(Succeed())
@@ -61,13 +85,37 @@ var _ = Describe("Test placement v1alpha1 API validation", func() {
 			Expect(hubClient.Create(ctx, &crpdb)).Should(Succeed())
 		})
 
-		It("should allow creation of ClusterPlacementDisruptionBudget with valid minAvailable - string", func() {
+		It("should allow creation of ClusterPlacementDisruptionBudget with valid minAvailable less than 10% - string", func() {
+			crpdb := placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(crpdbNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1alpha1.PlacementDisruptionBudgetSpec{
+					MinAvailable: &intstr.IntOrString{Type: intstr.String, StrVal: "5%"},
+				},
+			}
+			Expect(hubClient.Create(ctx, &crpdb)).Should(Succeed())
+		})
+
+		It("should allow creation of ClusterPlacementDisruptionBudget with valid minAvailable greater than or equal to 10% and less than 100% - string", func() {
 			crpdb := placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(crpdbNameTemplate, GinkgoParallelProcess()),
 				},
 				Spec: placementv1alpha1.PlacementDisruptionBudgetSpec{
 					MinAvailable: &intstr.IntOrString{Type: intstr.String, StrVal: "10%"},
+				},
+			}
+			Expect(hubClient.Create(ctx, &crpdb)).Should(Succeed())
+		})
+
+		It("should allow creation of ClusterPlacementDisruptionBudget with valid minAvailable equal to 100% - string", func() {
+			crpdb := placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(crpdbNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1alpha1.PlacementDisruptionBudgetSpec{
+					MinAvailable: &intstr.IntOrString{Type: intstr.String, StrVal: "100%"},
 				},
 			}
 			Expect(hubClient.Create(ctx, &crpdb)).Should(Succeed())
