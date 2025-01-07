@@ -4142,7 +4142,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 								Namespace: "ns-1",
 							},
 							ObservationTime:                 metav1.Time{Time: time.Now()},
-							TargetClusterObservedGeneration: 2,
+							TargetClusterObservedGeneration: ptr.To(int64(2)),
 							FirstDiffedObservedTime:         metav1.Time{Time: time.Now()},
 							ObservedDiffs: []fleetv1beta1.PatchDetail{
 								{
@@ -4243,7 +4243,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 							Namespace: "ns-1",
 						},
 						ObservationTime:                 metav1.Time{Time: time.Now()},
-						TargetClusterObservedGeneration: 2,
+						TargetClusterObservedGeneration: ptr.To(int64(2)),
 						FirstDiffedObservedTime:         metav1.Time{Time: time.Now()},
 						ObservedDiffs: []fleetv1beta1.PatchDetail{
 							{

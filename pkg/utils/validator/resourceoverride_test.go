@@ -348,6 +348,30 @@ func TestValidateResourceOverride(t *testing.T) {
 			roList:     nil,
 			wantErrMsg: nil,
 		},
+		"valid resource override - delete nil": {
+			ro: fleetv1alpha1.ResourceOverride{
+				Spec: fleetv1alpha1.ResourceOverrideSpec{
+					ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "ClusterRole",
+							Name:    "test-cluster-role",
+						},
+					},
+					Policy: &fleetv1alpha1.OverridePolicy{
+						OverrideRules: []fleetv1alpha1.OverrideRule{
+							{
+								ClusterSelector: validClusterSelector,
+								OverrideType:    fleetv1alpha1.DeleteOverrideType,
+							},
+						},
+					},
+				},
+			},
+			roList:     nil,
+			wantErrMsg: nil,
+		},
 		"invalid resource override - fail validateResourceOverridePolicy with unsupported type ": {
 			ro: fleetv1alpha1.ResourceOverride{
 				Spec: fleetv1alpha1.ResourceOverrideSpec{
@@ -404,6 +428,7 @@ func TestValidateResourceOverride(t *testing.T) {
 						OverrideRules: []fleetv1alpha1.OverrideRule{
 							{
 								ClusterSelector:    &fleetv1beta1.ClusterSelector{},
+								OverrideType:       fleetv1alpha1.JSONPatchOverrideType,
 								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 						},
@@ -421,6 +446,7 @@ func TestValidateResourceOverride(t *testing.T) {
 								ClusterSelector: &fleetv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{},
 								},
+								OverrideType:       fleetv1alpha1.JSONPatchOverrideType,
 								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 						},
@@ -442,6 +468,7 @@ func TestValidateResourceOverride(t *testing.T) {
 										},
 									},
 								},
+								OverrideType:       fleetv1alpha1.JSONPatchOverrideType,
 								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 							{
@@ -452,6 +479,7 @@ func TestValidateResourceOverride(t *testing.T) {
 										},
 									},
 								},
+								OverrideType:       fleetv1alpha1.JSONPatchOverrideType,
 								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 						},
@@ -485,6 +513,7 @@ func TestValidateResourceOverride(t *testing.T) {
 										},
 									},
 								},
+								OverrideType: fleetv1alpha1.JSONPatchOverrideType,
 								JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
 									{
 										Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
@@ -670,13 +699,14 @@ func TestValidateOverridePolicy(t *testing.T) {
 								},
 							},
 						},
+						OverrideType:       fleetv1alpha1.JSONPatchOverrideType,
 						JSONPatchOverrides: nil,
 					},
 				},
 			},
 			wantErrMsg: errors.New("JSONPatchOverrides cannot be empty"),
 		},
-		"empty JSONPatchOverrides": {
+		"empty JSONPatchOverrides with jsonPatch override type": {
 			policy: &fleetv1alpha1.OverridePolicy{
 				OverrideRules: []fleetv1alpha1.OverrideRule{
 					{
@@ -691,17 +721,41 @@ func TestValidateOverridePolicy(t *testing.T) {
 								},
 							},
 						},
+						OverrideType:       fleetv1alpha1.JSONPatchOverrideType,
 						JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{},
 					},
 				},
 			},
 			wantErrMsg: errors.New("JSONPatchOverrides cannot be empty"),
 		},
+		"JSONPatchOverrides with delete override type": {
+			policy: &fleetv1alpha1.OverridePolicy{
+				OverrideRules: []fleetv1alpha1.OverrideRule{
+					{
+						ClusterSelector: &fleetv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"key": "value",
+										},
+									},
+								},
+							},
+						},
+						OverrideType:       fleetv1alpha1.DeleteOverrideType,
+						JSONPatchOverrides: validJSONPatchOverrides,
+					},
+				},
+			},
+			wantErrMsg: errors.New("JSONPatchOverrides cannot be set when the override type is Delete"),
+		},
 		"invalid JSONPatchOverridesPath": {
 			policy: &fleetv1alpha1.OverridePolicy{
 				OverrideRules: []fleetv1alpha1.OverrideRule{
 					{
 						ClusterSelector: &fleetv1beta1.ClusterSelector{},
+						OverrideType:    fleetv1alpha1.JSONPatchOverrideType,
 						JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
 							{
 								Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
@@ -719,6 +773,7 @@ func TestValidateOverridePolicy(t *testing.T) {
 				OverrideRules: []fleetv1alpha1.OverrideRule{
 					{
 						ClusterSelector: &fleetv1beta1.ClusterSelector{},
+						OverrideType:    fleetv1alpha1.JSONPatchOverrideType,
 						JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
 							{
 								Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,

@@ -18,6 +18,7 @@ import (
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,6 +56,10 @@ import (
 var (
 	// maxFailedResourcePlacementLimit indicates the max number of failed resource placements to include in the status.
 	maxFailedResourcePlacementLimit = 100
+	// maxDriftedResourcePlacementLimit indicates the max number of drifted resource placements to include in the status.
+	maxDriftedResourcePlacementLimit = 100
+	// maxDiffedResourcePlacementLimit indicates the max number of diffed resource placements to include in the status.
+	maxDiffedResourcePlacementLimit = 100
 
 	errResourceSnapshotNotFound = fmt.Errorf("the master resource snapshot is not found")
 )
@@ -140,13 +145,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 	works, syncErr := r.listAllWorksAssociated(ctx, &resourceBinding)
 	if syncErr == nil {
 		// generate and apply the workUpdated works if we have all the works
-		overrideSucceeded, workUpdated, syncErr = r.syncAllWork(ctx, &resourceBinding, works, cluster)
+		overrideSucceeded, workUpdated, syncErr = r.syncAllWork(ctx, &resourceBinding, works, &cluster)
 	}
 	// Reset the conditions and failed placements.
 	for i := condition.OverriddenCondition; i < condition.TotalCondition; i++ {
 		resourceBinding.RemoveCondition(string(i.ResourceBindingConditionType()))
 	}
 	resourceBinding.Status.FailedPlacements = nil
+	resourceBinding.Status.DriftedPlacements = nil
+	resourceBinding.Status.DiffedPlacements = nil
 	if overrideSucceeded {
 		overrideReason := condition.OverriddenSucceededReason
 		overrideMessage := "Successfully applied the override rules on the resources"
@@ -372,7 +379,7 @@ func (r *Reconciler) listAllWorksAssociated(ctx context.Context, resourceBinding
 // it returns
 // 1: if we apply the overrides successfully
 // 2: if we actually made any changes on the hub cluster
-func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding, existingWorks map[string]*fleetv1beta1.Work, cluster clusterv1beta1.MemberCluster) (bool, bool, error) {
+func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding, existingWorks map[string]*fleetv1beta1.Work, cluster *clusterv1beta1.MemberCluster) (bool, bool, error) {
 	updateAny := atomic.NewBool(false)
 	resourceBindingRef := klog.KObj(resourceBinding)
 	// the hash256 function can can handle empty list https://go.dev/play/p/_4HW17fooXM
@@ -425,17 +432,22 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 		}
 		var simpleManifests []fleetv1beta1.Manifest
 		for j := range snapshot.Spec.SelectedResources {
-			selectedResource := snapshot.Spec.SelectedResources[j]
-			if err := r.applyOverrides(&selectedResource, cluster, croMap, roMap); err != nil {
-				return false, false, err
+			selectedResource := snapshot.Spec.SelectedResources[j].DeepCopy()
+			// TODO: override the content of the wrapped resource instead of the envelope itself
+			resourceDeleted, overrideErr := r.applyOverrides(selectedResource, cluster, croMap, roMap)
+			if overrideErr != nil {
+				return false, false, overrideErr
 			}
-
+			if resourceDeleted {
+				klog.V(2).InfoS("The resource is deleted by the override rules", "snapshot", klog.KObj(snapshot), "selectedResource", snapshot.Spec.SelectedResources[j])
+				continue
+			}
 			// we need to special treat configMap with envelopeConfigMapAnnotation annotation,
 			// so we need to check the GVK and annotation of the selected resource
 			var uResource unstructured.Unstructured
-			if err := uResource.UnmarshalJSON(selectedResource.Raw); err != nil {
-				klog.ErrorS(err, "work has invalid content", "snapshot", klog.KObj(snapshot), "selectedResource", selectedResource.Raw)
-				return true, false, controller.NewUnexpectedBehaviorError(err)
+			if unMarshallErr := uResource.UnmarshalJSON(selectedResource.Raw); unMarshallErr != nil {
+				klog.ErrorS(unMarshallErr, "work has invalid content", "snapshot", klog.KObj(snapshot), "selectedResource", selectedResource.Raw)
+				return true, false, controller.NewUnexpectedBehaviorError(unMarshallErr)
 			}
 			if uResource.GetObjectKind().GroupVersionKind() == utils.ConfigMapGVK &&
 				len(uResource.GetAnnotations()[fleetv1beta1.EnvelopeConfigMapAnnotation]) != 0 {
@@ -447,11 +459,11 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 				activeWork[work.Name] = work
 				newWork = append(newWork, work)
 			} else {
-				simpleManifests = append(simpleManifests, fleetv1beta1.Manifest(selectedResource))
+				simpleManifests = append(simpleManifests, fleetv1beta1.Manifest(*selectedResource))
 			}
 		}
 		if len(simpleManifests) == 0 {
-			klog.V(2).InfoS("the snapshot contains enveloped resource only", "snapshot", klog.KObj(snapshot))
+			klog.V(2).InfoS("the snapshot contains no resource to apply either because of override or enveloped resources", "snapshot", klog.KObj(snapshot))
 		}
 		// generate a work object for the manifests even if there is nothing to place
 		// to allow CRP to collect the status of the placement
@@ -755,25 +767,66 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 		resourceBinding.SetConditions(availableCond)
 	}
 	resourceBinding.Status.FailedPlacements = nil
+	resourceBinding.Status.DiffedPlacements = nil
+	resourceBinding.Status.DriftedPlacements = nil
 	// collect and set the failed resource placements to the binding if not all the works are available
-	if appliedCond.Status != metav1.ConditionTrue || availableCond.Status != metav1.ConditionTrue {
-		failedResourcePlacements := make([]fleetv1beta1.FailedResourcePlacement, 0, maxFailedResourcePlacementLimit) // preallocate the memory
-		for _, w := range works {
-			if w.DeletionTimestamp != nil {
-				klog.V(2).InfoS("Ignoring the deleting work", "clusterResourceBinding", bindingRef, "work", klog.KObj(w))
-				continue // ignore the deleting work
-			}
+	driftedResourcePlacements := make([]fleetv1beta1.DriftedResourcePlacement, 0, maxDriftedResourcePlacementLimit) // preallocate the memory
+	failedResourcePlacements := make([]fleetv1beta1.FailedResourcePlacement, 0, maxFailedResourcePlacementLimit)    // preallocate the memory
+	diffedResourcePlacements := make([]fleetv1beta1.DiffedResourcePlacement, 0, maxDiffedResourcePlacementLimit)    // preallocate the memory
+	for _, w := range works {
+		if w.DeletionTimestamp != nil {
+			klog.V(2).InfoS("Ignoring the deleting work", "clusterResourceBinding", bindingRef, "work", klog.KObj(w))
+			continue // ignore the deleting work
+		}
+
+		// Failed placements (resources that cannot be applied or failed to get available) will only appear when either
+		// the Applied or Available conditions (on the work object) are set to False
+		if appliedCond.Status != metav1.ConditionTrue || availableCond.Status != metav1.ConditionTrue {
 			failedManifests := extractFailedResourcePlacementsFromWork(w)
 			failedResourcePlacements = append(failedResourcePlacements, failedManifests...)
 		}
-		// cut the list to keep only the max limit
-		if len(failedResourcePlacements) > maxFailedResourcePlacementLimit {
-			failedResourcePlacements = failedResourcePlacements[0:maxFailedResourcePlacementLimit]
+		// Diffed placements can only appear when the Applied condition is set to False.
+		if appliedCond.Status == metav1.ConditionFalse {
+			diffedManifests := extractDiffedResourcePlacementsFromWork(w)
+			diffedResourcePlacements = append(diffedResourcePlacements, diffedManifests...)
 		}
+		// Drifted placements can appear in any situation (Applied condition is True or False)
+		driftedManifests := extractDriftedResourcePlacementsFromWork(w)
+		driftedResourcePlacements = append(driftedResourcePlacements, driftedManifests...)
+	}
+	// cut the list to keep only the max limit
+	if len(failedResourcePlacements) > maxFailedResourcePlacementLimit {
+		failedResourcePlacements = failedResourcePlacements[0:maxFailedResourcePlacementLimit]
+	}
+	if len(failedResourcePlacements) > 0 {
 		resourceBinding.Status.FailedPlacements = failedResourcePlacements
-		if len(failedResourcePlacements) > 0 {
-			klog.V(2).InfoS("Populated failed manifests", "clusterResourceBinding", bindingRef, "numberOfFailedPlacements", len(failedResourcePlacements))
-		}
+		klog.V(2).InfoS("Populated failed manifests", "clusterResourceBinding", bindingRef, "numberOfFailedPlacements", len(failedResourcePlacements))
+	}
+
+	// cut the list to keep only the max limit
+	if len(diffedResourcePlacements) > maxDiffedResourcePlacementLimit {
+		// Sort the slice
+		sort.Slice(diffedResourcePlacements, func(i, j int) bool {
+			return utils.LessFuncDiffedResourcePlacements(diffedResourcePlacements[i], diffedResourcePlacements[j])
+		})
+		diffedResourcePlacements = diffedResourcePlacements[0:maxDiffedResourcePlacementLimit]
+	}
+	if len(diffedResourcePlacements) > 0 {
+		resourceBinding.Status.DiffedPlacements = diffedResourcePlacements
+		klog.V(2).InfoS("Populated diffed manifests", "clusterResourceBinding", bindingRef, "numberOfDiffedPlacements", len(diffedResourcePlacements))
+	}
+
+	// cut the list to keep only the max limit
+	if len(driftedResourcePlacements) > maxDriftedResourcePlacementLimit {
+		// Sort the slice
+		sort.Slice(driftedResourcePlacements, func(i, j int) bool {
+			return utils.LessFuncDriftedResourcePlacements(driftedResourcePlacements[i], driftedResourcePlacements[j])
+		})
+		driftedResourcePlacements = driftedResourcePlacements[0:maxDriftedResourcePlacementLimit]
+	}
+	if len(driftedResourcePlacements) > 0 {
+		resourceBinding.Status.DriftedPlacements = driftedResourcePlacements
+		klog.V(2).InfoS("Populated drifted manifests", "clusterResourceBinding", bindingRef, "numberOfDriftedPlacements", len(driftedResourcePlacements))
 	}
 }
 
@@ -955,6 +1008,106 @@ func extractFailedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1b
 	return res
 }
 
+// extractDriftedResourcePlacementsFromWork extracts the drifted placements from work
+func extractDriftedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1beta1.DriftedResourcePlacement {
+	// check if the work is generated by an enveloped object
+	envelopeType, isEnveloped := work.GetLabels()[fleetv1beta1.EnvelopeTypeLabel]
+	var envelopObjName, envelopObjNamespace string
+	if isEnveloped {
+		// If the work  generated by an enveloped object, it must contain those labels.
+		envelopObjName = work.GetLabels()[fleetv1beta1.EnvelopeNameLabel]
+		envelopObjNamespace = work.GetLabels()[fleetv1beta1.EnvelopeNamespaceLabel]
+	}
+	res := make([]fleetv1beta1.DriftedResourcePlacement, 0, len(work.Status.ManifestConditions))
+	for _, manifestCondition := range work.Status.ManifestConditions {
+		if manifestCondition.DriftDetails == nil {
+			continue
+		}
+		driftedManifest := fleetv1beta1.DriftedResourcePlacement{
+			ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+				Group:     manifestCondition.Identifier.Group,
+				Version:   manifestCondition.Identifier.Version,
+				Kind:      manifestCondition.Identifier.Kind,
+				Name:      manifestCondition.Identifier.Name,
+				Namespace: manifestCondition.Identifier.Namespace,
+			},
+			ObservationTime:                 manifestCondition.DriftDetails.ObservationTime,
+			TargetClusterObservedGeneration: manifestCondition.DriftDetails.ObservedInMemberClusterGeneration,
+			FirstDriftedObservedTime:        manifestCondition.DriftDetails.FirstDriftedObservedTime,
+			ObservedDrifts:                  manifestCondition.DriftDetails.ObservedDrifts,
+		}
+
+		if isEnveloped {
+			driftedManifest.ResourceIdentifier.Envelope = &fleetv1beta1.EnvelopeIdentifier{
+				Name:      envelopObjName,
+				Namespace: envelopObjNamespace,
+				Type:      fleetv1beta1.EnvelopeType(envelopeType),
+			}
+			klog.V(2).InfoS("Found a drifted enveloped manifest",
+				"manifestName", manifestCondition.Identifier.Name,
+				"group", manifestCondition.Identifier.Group,
+				"version", manifestCondition.Identifier.Version, "kind", manifestCondition.Identifier.Kind,
+				"envelopeType", envelopeType, "envelopObjName", envelopObjName, "envelopObjNamespace", envelopObjNamespace)
+		} else {
+			klog.V(2).InfoS("Found a drifted manifest",
+				"manifestName", manifestCondition.Identifier.Name, "group", manifestCondition.Identifier.Group,
+				"version", manifestCondition.Identifier.Version, "kind", manifestCondition.Identifier.Kind)
+		}
+		res = append(res, driftedManifest)
+	}
+	return res
+}
+
+// extractDiffedResourcePlacementsFromWork extracts the diffed placements from work
+func extractDiffedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1beta1.DiffedResourcePlacement {
+	// check if the work is generated by an enveloped object
+	envelopeType, isEnveloped := work.GetLabels()[fleetv1beta1.EnvelopeTypeLabel]
+	var envelopObjName, envelopObjNamespace string
+	if isEnveloped {
+		// If the work  generated by an enveloped object, it must contain those labels.
+		envelopObjName = work.GetLabels()[fleetv1beta1.EnvelopeNameLabel]
+		envelopObjNamespace = work.GetLabels()[fleetv1beta1.EnvelopeNamespaceLabel]
+	}
+	res := make([]fleetv1beta1.DiffedResourcePlacement, 0, len(work.Status.ManifestConditions))
+	for _, manifestCondition := range work.Status.ManifestConditions {
+		if manifestCondition.DiffDetails == nil {
+			continue
+		}
+		diffedManifest := fleetv1beta1.DiffedResourcePlacement{
+			ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+				Group:     manifestCondition.Identifier.Group,
+				Version:   manifestCondition.Identifier.Version,
+				Kind:      manifestCondition.Identifier.Kind,
+				Name:      manifestCondition.Identifier.Name,
+				Namespace: manifestCondition.Identifier.Namespace,
+			},
+			ObservationTime:                 manifestCondition.DiffDetails.ObservationTime,
+			TargetClusterObservedGeneration: manifestCondition.DiffDetails.ObservedInMemberClusterGeneration,
+			FirstDiffedObservedTime:         manifestCondition.DiffDetails.FirstDiffedObservedTime,
+			ObservedDiffs:                   manifestCondition.DiffDetails.ObservedDiffs,
+		}
+
+		if isEnveloped {
+			diffedManifest.ResourceIdentifier.Envelope = &fleetv1beta1.EnvelopeIdentifier{
+				Name:      envelopObjName,
+				Namespace: envelopObjNamespace,
+				Type:      fleetv1beta1.EnvelopeType(envelopeType),
+			}
+			klog.V(2).InfoS("Found a diffed enveloped manifest",
+				"manifestName", manifestCondition.Identifier.Name,
+				"group", manifestCondition.Identifier.Group,
+				"version", manifestCondition.Identifier.Version, "kind", manifestCondition.Identifier.Kind,
+				"envelopeType", envelopeType, "envelopObjName", envelopObjName, "envelopObjNamespace", envelopObjNamespace)
+		} else {
+			klog.V(2).InfoS("Found a diffed manifest",
+				"manifestName", manifestCondition.Identifier.Name, "group", manifestCondition.Identifier.Group,
+				"version", manifestCondition.Identifier.Version, "kind", manifestCondition.Identifier.Kind)
+		}
+		res = append(res, diffedManifest)
+	}
+	return res
+}
+
 // SetupWithManager sets up the controller with the Manager.
 // It watches binding events and also update/delete events for work.
 func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
@@ -1009,42 +1162,29 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 						"Failed to process an update event for work object")
 					return
 				}
-				oldAppliedCondition := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
-				newAppliedCondition := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
-				oldAvailableCondition := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
-				newAvailableCondition := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 
-				// we try to filter out events, we only need to handle the updated event if the applied or available condition flip between true and false
-				// or the failed placements are changed.
-				if condition.EqualCondition(oldAppliedCondition, newAppliedCondition) && condition.EqualCondition(oldAvailableCondition, newAvailableCondition) {
-					if condition.IsConditionStatusFalse(newAppliedCondition, newWork.Generation) || condition.IsConditionStatusFalse(newAvailableCondition, newWork.Generation) {
-						// we need to compare the failed placement if the work is not applied or available
-						oldFailedPlacements := extractFailedResourcePlacementsFromWork(oldWork)
-						newFailedPlacements := extractFailedResourcePlacementsFromWork(newWork)
-						if utils.IsFailedResourcePlacementsEqual(oldFailedPlacements, newFailedPlacements) {
-							klog.V(2).InfoS("The failed placement list didn't change on failed work, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
-							return
-						}
-					} else {
-						oldResourceSnapshot := oldWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
-						newResourceSnapshot := newWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
-						if oldResourceSnapshot == "" || newResourceSnapshot == "" {
-							klog.ErrorS(controller.NewUnexpectedBehaviorError(errors.New("found an invalid work without parent-resource-snapshot-index")),
-								"Could not find the parent resource snapshot index label", "oldWork", klog.KObj(oldWork), "oldResourceSnapshotLabelValue", oldResourceSnapshot,
-								"newWork", klog.KObj(newWork), "newResourceSnapshotLabelValue", newResourceSnapshot)
-							return
-						}
-						// There is an edge case that, the work spec is the same but from different resourceSnapshots.
-						// WorkGenerator will update the work because of the label changes, but the generation is the same.
-						// When the normal update happens, the controller will set the applied condition as false and wait
-						// until the work condition has been changed.
-						// In this edge case, we need to requeue the binding to update the binding status.
-						if oldResourceSnapshot == newResourceSnapshot {
-							klog.V(2).InfoS("The work applied or available condition stayed as true, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
-							return
-						}
+				if !equality.Semantic.DeepEqual(oldWork.Status, newWork.Status) {
+					klog.V(2).InfoS("Work status has been changed", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
+				} else {
+					oldResourceSnapshot := oldWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
+					newResourceSnapshot := newWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
+					if oldResourceSnapshot == "" || newResourceSnapshot == "" {
+						klog.ErrorS(controller.NewUnexpectedBehaviorError(errors.New("found an invalid work without parent-resource-snapshot-index")),
+							"Could not find the parent resource snapshot index label", "oldWork", klog.KObj(oldWork), "oldResourceSnapshotLabelValue", oldResourceSnapshot,
+							"newWork", klog.KObj(newWork), "newResourceSnapshotLabelValue", newResourceSnapshot)
+						return
+					}
+					// There is an edge case that, the work spec is the same but from different resourceSnapshots.
+					// WorkGenerator will update the work because of the label changes, but the generation is the same.
+					// When the normal update happens, the controller will set the applied condition as false and wait
+					// until the work condition has been changed.
+					// In this edge case, we need to requeue the binding to update the binding status.
+					if oldResourceSnapshot == newResourceSnapshot {
+						klog.V(2).InfoS("The work applied or available condition stayed as true, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
+						return
 					}
 				}
+
 				// We need to update the binding status in this case
 				klog.V(2).InfoS("Received a work update event that we need to handle", "work", klog.KObj(newWork), "parentBindingName", parentBindingName)
 				queue.Add(reconcile.Request{NamespacedName: types.NamespacedName{

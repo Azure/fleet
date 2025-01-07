@@ -540,6 +540,21 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 			},
 			wantErrMsg: nil,
 		},
+		"valid cluster resource override - delete policy": {
+			cro: fleetv1alpha1.ClusterResourceOverride{
+				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
+					Policy: &fleetv1alpha1.OverridePolicy{
+						OverrideRules: []fleetv1alpha1.OverrideRule{
+							{
+								ClusterSelector: validClusterSelector,
+								OverrideType:    fleetv1alpha1.DeleteOverrideType,
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: nil,
+		},
 		"valid cluster resource override - policy with all label selectors": {
 			cro: fleetv1alpha1.ClusterResourceOverride{
 				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
@@ -564,6 +579,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 										},
 									},
 								},
+								OverrideType:       fleetv1alpha1.JSONPatchOverrideType,
 								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 							{
@@ -585,6 +601,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 										},
 									},
 								},
+								OverrideType:       fleetv1alpha1.JSONPatchOverrideType,
 								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 						},
@@ -627,6 +644,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 					Policy: &fleetv1alpha1.OverridePolicy{
 						OverrideRules: []fleetv1alpha1.OverrideRule{
 							{
+								OverrideType:       fleetv1alpha1.JSONPatchOverrideType,
 								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 						},
@@ -693,6 +711,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 										{},
 									},
 								},
+								OverrideType:       fleetv1alpha1.JSONPatchOverrideType,
 								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 						},
@@ -718,6 +737,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 										},
 									},
 								},
+								OverrideType: fleetv1alpha1.JSONPatchOverrideType,
 								JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
 									{
 										Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,

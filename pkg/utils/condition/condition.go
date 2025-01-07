@@ -145,6 +145,60 @@ const (
 	AfterStageTaskWaitTimeElapsedReason = "AfterStageTaskWaitTimeElapsed"
 )
 
+// A group of condition reason & message string which is used to populate the ClusterResourcePlacementEviction condition.
+const (
+	// ClusterResourcePlacementEvictionValidReason is the reason string of condition if the eviction is valid.
+	ClusterResourcePlacementEvictionValidReason = "ClusterResourcePlacementEvictionValid"
+
+	// ClusterResourcePlacementEvictionInvalidReason is the reason string of condition if the eviction is invalid.
+	ClusterResourcePlacementEvictionInvalidReason = "ClusterResourcePlacementEvictionInvalid"
+
+	// ClusterResourcePlacementEvictionExecutedReason is the reason string of condition if the eviction is executed.
+	ClusterResourcePlacementEvictionExecutedReason = "ClusterResourcePlacementEvictionExecuted"
+
+	// ClusterResourcePlacementEvictionNotExecutedReason is the reason string of condition if the eviction is not executed.
+	ClusterResourcePlacementEvictionNotExecutedReason = "ClusterResourcePlacementEvictionNotExecuted"
+
+	// EvictionInvalidMissingCRPMessage is the message string of invalid eviction condition when CRP is missing.
+	EvictionInvalidMissingCRPMessage = "Failed to find ClusterResourcePlacement targeted by eviction"
+
+	// EvictionInvalidDeletingCRPMessage is the message string of invalid eviction condition when CRP is deleting.
+	EvictionInvalidDeletingCRPMessage = "Found deleting ClusterResourcePlacement targeted by eviction"
+
+	// EvictionInvalidPickFixedCRPMessage is the message string of invalid eviction condition when CRP placement type is PickFixed.
+	EvictionInvalidPickFixedCRPMessage = "Found ClusterResourcePlacement with PickFixed placement type targeted by eviction"
+
+	// EvictionInvalidMissingCRBMessage is the message string of invalid eviction condition when CRB is missing.
+	EvictionInvalidMissingCRBMessage = "Failed to find scheduler decision for placement in cluster targeted by eviction"
+
+	// EvictionInvalidMultipleCRBMessage is the message string of invalid eviction condition when more than one CRB is present for cluster targeted by eviction.
+	EvictionInvalidMultipleCRBMessage = "Found more than one scheduler decision for placement in cluster targeted by eviction"
+
+	// EvictionValidMessage is the message string of valid eviction condition.
+	EvictionValidMessage = "Eviction is valid"
+
+	// EvictionAllowedNoPDBMessage is the message string for executed condition when no PDB is specified.
+	EvictionAllowedNoPDBMessage = "Eviction is allowed, no ClusterResourcePlacementDisruptionBudget specified"
+
+	// EvictionAllowedPlacementRemovedMessage is the message string for executed condition when CRB targeted by eviction is being deleted.
+	EvictionAllowedPlacementRemovedMessage = "Eviction is allowed, resources propagated by placement is currently being removed from cluster targeted by eviction"
+
+	// EvictionAllowedPlacementFailedMessage is the message string for executed condition when placed resources have failed to apply or the resources are not available.
+	EvictionAllowedPlacementFailedMessage = "Eviction is allowed, placement has failed"
+
+	// EvictionBlockedMisconfiguredPDBSpecifiedMessage is the message string for not executed condition when PDB specified is misconfigured for PickAll CRP.
+	EvictionBlockedMisconfiguredPDBSpecifiedMessage = "Eviction is blocked by misconfigured ClusterResourcePlacementDisruptionBudget, either MaxUnavailable is specified or MinAvailable is specified as a percentage for PickAll ClusterResourcePlacement"
+
+	// EvictionBlockedMissingPlacementMessage is the message string for not executed condition when resources are yet to be placed in targeted cluster by eviction.
+	EvictionBlockedMissingPlacementMessage = "Eviction is blocked, placement has not propagated resources to target cluster yet"
+
+	// EvictionAllowedPDBSpecifiedMessageFmt is the message format for executed condition when eviction is allowed by PDB specified.
+	EvictionAllowedPDBSpecifiedMessageFmt = "Eviction is allowed by specified ClusterResourcePlacementDisruptionBudget, availablePlacements: %d, totalPlacements: %d"
+
+	// EvictionBlockedPDBSpecifiedMessageFmt is the message format for not executed condition when eviction is blocked bt PDB specified.
+	EvictionBlockedPDBSpecifiedMessageFmt = "Eviction is blocked by specified ClusterResourcePlacementDisruptionBudget, availablePlacements: %d, totalPlacements: %d"
+)
+
 // EqualCondition compares one condition with another; it ignores the LastTransitionTime and Message fields,
 // and will consider the ObservedGeneration values from the two conditions a match if the current
 // condition is newer.

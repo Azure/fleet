@@ -167,6 +167,12 @@ var (
 		Kind:    "CustomResourceDefinition",
 	}
 
+	CustomResourceDefinitionGVR = schema.GroupVersionResource{
+		Group:    apiextensionsv1.SchemeGroupVersion.Group,
+		Version:  apiextensionsv1.SchemeGroupVersion.Version,
+		Resource: "customresourcedefinitions",
+	}
+
 	EndpointSliceExportMetaGVK = metav1.GroupVersionKind{
 		Group:   fleetnetworkingv1alpha1.GroupVersion.Group,
 		Version: fleetnetworkingv1alpha1.GroupVersion.Version,
@@ -323,13 +329,13 @@ var (
 		Kind:    DeploymentKind,
 	}
 
-	DaemonSettGVR = schema.GroupVersionResource{
+	DaemonSetGVR = schema.GroupVersionResource{
 		Group:    appv1.GroupName,
 		Version:  appv1.SchemeGroupVersion.Version,
 		Resource: "daemonsets",
 	}
 
-	StatefulSettGVR = schema.GroupVersionResource{
+	StatefulSetGVR = schema.GroupVersionResource{
 		Group:    appv1.GroupName,
 		Version:  appv1.SchemeGroupVersion.Version,
 		Resource: "statefulsets",
@@ -516,6 +522,17 @@ var LessFuncResourceIdentifier = func(a, b placementv1beta1.ResourceIdentifier) 
 	return aStr < bStr
 }
 
+// LessFuncPatchDetail is a less function for sorting patch details
+var LessFuncPatchDetail = func(a, b placementv1beta1.PatchDetail) bool {
+	if a.Path != b.Path {
+		return a.Path < b.Path
+	}
+	if a.ValueInMember != b.ValueInMember {
+		return a.ValueInMember < b.ValueInMember
+	}
+	return a.ValueInHub < b.ValueInHub
+}
+
 // LessFuncFailedResourcePlacements is a less function for sorting failed resource placements
 var LessFuncFailedResourcePlacements = func(a, b placementv1beta1.FailedResourcePlacement) bool {
 	var aStr, bStr string
@@ -554,6 +571,40 @@ func IsFailedResourcePlacementsEqual(oldFailedResourcePlacements, newFailedResou
 		}
 	}
 	return true
+}
+
+// LessFuncDriftedResourcePlacements is a less function for sorting drifted resource placements
+var LessFuncDriftedResourcePlacements = func(a, b placementv1beta1.DriftedResourcePlacement) bool {
+	var aStr, bStr string
+	if a.Envelope != nil {
+		aStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name, a.Envelope.Type, a.Envelope.Namespace, a.Envelope.Name)
+	} else {
+		aStr = fmt.Sprintf(ResourceIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name)
+	}
+	if b.Envelope != nil {
+		bStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name, b.Envelope.Type, b.Envelope.Namespace, b.Envelope.Name)
+	} else {
+		bStr = fmt.Sprintf(ResourceIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name)
+
+	}
+	return aStr < bStr
+}
+
+// LessFuncDiffedResourcePlacements is a less function for sorting drifted resource placements
+var LessFuncDiffedResourcePlacements = func(a, b placementv1beta1.DiffedResourcePlacement) bool {
+	var aStr, bStr string
+	if a.Envelope != nil {
+		aStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name, a.Envelope.Type, a.Envelope.Namespace, a.Envelope.Name)
+	} else {
+		aStr = fmt.Sprintf(ResourceIdentifierStringFormat, a.Group, a.Version, a.Kind, a.Namespace, a.Name)
+	}
+	if b.Envelope != nil {
+		bStr = fmt.Sprintf(ResourceIdentifierWithEnvelopeIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name, b.Envelope.Type, b.Envelope.Namespace, b.Envelope.Name)
+	} else {
+		bStr = fmt.Sprintf(ResourceIdentifierStringFormat, b.Group, b.Version, b.Kind, b.Namespace, b.Name)
+
+	}
+	return aStr < bStr
 }
 
 // IsFleetAnnotationPresent returns true if a key with fleet prefix is present in the annotations map.
