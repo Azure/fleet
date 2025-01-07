@@ -166,6 +166,7 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 			// skipped in the check above. Here Fleet simply skips the manifest.
 			klog.ErrorS(err, "Failed to format the work resource identifier string",
 				"ordinal", idx, "work", workRef)
+			_ = controller.NewUnexpectedBehaviorError(err)
 			continue
 		}
 		if _, found := checked[wriStr]; found {
@@ -178,7 +179,7 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 		checked[wriStr] = true
 
 		// Prepare the manifest conditions for the write-ahead process.
-		manifestCondForWA := prepareManifestCondForWA(wriStr, bundle.id, work.Generation, existingManifestCondQIdx, work.Status.ManifestConditions)
+		manifestCondForWA := prepareManifestCondForWriteAhead(wriStr, bundle.id, work.Generation, existingManifestCondQIdx, work.Status.ManifestConditions)
 		manifestCondsForWA = append(manifestCondsForWA, manifestCondForWA)
 
 		klog.V(2).InfoS("Prepared write-ahead information for a manifest",
@@ -288,8 +289,8 @@ func prepareExistingManifestCondQIdx(existingManifestConditions []fleetv1beta1.M
 	return existingManifestConditionQIdx
 }
 
-// prepareManifestCondForWA prepares a manifest condition for the write-ahead process.
-func prepareManifestCondForWA(
+// prepareManifestCondForWriteAhead prepares a manifest condition for the write-ahead process.
+func prepareManifestCondForWriteAhead(
 	wriStr string, wri *fleetv1beta1.WorkResourceIdentifier,
 	workGeneration int64,
 	existingManifestCondQIdx map[string]int,
@@ -453,6 +454,7 @@ func (r *Reconciler) removeOneLeftOverManifest(
 		return nil
 	case err != nil:
 		// Failed to retrieve the object from the member cluster.
+		_ = controller.NewAPIServerError(true, err)
 		return fmt.Errorf("failed to retrieve the object from the member cluster (gvr=%+v, manifestObj=%+v): %w", gvr, klog.KRef(manifestNamespace, manifestName), err)
 	case inMemberClusterObj.GetDeletionTimestamp() != nil:
 		// The object has been marked for deletion; no further action is needed.
@@ -483,6 +485,7 @@ func (r *Reconciler) removeOneLeftOverManifest(
 		removeOwnerRef(inMemberClusterObj, expectedAppliedWorkOwnerRef)
 		if _, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestNamespace).Update(ctx, inMemberClusterObj, metav1.UpdateOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			// Failed to drop the ownership.
+			_ = controller.NewAPIServerError(false, err)
 			return fmt.Errorf("failed to drop the ownership of the object (gvr=%+v, manifestObj=%+v, inMemberClusterObj=%+v, expectedAppliedWorkOwnerRef=%+v): %w",
 				gvr, klog.KRef(manifestNamespace, manifestName), klog.KObj(inMemberClusterObj), *expectedAppliedWorkOwnerRef, err)
 		}
@@ -507,6 +510,7 @@ func (r *Reconciler) removeOneLeftOverManifest(
 		}
 		if err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestNamespace).Delete(ctx, manifestName, deleteOpts); err != nil && !apierrors.IsNotFound(err) {
 			// Failed to delete the object from the member cluster.
+			_ = controller.NewAPIServerError(false, err)
 			return fmt.Errorf("failed to delete the object (gvr=%+v, manifestObj=%+v, inMemberClusterObj=%+v, expectedAppliedWorkOwnerRef=%+v): %w",
 				gvr, klog.KRef(manifestNamespace, manifestName), klog.KObj(inMemberClusterObj), *expectedAppliedWorkOwnerRef, err)
 		}
