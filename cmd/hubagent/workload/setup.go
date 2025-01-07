@@ -223,7 +223,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		if opts.EnableEvictionAPIs {
 			for _, gvk := range evictionGVKs {
 				if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
-					klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
+					klog.ErrorS(err, "Unable to find the required CRD", "GVK", gvk)
 					return err
 				}
 			}
@@ -240,7 +240,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		if opts.EnableStagedUpdateRunAPIs {
 			for _, gvk := range clusterStagedUpdateRunGVKs {
 				if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
-					klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
+					klog.ErrorS(err, "Unable to find the required CRD", "GVK", gvk)
 					return err
 				}
 			}
@@ -249,7 +249,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 				Client:          mgr.GetClient(),
 				InformerManager: dynamicInformerManager,
 			}).SetupWithManager(mgr); err != nil {
-				klog.ErrorS(err, "unable to set up clusterStagedUpdateRun controller")
+				klog.ErrorS(err, "Unable to set up clusterStagedUpdateRun controller")
 				return err
 			}
 		}
