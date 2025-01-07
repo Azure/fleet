@@ -17,4 +17,10 @@ const (
 
 	// OverrideClusterNameVariable is the reserved variable in the override value that will be replaced by the actual cluster name.
 	OverrideClusterNameVariable = "${MEMBER-CLUSTER-NAME}"
+
+	// ClusterResourcePlacementEvictionKind is the kind of the ClusterResourcePlacementEviction.
+	ClusterResourcePlacementEvictionKind = "ClusterResourcePlacementEviction"
+
+	// ClusterResourcePlacementDisruptionBudgetKind is the kind of the ClusterResourcePlacementDisruptionBudget.
+	ClusterResourcePlacementDisruptionBudgetKind = "ClusterResourcePlacementDisruptionBudget"
 )

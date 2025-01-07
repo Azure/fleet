@@ -85,6 +85,8 @@ type Options struct {
 	ForceDeleteWaitTime metav1.Duration
 	// EnableStagedUpdateRunAPIs enables the agents to watch the clusterStagedUpdateRun CRs.
 	EnableStagedUpdateRunAPIs bool
+	// EnableEvictionAPIs enables to agents to watch the eviction and placement disruption budget CRs.
+	EnableEvictionAPIs bool
 }
 
 // NewOptions builds an empty options.
@@ -144,6 +146,7 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.BoolVar(&o.EnableClusterInventoryAPIs, "enable-cluster-inventory-apis", false, "If set, the agents will watch for the ClusterInventory APIs.")
 	flags.DurationVar(&o.ForceDeleteWaitTime.Duration, "force-delete-wait-time", 15*time.Minute, "The duration the hub agent waits before force deleting a member cluster.")
 	flags.BoolVar(&o.EnableStagedUpdateRunAPIs, "enable-staged-update-run-apis", false, "If set, the agents will watch for the ClusterStagedUpdateRun APIs.")
+	flags.BoolVar(&o.EnableEvictionAPIs, "enable-eviction-apis", false, "If set, the agents will watch for the Eviction and PlacementDisruptionBudget APIs.")
 
 	o.RateLimiterOpts.AddFlags(flags)
 }
