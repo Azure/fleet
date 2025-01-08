@@ -97,8 +97,8 @@ var (
 	}
 
 	evictionGVKs = []schema.GroupVersionKind{
-		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ClusterResourcePlacementEvictionKind),
-		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ClusterResourcePlacementDisruptionBudgetKind),
+		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ClusterResourcePlacementEvictionKind),
+		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ClusterResourcePlacementDisruptionBudgetKind),
 	}
 )
 

@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package v1alpha1
+package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,6 +12,7 @@ import (
 
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=crpdb
+// +kubebuilder:storageversion
 
 // ClusterResourcePlacementDisruptionBudget is the policy applied to a ClusterResourcePlacement
 // object that specifies its disruption budget, i.e., how many placements (clusters) can be

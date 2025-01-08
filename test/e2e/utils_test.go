@@ -918,7 +918,7 @@ func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*fram
 }
 
 func ensureCRPEvictionDeletion(crpEvictionName string) {
-	crpe := &placementv1alpha1.ClusterResourcePlacementEviction{
+	crpe := &placementv1beta1.ClusterResourcePlacementEviction{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crpEvictionName,
 		},

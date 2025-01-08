@@ -139,4 +139,125 @@ spec:
         - spec
         type: object
     served: true
+    storage: false
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          ClusterResourcePlacementDisruptionBudget is the policy applied to a ClusterResourcePlacement
+          object that specifies its disruption budget, i.e., how many placements (clusters) can be
+          down at the same time due to voluntary disruptions (e.g., evictions). Involuntary
+          disruptions are not subject to this budget, but will still count against it.
+
+
+          To apply a ClusterResourcePlacementDisruptionBudget to a ClusterResourcePlacement, use the
+          same name for the ClusterResourcePlacementDisruptionBudget object as the ClusterResourcePlacement
+          object. This guarantees a 1:1 link between the two objects.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: Spec is the desired state of the ClusterResourcePlacementDisruptionBudget.
+            properties:
+              maxUnavailable:
+                anyOf:
+                - type: integer
+                - type: string
+                description: |-
+                  MaxUnavailable is the maximum number of placements (clusters) that can be down at the
+                  same time due to voluntary disruptions. For example, a setting of 1 would imply that
+                  a voluntary disruption (e.g., an eviction) can only happen if all placements (clusters)
+                  from the linked Placement object are applied and available.
+
+
+                  This can be either an absolute value (e.g., 1) or a percentage (e.g., 10%).
+
+
+                  If a percentage is specified, Fleet will calculate the corresponding absolute values
+                  as follows:
+                  * if the linked Placement object is of the PickFixed placement type,
+                    we don't perform any calculation because eviction is not allowed for PickFixed CRP.
+                  * if the linked Placement object is of the PickAll placement type, MaxUnavailable cannot
+                    be specified since we cannot derive the total number of clusters selected.
+                  * if the linked Placement object is of the PickN placement type,
+                    the percentage is against the number of clusters specified in the placement (i.e., the
+                    value of the NumberOfClusters fields in the placement policy).
+                  The end result will be rounded up to the nearest integer if applicable.
+
+
+                  One may use a value of 0 for this field; in this case, no voluntary disruption would be
+                  allowed.
+
+
+                  This field is mutually exclusive with the MinAvailable field in the spec; exactly one
+                  of them can be set at a time.
+                x-kubernetes-int-or-string: true
+                x-kubernetes-validations:
+                - message: If supplied value is String should match regex '^(100|[0-9]{1,2})%$'
+                    or If supplied value is Integer must be greater than or equal
+                    to 0
+                  rule: 'type(self) == string ? self.matches(''^(100|[0-9]{1,2})%$'')
+                    : self >= 0'
+              minAvailable:
+                anyOf:
+                - type: integer
+                - type: string
+                description: |-
+                  MinAvailable is the minimum number of placements (clusters) that must be available at any
+                  time despite voluntary disruptions. For example, a setting of 10 would imply that
+                  a voluntary disruption (e.g., an eviction) can only happen if there are at least 11
+                  placements (clusters) from the linked Placement object are applied and available.
+
+
+                  This can be either an absolute value (e.g., 1) or a percentage (e.g., 10%).
+
+
+                  If a percentage is specified, Fleet will calculate the corresponding absolute values
+                  as follows:
+                  * if the linked Placement object is of the PickFixed placement type,
+                    we don't perform any calculation because eviction is not allowed for PickFixed CRP.
+                  * if the linked Placement object is of the PickAll placement type, MinAvailable can be
+                    specified but only as an integer since we cannot derive the total number of clusters selected.
+                  * if the linked Placement object is of the PickN placement type,
+                    the percentage is against the number of clusters specified in the placement (i.e., the
+                    value of the NumberOfClusters fields in the placement policy).
+                  The end result will be rounded up to the nearest integer if applicable.
+
+
+                  One may use a value of 0 for this field; in this case, voluntary disruption would be
+                  allowed at any time.
+
+
+                  This field is mutually exclusive with the MaxUnavailable field in the spec; exactly one
+                  of them can be set at a time.
+                x-kubernetes-int-or-string: true
+                x-kubernetes-validations:
+                - message: If supplied value is String should match regex '^(100|[0-9]{1,2})%$'
+                    or If supplied value is Integer must be greater than or equal
+                    to 0
+                  rule: 'type(self) == string ? self.matches(''^(100|[0-9]{1,2})%$'')
+                    : self >= 0'
+            type: object
+            x-kubernetes-validations:
+            - message: Both MaxUnavailable and MinAvailable cannot be specified
+              rule: '!(has(self.maxUnavailable) && has(self.minAvailable))'
+        required:
+        - spec
+        type: object
+    served: true
     storage: true

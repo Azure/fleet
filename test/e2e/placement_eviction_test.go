@@ -12,7 +12,6 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -62,11 +61,11 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding, taint clus
 	})
 
 	It("create cluster resource placement eviction targeting member cluster 1", func() {
-		crpe := &placementv1alpha1.ClusterResourcePlacementEviction{
+		crpe := &placementv1beta1.ClusterResourcePlacementEviction{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpEvictionName,
 			},
-			Spec: placementv1alpha1.PlacementEvictionSpec{
+			Spec: placementv1beta1.PlacementEvictionSpec{
 				PlacementName: crpName,
 				ClusterName:   taintClusterNames[0],
 			},
@@ -140,11 +139,11 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding, no taint s
 	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 	It("create cluster resource placement eviction targeting member cluster 1", func() {
-		crpe := &placementv1alpha1.ClusterResourcePlacementEviction{
+		crpe := &placementv1beta1.ClusterResourcePlacementEviction{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpEvictionName,
 			},
-			Spec: placementv1alpha1.PlacementEvictionSpec{
+			Spec: placementv1beta1.PlacementEvictionSpec{
 				PlacementName: crpName,
 				ClusterName:   memberCluster1EastProdName,
 			},
