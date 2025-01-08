@@ -16,7 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/controllers/work"
@@ -914,7 +913,7 @@ func crpRemovedActual(crpName string) func() error {
 
 func crpEvictionRemovedActual(crpEvictionName string) func() error {
 	return func() error {
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpEvictionName}, &placementv1alpha1.ClusterResourcePlacementEviction{}); !errors.IsNotFound(err) {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpEvictionName}, &placementv1beta1.ClusterResourcePlacementEviction{}); !errors.IsNotFound(err) {
 			return fmt.Errorf("CRP eviction still exists or an unexpected error occurred: %w", err)
 		}
 

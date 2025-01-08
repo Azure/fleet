@@ -12,7 +12,6 @@ import (
 
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=crpdb
-// +kubebuilder:storageversion
 
 // ClusterResourcePlacementDisruptionBudget is the policy applied to a ClusterResourcePlacement
 // object that specifies its disruption budget, i.e., how many placements (clusters) can be

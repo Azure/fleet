@@ -19,7 +19,6 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
 	testutilseviction "go.goms.io/fleet/test/utils/eviction"
@@ -85,11 +84,11 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		})
 
 		By("Create ClusterResourcePlacementDisruptionBudget", func() {
-			crpdb := placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
+			crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
 				},
-				Spec: placementv1alpha1.PlacementDisruptionBudgetSpec{
+				Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
 					MaxUnavailable: &intstr.IntOrString{
 						Type:   intstr.Int,
 						IntVal: 1,
@@ -178,11 +177,11 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		})
 
 		By("Create ClusterResourcePlacementDisruptionBudget", func() {
-			crpdb := placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
+			crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
 				},
-				Spec: placementv1alpha1.PlacementDisruptionBudgetSpec{
+				Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
 					MaxUnavailable: &intstr.IntOrString{
 						Type:   intstr.Int,
 						IntVal: 1,
@@ -256,11 +255,11 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		})
 
 		By("Create ClusterResourcePlacementDisruptionBudget", func() {
-			crpdb := placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
+			crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
 				},
-				Spec: placementv1alpha1.PlacementDisruptionBudgetSpec{
+				Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
 					MinAvailable: &intstr.IntOrString{
 						Type:   intstr.Int,
 						IntVal: 1,
@@ -372,11 +371,11 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		})
 
 		By("Create ClusterResourcePlacementDisruptionBudget", func() {
-			crpdb := placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
+			crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
 				},
-				Spec: placementv1alpha1.PlacementDisruptionBudgetSpec{
+				Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
 					MinAvailable: &intstr.IntOrString{
 						Type:   intstr.Int,
 						IntVal: 1,
@@ -445,13 +444,13 @@ func buildTestPickNCRP(crpName string, clusterCount int32) placementv1beta1.Clus
 	}
 }
 
-func buildTestEviction(evictionName, placementName, clusterName string) *placementv1alpha1.ClusterResourcePlacementEviction {
-	return &placementv1alpha1.ClusterResourcePlacementEviction{
+func buildTestEviction(evictionName, placementName, clusterName string) *placementv1beta1.ClusterResourcePlacementEviction {
+	return &placementv1beta1.ClusterResourcePlacementEviction{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       evictionName,
 			Generation: 1,
 		},
-		Spec: placementv1alpha1.PlacementEvictionSpec{
+		Spec: placementv1beta1.PlacementEvictionSpec{
 			PlacementName: placementName,
 			ClusterName:   clusterName,
 		},
@@ -460,7 +459,7 @@ func buildTestEviction(evictionName, placementName, clusterName string) *placeme
 
 func ensureEvictionRemoved(name string) {
 	// Delete eviction.
-	eviction := placementv1alpha1.ClusterResourcePlacementEviction{
+	eviction := placementv1beta1.ClusterResourcePlacementEviction{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
@@ -494,7 +493,7 @@ func ensureCRPRemoved(name string) {
 
 func ensureCRPDBRemoved(name string) {
 	// Delete CRPDB.
-	crpdb := placementv1alpha1.ClusterResourcePlacementDisruptionBudget{
+	crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},

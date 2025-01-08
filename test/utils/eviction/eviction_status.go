@@ -15,7 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
 )
 
@@ -32,7 +32,7 @@ var (
 
 func StatusUpdatedActual(ctx context.Context, client client.Client, evictionName string, isValidEviction *IsValidEviction, isExecutedEviction *IsExecutedEviction) func() error {
 	return func() error {
-		var eviction placementv1alpha1.ClusterResourcePlacementEviction
+		var eviction placementv1beta1.ClusterResourcePlacementEviction
 		if err := client.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
 			return err
 		}
@@ -40,7 +40,7 @@ func StatusUpdatedActual(ctx context.Context, client client.Client, evictionName
 		if isValidEviction != nil {
 			if isValidEviction.IsValid {
 				validCondition := metav1.Condition{
-					Type:               string(placementv1alpha1.PlacementEvictionConditionTypeValid),
+					Type:               string(placementv1beta1.PlacementEvictionConditionTypeValid),
 					Status:             metav1.ConditionTrue,
 					ObservedGeneration: eviction.GetGeneration(),
 					Reason:             condition.ClusterResourcePlacementEvictionValidReason,
@@ -49,7 +49,7 @@ func StatusUpdatedActual(ctx context.Context, client client.Client, evictionName
 				conditions = append(conditions, validCondition)
 			} else {
 				invalidCondition := metav1.Condition{
-					Type:               string(placementv1alpha1.PlacementEvictionConditionTypeValid),
+					Type:               string(placementv1beta1.PlacementEvictionConditionTypeValid),
 					Status:             metav1.ConditionFalse,
 					ObservedGeneration: eviction.GetGeneration(),
 					Reason:             condition.ClusterResourcePlacementEvictionInvalidReason,
@@ -61,7 +61,7 @@ func StatusUpdatedActual(ctx context.Context, client client.Client, evictionName
 		if isExecutedEviction != nil {
 			if isExecutedEviction.IsExecuted {
 				executedCondition := metav1.Condition{
-					Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
+					Type:               string(placementv1beta1.PlacementEvictionConditionTypeExecuted),
 					Status:             metav1.ConditionTrue,
 					ObservedGeneration: eviction.GetGeneration(),
 					Reason:             condition.ClusterResourcePlacementEvictionExecutedReason,
@@ -70,7 +70,7 @@ func StatusUpdatedActual(ctx context.Context, client client.Client, evictionName
 				conditions = append(conditions, executedCondition)
 			} else {
 				notExecutedCondition := metav1.Condition{
-					Type:               string(placementv1alpha1.PlacementEvictionConditionTypeExecuted),
+					Type:               string(placementv1beta1.PlacementEvictionConditionTypeExecuted),
 					Status:             metav1.ConditionFalse,
 					ObservedGeneration: eviction.GetGeneration(),
 					Reason:             condition.ClusterResourcePlacementEvictionNotExecutedReason,
@@ -79,7 +79,7 @@ func StatusUpdatedActual(ctx context.Context, client client.Client, evictionName
 				conditions = append(conditions, notExecutedCondition)
 			}
 		}
-		wantStatus := placementv1alpha1.PlacementEvictionStatus{
+		wantStatus := placementv1beta1.PlacementEvictionStatus{
 			Conditions: conditions,
 		}
 		if diff := cmp.Diff(eviction.Status, wantStatus, evictionStatusCmpOptions...); diff != "" {
