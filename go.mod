@@ -30,6 +30,7 @@ require (
 	k8s.io/apimachinery v0.30.3
 	k8s.io/client-go v0.30.3
 	k8s.io/component-base v0.30.2
+	k8s.io/component-helpers v0.28.3
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/metrics v0.25.2
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
