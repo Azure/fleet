@@ -32,6 +32,7 @@ spec:
             - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
             - --enable-cluster-inventory-apis={{ .Values.enableClusterInventoryAPI }}
             - --enable-staged-update-run-apis={{ .Values.enableStagedUpdateRunAPIs }}
+            - --enable-eviction-apis={{ .Values.enableEvictionAPIs}}
             - --max-concurrent-cluster-placement={{ .Values.MaxConcurrentClusterPlacement }}
             - --concurrent-resource-change-syncs={{ .Values.ConcurrentResourceChangeSyncs }}
             - --log_file_max_size={{ .Values.logFileMaxSize }}

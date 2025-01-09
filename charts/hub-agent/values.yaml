@@ -37,6 +37,7 @@ enableV1Alpha1APIs: false
 enableV1Beta1APIs: true
 enableClusterInventoryAPI: true
 enableStagedUpdateRunAPIs: true
+enableEvictionAPIs: true
 
 hubAPIQPS: 250
 hubAPIBurst: 1000

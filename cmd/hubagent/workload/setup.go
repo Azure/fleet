@@ -95,6 +95,11 @@ var (
 	clusterInventoryGVKs = []schema.GroupVersionKind{
 		clusterinventory.GroupVersion.WithKind("ClusterProfile"),
 	}
+
+	evictionGVKs = []schema.GroupVersionKind{
+		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ClusterResourcePlacementEvictionKind),
+		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ClusterResourcePlacementDisruptionBudgetKind),
+	}
 )
 
 // SetupControllers set up the customized controllers we developed
@@ -215,19 +220,27 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			return err
 		}
 
-		klog.Info("Setting up cluster resource placement eviction controller")
-		if err := (&clusterresourceplacementeviction.Reconciler{
-			Client: mgr.GetClient(),
-		}).SetupWithManager(mgr); err != nil {
-			klog.ErrorS(err, "Unable to set up cluster resource placement eviction controller")
-			return err
+		if opts.EnableEvictionAPIs {
+			for _, gvk := range evictionGVKs {
+				if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
+					klog.ErrorS(err, "Unable to find the required CRD", "GVK", gvk)
+					return err
+				}
+			}
+			klog.Info("Setting up cluster resource placement eviction controller")
+			if err := (&clusterresourceplacementeviction.Reconciler{
+				Client: mgr.GetClient(),
+			}).SetupWithManager(mgr); err != nil {
+				klog.ErrorS(err, "Unable to set up cluster resource placement eviction controller")
+				return err
+			}
 		}
 
 		// Set up a controller to do staged update run, rolling out resources to clusters in a stage by stage manner.
 		if opts.EnableStagedUpdateRunAPIs {
 			for _, gvk := range clusterStagedUpdateRunGVKs {
 				if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
-					klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
+					klog.ErrorS(err, "Unable to find the required CRD", "GVK", gvk)
 					return err
 				}
 			}
@@ -236,7 +249,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 				Client:          mgr.GetClient(),
 				InformerManager: dynamicInformerManager,
 			}).SetupWithManager(mgr); err != nil {
-				klog.ErrorS(err, "unable to set up clusterStagedUpdateRun controller")
+				klog.ErrorS(err, "Unable to set up clusterStagedUpdateRun controller")
 				return err
 			}
 		}
