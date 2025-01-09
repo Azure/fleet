@@ -199,6 +199,16 @@ func (r *Reconciler) collectScheduledClusters(
 		// no more retries here.
 		return nil, nil, fmt.Errorf("%w: %s", errInitializedFailed, nobindingErr.Error())
 	}
+
+	if updateRun.Status.PolicyObservedClusterCount == -1 {
+		// For pickAll policy, the observed cluster count is not included in the policy snapshot. We set it to the number of selected bindings.
+		updateRun.Status.PolicyObservedClusterCount = len(selectedBindings)
+	} else if updateRun.Status.PolicyObservedClusterCount != len(selectedBindings) {
+		countErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the number of selected bindings %d is not equal to the observed cluster count %d", len(selectedBindings), updateRun.Status.PolicyObservedClusterCount))
+		klog.ErrorS(countErr, "Failed to collect clusterResourceBindings", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
+		// no more retries here.
+		return nil, nil, fmt.Errorf("%w: %s", errInitializedFailed, countErr.Error())
+	}
 	return selectedBindings, toBeDeletedBindings, nil
 }
 
