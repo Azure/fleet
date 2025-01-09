@@ -11,5 +11,5 @@ spec:
   targetStage: canary
 status:
   conditions:
-    - type: Approved
-      status: "True"
+  - type: Approved
+    status: "True"
