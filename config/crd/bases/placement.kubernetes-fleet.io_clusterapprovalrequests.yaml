@@ -21,7 +21,7 @@ spec:
   versions:
   - additionalPrinterColumns:
     - jsonPath: .spec.parentStageRollout
-      name: UpdateRun
+      name: Update-Run
       type: string
     - jsonPath: .spec.targetStage
       name: Stage
@@ -165,7 +165,7 @@ spec:
       status: {}
   - additionalPrinterColumns:
     - jsonPath: .spec.parentStageRollout
-      name: UpdateRun
+      name: Update-Run
       type: string
     - jsonPath: .spec.targetStage
       name: Stage

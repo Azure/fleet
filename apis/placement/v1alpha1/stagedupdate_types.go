@@ -18,9 +18,9 @@ import (
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=crsur
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:printcolumn:JSONPath=`.spec.placementName`,name="Placement",type=string
-// +kubebuilder:printcolumn:JSONPath=`.spec.resourceSnapshotIndex`,name="ResourceSnapshot",type=string
+// +kubebuilder:printcolumn:JSONPath=`.spec.resourceSnapshotIndex`,name="Resource-Snapshot",type=string
 // +kubebuilder:printcolumn:JSONPath=`.spec.stagedRolloutStrategyName`,name="Strategy",priority=1,type=string
-// +kubebuilder:printcolumn:JSONPath=`.status.policySnapshotIndexUsed`,name="PolicySnapshot",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.policySnapshotIndexUsed`,name="Policy-Snapshot",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Initialized")].status`,name="Initialized",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Succeeded")].status`,name="Succeeded",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
@@ -404,7 +404,7 @@ type ClusterStagedUpdateRunList struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=careq
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:printcolumn:JSONPath=`.spec.parentStageRollout`,name="UpdateRun",type=string
+// +kubebuilder:printcolumn:JSONPath=`.spec.parentStageRollout`,name="Update-Run",type=string
 // +kubebuilder:printcolumn:JSONPath=`.spec.targetStage`,name="Stage",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Approved")].status`,name="Approved",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
