@@ -117,9 +117,6 @@ const (
 
 	// TargetUpdatingStageNameLabel indicates the updating stage name on a staged run related object.
 	TargetUpdatingStageNameLabel = fleetPrefix + "targetUpdatingStage"
-
-	// ApprovalTaskNameFmt is the format of the approval task name.
-	ApprovalTaskNameFmt = "%s-%s"
 )
 
 // NamespacedName comprises a resource name, with a mandatory namespace.

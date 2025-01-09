@@ -377,6 +377,16 @@ func validateClusterStagedUpdateRunStatus(
 				return fmt.Errorf("condition message mismatch: got %s, want %s", succeedCond.Message, message)
 			}
 		}
+
+		for i, stage := range updateRun.Status.StagesStatus {
+			for j, task := range stage.AfterStageTaskStatus {
+				if task.Type == placementv1beta1.AfterStageTaskTypeApproval {
+					if !strings.HasPrefix(task.ApprovalRequestName, want.StagesStatus[i].AfterStageTaskStatus[j].ApprovalRequestName) {
+						return fmt.Errorf("approval request name mismatch: got %s, want with prefix %s", task.ApprovalRequestName, want.StagesStatus[i].AfterStageTaskStatus[j].ApprovalRequestName)
+					}
+				}
+			}
+		}
 		return nil
 	}, timeout, interval).Should(Succeed(), "failed to validate the clusterStagedUpdateRun status")
 }
@@ -399,6 +409,16 @@ func validateClusterStagedUpdateRunStatusConsistently(
 			succeedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionSucceeded))
 			if !strings.Contains(succeedCond.Message, message) {
 				return fmt.Errorf("condition message mismatch: got %s, want %s", succeedCond.Message, message)
+			}
+		}
+
+		for i, stage := range updateRun.Status.StagesStatus {
+			for j, task := range stage.AfterStageTaskStatus {
+				if task.Type == placementv1beta1.AfterStageTaskTypeApproval {
+					if !strings.HasPrefix(task.ApprovalRequestName, want.StagesStatus[i].AfterStageTaskStatus[j].ApprovalRequestName) {
+						return fmt.Errorf("approval request name mismatch: got %s, want with prefix %s", task.ApprovalRequestName, want.StagesStatus[i].AfterStageTaskStatus[j].ApprovalRequestName)
+					}
+				}
 			}
 		}
 		return nil

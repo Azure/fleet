@@ -33,6 +33,7 @@ var (
 		cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime"),
 		cmpopts.IgnoreFields(metav1.Condition{}, "Message"),
 		cmpopts.IgnoreFields(placementv1beta1.StageUpdatingStatus{}, "StartTime", "EndTime"),
+		cmpopts.IgnoreFields(placementv1beta1.AfterStageTaskStatus{}, "ApprovalRequestName"),
 	}
 )
 
