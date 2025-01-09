@@ -463,7 +463,7 @@ func TestPrepareManifestCondForWA(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			manifestCondForWA := prepareManifestCondForWA(tc.wriStr, tc.wri, tc.workGeneration, tc.existingManifestCondQIdx, tc.existingManifestConds)
+			manifestCondForWA := prepareManifestCondForWriteAhead(tc.wriStr, tc.wri, tc.workGeneration, tc.existingManifestCondQIdx, tc.existingManifestConds)
 			if diff := cmp.Diff(&manifestCondForWA, tc.wantManifestCondForWA, ignoreFieldConditionLTTMsg); diff != "" {
 				t.Errorf("prepareManifestCondForWA() mismatches (-got +want):\n%s", diff)
 			}

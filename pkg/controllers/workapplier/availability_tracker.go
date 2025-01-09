@@ -96,7 +96,9 @@ func trackDeploymentAvailability(inMemberClusterObj *unstructured.Unstructured) 
 	var deploy appv1.Deployment
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(inMemberClusterObj.Object, &deploy); err != nil {
 		// Normally this branch should never run.
-		return ManifestProcessingAvailabilityResultTypeFailed, controller.NewUnexpectedBehaviorError(fmt.Errorf("failed to convert the unstructured object to a deployment: %w", err))
+		wrappedErr := fmt.Errorf("failed to convert the unstructured object to a deployment: %w", err)
+		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
+		return ManifestProcessingAvailabilityResultTypeFailed, wrappedErr
 	}
 
 	// Check if the deployment is available.
@@ -119,7 +121,9 @@ func trackStatefulSetAvailability(inMemberClusterObj *unstructured.Unstructured)
 	var statefulSet appv1.StatefulSet
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(inMemberClusterObj.Object, &statefulSet); err != nil {
 		// Normally this branch should never run.
-		return ManifestProcessingAvailabilityResultTypeFailed, controller.NewUnexpectedBehaviorError(fmt.Errorf("failed to convert the unstructured object to a stateful set: %w", err))
+		wrappedErr := fmt.Errorf("failed to convert the unstructured object to a stateful set: %w", err)
+		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
+		return ManifestProcessingAvailabilityResultTypeFailed, wrappedErr
 	}
 
 	// Check if the stateful set is available.
@@ -145,8 +149,10 @@ func trackStatefulSetAvailability(inMemberClusterObj *unstructured.Unstructured)
 func trackDaemonSetAvailability(inMemberClusterObj *unstructured.Unstructured) (ManifestProcessingAvailabilityResultType, error) {
 	var daemonSet appv1.DaemonSet
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(inMemberClusterObj.Object, &daemonSet); err != nil {
+		wrappedErr := fmt.Errorf("failed to convert the unstructured object to a daemon set: %w", err)
+		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
 		// Normally this branch should never run.
-		return ManifestProcessingAvailabilityResultTypeFailed, controller.NewUnexpectedBehaviorError(fmt.Errorf("failed to convert the unstructured object to a daemon set: %w", err))
+		return ManifestProcessingAvailabilityResultTypeFailed, wrappedErr
 	}
 
 	// Check if the daemonSet is available.
@@ -168,7 +174,9 @@ func trackDaemonSetAvailability(inMemberClusterObj *unstructured.Unstructured) (
 func trackServiceAvailability(inMemberClusterObj *unstructured.Unstructured) (ManifestProcessingAvailabilityResultType, error) {
 	var svc corev1.Service
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(inMemberClusterObj.Object, &svc); err != nil {
-		return ManifestProcessingAvailabilityResultTypeFailed, controller.NewUnexpectedBehaviorError(fmt.Errorf("failed to convert the unstructured object to a service: %w", err))
+		wrappedErr := fmt.Errorf("failed to convert the unstructured object to a service: %w", err)
+		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
+		return ManifestProcessingAvailabilityResultTypeFailed, wrappedErr
 	}
 	switch svc.Spec.Type {
 	case "":
@@ -205,7 +213,9 @@ func trackServiceAvailability(inMemberClusterObj *unstructured.Unstructured) (Ma
 func trackCRDAvailability(inMemberClusterObj *unstructured.Unstructured) (ManifestProcessingAvailabilityResultType, error) {
 	var crd apiextensionsv1.CustomResourceDefinition
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(inMemberClusterObj.Object, &crd); err != nil {
-		return ManifestProcessingAvailabilityResultTypeFailed, controller.NewUnexpectedBehaviorError(fmt.Errorf("failed to convert the unstructured object to a custom resource definition: %w", err))
+		wrappedErr := fmt.Errorf("failed to convert the unstructured object to a custom resource definition: %w", err)
+		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
+		return ManifestProcessingAvailabilityResultTypeFailed, wrappedErr
 	}
 
 	// If both conditions are True, the CRD has become available.
