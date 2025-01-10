@@ -23,6 +23,7 @@ import (
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/overrider"
+	"go.goms.io/fleet/pkg/utils/uniquename"
 )
 
 // initialize initializes the ClusterStagedUpdateRun object with all the stages computed during the initialization.
@@ -199,6 +200,16 @@ func (r *Reconciler) collectScheduledClusters(
 		// no more retries here.
 		return nil, nil, fmt.Errorf("%w: %s", errInitializedFailed, nobindingErr.Error())
 	}
+
+	if updateRun.Status.PolicyObservedClusterCount == -1 {
+		// For pickAll policy, the observed cluster count is not included in the policy snapshot. We set it to the number of selected bindings.
+		updateRun.Status.PolicyObservedClusterCount = len(selectedBindings)
+	} else if updateRun.Status.PolicyObservedClusterCount != len(selectedBindings) {
+		countErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the number of selected bindings %d is not equal to the observed cluster count %d", len(selectedBindings), updateRun.Status.PolicyObservedClusterCount))
+		klog.ErrorS(countErr, "Failed to collect clusterResourceBindings", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
+		// no more retries here.
+		return nil, nil, fmt.Errorf("%w: %s", errInitializedFailed, countErr.Error())
+	}
 	return selectedBindings, toBeDeletedBindings, nil
 }
 
@@ -343,7 +354,14 @@ func (r *Reconciler) computeRunStageStatus(
 		for i, task := range stage.AfterStageTasks {
 			curStageUpdatingStatus.AfterStageTaskStatus[i].Type = task.Type
 			if task.Type == placementv1beta1.AfterStageTaskTypeApproval {
-				curStageUpdatingStatus.AfterStageTaskStatus[i].ApprovalRequestName = fmt.Sprintf(placementv1beta1.ApprovalTaskNameFmt, updateRun.Name, stage.Name)
+				requestName, err := uniquename.NewClusterApprovalRequestName(updateRun.Name, stage.Name)
+				if err != nil {
+					nameErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("failed to generate a valid ClusterApprovalRequest name: %s", err.Error()))
+					klog.ErrorS(nameErr, "Failed to generate ClusterApprovalRequest name", "clusterStagedUpdateStrategy", updateStrategyName, "stage name", stage.Name, "clusterStagedUpdateRun", updateRunRef)
+					// since updateRun and stage name should be both valid, this error can be temporary and retried.
+					return nameErr
+				}
+				curStageUpdatingStatus.AfterStageTaskStatus[i].ApprovalRequestName = requestName
 			}
 		}
 		stagesStatus = append(stagesStatus, curStageUpdatingStatus)
