@@ -133,7 +133,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		// Though the bounded binding is not taking the latest resourceSnapshot, we still needs to reconcile the works.
 		if !condition.IsConditionStatusFalse(rolloutStartedCondition, resourceBinding.Generation) &&
 			!condition.IsConditionStatusTrue(rolloutStartedCondition, resourceBinding.Generation) {
-			// The rollout controller is still in the processing of updating the condition
+			// The rollout controller is still in the processing of updating the condition.
+			//
+			// Note that running this branch would also skip the refreshing of apply strategies;
+			// it will resume once the rollout controller updates the rollout started condition.
 			klog.V(2).InfoS("Requeue the resource binding until the rollout controller finishes updating the status", "resourceBinding", bindingRef, "generation", resourceBinding.Generation, "rolloutStartedCondition", rolloutStartedCondition)
 			return controllerruntime.Result{Requeue: true}, nil
 		}
@@ -700,15 +703,16 @@ func (r *Reconciler) upsertWork(ctx context.Context, newWork, existingWork *flee
 	} else {
 		// we already checked the label in fetchAllResourceSnapShots function so no need to check again
 		resourceIndex, _ := labels.ExtractResourceIndexFromClusterResourceSnapshot(resourceSnapshot)
-		if workResourceIndex == resourceIndex {
-			// no need to do anything if the work is generated from the same resource/override snapshots
+		if workResourceIndex == resourceIndex && equality.Semantic.DeepEqual(existingWork.Spec.ApplyStrategy, newWork.Spec.ApplyStrategy) {
+			// no need to do anything if the work is generated from the same resource/override snapshots,
+			// and the apply strategy remains the same.
 			if existingWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] == newWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] &&
 				existingWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] == newWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] {
-				klog.V(2).InfoS("Work is associated with the desired resource/override snapshots", "existingROHash", existingWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation],
+				klog.V(2).InfoS("Work is associated with the desired resource/override snapshots and apply strategy", "existingROHash", existingWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation],
 					"existingCROHash", existingWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation], "work", workObj)
 				return false, nil
 			}
-			klog.V(2).InfoS("Work is already associated with the desired resourceSnapshot but still not having the right override snapshots", "resourceIndex", resourceIndex, "work", workObj, "resourceSnapshot", resourceSnapshotObj)
+			klog.V(2).InfoS("Work is already associated with the desired resourceSnapshot and apply strategy but still not having the right override snapshots", "resourceIndex", resourceIndex, "work", workObj, "resourceSnapshot", resourceSnapshotObj)
 		}
 	}
 	// need to copy the new work to the existing work, only 5 possible changes:
@@ -723,6 +727,7 @@ func (r *Reconciler) upsertWork(ctx context.Context, newWork, existingWork *flee
 	existingWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] = newWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation]
 	existingWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] = newWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation]
 	existingWork.Spec.Workload.Manifests = newWork.Spec.Workload.Manifests
+	existingWork.Spec.ApplyStrategy = newWork.Spec.ApplyStrategy
 	if err := r.Client.Update(ctx, existingWork); err != nil {
 		klog.ErrorS(err, "Failed to update the work associated with the resourceSnapshot", "resourceSnapshot", resourceSnapshotObj, "work", workObj)
 		return true, controller.NewUpdateIgnoreConflictError(err)
@@ -760,6 +765,17 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 	// try to gather the resource binding applied status if we didn't update any associated work spec this time
 	appliedCond := buildAllWorkAppliedCondition(works, resourceBinding)
 	resourceBinding.SetConditions(appliedCond)
+
+	// Set the DiffReported condition if (and only if) a ReportDiff apply strategy is currently
+	// being used.
+	if resourceBinding.Spec.ApplyStrategy != nil && resourceBinding.Spec.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff {
+		diffReportedCond := buildAllWorkDiffReportedCondition(works, resourceBinding)
+		resourceBinding.SetConditions(diffReportedCond)
+	} else {
+		// Remove the condition if the apply strategy is not of the ReportDiff type.
+		resourceBinding.RemoveCondition(string(fleetv1beta1.ResourceBindingDiffReported))
+	}
+
 	var availableCond metav1.Condition
 	// only try to gather the available status if all the work objects are applied
 	if appliedCond.Status == metav1.ConditionTrue {
@@ -855,6 +871,38 @@ func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *
 		Type:               string(fleetv1beta1.ResourceBindingApplied),
 		Reason:             condition.WorkNotAppliedReason,
 		Message:            fmt.Sprintf("Work object %s is not applied", notAppliedWork),
+		ObservedGeneration: binding.GetGeneration(),
+	}
+}
+
+// buildAllWorkDiffReportedCondition builds DiffReported condition for a ClusterResourceBinding
+// by checking the DiffReported condition of all the works associated with the binding.
+func buildAllWorkDiffReportedCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) metav1.Condition {
+	allDiffReported := true
+	var notDiffReportedWork string
+	for _, w := range works {
+		if !condition.IsConditionStatusTrue(meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeDiffReported), w.GetGeneration()) {
+			allDiffReported = false
+			notDiffReportedWork = w.Name
+			break
+		}
+	}
+
+	if allDiffReported {
+		klog.V(2).InfoS("All works associated with the binding have reported diff", "binding", klog.KObj(binding))
+		return metav1.Condition{
+			Status:             metav1.ConditionTrue,
+			Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+			Reason:             condition.AllWorkDiffReportedReason,
+			Message:            "All corresponding work objects have reported diff",
+			ObservedGeneration: binding.GetGeneration(),
+		}
+	}
+	return metav1.Condition{
+		Status:             metav1.ConditionFalse,
+		Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+		Reason:             condition.WorkNotDiffReportedReason,
+		Message:            fmt.Sprintf("Work object %s has failed to reported diff", notDiffReportedWork),
 		ObservedGeneration: binding.GetGeneration(),
 	}
 }

@@ -72,6 +72,14 @@ var (
 		ValueInHub:    "80",
 		ValueInMember: "90",
 	}
+
+	emptyStringSliceHash = "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+)
+
+var (
+	ignoreTypeMeta   = cmpopts.IgnoreFields(metav1.TypeMeta{}, "Kind", "APIVersion")
+	ignoreWorkOption = cmpopts.IgnoreFields(metav1.ObjectMeta{},
+		"UID", "ResourceVersion", "ManagedFields", "CreationTimestamp", "Generation")
 )
 
 const (
@@ -83,9 +91,7 @@ const (
 var _ = Describe("Test Work Generator Controller", func() {
 	Context("Test Bound ClusterResourceBinding", func() {
 		var binding *placementv1beta1.ClusterResourceBinding
-		ignoreTypeMeta := cmpopts.IgnoreFields(metav1.TypeMeta{}, "Kind", "APIVersion")
-		ignoreWorkOption := cmpopts.IgnoreFields(metav1.ObjectMeta{},
-			"UID", "ResourceVersion", "ManagedFields", "CreationTimestamp", "Generation")
+
 		var emptyArray []string
 		jsonBytes, _ := json.Marshal(emptyArray)
 		emptyHash := fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
@@ -1636,7 +1642,215 @@ var _ = Describe("Test Work Generator Controller", func() {
 		})
 	})
 
-	// TODO: add a test for the apply strategy
+	FContext("Sync apply strategy changes", Ordered, func() {
+		var clusterResourceBinding *placementv1beta1.ClusterResourceBinding
+
+		BeforeAll(func() {
+			memberClusterName = "cluster-" + utils.RandStr()
+			memberCluster := clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: memberClusterName,
+				},
+			}
+			Expect(k8sClient.Create(ctx, &memberCluster)).Should(Succeed(), "Failed to create member cluster")
+
+			memberClusterNamespaceName = fmt.Sprintf(utils.NamespaceNameFormat, memberClusterName)
+			memberClusterReservedNS := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: memberClusterNamespaceName,
+				},
+			}
+			Expect(k8sClient.Create(ctx, &memberClusterReservedNS)).Should(Succeed(), "Failed to create namespace")
+
+			testCRPName = "crp-" + utils.RandStr()
+		})
+
+		AfterAll(func() {})
+
+		It("Can create master resource snapshot and resource binding", func() {
+			// Create the master resource snapshot.
+			masterResourceSnapshot := generateResourceSnapshot(
+				1, 1, 0,
+				[][]byte{
+					testResourceCRD, testNameSpace, testResource,
+				})
+			Expect(k8sClient.Create(ctx, masterResourceSnapshot)).Should(Succeed(), "Failed to create master resource snapshot")
+
+			resourceBindingSpec := placementv1beta1.ResourceBindingSpec{
+				State:                placementv1beta1.BindingStateBound,
+				ResourceSnapshotName: masterResourceSnapshot.Name,
+				TargetCluster:        memberClusterName,
+			}
+			createClusterResourceBinding(&clusterResourceBinding, resourceBindingSpec)
+		})
+
+		It("should create work object for the resource binding", func() {
+			Eventually(func() error {
+				work := &placementv1beta1.Work{}
+				if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: memberClusterNamespaceName, Name: fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName)}, work); err != nil {
+					return err
+				}
+
+				wantWork := placementv1beta1.Work{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName),
+						Namespace: memberClusterNamespaceName,
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion:         placementv1beta1.GroupVersion.String(),
+								Kind:               "ClusterResourceBinding",
+								Name:               clusterResourceBinding.Name,
+								UID:                clusterResourceBinding.UID,
+								BlockOwnerDeletion: ptr.To(true),
+							},
+						},
+						Labels: map[string]string{
+							placementv1beta1.CRPTrackingLabel:                 testCRPName,
+							placementv1beta1.ParentBindingLabel:               clusterResourceBinding.Name,
+							placementv1beta1.ParentResourceSnapshotIndexLabel: "1",
+						},
+						Annotations: map[string]string{
+							placementv1beta1.ParentResourceSnapshotNameAnnotation:                clusterResourceBinding.Spec.ResourceSnapshotName,
+							placementv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: emptyStringSliceHash,
+							placementv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        emptyStringSliceHash,
+						},
+					},
+					Spec: placementv1beta1.WorkSpec{
+						Workload: placementv1beta1.WorkloadTemplate{
+							Manifests: []placementv1beta1.Manifest{
+								{
+									RawExtension: runtime.RawExtension{Raw: testResourceCRD},
+								},
+								{
+									RawExtension: runtime.RawExtension{Raw: testNameSpace},
+								},
+								{
+									RawExtension: runtime.RawExtension{Raw: testResource},
+								},
+							},
+						},
+					},
+				}
+				if diff := cmp.Diff(work, &wantWork, ignoreTypeMeta, ignoreWorkOption); diff != "" {
+					return fmt.Errorf("work object mismatches (-got, +want):\n%s", diff)
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "Failed to create expected work object")
+		})
+
+		It("can update apply strategy on the resource binding", func() {
+			// Update the apply strategy on the resource binding; use an Eventually
+			// block to avoid conflict induced errors.
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: clusterResourceBinding.Name}, clusterResourceBinding); err != nil {
+					return fmt.Errorf("failed to get resource binding: %w", err)
+				}
+
+				clusterResourceBinding.Spec.ApplyStrategy = &placementv1beta1.ApplyStrategy{
+					ComparisonOption: placementv1beta1.ComparisonOptionTypeFullComparison,
+					WhenToApply:      placementv1beta1.WhenToApplyTypeIfNotDrifted,
+					Type:             placementv1beta1.ApplyStrategyTypeServerSideApply,
+					WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeNever,
+				}
+
+				if err := k8sClient.Update(ctx, clusterResourceBinding); err != nil {
+					return fmt.Errorf("failed to update resource binding: %w", err)
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "Failed to update apply strategy on the resource binding")
+		})
+
+		It("can add the rollout started condition to the resource binding", func() {
+			updateRolloutStartedGeneration(&clusterResourceBinding)
+		})
+
+		It("should update apply strategy on the work object", func() {
+			Eventually(func() error {
+				work := &placementv1beta1.Work{}
+				if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: memberClusterNamespaceName, Name: fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName)}, work); err != nil {
+					return err
+				}
+
+				wantWork := placementv1beta1.Work{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName),
+						Namespace: memberClusterNamespaceName,
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion:         placementv1beta1.GroupVersion.String(),
+								Kind:               "ClusterResourceBinding",
+								Name:               clusterResourceBinding.Name,
+								UID:                clusterResourceBinding.UID,
+								BlockOwnerDeletion: ptr.To(true),
+							},
+						},
+						Labels: map[string]string{
+							placementv1beta1.CRPTrackingLabel:                 testCRPName,
+							placementv1beta1.ParentBindingLabel:               clusterResourceBinding.Name,
+							placementv1beta1.ParentResourceSnapshotIndexLabel: "1",
+						},
+						Annotations: map[string]string{
+							placementv1beta1.ParentResourceSnapshotNameAnnotation:                clusterResourceBinding.Spec.ResourceSnapshotName,
+							placementv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: emptyStringSliceHash,
+							placementv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        emptyStringSliceHash,
+						},
+					},
+					Spec: placementv1beta1.WorkSpec{
+						Workload: placementv1beta1.WorkloadTemplate{
+							Manifests: []placementv1beta1.Manifest{
+								{
+									RawExtension: runtime.RawExtension{Raw: testResourceCRD},
+								},
+								{
+									RawExtension: runtime.RawExtension{Raw: testNameSpace},
+								},
+								{
+									RawExtension: runtime.RawExtension{Raw: testResource},
+								},
+							},
+						},
+						ApplyStrategy: &placementv1beta1.ApplyStrategy{
+							ComparisonOption: placementv1beta1.ComparisonOptionTypeFullComparison,
+							WhenToApply:      placementv1beta1.WhenToApplyTypeIfNotDrifted,
+							Type:             placementv1beta1.ApplyStrategyTypeServerSideApply,
+							WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeNever,
+						},
+					},
+				}
+				if diff := cmp.Diff(work, &wantWork, ignoreTypeMeta, ignoreWorkOption); diff != "" {
+					return fmt.Errorf("work object mismatches (-got, +want):\n%s", diff)
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "Failed to create expected work object")
+		})
+
+		AfterAll(func() {
+			// Note that this test spec will not check if the cleanup has been
+			// fully completed. This is OK as the suite is never run in parallel
+			// and a random suffix is used for each created resource.
+
+			// Delete the member cluster reserved namespace.
+			memberClusterNamespace := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: memberClusterNamespaceName,
+				},
+			}
+			Expect(k8sClient.Delete(ctx, &memberClusterNamespace)).Should(Succeed(), "Failed to delete namespace")
+
+			// Delete the cluster resource binding.
+			if clusterResourceBinding != nil {
+				Expect(k8sClient.Delete(ctx, clusterResourceBinding)).Should(Succeed(), "Failed to delete cluster resource binding")
+			}
+
+			// Delete the member cluster.
+			memberCluster := clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: memberClusterName,
+				},
+			}
+			Expect(k8sClient.Delete(ctx, &memberCluster)).Should(Succeed(), "Failed to delete member cluster")
+		})
+	})
 })
 
 func verifyBindingStatusSyncedNotApplied(binding *placementv1beta1.ClusterResourceBinding, hasOverride, workSync bool) {

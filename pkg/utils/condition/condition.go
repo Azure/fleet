@@ -95,6 +95,12 @@ const (
 
 	// AllWorkAvailableReason is the reason string of placement condition if all works are available.
 	AllWorkAvailableReason = "AllWorkAreAvailable"
+
+	// AllWorkDiffReportedReason is the reason string of placement condition if all works have diff reported.
+	AllWorkDiffReportedReason = "AllWorkHaveDiffReported"
+
+	// WorkNotDiffReportedReason is the reason string of placement condition if some works failed to have diff reported.
+	WorkNotDiffReportedReason = "NotAllWorkHaveDiffReported"
 )
 
 // A group of condition reason string which is used t populate the ClusterStagedUpdateRun condition.
