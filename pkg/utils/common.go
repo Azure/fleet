@@ -607,6 +607,11 @@ var LessFuncDiffedResourcePlacements = func(a, b placementv1beta1.DiffedResource
 	return aStr < bStr
 }
 
+// LessFuncCondition is a less function for sorting conditions based on its types.
+var LessFuncConditions = func(a, b metav1.Condition) bool {
+	return a.Type < b.Type
+}
+
 // IsFleetAnnotationPresent returns true if a key with fleet prefix is present in the annotations map.
 func IsFleetAnnotationPresent(annotations map[string]string) bool {
 	for k := range annotations {

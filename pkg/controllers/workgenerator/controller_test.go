@@ -308,6 +308,34 @@ func TestUpsertWork(t *testing.T) {
 			},
 			expectChanged: false,
 		},
+		{
+			name: "apply strategy changes",
+			existingWork: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: namespace,
+					Labels: map[string]string{
+						fleetv1beta1.ParentResourceSnapshotIndexLabel: "1",
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.ParentResourceSnapshotNameAnnotation:                "snapshot-1",
+						fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: "hash1",
+						fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        "hash2",
+					},
+				},
+				Spec: fleetv1beta1.WorkSpec{
+					Workload: fleetv1beta1.WorkloadTemplate{
+						Manifests: []fleetv1beta1.Manifest{{RawExtension: runtime.RawExtension{Object: &testDeployment}}},
+					},
+					ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+						ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+						Type:             fleetv1beta1.ApplyStrategyTypeReportDiff,
+						WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+					},
+				},
+			},
+			expectChanged: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -530,6 +558,146 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 			got := buildAllWorkAppliedCondition(tt.works, binding)
 			if diff := cmp.Diff(got, tt.want, cmpConditionOption); diff != "" {
 				t.Errorf("buildAllWorkAppliedCondition test `%s` mismatch (-got +want):\n%s", name, diff)
+			}
+		})
+	}
+}
+
+func TestBuildAllWorkDiffReportedCondition(t *testing.T) {
+	binding := &fleetv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "binding",
+			Generation: 1,
+		},
+	}
+	testCases := []struct {
+		name                      string
+		works                     map[string]*fleetv1beta1.Work
+		wantDiffReportedCondition *metav1.Condition
+	}{
+		{
+			name: "all works have diff reported",
+			works: map[string]*fleetv1beta1.Work{
+				"work-1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-1",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+				"work-2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-2",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+			},
+			wantDiffReportedCondition: &metav1.Condition{
+				Status:             metav1.ConditionTrue,
+				Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+				Reason:             condition.AllWorkDiffReportedReason,
+				ObservedGeneration: 1,
+			},
+		},
+		{
+			name: "one of two works have diff reported, the other has not reported yet",
+			works: map[string]*fleetv1beta1.Work{
+				"work-1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-1",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+				"work-2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-2",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{},
+					},
+				},
+			},
+			wantDiffReportedCondition: &metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+				Reason:             condition.WorkNotDiffReportedReason,
+				ObservedGeneration: 1,
+			},
+		},
+		{
+			name: "one of two works have diff reported, the other has failed to report diff",
+			works: map[string]*fleetv1beta1.Work{
+				"work-1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-1",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+				"work-2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-2",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+								Status:             metav1.ConditionFalse,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+			},
+			wantDiffReportedCondition: &metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+				Reason:             condition.WorkNotDiffReportedReason,
+				ObservedGeneration: 1,
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotDiffReportedCond := buildAllWorkDiffReportedCondition(tc.works, binding)
+			if diff := cmp.Diff(&gotDiffReportedCond, tc.wantDiffReportedCondition, cmpConditionOption); diff != "" {
+				t.Errorf("diff reported condition mismatches (-got +want):\n%s", diff)
 			}
 		})
 	}

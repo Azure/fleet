@@ -762,6 +762,27 @@ func getWorkNamePrefixFromSnapshotName(resourceSnapshot *fleetv1beta1.ClusterRes
 // setBindingStatus sets the binding status based on the works associated with the binding.
 func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *fleetv1beta1.ClusterResourceBinding) {
 	bindingRef := klog.KObj(resourceBinding)
+
+	// Note (chenyu1): the work generator will refresh the status of a ClusterResourceBinding with
+	// the following logic:
+	//
+	// a) If the currently active apply strategy (as dictated by the ClusterResourceBinding spec)
+	//    is ClientSideApply or ServerSideApply, the work generator will update the Applied and
+	//    Available conditions (plus the details about failed, diffed, and/or drifted placements)
+	//    in the status, as appropriate; the DiffReported condition will not be updated.
+	// b) If the currently active apply strategy is ReportDiff, the work generator will update
+	//    the DiffReported condition in the status, plus the details about diffed placements;
+	//    the Applied condition will always be set to False, despite the fact that the work applier
+	//    will no longer report Applied condition on the Work objects, and the Available condition
+	//    will not be updated.
+	//
+	//    The always false Applied condition is set to allow the rollout controller to always
+	//    push new resource changes to all bindings, so that users can view configuration differences
+	//    without being blocked by the rollout process.
+	//
+	// Note that Fleet will not remove a condition from the status, even if it is no longer updated
+	// given the current apply strategy; a condition type is added when it is first updated.
+
 	// try to gather the resource binding applied status if we didn't update any associated work spec this time
 	appliedCond := buildAllWorkAppliedCondition(works, resourceBinding)
 	resourceBinding.SetConditions(appliedCond)
@@ -771,9 +792,6 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 	if resourceBinding.Spec.ApplyStrategy != nil && resourceBinding.Spec.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff {
 		diffReportedCond := buildAllWorkDiffReportedCondition(works, resourceBinding)
 		resourceBinding.SetConditions(diffReportedCond)
-	} else {
-		// Remove the condition if the apply strategy is not of the ReportDiff type.
-		resourceBinding.RemoveCondition(string(fleetv1beta1.ResourceBindingDiffReported))
 	}
 
 	var availableCond metav1.Condition
@@ -866,6 +884,9 @@ func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *
 			ObservedGeneration: binding.GetGeneration(),
 		}
 	}
+	// In the case where ReportDiff apply strategy is used, work applier will no longer update
+	// Applied condition on Work objects; since existing Applied conditons will all become stale,
+	// this function will return a False Applied condition.
 	return metav1.Condition{
 		Status:             metav1.ConditionFalse,
 		Type:               string(fleetv1beta1.ResourceBindingApplied),
