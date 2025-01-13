@@ -203,7 +203,7 @@ func TestValidateOwnerReferences(t *testing.T) {
 				AllowCoOwnership: false,
 			},
 			wantErred:        true,
-			wantErrMsgSubStr: "manifest is set to have owner references but co-ownership is disallowed",
+			wantErrMsgSubStr: "manifest is set to have multiple owner references but co-ownership is disallowed",
 		},
 		{
 			name:               "unexpected AppliedWork owner ref",

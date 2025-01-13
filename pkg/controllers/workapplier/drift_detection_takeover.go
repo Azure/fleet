@@ -8,6 +8,7 @@ package workapplier
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/qri-io/jsonpointer"
 	"github.com/wI2L/jsondiff"
@@ -19,7 +20,6 @@ import (
 	"k8s.io/klog/v2"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 const (
@@ -95,7 +95,6 @@ func (r *Reconciler) takeOverPreExistingObject(
 		Resource(*gvr).Namespace(inMemberClusterObjCopy.GetNamespace()).
 		Update(ctx, inMemberClusterObjCopy, metav1.UpdateOptions{})
 	if err != nil {
-		_ = controller.NewAPIServerError(false, err)
 		return nil, nil, fmt.Errorf("failed to take over the object: %w", err)
 	}
 
@@ -166,16 +165,12 @@ func organizeJSONPatchIntoFleetPatchDetails(patch jsondiff.Patch, manifestObjMap
 		pathPtr, err := jsonpointer.Parse(op.Path)
 		if err != nil {
 			// An invalid path is found; normally this should not happen.
-			wrappedErr := fmt.Errorf("failed to parse the JSON path %s: %w", op.Path, err)
-			_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-			return nil, wrappedErr
+			return nil, fmt.Errorf("failed to parse the JSON path: %w", err)
 		}
 		fromPtr, err := jsonpointer.Parse(op.From)
 		if err != nil {
 			// An invalid path is found; normally this should not happen.
-			wrappedErr := fmt.Errorf("failed to parse the JSON path %s: %w", op.From, err)
-			_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-			return nil, wrappedErr
+			return nil, fmt.Errorf("failed to parse the JSON path: %w", err)
 		}
 
 		switch op.Type {
@@ -188,9 +183,7 @@ func organizeJSONPatchIntoFleetPatchDetails(patch jsondiff.Patch, manifestObjMap
 			// Fleet here skips validation as the JSON data is just marshalled.
 			hubValue, err := pathPtr.Eval(manifestObjMap)
 			if err != nil {
-				wrappedErr := fmt.Errorf("failed to evaluate the JSON path %s in the manifest object: %w", op.Path, err)
-				_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-				return nil, wrappedErr
+				return nil, fmt.Errorf("failed to evaluate the JSON path %s in the manifest object: %w", op.Path, err)
 			}
 			details = append(details, fleetv1beta1.PatchDetail{
 				Path:       op.Path,
@@ -200,9 +193,7 @@ func organizeJSONPatchIntoFleetPatchDetails(patch jsondiff.Patch, manifestObjMap
 			// Fleet here skips validation as the JSON data is just marshalled.
 			hubValue, err := pathPtr.Eval(manifestObjMap)
 			if err != nil {
-				wrappedErr := fmt.Errorf("failed to evaluate the JSON path %s in the manifest object: %w", op.Path, err)
-				_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-				return nil, wrappedErr
+				return nil, fmt.Errorf("failed to evaluate the JSON path %s in the manifest object: %w", op.Path, err)
 			}
 			details = append(details, fleetv1beta1.PatchDetail{
 				Path:          op.Path,
@@ -217,9 +208,7 @@ func organizeJSONPatchIntoFleetPatchDetails(patch jsondiff.Patch, manifestObjMap
 			// Each Move operation will be parsed into two separate operations.
 			hubValue, err := fromPtr.Eval(manifestObjMap)
 			if err != nil {
-				wrappedErr := fmt.Errorf("failed to evaluate the JSON path %s in the manifest object: %w", op.Path, err)
-				_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-				return nil, wrappedErr
+				return nil, fmt.Errorf("failed to evaluate the JSON path %s in the manifest object: %w", op.Path, err)
 			}
 			details = append(details, fleetv1beta1.PatchDetail{
 				Path:       op.From,
@@ -237,9 +226,7 @@ func organizeJSONPatchIntoFleetPatchDetails(patch jsondiff.Patch, manifestObjMap
 			// Each Copy operation will be parsed into an Add operation.
 			hubValue, err := fromPtr.Eval(manifestObjMap)
 			if err != nil {
-				wrappedErr := fmt.Errorf("failed to evaluate the JSON path %s in the manifest object: %w", op.Path, err)
-				_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-				return nil, wrappedErr
+				return nil, fmt.Errorf("failed to evaluate the JSON path %s in the applied object: %w", op.Path, err)
 			}
 			details = append(details, fleetv1beta1.PatchDetail{
 				Path:          op.Path,
@@ -249,9 +236,7 @@ func organizeJSONPatchIntoFleetPatchDetails(patch jsondiff.Patch, manifestObjMap
 			// The Test op is a no-op in Fleet's use case. Normally it will not be returned, either.
 		default:
 			// An unexpected op is returned.
-			wrappedErr := fmt.Errorf("an unexpected JSON patch operation is returned (%s)", op)
-			_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-			return nil, wrappedErr
+			return nil, fmt.Errorf("an unexpected JSON patch operation is returned (%s)", op)
 		}
 	}
 
@@ -268,24 +253,18 @@ func preparePatchDetails(srcObj, destObj *unstructured.Unstructured) ([]fleetv1b
 	// Marshal the objects into JSON.
 	srcObjJSONBytes, err := srcObjCopy.MarshalJSON()
 	if err != nil {
-		wrappedErr := fmt.Errorf("failed to marshal the source object into JSON: %w", err)
-		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-		return nil, wrappedErr
+		return nil, fmt.Errorf("failed to marshal the source object into JSON: %w", err)
 	}
 
 	destObjJSONBytes, err := destObjCopy.MarshalJSON()
 	if err != nil {
-		wrappedErr := fmt.Errorf("failed to marshal the destination object into JSON: %w", err)
-		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-		return nil, wrappedErr
+		return nil, fmt.Errorf("failed to marshal the destination object into JSON: %w", err)
 	}
 
 	// Compare the JSON representations.
 	patch, err := jsondiff.CompareJSON(srcObjJSONBytes, destObjJSONBytes)
 	if err != nil {
-		wrappedErr := fmt.Errorf("failed to compare the JSON representations of the source and destination objects: %w", err)
-		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-		return nil, wrappedErr
+		return nil, fmt.Errorf("failed to compare the JSON representations of the source and destination objects: %w", err)
 	}
 
 	details, err := organizeJSONPatchIntoFleetPatchDetails(patch, srcObjCopy.Object)
@@ -312,7 +291,6 @@ func (r *Reconciler) removeLeftBehindAppliedWorkOwnerRefs(ctx context.Context, o
 		switch {
 		case err != nil && !errors.IsNotFound(err):
 			// An unexpected error occurred.
-			_ = controller.NewAPIServerError(true, err)
 			return nil, fmt.Errorf("failed to get the Work object: %w", err)
 		case err == nil:
 			// The AppliedWork owner reference is valid; no need for removal.
@@ -332,4 +310,99 @@ func (r *Reconciler) removeLeftBehindAppliedWorkOwnerRefs(ctx context.Context, o
 	}
 
 	return updatedOwnerRefs, nil
+}
+
+// discardFieldsIrrelevantInComparisonFrom discards fields that are irrelevant when comparing
+// the manifest and live objects (or two manifest objects).
+//
+// Note that this method will return an object copy; the original object will be left untouched.
+func discardFieldsIrrelevantInComparisonFrom(obj *unstructured.Unstructured) *unstructured.Unstructured {
+	// Create a deep copy of the object.
+	objCopy := obj.DeepCopy()
+
+	// Remove object meta fields that are irrelevant in comparison.
+
+	// Clear out the object's name/namespace. For regular objects, the names/namespaces will
+	// always be same between the manifest and the live objects, as guaranteed by the object
+	// retrieval step earlier, so a comparison on these fields is unnecessary anyway.
+	objCopy.SetName("")
+	objCopy.SetNamespace("")
+
+	// Clear out the object's generate name. This is a field that is irrelevant in comparison.
+	objCopy.SetGenerateName("")
+
+	// Remove certain labels and annotations.
+	//
+	// Fleet will remove labels/annotations that are reserved for Fleet own use cases, plus
+	// well-known Kubernetes labels and annotations, as these cannot (should not) be set by users
+	// directly.
+	annotations := objCopy.GetAnnotations()
+	cleanedAnnotations := map[string]string{}
+	for k, v := range annotations {
+		if strings.Contains(k, k8sReservedLabelAnnotationFullDomain) {
+			// Skip Kubernetes reserved annotations.
+			continue
+		}
+
+		if strings.Contains(k, k8sReservedLabelAnnotationAbbrDomain) {
+			// Skip Kubernetes reserved annotations.
+			continue
+		}
+
+		if strings.Contains(k, fleetReservedLabelAnnotationDomain) {
+			// Skip Fleet reserved annotations.
+			continue
+		}
+		cleanedAnnotations[k] = v
+	}
+	objCopy.SetAnnotations(cleanedAnnotations)
+
+	labels := objCopy.GetLabels()
+	cleanedLabels := map[string]string{}
+	for k, v := range labels {
+		if strings.Contains(k, k8sReservedLabelAnnotationFullDomain) {
+			// Skip Kubernetes reserved labels.
+			continue
+		}
+
+		if strings.Contains(k, k8sReservedLabelAnnotationAbbrDomain) {
+			// Skip Kubernetes reserved labels.
+			continue
+		}
+
+		if strings.Contains(k, fleetReservedLabelAnnotationDomain) {
+			// Skip Fleet reserved labels.
+			continue
+		}
+		cleanedLabels[k] = v
+	}
+	objCopy.SetLabels(cleanedLabels)
+
+	// Fields below are system-reserved fields in object meta. Technically speaking they can be
+	// set in the manifests, but this is a very uncommon practice, and currently Fleet will clear
+	// these fields (except for the finalizers) before applying the manifests].
+	// As a result, for now Fleet will ignore them in the comparison process as well.
+	//
+	// TO-DO (chenyu1): evaluate if this is a correct assumption for most (if not all) Fleet
+	// users.
+	objCopy.SetFinalizers([]string{})
+	objCopy.SetManagedFields([]metav1.ManagedFieldsEntry{})
+	objCopy.SetOwnerReferences([]metav1.OwnerReference{})
+
+	// Fields below are read-only fields in object meta. Fleet will ignore them in the comparison
+	// process.
+	objCopy.SetCreationTimestamp(metav1.Time{})
+	// Deleted objects are handled separately in the apply process; for comparison purposes,
+	// Fleet will ignore the deletion timestamp and grace period seconds.
+	objCopy.SetDeletionTimestamp(nil)
+	objCopy.SetDeletionGracePeriodSeconds(nil)
+	objCopy.SetGeneration(0)
+	objCopy.SetResourceVersion("")
+	objCopy.SetSelfLink("")
+	objCopy.SetUID("")
+
+	// Remove the status field.
+	unstructured.RemoveNestedField(objCopy.Object, "status")
+
+	return objCopy
 }

@@ -25,7 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/resource"
 )
 
@@ -36,7 +35,7 @@ func init() {
 	_ = clientgoscheme.AddToScheme(builtInScheme)
 }
 
-// applyInDryRunMode dry-runs an apply op.
+// applyInDryRunMode
 func (r *Reconciler) applyInDryRunMode(
 	ctx context.Context,
 	gvr *schema.GroupVersionResource,
@@ -75,8 +74,8 @@ func (r *Reconciler) apply(
 
 	// Compute the hash of the manifest object.
 	//
-	// Originally the manifest hash is kept only if three-way merge patch (client side apply)
-	// is used; with the new drift detection and takeover capabilities, the manifest hash
+	// Originally the manifest hash is kept only if three-way merge patch (client side apply esque
+	// strategy) is used; with the new drift detection and takeover capabilities, the manifest hash
 	// will always be kept regardless of the apply strategy in use, as it is needed for
 	// drift detection purposes.
 	//
@@ -142,12 +141,12 @@ func (r *Reconciler) apply(
 	switch {
 	case applyStrategy.Type == fleetv1beta1.ApplyStrategyTypeClientSideApply && isLastAppliedAnnotationSet:
 		// The apply strategy dictates that three-way merge patch
-		// (client-side apply) should be used, and the last applied annotation
+		// (client-side apply esque patch) should be used, and the last applied annotation
 		// has been set.
 		return r.threeWayMergePatch(ctx, gvr, manifestObjCopy, inMemberClusterObj, isOptimisticLockEnabled, false)
 	case applyStrategy.Type == fleetv1beta1.ApplyStrategyTypeClientSideApply:
 		// The apply strategy dictates that three-way merge patch
-		// (client-side apply) should be used, but the last applied annotation
+		// (client-side apply esque patch) should be used, but the last applied annotation
 		// cannot be set. Fleet will fall back to server-side apply.
 		return r.serverSideApply(
 			ctx,
@@ -162,11 +161,8 @@ func (r *Reconciler) apply(
 			applyStrategy.ServerSideApplyConfig.ForceConflicts, isOptimisticLockEnabled, false,
 		)
 	default:
-		// An unexpected apply strategy has been set. Normally this will never run as the built-in
-		// validation would block invalid values.
-		wrappedErr := fmt.Errorf("unexpected apply strategy %s is found", applyStrategy.Type)
-		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-		return nil, wrappedErr
+		// An unexpected apply strategy has been set.
+		return nil, fmt.Errorf("unexpected apply strategy %s is found", applyStrategy.Type)
 	}
 }
 
@@ -181,7 +177,6 @@ func (r *Reconciler) createManifestObject(
 	}
 	createdObj, err := r.spokeDynamicClient.Resource(*gvr).Namespace(manifestObject.GetNamespace()).Create(ctx, manifestObject, createOpts)
 	if err != nil {
-		_ = controller.NewAPIServerError(false, err)
 		return nil, fmt.Errorf("failed to create manifest object: %w", err)
 	}
 	return createdObj, nil
@@ -217,9 +212,7 @@ func (r *Reconciler) threeWayMergePatch(
 	data, err := patch.Data(manifestObj)
 	if err != nil {
 		// Fleet uses raw patch; this branch should never run.
-		wrappedErr := fmt.Errorf("failed to get patch data: %w", err)
-		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-		return nil, wrappedErr
+		return nil, fmt.Errorf("failed to get patch data: %w", err)
 	}
 
 	// Use three-way merge (similar to kubectl client side apply) to patch the object in the
@@ -240,7 +233,6 @@ func (r *Reconciler) threeWayMergePatch(
 		Resource(*gvr).Namespace(manifestObj.GetNamespace()).
 		Patch(ctx, manifestObj.GetName(), patch.Type(), data, patchOpts)
 	if err != nil {
-		_ = controller.NewAPIServerError(false, err)
 		return nil, fmt.Errorf("failed to patch the manifest object: %w", err)
 	}
 	return patchedObj, nil
@@ -282,7 +274,6 @@ func (r *Reconciler) serverSideApply(
 		Resource(*gvr).Namespace(manifestObj.GetNamespace()).
 		Apply(ctx, manifestObj.GetName(), manifestObj, applyOpts)
 	if err != nil {
-		_ = controller.NewAPIServerError(false, err)
 		return nil, fmt.Errorf("failed to apply the manifest object: %w", err)
 	}
 	return appliedObj, nil
@@ -323,9 +314,7 @@ func buildThreeWayMergePatch(manifestObj, liveObj *unstructured.Unstructured) (c
 		patchData, err = jsonmergepatch.CreateThreeWayJSONMergePatch(
 			lastAppliedObjJSONBytes, manifestObjJSONBytes, liveObjJSONBytes, preconditions...)
 		if err != nil {
-			wrappedErr := fmt.Errorf("failed to create three-way JSON merge patch: %w", err)
-			_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-			return nil, wrappedErr
+			return nil, err
 		}
 	case err != nil:
 		return nil, err
@@ -334,15 +323,11 @@ func buildThreeWayMergePatch(manifestObj, liveObj *unstructured.Unstructured) (c
 		patchType = types.StrategicMergePatchType
 		lookupPatchMeta, err = strategicpatch.NewPatchMetaFromStruct(versionedObject)
 		if err != nil {
-			wrappedErr := fmt.Errorf("failed to create patch meta from struct (strategic merge patch): %w", err)
-			_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-			return nil, wrappedErr
+			return nil, err
 		}
 		patchData, err = strategicpatch.CreateThreeWayMergePatch(lastAppliedObjJSONBytes, manifestObjJSONBytes, liveObjJSONBytes, lookupPatchMeta, true)
 		if err != nil {
-			wrappedErr := fmt.Errorf("failed to create three-way strategic merge patch: %w", err)
-			_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-			return nil, wrappedErr
+			return nil, err
 		}
 	}
 	return client.RawPatch(patchType, patchData), nil
@@ -361,9 +346,7 @@ func setFleetLastAppliedAnnotation(manifestObj *unstructured.Unstructured) (bool
 
 	lastAppliedManifestJSONBytes, err := manifestObj.MarshalJSON()
 	if err != nil {
-		wrappedErr := fmt.Errorf("failed to marshal the manifest object into JSON: %w", err)
-		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-		return false, wrappedErr
+		return false, fmt.Errorf("failed to marshal the manifest object into JSON: %w", err)
 	}
 	annotations[fleetv1beta1.LastAppliedConfigAnnotation] = string(lastAppliedManifestJSONBytes)
 	isLastAppliedAnnotationSet := true
@@ -405,9 +388,7 @@ func setManifestHashAnnotation(manifestObj *unstructured.Unstructured) error {
 	cleanedManifestObj := discardFieldsIrrelevantInComparisonFrom(manifestObj)
 	manifestObjHash, err := resource.HashOf(cleanedManifestObj.Object)
 	if err != nil {
-		wrappedErr := fmt.Errorf("failed to compute the hash of the manifest object: %w", err)
-		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-		return wrappedErr
+		return err
 	}
 
 	annotations := manifestObj.GetAnnotations()
@@ -423,13 +404,13 @@ func setManifestHashAnnotation(manifestObj *unstructured.Unstructured) error {
 // on a manifest to be applied.
 func setOwnerRef(obj *unstructured.Unstructured, expectedAppliedWorkOwnerRef *metav1.OwnerReference) {
 	ownerRefs := obj.GetOwnerReferences()
-
+	if ownerRefs == nil {
+		ownerRefs = []metav1.OwnerReference{}
+	}
 	// Typically owner references is a system-managed field, and at this moment Fleet will
 	// clear owner references (if any) set in the manifest object. However, for consistency
 	// reasons, here Fleet will still assume that there might be some owner references set
 	// in the manifest object.
-	//
-	// TO-DO (chenyu1): evaluate if user-set owner references should be kept.
 	ownerRefs = append(ownerRefs, *expectedAppliedWorkOwnerRef)
 	obj.SetOwnerReferences(ownerRefs)
 }
@@ -450,9 +431,7 @@ func validateOwnerReferences(
 	// perform sanitization on the manifest object before applying it, which removes all owner
 	// references.
 	if len(manifestObjOwnerRefs) > 0 && !applyStrategy.AllowCoOwnership {
-		wrappedErr := fmt.Errorf("manifest is set to have owner references but co-ownership is disallowed")
-		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-		return wrappedErr
+		return fmt.Errorf("manifest is set to have multiple owner references but co-ownership is disallowed")
 	}
 
 	// Do a sanity check to verify that no AppliedWork object is directly added as an owner
@@ -461,9 +440,7 @@ func validateOwnerReferences(
 	// references.
 	for _, ownerRef := range manifestObjOwnerRefs {
 		if ownerRef.APIVersion == fleetv1beta1.GroupVersion.String() && ownerRef.Kind == fleetv1beta1.AppliedWorkKind {
-			wrappedErr := fmt.Errorf("an AppliedWork object is unexpectedly added as an owner in the manifest object")
-			_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-			return wrappedErr
+			return fmt.Errorf("an AppliedWork object is unexpectedly added as an owner in the manifest object")
 		}
 	}
 
@@ -475,9 +452,7 @@ func validateOwnerReferences(
 
 	// If the live object is co-owned but co-ownership is no longer allowed, the validation fails.
 	if len(inMemberClusterObjOwnerRefs) > 1 && !applyStrategy.AllowCoOwnership {
-		wrappedErr := fmt.Errorf("object is co-owned by multiple objects but co-ownership has been disallowed")
-		_ = controller.NewUserError(wrappedErr)
-		return wrappedErr
+		return fmt.Errorf("object is co-owned by multiple objects but co-ownership has been disallowed")
 	}
 
 	// Note that at this point of execution, one of the owner references is guaranteed to be the
@@ -490,9 +465,7 @@ func validateOwnerReferences(
 		}
 	}
 	if !found {
-		wrappedErr := fmt.Errorf("object is not owned by the expected AppliedWork object")
-		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-		return wrappedErr
+		return fmt.Errorf("object is not owned by the expected AppliedWork object")
 	}
 
 	// If the object is already owned by another AppliedWork object, the validation fails.
@@ -500,9 +473,7 @@ func validateOwnerReferences(
 	// Normally this branch will never get executed as Fleet would refuse to take over an object
 	// that has been owned by another AppliedWork object.
 	if isPlacedByFleetInDuplicate(inMemberClusterObjOwnerRefs, expectedAppliedWorkOwnerRef) {
-		wrappedErr := fmt.Errorf("object is already owned by another AppliedWork object")
-		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-		return wrappedErr
+		return fmt.Errorf("object is already owned by another AppliedWork object")
 	}
 
 	return nil
