@@ -885,7 +885,7 @@ func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *
 		}
 	}
 	// In the case where ReportDiff apply strategy is used, work applier will no longer update
-	// Applied condition on Work objects; since existing Applied conditons will all become stale,
+	// Applied condition on Work objects; since existing Applied conditions will all become stale,
 	// this function will return a False Applied condition.
 	return metav1.Condition{
 		Status:             metav1.ConditionFalse,
