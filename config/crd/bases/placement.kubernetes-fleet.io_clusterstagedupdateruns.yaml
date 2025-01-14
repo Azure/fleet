@@ -26,10 +26,6 @@ spec:
     - jsonPath: .spec.resourceSnapshotIndex
       name: Resource-Snapshot
       type: string
-    - jsonPath: .spec.stagedRolloutStrategyName
-      name: Strategy
-      priority: 1
-      type: string
     - jsonPath: .status.policySnapshotIndexUsed
       name: Policy-Snapshot
       type: string
@@ -42,6 +38,10 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    - jsonPath: .spec.stagedRolloutStrategyName
+      name: Strategy
+      priority: 1
+      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -884,7 +884,7 @@ spec:
                           description: The name of the stage. This MUST be unique
                             within the same StagedUpdateStrategy.
                           maxLength: 63
-                          pattern: '[A-Za-z0-9]+$'
+                          pattern: ^[a-z0-9]+$
                           type: string
                         sortingLabelKey:
                           description: |-
@@ -1232,6 +1232,9 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: metadata.name max length is 127
+          rule: size(self.metadata.name) < 128
     served: true
     storage: false
     subresources:
@@ -1242,10 +1245,6 @@ spec:
       type: string
     - jsonPath: .spec.resourceSnapshotIndex
       name: Resource-Snapshot
-      type: string
-    - jsonPath: .spec.stagedRolloutStrategyName
-      name: Strategy
-      priority: 1
       type: string
     - jsonPath: .status.policySnapshotIndexUsed
       name: Policy-Snapshot
@@ -1259,6 +1258,10 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    - jsonPath: .spec.stagedRolloutStrategyName
+      name: Strategy
+      priority: 1
+      type: string
     name: v1beta1
     schema:
       openAPIV3Schema:
@@ -2101,7 +2104,7 @@ spec:
                           description: The name of the stage. This MUST be unique
                             within the same StagedUpdateStrategy.
                           maxLength: 63
-                          pattern: '[A-Za-z0-9]+$'
+                          pattern: ^[a-z0-9]+$
                           type: string
                         sortingLabelKey:
                           description: |-
@@ -2449,6 +2452,9 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: metadata.name max length is 127
+          rule: size(self.metadata.name) < 128
     served: true
     storage: true
     subresources:
