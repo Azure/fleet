@@ -1123,28 +1123,6 @@ func updateCRPWithTolerations(tolerations []placementv1beta1.Toleration) {
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement with tolerations %s", crpName)
 }
 
-func buildClusterNamesWithoutTaints(taintClusterNames []string) []string {
-	taintClusterNameMap := make(map[string]bool)
-	for i := range taintClusterNames {
-		taintClusterNameMap[taintClusterNames[i]] = true
-	}
-	var noTaintClustersNames []string
-	for i := range allMemberClusterNames {
-		if !taintClusterNameMap[allMemberClusterNames[i]] {
-			noTaintClustersNames = append(noTaintClustersNames, allMemberClusterNames[i])
-		}
-	}
-	return noTaintClustersNames
-}
-
-func buildClustersFromNames(clusterNames []string) []*framework.Cluster {
-	clusters := make([]*framework.Cluster, len(clusterNames))
-	for i := range clusterNames {
-		clusters[i] = allMemberClustersMap[clusterNames[i]]
-	}
-	return clusters
-}
-
 func cleanupClusterResourceOverride(name string) {
 	cro := &placementv1alpha1.ClusterResourceOverride{
 		ObjectMeta: metav1.ObjectMeta{

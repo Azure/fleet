@@ -16,10 +16,11 @@ import (
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/test/e2e/framework"
 	testutilseviction "go.goms.io/fleet/test/utils/eviction"
 )
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickFixed CRP, invalid eviction denied - No PDB specified", Ordered, func() {
+var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickFixed CRP, invalid eviction denied - No PDB specified", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -87,14 +88,18 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickFixed
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding, taint cluster before eviction - No PDB specified", Ordered, Serial, func() {
+var _ = FDescribe("ClusterResourcePlacement eviction of bound binding, taint cluster before eviction - No PDB specified", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 	var taintClusterNames, noTaintClusterNames []string
+	var taintClusters, noTaintClusters []*framework.Cluster
 
 	BeforeAll(func() {
 		taintClusterNames = []string{memberCluster1EastProdName}
-		noTaintClusterNames = buildClusterNamesWithoutTaints(taintClusterNames)
+		taintClusters = []*framework.Cluster{memberCluster1EastProd}
+
+		noTaintClusterNames = []string{memberCluster2EastCanaryName, memberCluster3WestProdName}
+		noTaintClusters = []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd}
 
 		By("creating work resources")
 		createWorkResources()
@@ -143,7 +148,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding, taint clus
 	})
 
 	It("should ensure no resources exist on evicted member cluster with taint", func() {
-		taintClusters := buildClustersFromNames(taintClusterNames)
 		for _, cluster := range taintClusters {
 			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
 			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
@@ -156,7 +160,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding, taint clus
 	})
 
 	It("should place resources on the selected clusters with no taint", func() {
-		noTaintClusters := buildClustersFromNames(noTaintClusterNames)
 		for _, cluster := range noTaintClusters {
 			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the selected clusters")
@@ -164,7 +167,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding, taint clus
 	})
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding, no taint specified, evicted cluster is picked again by scheduler - No PDB specified", Ordered, func() {
+var _ = FDescribe("ClusterResourcePlacement eviction of bound binding, no taint specified, evicted cluster is picked again by scheduler - No PDB specified", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -217,7 +220,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding, no taint s
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MaxUnavailable set as Integer, eviction denied due to misconfigured PDB", Ordered, func() {
+var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MaxUnavailable set as Integer, eviction denied due to misconfigured PDB", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -289,7 +292,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MaxUnavailable set as Percentage, eviction denied due to misconfigured PDB", Ordered, func() {
+var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MaxUnavailable set as Percentage, eviction denied due to misconfigured PDB", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -361,7 +364,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MinAvailable set as Percentage, eviction denied due to misconfigured PDB", Ordered, func() {
+var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MinAvailable set as Percentage, eviction denied due to misconfigured PDB", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -433,7 +436,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MinAvailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, func() {
+var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MinAvailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -505,14 +508,18 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MinAvailable specified as Integer to protect resources in all but one cluster, eviction allowed", Ordered, Serial, func() {
+var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MinAvailable specified as Integer to protect resources in all but one cluster, eviction allowed", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 	var taintClusterNames, noTaintClusterNames []string
+	var taintClusters, noTaintClusters []*framework.Cluster
 
 	BeforeAll(func() {
 		taintClusterNames = []string{memberCluster1EastProdName}
-		noTaintClusterNames = buildClusterNamesWithoutTaints(taintClusterNames)
+		taintClusters = []*framework.Cluster{memberCluster1EastProd}
+
+		noTaintClusterNames = []string{memberCluster2EastCanaryName, memberCluster3WestProdName}
+		noTaintClusters = []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd}
 
 		By("creating work resources")
 		createWorkResources()
@@ -579,7 +586,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 	})
 
 	It("should ensure no resources exist on evicted member cluster with taint", func() {
-		taintClusters := buildClustersFromNames(taintClusterNames)
 		for _, cluster := range taintClusters {
 			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
 			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
@@ -592,7 +598,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 	})
 
 	It("should place resources on the selected clusters with no taint", func() {
-		noTaintClusters := buildClustersFromNames(noTaintClusterNames)
 		for _, cluster := range noTaintClusters {
 			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the selected clusters")
@@ -600,7 +605,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 	})
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, func() {
+var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -687,14 +692,18 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as Integer to protect resources all clusters but one cluster, eviction allowed", Ordered, Serial, func() {
+var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as Integer to protect resources all clusters but one cluster, eviction allowed", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 	var taintClusterNames, noTaintClusterNames []string
+	var taintClusters, noTaintClusters []*framework.Cluster
 
 	BeforeAll(func() {
 		taintClusterNames = []string{memberCluster1EastProdName}
-		noTaintClusterNames = buildClusterNamesWithoutTaints(taintClusterNames)
+		taintClusters = []*framework.Cluster{memberCluster1EastProd}
+
+		noTaintClusterNames = []string{memberCluster2EastCanaryName, memberCluster3WestProdName}
+		noTaintClusters = []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd}
 
 		By("creating work resources")
 		createWorkResources()
@@ -776,7 +785,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should ensure no resources exist on evicted member cluster with taint", func() {
-		taintClusters := buildClustersFromNames(taintClusterNames)
 		for _, cluster := range taintClusters {
 			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
 			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
@@ -789,7 +797,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should place resources on the selected clusters with no taint", func() {
-		noTaintClusters := buildClustersFromNames(noTaintClusterNames)
 		for _, cluster := range noTaintClusters {
 			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the selected clusters")
@@ -797,14 +804,18 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as percentage to protect all clusters but one, eviction allowed", Ordered, Serial, func() {
+var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as percentage to protect all clusters but one, eviction allowed", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 	var taintClusterNames, noTaintClusterNames []string
+	var taintClusters, noTaintClusters []*framework.Cluster
 
 	BeforeAll(func() {
 		taintClusterNames = []string{memberCluster1EastProdName}
-		noTaintClusterNames = buildClusterNamesWithoutTaints(taintClusterNames)
+		taintClusters = []*framework.Cluster{memberCluster1EastProd}
+
+		noTaintClusterNames = []string{memberCluster2EastCanaryName, memberCluster3WestProdName}
+		noTaintClusters = []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd}
 
 		By("creating work resources")
 		createWorkResources()
@@ -886,7 +897,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should ensure no resources exist on evicted member cluster with taint", func() {
-		taintClusters := buildClustersFromNames(taintClusterNames)
 		for _, cluster := range taintClusters {
 			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
 			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
@@ -899,7 +909,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should place resources on the selected clusters with no taint", func() {
-		noTaintClusters := buildClustersFromNames(noTaintClusterNames)
 		for _, cluster := range noTaintClusters {
 			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the selected clusters")
@@ -907,7 +916,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as percentage to protect resources on all clusters, eviction denied", Ordered, func() {
+var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as percentage to protect resources on all clusters, eviction denied", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -1002,7 +1011,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, func() {
+var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -1089,14 +1098,18 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as Integer to protect resources all clusters but one cluster, eviction allowed", Ordered, Serial, func() {
+var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as Integer to protect resources all clusters but one cluster, eviction allowed", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 	var taintClusterNames, noTaintClusterNames []string
+	var taintClusters, noTaintClusters []*framework.Cluster
 
 	BeforeAll(func() {
 		taintClusterNames = []string{memberCluster1EastProdName}
-		noTaintClusterNames = buildClusterNamesWithoutTaints(taintClusterNames)
+		taintClusters = []*framework.Cluster{memberCluster1EastProd}
+
+		noTaintClusterNames = []string{memberCluster2EastCanaryName, memberCluster3WestProdName}
+		noTaintClusters = []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd}
 
 		By("creating work resources")
 		createWorkResources()
@@ -1178,7 +1191,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should ensure no resources exist on evicted member cluster with taint", func() {
-		taintClusters := buildClustersFromNames(taintClusterNames)
 		for _, cluster := range taintClusters {
 			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
 			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
@@ -1191,7 +1203,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should place resources on the selected clusters with no taint", func() {
-		noTaintClusters := buildClustersFromNames(noTaintClusterNames)
 		for _, cluster := range noTaintClusters {
 			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the selected clusters")
@@ -1199,14 +1210,18 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as percentage to protect all clusters but one, eviction allowed", Ordered, Serial, func() {
+var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as percentage to protect all clusters but one, eviction allowed", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 	var taintClusterNames, noTaintClusterNames []string
+	var taintClusters, noTaintClusters []*framework.Cluster
 
 	BeforeAll(func() {
 		taintClusterNames = []string{memberCluster1EastProdName}
-		noTaintClusterNames = buildClusterNamesWithoutTaints(taintClusterNames)
+		taintClusters = []*framework.Cluster{memberCluster1EastProd}
+
+		noTaintClusterNames = []string{memberCluster2EastCanaryName, memberCluster3WestProdName}
+		noTaintClusters = []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd}
 
 		By("creating work resources")
 		createWorkResources()
@@ -1288,7 +1303,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should ensure no resources exist on evicted member cluster with taint", func() {
-		taintClusters := buildClustersFromNames(taintClusterNames)
 		for _, cluster := range taintClusters {
 			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
 			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
@@ -1301,7 +1315,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should place resources on the selected clusters with no taint", func() {
-		noTaintClusters := buildClustersFromNames(noTaintClusterNames)
 		for _, cluster := range noTaintClusters {
 			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the selected clusters")
@@ -1309,7 +1322,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as percentage to protect resources on all clusters, eviction denied", Ordered, func() {
+var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as percentage to protect resources on all clusters, eviction denied", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 

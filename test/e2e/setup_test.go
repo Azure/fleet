@@ -95,7 +95,6 @@ var (
 
 	allMemberClusters     []*framework.Cluster
 	allMemberClusterNames = []string{}
-	allMemberClustersMap  = map[string]*framework.Cluster{}
 )
 
 var (
@@ -311,7 +310,6 @@ func beforeSuiteForAllProcesses() {
 		// the `beforeSuiteForAllProcesses` function is called twice.
 		for i := range allMemberClusters {
 			allMemberClusterNames = append(allMemberClusterNames, allMemberClusters[i].ClusterName)
-			allMemberClustersMap[allMemberClusters[i].ClusterName] = allMemberClusters[i]
 		}
 	})
 }

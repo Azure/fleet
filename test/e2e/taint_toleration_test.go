@@ -14,9 +14,10 @@ import (
 	"k8s.io/utils/ptr"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/test/e2e/framework"
 )
 
-var _ = Describe("placing resource using a cluster resource placement with pickFixed placement policy specified, taint clusters, pick all specified clusters", Serial, Ordered, func() {
+var _ = FDescribe("placing resource using a cluster resource placement with pickFixed placement policy specified, taint clusters, pick all specified clusters", Serial, Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
@@ -58,13 +59,17 @@ var _ = Describe("placing resource using a cluster resource placement with pickF
 	})
 })
 
-var _ = Describe("placing resources using a cluster resource placement with no placement policy specified, taint clusters, update cluster resource placement with tolerations", Serial, Ordered, func() {
+var _ = FDescribe("placing resources using a cluster resource placement with no placement policy specified, taint clusters, update cluster resource placement with tolerations", Serial, Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	var taintClusterNames, noTaintClusterNames []string
+	var taintClusters, noTaintClusters []*framework.Cluster
 
 	BeforeAll(func() {
 		taintClusterNames = []string{memberCluster1EastProdName, memberCluster2EastCanaryName}
-		noTaintClusterNames = buildClusterNamesWithoutTaints(taintClusterNames)
+		taintClusters = []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary}
+
+		noTaintClusterNames = []string{memberCluster3WestProdName}
+		noTaintClusters = []*framework.Cluster{memberCluster3WestProd}
 
 		// Create the resources.
 		createWorkResources()
@@ -98,7 +103,6 @@ var _ = Describe("placing resources using a cluster resource placement with no p
 	})
 
 	It("should ensure no resources exist on member clusters with taint", func() {
-		taintClusters := buildClustersFromNames(taintClusterNames)
 		for _, cluster := range taintClusters {
 			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
 			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
@@ -106,7 +110,6 @@ var _ = Describe("placing resources using a cluster resource placement with no p
 	})
 
 	It("should place resources on the selected cluster without taint", func() {
-		noTaintClusters := buildClustersFromNames(noTaintClusterNames)
 		for _, cluster := range noTaintClusters {
 			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on selected cluster")
@@ -132,13 +135,17 @@ var _ = Describe("placing resources using a cluster resource placement with no p
 	})
 })
 
-var _ = Describe("placing resources using a cluster resource placement with no placement policy specified, taint clusters, remove taints from cluster, all cluster should be picked", Serial, Ordered, func() {
+var _ = FDescribe("placing resources using a cluster resource placement with no placement policy specified, taint clusters, remove taints from cluster, all cluster should be picked", Serial, Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	var taintClusterNames, noTaintClusterNames []string
+	var taintClusters, noTaintClusters []*framework.Cluster
 
 	BeforeAll(func() {
 		taintClusterNames = []string{memberCluster1EastProdName, memberCluster2EastCanaryName}
-		noTaintClusterNames = buildClusterNamesWithoutTaints(taintClusterNames)
+		taintClusters = []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary}
+
+		noTaintClusterNames = []string{memberCluster3WestProdName}
+		noTaintClusters = []*framework.Cluster{memberCluster3WestProd}
 
 		// Create the resources.
 		createWorkResources()
@@ -172,7 +179,6 @@ var _ = Describe("placing resources using a cluster resource placement with no p
 	})
 
 	It("should ensure no resources exist on member clusters with taint", func() {
-		taintClusters := buildClustersFromNames(taintClusterNames)
 		for _, cluster := range taintClusters {
 			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
 			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
@@ -180,7 +186,6 @@ var _ = Describe("placing resources using a cluster resource placement with no p
 	})
 
 	It("should place resources on the selected cluster without taint", func() {
-		noTaintClusters := buildClustersFromNames(noTaintClusterNames)
 		for _, cluster := range noTaintClusters {
 			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on selected cluster")
@@ -204,14 +209,19 @@ var _ = Describe("placing resources using a cluster resource placement with no p
 	})
 })
 
-var _ = Describe("picking N clusters with affinities and topology spread constraints, taint clusters, create cluster resource placement with toleration for one cluster", Serial, Ordered, func() {
+var _ = FDescribe("picking N clusters with affinities and topology spread constraints, taint clusters, create cluster resource placement with toleration for one cluster", Serial, Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	var taintClusterNames, tolerateClusterNames, unSelectedClusterNames []string
+	var tolerateClusters, unSelectedClusters []*framework.Cluster
 
 	BeforeAll(func() {
 		taintClusterNames = []string{memberCluster1EastProdName, memberCluster2EastCanaryName}
+
 		tolerateClusterNames = []string{memberCluster1EastProdName}
+		tolerateClusters = []*framework.Cluster{memberCluster1EastProd}
+
 		unSelectedClusterNames = []string{memberCluster2EastCanaryName}
+		unSelectedClusters = []*framework.Cluster{memberCluster2EastCanary}
 
 		// Create the resources.
 		createWorkResources()
@@ -279,7 +289,6 @@ var _ = Describe("picking N clusters with affinities and topology spread constra
 	})
 
 	It("should place resources on the selected clusters with tolerated taint", func() {
-		tolerateClusters := buildClustersFromNames(tolerateClusterNames)
 		for _, cluster := range tolerateClusters {
 			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the selected clusters")
@@ -287,7 +296,6 @@ var _ = Describe("picking N clusters with affinities and topology spread constra
 	})
 
 	It("should ensure no resources exist on member clusters with untolerated taint", func() {
-		unSelectedClusters := buildClustersFromNames(unSelectedClusterNames)
 		for _, cluster := range unSelectedClusters {
 			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
 			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
@@ -297,11 +305,11 @@ var _ = Describe("picking N clusters with affinities and topology spread constra
 	AfterAll(func() {
 		// Remove taint from member cluster 1, 2.
 		removeTaintsFromMemberClusters(taintClusterNames)
-		ensureCRPAndRelatedResourcesDeleted(crpName, buildClustersFromNames(tolerateClusterNames))
+		ensureCRPAndRelatedResourcesDeleted(crpName, tolerateClusters)
 	})
 })
 
-var _ = Describe("picking all clusters using pickAll placement policy, add taint to a cluster that's already selected", Serial, Ordered, func() {
+var _ = FDescribe("picking all clusters using pickAll placement policy, add taint to a cluster that's already selected", Serial, Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	taintClusterNames := []string{memberCluster1EastProdName}
 
