@@ -686,7 +686,6 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 		Watches(&fleetv1beta1.ClusterResourcePlacement{}, handler.Funcs{
 			// Ignore all Create, Delete, and Generic events; these do not concern the rollout controller.
 			UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
-				klog.V(2).InfoS("Handling a clusterResourcePlacement update event", "clusterResourcePlacement", klog.KObj(e.ObjectNew))
 				handleCRP(e.ObjectNew, e.ObjectOld, q)
 			},
 		}).
