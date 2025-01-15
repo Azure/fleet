@@ -173,10 +173,10 @@ func (r *Reconciler) findInMemberClusterObjectFor(
 		return false
 	default:
 		// An unexpected error has occurred.
-		_ = controller.NewAPIServerError(true, err)
-		bundle.applyErr = fmt.Errorf("failed to find the corresponding object for the manifest object in the member cluster: %w", err)
+		wrappedErr := controller.NewAPIServerError(true, err)
+		bundle.applyErr = fmt.Errorf("failed to find the corresponding object for the manifest object in the member cluster: %w", wrappedErr)
 		bundle.applyResTyp = ManifestProcessingApplyResultTypeFailedToFindObjInMemberCluster
-		klog.ErrorS(err,
+		klog.ErrorS(wrappedErr,
 			"Failed to find the corresponding object for the manifest object in the member cluster",
 			"work", klog.KObj(work), "GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
 			"expectedAppliedWorkOwnerRef", *expectedAppliedWorkOwnerRef)

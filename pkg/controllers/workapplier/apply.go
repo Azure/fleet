@@ -181,8 +181,8 @@ func (r *Reconciler) createManifestObject(
 	}
 	createdObj, err := r.spokeDynamicClient.Resource(*gvr).Namespace(manifestObject.GetNamespace()).Create(ctx, manifestObject, createOpts)
 	if err != nil {
-		_ = controller.NewAPIServerError(false, err)
-		return nil, fmt.Errorf("failed to create manifest object: %w", err)
+		wrappedErr := controller.NewAPIServerError(false, err)
+		return nil, fmt.Errorf("failed to create manifest object: %w", wrappedErr)
 	}
 	return createdObj, nil
 }
@@ -240,8 +240,8 @@ func (r *Reconciler) threeWayMergePatch(
 		Resource(*gvr).Namespace(manifestObj.GetNamespace()).
 		Patch(ctx, manifestObj.GetName(), patch.Type(), data, patchOpts)
 	if err != nil {
-		_ = controller.NewAPIServerError(false, err)
-		return nil, fmt.Errorf("failed to patch the manifest object: %w", err)
+		wrappedErr := controller.NewAPIServerError(false, err)
+		return nil, fmt.Errorf("failed to patch the manifest object: %w", wrappedErr)
 	}
 	return patchedObj, nil
 }
@@ -282,8 +282,8 @@ func (r *Reconciler) serverSideApply(
 		Resource(*gvr).Namespace(manifestObj.GetNamespace()).
 		Apply(ctx, manifestObj.GetName(), manifestObj, applyOpts)
 	if err != nil {
-		_ = controller.NewAPIServerError(false, err)
-		return nil, fmt.Errorf("failed to apply the manifest object: %w", err)
+		wrappedErr := controller.NewAPIServerError(false, err)
+		return nil, fmt.Errorf("failed to apply the manifest object: %w", wrappedErr)
 	}
 	return appliedObj, nil
 }

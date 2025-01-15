@@ -95,8 +95,8 @@ func (r *Reconciler) takeOverPreExistingObject(
 		Resource(*gvr).Namespace(inMemberClusterObjCopy.GetNamespace()).
 		Update(ctx, inMemberClusterObjCopy, metav1.UpdateOptions{})
 	if err != nil {
-		_ = controller.NewAPIServerError(false, err)
-		return nil, nil, fmt.Errorf("failed to take over the object: %w", err)
+		wrappedErr := controller.NewAPIServerError(false, err)
+		return nil, nil, fmt.Errorf("failed to take over the object: %w", wrappedErr)
 	}
 
 	return takenOverInMemberClusterObj, nil, nil
@@ -312,8 +312,8 @@ func (r *Reconciler) removeLeftBehindAppliedWorkOwnerRefs(ctx context.Context, o
 		switch {
 		case err != nil && !errors.IsNotFound(err):
 			// An unexpected error occurred.
-			_ = controller.NewAPIServerError(true, err)
-			return nil, fmt.Errorf("failed to get the Work object: %w", err)
+			wrappedErr := controller.NewAPIServerError(true, err)
+			return nil, fmt.Errorf("failed to get the Work object: %w", wrappedErr)
 		case err == nil:
 			// The AppliedWork owner reference is valid; no need for removal.
 			//

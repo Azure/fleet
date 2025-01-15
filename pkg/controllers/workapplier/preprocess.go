@@ -454,8 +454,8 @@ func (r *Reconciler) removeOneLeftOverManifest(
 		return nil
 	case err != nil:
 		// Failed to retrieve the object from the member cluster.
-		_ = controller.NewAPIServerError(true, err)
-		return fmt.Errorf("failed to retrieve the object from the member cluster (gvr=%+v, manifestObj=%+v): %w", gvr, klog.KRef(manifestNamespace, manifestName), err)
+		wrappedErr := controller.NewAPIServerError(true, err)
+		return fmt.Errorf("failed to retrieve the object from the member cluster (gvr=%+v, manifestObj=%+v): %w", gvr, klog.KRef(manifestNamespace, manifestName), wrappedErr)
 	case inMemberClusterObj.GetDeletionTimestamp() != nil:
 		// The object has been marked for deletion; no further action is needed.
 		return nil
@@ -485,9 +485,9 @@ func (r *Reconciler) removeOneLeftOverManifest(
 		removeOwnerRef(inMemberClusterObj, expectedAppliedWorkOwnerRef)
 		if _, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestNamespace).Update(ctx, inMemberClusterObj, metav1.UpdateOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			// Failed to drop the ownership.
-			_ = controller.NewAPIServerError(false, err)
+			wrappedErr := controller.NewAPIServerError(false, err)
 			return fmt.Errorf("failed to drop the ownership of the object (gvr=%+v, manifestObj=%+v, inMemberClusterObj=%+v, expectedAppliedWorkOwnerRef=%+v): %w",
-				gvr, klog.KRef(manifestNamespace, manifestName), klog.KObj(inMemberClusterObj), *expectedAppliedWorkOwnerRef, err)
+				gvr, klog.KRef(manifestNamespace, manifestName), klog.KObj(inMemberClusterObj), *expectedAppliedWorkOwnerRef, wrappedErr)
 		}
 	default:
 		// Fleet is the sole owner of the object; in this case, Fleet will delete the object.
@@ -510,9 +510,9 @@ func (r *Reconciler) removeOneLeftOverManifest(
 		}
 		if err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestNamespace).Delete(ctx, manifestName, deleteOpts); err != nil && !apierrors.IsNotFound(err) {
 			// Failed to delete the object from the member cluster.
-			_ = controller.NewAPIServerError(false, err)
+			wrappedErr := controller.NewAPIServerError(false, err)
 			return fmt.Errorf("failed to delete the object (gvr=%+v, manifestObj=%+v, inMemberClusterObj=%+v, expectedAppliedWorkOwnerRef=%+v): %w",
-				gvr, klog.KRef(manifestNamespace, manifestName), klog.KObj(inMemberClusterObj), *expectedAppliedWorkOwnerRef, err)
+				gvr, klog.KRef(manifestNamespace, manifestName), klog.KObj(inMemberClusterObj), *expectedAppliedWorkOwnerRef, wrappedErr)
 		}
 	}
 	return nil
