@@ -13,6 +13,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -564,7 +565,7 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 }
 
 func TestBuildAllWorkDiffReportedCondition(t *testing.T) {
-	binding := &fleetv1beta1.ClusterResourceBinding{
+	bindingTemplate := &fleetv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "binding",
 			Generation: 1,
@@ -695,8 +696,10 @@ func TestBuildAllWorkDiffReportedCondition(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotDiffReportedCond := buildAllWorkDiffReportedCondition(tc.works, binding)
-			if diff := cmp.Diff(&gotDiffReportedCond, tc.wantDiffReportedCondition, cmpConditionOption); diff != "" {
+			binding := bindingTemplate.DeepCopy()
+			setAllWorkDiffReportedCondition(tc.works, binding)
+			diffReportedCond := meta.FindStatusCondition(binding.Status.Conditions, string(fleetv1beta1.ResourceBindingDiffReported))
+			if diff := cmp.Diff(&diffReportedCond, tc.wantDiffReportedCondition, cmpConditionOption); diff != "" {
 				t.Errorf("diff reported condition mismatches (-got +want):\n%s", diff)
 			}
 		})

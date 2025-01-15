@@ -790,8 +790,7 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 	// Set the DiffReported condition if (and only if) a ReportDiff apply strategy is currently
 	// being used.
 	if resourceBinding.Spec.ApplyStrategy != nil && resourceBinding.Spec.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff {
-		diffReportedCond := buildAllWorkDiffReportedCondition(works, resourceBinding)
-		resourceBinding.SetConditions(diffReportedCond)
+		setAllWorkDiffReportedCondition(works, resourceBinding)
 	}
 
 	var availableCond metav1.Condition
@@ -896,9 +895,12 @@ func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *
 	}
 }
 
-// buildAllWorkDiffReportedCondition builds DiffReported condition for a ClusterResourceBinding
-// by checking the DiffReported condition of all the works associated with the binding.
-func buildAllWorkDiffReportedCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) metav1.Condition {
+// setAllWorkDiffReportedCondition sets the DiffReported condition on a ClusterResourceBinding
+// based on the DiffReported conditions on all the related Work objects.
+//
+// The DiffReported condition of a ClusterResourceBinding object if and only if all the
+// related Work objects have their DiffReported condition set to True.
+func setAllWorkDiffReportedCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) {
 	allDiffReported := true
 	var notDiffReportedWork string
 	for _, w := range works {
@@ -911,21 +913,22 @@ func buildAllWorkDiffReportedCondition(works map[string]*fleetv1beta1.Work, bind
 
 	if allDiffReported {
 		klog.V(2).InfoS("All works associated with the binding have reported diff", "binding", klog.KObj(binding))
-		return metav1.Condition{
+		meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingDiffReported),
 			Reason:             condition.AllWorkDiffReportedReason,
 			Message:            "All corresponding work objects have reported diff",
 			ObservedGeneration: binding.GetGeneration(),
-		}
+		})
+		return
 	}
-	return metav1.Condition{
+	meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
 		Status:             metav1.ConditionFalse,
 		Type:               string(fleetv1beta1.ResourceBindingDiffReported),
 		Reason:             condition.WorkNotDiffReportedReason,
 		Message:            fmt.Sprintf("Work object %s has failed to reported diff", notDiffReportedWork),
 		ObservedGeneration: binding.GetGeneration(),
-	}
+	})
 }
 
 func buildAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) metav1.Condition {
