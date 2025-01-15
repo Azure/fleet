@@ -20,7 +20,7 @@ import (
 	testutilseviction "go.goms.io/fleet/test/utils/eviction"
 )
 
-var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickFixed CRP, invalid eviction denied - No PDB specified", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickFixed CRP, invalid eviction denied - No PDB specified", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -88,7 +88,7 @@ var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickFixe
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = FDescribe("ClusterResourcePlacement eviction of bound binding, taint cluster before eviction - No PDB specified", Ordered, Serial, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding, taint cluster before eviction - No PDB specified", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 	var taintClusterNames, noTaintClusterNames []string
@@ -167,7 +167,7 @@ var _ = FDescribe("ClusterResourcePlacement eviction of bound binding, taint clu
 	})
 })
 
-var _ = FDescribe("ClusterResourcePlacement eviction of bound binding, no taint specified, evicted cluster is picked again by scheduler - No PDB specified", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding, no taint specified, evicted cluster is picked again by scheduler - No PDB specified", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -220,7 +220,7 @@ var _ = FDescribe("ClusterResourcePlacement eviction of bound binding, no taint 
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MaxUnavailable set as Integer, eviction denied due to misconfigured PDB", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MaxUnavailable set as Integer, eviction denied due to misconfigured PDB", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -292,7 +292,7 @@ var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickAll 
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MaxUnavailable set as Percentage, eviction denied due to misconfigured PDB", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MaxUnavailable set as Percentage, eviction denied due to misconfigured PDB", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -364,7 +364,7 @@ var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickAll 
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MinAvailable set as Percentage, eviction denied due to misconfigured PDB", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MinAvailable set as Percentage, eviction denied due to misconfigured PDB", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -436,7 +436,7 @@ var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickAll 
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MinAvailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MinAvailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -508,7 +508,7 @@ var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickAll 
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MinAvailable specified as Integer to protect resources in all but one cluster, eviction allowed", Ordered, Serial, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MinAvailable specified as Integer to protect resources in all but one cluster, eviction allowed", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 	var taintClusterNames, noTaintClusterNames []string
@@ -605,7 +605,7 @@ var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickAll 
 	})
 })
 
-var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -692,7 +692,7 @@ var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CR
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as Integer to protect resources all clusters but one cluster, eviction allowed", Ordered, Serial, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as Integer to protect resources all clusters but one cluster, eviction allowed", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 	var taintClusterNames, noTaintClusterNames []string
@@ -804,7 +804,7 @@ var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CR
 	})
 })
 
-var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as percentage to protect all clusters but one, eviction allowed", Ordered, Serial, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as percentage to protect all clusters but one, eviction allowed", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 	var taintClusterNames, noTaintClusterNames []string
@@ -916,7 +916,7 @@ var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CR
 	})
 })
 
-var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as percentage to protect resources on all clusters, eviction denied", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as percentage to protect resources on all clusters, eviction denied", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -1011,7 +1011,7 @@ var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CR
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -1098,7 +1098,7 @@ var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CR
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as Integer to protect resources all clusters but one cluster, eviction allowed", Ordered, Serial, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as Integer to protect resources all clusters but one cluster, eviction allowed", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 	var taintClusterNames, noTaintClusterNames []string
@@ -1210,7 +1210,7 @@ var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CR
 	})
 })
 
-var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as percentage to protect all clusters but one, eviction allowed", Ordered, Serial, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as percentage to protect all clusters but one, eviction allowed", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 	var taintClusterNames, noTaintClusterNames []string
@@ -1322,7 +1322,7 @@ var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CR
 	})
 })
 
-var _ = FDescribe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as percentage to protect resources on all clusters, eviction denied", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as percentage to protect resources on all clusters, eviction denied", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
