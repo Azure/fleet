@@ -564,7 +564,7 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 	}
 }
 
-func TestBuildAllWorkDiffReportedCondition(t *testing.T) {
+func TestSetAllWorkDiffReportedCondition(t *testing.T) {
 	bindingTemplate := &fleetv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "binding",
@@ -699,7 +699,7 @@ func TestBuildAllWorkDiffReportedCondition(t *testing.T) {
 			binding := bindingTemplate.DeepCopy()
 			setAllWorkDiffReportedCondition(tc.works, binding)
 			diffReportedCond := meta.FindStatusCondition(binding.Status.Conditions, string(fleetv1beta1.ResourceBindingDiffReported))
-			if diff := cmp.Diff(&diffReportedCond, tc.wantDiffReportedCondition, cmpConditionOption); diff != "" {
+			if diff := cmp.Diff(diffReportedCond, tc.wantDiffReportedCondition, cmpConditionOption); diff != "" {
 				t.Errorf("diff reported condition mismatches (-got +want):\n%s", diff)
 			}
 		})
