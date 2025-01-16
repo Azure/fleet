@@ -55,7 +55,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 	BeforeEach(func() {
 		testUpdateRunName = "updaterun-" + utils.RandStr()
 		testCRPName = "crp-" + utils.RandStr()
-		testResourceSnapshotName = "snapshot-" + utils.RandStr()
+		testResourceSnapshotName = testCRPName + "-" + testResourceSnapshotIndex + "-snapshot"
 		testUpdateStrategyName = "updatestrategy-" + utils.RandStr()
 		testCROName = "cro-" + utils.RandStr()
 		updateRunNamespacedName = types.NamespacedName{Name: testUpdateRunName}
@@ -220,6 +220,18 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Delete(ctx, snapshot2)).Should(Succeed())
 		})
 
+		It("Should fail to initialize if the latest policy snapshot does not have index label", func() {
+			By("Creating scheduling policy snapshot without index label")
+			delete(policySnapshot.Labels, placementv1beta1.PolicyIndexLabel)
+			Expect(k8sClient.Create(ctx, policySnapshot)).To(Succeed())
+
+			By("Creating a new clusterStagedUpdateRun")
+			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
+
+			By("Validating the initialization failed")
+			validateFailedInitCondition(ctx, updateRun, "does not have a policy index label")
+		})
+
 		It("Should fail to initialize if the latest policy snapshot has a nil policy", func() {
 			By("Creating scheduling policy snapshot with nil policy")
 			policySnapshot.Spec.Policy = nil
@@ -276,7 +288,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
 					return err
 				}
-				if updateRun.Status.PolicySnapshotIndexUsed != policySnapshot.Name {
+				if updateRun.Status.PolicySnapshotIndexUsed != policySnapshot.Labels[placementv1beta1.PolicyIndexLabel] {
 					return fmt.Errorf("updateRun status `PolicySnapshotIndexUsed` mismatch: got %s, want %s", updateRun.Status.PolicySnapshotIndexUsed, policySnapshot.Name)
 				}
 				if updateRun.Status.PolicyObservedClusterCount != numberOfClustersAnnotation {
@@ -309,7 +321,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
 					return err
 				}
-				if updateRun.Status.PolicySnapshotIndexUsed != policySnapshot.Name {
+				if updateRun.Status.PolicySnapshotIndexUsed != policySnapshot.Labels[placementv1beta1.PolicyIndexLabel] {
 					return fmt.Errorf("updateRun status `PolicySnapshotIndexUsed` mismatch: got %s, want %s", updateRun.Status.PolicySnapshotIndexUsed, policySnapshot.Name)
 				}
 				if updateRun.Status.PolicyObservedClusterCount != 2 {
@@ -341,7 +353,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 				if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
 					return err
 				}
-				if updateRun.Status.PolicySnapshotIndexUsed != policySnapshot.Name {
+				if updateRun.Status.PolicySnapshotIndexUsed != policySnapshot.Labels[placementv1beta1.PolicyIndexLabel] {
 					return fmt.Errorf("updateRun status `PolicySnapshotIndexUsed` mismatch: got %s, want %s", updateRun.Status.PolicySnapshotIndexUsed, policySnapshot.Name)
 				}
 				if updateRun.Status.PolicyObservedClusterCount != -1 {
@@ -646,16 +658,34 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Create(ctx, updateStrategy)).To(Succeed())
 		})
 
-		It("Should fail to initialize if the specified resource snapshot is not found", func() {
+		It("Should fail to initialize if the specified resource snapshot index is invalid - not integer", func() {
+			By("Creating a new clusterStagedUpdateRun with invalid resource snapshot index")
+			updateRun.Spec.ResourceSnapshotIndex = "invalid-index"
+			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
+
+			By("Validating the initialization failed")
+			validateFailedInitCondition(ctx, updateRun, "invalid resource snapshot index `invalid-index` provided")
+		})
+
+		It("Should fail to initialize if the specified resource snapshot index is invalid - negative integer", func() {
+			By("Creating a new clusterStagedUpdateRun with invalid resource snapshot index")
+			updateRun.Spec.ResourceSnapshotIndex = "-1"
+			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
+
+			By("Validating the initialization failed")
+			validateFailedInitCondition(ctx, updateRun, "invalid resource snapshot index `-1` provided")
+		})
+
+		It("Should fail to initialize if the specified resource snapshot is not found - no resourceSnapshots at all", func() {
 			By("Creating a new clusterStagedUpdateRun")
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization failed")
-			validateFailedInitCondition(ctx, updateRun, "resource snapshot `"+testResourceSnapshotName+"` not found")
+			validateFailedInitCondition(ctx, updateRun, "no clusterResourceSnapshots with index `0` found")
 		})
 
-		It("Should fail to initialize if the specified resource snapshot is not associated with wanted CRP", func() {
-			By("Creating a new resource snapshot associated with wrong CRP")
+		It("Should fail to initialize if the specified resource snapshot is not found - no CRP label found", func() {
+			By("Creating a new resource snapshot associated with another CRP")
 			resourceSnapshot.Labels[placementv1beta1.CRPTrackingLabel] = "not-exist-crp"
 			Expect(k8sClient.Create(ctx, resourceSnapshot)).To(Succeed())
 
@@ -663,7 +693,19 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization failed")
-			validateFailedInitCondition(ctx, updateRun, "resource snapshot `"+testResourceSnapshotName+"` is not associated with expected clusterResourcePlacement")
+			validateFailedInitCondition(ctx, updateRun, "no clusterResourceSnapshots with index `0` found")
+		})
+
+		It("Should fail to initialize if the specified resource snapshot is not found - no resource index label found", func() {
+			By("Creating a new resource snapshot with a different index label")
+			resourceSnapshot.Labels[placementv1beta1.ResourceIndexLabel] = testResourceSnapshotIndex + "1"
+			Expect(k8sClient.Create(ctx, resourceSnapshot)).To(Succeed())
+
+			By("Creating a new clusterStagedUpdateRun")
+			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
+
+			By("Validating the initialization failed")
+			validateFailedInitCondition(ctx, updateRun, "no clusterResourceSnapshots with index `0` found")
 		})
 
 		It("Should fail to initialize if the specified resource snapshot is not master snapshot", func() {
@@ -675,7 +717,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization failed")
-			validateFailedInitCondition(ctx, updateRun, "resource snapshot `"+testResourceSnapshotName+"` is not a master snapshot")
+			validateFailedInitCondition(ctx, updateRun, "no master clusterResourceSnapshot found for clusterResourcePlacement")
 		})
 
 		It("Should put related ClusterResourceOverrides in the status", func() {
@@ -724,7 +766,7 @@ func generateSucceededInitializationStatus(
 	clusterResourceOverride *placementv1alpha1.ClusterResourceOverrideSnapshot,
 ) *placementv1beta1.StagedUpdateRunStatus {
 	return &placementv1beta1.StagedUpdateRunStatus{
-		PolicySnapshotIndexUsed:      policySnapshot.Name,
+		PolicySnapshotIndexUsed:      policySnapshot.Labels[placementv1beta1.PolicyIndexLabel],
 		PolicyObservedClusterCount:   numberOfClustersAnnotation,
 		ApplyStrategy:                crp.Spec.Strategy.ApplyStrategy.DeepCopy(),
 		StagedUpdateStrategySnapshot: &updateStrategy.Spec,
