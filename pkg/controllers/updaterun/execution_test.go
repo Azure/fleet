@@ -17,36 +17,29 @@ import (
 
 func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 	tests := []struct {
-		name      string
-		updateRun *placementv1beta1.ClusterStagedUpdateRun
-		binding   *placementv1beta1.ClusterResourceBinding
-		cluster   *placementv1beta1.ClusterUpdatingStatus
-		wantEqual bool
+		name                 string
+		resourceSnapshotName string
+		updateRun            *placementv1beta1.ClusterStagedUpdateRun
+		binding              *placementv1beta1.ClusterResourceBinding
+		cluster              *placementv1beta1.ClusterUpdatingStatus
+		wantEqual            bool
 	}{
 		{
-			name: "isBindingSyncedWithClusterStatus should return false if binding and updateRun have different resourceSnapshot",
-			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
-				Spec: placementv1beta1.StagedUpdateRunSpec{
-					ResourceSnapshotIndex: "test-snapshot",
-				},
-			},
+			name:                 "isBindingSyncedWithClusterStatus should return false if binding and updateRun have different resourceSnapshot",
+			resourceSnapshotName: "test-1-snapshot",
 			binding: &placementv1beta1.ClusterResourceBinding{
 				Spec: placementv1beta1.ResourceBindingSpec{
-					ResourceSnapshotName: "test-snapshot-1",
+					ResourceSnapshotName: "test-2-snapshot",
 				},
 			},
 			wantEqual: false,
 		},
 		{
-			name: "isBindingSyncedWithClusterStatus should return false if binding and cluster status have different resourceOverrideSnapshot list",
-			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
-				Spec: placementv1beta1.StagedUpdateRunSpec{
-					ResourceSnapshotIndex: "test-snapshot",
-				},
-			},
+			name:                 "isBindingSyncedWithClusterStatus should return false if binding and cluster status have different resourceOverrideSnapshot list",
+			resourceSnapshotName: "test-1-snapshot",
 			binding: &placementv1beta1.ClusterResourceBinding{
 				Spec: placementv1beta1.ResourceBindingSpec{
-					ResourceSnapshotName: "test-snapshot",
+					ResourceSnapshotName: "test-1-snapshot",
 					ResourceOverrideSnapshots: []placementv1beta1.NamespacedName{
 						{
 							Name:      "ro2",
@@ -74,15 +67,11 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 			wantEqual: false,
 		},
 		{
-			name: "isBindingSyncedWithClusterStatus should return false if binding and cluster status have different clusterResourceOverrideSnapshot list",
-			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
-				Spec: placementv1beta1.StagedUpdateRunSpec{
-					ResourceSnapshotIndex: "test-snapshot",
-				},
-			},
+			name:                 "isBindingSyncedWithClusterStatus should return false if binding and cluster status have different clusterResourceOverrideSnapshot list",
+			resourceSnapshotName: "test-1-snapshot",
 			binding: &placementv1beta1.ClusterResourceBinding{
 				Spec: placementv1beta1.ResourceBindingSpec{
-					ResourceSnapshotName: "test-snapshot",
+					ResourceSnapshotName: "test-1-snapshot",
 					ResourceOverrideSnapshots: []placementv1beta1.NamespacedName{
 						{Name: "ro1", Namespace: "ns1"},
 						{Name: "ro2", Namespace: "ns2"},
@@ -100,11 +89,9 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 			wantEqual: false,
 		},
 		{
-			name: "isBindingSyncedWithClusterStatus should return false if binding and updateRun have different applyStrategy",
+			name:                 "isBindingSyncedWithClusterStatus should return false if binding and updateRun have different applyStrategy",
+			resourceSnapshotName: "test-1-snapshot",
 			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
-				Spec: placementv1beta1.StagedUpdateRunSpec{
-					ResourceSnapshotIndex: "test-snapshot",
-				},
 				Status: placementv1beta1.StagedUpdateRunStatus{
 					ApplyStrategy: &placementv1beta1.ApplyStrategy{
 						Type: placementv1beta1.ApplyStrategyTypeClientSideApply,
@@ -113,7 +100,7 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 			},
 			binding: &placementv1beta1.ClusterResourceBinding{
 				Spec: placementv1beta1.ResourceBindingSpec{
-					ResourceSnapshotName: "test-snapshot",
+					ResourceSnapshotName: "test-1-snapshot",
 					ResourceOverrideSnapshots: []placementv1beta1.NamespacedName{
 						{Name: "ro1", Namespace: "ns1"},
 						{Name: "ro2", Namespace: "ns2"},
@@ -134,11 +121,9 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 			wantEqual: false,
 		},
 		{
-			name: "isBindingSyncedWithClusterStatus should return true if resourceSnapshot, applyStrategy, and override lists are all deep equal",
+			name:                 "isBindingSyncedWithClusterStatus should return true if resourceSnapshot, applyStrategy, and override lists are all deep equal",
+			resourceSnapshotName: "test-1-snapshot",
 			updateRun: &placementv1beta1.ClusterStagedUpdateRun{
-				Spec: placementv1beta1.StagedUpdateRunSpec{
-					ResourceSnapshotIndex: "test-snapshot",
-				},
 				Status: placementv1beta1.StagedUpdateRunStatus{
 					ApplyStrategy: &placementv1beta1.ApplyStrategy{
 						Type: placementv1beta1.ApplyStrategyTypeReportDiff,
@@ -147,7 +132,7 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 			},
 			binding: &placementv1beta1.ClusterResourceBinding{
 				Spec: placementv1beta1.ResourceBindingSpec{
-					ResourceSnapshotName: "test-snapshot",
+					ResourceSnapshotName: "test-1-snapshot",
 					ResourceOverrideSnapshots: []placementv1beta1.NamespacedName{
 						{Name: "ro1", Namespace: "ns1"},
 						{Name: "ro2", Namespace: "ns2"},
@@ -170,7 +155,7 @@ func TestIsBindingSyncedWithClusterStatus(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := isBindingSyncedWithClusterStatus(test.updateRun, test.binding, test.cluster)
+			got := isBindingSyncedWithClusterStatus(test.resourceSnapshotName, test.updateRun, test.binding, test.cluster)
 			if got != test.wantEqual {
 				t.Fatalf("isBindingSyncedWithClusterStatus() got %v; want %v", got, test.wantEqual)
 			}

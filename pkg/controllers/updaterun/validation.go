@@ -50,13 +50,14 @@ func (r *Reconciler) validate(
 		return -1, nil, nil, err
 	}
 	// Make sure the latestPolicySnapshot has not changed.
-	if updateRun.Status.PolicySnapshotIndexUsed != latestPolicySnapshot.Name {
-		mismatchErr := fmt.Errorf("the policy snapshot index used in the clusterStagedUpdateRun is outdated, latest: %s, recorded: %s", latestPolicySnapshot.Name, updateRun.Status.PolicySnapshotIndexUsed)
+	if updateRun.Status.PolicySnapshotIndexUsed != updateRunCopy.Status.PolicySnapshotIndexUsed {
+		mismatchErr := fmt.Errorf("the policy snapshot index used in the clusterStagedUpdateRun is outdated, latest: %s, recorded: %s", updateRunCopy.Status.PolicySnapshotIndexUsed, updateRun.Status.PolicySnapshotIndexUsed)
 		klog.ErrorS(mismatchErr, "there's a new latest policy snapshot", "clusterResourcePlacement", placementName, "clusterStagedUpdateRun", updateRunRef)
 		return -1, nil, nil, fmt.Errorf("%w: %s", errStagedUpdatedAborted, mismatchErr.Error())
 	}
 	// Make sure the cluster count in the policy snapshot has not changed.
-	if updateRun.Status.PolicyObservedClusterCount != clusterCount {
+	// PickAll policy case will be verified in validateStagesStatus.
+	if clusterCount != -1 && updateRun.Status.PolicyObservedClusterCount != clusterCount {
 		mismatchErr := fmt.Errorf("the cluster count initialized in the clusterStagedUpdateRun is outdated, latest: %d, recorded: %d", clusterCount, updateRun.Status.PolicyObservedClusterCount)
 		klog.ErrorS(mismatchErr, "the cluster count in the policy snapshot has changed", "clusterResourcePlacement", placementName, "clusterStagedUpdateRun", updateRunRef)
 		return -1, nil, nil, fmt.Errorf("%w: %s", errStagedUpdatedAborted, mismatchErr.Error())
