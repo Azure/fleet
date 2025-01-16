@@ -43,8 +43,27 @@ const (
 	ResourceScheduleFailedReason = "ScheduleFailed"
 )
 
+var (
+	skippedCondTypesForCSASSAApplyStrategyTypes = map[condition.ResourceCondition]interface{}{
+		condition.DiffReportedCondition: nil,
+	}
+	skippedCondTypesForReportDiffApplyStrategyType = map[condition.ResourceCondition]interface{}{
+		condition.AppliedCondition:   nil,
+		condition.AvailableCondition: nil,
+	}
+)
+
+// Note (chenyu1): with the newly added DiffReported condition type, the status handling part
+// probably needs some refactoring as it is triggering the code complexity linter (original
+// cyclomatic complexity score 26, new score 31, threshold 30); the original
+// assumption, where condition types can always be handled in sequential order, i.e., one failing
+// condition type will exempt Fleet from processing all subsequent condition types, only partially
+// stands now.
+
 // setResourceConditions sets the resource related conditions by looking at the bindings and work, excluding the scheduled condition.
 // It returns whether there is a cluster scheduled or not.
+//
+// nolint: gocyclo
 func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement,
 	latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (bool, error) {
 	placementStatuses := make([]fleetv1beta1.ResourcePlacementStatus, 0, len(latestSchedulingPolicySnapshot.Status.ClusterDecisions))
@@ -93,20 +112,22 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 		if err != nil {
 			return false, err
 		}
-		for i := range res {
-			switch res[i] {
+		for condType, condStatus := range res {
+			switch condStatus {
 			case metav1.ConditionTrue:
-				clusterConditionStatusRes[i][condition.TrueConditionStatus]++
+				clusterConditionStatusRes[condType][condition.TrueConditionStatus]++
 			case metav1.ConditionFalse:
-				clusterConditionStatusRes[i][condition.FalseConditionStatus]++
+				clusterConditionStatusRes[condType][condition.FalseConditionStatus]++
 			case metav1.ConditionUnknown:
-				clusterConditionStatusRes[i][condition.UnknownConditionStatus]++
+				clusterConditionStatusRes[condType][condition.UnknownConditionStatus]++
 			}
 		}
 		// The resources can be changed without updating the crp spec.
-		// To reflect the latest resource conditions, we reset the renaming conditions.
-		for i := condition.ResourceCondition(len(res)); i < condition.TotalCondition; i++ {
-			meta.RemoveStatusCondition(&rps.Conditions, string(i.ResourcePlacementConditionType()))
+		// To reflect the latest resource conditions, we reset conditions that are no longer relevant.
+		for i := condition.RolloutStartedCondition; i < condition.TotalCondition; i++ {
+			if _, ok := res[i]; !ok {
+				meta.RemoveStatusCondition(&rps.Conditions, string(i.ResourcePlacementConditionType()))
+			}
 		}
 		placementStatuses = append(placementStatuses, rps)
 		klog.V(2).InfoS("Populated the resource placement status for the scheduled cluster", "clusterResourcePlacement", klog.KObj(crp), "cluster", c.ClusterName, "resourcePlacementStatus", rps)
@@ -140,8 +161,26 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 		return false, nil
 	}
 
-	i := condition.RolloutStartedCondition
-	for ; i < condition.TotalCondition; i++ {
+	// If the CRP has an apply strategy of the ClientSideApply or ServerSideApply type, skip
+	// any updates to the DiffReported condition type; similarly, should the apply strategy be of
+	// the ReportDiff type, Fleet will skip any updates to the Applied and Available condition
+	// type.
+	skippedCondTypes := skippedCondTypesForCSASSAApplyStrategyTypes
+	if crp.Spec.Strategy.ApplyStrategy != nil && crp.Spec.Strategy.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff {
+		skippedCondTypes = skippedCondTypesForReportDiffApplyStrategyType
+	}
+
+	// Track all the condition types that have been set.
+	setCondTypes := make(map[condition.ResourceCondition]interface{})
+	for i := condition.RolloutStartedCondition; i < condition.TotalCondition; i++ {
+		if _, ok := skippedCondTypes[i]; ok {
+			// If the Applied and Available condition types are skipped (as the CRP uses
+			// the ReportDiff apply strategy), proceed to evaluate the DiffReported condition
+			// type.
+			continue
+		}
+
+		setCondTypes[i] = nil
 		if clusterConditionStatusRes[i][condition.UnknownConditionStatus] > 0 {
 			crp.SetConditions(i.UnknownClusterResourcePlacementCondition(crp.Generation, clusterConditionStatusRes[i][condition.UnknownConditionStatus]))
 			break
@@ -167,10 +206,12 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 		}
 	}
 	// reset the remaining conditions, starting from the next one
-	for i = i + 1; i < condition.TotalCondition; i++ {
+	for i := condition.RolloutStartedCondition; i < condition.TotalCondition; i++ {
 		// The resources can be changed without updating the crp spec.
 		// To reflect the latest resource conditions, we reset the renaming conditions.
-		meta.RemoveStatusCondition(&crp.Status.Conditions, string(i.ClusterResourcePlacementConditionType()))
+		if _, ok := setCondTypes[i]; !ok {
+			meta.RemoveStatusCondition(&crp.Status.Conditions, string(i.ClusterResourcePlacementConditionType()))
+		}
 	}
 	klog.V(2).InfoS("Populated the placement conditions", "clusterResourcePlacement", klog.KObj(crp))
 
@@ -219,22 +260,33 @@ func (r *Reconciler) buildClusterResourceBindings(ctx context.Context, crp *flee
 // The resource condition order (index) is defined as const:
 // const (
 //
-//	RolloutStartedCondition resourceCondition = iota
-//	OverriddenCondition
-//	WorkSynchronizedCondition
-//	AppliedCondition
-//	AvailableCondition
-//	TotalCondition
+//		RolloutStartedCondition resourceCondition = iota
+//		OverriddenCondition
+//		WorkSynchronizedCondition
+//		AppliedCondition
+//		AvailableCondition
+//	    DiffReportedCondition
+//		TotalCondition
 //
 // )
 func (r *Reconciler) setResourcePlacementStatusPerCluster(crp *fleetv1beta1.ClusterResourcePlacement, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot,
-	binding *fleetv1beta1.ClusterResourceBinding, status *fleetv1beta1.ResourcePlacementStatus) ([]metav1.ConditionStatus, error) {
+	binding *fleetv1beta1.ClusterResourceBinding, status *fleetv1beta1.ResourcePlacementStatus) (map[condition.ResourceCondition]metav1.ConditionStatus, error) {
+	res := make(map[condition.ResourceCondition]metav1.ConditionStatus)
 	if binding == nil {
 		meta.SetStatusCondition(&status.Conditions, condition.RolloutStartedCondition.UnknownResourceConditionPerCluster(crp.Generation))
-		return []metav1.ConditionStatus{metav1.ConditionUnknown}, nil
+		res[condition.RolloutStartedCondition] = metav1.ConditionUnknown
+		return res, nil
 	}
 
-	res := make([]metav1.ConditionStatus, 0, condition.TotalCondition)
+	// If the CRP has an apply strategy of the ClientSideApply or ServerSideApply type, skip
+	// any updates to the DiffReported condition type; similarly, should the apply strategy be of
+	// the ReportDiff type, Fleet will skip any updates to the Applied and Available condition
+	// type.
+	skippedCondTypes := skippedCondTypesForCSASSAApplyStrategyTypes
+	if crp.Spec.Strategy.ApplyStrategy != nil && crp.Spec.Strategy.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff {
+		skippedCondTypes = skippedCondTypesForReportDiffApplyStrategyType
+	}
+
 	// There are few cases:
 	// * if the resourceSnapshotName is not equal,
 	//     1. the status is false, it means the rollout is stuck.
@@ -243,12 +295,19 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(crp *fleetv1beta1.Clus
 	//     just return the corresponding status.
 	if binding.Spec.ResourceSnapshotName == latestResourceSnapshot.Name {
 		for i := condition.RolloutStartedCondition; i < condition.TotalCondition; i++ {
+			if _, ok := skippedCondTypes[i]; ok {
+				// If the Applied and Available condition types are skipped (as the CRP uses
+				// the ReportDiff apply strategy), proceed to evaluate the DiffReported condition
+				// type.
+				continue
+			}
+
 			bindingCond := binding.GetCondition(string(i.ResourceBindingConditionType()))
 			if !condition.IsConditionStatusTrue(bindingCond, binding.Generation) &&
 				!condition.IsConditionStatusFalse(bindingCond, binding.Generation) {
 				meta.SetStatusCondition(&status.Conditions, i.UnknownResourceConditionPerCluster(crp.Generation))
 				klog.V(5).InfoS("Find an unknown condition", "bindingCond", bindingCond, "clusterResourceBinding", klog.KObj(binding), "clusterResourcePlacement", klog.KObj(crp))
-				res = append(res, metav1.ConditionUnknown)
+				res[i] = metav1.ConditionUnknown
 				break
 			}
 
@@ -262,9 +321,16 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(crp *fleetv1beta1.Clus
 				if bindingCond.Status == metav1.ConditionFalse {
 					status.FailedPlacements = binding.Status.FailedPlacements
 					status.DiffedPlacements = binding.Status.DiffedPlacements
-					status.DriftedPlacements = binding.Status.DriftedPlacements
+				}
+				// Note that configuration drifts can occur whether the manifests are applied
+				// successfully or not.
+				status.DriftedPlacements = binding.Status.DriftedPlacements
+			case condition.DiffReportedCondition:
+				if bindingCond.Status == metav1.ConditionTrue {
+					status.DiffedPlacements = binding.Status.DiffedPlacements
 				}
 			}
+
 			cond := metav1.Condition{
 				Type:               string(i.ResourcePlacementConditionType()),
 				Status:             bindingCond.Status,
@@ -273,7 +339,7 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(crp *fleetv1beta1.Clus
 				Message:            bindingCond.Message,
 			}
 			meta.SetStatusCondition(&status.Conditions, cond)
-			res = append(res, bindingCond.Status)
+			res[i] = bindingCond.Status
 
 			if bindingCond.Status == metav1.ConditionFalse {
 				break // if the current condition is false, no need to populate the rest conditions
@@ -292,12 +358,13 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(crp *fleetv1beta1.Clus
 			Message:            "The rollout is being blocked by the rollout strategy",
 		}
 		meta.SetStatusCondition(&status.Conditions, cond)
-		res = append(res, metav1.ConditionFalse)
+		res[condition.RolloutStartedCondition] = metav1.ConditionFalse
 		return res, nil
 	}
 	// At this point, either the generation is not the one in the binding spec or the status is true/unknown.
 	// It means the rollout controller has not handled the binding yet.
 	meta.SetStatusCondition(&status.Conditions, condition.RolloutStartedCondition.UnknownResourceConditionPerCluster(crp.Generation))
 	klog.V(5).InfoS("The staled binding rollout status is unknown", "clusterResourceBinding", klog.KObj(binding), "clusterResourcePlacement", klog.KObj(crp))
-	return []metav1.ConditionStatus{metav1.ConditionUnknown}, nil
+	res[condition.RolloutStartedCondition] = metav1.ConditionUnknown
+	return res, nil
 }

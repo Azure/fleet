@@ -1142,6 +1142,17 @@ const (
 	// array.
 	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
 	ClusterResourcePlacementAvailableConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementAvailable"
+
+	// ClusterResourcePlacementDiffReportedConditionType indicates whether Fleet has reported
+	// configuration differences between the desired states of resources as kept in the hub cluster
+	// and the current states on the all member clusters.
+	//
+	// It can have the following condition statuses:
+	// * True: Fleet has reported complete sets of configuration differences on all member clusters.
+	// * False: Fleet has not yet reported complete sets of configuration differences on some member
+	//   clusters, or an error has occurred.
+	// * Unknown: The diff reporting has just started and its status is not yet to be known.
+	ClusterResourcePlacementDiffReportedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementDiffReported"
 )
 
 // ResourcePlacementConditionType defines a specific condition of a resource placement.
@@ -1197,6 +1208,17 @@ const (
 	// - "False" means some of them are not available yet.
 	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
 	ResourcesAvailableConditionType ResourcePlacementConditionType = "Available"
+
+	// ResourceDiffReportedConditionType indicates whether Fleet has reported configuration
+	// differences between the desired states of resources as kept in the hub cluster and the
+	// current states on the selected member cluster.
+	//
+	// It can have the following condition statuses:
+	// * True: Fleet has reported the complete set of configuration differences on the member cluster.
+	// * False: Fleet has not yet reported the complete set of configuration differences on the
+	//   member cluster, or an error has occurred.
+	// * Unknown: The diff reporting has just started and its status is yet to be known.
+	ResourcesDiffReportedConditionType ResourcePlacementConditionType = "DiffReported"
 )
 
 // PlacementType identifies the type of placement.
