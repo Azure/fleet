@@ -928,17 +928,6 @@ func ensureCRPEvictionDeleted(crpEvictionName string) {
 	Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "CRP eviction still exists")
 }
 
-func ensureCRPDisruptionBudgetExists(crpDisruptionBudgetName string) func() bool {
-	return func() bool {
-		crpdb := &placementv1beta1.ClusterResourcePlacementDisruptionBudget{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpDisruptionBudgetName,
-			},
-		}
-		return !k8serrors.IsNotFound(hubClient.Get(ctx, types.NamespacedName{Name: crpdb.Name}, crpdb))
-	}
-}
-
 func ensureCRPDisruptionBudgetDeleted(crpDisruptionBudgetName string) {
 	crpdb := &placementv1beta1.ClusterResourcePlacementDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{
