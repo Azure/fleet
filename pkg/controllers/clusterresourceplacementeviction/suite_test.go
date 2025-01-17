@@ -81,7 +81,8 @@ var _ = BeforeSuite(func() {
 	Expect(err).Should(Succeed())
 
 	err = (&Reconciler{
-		Client: k8sClient,
+		Client:         k8sClient,
+		UncachedReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr)
 	Expect(err).Should(Succeed())
 

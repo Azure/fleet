@@ -122,7 +122,7 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 
 	AfterAll(func() {
 		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 })
 

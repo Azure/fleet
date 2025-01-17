@@ -889,7 +889,7 @@ func createClusterResourceOverrides(number int) {
 	}
 }
 
-func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*framework.Cluster) {
+func ensureCRPAndRelatedResourcesDeleted(crpName string, memberClusters []*framework.Cluster) {
 	// Delete the CRP.
 	crp := &placementv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
@@ -917,7 +917,7 @@ func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*fram
 	cleanupWorkResources()
 }
 
-func ensureCRPEvictionDeletion(crpEvictionName string) {
+func ensureCRPEvictionDeleted(crpEvictionName string) {
 	crpe := &placementv1beta1.ClusterResourcePlacementEviction{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crpEvictionName,
@@ -926,6 +926,28 @@ func ensureCRPEvictionDeletion(crpEvictionName string) {
 	Expect(hubClient.Delete(ctx, crpe)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete CRP eviction")
 	removedActual := crpEvictionRemovedActual(crpEvictionName)
 	Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "CRP eviction still exists")
+}
+
+func ensureCRPDisruptionBudgetExists(crpDisruptionBudgetName string) func() bool {
+	return func() bool {
+		crpdb := &placementv1beta1.ClusterResourcePlacementDisruptionBudget{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpDisruptionBudgetName,
+			},
+		}
+		return !k8serrors.IsNotFound(hubClient.Get(ctx, types.NamespacedName{Name: crpdb.Name}, crpdb))
+	}
+}
+
+func ensureCRPDisruptionBudgetDeleted(crpDisruptionBudgetName string) {
+	crpdb := &placementv1beta1.ClusterResourcePlacementDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: crpDisruptionBudgetName,
+		},
+	}
+	Expect(hubClient.Delete(ctx, crpdb)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete CRP disruption budget")
+	removedActual := crpDisruptionBudgetRemovedActual(crpDisruptionBudgetName)
+	Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "CRP disruption budget still exists")
 }
 
 // verifyWorkPropagationAndMarkAsAvailable verifies that works derived from a specific CPR have been created

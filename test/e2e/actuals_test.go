@@ -921,6 +921,15 @@ func crpEvictionRemovedActual(crpEvictionName string) func() error {
 	}
 }
 
+func crpDisruptionBudgetRemovedActual(crpDisruptionBudgetName string) func() error {
+	return func() error {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpDisruptionBudgetName}, &placementv1beta1.ClusterResourcePlacementDisruptionBudget{}); !errors.IsNotFound(err) {
+			return fmt.Errorf("CRP disruption budget still exists or an unexpected error occurred: %w", err)
+		}
+		return nil
+	}
+}
+
 func validateCRPSnapshotRevisions(crpName string, wantPolicySnapshotRevision, wantResourceSnapshotRevision int) error {
 	matchingLabels := client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName}
 

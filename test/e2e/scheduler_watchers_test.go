@@ -109,7 +109,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
@@ -197,7 +197,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
@@ -303,7 +303,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 				return nil
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete the node")
 
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster3WestProd})
 		})
 	})
 
@@ -368,7 +368,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
@@ -457,7 +457,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
@@ -525,7 +525,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
@@ -589,7 +589,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
@@ -695,7 +695,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 				return nil
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete the node")
 
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster3WestProd})
 		})
 	})
 
@@ -756,7 +756,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
@@ -820,7 +820,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
@@ -885,7 +885,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
@@ -949,7 +949,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
@@ -1015,7 +1015,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
@@ -1104,7 +1104,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
@@ -1183,7 +1183,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
@@ -1266,7 +1266,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName2ForWatcherTests)
 		})
@@ -1387,7 +1387,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 				return nil
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete the node")
 
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster3WestProd})
 		})
 	})
 
@@ -1450,7 +1450,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
@@ -1515,7 +1515,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
@@ -1602,7 +1602,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
@@ -1681,7 +1681,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
@@ -1769,7 +1769,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName2ForWatcherTests)
 		})
@@ -1866,7 +1866,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 				return nil
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete the node")
 
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster3WestProd})
 		})
 	})
 })
