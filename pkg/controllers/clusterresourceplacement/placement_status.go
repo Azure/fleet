@@ -260,13 +260,13 @@ func (r *Reconciler) buildClusterResourceBindings(ctx context.Context, crp *flee
 // The resource condition order (index) is defined as const:
 // const (
 //
-//		RolloutStartedCondition resourceCondition = iota
-//		OverriddenCondition
-//		WorkSynchronizedCondition
-//		AppliedCondition
-//		AvailableCondition
-//	    DiffReportedCondition
-//		TotalCondition
+//	RolloutStartedCondition resourceCondition = iota
+//	OverriddenCondition
+//	WorkSynchronizedCondition
+//	AppliedCondition
+//	AvailableCondition
+//	DiffReportedCondition
+//	TotalCondition
 //
 // )
 func (r *Reconciler) setResourcePlacementStatusPerCluster(crp *fleetv1beta1.ClusterResourcePlacement, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot,
