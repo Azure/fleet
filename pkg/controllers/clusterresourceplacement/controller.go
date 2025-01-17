@@ -974,7 +974,18 @@ func isRolloutCompleted(crp *fleetv1beta1.ClusterResourcePlacement) bool {
 		return false
 	}
 
+	skippedCondTypes := skippedCondTypesForCSASSAApplyStrategyTypes
+	if crp.Spec.Strategy.ApplyStrategy != nil && crp.Spec.Strategy.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff {
+		skippedCondTypes = skippedCondTypesForReportDiffApplyStrategyType
+	}
 	for i := condition.RolloutStartedCondition; i < condition.TotalCondition; i++ {
+		// If the CRP has an apply strategy of the ClientSideApply or ServerSideApply type, skip
+		// checking the DiffReported condition type; similarly, should the apply strategy be of
+		// the ReportDiff type, Fleet will skip checking the Applied and Available condition
+		// type.
+		if _, ok := skippedCondTypes[i]; ok {
+			continue
+		}
 		if !condition.IsConditionStatusTrue(crp.GetCondition(string(i.ClusterResourcePlacementConditionType())), crp.Generation) {
 			return false
 		}
