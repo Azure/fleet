@@ -49,10 +49,11 @@ func (v *resourceOverrideValidator) Handle(ctx context.Context, req admission.Re
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	// List of resource overrides.
-	roList, err := listResourceOverride(ctx, v.client)
-	if err != nil {
-		return admission.Errored(http.StatusBadRequest, err)
+	// List all the resource overrides in the same namespace
+	roList := &fleetv1alpha1.ResourceOverrideList{}
+	if err := v.client.List(ctx, roList, client.InNamespace(ro.Namespace)); err != nil {
+		klog.ErrorS(err, "Failed to list resourceOverrides when validating")
+		return admission.Errored(http.StatusInternalServerError, fmt.Errorf("failed to list resourceOverrides, please retry the request: %w", err))
 	}
 
 	// Check if the override count limit has been reached, if there are at most 100 resource overrides.
@@ -66,14 +67,4 @@ func (v *resourceOverrideValidator) Handle(ctx context.Context, req admission.Re
 		return admission.Denied(err.Error())
 	}
 	return admission.Allowed("resourceOverride has valid fields")
-}
-
-// listResourceOverride returns a list of cluster resource overrides.
-func listResourceOverride(ctx context.Context, client client.Client) (*fleetv1alpha1.ResourceOverrideList, error) {
-	roList := &fleetv1alpha1.ResourceOverrideList{}
-	if err := client.List(ctx, roList); err != nil {
-		klog.ErrorS(err, "Failed to list resourceOverrides when validating")
-		return nil, fmt.Errorf("failed to list resourceOverrides, please retry the request: %w", err)
-	}
-	return roList, nil
 }
