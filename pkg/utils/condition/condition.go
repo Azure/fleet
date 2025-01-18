@@ -254,9 +254,14 @@ func IsConditionStatusFalse(cond *metav1.Condition, latestGeneration int64) bool
 // ResourceCondition is all the resource related condition, for example, scheduled condition is not included.
 type ResourceCondition int
 
-// The following conditions are in ordered.
-// Once the placement is scheduled, it will be divided into following stages.
-// Used to populate the CRP conditions.
+// The full set of condition types that Fleet will populate on CRPs (the CRP itself and the
+// resource placement status per cluster) and cluster resource bindings.
+//
+//   - RolloutStarted, Overridden and WorkSynchronized apply to all objects;
+//   - Applied and Available apply only when the apply strategy in use is of the ClientSideApply
+//     and ServerSideApply type;
+//   - DiffReported applies only the apply strategy in use is of the ReportDiff type.
+//   - Total is a end marker (not used).
 const (
 	RolloutStartedCondition ResourceCondition = iota
 	OverriddenCondition
@@ -265,6 +270,24 @@ const (
 	AvailableCondition
 	DiffReportedCondition
 	TotalCondition
+)
+
+var (
+	// Different set of condition types that Fleet will populate.
+	CondTypesForCSAAndSSAApplyStrategies = []ResourceCondition{
+		RolloutStartedCondition,
+		OverriddenCondition,
+		WorkSynchronizedCondition,
+		AppliedCondition,
+		AvailableCondition,
+	}
+
+	CondTypesForReportDiffApplyStrategy = []ResourceCondition{
+		RolloutStartedCondition,
+		OverriddenCondition,
+		WorkSynchronizedCondition,
+		DiffReportedCondition,
+	}
 )
 
 func (c ResourceCondition) EventReasonForTrue() string {

@@ -4423,6 +4423,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 		binding                     *fleetv1beta1.ClusterResourceBinding
 		wantConditionStatusMap      map[condition.ResourceCondition]metav1.ConditionStatus
 		wantResourcePlacementStatus fleetv1beta1.ResourcePlacementStatus
+		expectedCondTypes           []condition.ResourceCondition
 	}{
 		{
 			name:    "binding not found",
@@ -4442,6 +4443,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
+			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
 		},
 		{
 			name: "stale binding with false rollout started condition",
@@ -4478,6 +4480,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
+			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
 		},
 		{
 			name: "stale binding with true rollout started condition",
@@ -4513,6 +4516,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
+			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
 		},
 		{
 			name: "completed binding",
@@ -4623,6 +4627,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
+			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
 		},
 		{
 			name: "unknown rollout started condition",
@@ -4659,6 +4664,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
+			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
 		},
 		{
 			name: "false overridden condition",
@@ -4729,6 +4735,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
+			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
 		},
 		{
 			name: "unknown work created condition",
@@ -4813,6 +4820,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
+			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
 		},
 		{
 			name: "false applied condition",
@@ -4941,6 +4949,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
+			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
 		},
 		{
 			name: "false available condition",
@@ -5082,6 +5091,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
+			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
 		},
 		{
 			name: "drifts and configuration diffs",
@@ -5284,6 +5294,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
+			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
 		},
 		{
 			name: "always on drift detection",
@@ -5421,6 +5432,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
+			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
 		},
 		{
 			name: "ReportDiff apply strategy (diff reported)",
@@ -5554,6 +5566,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
+			expectedCondTypes: condition.CondTypesForReportDiffApplyStrategy,
 		},
 		{
 			name: "ReportDiff apply strategy (diff not yet reported)",
@@ -5660,6 +5673,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
+			expectedCondTypes: condition.CondTypesForReportDiffApplyStrategy,
 		},
 		{
 			name: "ReportDiff apply strategy (failed to report diff)",
@@ -5766,6 +5780,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
+			expectedCondTypes: condition.CondTypesForReportDiffApplyStrategy,
 		},
 	}
 	for _, tc := range tests {
@@ -5779,7 +5794,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 				Recorder: record.NewFakeRecorder(10),
 			}
 			status := fleetv1beta1.ResourcePlacementStatus{ClusterName: cluster}
-			got, err := r.setResourcePlacementStatusPerCluster(tc.crp, resourceSnapshot, tc.binding, &status)
+			got, err := r.setResourcePlacementStatusPerCluster(tc.crp, resourceSnapshot, tc.binding, &status, tc.expectedCondTypes)
 			if err != nil {
 				t.Fatalf("setResourcePlacementStatusPerCluster() got err %v, want nil", err)
 			}
