@@ -385,6 +385,22 @@ func (r *Reconciler) listAllWorksAssociated(ctx context.Context, resourceBinding
 func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding, existingWorks map[string]*fleetv1beta1.Work, cluster *clusterv1beta1.MemberCluster) (bool, bool, error) {
 	updateAny := atomic.NewBool(false)
 	resourceBindingRef := klog.KObj(resourceBinding)
+
+	// Refresh the apply strategy for all existing works.
+	//
+	// This step is performed separately from other refreshes as apply strategy changes are
+	// CRP-scoped and independent from the resource snapshot management mechanism. In other
+	// words, even if a work has become stranded (i.e., it is linked to a resource snapshot that
+	// is no longer present in the system), it should still be able to receive the latest apply
+	// strategy update.
+	isApplyStrategyUpdated, err := r.syncApplyStrategyOnAllWorks(ctx, resourceBinding, existingWorks)
+	if err != nil {
+		return false, true, err
+	}
+	if isApplyStrategyUpdated {
+		updateAny.Store(true)
+	}
+
 	// the hash256 function can can handle empty list https://go.dev/play/p/_4HW17fooXM
 	resourceOverrideSnapshotHash, err := resource.HashOf(resourceBinding.Spec.ResourceOverrideSnapshots)
 	if err != nil {
