@@ -146,6 +146,12 @@ func (r *Reconciler) setScheduledResourcePlacementStatuses(
 		clusterDecision := selected[idx]
 		rps := &fleetv1beta1.ResourcePlacementStatus{}
 
+		// Port back the old conditions.
+		// This is necessary for Fleet to track the last transition times correctly.
+		if oldConds, ok := oldRPSMap[clusterDecision.ClusterName]; ok {
+			rps.Conditions = oldConds
+		}
+
 		// Set the scheduled condition.
 		scheduledCondition := metav1.Condition{
 			Status:             metav1.ConditionTrue,
@@ -158,12 +164,6 @@ func (r *Reconciler) setScheduledResourcePlacementStatuses(
 
 		// Set the cluster name.
 		rps.ClusterName = clusterDecision.ClusterName
-
-		// Port back the old conditions.
-		// This is necessary for Fleet to track the last transition times correctly.
-		if oldConds, ok := oldRPSMap[clusterDecision.ClusterName]; ok {
-			rps.Conditions = oldConds
-		}
 
 		// Prepare the new conditions.
 		binding := bindingMap[clusterDecision.ClusterName]
