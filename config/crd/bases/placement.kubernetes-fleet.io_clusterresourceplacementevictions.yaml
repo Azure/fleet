@@ -191,7 +191,14 @@ spec:
     storage: false
     subresources:
       status: {}
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - jsonPath: .status.conditions[?(@.type=="Valid")].status
+      name: Valid
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Executed")].status
+      name: Executed
+      type: string
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: |-
