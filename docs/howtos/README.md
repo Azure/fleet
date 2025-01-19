@@ -58,7 +58,7 @@ domains:
     resource selectors, policy, and more. `ResourceOverride` is a Fleet API that allows you to
     modify or override specific attributes across namespaced resources.
 
-* [Using the Fleet `ClusterResourcePlacementEviction` and `ClusterResourcePlacementDisruptionBudget` APIs](eviction-and-disruption-budget.md)
+* [Using the Fleet `ClusterResourcePlacementEviction` and `ClusterResourcePlacementDisruptionBudget` APIs](eviction-placement-disruption-budget.md)
 
     This how-to guide explains the specifics of the Fleet `ClusterResourcePlacementEviction` and
     `ClusterResourcePlacementDisruptionBudget` APIs, including how to evict resources from a
