@@ -8,7 +8,7 @@ This document explains the concept of `Eviction` and `Placement Disruption Budge
 
 The `Placement Disruption Budget` object protects against voluntary disruption, and in the case of the fleet, the only allowed voluntary disruption as of now is eviction.
 
-## Eviction
+## ClusterResourcePlacementEviction
 
 An eviction object is used to remove resources from a member cluster once the resources have already been propagated from the hub cluster.
 
