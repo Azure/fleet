@@ -931,7 +931,7 @@ func (r *Reconciler) setPlacementStatus(
 	// For clusters that have been selected, set the resource placement status based on the
 	// respective resource binding status for each of them.
 	expectedCondTypes := determineExpectedCRPAndResourcePlacementStatusCondType(crp)
-	allRPS, rpsSetCondTypeCounter, err := r.setScheduledResourcePlacementStatuses(
+	allRPS, rpsSetCondTypeCounter, err := r.appendScheduledResourcePlacementStatuses(
 		ctx, allRPS, selected, expectedCondTypes, crp, latestSchedulingPolicySnapshot, latestResourceSnapshot)
 	if err != nil {
 		return false, err
@@ -939,7 +939,7 @@ func (r *Reconciler) setPlacementStatus(
 
 	// For clusters that failed to get scheduled, set a resource placement status with the
 	// failed to schedule condition for each of them.
-	allRPS = setFailedToScheduleResourcePlacementStatuses(allRPS, unselected, failedToScheduleClusterCount, klog.KObj(crp), crp.Generation)
+	allRPS = appendFailedToScheduleResourcePlacementStatuses(allRPS, unselected, failedToScheduleClusterCount, crp)
 
 	crp.Status.PlacementStatuses = allRPS
 

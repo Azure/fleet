@@ -78,11 +78,11 @@ func calculateFailedToScheduleClusterCount(crp *fleetv1beta1.ClusterResourcePlac
 }
 
 // setFailedToScheduleResourcePlacementStatuses sets the resource placement statuses for the failed to schedule clusters.
-func setFailedToScheduleResourcePlacementStatuses(
+func appendFailedToScheduleResourcePlacementStatuses(
 	allRPS []fleetv1beta1.ResourcePlacementStatus,
 	unselected []*fleetv1beta1.ClusterDecision,
 	failedToScheduleClusterCount int,
-	crpRef klog.ObjectRef, crpGeneration int64,
+	crp *fleetv1beta1.ClusterResourcePlacement,
 ) []fleetv1beta1.ResourcePlacementStatus {
 	// In the earlier step it has been guaranteed that failedToScheduleClusterCount is less than or equal to the
 	// total number of unselected clusters; here Fleet still performs a sanity check.
@@ -94,13 +94,13 @@ func setFailedToScheduleResourcePlacementStatuses(
 			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
 			Reason:             ResourceScheduleFailedReason,
 			Message:            unselected[i].Reason,
-			ObservedGeneration: crpGeneration,
+			ObservedGeneration: crp.Generation,
 		}
 		meta.SetStatusCondition(&rps.Conditions, failedToScheduleCond)
 		// The allRPS slice has been pre-allocated, so the append call will never produce a new
 		// slice; here, however, Fleet will still return the old slice just in case.
 		allRPS = append(allRPS, *rps)
-		klog.V(2).InfoS("Populated the resource placement status for the unscheduled cluster", "clusterResourcePlacement", crpRef, "cluster", unselected[i].ClusterName)
+		klog.V(2).InfoS("Populated the resource placement status for the unscheduled cluster", "clusterResourcePlacement", klog.KObj(crp), "cluster", unselected[i].ClusterName)
 	}
 
 	return allRPS
@@ -120,13 +120,13 @@ func determineExpectedCRPAndResourcePlacementStatusCondType(crp *fleetv1beta1.Cl
 }
 
 // setScheduledResourcePlacementStatuses sets the resource placement statuses for the scheduled clusters.
-func (r *Reconciler) setScheduledResourcePlacementStatuses(
+func (r *Reconciler) appendScheduledResourcePlacementStatuses(
 	ctx context.Context,
 	allRPS []fleetv1beta1.ResourcePlacementStatus,
 	selected []*fleetv1beta1.ClusterDecision,
 	expectedCondTypes []condition.ResourceCondition,
 	crp *fleetv1beta1.ClusterResourcePlacement,
-	lastestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot,
+	latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot,
 	latestClusterResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot,
 ) (
 	[]fleetv1beta1.ResourcePlacementStatus,
@@ -137,7 +137,7 @@ func (r *Reconciler) setScheduledResourcePlacementStatuses(
 	var rpsSetCondTypeCounter [condition.TotalCondition][condition.TotalConditionStatus]int
 
 	oldRPSMap := buildResourcePlacementStatusMap(crp)
-	bindingMap, err := r.buildClusterResourceBindings(ctx, crp, lastestSchedulingPolicySnapshot)
+	bindingMap, err := r.buildClusterResourceBindings(ctx, crp, latestSchedulingPolicySnapshot)
 	if err != nil {
 		return allRPS, rpsSetCondTypeCounter, err
 	}
@@ -167,10 +167,7 @@ func (r *Reconciler) setScheduledResourcePlacementStatuses(
 
 		// Prepare the new conditions.
 		binding := bindingMap[clusterDecision.ClusterName]
-		setStatusByCondType, err := r.setResourcePlacementStatusPerCluster(crp, latestClusterResourceSnapshot, binding, rps, expectedCondTypes)
-		if err != nil {
-			return allRPS, rpsSetCondTypeCounter, err
-		}
+		setStatusByCondType := r.setResourcePlacementStatusPerCluster(crp, latestClusterResourceSnapshot, binding, rps, expectedCondTypes)
 
 		// Update the counter.
 		for condType, condStatus := range setStatusByCondType {
@@ -304,14 +301,14 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(
 	binding *fleetv1beta1.ClusterResourceBinding,
 	status *fleetv1beta1.ResourcePlacementStatus,
 	expectedCondTypes []condition.ResourceCondition,
-) (map[condition.ResourceCondition]metav1.ConditionStatus, error) {
+) map[condition.ResourceCondition]metav1.ConditionStatus {
 	res := make(map[condition.ResourceCondition]metav1.ConditionStatus)
 	if binding == nil {
 		// The binding cannot be found; Fleet might be observing an in-between state where
 		// the cluster has been picked but the binding has not been created yet.
 		meta.SetStatusCondition(&status.Conditions, condition.RolloutStartedCondition.UnknownResourceConditionPerCluster(crp.Generation))
 		res[condition.RolloutStartedCondition] = metav1.ConditionUnknown
-		return res, nil
+		return res
 	}
 
 	rolloutStartedCond := binding.GetCondition(string(condition.RolloutStartedCondition.ResourceBindingConditionType()))
@@ -328,14 +325,14 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(
 		}
 		meta.SetStatusCondition(&status.Conditions, cond)
 		res[condition.RolloutStartedCondition] = metav1.ConditionFalse
-		return res, nil
+		return res
 	case binding.Spec.ResourceSnapshotName != latestResourceSnapshot.Name:
 		// The binding uses an out of date resource snapshot, and the RolloutStarted condition is
 		// set to True, Unknown, or has become stale. Fleet might be observing an in-between state.
 		meta.SetStatusCondition(&status.Conditions, condition.RolloutStartedCondition.UnknownResourceConditionPerCluster(crp.Generation))
 		klog.V(5).InfoS("The cluster resource binding has a stale RolloutStarted condition, or it links to an out of date resource snapshot yet has the RolloutStarted condition set to True or Unknown status", "clusterResourceBinding", klog.KObj(binding), "clusterResourcePlacement", klog.KObj(crp))
 		res[condition.RolloutStartedCondition] = metav1.ConditionUnknown
-		return res, nil
+		return res
 	default:
 		// The binding uses the latest resource snapshot.
 		for _, i := range expectedCondTypes {
@@ -382,6 +379,6 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(
 				break // if the current condition is false, no need to populate the rest conditions
 			}
 		}
-		return res, nil
+		return res
 	}
 }

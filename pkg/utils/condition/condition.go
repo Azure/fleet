@@ -71,7 +71,7 @@ const (
 
 	// DiffReportedStatusUnknownReason is the reason string of the DiffReported condition when the
 	// diff reporting has just started and its status is not yet to be known.
-	DiffReportedStatusUnknownReason = "DiffReportingJustStarted"
+	DiffReportedStatusUnknownReason = "DiffReportingPending"
 
 	// DiffReportedStatusFalseReason is the reason string of the DiffReported condition when the
 	// diff reporting has not been fully completed.
@@ -273,7 +273,8 @@ const (
 )
 
 var (
-	// Different set of condition types that Fleet will populate.
+	// Different set of condition types that Fleet will populate in sequential order based on the
+	// apply strategy in use.
 	CondTypesForCSAAndSSAApplyStrategies = []ResourceCondition{
 		RolloutStartedCondition,
 		OverriddenCondition,
@@ -438,7 +439,7 @@ func (c ResourceCondition) UnknownClusterResourcePlacementCondition(generation i
 			Status:             metav1.ConditionUnknown,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementDiffReportedConditionType),
 			Reason:             DiffReportedStatusUnknownReason,
-			Message:            fmt.Sprintf("There are still %d cluster(s) which just started checking for configuration differences", clusterCount),
+			Message:            fmt.Sprintf("There are still %d cluster(s) in the process of checking for configuration differences", clusterCount),
 			ObservedGeneration: generation,
 		},
 	}[c]
