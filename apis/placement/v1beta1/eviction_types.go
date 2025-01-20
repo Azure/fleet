@@ -14,6 +14,8 @@ import (
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=crpe
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Valid")].status`,name="Valid",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Executed")].status`,name="Executed",type=string
 
 // ClusterResourcePlacementEviction is an eviction attempt on a specific placement from
 // a ClusterResourcePlacement object; one may use this API to force the removal of specific
