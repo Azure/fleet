@@ -6,13 +6,26 @@ This document explains the concept of `Eviction` and `Placement Disruption Budge
 
 `Eviction` pertains to the act of removing resources from a target cluster propagated by a resource placement object from the hub cluster.
 
-The `Placement Disruption Budget` object protects against voluntary disruption, and in the case of the fleet, the only allowed voluntary disruption as of now is eviction.
+The `Placement Disruption Budget` object protects against voluntary disruptions.
+
+The only voluntary disruption that can occur in the fleet is the eviction of resources from a target cluster which can be achieved by creating the `ClusterResourcePlacementEviction` object
+
+Some cases of involuntary disruptions in the context of fleet,
+- The removal of resources from a member cluster by the scheduler due to scheduling policy changes
+- Users manually deleting workload resources running on a member cluster
+- Users manually deleting the `ClusterResourceBinding` object which is an internal resource the represents the placement of resources on a member cluster
+- Workloads failing to run properly on a member cluster due to misconfiguration or cluster related issues.
+
+For all the cases of involuntary disruptions described above, the `Placement Disruption Budget` object does not protect against them.
 
 ## ClusterResourcePlacementEviction
 
 An eviction object is used to remove resources from a member cluster once the resources have already been propagated from the hub cluster.
 
-Once the resources are successfully removed or if eviction cannot be executed, the eviction object won't be reconciled again.
+The eviction object is only reconciled once after which it reaches a terminal state. List of terminal states for `ClusterResourcePlacementEviction`,
+- `ClusterResourcePlacementEviction` is valid and it's executed successfully
+- `ClusterResourcePlacementEviction` is invalid
+- `ClusterResourcePlacementEviction` is valid but it's not executed
 
 To successfully evict resources from a cluster, the user needs to specify:
 
@@ -21,11 +34,12 @@ To successfully evict resources from a cluster, the user needs to specify:
 
 When specifying the `ClusterResourcePlacement` object in the eviction's spec, the user needs to consider the following cases:
 
-- For `PickFixed` CRP, eviction is not allowed because if users wanted to remove resources from a cluster, they could choose to remove the cluster name from the `ClusterResourcePlacement` spec or pick a different cluster.
+- For `PickFixed` CRP, eviction is not allowed  it is recommended that one directly edit the list of target clusters on the CRP object.
 - For `PickAll` & `PickN` CRPs, eviction is allowed because the users cannot deterministically pick or unpick a cluster based on the placement strategy; it's up to the scheduler.
 
-> **Note:** After an eviction is executed, there is no guarantee that the cluster won't be picked again by the scheduler to propagate resources for a `Placement` resource.
-> The user needs to specify a taint on the cluster to prevent the scheduler from picking the cluster again.
+> **Note:** After an eviction is executed, there is no guarantee that the cluster won't be picked again by the scheduler to propagate resources for a `ClusterResourcePlacement` resource.
+> The user needs to specify a [taint](../../howtos/taint-toleration.md) on the cluster to prevent the scheduler from picking the cluster again. This is especially true for `PickAll ClusterResourcePlacement` because 
+> the scheduler will try to propagate resources to all the clusters in the fleet.
 
 ## ClusterResourcePlacementDisruptionBudget
 

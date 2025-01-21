@@ -1,17 +1,17 @@
 # Using ClusterResourcePlacementEviction and ClusterResourcePlacementDisruptionBudget
 
-This how-to guide discusses how to create ClusterResourcePlacementEviction objects and ClusterResourcePlacementDisruptionBudget objects to evict resources from member clusters and protect resources on member clusters from voluntary disruption, respectively.
+This how-to guide discusses how to create `ClusterResourcePlacementEviction` objects and `ClusterResourcePlacementDisruptionBudget` objects to evict resources from member clusters and protect resources on member clusters from voluntary disruption, respectively.
 
 ## Evicting Resources from Member Clusters using ClusterResourcePlacementEviction
 
-The ClusterResourcePlacementEviction object is used to remove resources from a member cluster once the resources have already been propagated from the hub cluster.
+The `ClusterResourcePlacementEviction` object is used to remove resources from a member cluster once the resources have already been propagated from the hub cluster.
 
 To successfully evict resources from a cluster, the user needs to specify:
-- The name of the ClusterResourcePlacement object which propagated resources to the target cluster
+- The name of the `ClusterResourcePlacement` object which propagated resources to the target cluster
 - The name of the target cluster from which we need to evict resources.
 
-In this example, we will create a `ClusterResourcePlacement` object with PickAll placement policy to propagate resources to an existing MemberCluster, add a taint to the member cluster 
-resource and then create a ClusterResourcePlacementEviction object to evict resources from the MemberCluster.
+In this example, we will create a `ClusterResourcePlacement` object with PickAll placement policy to propagate resources to an existing `MemberCluster`, add a taint to the member cluster 
+resource and then create a `ClusterResourcePlacementEviction` object to evict resources from the `MemberCluster`.
 
 We will first create a namespace that we will propagate to the member cluster
 
@@ -306,7 +306,6 @@ status:
     name: test-ns
     version: v1
 ```
-> **Note:** The `ClusterResourcePlacementDisruptionBudget` object is only used as an information source by the eviction controller and hence it doesn't have a status associated to it.
 
 Now we will create a `ClusterResourcePlacementDisruptionBudget` object to protect resources on the member cluster from voluntary disruption:
 
