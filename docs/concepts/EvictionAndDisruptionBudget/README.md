@@ -52,10 +52,14 @@ Users are allowed to specify one of two fields in the `ClusterResourcePlacementD
 - MaxUnavailable - specifies the maximum number of clusters in which a placement can be unavailable due to voluntary disruptions.
 - MinAvailable - specifies the minimum number of clusters in which placements are available despite voluntary disruptions.
 
+for both `MaxUnavailable` and `MinAvailable`, the user can specify the number of clusters as an integer or as a percentage of the total number of clusters in the fleet.
+
 > **Note:** For both MaxUnavailable and MinAvailable, involuntary disruptions are not subject to the disruption budget but will still count against it.
 
 When specifying a disruption budget for a particular `ClusterResourcePlacement`, the user needs to consider the following cases:
 
-- For `PickFixed` CRP, whether a `ClusterResourcePlacementDisruptionBudget` is specified or not, if an eviction is carried out, the user will receive an invalid eviction error message in the eviction status.
-- For `PickAll` CRP, if a `ClusterResourcePlacementDisruptionBudget` is specified and the `MaxUnavailable` field is set, the user will receive a misconfigured placement disruption budget error message in the eviction status because total number of clusters selected is non-deterministic.
-- For `PickN` CRP, if a `ClusterResourcePlacementDisruptionBudget` is specified, the user can either set `MaxUnavailable` or `MinAvailable` field since the fields are mutually exclusive.
+- For `PickFixed` CRP, whether a `ClusterResourcePlacementDisruptionBudget` is specified or not, if an eviction object is created, the user will receive an invalid eviction error message in the eviction status.
+- For `PickAll` CRP, if the `ClusterResourcePlacementDisruptionBudget` is specified for the following cases, the user will receive a misconfigured placement disruption budget error message in the eviction status because total number of clusters selected is non-deterministic
+  - If the `MaxUnavailable` field is set either as integer or as a percentage
+  - If the `MinAvailable` field is set as a percentage
+- For `PickN` CRP, if a `ClusterResourcePlacementDisruptionBudget` is specified, the user can either set `MaxUnavailable` or `MinAvailable` field as an integer or percentage since the fields are mutually exclusive.

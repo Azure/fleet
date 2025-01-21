@@ -32,94 +32,12 @@ spec:
     placementType: PickAll
 ```
 
-The CRP status after applying should look something like this:
+The `CRP` status after applying should look something like this:
 
 ```yaml
-status:
-  conditions:
-  - lastTransitionTime: "2025-01-19T11:43:31Z"
-    message: found all cluster needed as specified by the scheduling policy, found
-      1 cluster(s)
-    observedGeneration: 2
-    reason: SchedulingPolicyFulfilled
-    status: "True"
-    type: ClusterResourcePlacementScheduled
-  - lastTransitionTime: "2025-01-19T11:43:31Z"
-    message: All 1 cluster(s) start rolling out the latest resource
-    observedGeneration: 2
-    reason: RolloutStarted
-    status: "True"
-    type: ClusterResourcePlacementRolloutStarted
-  - lastTransitionTime: "2025-01-19T11:43:31Z"
-    message: No override rules are configured for the selected resources
-    observedGeneration: 2
-    reason: NoOverrideSpecified
-    status: "True"
-    type: ClusterResourcePlacementOverridden
-  - lastTransitionTime: "2025-01-19T11:43:31Z"
-    message: Works(s) are succcesfully created or updated in 1 target cluster(s)'
-      namespaces
-    observedGeneration: 2
-    reason: WorkSynchronized
-    status: "True"
-    type: ClusterResourcePlacementWorkSynchronized
-  - lastTransitionTime: "2025-01-19T11:43:31Z"
-    message: The selected resources are successfully applied to 1 cluster(s)
-    observedGeneration: 2
-    reason: ApplySucceeded
-    status: "True"
-    type: ClusterResourcePlacementApplied
-  - lastTransitionTime: "2025-01-19T11:43:31Z"
-    message: The selected resources in 1 cluster(s) are available now
-    observedGeneration: 2
-    reason: ResourceAvailable
-    status: "True"
-    type: ClusterResourcePlacementAvailable
-  observedResourceIndex: "0"
-  placementStatuses:
-  - clusterName: kind-cluster-1
-    conditions:
-    - lastTransitionTime: "2025-01-19T11:43:31Z"
-      message: 'Successfully scheduled resources for placement in "kind-cluster-1"
-        (affinity score: 0, topology spread score: 0): picked by scheduling policy'
-      observedGeneration: 2
-      reason: Scheduled
-      status: "True"
-      type: Scheduled
-    - lastTransitionTime: "2025-01-19T11:43:31Z"
-      message: Detected the new changes on the resources and started the rollout process
-      observedGeneration: 2
-      reason: RolloutStarted
-      status: "True"
-      type: RolloutStarted
-    - lastTransitionTime: "2025-01-19T11:43:31Z"
-      message: No override rules are configured for the selected resources
-      observedGeneration: 2
-      reason: NoOverrideSpecified
-      status: "True"
-      type: Overridden
-    - lastTransitionTime: "2025-01-19T11:43:31Z"
-      message: All of the works are synchronized to the latest
-      observedGeneration: 2
-      reason: AllWorkSynced
-      status: "True"
-      type: WorkSynchronized
-    - lastTransitionTime: "2025-01-19T11:43:31Z"
-      message: All corresponding work objects are applied
-      observedGeneration: 2
-      reason: AllWorkHaveBeenApplied
-      status: "True"
-      type: Applied
-    - lastTransitionTime: "2025-01-19T11:43:31Z"
-      message: All corresponding work objects are available
-      observedGeneration: 2
-      reason: AllWorkAreAvailable
-      status: "True"
-      type: Available
-  selectedResources:
-  - kind: Namespace
-    name: test-ns
-    version: v1
+kubectl get crp test-crp
+NAME       GEN   SCHEDULED   SCHEDULED-GEN   AVAILABLE   AVAILABLE-GEN   AGE
+test-crp   2     True        2               True        2               5m49s
 ```
 
 let's now add a taint to the member cluster to ensure this cluster is not picked again by the scheduler once we evict resources from it.
@@ -151,45 +69,23 @@ spec:
   clusterName: kind-cluster-1
 ```
 
-the eviction status lets us know if the eviction was successful:
+the eviction object should look like this, if the eviction was successful:
 
 ```yaml
-status:
-  conditions:
-    - lastTransitionTime: "2025-01-19T12:10:01Z"
-      message: Eviction is valid
-      observedGeneration: 1
-      reason: ClusterResourcePlacementEvictionValid
-      status: "True"
-      type: Valid
-    - lastTransitionTime: "2025-01-19T12:10:01Z"
-      message: Eviction is allowed, no ClusterResourcePlacementDisruptionBudget specified
-      observedGeneration: 1
-      reason: ClusterResourcePlacementEvictionExecuted
-      status: "True"
-      type: Executed
+kubectl get crpe test-eviction
+NAME            VALID   EXECUTED
+test-eviction   True    True
 ```
 
-since the eviction is successful, the resources should be removed from the cluster, let's take a look at the CRP object's status to verify:
+since the eviction is successful, the resources should be removed from the cluster, let's take a look at the `CRP` object status to verify:
 
 ```yaml
-status:
-  conditions:
-    - lastTransitionTime: "2025-01-19T11:43:31Z"
-      message: found all cluster needed as specified by the scheduling policy, found
-        0 cluster(s)
-      observedGeneration: 2
-      reason: SchedulingPolicyFulfilled
-      status: "True"
-      type: ClusterResourcePlacementScheduled
-  observedResourceIndex: "0"
-  selectedResources:
-    - kind: Namespace
-      name: test-ns
-      version: v1
+kubectl get crp test-crp
+NAME       GEN   SCHEDULED   SCHEDULED-GEN   AVAILABLE   AVAILABLE-GEN   AGE
+test-crp   2     True        2                                           15m
 ```
 
-The status shows that the resources have been removed from the cluster and the only reason the scheduler doesn't re-pick the cluster is because of the taint we added.
+from the object we can clearly tell that the resources were evicted since the `AVAILABLE` column is empty. If the user needs more information `ClusterResourcePlacement` object's status can be checked.
 
 ## Protecting resources from voluntary disruptions using ClusterResourcePlacementDisruptionBudget
 
@@ -217,94 +113,12 @@ spec:
     numberOfClusters: 1
 ```
 
-The CRP status after applying should look something like this:
+The `CRP` object after applying should look something like this:
 
 ```yaml
-status:
-  conditions:
-  - lastTransitionTime: "2025-01-19T12:36:54Z"
-    message: found all cluster needed as specified by the scheduling policy, found
-      1 cluster(s)
-    observedGeneration: 2
-    reason: SchedulingPolicyFulfilled
-    status: "True"
-    type: ClusterResourcePlacementScheduled
-  - lastTransitionTime: "2025-01-19T12:36:54Z"
-    message: All 1 cluster(s) start rolling out the latest resource
-    observedGeneration: 2
-    reason: RolloutStarted
-    status: "True"
-    type: ClusterResourcePlacementRolloutStarted
-  - lastTransitionTime: "2025-01-19T12:36:54Z"
-    message: No override rules are configured for the selected resources
-    observedGeneration: 2
-    reason: NoOverrideSpecified
-    status: "True"
-    type: ClusterResourcePlacementOverridden
-  - lastTransitionTime: "2025-01-19T12:36:54Z"
-    message: Works(s) are succcesfully created or updated in 1 target cluster(s)'
-      namespaces
-    observedGeneration: 2
-    reason: WorkSynchronized
-    status: "True"
-    type: ClusterResourcePlacementWorkSynchronized
-  - lastTransitionTime: "2025-01-19T12:36:54Z"
-    message: The selected resources are successfully applied to 1 cluster(s)
-    observedGeneration: 2
-    reason: ApplySucceeded
-    status: "True"
-    type: ClusterResourcePlacementApplied
-  - lastTransitionTime: "2025-01-19T12:36:54Z"
-    message: The selected resources in 1 cluster(s) are available now
-    observedGeneration: 2
-    reason: ResourceAvailable
-    status: "True"
-    type: ClusterResourcePlacementAvailable
-  observedResourceIndex: "0"
-  placementStatuses:
-  - clusterName: kind-cluster-1
-    conditions:
-    - lastTransitionTime: "2025-01-19T12:36:54Z"
-      message: 'Successfully scheduled resources for placement in "kind-cluster-1"
-        (affinity score: 0, topology spread score: 0): picked by scheduling policy'
-      observedGeneration: 2
-      reason: Scheduled
-      status: "True"
-      type: Scheduled
-    - lastTransitionTime: "2025-01-19T12:36:54Z"
-      message: Detected the new changes on the resources and started the rollout process
-      observedGeneration: 2
-      reason: RolloutStarted
-      status: "True"
-      type: RolloutStarted
-    - lastTransitionTime: "2025-01-19T12:36:54Z"
-      message: No override rules are configured for the selected resources
-      observedGeneration: 2
-      reason: NoOverrideSpecified
-      status: "True"
-      type: Overridden
-    - lastTransitionTime: "2025-01-19T12:36:54Z"
-      message: All of the works are synchronized to the latest
-      observedGeneration: 2
-      reason: AllWorkSynced
-      status: "True"
-      type: WorkSynchronized
-    - lastTransitionTime: "2025-01-19T12:36:54Z"
-      message: All corresponding work objects are applied
-      observedGeneration: 2
-      reason: AllWorkHaveBeenApplied
-      status: "True"
-      type: Applied
-    - lastTransitionTime: "2025-01-19T12:36:54Z"
-      message: All corresponding work objects are available
-      observedGeneration: 2
-      reason: AllWorkAreAvailable
-      status: "True"
-      type: Available
-  selectedResources:
-  - kind: Namespace
-    name: test-ns
-    version: v1
+kubectl get crp test-crp
+NAME       GEN   SCHEDULED   SCHEDULED-GEN   AVAILABLE   AVAILABLE-GEN   AGE
+test-crp   2     True        2               True        2               8s
 ```
 
 Now we will create a `ClusterResourcePlacementDisruptionBudget` object to protect resources on the member cluster from voluntary disruption:
@@ -332,18 +146,30 @@ spec:
   clusterName: kind-cluster-1
 ```
 
-let's take a look at the status to see if the eviction was executed,
+> **Note:** The eviction controller will try to get the corresponding `ClusterResourcePlacementDisruptionBudget` object when a `ClusterResourcePlacementEviction` object is reconciled to check if the specified MaxAvailable or MinAvailable allows the eviction to be executed.
+
+let's take a look at the eviction object to see if the eviction was executed,
+
+```yaml
+kubectl get crpe test-eviction
+NAME            VALID   EXECUTED
+test-eviction   True    False
+```
+
+from the eviction object we can see the eviction was not executed.
+
+let's take a look at the `ClusterResourcePlacementEviction` object status to verify why the eviction was not executed:
 
 ```yaml
 status:
   conditions:
-  - lastTransitionTime: "2025-01-19T12:48:42Z"
+  - lastTransitionTime: "2025-01-21T15:52:29Z"
     message: Eviction is valid
     observedGeneration: 1
     reason: ClusterResourcePlacementEvictionValid
     status: "True"
     type: Valid
-  - lastTransitionTime: "2025-01-19T12:48:42Z"
+  - lastTransitionTime: "2025-01-21T15:52:29Z"
     message: 'Eviction is blocked by specified ClusterResourcePlacementDisruptionBudget,
       availablePlacements: 1, totalPlacements: 1'
     observedGeneration: 1
@@ -352,4 +178,4 @@ status:
     type: Executed
 ```
 
-from the eviction status we can clearly see the eviction was blocked by the `ClusterResourcePlacementDisruptionBudget` object which protected resources from being evicted from the MemberCluster.
+the eviction status clearly mentions that the eviction was blocked by the specified `ClusterResourcePlacementDisruptionBudget`.
