@@ -1421,6 +1421,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 			err:      nil,
 		},
 	}
+
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			action, err := trackResourceAvailability(tt.gvr, tt.obj)

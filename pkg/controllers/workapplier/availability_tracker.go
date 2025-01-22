@@ -222,6 +222,7 @@ func trackCRDAvailability(inMemberClusterObj *unstructured.Unstructured) (Manife
 	return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
 }
 
+// trackPDBAvailability tracks the availability of a pod disruption budget in the member cluster
 func trackPDBAvailability(curObj *unstructured.Unstructured) (ManifestProcessingAvailabilityResultType, error) {
 	var pdb policyv1.PodDisruptionBudget
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &pdb); err != nil {
