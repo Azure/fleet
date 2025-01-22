@@ -17,6 +17,7 @@ import (
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/defaulter"
 )
 
 var (
@@ -206,7 +207,14 @@ func TestFindConflictedWork(t *testing.T) {
 				WithScheme(scheme).
 				WithObjects(objects...).
 				Build()
-			got, err := findConflictedWork(ctx, fakeClient, testWorkNamespace, &tc.applyStrategy, tc.ownerRefs)
+			// Certain path of the findConflictedWork function will attempt
+			// to set default values of the retrieved apply strategy from the mock Work object and
+			// compare it with the passed-in apply strategy.
+			// To keep things consistent, here the test spec sets the passed-in apply strategy
+			// as well.
+			applyStrategy := &tc.applyStrategy
+			defaulter.SetDefaultsApplyStrategy(applyStrategy)
+			got, err := findConflictedWork(ctx, fakeClient, testWorkNamespace, applyStrategy, tc.ownerRefs)
 			if gotErr, wantErr := err != nil, tc.wantErr != nil; gotErr != wantErr || !errors.Is(err, tc.wantErr) {
 				t.Fatalf("findConflictedWork() got error %v, want error %v", err, tc.wantErr)
 			}
@@ -412,7 +420,14 @@ func TestValidateOwnerReference(t *testing.T) {
 				WithScheme(scheme).
 				WithObjects(objects...).
 				Build()
-			got, err := validateOwnerReference(ctx, fakeClient, testWorkNamespace, &tc.applyStrategy, tc.ownerRefs)
+			// Certain path of the validateOwnerReference function will attempt
+			// to set default values of the retrieved apply strategy from the mock Work object and
+			// compare it with the passed-in apply strategy.
+			// To keep things consistent, here the test spec sets the passed-in apply strategy
+			// as well.
+			applyStrategy := &tc.applyStrategy
+			defaulter.SetDefaultsApplyStrategy(applyStrategy)
+			got, err := validateOwnerReference(ctx, fakeClient, testWorkNamespace, applyStrategy, tc.ownerRefs)
 			if gotErr, wantErr := err != nil, tc.wantErr != nil; gotErr != wantErr || !errors.Is(err, tc.wantErr) {
 				t.Fatalf("validateOwnerReference() got error %v, want error %v", err, tc.wantErr)
 			}
