@@ -3079,6 +3079,94 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 	}
 }
 
+func TestSyncApplyStrategy(t *testing.T) {
+	bindingName := "test-binding-1"
+	workName := "test-work-1"
+
+	testCases := []struct {
+		name              string
+		resourceBinding   *fleetv1beta1.ClusterResourceBinding
+		work              *fleetv1beta1.Work
+		wantUpdated       bool
+		wantApplyStrategy *fleetv1beta1.ApplyStrategy
+	}{
+		{
+			name: "same apply strategy",
+			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: bindingName,
+				},
+				Spec: fleetv1beta1.ResourceBindingSpec{},
+			},
+			work: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: workName,
+				},
+				Spec: fleetv1beta1.WorkSpec{},
+			},
+		},
+		{
+			name: "apply strategy changed",
+			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: bindingName,
+				},
+				Spec: fleetv1beta1.ResourceBindingSpec{
+					ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+						ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+						Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
+						WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+						WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+					},
+				},
+			},
+			work: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: workName,
+				},
+				Spec: fleetv1beta1.WorkSpec{},
+			},
+			wantUpdated: true,
+			wantApplyStrategy: &fleetv1beta1.ApplyStrategy{
+				ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+				Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
+				WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+				WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			scheme := serviceScheme(t)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(tc.work).
+				Build()
+
+			r := &Reconciler{
+				Client: fakeClient,
+			}
+			workUpdated, err := r.syncApplyStrategy(ctx, tc.resourceBinding, tc.work)
+			if err != nil {
+				t.Fatalf("syncApplyStrategy() = %v, want no error", err)
+			}
+			if workUpdated != tc.wantUpdated {
+				t.Errorf("syncApplyStrategy() = %v, want %v", workUpdated, tc.wantUpdated)
+			}
+
+			updatedWork := &fleetv1beta1.Work{}
+			if err := r.Client.Get(ctx, client.ObjectKeyFromObject(tc.work), updatedWork); err != nil {
+				t.Fatalf("Get Work = %v, want no error", err)
+			}
+			if diff := cmp.Diff(updatedWork.Spec.ApplyStrategy, tc.wantApplyStrategy); diff != "" {
+				t.Errorf("applyStrategy mismatches (-got, +want):\n%s", diff)
+			}
+		})
+	}
+}
+
 type conflictClient struct {
 	client.Client
 	conflictCount int

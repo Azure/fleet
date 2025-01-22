@@ -51,7 +51,7 @@ var (
 	invalidClusterResourceOverrideSnapshot placementv1alpha1.ClusterResourceOverrideSnapshot
 
 	bindingStatusCmpOpts = cmp.Options{
-		cmpopts.SortSlices(utils.LessFuncConditions),
+		cmpopts.SortSlices(utils.LessFuncConditionByType),
 		cmpopts.SortSlices(utils.LessFuncFailedResourcePlacements),
 		cmpopts.SortSlices(utils.LessFuncDriftedResourcePlacements),
 		cmpopts.SortSlices(utils.LessFuncDiffedResourcePlacements),
@@ -1650,7 +1650,8 @@ var _ = Describe("Test Work Generator Controller", func() {
 		})
 	})
 
-	Context("Sync apply strategy changes", Ordered, func() {
+	Context("Sync apply strategy changes (works with valid resource snapshots)", Ordered, func() {
+		var masterResourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 		var clusterResourceBinding *placementv1beta1.ClusterResourceBinding
 
 		BeforeAll(func() {
@@ -1675,7 +1676,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 
 		It("can create master resource snapshot and resource binding", func() {
 			// Create the master resource snapshot.
-			masterResourceSnapshot := generateResourceSnapshot(
+			masterResourceSnapshot = generateResourceSnapshot(
 				1, 1, 0,
 				[][]byte{
 					testResourceCRD, testNameSpace, testResource,
@@ -1690,7 +1691,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			createClusterResourceBinding(&clusterResourceBinding, resourceBindingSpec)
 		})
 
-		It("should create work object with expected apply strategy", func() {
+		It("should create work object with no apply strategy", func() {
 			workName := fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName)
 			applyStrategyUpdatedActual := workApplyStrategyUpdatedActual(memberClusterNamespaceName, workName, nil)
 			Eventually(applyStrategyUpdatedActual, timeout, interval).Should(Succeed(), "Failed to create expected work object")
@@ -1745,11 +1746,16 @@ var _ = Describe("Test Work Generator Controller", func() {
 					Name: memberClusterNamespaceName,
 				},
 			}
-			Expect(k8sClient.Delete(ctx, &memberClusterNamespace)).Should(Succeed(), "Failed to delete namespace")
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &memberClusterNamespace))).Should(Succeed(), "Failed to delete namespace")
 
 			// Delete the cluster resource binding.
 			if clusterResourceBinding != nil {
-				Expect(k8sClient.Delete(ctx, clusterResourceBinding)).Should(Succeed(), "Failed to delete cluster resource binding")
+				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, clusterResourceBinding))).Should(Succeed(), "Failed to delete cluster resource binding")
+			}
+
+			// Delete the master resource snapshot.
+			if masterResourceSnapshot != nil {
+				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, masterResourceSnapshot))).Should(Succeed(), "Failed to delete master resource snapshot")
 			}
 
 			// Delete the member cluster.
@@ -1758,11 +1764,135 @@ var _ = Describe("Test Work Generator Controller", func() {
 					Name: memberClusterName,
 				},
 			}
-			Expect(k8sClient.Delete(ctx, &memberCluster)).Should(Succeed(), "Failed to delete member cluster")
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &memberCluster))).Should(Succeed(), "Failed to delete member cluster")
+		})
+	})
+
+	Context("Sync apply strategy changes (works with missing resource snapshots)", Ordered, func() {
+		var masterResourceSnapshot *placementv1beta1.ClusterResourceSnapshot
+		var clusterResourceBinding *placementv1beta1.ClusterResourceBinding
+
+		BeforeAll(func() {
+			memberClusterName = "cluster-" + utils.RandStr()
+			memberCluster := clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: memberClusterName,
+				},
+			}
+			Expect(k8sClient.Create(ctx, &memberCluster)).Should(Succeed(), "Failed to create member cluster")
+
+			memberClusterNamespaceName = fmt.Sprintf(utils.NamespaceNameFormat, memberClusterName)
+			memberClusterReservedNS := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: memberClusterNamespaceName,
+				},
+			}
+			Expect(k8sClient.Create(ctx, &memberClusterReservedNS)).Should(Succeed(), "Failed to create namespace")
+
+			testCRPName = "crp-" + utils.RandStr()
+		})
+
+		It("can create master resource snapshot and resource binding", func() {
+			// Create the master resource snapshot.
+			masterResourceSnapshot = generateResourceSnapshot(
+				1, 1, 0,
+				[][]byte{
+					testResourceCRD, testNameSpace, testResource,
+				})
+			Expect(k8sClient.Create(ctx, masterResourceSnapshot)).Should(Succeed(), "Failed to create master resource snapshot")
+
+			resourceBindingSpec := placementv1beta1.ResourceBindingSpec{
+				State:                placementv1beta1.BindingStateBound,
+				ResourceSnapshotName: masterResourceSnapshot.Name,
+				TargetCluster:        memberClusterName,
+			}
+			createClusterResourceBinding(&clusterResourceBinding, resourceBindingSpec)
+		})
+
+		It("should create work object with no apply strategy", func() {
+			workName := fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName)
+			applyStrategyUpdatedActual := workApplyStrategyUpdatedActual(memberClusterNamespaceName, workName, nil)
+			Eventually(applyStrategyUpdatedActual, timeout, interval).Should(Succeed(), "Failed to create expected work object")
+		})
+
+		It("can delete the master resource snapshot", func() {
+			Expect(k8sClient.Delete(ctx, masterResourceSnapshot)).Should(Succeed(), "Failed to delete master resource snapshot")
+		})
+
+		It("can update apply strategy on the resource binding", func() {
+			// Update the apply strategy on the resource binding; use an Eventually
+			// block to avoid conflict induced errors.
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: clusterResourceBinding.Name}, clusterResourceBinding); err != nil {
+					return fmt.Errorf("failed to get resource binding: %w", err)
+				}
+
+				clusterResourceBinding.Spec.ApplyStrategy = &placementv1beta1.ApplyStrategy{
+					ComparisonOption: placementv1beta1.ComparisonOptionTypeFullComparison,
+					WhenToApply:      placementv1beta1.WhenToApplyTypeIfNotDrifted,
+					Type:             placementv1beta1.ApplyStrategyTypeServerSideApply,
+					WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeNever,
+				}
+
+				if err := k8sClient.Update(ctx, clusterResourceBinding); err != nil {
+					return fmt.Errorf("failed to update resource binding: %w", err)
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "Failed to update apply strategy on the resource binding")
+		})
+
+		It("can add the rollout started condition to the resource binding", func() {
+			updateRolloutStartedGeneration(&clusterResourceBinding)
+		})
+
+		It("should update apply strategy on the work object", func() {
+			workName := fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName)
+			wantApplyStrategy := &placementv1beta1.ApplyStrategy{
+				ComparisonOption: placementv1beta1.ComparisonOptionTypeFullComparison,
+				WhenToApply:      placementv1beta1.WhenToApplyTypeIfNotDrifted,
+				Type:             placementv1beta1.ApplyStrategyTypeServerSideApply,
+				WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeNever,
+			}
+			applyStrategyUpdatedActual := workApplyStrategyUpdatedActual(memberClusterNamespaceName, workName, wantApplyStrategy)
+			Eventually(applyStrategyUpdatedActual, timeout, interval).Should(Succeed(), "Failed to create expected work object")
+		})
+
+		AfterAll(func() {
+			// Note that this test spec will not check if the cleanup has been
+			// fully completed. This is OK as the suite is never run in parallel
+			// and a random suffix is used for each created resource.
+
+			// Delete the member cluster reserved namespace.
+			memberClusterNamespace := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: memberClusterNamespaceName,
+				},
+			}
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &memberClusterNamespace))).Should(Succeed(), "Failed to delete namespace")
+
+			// Delete the cluster resource binding.
+			if clusterResourceBinding != nil {
+				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, clusterResourceBinding))).Should(Succeed(), "Failed to delete cluster resource binding")
+			}
+
+			// Delete the master resource snapshot.
+			if masterResourceSnapshot != nil {
+				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, masterResourceSnapshot))).Should(Succeed(), "Failed to delete master resource snapshot")
+			}
+
+			// Delete the member cluster.
+			memberCluster := clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: memberClusterName,
+				},
+			}
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &memberCluster))).Should(Succeed(), "Failed to delete member cluster")
 		})
 	})
 
 	Context("Refresh status given different apply strategies (ReportDiff -> ClientSideApply)", Ordered, func() {
+		var masterResourceSnapshot *placementv1beta1.ClusterResourceSnapshot
+		var secondaryResourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 		var clusterResourceBinding *placementv1beta1.ClusterResourceBinding
 
 		var diffObservedTimestamp *metav1.Time
@@ -1789,7 +1919,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 
 		It("can create multiple resource snapshots and resource binding", func() {
 			// Create the master resource snapshot.
-			masterResourceSnapshot := generateResourceSnapshot(
+			masterResourceSnapshot = generateResourceSnapshot(
 				1, 2, 0,
 				[][]byte{
 					testResourceCRD, testNameSpace,
@@ -1797,7 +1927,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			)
 			Expect(k8sClient.Create(ctx, masterResourceSnapshot)).Should(Succeed(), "Failed to create master resource snapshot")
 
-			secondaryResourceSnapshot := generateResourceSnapshot(
+			secondaryResourceSnapshot = generateResourceSnapshot(
 				1, 2, 1,
 				[][]byte{
 					testResource,
@@ -2082,6 +2212,43 @@ var _ = Describe("Test Work Generator Controller", func() {
 				&appliedCond, &availableCond, &diffReportedCond,
 				nil, nil, nil)
 			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
+		AfterAll(func() {
+			// Note that this test spec will not check if the cleanup has been
+			// fully completed. This is OK as the suite is never run in parallel
+			// and a random suffix is used for each created resource.
+
+			// Delete the member cluster reserved namespace.
+			memberClusterNamespace := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: memberClusterNamespaceName,
+				},
+			}
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &memberClusterNamespace))).Should(Succeed(), "Failed to delete namespace")
+
+			// Delete the cluster resource binding.
+			if clusterResourceBinding != nil {
+				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, clusterResourceBinding))).Should(Succeed(), "Failed to delete cluster resource binding")
+			}
+
+			// Delete the master resource snapshot.
+			if masterResourceSnapshot != nil {
+				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, masterResourceSnapshot))).Should(Succeed(), "Failed to delete master resource snapshot")
+			}
+
+			// Delete the secondary resource snapshot.
+			if secondaryResourceSnapshot != nil {
+				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, secondaryResourceSnapshot))).Should(Succeed(), "Failed to delete secondary resource snapshot")
+			}
+
+			// Delete the member cluster.
+			memberCluster := clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: memberClusterName,
+				},
+			}
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &memberCluster))).Should(Succeed(), "Failed to delete member cluster")
 		})
 	})
 })
@@ -2674,6 +2841,7 @@ func workApplyStrategyUpdatedActual(workNamespace, workName string, wantApplyStr
 	}
 }
 
+// TO-DO (chenyu1): consider refactoring the related code to reduce duplication.
 func bindingStatusUpdatedActual(
 	binding *placementv1beta1.ClusterResourceBinding,
 	hasOverrides bool,
@@ -2906,6 +3074,7 @@ func retrieveWork(namespace, name string) *placementv1beta1.Work {
 	return work
 }
 
+// TO-DO (chenyu1): consider refactoring related code to reduce duplication.
 func refreshWorkStatus(
 	work *placementv1beta1.Work,
 	appliedCond, availableCond, diffReportedCond *metav1.Condition,

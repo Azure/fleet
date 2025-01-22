@@ -393,12 +393,19 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 	// words, even if a work has become stranded (i.e., it is linked to a resource snapshot that
 	// is no longer present in the system), it should still be able to receive the latest apply
 	// strategy update.
-	isApplyStrategyUpdated, err := r.syncApplyStrategyOnAllWorks(ctx, resourceBinding, existingWorks)
-	if err != nil {
-		return false, true, err
-	}
-	if isApplyStrategyUpdated {
-		updateAny.Store(true)
+	errs, cctx := errgroup.WithContext(ctx)
+	for workName := range existingWorks {
+		w := existingWorks[workName]
+		errs.Go(func() error {
+			updated, err := r.syncApplyStrategy(ctx, resourceBinding, w)
+			if err != nil {
+				return err
+			}
+			if updated {
+				updateAny.Store(true)
+			}
+			return nil
+		})
 	}
 
 	// the hash256 function can can handle empty list https://go.dev/play/p/_4HW17fooXM
@@ -439,7 +446,7 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 
 	// issue all the create/update requests for the corresponding works for each snapshot in parallel
 	activeWork := make(map[string]*fleetv1beta1.Work, len(resourceSnapshots))
-	errs, cctx := errgroup.WithContext(ctx)
+	errs, cctx = errgroup.WithContext(ctx)
 	// generate work objects for each resource snapshot
 	for i := range resourceSnapshots {
 		snapshot := resourceSnapshots[i]
@@ -532,6 +539,28 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 	}
 	klog.V(2).InfoS("Successfully synced all the work associated with the resourceBinding", "updateAny", updateAny.Load(), "resourceBinding", resourceBindingRef)
 	return true, updateAny.Load(), nil
+}
+
+// syncApplyStrategy syncs the apply strategy specified on a ClusterResourceBinding object
+// to a Work object.
+func (r *Reconciler) syncApplyStrategy(
+	ctx context.Context,
+	resourceBinding *fleetv1beta1.ClusterResourceBinding,
+	existingWork *fleetv1beta1.Work,
+) (bool, error) {
+	// Skip the update if no change on apply strategy is needed.
+	if equality.Semantic.DeepEqual(existingWork.Spec.ApplyStrategy, resourceBinding.Spec.ApplyStrategy) {
+		return false, nil
+	}
+
+	// Update the apply strategy on the work.
+	existingWork.Spec.ApplyStrategy = resourceBinding.Spec.ApplyStrategy.DeepCopy()
+	if err := r.Client.Update(ctx, existingWork); err != nil {
+		klog.ErrorS(err, "Failed to update the apply strategy on the work", "work", klog.KObj(existingWork), "binding", klog.KObj(resourceBinding))
+		return true, controller.NewUpdateIgnoreConflictError(err)
+	}
+	klog.V(2).InfoS("Successfully updated the apply strategy on the work", "work", klog.KObj(existingWork), "binding", klog.KObj(resourceBinding))
+	return true, nil
 }
 
 // areAllWorkSynced checks if all the works are synced with the resource binding.
