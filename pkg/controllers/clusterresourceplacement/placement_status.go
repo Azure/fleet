@@ -77,7 +77,7 @@ func calculateFailedToScheduleClusterCount(crp *fleetv1beta1.ClusterResourcePlac
 	return failedToScheduleClusterCount
 }
 
-// setFailedToScheduleResourcePlacementStatuses sets the resource placement statuses for the failed to schedule clusters.
+// appendFailedToScheduleResourcePlacementStatuses sets the resource placement statuses for the failed to schedule clusters.
 func appendFailedToScheduleResourcePlacementStatuses(
 	allRPS []fleetv1beta1.ResourcePlacementStatus,
 	unselected []*fleetv1beta1.ClusterDecision,
@@ -111,15 +111,15 @@ func appendFailedToScheduleResourcePlacementStatuses(
 func determineExpectedCRPAndResourcePlacementStatusCondType(crp *fleetv1beta1.ClusterResourcePlacement) []condition.ResourceCondition {
 	switch {
 	case crp.Spec.Strategy.ApplyStrategy == nil:
-		return condition.CondTypesForCSAAndSSAApplyStrategies
+		return condition.CondTypesForClientSideServerSideApplyStrategies
 	case crp.Spec.Strategy.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff:
 		return condition.CondTypesForReportDiffApplyStrategy
 	default:
-		return condition.CondTypesForCSAAndSSAApplyStrategies
+		return condition.CondTypesForClientSideServerSideApplyStrategies
 	}
 }
 
-// setScheduledResourcePlacementStatuses sets the resource placement statuses for the scheduled clusters.
+// appendScheduledResourcePlacementStatuses sets the resource placement statuses for the scheduled clusters.
 func (r *Reconciler) appendScheduledResourcePlacementStatuses(
 	ctx context.Context,
 	allRPS []fleetv1beta1.ResourcePlacementStatus,

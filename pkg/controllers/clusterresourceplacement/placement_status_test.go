@@ -4372,6 +4372,592 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Removing Applied/Available condition from status as apply strategy has changed",
+			policy: &fleetv1beta1.PlacementPolicy{
+				PlacementType:    fleetv1beta1.PickNPlacementType,
+				NumberOfClusters: ptr.To(int32(1)),
+			},
+			strategy: fleetv1beta1.RolloutStrategy{
+				ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+					Type: fleetv1beta1.ApplyStrategyTypeReportDiff,
+				},
+			},
+			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.PolicyIndexLabel:      "0",
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
+					},
+					Generation: 1,
+				},
+				Status: fleetv1beta1.SchedulingPolicySnapshotStatus{
+					ObservedCRPGeneration: crpGeneration,
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(fleetv1beta1.PolicySnapshotScheduled),
+							Reason:             "Scheduled",
+							Message:            "message",
+							ObservedGeneration: 1,
+						},
+					},
+					ClusterDecisions: []fleetv1beta1.ClusterDecision{
+						{
+							ClusterName: "member-1",
+							Selected:    true,
+							Reason:      "success",
+						},
+					},
+				},
+			},
+			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.ResourceIndexLabel:    "0",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.ResourceGroupHashAnnotation:         "hash",
+						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+					},
+				},
+			},
+			clusterResourceBindings: []fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "binding-diff-reported-1",
+						Labels: map[string]string{
+							fleetv1beta1.CRPTrackingLabel: testName,
+						},
+						Generation: 1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						TargetCluster:                "member-1",
+						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+							Type: fleetv1beta1.ApplyStrategyTypeReportDiff,
+						},
+					},
+					Status: fleetv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+								Reason:             condition.RolloutStartedReason,
+								ObservedGeneration: 1,
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceBindingOverridden),
+								Reason:             condition.OverrideNotSpecifiedReason,
+								ObservedGeneration: 1,
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
+								Reason:             condition.WorkSynchronizedReason,
+								ObservedGeneration: 1,
+							},
+							{
+								Status:             metav1.ConditionFalse,
+								Type:               string(fleetv1beta1.ResourceBindingApplied),
+								Reason:             condition.ApplyFailedReason,
+								ObservedGeneration: 1,
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+								Reason:             condition.DiffReportedStatusTrueReason,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+			},
+			want: true,
+			crpStatus: fleetv1beta1.ClusterResourcePlacementStatus{
+				SelectedResources:     selectedResources,
+				ObservedResourceIndex: "0",
+				Conditions: []metav1.Condition{
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
+						Reason:             condition.OverrideNotSpecifiedReason,
+						ObservedGeneration: crpGeneration - 1,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+						Reason:             condition.RolloutStartedReason,
+						ObservedGeneration: crpGeneration - 1,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+						Reason:             "Scheduled",
+						ObservedGeneration: crpGeneration - 1,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
+						Reason:             condition.WorkSynchronizedReason,
+						ObservedGeneration: crpGeneration - 1,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+						Reason:             condition.ApplySucceededReason,
+						ObservedGeneration: crpGeneration - 1,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementAvailableConditionType),
+						Reason:             condition.AvailableReason,
+						ObservedGeneration: crpGeneration - 1,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+				},
+				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{
+					{
+						ClusterName: "member-1",
+						Conditions: []metav1.Condition{
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceOverriddenConditionType),
+								Reason:             condition.OverrideNotSpecifiedReason,
+								ObservedGeneration: crpGeneration - 1,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+								Reason:             condition.RolloutStartedReason,
+								ObservedGeneration: crpGeneration - 1,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
+								Reason:             condition.ScheduleSucceededReason,
+								ObservedGeneration: crpGeneration - 1,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceWorkSynchronizedConditionType),
+								Reason:             condition.WorkSynchronizedReason,
+								ObservedGeneration: crpGeneration - 1,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourcesAppliedConditionType),
+								Reason:             condition.ApplySucceededReason,
+								ObservedGeneration: crpGeneration - 1,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourcesAvailableConditionType),
+								Reason:             condition.AvailableReason,
+								ObservedGeneration: crpGeneration - 1,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+						},
+					},
+				},
+			},
+			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+				SelectedResources:     selectedResources,
+				ObservedResourceIndex: "0",
+				Conditions: []metav1.Condition{
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
+						Reason:             condition.OverrideNotSpecifiedReason,
+						ObservedGeneration: crpGeneration,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+						Reason:             condition.RolloutStartedReason,
+						ObservedGeneration: crpGeneration,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+						Reason:             "Scheduled",
+						ObservedGeneration: crpGeneration,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
+						Reason:             condition.WorkSynchronizedReason,
+						ObservedGeneration: crpGeneration,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementDiffReportedConditionType),
+						Reason:             condition.DiffReportedStatusTrueReason,
+						ObservedGeneration: crpGeneration,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+				},
+				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{
+					{
+						ClusterName: "member-1",
+						Conditions: []metav1.Condition{
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceOverriddenConditionType),
+								Reason:             condition.OverrideNotSpecifiedReason,
+								ObservedGeneration: crpGeneration,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+								Reason:             condition.RolloutStartedReason,
+								ObservedGeneration: crpGeneration,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
+								Reason:             condition.ScheduleSucceededReason,
+								ObservedGeneration: crpGeneration,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceWorkSynchronizedConditionType),
+								Reason:             condition.WorkSynchronizedReason,
+								ObservedGeneration: crpGeneration,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourcesDiffReportedConditionType),
+								Reason:             condition.DiffReportedStatusTrueReason,
+								ObservedGeneration: crpGeneration,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Removing DiffReported condition from status as apply strategy has changed",
+			policy: &fleetv1beta1.PlacementPolicy{
+				PlacementType:    fleetv1beta1.PickNPlacementType,
+				NumberOfClusters: ptr.To(int32(1)),
+			},
+			strategy: fleetv1beta1.RolloutStrategy{
+				ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+					Type: fleetv1beta1.ApplyStrategyTypeServerSideApply,
+				},
+			},
+			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.PolicyIndexLabel:      "0",
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
+					},
+					Generation: 1,
+				},
+				Status: fleetv1beta1.SchedulingPolicySnapshotStatus{
+					ObservedCRPGeneration: crpGeneration,
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(fleetv1beta1.PolicySnapshotScheduled),
+							Reason:             "Scheduled",
+							Message:            "message",
+							ObservedGeneration: 1,
+						},
+					},
+					ClusterDecisions: []fleetv1beta1.ClusterDecision{
+						{
+							ClusterName: "member-1",
+							Selected:    true,
+							Reason:      "success",
+						},
+					},
+				},
+			},
+			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.ResourceIndexLabel:    "0",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.ResourceGroupHashAnnotation:         "hash",
+						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+					},
+				},
+			},
+			clusterResourceBindings: []fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "binding-diff-reported-1",
+						Labels: map[string]string{
+							fleetv1beta1.CRPTrackingLabel: testName,
+						},
+						Generation: 1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						TargetCluster:                "member-1",
+						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+							Type: fleetv1beta1.ApplyStrategyTypeServerSideApply,
+						},
+					},
+					Status: fleetv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+								Reason:             condition.RolloutStartedReason,
+								ObservedGeneration: 1,
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceBindingOverridden),
+								Reason:             condition.OverrideNotSpecifiedReason,
+								ObservedGeneration: 1,
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
+								Reason:             condition.WorkSynchronizedReason,
+								ObservedGeneration: 1,
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceBindingApplied),
+								Reason:             condition.ApplySucceededReason,
+								ObservedGeneration: 1,
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceBindingAvailable),
+								Reason:             condition.AvailableReason,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+			},
+			want: true,
+			crpStatus: fleetv1beta1.ClusterResourcePlacementStatus{
+				SelectedResources:     selectedResources,
+				ObservedResourceIndex: "0",
+				Conditions: []metav1.Condition{
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
+						Reason:             condition.OverrideNotSpecifiedReason,
+						ObservedGeneration: crpGeneration - 1,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+						Reason:             condition.RolloutStartedReason,
+						ObservedGeneration: crpGeneration - 1,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+						Reason:             "Scheduled",
+						ObservedGeneration: crpGeneration - 1,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
+						Reason:             condition.WorkSynchronizedReason,
+						ObservedGeneration: crpGeneration - 1,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementDiffReportedConditionType),
+						Reason:             condition.DiffReportedStatusTrueReason,
+						ObservedGeneration: crpGeneration - 1,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+				},
+				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{
+					{
+						ClusterName: "member-1",
+						Conditions: []metav1.Condition{
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceOverriddenConditionType),
+								Reason:             condition.OverrideNotSpecifiedReason,
+								ObservedGeneration: crpGeneration - 1,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+								Reason:             condition.RolloutStartedReason,
+								ObservedGeneration: crpGeneration - 1,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
+								Reason:             condition.ScheduleSucceededReason,
+								ObservedGeneration: crpGeneration - 1,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceWorkSynchronizedConditionType),
+								Reason:             condition.WorkSynchronizedReason,
+								ObservedGeneration: crpGeneration - 1,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourcesDiffReportedConditionType),
+								Reason:             condition.DiffReportedStatusTrueReason,
+								ObservedGeneration: crpGeneration - 1,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+						},
+					},
+				},
+			},
+			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+				SelectedResources:     selectedResources,
+				ObservedResourceIndex: "0",
+				Conditions: []metav1.Condition{
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
+						Reason:             condition.OverrideNotSpecifiedReason,
+						ObservedGeneration: crpGeneration,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+						Reason:             condition.RolloutStartedReason,
+						ObservedGeneration: crpGeneration,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+						Reason:             "Scheduled",
+						ObservedGeneration: crpGeneration,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
+						Reason:             condition.WorkSynchronizedReason,
+						ObservedGeneration: crpGeneration,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+						Reason:             condition.ApplySucceededReason,
+						ObservedGeneration: crpGeneration,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementAvailableConditionType),
+						Reason:             condition.AvailableReason,
+						ObservedGeneration: crpGeneration,
+						LastTransitionTime: metav1.NewTime(currentTime),
+					},
+				},
+				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{
+					{
+						ClusterName: "member-1",
+						Conditions: []metav1.Condition{
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceOverriddenConditionType),
+								Reason:             condition.OverrideNotSpecifiedReason,
+								ObservedGeneration: crpGeneration,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+								Reason:             condition.RolloutStartedReason,
+								ObservedGeneration: crpGeneration,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
+								Reason:             condition.ScheduleSucceededReason,
+								ObservedGeneration: crpGeneration,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceWorkSynchronizedConditionType),
+								Reason:             condition.WorkSynchronizedReason,
+								ObservedGeneration: crpGeneration,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourcesAppliedConditionType),
+								Reason:             condition.ApplySucceededReason,
+								ObservedGeneration: crpGeneration,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourcesAvailableConditionType),
+								Reason:             condition.AvailableReason,
+								ObservedGeneration: crpGeneration,
+								LastTransitionTime: metav1.NewTime(currentTime),
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -4719,7 +5305,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
-			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
+			expectedCondTypes: condition.CondTypesForClientSideServerSideApplyStrategies,
 		},
 		{
 			name: "stale binding with false rollout started condition",
@@ -4756,7 +5342,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
-			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
+			expectedCondTypes: condition.CondTypesForClientSideServerSideApplyStrategies,
 		},
 		{
 			name: "stale binding with true rollout started condition",
@@ -4792,7 +5378,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
-			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
+			expectedCondTypes: condition.CondTypesForClientSideServerSideApplyStrategies,
 		},
 		{
 			name: "completed binding",
@@ -4903,7 +5489,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
-			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
+			expectedCondTypes: condition.CondTypesForClientSideServerSideApplyStrategies,
 		},
 		{
 			name: "unknown rollout started condition",
@@ -4940,7 +5526,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
-			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
+			expectedCondTypes: condition.CondTypesForClientSideServerSideApplyStrategies,
 		},
 		{
 			name: "false overridden condition",
@@ -5011,7 +5597,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
-			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
+			expectedCondTypes: condition.CondTypesForClientSideServerSideApplyStrategies,
 		},
 		{
 			name: "unknown work created condition",
@@ -5096,7 +5682,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
-			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
+			expectedCondTypes: condition.CondTypesForClientSideServerSideApplyStrategies,
 		},
 		{
 			name: "false applied condition",
@@ -5225,7 +5811,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
-			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
+			expectedCondTypes: condition.CondTypesForClientSideServerSideApplyStrategies,
 		},
 		{
 			name: "false available condition",
@@ -5367,7 +5953,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
-			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
+			expectedCondTypes: condition.CondTypesForClientSideServerSideApplyStrategies,
 		},
 		{
 			name: "drifts and configuration diffs",
@@ -5570,7 +6156,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
-			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
+			expectedCondTypes: condition.CondTypesForClientSideServerSideApplyStrategies,
 		},
 		{
 			name: "always on drift detection",
@@ -5708,7 +6294,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
-			expectedCondTypes: condition.CondTypesForCSAAndSSAApplyStrategies,
+			expectedCondTypes: condition.CondTypesForClientSideServerSideApplyStrategies,
 		},
 		{
 			name: "ReportDiff apply strategy (diff reported)",
