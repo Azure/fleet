@@ -155,6 +155,9 @@ const (
 
 	// AfterStageTaskWaitTimeElapsedReason is the reason string of condition if the wait time for after stage task has elapsed.
 	AfterStageTaskWaitTimeElapsedReason = "AfterStageTaskWaitTimeElapsed"
+
+	// ApprovalRequestApprovalAcceptedReason is the reason string of condition if the approval of the approval request has been accepted.
+	ApprovalRequestApprovalAcceptedReason = "ApprovalRequestApprovalAccepted"
 )
 
 // A group of condition reason & message string which is used to populate the ClusterResourcePlacementEviction condition.
