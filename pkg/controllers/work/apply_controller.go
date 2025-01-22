@@ -29,7 +29,6 @@ import (
 	"go.uber.org/atomic"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
-	policyv1 "k8s.io/api/policy/v1"
 	apiextensionshelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -42,7 +41,6 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/component-helpers/apps/poddisruptionbudget"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -455,9 +453,6 @@ func trackResourceAvailability(gvr schema.GroupVersionResource, curObj *unstruct
 	case utils.CustomResourceDefinitionGVR:
 		return trackCRDAvailability(curObj)
 
-	case utils.PodDisruptionBudgetGVR:
-		return trackPDBAvailability(curObj)
-
 	default:
 		if isDataResource(gvr) {
 			klog.V(2).InfoS("Data resources are available immediately", "gvr", gvr, "resource", klog.KObj(curObj))
@@ -466,20 +461,6 @@ func trackResourceAvailability(gvr schema.GroupVersionResource, curObj *unstruct
 		klog.V(2).InfoS("We don't know how to track the availability of the resource", "gvr", gvr, "resource", klog.KObj(curObj))
 		return manifestNotTrackableAction, nil
 	}
-}
-
-func trackPDBAvailability(curObj *unstructured.Unstructured) (ApplyAction, error) {
-	var pdb policyv1.PodDisruptionBudget
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &pdb); err != nil {
-		return errorApplyAction, controller.NewUnexpectedBehaviorError(err)
-	}
-	// Check if conditions are up-to-date
-	if poddisruptionbudget.ConditionsAreUpToDate(&pdb) {
-		klog.V(2).InfoS("PodDisruptionBudget is available", "pdb", klog.KObj(curObj))
-		return manifestAvailableAction, nil
-	}
-	klog.V(2).InfoS("Still need to wait for PodDisruptionBudget to be available", "pdb", klog.KObj(curObj))
-	return manifestNotAvailableYetAction, nil
 }
 
 func trackCRDAvailability(curObj *unstructured.Unstructured) (ApplyAction, error) {
