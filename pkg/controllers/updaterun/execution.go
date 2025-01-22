@@ -306,11 +306,20 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 						klog.ErrorS(unexpectedErr, "Found an approval request targeting wrong stage", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
 						return false, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 					}
-					if !condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequest.Status.Conditions, string(placementv1beta1.ApprovalRequestConditionApproved)), approvalRequest.Generation) {
+					approvalAccepted := condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequest.Status.Conditions, string(placementv1beta1.ApprovalRequestConditionApprovalAccepted)), approvalRequest.Generation)
+					// Approved state should not change once the approval is accepted.
+					if !approvalAccepted && !condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequest.Status.Conditions, string(placementv1beta1.ApprovalRequestConditionApproved)), approvalRequest.Generation) {
 						klog.V(2).InfoS("The approval request has not been approved yet", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
 						return false, nil
 					}
 					klog.V(2).InfoS("The approval request has been approved", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
+					if !approvalAccepted {
+						if err := r.updateApprovalRequestAccepted(ctx, &approvalRequest); err != nil {
+							klog.ErrorS(err, "Failed to accept the approved approval request", "approvalRequest", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
+							// retriable err
+							return false, err
+						}
+					}
 					markAfterStageRequestApproved(&updatingStageStatus.AfterStageTaskStatus[i], updateRun.Generation)
 				} else {
 					// retriable error
@@ -346,6 +355,23 @@ func (r *Reconciler) updateBindingRolloutStarted(ctx context.Context, binding *p
 		return controller.NewUpdateIgnoreConflictError(err)
 	}
 	klog.V(2).InfoS("Updated binding as rolloutStarted", "clusterResourceBinding", klog.KObj(binding), "condition", cond)
+	return nil
+}
+
+// updateApprovalRequestAccepted updates the *approved* clusterApprovalRequest status to indicate the approval accepted.
+func (r *Reconciler) updateApprovalRequestAccepted(ctx context.Context, appReq *placementv1beta1.ClusterApprovalRequest) error {
+	cond := metav1.Condition{
+		Type:               string(placementv1beta1.ApprovalRequestConditionApprovalAccepted),
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: appReq.Generation,
+		Reason:             condition.ApprovalRequestApprovalAcceptedReason,
+	}
+	meta.SetStatusCondition(&appReq.Status.Conditions, cond)
+	if err := r.Client.Status().Update(ctx, appReq); err != nil {
+		klog.ErrorS(err, "Failed to update approval request status", "clusterApprovalRequest", klog.KObj(appReq), "condition", cond)
+		return controller.NewUpdateIgnoreConflictError(err)
+	}
+	klog.V(2).InfoS("Updated binding as rolloutStarted", "clusterApprovalRequest", klog.KObj(appReq), "condition", cond)
 	return nil
 }
 

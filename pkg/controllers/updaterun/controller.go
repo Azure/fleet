@@ -235,28 +235,39 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 			// We only care about when an approval request is approved.
 			UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
 				klog.V(2).InfoS("Handling a clusterApprovalRequest update event", "clusterApprovalRequest", klog.KObj(e.ObjectNew))
-				handleClusterApprovalRequest(e.ObjectNew, q)
-			},
-			GenericFunc: func(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
-				klog.V(2).InfoS("Handling a clusterApprovalRequest generic event", "clusterApprovalRequest", klog.KObj(e.Object))
-				handleClusterApprovalRequest(e.Object, q)
+				handleClusterApprovalRequest(e.ObjectOld, e.ObjectNew, q)
 			},
 		}).Complete(r)
 }
 
 // handleClusterApprovalRequest finds the ClusterStagedUpdateRun creating the ClusterApprovalRequest,
-// and enqueues it to the ClusterStagedUpdateRun controller queue.
-func handleClusterApprovalRequest(obj client.Object, q workqueue.RateLimitingInterface) {
-	approvalRequest, ok := obj.(*placementv1beta1.ClusterApprovalRequest)
+// and enqueues it to the ClusterStagedUpdateRun controller queue only when the approved condition gets changed.
+func handleClusterApprovalRequest(oldObj, newObj client.Object, q workqueue.RateLimitingInterface) {
+	oldAppReq, ok := oldObj.(*placementv1beta1.ClusterApprovalRequest)
 	if !ok {
 		klog.V(2).ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("cannot cast runtime object to ClusterApprovalRequest")),
-			"Invalid object type", "object", klog.KObj(obj))
+			"Invalid object type", "object", klog.KObj(oldObj))
 		return
 	}
-	updateRun := approvalRequest.Spec.TargetUpdateRun
+	newAppReq, ok := newObj.(*placementv1beta1.ClusterApprovalRequest)
+	if !ok {
+		klog.V(2).ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("cannot cast runtime object to ClusterApprovalRequest")),
+			"Invalid object type", "object", klog.KObj(newObj))
+		return
+	}
+
+	approvedInOld := condition.IsConditionStatusTrue(meta.FindStatusCondition(oldAppReq.Status.Conditions, string(placementv1beta1.ApprovalRequestConditionApproved)), oldAppReq.Generation)
+	approvedInNew := condition.IsConditionStatusTrue(meta.FindStatusCondition(newAppReq.Status.Conditions, string(placementv1beta1.ApprovalRequestConditionApproved)), newAppReq.Generation)
+
+	if approvedInOld == approvedInNew {
+		klog.V(2).InfoS("The approval status is not changed, ignore queueing", "clusterApprovalRequest", klog.KObj(newAppReq))
+		return
+	}
+
+	updateRun := newAppReq.Spec.TargetUpdateRun
 	if len(updateRun) == 0 {
 		klog.V(2).ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("TargetUpdateRun field in ClusterApprovalRequest is empty")),
-			"Invalid clusterApprovalRequest", "clusterApprovalRequest", klog.KObj(approvalRequest))
+			"Invalid clusterApprovalRequest", "clusterApprovalRequest", klog.KObj(newAppReq))
 		return
 	}
 	// enqueue to the updaterun controller queue.
