@@ -1,15 +1,15 @@
-apiVersion: placement.kubernetes-fleet.io/v1alpha1
+apiVersion: placement.kubernetes-fleet.io/v1beta1
 kind: ClusterApprovalRequest
 metadata:
   name: example-approvalrequest
   labels:
-    TargetUpdateRun: example-clusterstagedupdaterun
-    TargetStage: stage1
-    IsLatestUpdateRunApproval: "true"
+    kubernetes-fleet.io/targetupdaterun: example-run
+    kubernetes-fleet.io/targetUpdatingStage: canary
+    kubernetes-fleet.io/isLatestUpdateRunApproval: "true"
 spec:
   parentStageRollout: example-run
   targetStage: canary
 status:
   conditions:
-    - type: Approved
-      status: "True"
+  - type: Approved
+    status: "True"

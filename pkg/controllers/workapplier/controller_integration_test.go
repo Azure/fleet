@@ -34,9 +34,9 @@ const (
 
 const (
 	eventuallyDuration   = time.Second * 30
-	eventuallyInternal   = time.Second * 1
+	eventuallyInterval   = time.Second * 1
 	consistentlyDuration = time.Second * 5
-	consistentlyInternal = time.Millisecond * 500
+	consistentlyInterval = time.Millisecond * 500
 )
 
 var (
@@ -408,7 +408,7 @@ func cleanupWorkObject(workName string) {
 		}
 		return nil
 	}
-	Eventually(workRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the Work object")
+	Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 }
 
 func appliedWorkRemovedActual(workName string) func() error {
@@ -499,12 +499,12 @@ var _ = Describe("applying manifests", func() {
 
 		It("should add cleanup finalizer to the Work object", func() {
 			finalizerAddedActual := workFinalizerAddedActual(workName)
-			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
 		})
 
 		It("should prepare an AppliedWork object", func() {
 			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
-			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to prepare an AppliedWork object")
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
 
 			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
 		})
@@ -512,13 +512,13 @@ var _ = Describe("applying manifests", func() {
 		It("should apply the manifests", func() {
 			// Ensure that the NS object has been applied as expected.
 			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
-			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to apply the namespace object")
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
 
 			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
 
 			// Ensure that the Deployment object has been applied as expected.
 			regularDeploymentObjectAppliedActual := regularDeploymentObjectAppliedActual(nsName, deployName, appliedWorkOwnerRef)
-			Eventually(regularDeploymentObjectAppliedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to apply the deployment object")
+			Eventually(regularDeploymentObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the deployment object")
 
 			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, regularDeploy)).To(Succeed(), "Failed to retrieve the Deployment object")
 		})
@@ -594,7 +594,7 @@ var _ = Describe("applying manifests", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -626,7 +626,7 @@ var _ = Describe("applying manifests", func() {
 			}
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		AfterAll(func() {
@@ -635,10 +635,10 @@ var _ = Describe("applying manifests", func() {
 
 			// Ensure that all applied manifests have been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the AppliedWork object")
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
 			regularDeployRemovedActual := regularDeployRemovedActual(nsName, deployName)
-			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the deployment object")
+			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the deployment object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -674,12 +674,12 @@ var _ = Describe("applying manifests", func() {
 
 		It("should add cleanup finalizer to the Work object", func() {
 			finalizerAddedActual := workFinalizerAddedActual(workName)
-			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
 		})
 
 		It("should prepare an AppliedWork object", func() {
 			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
-			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to prepare an AppliedWork object")
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
 
 			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
 		})
@@ -687,13 +687,13 @@ var _ = Describe("applying manifests", func() {
 		It("should apply the manifests", func() {
 			// Ensure that the NS object has been applied as expected.
 			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
-			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to apply the namespace object")
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
 
 			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
 
 			// Ensure that the Deployment object has been applied as expected.
 			regularDeploymentObjectAppliedActual := regularDeploymentObjectAppliedActual(nsName, deployName, appliedWorkOwnerRef)
-			Eventually(regularDeploymentObjectAppliedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to apply the deployment object")
+			Eventually(regularDeploymentObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the deployment object")
 
 			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, regularDeploy)).To(Succeed(), "Failed to retrieve the Deployment object")
 		})
@@ -769,7 +769,7 @@ var _ = Describe("applying manifests", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -801,7 +801,7 @@ var _ = Describe("applying manifests", func() {
 			}
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		It("can delete some manifests", func() {
@@ -817,7 +817,7 @@ var _ = Describe("applying manifests", func() {
 
 		It("should garbage collect removed manifests", func() {
 			deployRemovedActual := regularDeployRemovedActual(nsName, deployName)
-			Eventually(deployRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the deployment object")
+			Eventually(deployRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the deployment object")
 		})
 
 		It("should update the Work object status", func() {
@@ -862,7 +862,7 @@ var _ = Describe("applying manifests", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -882,7 +882,7 @@ var _ = Describe("applying manifests", func() {
 			}
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		AfterAll(func() {
@@ -891,7 +891,7 @@ var _ = Describe("applying manifests", func() {
 
 			// Ensure that all applied manifests have been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the AppliedWork object")
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -939,12 +939,12 @@ var _ = Describe("drift detection and takeover", func() {
 
 		It("should add cleanup finalizer to the Work object", func() {
 			finalizerAddedActual := workFinalizerAddedActual(workName)
-			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
 		})
 
 		It("should prepare an AppliedWork object", func() {
 			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
-			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to prepare an AppliedWork object")
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
 
 			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
 		})
@@ -952,13 +952,13 @@ var _ = Describe("drift detection and takeover", func() {
 		It("should apply the manifests", func() {
 			// Ensure that the NS object has been applied as expected.
 			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
-			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to apply the namespace object")
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
 
 			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
 
 			// Ensure that the Deployment object has been applied as expected.
 			regularDeploymentObjectAppliedActual := regularDeploymentObjectAppliedActual(nsName, deployName, appliedWorkOwnerRef)
-			Eventually(regularDeploymentObjectAppliedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to apply the deployment object")
+			Eventually(regularDeploymentObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the deployment object")
 
 			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, regularDeploy)).To(Succeed(), "Failed to retrieve the Deployment object")
 		})
@@ -1032,7 +1032,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -1064,7 +1064,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		AfterAll(func() {
@@ -1073,10 +1073,10 @@ var _ = Describe("drift detection and takeover", func() {
 
 			// Ensure that all applied manifests have been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the AppliedWork object")
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
 			regularDeployRemovedActual := regularDeployRemovedActual(nsName, deployName)
-			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the deployment object")
+			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the deployment object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -1132,12 +1132,12 @@ var _ = Describe("drift detection and takeover", func() {
 
 		It("should add cleanup finalizer to the Work object", func() {
 			finalizerAddedActual := workFinalizerAddedActual(workName)
-			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
 		})
 
 		It("should prepare an AppliedWork object", func() {
 			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
-			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to prepare an AppliedWork object")
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
 
 			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
 		})
@@ -1176,7 +1176,7 @@ var _ = Describe("drift detection and takeover", func() {
 					return fmt.Errorf("namespace diff (-got +want):\n%s", diff)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to take over the NS object")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to take over the NS object")
 		})
 
 		It("should not take over some objects", func() {
@@ -1234,7 +1234,7 @@ var _ = Describe("drift detection and takeover", func() {
 					return fmt.Errorf("deployment diff (-got +want):\n%s", diff)
 				}
 				return nil
-			}, consistentlyDuration, consistentlyInternal).Should(Succeed(), "Failed to leave the Deployment object alone")
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to leave the Deployment object alone")
 		})
 
 		It("should update the Work object status", func() {
@@ -1312,7 +1312,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, &noLaterThanTimestamp, &noLaterThanTimestamp)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -1332,7 +1332,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		AfterAll(func() {
@@ -1341,11 +1341,11 @@ var _ = Describe("drift detection and takeover", func() {
 
 			// Ensure that the AppliedWork object has been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the AppliedWork object")
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
 			// Ensure that the Deployment object has been left alone.
 			regularDeployNotRemovedActual := regularDeployNotRemovedActual(nsName, deployName)
-			Consistently(regularDeployNotRemovedActual, consistentlyDuration, consistentlyInternal).Should(Succeed(), "Failed to remove the deployment object")
+			Consistently(regularDeployNotRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove the deployment object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -1400,12 +1400,12 @@ var _ = Describe("drift detection and takeover", func() {
 
 		It("should add cleanup finalizer to the Work object", func() {
 			finalizerAddedActual := workFinalizerAddedActual(workName)
-			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
 		})
 
 		It("should prepare an AppliedWork object", func() {
 			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
-			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to prepare an AppliedWork object")
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
 		})
 
 		It("should not take over any object", func() {
@@ -1438,7 +1438,7 @@ var _ = Describe("drift detection and takeover", func() {
 					return fmt.Errorf("namespace diff (-got +want):\n%s", diff)
 				}
 				return nil
-			}, consistentlyDuration, consistentlyInternal).Should(Succeed(), "Failed to take over the NS object")
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to take over the NS object")
 
 			// Verify that the Deployment object has not been taken over.
 			wantDeploy := deploy.DeepCopy()
@@ -1494,7 +1494,7 @@ var _ = Describe("drift detection and takeover", func() {
 					return fmt.Errorf("deployment diff (-got +want):\n%s", diff)
 				}
 				return nil
-			}, consistentlyDuration, consistentlyInternal, "Failed to leave the Deployment object alone")
+			}, consistentlyDuration, consistentlyInterval, "Failed to leave the Deployment object alone")
 		})
 
 		It("should update the Work object status", func() {
@@ -1607,13 +1607,13 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, &noLaterThanTimestamp, &noLaterThanTimestamp)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
 			// No object can be applied, hence no resource are bookkept in the AppliedWork object status.
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, nil)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		AfterAll(func() {
@@ -1622,11 +1622,11 @@ var _ = Describe("drift detection and takeover", func() {
 
 			// Ensure that the AppliedWork object has been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the AppliedWork object")
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
 			// Ensure that the Deployment object has been left alone.
 			regularDeployNotRemovedActual := regularDeployNotRemovedActual(nsName, deployName)
-			Consistently(regularDeployNotRemovedActual, consistentlyDuration, consistentlyInternal).Should(Succeed(), "Failed to remove the deployment object")
+			Consistently(regularDeployNotRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove the deployment object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -1666,12 +1666,12 @@ var _ = Describe("drift detection and takeover", func() {
 
 		It("should add cleanup finalizer to the Work object", func() {
 			finalizerAddedActual := workFinalizerAddedActual(workName)
-			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
 		})
 
 		It("should prepare an AppliedWork object", func() {
 			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
-			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to prepare an AppliedWork object")
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
 
 			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
 		})
@@ -1679,13 +1679,13 @@ var _ = Describe("drift detection and takeover", func() {
 		It("should apply the manifests", func() {
 			// Ensure that the NS object has been applied as expected.
 			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
-			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to apply the namespace object")
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
 
 			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
 
 			// Ensure that the Deployment object has been applied as expected.
 			regularDeploymentObjectAppliedActual := regularDeploymentObjectAppliedActual(nsName, deployName, appliedWorkOwnerRef)
-			Eventually(regularDeploymentObjectAppliedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to apply the deployment object")
+			Eventually(regularDeploymentObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the deployment object")
 
 			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, regularDeploy)).To(Succeed(), "Failed to retrieve the Deployment object")
 		})
@@ -1761,7 +1761,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -1793,7 +1793,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		It("can make changes to the objects", func() {
@@ -1813,7 +1813,7 @@ var _ = Describe("drift detection and takeover", func() {
 					return fmt.Errorf("failed to update the Deployment object: %w", err)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update the Deployment object")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the Deployment object")
 
 			Eventually(func() error {
 				// Retrieve the NS object.
@@ -1833,7 +1833,7 @@ var _ = Describe("drift detection and takeover", func() {
 					return fmt.Errorf("failed to update the NS object: %w", err)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update the NS object")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the NS object")
 		})
 
 		It("should continue to apply some manifest (while preserving drifts in unmanaged fields)", func() {
@@ -1870,7 +1870,7 @@ var _ = Describe("drift detection and takeover", func() {
 					return fmt.Errorf("namespace diff (-got +want):\n%s", diff)
 				}
 				return nil
-			}, consistentlyDuration, consistentlyInternal).Should(Succeed(), "Failed to take over the NS object")
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to take over the NS object")
 		})
 
 		It("should stop applying some objects", func() {
@@ -1931,7 +1931,7 @@ var _ = Describe("drift detection and takeover", func() {
 					return fmt.Errorf("deployment diff (-got +want):\n%s", diff)
 				}
 				return nil
-			}, consistentlyDuration, consistentlyInternal).Should(Succeed(), "Failed to leave the Deployment object alone")
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to leave the Deployment object alone")
 		})
 
 		It("should update the Work object status", func() {
@@ -2010,7 +2010,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, &noLaterThanTimestamp, &noLaterThanTimestamp)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -2030,7 +2030,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		AfterAll(func() {
@@ -2039,11 +2039,11 @@ var _ = Describe("drift detection and takeover", func() {
 
 			// Ensure that the AppliedWork object has been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the AppliedWork object")
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
 			// Ensure that the Deployment object has been left alone.
 			regularDeployNotRemovedActual := regularDeployNotRemovedActual(nsName, deployName)
-			Consistently(regularDeployNotRemovedActual, consistentlyDuration, consistentlyInternal).Should(Succeed(), "Failed to remove the deployment object")
+			Consistently(regularDeployNotRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove the deployment object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -2077,12 +2077,12 @@ var _ = Describe("drift detection and takeover", func() {
 
 		It("should add cleanup finalizer to the Work object", func() {
 			finalizerAddedActual := workFinalizerAddedActual(workName)
-			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
 		})
 
 		It("should prepare an AppliedWork object", func() {
 			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
-			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to prepare an AppliedWork object")
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
 
 			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
 		})
@@ -2090,7 +2090,7 @@ var _ = Describe("drift detection and takeover", func() {
 		It("should apply the manifests", func() {
 			// Ensure that the NS object has been applied as expected.
 			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
-			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to apply the namespace object")
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
 
 			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
 		})
@@ -2137,7 +2137,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -2157,7 +2157,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		It("can make changes to the objects", func() {
@@ -2179,7 +2179,7 @@ var _ = Describe("drift detection and takeover", func() {
 					return fmt.Errorf("failed to update the NS object: %w", err)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update the NS object")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the NS object")
 		})
 
 		It("should stop applying some objects", func() {
@@ -2215,7 +2215,7 @@ var _ = Describe("drift detection and takeover", func() {
 					return fmt.Errorf("namespace diff (-got +want):\n%s", diff)
 				}
 				return nil
-			}, consistentlyDuration, consistentlyInternal).Should(Succeed(), "Failed to leave the NS object alone")
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to leave the NS object alone")
 		})
 
 		It("should update the Work object status", func() {
@@ -2268,13 +2268,13 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, &noLaterThanTimestamp, &noLaterThanTimestamp)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
 			// No object can be applied, hence no resource are bookkept in the AppliedWork object status.
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, nil)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		AfterAll(func() {
@@ -2283,7 +2283,7 @@ var _ = Describe("drift detection and takeover", func() {
 
 			// Ensure that the AppliedWork object has been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the AppliedWork object")
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -2319,12 +2319,12 @@ var _ = Describe("drift detection and takeover", func() {
 
 		It("should add cleanup finalizer to the Work object", func() {
 			finalizerAddedActual := workFinalizerAddedActual(workName)
-			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
 		})
 
 		It("should prepare an AppliedWork object", func() {
 			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
-			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to prepare an AppliedWork object")
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
 
 			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
 		})
@@ -2332,7 +2332,7 @@ var _ = Describe("drift detection and takeover", func() {
 		It("should apply the manifests", func() {
 			// Ensure that the NS object has been applied as expected.
 			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
-			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to apply the namespace object")
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
 
 			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
 		})
@@ -2379,7 +2379,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -2399,7 +2399,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		It("can make changes to the objects", func() {
@@ -2421,7 +2421,7 @@ var _ = Describe("drift detection and takeover", func() {
 					return fmt.Errorf("failed to update the NS object: %w", err)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update the NS object")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the NS object")
 		})
 
 		It("should continue to apply some manifest (while overwriting drifts in managed fields)", func() {
@@ -2459,8 +2459,8 @@ var _ = Describe("drift detection and takeover", func() {
 				}
 				return nil
 			}
-			Eventually(nsOverwrittenActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to apply the NS object")
-			Consistently(nsOverwrittenActual, consistentlyDuration, consistentlyInternal).Should(Succeed(), "Failed to apply the NS object")
+			Eventually(nsOverwrittenActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the NS object")
+			Consistently(nsOverwrittenActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to apply the NS object")
 		})
 
 		It("should update the Work object status", func() {
@@ -2505,7 +2505,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -2525,7 +2525,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		AfterAll(func() {
@@ -2534,7 +2534,7 @@ var _ = Describe("drift detection and takeover", func() {
 
 			// Ensure that the AppliedWork object has been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the AppliedWork object")
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -2569,12 +2569,12 @@ var _ = Describe("drift detection and takeover", func() {
 
 		It("should add cleanup finalizer to the Work object", func() {
 			finalizerAddedActual := workFinalizerAddedActual(workName)
-			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
 		})
 
 		It("should prepare an AppliedWork object", func() {
 			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
-			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to prepare an AppliedWork object")
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
 
 			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
 		})
@@ -2582,7 +2582,7 @@ var _ = Describe("drift detection and takeover", func() {
 		It("should apply the manifests", func() {
 			// Ensure that the NS object has been applied as expected.
 			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
-			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to apply the namespace object")
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
 
 			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
 		})
@@ -2629,7 +2629,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -2649,7 +2649,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		It("can make changes to the objects", func() {
@@ -2671,7 +2671,7 @@ var _ = Describe("drift detection and takeover", func() {
 					return fmt.Errorf("failed to update the NS object: %w", err)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update the NS object")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the NS object")
 		})
 
 		It("should stop applying some objects", func() {
@@ -2707,7 +2707,7 @@ var _ = Describe("drift detection and takeover", func() {
 					return fmt.Errorf("namespace diff (-got +want):\n%s", diff)
 				}
 				return nil
-			}, consistentlyDuration, consistentlyInternal).Should(Succeed(), "Failed to leave the NS object alone")
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to leave the NS object alone")
 		})
 
 		It("should update the Work object status", func() {
@@ -2761,13 +2761,13 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, &noLaterThanTimestamp, &noLaterThanTimestamp)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
 			// No object can be applied, hence no resource are bookkept in the AppliedWork object status.
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, nil)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		It("can update the Work object", func() {
@@ -2819,7 +2819,7 @@ var _ = Describe("drift detection and takeover", func() {
 					return fmt.Errorf("namespace diff (-got +want):\n%s", diff)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to apply new manifests")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply new manifests")
 		})
 
 		It("should update the Work object status", func() {
@@ -2864,7 +2864,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -2884,7 +2884,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		AfterAll(func() {
@@ -2893,7 +2893,7 @@ var _ = Describe("drift detection and takeover", func() {
 
 			// Ensure that the AppliedWork object has been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the AppliedWork object")
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -2928,12 +2928,12 @@ var _ = Describe("drift detection and takeover", func() {
 
 		It("should add cleanup finalizer to the Work object", func() {
 			finalizerAddedActual := workFinalizerAddedActual(workName)
-			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
 		})
 
 		It("should prepare an AppliedWork object", func() {
 			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
-			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to prepare an AppliedWork object")
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
 
 			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
 		})
@@ -2941,7 +2941,7 @@ var _ = Describe("drift detection and takeover", func() {
 		It("should apply the manifests", func() {
 			// Ensure that the NS object has been applied as expected.
 			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
-			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to apply the namespace object")
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
 
 			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
 		})
@@ -2988,7 +2988,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -3008,7 +3008,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		It("can make changes to the objects", func() {
@@ -3030,7 +3030,7 @@ var _ = Describe("drift detection and takeover", func() {
 					return fmt.Errorf("failed to update the NS object: %w", err)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update the NS object")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the NS object")
 		})
 
 		var firstDriftedMustBeforeTimestamp metav1.Time
@@ -3086,7 +3086,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, &noLaterThanTimestamp, &noLaterThanTimestamp)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 
 			// Track the timestamp that was just after the drift was first detected.
 			firstDriftedMustBeforeTimestamp = metav1.Now()
@@ -3111,7 +3111,7 @@ var _ = Describe("drift detection and takeover", func() {
 					return fmt.Errorf("failed to update the NS object: %w", err)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update the NS object")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the NS object")
 		})
 
 		It("should update the Work object status (must track timestamps correctly)", func() {
@@ -3165,7 +3165,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, &driftObservedMustBeforeTimestamp, &firstDriftedMustBeforeTimestamp)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 	})
 
@@ -3205,12 +3205,12 @@ var _ = Describe("drift detection and takeover", func() {
 
 		It("should add cleanup finalizer to the Work object", func() {
 			finalizerAddedActual := workFinalizerAddedActual(workName)
-			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
 		})
 
 		It("should prepare an AppliedWork object", func() {
 			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
-			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to prepare an AppliedWork object")
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
 
 			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
 		})
@@ -3218,7 +3218,7 @@ var _ = Describe("drift detection and takeover", func() {
 		It("should apply the manifests that haven not been created yet", func() {
 			// Ensure that the Deployment object has been applied as expected.
 			regularDeploymentObjectAppliedActual := regularDeploymentObjectAppliedActual(nsName, deployName, appliedWorkOwnerRef)
-			Eventually(regularDeploymentObjectAppliedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to apply the deployment object")
+			Eventually(regularDeploymentObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the deployment object")
 
 			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, regularDeploy)).To(Succeed(), "Failed to retrieve the Deployment object")
 		})
@@ -3245,7 +3245,7 @@ var _ = Describe("drift detection and takeover", func() {
 					return fmt.Errorf("namespace diff (-got +want):\n%s", diff)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to leave the NS object alone")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to leave the NS object alone")
 		})
 
 		It("can mark the deployment as available", func() {
@@ -3313,7 +3313,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -3334,7 +3334,7 @@ var _ = Describe("drift detection and takeover", func() {
 			}
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		AfterAll(func() {
@@ -3343,10 +3343,10 @@ var _ = Describe("drift detection and takeover", func() {
 
 			// Ensure that all applied manifests have been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the AppliedWork object")
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
 			regularDeployRemovedActual := regularDeployRemovedActual(nsName, deployName)
-			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the deployment object")
+			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the deployment object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -3379,12 +3379,12 @@ var _ = Describe("report diff", func() {
 
 		It("should add cleanup finalizer to the Work object", func() {
 			finalizerAddedActual := workFinalizerAddedActual(workName)
-			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
 		})
 
 		It("should prepare an AppliedWork object", func() {
 			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
-			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to prepare an AppliedWork object")
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
 
 			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
 		})
@@ -3392,7 +3392,7 @@ var _ = Describe("report diff", func() {
 		It("should not apply the manifests", func() {
 			// Ensure that the NS object has not been applied.
 			regularNSObjectNotAppliedActual := regularNSObjectNotAppliedActual(nsName)
-			Eventually(regularNSObjectNotAppliedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to avoid applying the namespace object")
+			Eventually(regularNSObjectNotAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to avoid applying the namespace object")
 		})
 
 		It("should update the Work object status", func() {
@@ -3434,13 +3434,13 @@ var _ = Describe("report diff", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
 			// Prepare the status information.
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, nil)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		AfterAll(func() {
@@ -3449,7 +3449,7 @@ var _ = Describe("report diff", func() {
 
 			// Ensure that the AppliedWork object has been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the AppliedWork object")
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -3495,12 +3495,12 @@ var _ = Describe("report diff", func() {
 
 		It("should add cleanup finalizer to the Work object", func() {
 			finalizerAddedActual := workFinalizerAddedActual(workName)
-			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
 		})
 
 		It("should prepare an AppliedWork object", func() {
 			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
-			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to prepare an AppliedWork object")
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
 
 			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
 		})
@@ -3566,8 +3566,8 @@ var _ = Describe("report diff", func() {
 				return nil
 			}
 
-			Eventually(deployOwnedButNotApplied, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to own the Deployment object without applying the manifest")
-			Consistently(deployOwnedButNotApplied, consistentlyDuration, consistentlyInternal).Should(Succeed(), "Failed to own the Deployment object without applying the manifest")
+			Eventually(deployOwnedButNotApplied, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to own the Deployment object without applying the manifest")
+			Consistently(deployOwnedButNotApplied, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to own the Deployment object without applying the manifest")
 
 			// Verify that Fleet has assumed ownership of the NS object.
 			wantNS := ns.DeepCopy()
@@ -3595,8 +3595,8 @@ var _ = Describe("report diff", func() {
 				}
 				return nil
 			}
-			Eventually(nsOwnedButNotApplied, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to own the NS object without applying the manifest")
-			Consistently(nsOwnedButNotApplied, consistentlyDuration, consistentlyInternal).Should(Succeed(), "Failed to own the NS object without applying the manifest")
+			Eventually(nsOwnedButNotApplied, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to own the NS object without applying the manifest")
+			Consistently(nsOwnedButNotApplied, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to own the NS object without applying the manifest")
 		})
 
 		It("should update the Work object status", func() {
@@ -3663,7 +3663,7 @@ var _ = Describe("report diff", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, &noLaterThanTimestamp, &noLaterThanTimestamp)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -3671,7 +3671,7 @@ var _ = Describe("report diff", func() {
 			var appliedResourceMeta []fleetv1beta1.AppliedResourceMeta
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		It("can make changes to the objects", func() {
@@ -3691,7 +3691,7 @@ var _ = Describe("report diff", func() {
 					return fmt.Errorf("failed to update the Deployment object: %w", err)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update the Deployment object")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the Deployment object")
 		})
 
 		It("can mark the deployment as available", func() {
@@ -3753,7 +3753,7 @@ var _ = Describe("report diff", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, &noLaterThanTimestamp, &noLaterThanTimestamp)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -3761,7 +3761,7 @@ var _ = Describe("report diff", func() {
 			var appliedResourceMeta []fleetv1beta1.AppliedResourceMeta
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		AfterAll(func() {
@@ -3770,11 +3770,11 @@ var _ = Describe("report diff", func() {
 
 			// Ensure that the AppliedWork object has been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the AppliedWork object")
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
 			// Ensure that the Deployment object has been left alone.
 			regularDeployNotRemovedActual := regularDeployNotRemovedActual(nsName, deployName)
-			Consistently(regularDeployNotRemovedActual, consistentlyDuration, consistentlyInternal).Should(Succeed(), "Failed to remove the deployment object")
+			Consistently(regularDeployNotRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove the deployment object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -3820,12 +3820,12 @@ var _ = Describe("report diff", func() {
 
 		It("should add cleanup finalizer to the Work object", func() {
 			finalizerAddedActual := workFinalizerAddedActual(workName)
-			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
 		})
 
 		It("should prepare an AppliedWork object", func() {
 			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
-			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to prepare an AppliedWork object")
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
 		})
 
 		It("should not apply any manifest", func() {
@@ -3851,7 +3851,7 @@ var _ = Describe("report diff", func() {
 				}
 
 				return nil
-			}, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to leave the NS object alone")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to leave the NS object alone")
 
 			// Verify that the Deployment manifest has not been applied.
 			Eventually(func() error {
@@ -3902,7 +3902,7 @@ var _ = Describe("report diff", func() {
 					return fmt.Errorf("deployment diff (-got +want):\n%s", diff)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to leave the Deployment object alone")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to leave the Deployment object alone")
 		})
 
 		It("should update the Work object status", func() {
@@ -3965,7 +3965,7 @@ var _ = Describe("report diff", func() {
 			}
 
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
-			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update work status")
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
 		It("should update the AppliedWork object status", func() {
@@ -3973,7 +3973,7 @@ var _ = Describe("report diff", func() {
 			var appliedResourceMeta []fleetv1beta1.AppliedResourceMeta
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
-			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to update appliedWork status")
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
 		})
 
 		AfterAll(func() {
@@ -3982,10 +3982,10 @@ var _ = Describe("report diff", func() {
 
 			// Ensure that all applied manifests have been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the AppliedWork object")
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
 			regularDeployRemovedActual := regularDeployRemovedActual(nsName, deployName)
-			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInternal).Should(Succeed(), "Failed to remove the deployment object")
+			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the deployment object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.

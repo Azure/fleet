@@ -8,7 +8,6 @@ package workapplier
 import (
 	"context"
 	"flag"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -49,15 +48,6 @@ var (
 
 	ctx    context.Context
 	cancel context.CancelFunc
-
-	// Temporary variables for migrated integration tests.
-	tmpEnv         *envtest.Environment
-	tmpCfg         *rest.Config
-	k8sClient      client.Client
-	tmpMgr         manager.Manager
-	workController *Reconciler
-
-	testWorkNamespace = "test-work-namespace"
 )
 
 const (
@@ -172,71 +162,6 @@ var _ = BeforeSuite(func() {
 		Expect(workApplier.Join(ctx)).To(Succeed())
 		Expect(hubMgr.Start(ctx)).To(Succeed())
 	}()
-
-	// Temporary setup for migrated integration tests.
-	tmpEnv = &envtest.Environment{
-		CRDDirectoryPaths: []string{
-			filepath.Join("../../../", "config", "crd", "bases"),
-			filepath.Join("../../../", "test", "manifests"),
-		},
-	}
-
-	tmpCfg, err = tmpEnv.Start()
-	Expect(err).ToNot(HaveOccurred())
-	Expect(tmpCfg).ToNot(BeNil())
-
-	k8sClient, err = client.New(tmpCfg, client.Options{Scheme: scheme.Scheme})
-	Expect(err).ToNot(HaveOccurred())
-
-	workNamespace := corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: testWorkNamespace,
-		},
-	}
-	err = k8sClient.Create(context.Background(), &workNamespace)
-	Expect(err).ToNot(HaveOccurred())
-
-	tmpMgr, err = ctrl.NewManager(tmpCfg, ctrl.Options{
-		Scheme: scheme.Scheme,
-		Metrics: server.Options{
-			BindAddress: "0",
-		},
-		Cache: cache.Options{
-			DefaultNamespaces: map[string]cache.Config{
-				testWorkNamespace: {},
-			},
-		},
-		Logger: textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(4))),
-	})
-	Expect(err).ToNot(HaveOccurred())
-
-	tmpSpokeDynamicClient, err := dynamic.NewForConfig(tmpCfg)
-	Expect(err).ToNot(HaveOccurred())
-
-	tmpSpokeClient, err := client.New(tmpCfg, client.Options{Scheme: scheme.Scheme})
-	Expect(err).ToNot(HaveOccurred())
-
-	workController = NewReconciler(
-		tmpMgr.GetClient(),
-		testWorkNamespace,
-		tmpSpokeDynamicClient,
-		tmpSpokeClient,
-		tmpSpokeClient.RESTMapper(),
-		tmpMgr.GetEventRecorderFor("work-applier"),
-		maxConcurrentReconciles,
-		workerCount,
-		time.Second*5,
-		time.Second*5,
-	)
-	Expect(workController.SetupWithManager(tmpMgr)).To(Succeed())
-	Expect(workController.Join(ctx)).To(Succeed())
-
-	go func() {
-		if err = tmpMgr.Start(ctx); err != nil {
-			os.Exit(1)
-		}
-		Expect(err).ToNot(HaveOccurred())
-	}()
 })
 
 var _ = AfterSuite(func() {
@@ -246,7 +171,4 @@ var _ = AfterSuite(func() {
 	By("Tearing down the test environment")
 	Expect(hubEnv.Stop()).To(Succeed())
 	Expect(memberEnv.Stop()).To(Succeed())
-
-	// Temporary setup for migrated integration tests.
-	Expect(tmpEnv.Stop()).To(Succeed())
 })

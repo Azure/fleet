@@ -134,7 +134,7 @@ spec:
                       description: The name of the stage. This MUST be unique within
                         the same StagedUpdateStrategy.
                       maxLength: 63
-                      pattern: '[A-Za-z0-9]+$'
+                      pattern: ^[a-z0-9]+$
                       type: string
                     sortingLabelKey:
                       description: |-
@@ -273,7 +273,7 @@ spec:
                       description: The name of the stage. This MUST be unique within
                         the same StagedUpdateStrategy.
                       maxLength: 63
-                      pattern: '[A-Za-z0-9]+$'
+                      pattern: ^[a-z0-9]+$
                       type: string
                     sortingLabelKey:
                       description: |-

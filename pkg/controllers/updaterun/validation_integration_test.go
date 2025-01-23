@@ -333,12 +333,13 @@ var _ = Describe("UpdateRun validation tests", func() {
 		})
 
 		It("Should fail to validate if the number of clusters has changed in a stage", func() {
-			By("Deleting a cluster resource binding")
-			Expect(k8sClient.Delete(ctx, resourceBindings[0])).Should(Succeed())
+			By("Changing 1st cluster's so that it's selected by the 1st stage")
+			targetClusters[0].Labels["region"] = regionEastus
+			Expect(k8sClient.Update(ctx, targetClusters[0])).Should(Succeed())
 
 			By("Validating the validation failed")
 			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
-			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the number of clusters in index `1` stage has changed")
+			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "the number of clusters in index `0` stage has changed")
 		})
 
 		It("Should fail to validate if the cluster name has changed in a stage", func() {

@@ -283,7 +283,8 @@ var _ = Describe("UpdateRun execution tests", func() {
 			waitEndTime := meta.FindStatusCondition(updateRun.Status.StagesStatus[0].AfterStageTaskStatus[0].Conditions, string(placementv1beta1.AfterStageTaskConditionWaitTimeElapsed)).LastTransitionTime.Time
 			// In this test, I set wait time to be 4 seconds, while stageClusterUpdatingWaitTime is 3 seconds.
 			// So it needs 2 rounds of reconcile to wait for the waitTime to elapse, waitEndTime - waitStartTime should be around 6 seconds.
-			Expect(waitStartTime.Add(updateStrategy.Spec.Stages[0].AfterStageTasks[0].WaitTime.Duration).Before(waitEndTime)).Should(BeTrue())
+			Expect(waitStartTime.Add(updateStrategy.Spec.Stages[0].AfterStageTasks[0].WaitTime.Duration).Before(waitEndTime)).Should(BeTrue(),
+				fmt.Sprintf("waitEndTime %v did not pass waitStartTime %v long enough, want at least %v", waitEndTime, waitStartTime, updateStrategy.Spec.Stages[0].AfterStageTasks[0].WaitTime.Duration))
 		})
 
 		It("Should mark the 1st cluster in the 2nd stage as succeeded after marking the binding available", func() {

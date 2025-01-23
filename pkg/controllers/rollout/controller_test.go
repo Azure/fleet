@@ -41,6 +41,8 @@ var (
 	cluster5 = "cluster-5"
 	cluster6 = "cluster-6"
 
+	crpName = "test-crp"
+
 	cmpOptions = []cmp.Option{
 		cmp.AllowUnexported(toBeUpdatedBinding{}),
 		cmpopts.EquateEmpty(),
@@ -794,9 +796,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 					State:                fleetv1beta1.BindingStateBound,
 					TargetCluster:        cluster1,
 					ResourceSnapshotName: "snapshot-2",
-					ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-						Type: fleetv1beta1.ApplyStrategyTypeServerSideApply,
-					},
+					// The pickBindingsToRoll method no longer refreshes apply strategy.
 				},
 			},
 			wantNeedRoll: true,
@@ -2632,6 +2632,198 @@ func TestCheckAndUpdateStaleBindingsStatus(t *testing.T) {
 			}
 			if diff := cmp.Diff(tt.wantBindings, bindingList.Items, cmpOptions...); diff != "" {
 				t.Errorf("checkAndUpdateStaleBindingsStatus List() mismatch (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestProcessApplyStrategyUpdates tests the processApplyStrategyUpdates method.
+func TestProcessApplyStrategyUpdates(t *testing.T) {
+	// Use RFC 3339 copy to avoid time precision issues.
+	now := metav1.Now().Rfc3339Copy()
+
+	testCases := []struct {
+		name            string
+		crp             *fleetv1beta1.ClusterResourcePlacement
+		allBindings     []*fleetv1beta1.ClusterResourceBinding
+		wantAllBindings []*fleetv1beta1.ClusterResourceBinding
+	}{
+		{
+			name: "nil apply strategy",
+			crp: &fleetv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+					Strategy: fleetv1beta1.RolloutStrategy{},
+				},
+			},
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "binding-1",
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{},
+				},
+			},
+			wantAllBindings: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "binding-1",
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+							Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
+							ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+							WhenToApply:      fleetv1beta1.WhenToApplyTypeAlways,
+							WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeAlways,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "push apply strategy to bindings of various states",
+			crp: &fleetv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+					Strategy: fleetv1beta1.RolloutStrategy{
+						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+							Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
+							ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+							WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+							WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeIfNoDiff,
+						},
+					},
+				},
+			},
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				// A binding that has been marked for deletion.
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "binding-1",
+						DeletionTimestamp: &now,
+						// The fake client requires that all objects that have been marked
+						// for deletion should have at least one finalizer set.
+						Finalizers: []string{
+							"custom-deletion-blocker",
+						},
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{},
+				},
+				// A binding that already has the latest apply strategy.
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "binding-2",
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						ResourceSnapshotName: "snapshot-2",
+						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+							Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
+							ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+							WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+							WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeIfNoDiff,
+						},
+					},
+				},
+				// A binding that has an out of date apply strategy.
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "binding-3",
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						ResourceSnapshotName: "snapshot-1",
+						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+							Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
+							ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+							WhenToApply:      fleetv1beta1.WhenToApplyTypeAlways,
+							WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeAlways,
+						},
+					},
+				},
+			},
+			wantAllBindings: []*fleetv1beta1.ClusterResourceBinding{
+				// Binding that has been marked for deletion should not be updated.
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "binding-1",
+						DeletionTimestamp: &now,
+						Finalizers: []string{
+							"custom-deletion-blocker",
+						},
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{},
+				},
+				// Binding that already has the latest apply strategy should not be updated.
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "binding-2",
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						ResourceSnapshotName: "snapshot-2",
+						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+							Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
+							ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+							WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+							WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeIfNoDiff,
+						},
+					},
+				},
+				// Binding that has an out of date apply strategy should be updated.
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "binding-3",
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						ResourceSnapshotName: "snapshot-1",
+						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+							Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
+							ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+							WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+							WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeIfNoDiff,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			objs := make([]client.Object, 0, len(tc.allBindings))
+			for idx := range tc.allBindings {
+				objs = append(objs, tc.allBindings[idx])
+			}
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(serviceScheme(t)).
+				WithObjects(objs...).
+				Build()
+			r := &Reconciler{
+				Client: fakeClient,
+			}
+
+			if err := r.processApplyStrategyUpdates(ctx, tc.crp, tc.allBindings); err != nil {
+				t.Errorf("processApplyStrategyUpdates() error = %v, want no error", err)
+			}
+
+			for idx := range tc.wantAllBindings {
+				wantBinding := tc.wantAllBindings[idx]
+
+				gotBinding := &fleetv1beta1.ClusterResourceBinding{}
+				if err := fakeClient.Get(ctx, client.ObjectKey{Name: wantBinding.Name}, gotBinding); err != nil {
+					t.Fatalf("failed to retrieve binding: %v", err)
+				}
+
+				if diff := cmp.Diff(
+					gotBinding, wantBinding,
+					cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
+				); diff != "" {
+					t.Errorf("updated binding mismatch (-got, +want):\n%s", diff)
+				}
 			}
 		})
 	}
