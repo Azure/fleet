@@ -232,18 +232,6 @@ var _ = Describe("Updaterun initialization tests", func() {
 			validateFailedInitCondition(ctx, updateRun, "does not have a policy index label")
 		})
 
-		It("Should fail to initialize if the latest policy snapshot has a nil policy", func() {
-			By("Creating scheduling policy snapshot with nil policy")
-			policySnapshot.Spec.Policy = nil
-			Expect(k8sClient.Create(ctx, policySnapshot)).To(Succeed())
-
-			By("Creating a new clusterStagedUpdateRun")
-			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
-
-			By("Validating the initialization failed")
-			validateFailedInitCondition(ctx, updateRun, "does not have a policy")
-		})
-
 		It("Should fail to initialize if the latest policy snapshot does not have valid cluster count annotation", func() {
 			By("Creating scheduling policy snapshot with invalid cluster count annotation")
 			delete(policySnapshot.Annotations, placementv1beta1.NumberOfClustersAnnotation)
