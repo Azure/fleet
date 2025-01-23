@@ -4,6 +4,8 @@ metadata:
   name: ro-1
   namespace: test-namespace
 spec:
+  placement:
+    name: crp-example
   resourceSelectors:
     -  group: ""
        kind: ConfigMap
