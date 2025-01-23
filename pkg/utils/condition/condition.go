@@ -275,7 +275,7 @@ const (
 var (
 	// Different set of condition types that Fleet will populate in sequential order based on the
 	// apply strategy in use.
-	CondTypesForCSAAndSSAApplyStrategies = []ResourceCondition{
+	CondTypesForClientSideServerSideApplyStrategies = []ResourceCondition{
 		RolloutStartedCondition,
 		OverriddenCondition,
 		WorkSynchronizedCondition,

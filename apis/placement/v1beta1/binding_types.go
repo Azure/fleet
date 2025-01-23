@@ -182,7 +182,7 @@ const (
 	// * True: Fleet has successfully reported configuration differences for all resources.
 	// * False: Fleet has not yet reported configuration differences for some resources, or an
 	//   error has occurred.
-	// * Unknown: The diff reporting has just started and its status is yet to be known.
+	// * Unknown: Fleet has not finished processing the diff reporting yet.
 	ResourceBindingDiffReported ResourceBindingConditionType = "DiffReported"
 )
 

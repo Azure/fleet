@@ -1151,7 +1151,7 @@ const (
 	// * True: Fleet has reported complete sets of configuration differences on all member clusters.
 	// * False: Fleet has not yet reported complete sets of configuration differences on some member
 	//   clusters, or an error has occurred.
-	// * Unknown: The diff reporting has just started and its status is not yet to be known.
+	// * Unknown: Fleet has not finished processing the diff reporting yet.
 	ClusterResourcePlacementDiffReportedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementDiffReported"
 )
 
@@ -1217,7 +1217,7 @@ const (
 	// * True: Fleet has reported the complete set of configuration differences on the member cluster.
 	// * False: Fleet has not yet reported the complete set of configuration differences on the
 	//   member cluster, or an error has occurred.
-	// * Unknown: The diff reporting has just started and its status is yet to be known.
+	// * Unknown: Fleet has not finished processing the diff reporting yet.
 	ResourcesDiffReportedConditionType ResourcePlacementConditionType = "DiffReported"
 )
 
