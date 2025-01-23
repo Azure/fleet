@@ -4,7 +4,9 @@ This document explains the concept of `Eviction` and `Placement Disruption Budge
 
 ## Overview
 
-`Eviction` pertains to the act of removing resources from a target cluster propagated by a resource placement object from the hub cluster.
+`Eviction` provides a way to force remove resources from a target cluster once the resources have already been propagated from the hub cluster by a `Placement` object. 
+`Eviction` is considered as an voluntary disruption triggered by the user. `Eviction` alone doesn't guarantee that resources won't be propagated to target cluster again by the scheduler.
+The users need to use [taints](../../howtos/taint-toleration.md) in conjunction with `Eviction` to prevent the scheduler from picking the target cluster again.
 
 The `Placement Disruption Budget` object protects against voluntary disruptions.
 
@@ -49,8 +51,8 @@ The `ClusterResourcePlacementDisruptionBudget` is used to protect resources prop
 
 Users are allowed to specify one of two fields in the `ClusterResourcePlacementDisruptionBudget` spec since they are mutually exclusive:
 
-- MaxUnavailable - specifies the maximum number of clusters in which a placement can be unavailable due to voluntary disruptions.
-- MinAvailable - specifies the minimum number of clusters in which placements are available despite voluntary disruptions.
+- MaxUnavailable - specifies the maximum number of clusters in which a placement can be unavailable due to any form of disruptions.
+- MinAvailable - specifies the minimum number of clusters in which placements are available despite any form of disruptions.
 
 for both `MaxUnavailable` and `MinAvailable`, the user can specify the number of clusters as an integer or as a percentage of the total number of clusters in the fleet.
 
