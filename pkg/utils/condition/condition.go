@@ -68,6 +68,18 @@ const (
 
 	// AvailableReason is the reason string of placement condition if the selected resources are available.
 	AvailableReason = "ResourceAvailable"
+
+	// DiffReportedStatusUnknownReason is the reason string of the DiffReported condition when the
+	// diff reporting has just started and its status is not yet to be known.
+	DiffReportedStatusUnknownReason = "DiffReportingPending"
+
+	// DiffReportedStatusFalseReason is the reason string of the DiffReported condition when the
+	// diff reporting has not been fully completed.
+	DiffReportedStatusFalseReason = "DiffReportingIncompleteOrFailed"
+
+	// DiffReportedStatusTrueReason is the reason string of the DiffReported condition when the
+	// diff reporting has been fully completed.
+	DiffReportedStatusTrueReason = "DiffReportingCompleted"
 )
 
 // A group of condition reason string which is used to populate the placement condition per cluster.
@@ -242,16 +254,41 @@ func IsConditionStatusFalse(cond *metav1.Condition, latestGeneration int64) bool
 // ResourceCondition is all the resource related condition, for example, scheduled condition is not included.
 type ResourceCondition int
 
-// The following conditions are in ordered.
-// Once the placement is scheduled, it will be divided into following stages.
-// Used to populate the CRP conditions.
+// The full set of condition types that Fleet will populate on CRPs (the CRP itself and the
+// resource placement status per cluster) and cluster resource bindings.
+//
+//   - RolloutStarted, Overridden and WorkSynchronized apply to all objects;
+//   - Applied and Available apply only when the apply strategy in use is of the ClientSideApply
+//     and ServerSideApply type;
+//   - DiffReported applies only the apply strategy in use is of the ReportDiff type.
+//   - Total is a end marker (not used).
 const (
 	RolloutStartedCondition ResourceCondition = iota
 	OverriddenCondition
 	WorkSynchronizedCondition
 	AppliedCondition
 	AvailableCondition
+	DiffReportedCondition
 	TotalCondition
+)
+
+var (
+	// Different set of condition types that Fleet will populate in sequential order based on the
+	// apply strategy in use.
+	CondTypesForClientSideServerSideApplyStrategies = []ResourceCondition{
+		RolloutStartedCondition,
+		OverriddenCondition,
+		WorkSynchronizedCondition,
+		AppliedCondition,
+		AvailableCondition,
+	}
+
+	CondTypesForReportDiffApplyStrategy = []ResourceCondition{
+		RolloutStartedCondition,
+		OverriddenCondition,
+		WorkSynchronizedCondition,
+		DiffReportedCondition,
+	}
 )
 
 func (c ResourceCondition) EventReasonForTrue() string {
@@ -261,6 +298,7 @@ func (c ResourceCondition) EventReasonForTrue() string {
 		"PlacementWorkSynchronized",
 		"PlacementApplied",
 		"PlacementAvailable",
+		"PlacementDiffReported",
 	}[c]
 }
 
@@ -271,6 +309,7 @@ func (c ResourceCondition) EventMessageForTrue() string {
 		"Work(s) have been created or updated successfully for the selected cluster(s)",
 		"Resources have been applied to the selected cluster(s)",
 		"Resources are available on the selected cluster(s)",
+		"Configuration differences have been reported on the selected cluster(s)",
 	}[c]
 }
 
@@ -282,6 +321,7 @@ func (c ResourceCondition) ResourcePlacementConditionType() fleetv1beta1.Resourc
 		fleetv1beta1.ResourceWorkSynchronizedConditionType,
 		fleetv1beta1.ResourcesAppliedConditionType,
 		fleetv1beta1.ResourcesAvailableConditionType,
+		fleetv1beta1.ResourcesDiffReportedConditionType,
 	}[c]
 }
 
@@ -293,6 +333,7 @@ func (c ResourceCondition) ResourceBindingConditionType() fleetv1beta1.ResourceB
 		fleetv1beta1.ResourceBindingWorkSynchronized,
 		fleetv1beta1.ResourceBindingApplied,
 		fleetv1beta1.ResourceBindingAvailable,
+		fleetv1beta1.ResourceBindingDiffReported,
 	}[c]
 }
 
@@ -304,6 +345,7 @@ func (c ResourceCondition) ClusterResourcePlacementConditionType() fleetv1beta1.
 		fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType,
 		fleetv1beta1.ClusterResourcePlacementAppliedConditionType,
 		fleetv1beta1.ClusterResourcePlacementAvailableConditionType,
+		fleetv1beta1.ClusterResourcePlacementDiffReportedConditionType,
 	}[c]
 }
 
@@ -343,6 +385,13 @@ func (c ResourceCondition) UnknownResourceConditionPerCluster(generation int64) 
 			Type:               string(fleetv1beta1.ResourcesAvailableConditionType),
 			Reason:             AvailableUnknownReason,
 			Message:            "The availability of the selected resources is unknown yet ",
+			ObservedGeneration: generation,
+		},
+		{
+			Status:             metav1.ConditionUnknown,
+			Type:               string(fleetv1beta1.ResourcesDiffReportedConditionType),
+			Reason:             DiffReportedStatusUnknownReason,
+			Message:            "Diff reporting has just started; its status is not yet to be known",
 			ObservedGeneration: generation,
 		},
 	}[c]
@@ -386,6 +435,13 @@ func (c ResourceCondition) UnknownClusterResourcePlacementCondition(generation i
 			Message:            fmt.Sprintf("There are still %d cluster(s) in the process of checking the availability of the selected resources", clusterCount),
 			ObservedGeneration: generation,
 		},
+		{
+			Status:             metav1.ConditionUnknown,
+			Type:               string(fleetv1beta1.ClusterResourcePlacementDiffReportedConditionType),
+			Reason:             DiffReportedStatusUnknownReason,
+			Message:            fmt.Sprintf("There are still %d cluster(s) in the process of checking for configuration differences", clusterCount),
+			ObservedGeneration: generation,
+		},
 	}[c]
 }
 
@@ -427,6 +483,13 @@ func (c ResourceCondition) FalseClusterResourcePlacementCondition(generation int
 			Message:            fmt.Sprintf("The selected resources in %d cluster(s) are still not available yet", clusterCount),
 			ObservedGeneration: generation,
 		},
+		{
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1beta1.ClusterResourcePlacementDiffReportedConditionType),
+			Reason:             DiffReportedStatusFalseReason,
+			Message:            fmt.Sprintf("Diff reporting in %d clusters is still in progress or has failed", clusterCount),
+			ObservedGeneration: generation,
+		},
 	}[c]
 }
 
@@ -466,6 +529,13 @@ func (c ResourceCondition) TrueClusterResourcePlacementCondition(generation int6
 			Type:               string(fleetv1beta1.ClusterResourcePlacementAvailableConditionType),
 			Reason:             AvailableReason,
 			Message:            fmt.Sprintf("The selected resources in %d cluster(s) are available now", clusterCount),
+			ObservedGeneration: generation,
+		},
+		{
+			Status:             metav1.ConditionTrue,
+			Type:               string(fleetv1beta1.ClusterResourcePlacementDiffReportedConditionType),
+			Reason:             DiffReportedStatusTrueReason,
+			Message:            fmt.Sprintf("Diff reporting in %d cluster(s) has been completed", clusterCount),
 			ObservedGeneration: generation,
 		},
 	}[c]
