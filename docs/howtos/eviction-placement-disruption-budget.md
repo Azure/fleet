@@ -132,7 +132,7 @@ spec:
   minAvailable: 1
 ```
 
-> **Note:** An eviction object is only reconciled once, after which it reaches a terminal state, if the user desires to use the same eviction object again they need to delete the existing eviction object and re-create the object for the eviction to occur.
+> **Note:** An eviction object is only reconciled once, after which it reaches a terminal state, if the user desires to create/apply the same eviction object again they need to delete the existing eviction object and re-create the object for the eviction to occur again.
 
 Now we will create a `ClusterResourcePlacementEviction` object to evict resources from the member cluster:
 

@@ -58,8 +58,12 @@ for both `MaxUnavailable` and `MinAvailable`, the user can specify the number of
 
 When specifying a disruption budget for a particular `ClusterResourcePlacement`, the user needs to consider the following cases:
 
-- For `PickFixed` CRP, whether a `ClusterResourcePlacementDisruptionBudget` is specified or not, if an eviction object is created, the user will receive an invalid eviction error message in the eviction status.
-- For `PickAll` CRP, if the `ClusterResourcePlacementDisruptionBudget` is specified for the following cases, the user will receive a misconfigured placement disruption budget error message in the eviction status because total number of clusters selected is non-deterministic
-  - If the `MaxUnavailable` field is set either as integer or as a percentage.
-  - If the `MinAvailable` field is set as a percentage.
-- For `PickN` CRP, if a `ClusterResourcePlacementDisruptionBudget` is specified, the user can either set `MaxUnavailable` or `MinAvailable` field as an integer or percentage since the fields are mutually exclusive.
+| CRP type     | `MinAvailable` DB with an integer | `MinAvailable` DB with a percentage | `MaxUnavailable` DB with an integer | `MaxUnavailable` DB with a percentage |
+|--------------|-----------------------------------|-------------------------------------|-------------------------------------|---------------------------------------|
+| `PickFixed`  | ❌                                 | ❌                                   | ❌                                   | ❌                                |
+| `PickAll`    | ✅                                 | ❌                                   | ❌                                   | ❌                                |
+| `PickN`      | ✅                                 | ✅                                   | ✅                                   | ✅                                |
+
+> **Note:** We don't allow eviction for `PickFixed` CRP and hence specifying a `ClusterResourcePlacementDisruptionBudget` for `PickFixed` CRP does nothing. 
+> And for `PickAll` CRP, the user can only specify `MinAvailable` because total number of clusters selected by a `PickAll` CRP is non-deterministic.
+> If the user creates an invalid `ClusterResourcePlacementDisruptionBudget` object, when an eviction is created, the eviction won't be successfully executed.
