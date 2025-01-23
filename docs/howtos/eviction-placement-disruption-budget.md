@@ -7,13 +7,13 @@ This how-to guide discusses how to create `ClusterResourcePlacementEviction` obj
 The `ClusterResourcePlacementEviction` object is used to remove resources from a member cluster once the resources have already been propagated from the hub cluster.
 
 To successfully evict resources from a cluster, the user needs to specify:
-- The name of the `ClusterResourcePlacement` object which propagated resources to the target cluster
+- The name of the `ClusterResourcePlacement` object which propagated resources to the target cluster.
 - The name of the target cluster from which we need to evict resources.
 
 In this example, we will create a `ClusterResourcePlacement` object with PickAll placement policy to propagate resources to an existing `MemberCluster`, add a taint to the member cluster 
 resource and then create a `ClusterResourcePlacementEviction` object to evict resources from the `MemberCluster`.
 
-We will first create a namespace that we will propagate to the member cluster
+We will first create a namespace that we will propagate to the member cluster.
 
 ```
 kubectl create ns test-ns
@@ -93,7 +93,7 @@ In this example, we will create a `ClusterResourcePlacement` object with PickN p
 then create a `ClusterResourcePlacementDisruptionBudget` object to protect resources on the MemberCluster from voluntary disruption and 
 then try to evict resources from the MemberCluster using `ClusterResourcePlacementEviction`.
 
-We will first create a namespace that we will propagate to the member cluster
+We will first create a namespace that we will propagate to the member cluster.
 
 ```
 kubectl create ns test-ns

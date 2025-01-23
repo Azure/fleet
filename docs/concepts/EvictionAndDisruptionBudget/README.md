@@ -8,12 +8,12 @@ This document explains the concept of `Eviction` and `Placement Disruption Budge
 
 The `Placement Disruption Budget` object protects against voluntary disruptions.
 
-The only voluntary disruption that can occur in the fleet is the eviction of resources from a target cluster which can be achieved by creating the `ClusterResourcePlacementEviction` object
+The only voluntary disruption that can occur in the fleet is the eviction of resources from a target cluster which can be achieved by creating the `ClusterResourcePlacementEviction` object.
 
 Some cases of involuntary disruptions in the context of fleet,
-- The removal of resources from a member cluster by the scheduler due to scheduling policy changes
-- Users manually deleting workload resources running on a member cluster
-- Users manually deleting the `ClusterResourceBinding` object which is an internal resource the represents the placement of resources on a member cluster
+- The removal of resources from a member cluster by the scheduler due to scheduling policy changes.
+- Users manually deleting workload resources running on a member cluster.
+- Users manually deleting the `ClusterResourceBinding` object which is an internal resource the represents the placement of resources on a member cluster.
 - Workloads failing to run properly on a member cluster due to misconfiguration or cluster related issues.
 
 For all the cases of involuntary disruptions described above, the `Placement Disruption Budget` object does not protect against them.
@@ -22,19 +22,19 @@ For all the cases of involuntary disruptions described above, the `Placement Dis
 
 An eviction object is used to remove resources from a member cluster once the resources have already been propagated from the hub cluster.
 
-The eviction object is only reconciled once after which it reaches a terminal state. List of terminal states for `ClusterResourcePlacementEviction`,
-- `ClusterResourcePlacementEviction` is valid and it's executed successfully
-- `ClusterResourcePlacementEviction` is invalid
-- `ClusterResourcePlacementEviction` is valid but it's not executed
+The eviction object is only reconciled once after which it reaches a terminal state. Below is the list of terminal states for `ClusterResourcePlacementEviction`,
+- `ClusterResourcePlacementEviction` is valid and it's executed successfully.
+- `ClusterResourcePlacementEviction` is invalid.
+- `ClusterResourcePlacementEviction` is valid but it's not executed.
 
 To successfully evict resources from a cluster, the user needs to specify:
 
-- The name of the `ClusterResourcePlacement` object which propagated resources to the target cluster
-- The name of the target cluster from which we need to evict resources
+- The name of the `ClusterResourcePlacement` object which propagated resources to the target cluster.
+- The name of the target cluster from which we need to evict resources.
 
 When specifying the `ClusterResourcePlacement` object in the eviction's spec, the user needs to consider the following cases:
 
-- For `PickFixed` CRP, eviction is not allowed  it is recommended that one directly edit the list of target clusters on the CRP object.
+- For `PickFixed` CRP, eviction is not allowed; it is recommended that one directly edit the list of target clusters on the CRP object.
 - For `PickAll` & `PickN` CRPs, eviction is allowed because the users cannot deterministically pick or unpick a cluster based on the placement strategy; it's up to the scheduler.
 
 > **Note:** After an eviction is executed, there is no guarantee that the cluster won't be picked again by the scheduler to propagate resources for a `ClusterResourcePlacement` resource.
@@ -60,6 +60,6 @@ When specifying a disruption budget for a particular `ClusterResourcePlacement`,
 
 - For `PickFixed` CRP, whether a `ClusterResourcePlacementDisruptionBudget` is specified or not, if an eviction object is created, the user will receive an invalid eviction error message in the eviction status.
 - For `PickAll` CRP, if the `ClusterResourcePlacementDisruptionBudget` is specified for the following cases, the user will receive a misconfigured placement disruption budget error message in the eviction status because total number of clusters selected is non-deterministic
-  - If the `MaxUnavailable` field is set either as integer or as a percentage
-  - If the `MinAvailable` field is set as a percentage
+  - If the `MaxUnavailable` field is set either as integer or as a percentage.
+  - If the `MinAvailable` field is set as a percentage.
 - For `PickN` CRP, if a `ClusterResourcePlacementDisruptionBudget` is specified, the user can either set `MaxUnavailable` or `MinAvailable` field as an integer or percentage since the fields are mutually exclusive.
