@@ -141,8 +141,8 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 	if !currentNS.DeletionTimestamp.IsZero() {
 		klog.V(2).InfoS("The member cluster namespace is still being deleted", "memberCluster", mcObjRef, "deleteTimestamp", currentNS.DeletionTimestamp)
 		var stuckErr error
-		if time.Now().After(currentNS.DeletionTimestamp.Add(5 * time.Minute)) {
-			// alert if the namespace is stuck in deleting for more than 5 minutes
+		if time.Now().After(currentNS.DeletionTimestamp.Add(15 * time.Minute)) {
+			// alert if the namespace is stuck in deleting for more than 15 minutes
 			stuckErr = controller.NewUnexpectedBehaviorError(fmt.Errorf("the member cluster namespace %s has been deleting since %s", namespaceName, currentNS.DeletionTimestamp.Format(time.RFC3339)))
 		}
 		return runtime.Result{RequeueAfter: time.Second}, stuckErr
