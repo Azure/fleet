@@ -1166,7 +1166,7 @@ func TestIsDiffedResourcePlacementEqual(t *testing.T) {
 						Kind:    "Namespace",
 						Name:    "work",
 					},
-					ObservationTime:                 now,
+					ObservationTime:                 metav1.Now(),
 					FirstDiffedObservedTime:         now,
 					TargetClusterObservedGeneration: ptr.To(int64(2)),
 					ObservedDiffs: []fleetv1beta1.PatchDetail{
