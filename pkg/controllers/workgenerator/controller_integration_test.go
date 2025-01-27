@@ -2199,17 +2199,11 @@ var _ = Describe("Test Work Generator Controller", func() {
 				Reason:             condition.AllWorkAvailableReason,
 				ObservedGeneration: clusterResourceBinding.GetGeneration(),
 			}
-			diffReportedCond := metav1.Condition{
-				Type:               string(placementv1beta1.ResourceBindingDiffReported),
-				Status:             metav1.ConditionTrue,
-				Reason:             condition.AllWorkDiffReportedReason,
-				ObservedGeneration: clusterResourceBinding.GetGeneration() - 1,
-			}
 
 			statusUpdatedActual := bindingStatusUpdatedActual(
 				clusterResourceBinding,
 				false,
-				&appliedCond, &availableCond, &diffReportedCond,
+				&appliedCond, &availableCond, nil,
 				nil, nil, nil)
 			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
 		})
