@@ -92,11 +92,11 @@ func validateOverridePolicy(policy *fleetv1alpha1.OverridePolicy) error {
 			for _, selector := range rule.ClusterSelector.ClusterSelectorTerms {
 				// Check that only label selector is supported
 				if selector.PropertySelector != nil || selector.PropertySorter != nil {
-					allErr = append(allErr, fmt.Errorf("invalid clusterSelector %v: only labelSelector is supported", selector))
+					allErr = append(allErr, fmt.Errorf("invalid clusterSelector %+v: only labelSelector is supported", selector))
 					continue
 				}
 				if selector.LabelSelector == nil {
-					allErr = append(allErr, fmt.Errorf("invalid clusterSelector %v: labelSelector is required", selector))
+					allErr = append(allErr, fmt.Errorf("invalid clusterSelector %+v: labelSelector is required", selector))
 				} else if err := validateLabelSelector(selector.LabelSelector, "cluster selector"); err != nil {
 					allErr = append(allErr, err)
 				}

@@ -19,7 +19,30 @@ spec:
     singular: clusterstagedupdaterun
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.placementName
+      name: Placement
+      type: string
+    - jsonPath: .spec.resourceSnapshotIndex
+      name: Resource-Snapshot
+      type: string
+    - jsonPath: .status.policySnapshotIndexUsed
+      name: Policy-Snapshot
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Initialized")].status
+      name: Initialized
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Succeeded")].status
+      name: Succeeded
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - jsonPath: .spec.stagedRolloutStrategyName
+      name: Strategy
+      priority: 1
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: |-
@@ -861,7 +884,7 @@ spec:
                           description: The name of the stage. This MUST be unique
                             within the same StagedUpdateStrategy.
                           maxLength: 63
-                          pattern: '[A-Za-z0-9]+$'
+                          pattern: ^[a-z0-9]+$
                           type: string
                         sortingLabelKey:
                           description: |-
@@ -1209,11 +1232,37 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: metadata.name max length is 127
+          rule: size(self.metadata.name) < 128
     served: true
     storage: false
     subresources:
       status: {}
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.placementName
+      name: Placement
+      type: string
+    - jsonPath: .spec.resourceSnapshotIndex
+      name: Resource-Snapshot
+      type: string
+    - jsonPath: .status.policySnapshotIndexUsed
+      name: Policy-Snapshot
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Initialized")].status
+      name: Initialized
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Succeeded")].status
+      name: Succeeded
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - jsonPath: .spec.stagedRolloutStrategyName
+      name: Strategy
+      priority: 1
+      type: string
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: |-
@@ -2055,7 +2104,7 @@ spec:
                           description: The name of the stage. This MUST be unique
                             within the same StagedUpdateStrategy.
                           maxLength: 63
-                          pattern: '[A-Za-z0-9]+$'
+                          pattern: ^[a-z0-9]+$
                           type: string
                         sortingLabelKey:
                           description: |-
@@ -2403,6 +2452,9 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: metadata.name max length is 127
+          rule: size(self.metadata.name) < 128
     served: true
     storage: true
     subresources:

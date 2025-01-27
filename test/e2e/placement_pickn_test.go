@@ -67,7 +67,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster3WestProd})
 		})
 	})
 
@@ -139,7 +139,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster3WestProd})
 		})
 	})
 
@@ -207,7 +207,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd, memberCluster2EastCanary})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster3WestProd, memberCluster2EastCanary})
 		})
 	})
 
@@ -285,7 +285,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary})
 		})
 	})
 
@@ -405,7 +405,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster3WestProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster3WestProd})
 		})
 	})
 
@@ -479,7 +479,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary})
 		})
 	})
 
@@ -549,7 +549,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, nil)
+			ensureCRPAndRelatedResourcesDeleted(crpName, nil)
 		})
 	})
 
@@ -624,7 +624,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary})
 		})
 	})
 
@@ -708,7 +708,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd, memberCluster2EastCanary})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster3WestProd, memberCluster2EastCanary})
 		})
 	})
 
@@ -802,7 +802,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster2EastCanary, memberCluster1EastProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster2EastCanary, memberCluster1EastProd})
 		})
 	})
 
@@ -915,7 +915,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster3WestProd})
 		})
 	})
 })

@@ -212,12 +212,12 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		}
 	}
 
-	// There is no need to check if the CRP is available or not.
-	// If the available condition is true, it means the rollout is completed.
+	// Rollout is considered to be completed when all the expected condition types are set to the
+	// True status.
 	if isRolloutCompleted(crp) {
 		if !isRolloutCompleted(oldCRP) {
-			klog.V(2).InfoS("Placement rollout has finished and resources are available", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
-			r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementRolloutCompleted", "Resources are available in the selected clusters")
+			klog.V(2).InfoS("Placement has finished the rollout process and reached the desired status", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
+			r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementRolloutCompleted", "Placement has finished the rollout process and reached the desired status")
 		}
 		// We don't need to requeue any request now by watching the binding changes
 		return ctrl.Result{}, nil
@@ -888,8 +888,13 @@ func parseResourceGroupHashFromAnnotation(s *fleetv1beta1.ClusterResourceSnapsho
 }
 
 // setPlacementStatus returns if there is a cluster scheduled by the scheduler.
-func (r *Reconciler) setPlacementStatus(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, selectedResourceIDs []fleetv1beta1.ResourceIdentifier,
-	latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (bool, error) {
+func (r *Reconciler) setPlacementStatus(
+	ctx context.Context,
+	crp *fleetv1beta1.ClusterResourcePlacement,
+	selectedResourceIDs []fleetv1beta1.ResourceIdentifier,
+	latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot,
+	latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot,
+) (bool, error) {
 	crp.Status.SelectedResources = selectedResourceIDs
 	scheduledCondition := buildScheduledCondition(crp, latestSchedulingPolicySnapshot)
 	crp.SetConditions(scheduledCondition)
@@ -913,7 +918,47 @@ func (r *Reconciler) setPlacementStatus(ctx context.Context, crp *fleetv1beta1.C
 		return false, nil
 	}
 
-	return r.setResourceConditions(ctx, crp, latestSchedulingPolicySnapshot, latestResourceSnapshot)
+	// Classify cluster decisions; find out clusters that have been selected and
+	// have not been selected.
+	selected, unselected := classifyClusterDecisions(latestSchedulingPolicySnapshot.Status.ClusterDecisions)
+	// Calculate the number of clusters that should have been selected yet cannot be, due to
+	// scheduling constraints.
+	failedToScheduleClusterCount := calculateFailedToScheduleClusterCount(crp, selected, unselected)
+
+	// Prepare the resource placement status (status per cluster) in the CRP status.
+	allRPS := make([]fleetv1beta1.ResourcePlacementStatus, 0, len(latestSchedulingPolicySnapshot.Status.ClusterDecisions))
+
+	// For clusters that have been selected, set the resource placement status based on the
+	// respective resource binding status for each of them.
+	expectedCondTypes := determineExpectedCRPAndResourcePlacementStatusCondType(crp)
+	allRPS, rpsSetCondTypeCounter, err := r.appendScheduledResourcePlacementStatuses(
+		ctx, allRPS, selected, expectedCondTypes, crp, latestSchedulingPolicySnapshot, latestResourceSnapshot)
+	if err != nil {
+		return false, err
+	}
+
+	// For clusters that failed to get scheduled, set a resource placement status with the
+	// failed to schedule condition for each of them.
+	allRPS = appendFailedToScheduleResourcePlacementStatuses(allRPS, unselected, failedToScheduleClusterCount, crp)
+
+	crp.Status.PlacementStatuses = allRPS
+
+	// Prepare the conditions for the CRP object itself.
+
+	if len(selected) == 0 {
+		// There is no selected cluster at all. It could be that there is no matching cluster
+		// given the current scheduling policy; there remains a corner case as well where a cluster
+		// has been selected before (with resources being possibly applied), but has now
+		// left the fleet. To address this corner case, Fleet here will remove all lingering
+		// conditions (any condition type other than CRPScheduled).
+
+		// Note that the scheduled condition has been set earlier in this method.
+		crp.Status.Conditions = []metav1.Condition{*crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType))}
+		return false, nil
+	}
+
+	setCRPConditions(crp, allRPS, rpsSetCondTypeCounter, expectedCondTypes)
+	return true, nil
 }
 
 func buildScheduledCondition(crp *fleetv1beta1.ClusterResourcePlacement, latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot) metav1.Condition {
@@ -974,7 +1019,8 @@ func isRolloutCompleted(crp *fleetv1beta1.ClusterResourcePlacement) bool {
 		return false
 	}
 
-	for i := condition.RolloutStartedCondition; i < condition.TotalCondition; i++ {
+	expectedCondTypes := determineExpectedCRPAndResourcePlacementStatusCondType(crp)
+	for _, i := range expectedCondTypes {
 		if !condition.IsConditionStatusTrue(crp.GetCondition(string(i.ClusterResourcePlacementConditionType())), crp.Generation) {
 			return false
 		}

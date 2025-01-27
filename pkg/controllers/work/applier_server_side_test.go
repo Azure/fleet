@@ -22,6 +22,7 @@ import (
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/defaulter"
 )
 
 func TestApplyUnstructured(t *testing.T) {
@@ -237,6 +238,12 @@ func TestApplyUnstructured(t *testing.T) {
 				},
 				AllowCoOwnership: tc.allowCoOwnership,
 			}
+			// Certain path of the ApplyUnstructured method will attempt
+			// to set default values of the retrieved apply strategy from the mock Work object and
+			// compare it with the passed-in apply strategy.
+			// To keep things consistent, here the test spec sets the passed-in apply strategy
+			// as well.
+			defaulter.SetDefaultsApplyStrategy(applyStrategy)
 			gvr := schema.GroupVersionResource{
 				Group:    "apps",
 				Version:  "v1",

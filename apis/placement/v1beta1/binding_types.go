@@ -175,15 +175,16 @@ const (
 	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
 	ResourceBindingAvailable ResourceBindingConditionType = "Available"
 
-	// ResourceBindingDiffReported indicates that Fleet has successfully reported configuration differences
-	// between the hub cluster and a specific member cluster for the given resources.
+	// ResourceBindingDiffReported indicates that Fleet has successfully reported configuration
+	// differences between the hub cluster and a specific member cluster for the given resources.
 	//
 	// This condition is added only when the ReportDiff apply strategy is used.
 	//
 	// It can have the following condition statuses:
 	// * True: Fleet has successfully reported configuration differences for all resources.
-	// * False: Fleet has failed to report configuration differences for some resources.
-	// * Unknown: The reporting status is yet to be known.
+	// * False: Fleet has not yet reported configuration differences for some resources, or an
+	//   error has occurred.
+	// * Unknown: Fleet has not finished processing the diff reporting yet.
 	ResourceBindingDiffReported ResourceBindingConditionType = "DiffReported"
 )
 

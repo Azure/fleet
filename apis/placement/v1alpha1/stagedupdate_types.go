@@ -17,6 +17,14 @@ import (
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=crsur
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:printcolumn:JSONPath=`.spec.placementName`,name="Placement",type=string
+// +kubebuilder:printcolumn:JSONPath=`.spec.resourceSnapshotIndex`,name="Resource-Snapshot",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.policySnapshotIndexUsed`,name="Policy-Snapshot",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Initialized")].status`,name="Initialized",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Succeeded")].status`,name="Succeeded",type=string
+// +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
+// +kubebuilder:printcolumn:JSONPath=`.spec.stagedRolloutStrategyName`,name="Strategy",priority=1,type=string
+// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) < 128",message="metadata.name max length is 127"
 
 // ClusterStagedUpdateRun represents a stage by stage update process that applies ClusterResourcePlacement
 // selected resources to specified clusters.
@@ -102,7 +110,7 @@ type ClusterStagedUpdateStrategyList struct {
 type StageConfig struct {
 	// The name of the stage. This MUST be unique within the same StagedUpdateStrategy.
 	// +kubebuilder:validation:MaxLength=63
-	// +kubebuilder:validation:Pattern="[A-Za-z0-9]+$"
+	// +kubebuilder:validation:Pattern="^[a-z0-9]+$"
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`
 
@@ -397,6 +405,10 @@ type ClusterStagedUpdateRunList struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=careq
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:printcolumn:JSONPath=`.spec.parentStageRollout`,name="Update-Run",type=string
+// +kubebuilder:printcolumn:JSONPath=`.spec.targetStage`,name="Stage",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Approved")].status`,name="Approved",type=string
+// +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 
 // ClusterApprovalRequest defines a request for user approval for cluster staged update run.
 // The request object MUST have the following labels:

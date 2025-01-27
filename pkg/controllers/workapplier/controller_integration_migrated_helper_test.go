@@ -25,12 +25,12 @@ import (
 )
 
 // createWorkWithManifest creates a work given a manifest
-func createWorkWithManifest(workNamespace string, manifest runtime.Object) *fleetv1beta1.Work {
+func createWorkWithManifest(manifest runtime.Object) *fleetv1beta1.Work {
 	manifestCopy := manifest.DeepCopyObject()
 	newWork := fleetv1beta1.Work{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "work-" + utilrand.String(5),
-			Namespace: workNamespace,
+			Namespace: memberReservedNSName,
 		},
 		Spec: fleetv1beta1.WorkSpec{
 			Workload: fleetv1beta1.WorkloadTemplate{
@@ -48,7 +48,7 @@ func createWorkWithManifest(workNamespace string, manifest runtime.Object) *flee
 // verifyAppliedConfigMap verifies that the applied CM is the same as the CM we want to apply
 func verifyAppliedConfigMap(cm *corev1.ConfigMap) *corev1.ConfigMap {
 	var appliedCM corev1.ConfigMap
-	Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: cm.GetName(), Namespace: cm.GetNamespace()}, &appliedCM)).Should(Succeed())
+	Expect(memberClient.Get(context.Background(), types.NamespacedName{Name: cm.GetName(), Namespace: cm.GetNamespace()}, &appliedCM)).Should(Succeed())
 
 	By("Check the config map label")
 	Expect(cmp.Diff(appliedCM.Labels, cm.Labels)).Should(BeEmpty())
@@ -67,10 +67,10 @@ func verifyAppliedConfigMap(cm *corev1.ConfigMap) *corev1.ConfigMap {
 }
 
 // waitForWorkToApply waits for a work to be applied
-func waitForWorkToApply(workName, workNS string) *fleetv1beta1.Work {
+func waitForWorkToApply(workName string) *fleetv1beta1.Work {
 	var resultWork fleetv1beta1.Work
 	Eventually(func() bool {
-		err := k8sClient.Get(context.Background(), types.NamespacedName{Name: workName, Namespace: workNS}, &resultWork)
+		err := hubClient.Get(context.Background(), types.NamespacedName{Name: workName, Namespace: memberReservedNSName}, &resultWork)
 		if err != nil {
 			return false
 		}
@@ -86,15 +86,15 @@ func waitForWorkToApply(workName, workNS string) *fleetv1beta1.Work {
 			}
 		}
 		return true
-	}, timeout, interval).Should(BeTrue())
+	}, eventuallyDuration, eventuallyInterval).Should(BeTrue())
 	return &resultWork
 }
 
 // waitForWorkToAvailable waits for a work to have an available condition to be true
-func waitForWorkToBeAvailable(workName, workNS string) *fleetv1beta1.Work {
+func waitForWorkToBeAvailable(workName string) *fleetv1beta1.Work {
 	var resultWork fleetv1beta1.Work
 	Eventually(func() bool {
-		err := k8sClient.Get(context.Background(), types.NamespacedName{Name: workName, Namespace: workNS}, &resultWork)
+		err := hubClient.Get(context.Background(), types.NamespacedName{Name: workName, Namespace: memberReservedNSName}, &resultWork)
 		if err != nil {
 			return false
 		}
@@ -110,7 +110,7 @@ func waitForWorkToBeAvailable(workName, workNS string) *fleetv1beta1.Work {
 			}
 		}
 		return true
-	}, timeout, interval).Should(BeTrue())
+	}, eventuallyDuration, eventuallyInterval).Should(BeTrue())
 	return &resultWork
 }
 
@@ -118,11 +118,11 @@ func waitForWorkToBeAvailable(workName, workNS string) *fleetv1beta1.Work {
 func waitForWorkToBeHandled(workName, workNS string) *fleetv1beta1.Work {
 	var resultWork fleetv1beta1.Work
 	Eventually(func() bool {
-		err := k8sClient.Get(context.Background(), types.NamespacedName{Name: workName, Namespace: workNS}, &resultWork)
+		err := hubClient.Get(context.Background(), types.NamespacedName{Name: workName, Namespace: workNS}, &resultWork)
 		if err != nil {
 			return false
 		}
 		return controllerutil.ContainsFinalizer(&resultWork, fleetv1beta1.WorkFinalizer)
-	}, timeout, interval).Should(BeTrue())
+	}, eventuallyDuration, eventuallyInterval).Should(BeTrue())
 	return &resultWork
 }

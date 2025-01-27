@@ -17,6 +17,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -261,6 +262,12 @@ var (
 		Group:   corev1.SchemeGroupVersion.Group,
 		Version: corev1.SchemeGroupVersion.Version,
 		Kind:    "Pod",
+	}
+
+	PodDisruptionBudgetGVR = schema.GroupVersionResource{
+		Group:    policyv1.GroupName,
+		Version:  policyv1.SchemeGroupVersion.Version,
+		Resource: "poddisruptionbudgets",
 	}
 
 	RoleMetaGVK = metav1.GroupVersionKind{

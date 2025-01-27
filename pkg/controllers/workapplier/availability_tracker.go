@@ -11,11 +11,13 @@ import (
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	apiextensionshelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/component-helpers/apps/poddisruptionbudget"
 	"k8s.io/klog/v2"
 
 	"go.goms.io/fleet/pkg/utils"
@@ -79,6 +81,8 @@ func trackInMemberClusterObjAvailabilityByGVR(
 		return trackServiceAvailability(inMemberClusterObj)
 	case utils.CustomResourceDefinitionGVR:
 		return trackCRDAvailability(inMemberClusterObj)
+	case utils.PodDisruptionBudgetGVR:
+		return trackPDBAvailability(inMemberClusterObj)
 	default:
 		if isDataResource(*gvr) {
 			klog.V(2).InfoS("The object from the member cluster is a data object, consider it to be immediately available",
@@ -215,6 +219,21 @@ func trackCRDAvailability(inMemberClusterObj *unstructured.Unstructured) (Manife
 	}
 
 	klog.V(2).InfoS("Custom resource definition is not ready yet, will check later to see if it becomes available", klog.KObj(inMemberClusterObj))
+	return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
+}
+
+// trackPDBAvailability tracks the availability of a pod disruption budget in the member cluster
+func trackPDBAvailability(curObj *unstructured.Unstructured) (ManifestProcessingAvailabilityResultType, error) {
+	var pdb policyv1.PodDisruptionBudget
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &pdb); err != nil {
+		return ManifestProcessingAvailabilityResultTypeFailed, controller.NewUnexpectedBehaviorError(err)
+	}
+	// Check if conditions are up-to-date
+	if poddisruptionbudget.ConditionsAreUpToDate(&pdb) {
+		klog.V(2).InfoS("PodDisruptionBudget is available", "pdb", klog.KObj(curObj))
+		return ManifestProcessingAvailabilityResultTypeAvailable, nil
+	}
+	klog.V(2).InfoS("Still need to wait for PodDisruptionBudget to be available", "pdb", klog.KObj(curObj))
 	return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
 }
 

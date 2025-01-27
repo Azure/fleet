@@ -26,6 +26,10 @@ const (
 	ClusterStagedUpdateStrategyKind = "ClusterStagedUpdateStrategy"
 	// ClusterApprovalRequestKind is the kind of the ClusterApprovalRequest.
 	ClusterApprovalRequestKind = "ClusterApprovalRequest"
+	// ClusterResourcePlacementEvictionKind is the kind of the ClusterResourcePlacementEviction.
+	ClusterResourcePlacementEvictionKind = "ClusterResourcePlacementEviction"
+	// ClusterResourcePlacementDisruptionBudgetKind is the kind of the ClusterResourcePlacementDisruptionBudget.
+	ClusterResourcePlacementDisruptionBudgetKind = "ClusterResourcePlacementDisruptionBudget"
 )
 
 const (

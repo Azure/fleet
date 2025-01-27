@@ -14,10 +14,12 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
@@ -134,6 +136,22 @@ var (
 					},
 				},
 			},
+		},
+	}
+	minAvailable = intstr.FromInt32(1)
+
+	pdbTemplate = &policyv1.PodDisruptionBudget{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "policy/v1",
+			Kind:       "PodDisruptionBudget",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-pdb",
+			Namespace:  nsName,
+			Generation: 2,
+		},
+		Spec: policyv1.PodDisruptionBudgetSpec{
+			MinAvailable: &minAvailable,
 		},
 	}
 )
@@ -659,6 +677,93 @@ func TestTrackCRDAvailability(t *testing.T) {
 			gotResTyp, err := trackCRDAvailability(toUnstructured(t, tc.crd))
 			if err != nil {
 				t.Fatalf("trackCRDAvailability() = %v, want no error", err)
+			}
+			if gotResTyp != tc.wantManifestProcessingAvailabilityResultType {
+				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantManifestProcessingAvailabilityResultType)
+			}
+		})
+	}
+}
+
+// TestTrackPDBAvailability tests the trackPDBAvailability function.
+func TestTrackPDBAvailability(t *testing.T) {
+	availablePDB := pdbTemplate.DeepCopy()
+	availablePDB.Status = policyv1.PodDisruptionBudgetStatus{
+		DisruptionsAllowed: 1,
+		CurrentHealthy:     2,
+		ObservedGeneration: 2,
+		DesiredHealthy:     2,
+		ExpectedPods:       1,
+		Conditions: []metav1.Condition{
+			{
+				Type:               policyv1.DisruptionAllowedCondition,
+				Status:             metav1.ConditionTrue,
+				Reason:             policyv1.SufficientPodsReason,
+				ObservedGeneration: 2,
+			},
+		},
+	}
+	unavailablePDBInsufficientPods := pdbTemplate.DeepCopy()
+	unavailablePDBInsufficientPods.Status = policyv1.PodDisruptionBudgetStatus{
+		DisruptionsAllowed: 0,
+		CurrentHealthy:     1,
+		ObservedGeneration: 2,
+		DesiredHealthy:     2,
+		ExpectedPods:       1,
+		Conditions: []metav1.Condition{
+			{
+				Type:               policyv1.DisruptionAllowedCondition,
+				Status:             metav1.ConditionTrue,
+				Reason:             policyv1.SufficientPodsReason,
+				ObservedGeneration: 2,
+			},
+		},
+	}
+
+	unavailablePDBStaleCondition := pdbTemplate.DeepCopy()
+	unavailablePDBStaleCondition.Status = policyv1.PodDisruptionBudgetStatus{
+		DisruptionsAllowed: 1,
+		CurrentHealthy:     2,
+		ObservedGeneration: 1,
+		DesiredHealthy:     2,
+		ExpectedPods:       1,
+		Conditions: []metav1.Condition{
+			{
+				Type:               policyv1.DisruptionAllowedCondition,
+				Status:             metav1.ConditionTrue,
+				Reason:             policyv1.SufficientPodsReason,
+				ObservedGeneration: 1,
+			},
+		},
+	}
+
+	testCases := []struct {
+		name                                         string
+		pdb                                          *policyv1.PodDisruptionBudget
+		wantManifestProcessingAvailabilityResultType ManifestProcessingAvailabilityResultType
+	}{
+		{
+			name: "available PDB",
+			pdb:  availablePDB,
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+		},
+		{
+			name: "unavailable PDB (insufficient pods)",
+			pdb:  unavailablePDBInsufficientPods,
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+		},
+		{
+			name: "unavailable PDB (stale condition)",
+			pdb:  unavailablePDBStaleCondition,
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotResTyp, err := trackPDBAvailability(toUnstructured(t, tc.pdb))
+			if err != nil {
+				t.Fatalf("trackPDBAvailability() = %v, want no error", err)
 			}
 			if gotResTyp != tc.wantManifestProcessingAvailabilityResultType {
 				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantManifestProcessingAvailabilityResultType)

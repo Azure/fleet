@@ -24,7 +24,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
@@ -59,8 +58,6 @@ var _ = BeforeSuite(func() {
 	Expect(err).Should(Succeed())
 	Expect(cfg).NotTo(BeNil())
 
-	err = placementv1alpha1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
 	err = placementv1beta1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -84,7 +81,8 @@ var _ = BeforeSuite(func() {
 	Expect(err).Should(Succeed())
 
 	err = (&Reconciler{
-		Client: k8sClient,
+		Client:         k8sClient,
+		UncachedReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr)
 	Expect(err).Should(Succeed())
 
