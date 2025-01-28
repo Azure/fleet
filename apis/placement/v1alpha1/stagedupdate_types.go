@@ -462,6 +462,11 @@ const (
 	// Its condition status can be:
 	// - "True": The request is approved.
 	ApprovalRequestConditionApproved ApprovalRequestConditionType = "Approved"
+
+	// ApprovalRequestConditionApprovalAccepted indicates if the approved approval request was accepted.
+	// Its condition status can be:
+	// - "True": The request is approved.
+	ApprovalRequestConditionApprovalAccepted ApprovalRequestConditionType = "ApprovalAccepted"
 )
 
 // ClusterApprovalRequestList contains a list of ClusterApprovalRequest.

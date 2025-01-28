@@ -117,7 +117,14 @@ func (r *Reconciler) determinePolicySnapshot(
 	}
 
 	latestPolicySnapshot := policySnapshotList.Items[0]
-	updateRun.Status.PolicySnapshotIndexUsed = latestPolicySnapshot.Name
+	policyIndex, foundIndex := latestPolicySnapshot.Labels[placementv1beta1.PolicyIndexLabel]
+	if !foundIndex || len(policyIndex) == 0 {
+		noIndexErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("policy snapshot `%s` does not have a policy index label", latestPolicySnapshot.Name))
+		klog.ErrorS(noIndexErr, "Failed to get the policy index from the latestPolicySnapshot", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
+		// no more retries here.
+		return nil, -1, fmt.Errorf("%w: %s", errInitializedFailed, noIndexErr.Error())
+	}
+	updateRun.Status.PolicySnapshotIndexUsed = policyIndex
 
 	// Get the cluster count from the policy snapshot.
 	if latestPolicySnapshot.Spec.Policy == nil {
@@ -141,7 +148,7 @@ func (r *Reconciler) determinePolicySnapshot(
 		clusterCount = len(latestPolicySnapshot.Spec.Policy.ClusterNames)
 	}
 	updateRun.Status.PolicyObservedClusterCount = clusterCount
-	klog.V(2).InfoS("Found the latest policy snapshot", "latestPolicySnapshot", latestPolicySnapshot.Name, "observed cluster count", updateRun.Status.PolicyObservedClusterCount, "clusterStagedUpdateRun", updateRunRef)
+	klog.V(2).InfoS("Found the latest policy snapshot", "latestPolicySnapshot", latestPolicySnapshot.Name, "observedClusterCount", updateRun.Status.PolicyObservedClusterCount, "clusterStagedUpdateRun", updateRunRef)
 
 	if !condition.IsConditionStatusTrue(latestPolicySnapshot.GetCondition(string(placementv1beta1.PolicySnapshotScheduled)), latestPolicySnapshot.Generation) {
 		scheduleErr := fmt.Errorf("policy snapshot `%s` not fully scheduled yet", latestPolicySnapshot.Name)
@@ -393,36 +400,57 @@ func validateAfterStageTask(tasks []placementv1beta1.AfterStageTask) error {
 // recordOverrideSnapshots finds all the override snapshots that are associated with each cluster and record them in the ClusterStagedUpdateRun status.
 func (r *Reconciler) recordOverrideSnapshots(ctx context.Context, placementName string, updateRun *placementv1beta1.ClusterStagedUpdateRun) error {
 	updateRunRef := klog.KObj(updateRun)
-	var masterResourceSnapshot placementv1beta1.ClusterResourceSnapshot
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: updateRun.Spec.ResourceSnapshotIndex}, &masterResourceSnapshot); err != nil {
-		klog.ErrorS(err, "Failed to get the master resource snapshot", "resourceSnapshot", updateRun.Spec.ResourceSnapshotIndex, "clusterStagedUpdateRun", updateRunRef)
-		if apierrors.IsNotFound(err) {
-			snapshotNotFoundErr := controller.NewUserError(fmt.Errorf("resource snapshot `%s` not found", updateRun.Spec.ResourceSnapshotIndex))
-			// we won't continue or retry the initialization if the resource snapshot is not found.
-			return fmt.Errorf("%w: %s", errInitializedFailed, snapshotNotFoundErr.Error())
-		}
+
+	snapshotIndex, err := strconv.Atoi(updateRun.Spec.ResourceSnapshotIndex)
+	if err != nil || snapshotIndex < 0 {
+		err := controller.NewUserError(fmt.Errorf("invalid resource snapshot index `%s` provided, expected an integer >= 0", updateRun.Spec.ResourceSnapshotIndex))
+		klog.ErrorS(err, "Failed to parse the resource snapshot index", "clusterStagedUpdateRun", updateRunRef)
+		// no more retries here.
+		return fmt.Errorf("%w: %s", errInitializedFailed, err.Error())
+	}
+
+	var masterResourceSnapshot *placementv1beta1.ClusterResourceSnapshot
+	labelMatcher := client.MatchingLabels{
+		placementv1beta1.CRPTrackingLabel:   placementName,
+		placementv1beta1.ResourceIndexLabel: updateRun.Spec.ResourceSnapshotIndex,
+	}
+	resourceSnapshotList := &placementv1beta1.ClusterResourceSnapshotList{}
+	if err := r.Client.List(ctx, resourceSnapshotList, labelMatcher); err != nil {
+		klog.ErrorS(err, "Failed to list the clusterResourceSnapshots associated with the clusterResourcePlacement",
+			"clusterResourcePlacement", placementName, "resourceSnapshotIndex", snapshotIndex, "clusterStagedUpdateRun", updateRunRef)
 		// err can be retried.
 		return controller.NewAPIServerError(true, err)
 	}
 
-	if parentCRP, ok := masterResourceSnapshot.Labels[placementv1beta1.CRPTrackingLabel]; !ok || parentCRP != placementName {
-		wrongCRPErr := controller.NewUserError(fmt.Errorf("resource snapshot `%s` is not associated with expected clusterResourcePlacement `%s`, got: `%s`", updateRun.Spec.ResourceSnapshotIndex, placementName, parentCRP))
-		klog.ErrorS(wrongCRPErr, "Failed to get the master resource snapshot", "resourceSnapshot", updateRun.Spec.ResourceSnapshotIndex, "clusterStagedUpdateRun", updateRunRef)
+	if len(resourceSnapshotList.Items) == 0 {
+		err := controller.NewUserError(fmt.Errorf("no clusterResourceSnapshots with index `%d` found for clusterResourcePlacement `%s`", snapshotIndex, placementName))
+		klog.ErrorS(err, "No specified clusterResourceSnapshots found", "clusterStagedUpdateRun", updateRunRef)
 		// no more retries here.
-		return fmt.Errorf("%w: %s", errInitializedFailed, wrongCRPErr.Error())
+		return fmt.Errorf("%w: %s", errInitializedFailed, err.Error())
 	}
 
-	if hash, ok := masterResourceSnapshot.Annotations[placementv1beta1.ResourceGroupHashAnnotation]; !ok || len(hash) == 0 {
-		nomasterErr := controller.NewUserError(fmt.Errorf("resource snapshot `%s` is not a master snapshot", updateRun.Spec.ResourceSnapshotIndex))
-		klog.ErrorS(nomasterErr, "Failed to get the master resource snapshot", "resourceSnapshot", updateRun.Spec.ResourceSnapshotIndex, "clusterStagedUpdateRun", updateRunRef)
-		// no more retries here.
-		return fmt.Errorf("%w: %s", errInitializedFailed, nomasterErr.Error())
+	// Look for the master clusterResourceSnapshot.
+	for i, resourceSnapshot := range resourceSnapshotList.Items {
+		// only master has this annotation
+		if len(resourceSnapshot.Annotations[placementv1beta1.ResourceGroupHashAnnotation]) != 0 {
+			masterResourceSnapshot = &resourceSnapshotList.Items[i]
+			break
+		}
 	}
+
+	// No clusterResourceSnapshot found
+	if masterResourceSnapshot == nil {
+		err := controller.NewUnexpectedBehaviorError(fmt.Errorf("no master clusterResourceSnapshot found for clusterResourcePlacement `%s` with index `%d`", placementName, snapshotIndex))
+		klog.ErrorS(err, "Failed to find master clusterResourceSnapshot", "clusterStagedUpdateRun", updateRunRef)
+		// no more retries here.
+		return fmt.Errorf("%w: %s", errInitializedFailed, err.Error())
+	}
+	klog.V(2).InfoS("Found master clusterResourceSnapshot", "clusterResourcePlacement", placementName, "index", snapshotIndex, "clusterStagedUpdateRun", updateRunRef)
 
 	// Fetch all the matching overrides.
-	matchedCRO, matchedRO, err := overrider.FetchAllMatchingOverridesForResourceSnapshot(ctx, r.Client, r.InformerManager, updateRun.Spec.PlacementName, &masterResourceSnapshot)
+	matchedCRO, matchedRO, err := overrider.FetchAllMatchingOverridesForResourceSnapshot(ctx, r.Client, r.InformerManager, updateRun.Spec.PlacementName, masterResourceSnapshot)
 	if err != nil {
-		klog.ErrorS(err, "Failed to find all matching overrides for the clusterStagedUpdateRun", "masterResourceSnapshot", klog.KObj(&masterResourceSnapshot), "clusterStagedUpdateRun", updateRunRef)
+		klog.ErrorS(err, "Failed to find all matching overrides for the clusterStagedUpdateRun", "masterResourceSnapshot", klog.KObj(masterResourceSnapshot), "clusterStagedUpdateRun", updateRunRef)
 		// no more retries here.
 		return fmt.Errorf("%w: %s", errInitializedFailed, err.Error())
 	}
@@ -433,7 +461,7 @@ func (r *Reconciler) recordOverrideSnapshots(ctx context.Context, placementName 
 			clusterStatus.ClusterResourceOverrideSnapshots, clusterStatus.ResourceOverrideSnapshots, err =
 				overrider.PickFromResourceMatchedOverridesForTargetCluster(ctx, r.Client, clusterStatus.ClusterName, matchedCRO, matchedRO)
 			if err != nil {
-				klog.ErrorS(err, "Failed to pick the override snapshots for cluster", "cluster", clusterStatus.ClusterName, "masterResourceSnapshot", klog.KObj(&masterResourceSnapshot), "clusterStagedUpdateRun", updateRunRef)
+				klog.ErrorS(err, "Failed to pick the override snapshots for cluster", "cluster", clusterStatus.ClusterName, "masterResourceSnapshot", klog.KObj(masterResourceSnapshot), "clusterStagedUpdateRun", updateRunRef)
 				// no more retries here.
 				return fmt.Errorf("%w: %s", errInitializedFailed, err.Error())
 			}

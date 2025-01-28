@@ -45,6 +45,9 @@ const (
 	numUnscheduledClusters = 3
 	// numberOfClustersAnnotation is the number of clusters in the test latest policy snapshot
 	numberOfClustersAnnotation = numTargetClusters
+
+	// testResourceSnapshotIndex is the index of the test resource snapshot
+	testResourceSnapshotIndex = "0"
 )
 
 var (
@@ -62,7 +65,7 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 	BeforeEach(func() {
 		testUpdateRunName = "updaterun-" + utils.RandStr()
 		testCRPName = "crp-" + utils.RandStr()
-		testResourceSnapshotName = "snapshot-" + utils.RandStr()
+		testResourceSnapshotName = testCRPName + "-" + testResourceSnapshotIndex + "-snapshot"
 		testUpdateStrategyName = "updatestrategy-" + utils.RandStr()
 		testCROName = "cro-" + utils.RandStr()
 		updateRunNamespacedName = types.NamespacedName{Name: testUpdateRunName}
@@ -216,7 +219,7 @@ func generateTestClusterStagedUpdateRun() *placementv1beta1.ClusterStagedUpdateR
 		},
 		Spec: placementv1beta1.StagedUpdateRunSpec{
 			PlacementName:            testCRPName,
-			ResourceSnapshotIndex:    testResourceSnapshotName,
+			ResourceSnapshotIndex:    testResourceSnapshotIndex,
 			StagedUpdateStrategyName: testUpdateStrategyName,
 		},
 	}
@@ -254,6 +257,7 @@ func generateTestClusterSchedulingPolicySnapshot(idx int) *placementv1beta1.Clus
 			Labels: map[string]string{
 				"kubernetes-fleet.io/parent-CRP":         testCRPName,
 				"kubernetes-fleet.io/is-latest-snapshot": "true",
+				"kubernetes-fleet.io/policy-index":       strconv.Itoa(idx),
 			},
 			Annotations: map[string]string{
 				"kubernetes-fleet.io/number-of-clusters": strconv.Itoa(numberOfClustersAnnotation),
@@ -360,6 +364,7 @@ func generateTestClusterResourceSnapshot() *placementv1beta1.ClusterResourceSnap
 			Labels: map[string]string{
 				placementv1beta1.CRPTrackingLabel:      testCRPName,
 				placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+				placementv1beta1.ResourceIndexLabel:    testResourceSnapshotIndex,
 			},
 			Annotations: map[string]string{
 				placementv1beta1.ResourceGroupHashAnnotation:         "hash",
