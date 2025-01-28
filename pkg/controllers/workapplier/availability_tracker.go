@@ -255,6 +255,32 @@ func isDataResource(gvr schema.GroupVersionResource) bool {
 		return true
 	case utils.ClusterRoleBindingGVR:
 		return true
+	case utils.ServiceAccountGVR:
+		return true
+	case utils.NetworkPolicyGVR:
+		return true
+	case utils.CSIDriverGVR:
+		return true
+	case utils.CSINodeGVR:
+		return true
+	case utils.StorageClassGVR:
+		return true
+	case utils.CSIStorageCapacityGVR:
+		return true
+	case utils.ControllerRevisionGVR:
+		return true
+	case utils.IngressClassGVR:
+		return true
+	case utils.LimitRangeGVR:
+		return true
+	case utils.MutatingWebhookConfigurationGVR:
+		return true
+	case utils.ValidatingWebhookConfigurationGVR:
+		return true
+	case utils.ResourceQuotaGVR:
+		return true
+	case utils.PriorityClassGVR:
+		return true
 	}
 	return false
 }

@@ -11,10 +11,14 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -898,6 +902,84 @@ func TestTrackInMemberClusterObjAvailabilityByGVR(t *testing.T) {
 			gvr:                utils.JobGVR,
 			inMemberClusterObj: toUnstructured(t, untrackableJob),
 			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotTrackable,
+		},
+		{
+			name:               "available service account",
+			gvr:                utils.ServiceAccountGVR,
+			inMemberClusterObj: toUnstructured(t, &corev1.ServiceAccount{}),
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+		},
+		{
+			name:               "available network policy",
+			gvr:                utils.NetworkPolicyGVR,
+			inMemberClusterObj: toUnstructured(t, &networkingv1.NetworkPolicy{}),
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+		},
+		{
+			name:               "available csi driver",
+			gvr:                utils.CSIDriverGVR,
+			inMemberClusterObj: toUnstructured(t, &storagev1.CSIDriver{}),
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+		},
+		{
+			name:               "available csi node",
+			gvr:                utils.CSINodeGVR,
+			inMemberClusterObj: toUnstructured(t, &storagev1.CSINode{}),
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+		},
+		{
+			name:               "available storage class",
+			gvr:                utils.StorageClassGVR,
+			inMemberClusterObj: toUnstructured(t, &storagev1.StorageClass{}),
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+		},
+		{
+			name:               "available csi storage capacity",
+			gvr:                utils.CSIStorageCapacityGVR,
+			inMemberClusterObj: toUnstructured(t, &storagev1.CSIStorageCapacity{}),
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+		},
+		{
+			name:               "available controller revision",
+			gvr:                utils.ControllerRevisionGVR,
+			inMemberClusterObj: toUnstructured(t, &appsv1.ControllerRevision{}),
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+		},
+		{
+			name:               "available ingress class",
+			gvr:                utils.IngressClassGVR,
+			inMemberClusterObj: toUnstructured(t, &networkingv1.IngressClass{}),
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+		},
+		{
+			name:               "available limit range",
+			gvr:                utils.LimitRangeGVR,
+			inMemberClusterObj: toUnstructured(t, &corev1.LimitRange{}),
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+		},
+		{
+			name:               "available mutating webhook configuration",
+			gvr:                utils.MutatingWebhookConfigurationGVR,
+			inMemberClusterObj: toUnstructured(t, &admissionregistrationv1.MutatingWebhookConfiguration{}),
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+		},
+		{
+			name:               "available validating webhook configuration",
+			gvr:                utils.ValidatingWebhookConfigurationGVR,
+			inMemberClusterObj: toUnstructured(t, &admissionregistrationv1.ValidatingWebhookConfiguration{}),
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+		},
+		{
+			name:               "available resource quota",
+			gvr:                utils.ResourceQuotaGVR,
+			inMemberClusterObj: toUnstructured(t, &corev1.ResourceQuota{}),
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+		},
+		{
+			name:               "available priority class",
+			gvr:                utils.PriorityClassGVR,
+			inMemberClusterObj: toUnstructured(t, &schedulingv1.PriorityClass{}),
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
 		},
 	}
 
