@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
+	apiregistrationsv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	"k8s.io/utils/ptr"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -155,6 +156,24 @@ var (
 		},
 		Spec: policyv1.PodDisruptionBudgetSpec{
 			MinAvailable: &minAvailable,
+		},
+	}
+
+	apiServiceTemplate = &apiregistrationsv1.APIService{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apiregistration.k8s.io/v1",
+			Kind:       "APIService",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-apiservice",
+		},
+		Spec: apiregistrationsv1.APIServiceSpec{
+			Group:   "example.com",
+			Version: "v1",
+			Service: &apiregistrationsv1.ServiceReference{
+				Name:      "test-service",
+				Namespace: nsName,
+			},
 		},
 	}
 )
@@ -767,6 +786,55 @@ func TestTrackPDBAvailability(t *testing.T) {
 			gotResTyp, err := trackPDBAvailability(toUnstructured(t, tc.pdb))
 			if err != nil {
 				t.Fatalf("trackPDBAvailability() = %v, want no error", err)
+			}
+			if gotResTyp != tc.wantManifestProcessingAvailabilityResultType {
+				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantManifestProcessingAvailabilityResultType)
+			}
+		})
+	}
+}
+
+func TestTrackAPIServiceAvailability(t *testing.T) {
+	availableAPIService := apiServiceTemplate.DeepCopy()
+	availableAPIService.Status = apiregistrationsv1.APIServiceStatus{
+		Conditions: []apiregistrationsv1.APIServiceCondition{
+			{
+				Type:   apiregistrationsv1.Available,
+				Status: apiregistrationsv1.ConditionTrue,
+			},
+		},
+	}
+
+	unavailableAPIService := apiServiceTemplate.DeepCopy()
+	unavailableAPIService.Status = apiregistrationsv1.APIServiceStatus{
+		Conditions: []apiregistrationsv1.APIServiceCondition{
+			{
+				Type:   apiregistrationsv1.Available,
+				Status: apiregistrationsv1.ConditionFalse,
+			},
+		},
+	}
+	testCases := []struct {
+		name                                         string
+		apiService                                   *apiregistrationsv1.APIService
+		wantManifestProcessingAvailabilityResultType ManifestProcessingAvailabilityResultType
+	}{
+		{
+			name:       "available APIService",
+			apiService: availableAPIService,
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+		},
+		{
+			name:       "unavailable APIService",
+			apiService: unavailableAPIService,
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotResTyp, err := trackAPIServiceAvailability(toUnstructured(t, tc.apiService))
+			if err != nil {
+				t.Fatalf("trackAPIServiceAvailability() = %v, want no error", err)
 			}
 			if gotResTyp != tc.wantManifestProcessingAvailabilityResultType {
 				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantManifestProcessingAvailabilityResultType)

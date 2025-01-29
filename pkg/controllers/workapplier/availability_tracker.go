@@ -9,6 +9,9 @@ import (
 	"context"
 	"fmt"
 
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/controller"
+
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -19,9 +22,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/component-helpers/apps/poddisruptionbudget"
 	"k8s.io/klog/v2"
-
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/controller"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
+	apiregistrationhelpers "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1/helper"
 )
 
 // trackInMemberClusterObjAvailability tracks the availability of an applied objects in the member cluster.
@@ -83,6 +85,8 @@ func trackInMemberClusterObjAvailabilityByGVR(
 		return trackCRDAvailability(inMemberClusterObj)
 	case utils.PodDisruptionBudgetGVR:
 		return trackPDBAvailability(inMemberClusterObj)
+	case utils.APIServiceGVR:
+		return trackAPIServiceAvailability(inMemberClusterObj)
 	default:
 		if isDataResource(*gvr) {
 			klog.V(2).InfoS("The object from the member cluster is a data object, consider it to be immediately available",
@@ -244,6 +248,20 @@ func trackPDBAvailability(curObj *unstructured.Unstructured) (ManifestProcessing
 		return ManifestProcessingAvailabilityResultTypeAvailable, nil
 	}
 	klog.V(2).InfoS("Still need to wait for PodDisruptionBudget to be available", "pdb", klog.KObj(curObj))
+	return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
+}
+
+func trackAPIServiceAvailability(inMemberClusterObj *unstructured.Unstructured) (ManifestProcessingAvailabilityResultType, error) {
+	var apiService apiregistrationv1.APIService
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(inMemberClusterObj.Object, &apiService); err != nil {
+		return ManifestProcessingAvailabilityResultTypeFailed, controller.NewUnexpectedBehaviorError(fmt.Errorf("failed to convert the unstructured object to an APIService: %w", err))
+	}
+
+	// Check if the APIService is available.
+	if apiregistrationhelpers.IsAPIServiceConditionTrue(&apiService, apiregistrationv1.Available) {
+		klog.V(2).InfoS("APIService is available", "apiService", klog.KObj(inMemberClusterObj))
+		return ManifestProcessingAvailabilityResultTypeAvailable, nil
+	}
 	return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
 }
 

@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
+	apiregistrationsv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
@@ -136,6 +137,12 @@ var (
 
 // Those are the GVR/GVK of the fleet related resources.
 var (
+	APIServiceGVR = schema.GroupVersionResource{
+		Group:    apiregistrationsv1.GroupName,
+		Version:  apiregistrationsv1.SchemeGroupVersion.Version,
+		Resource: "apiservices",
+	}
+
 	ClusterResourcePlacementV1Alpha1GVK = schema.GroupVersionKind{
 		Group:   fleetv1alpha1.GroupVersion.Group,
 		Version: fleetv1alpha1.GroupVersion.Version,
@@ -572,6 +579,7 @@ func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Uns
 			return false, nil
 		}
 	}
+	// TODO: Add special handling for resources we don't want to propagate
 	return true, nil
 }
 
