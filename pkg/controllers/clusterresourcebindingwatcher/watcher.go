@@ -115,14 +115,23 @@ func isBindingStatusUpdated(oldBinding, newBinding *fleetv1beta1.ClusterResource
 		oldCond := oldBinding.GetCondition(string(i.ResourceBindingConditionType()))
 		newCond := newBinding.GetCondition(string(i.ResourceBindingConditionType()))
 		if !condition.EqualCondition(oldCond, newCond) {
-			klog.V(2).InfoS("The binding condition has changed, need to update the corresponding CRP", "oldBinding", klog.KObj(oldBinding), "newBinding", klog.KObj(newBinding), "type", i.ResourceBindingConditionType())
+			klog.V(2).InfoS("The binding status conditions have changed, need to refresh the CRP status", "binding", klog.KObj(oldBinding), "type", i.ResourceBindingConditionType())
 			return true
 		}
 	}
 	if !utils.IsFailedResourcePlacementsEqual(oldBinding.Status.FailedPlacements, newBinding.Status.FailedPlacements) {
-		klog.V(2).InfoS("The binding failed placement has changed, need to update the corresponding CRP", "oldBinding", klog.KObj(oldBinding), "newBinding", klog.KObj(newBinding))
+		klog.V(2).InfoS("Failed placements reported on the binding status has changed, need to refresh the CRP status", "binding", klog.KObj(oldBinding))
 		return true
 	}
-	klog.V(5).InfoS("The binding status has not changed, no need to update the corresponding CRP", "oldBinding", klog.KObj(oldBinding), "newBinding", klog.KObj(newBinding))
+	if !utils.IsDriftedResourcePlacementsEqual(oldBinding.Status.DriftedPlacements, newBinding.Status.DriftedPlacements) {
+		klog.V(2).InfoS("Drifted placements reported on the binding status has changed, need to refresh the CRP status", "binding", klog.KObj(oldBinding))
+		return true
+	}
+	if !utils.IsDiffedResourcePlacementsEqual(oldBinding.Status.DiffedPlacements, newBinding.Status.DiffedPlacements) {
+		klog.V(2).InfoS("Diffed placements reported on the binding status has changed, need to refresh the CRP status", "binding", klog.KObj(oldBinding))
+		return true
+	}
+
+	klog.V(5).InfoS("The binding status has not changed, no need to refresh the CRP status", "binding", klog.KObj(oldBinding))
 	return false
 }

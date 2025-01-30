@@ -597,6 +597,30 @@ var LessFuncDriftedResourcePlacements = func(a, b placementv1beta1.DriftedResour
 	return aStr < bStr
 }
 
+// IsDriftedResourcePlacementsEqual returns true if the two set of drifted resource placements are equal.
+func IsDriftedResourcePlacementsEqual(oldDriftedResourcePlacements, newDriftedResourcePlacements []placementv1beta1.DriftedResourcePlacement) bool {
+	if len(oldDriftedResourcePlacements) != len(newDriftedResourcePlacements) {
+		return false
+	}
+	sort.Slice(oldDriftedResourcePlacements, func(i, j int) bool {
+		return LessFuncDriftedResourcePlacements(oldDriftedResourcePlacements[i], oldDriftedResourcePlacements[j])
+	})
+	sort.Slice(newDriftedResourcePlacements, func(i, j int) bool {
+		return LessFuncDriftedResourcePlacements(newDriftedResourcePlacements[i], newDriftedResourcePlacements[j])
+	})
+	for i := range oldDriftedResourcePlacements {
+		oldDriftedResourcePlacement := oldDriftedResourcePlacements[i]
+		newDriftedResourcePlacement := newDriftedResourcePlacements[i]
+
+		// Note that here Fleet will not attempt to sort the ObservedDrifts slice as it yields no
+		// performance benefits; ObservedDrifts changes are always paired with ObservationTime changes.
+		if !equality.Semantic.DeepEqual(oldDriftedResourcePlacement, newDriftedResourcePlacement) {
+			return false
+		}
+	}
+	return true
+}
+
 // LessFuncDiffedResourcePlacements is a less function for sorting drifted resource placements
 var LessFuncDiffedResourcePlacements = func(a, b placementv1beta1.DiffedResourcePlacement) bool {
 	var aStr, bStr string
@@ -612,6 +636,29 @@ var LessFuncDiffedResourcePlacements = func(a, b placementv1beta1.DiffedResource
 
 	}
 	return aStr < bStr
+}
+
+// IsDiffedResourcePlacementsEqual returns true if the two sets of diffed resource placements are equal.
+func IsDiffedResourcePlacementsEqual(oldDiffedResourcePlacements, newDiffedResourcePlacements []placementv1beta1.DiffedResourcePlacement) bool {
+	if len(oldDiffedResourcePlacements) != len(newDiffedResourcePlacements) {
+		return false
+	}
+	sort.Slice(oldDiffedResourcePlacements, func(i, j int) bool {
+		return LessFuncDiffedResourcePlacements(oldDiffedResourcePlacements[i], oldDiffedResourcePlacements[j])
+	})
+	sort.Slice(newDiffedResourcePlacements, func(i, j int) bool {
+		return LessFuncDiffedResourcePlacements(newDiffedResourcePlacements[i], newDiffedResourcePlacements[j])
+	})
+	for i := range oldDiffedResourcePlacements {
+		oldDiffedResourcePlacement := oldDiffedResourcePlacements[i]
+		newDiffedResourcePlacement := newDiffedResourcePlacements[i]
+		// Note that here Fleet will not attempt to sort the ObservedDiffs slice as it yields no
+		// performance benefits; ObservedDiffs changes are always paired with ObservationTime changes.
+		if !equality.Semantic.DeepEqual(oldDiffedResourcePlacement, newDiffedResourcePlacement) {
+			return false
+		}
+	}
+	return true
 }
 
 // IsFleetAnnotationPresent returns true if a key with fleet prefix is present in the annotations map.
