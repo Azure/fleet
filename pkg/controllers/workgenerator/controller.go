@@ -407,6 +407,9 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 			return nil
 		})
 	}
+	if updateErr := errs.Wait(); updateErr != nil {
+		return false, false, updateErr
+	}
 
 	// the hash256 function can can handle empty list https://go.dev/play/p/_4HW17fooXM
 	resourceOverrideSnapshotHash, err := resource.HashOf(resourceBinding.Spec.ResourceOverrideSnapshots)
