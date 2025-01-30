@@ -273,10 +273,6 @@ func isDataResource(gvr schema.GroupVersionResource) bool {
 		return true
 	case utils.LimitRangeGVR:
 		return true
-	case utils.MutatingWebhookConfigurationGVR:
-		return true
-	case utils.ValidatingWebhookConfigurationGVR:
-		return true
 	case utils.ResourceQuotaGVR:
 		return true
 	case utils.PriorityClassGVR:

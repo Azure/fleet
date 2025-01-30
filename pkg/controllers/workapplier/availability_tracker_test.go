@@ -11,7 +11,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -955,18 +954,6 @@ func TestTrackInMemberClusterObjAvailabilityByGVR(t *testing.T) {
 			name:               "available limit range",
 			gvr:                utils.LimitRangeGVR,
 			inMemberClusterObj: toUnstructured(t, &corev1.LimitRange{}),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
-		},
-		{
-			name:               "available mutating webhook configuration",
-			gvr:                utils.MutatingWebhookConfigurationGVR,
-			inMemberClusterObj: toUnstructured(t, &admissionregistrationv1.MutatingWebhookConfiguration{}),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
-		},
-		{
-			name:               "available validating webhook configuration",
-			gvr:                utils.ValidatingWebhookConfigurationGVR,
-			inMemberClusterObj: toUnstructured(t, &admissionregistrationv1.ValidatingWebhookConfiguration{}),
 			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
 		},
 		{
