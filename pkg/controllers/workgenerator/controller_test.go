@@ -13,6 +13,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -308,6 +309,34 @@ func TestUpsertWork(t *testing.T) {
 			},
 			expectChanged: false,
 		},
+		{
+			name: "apply strategy changes",
+			existingWork: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: namespace,
+					Labels: map[string]string{
+						fleetv1beta1.ParentResourceSnapshotIndexLabel: "1",
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.ParentResourceSnapshotNameAnnotation:                "snapshot-1",
+						fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: "hash1",
+						fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        "hash2",
+					},
+				},
+				Spec: fleetv1beta1.WorkSpec{
+					Workload: fleetv1beta1.WorkloadTemplate{
+						Manifests: []fleetv1beta1.Manifest{{RawExtension: runtime.RawExtension{Object: &testDeployment}}},
+					},
+					ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+						ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+						Type:             fleetv1beta1.ApplyStrategyTypeReportDiff,
+						WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+					},
+				},
+			},
+			expectChanged: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -530,6 +559,148 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 			got := buildAllWorkAppliedCondition(tt.works, binding)
 			if diff := cmp.Diff(got, tt.want, cmpConditionOption); diff != "" {
 				t.Errorf("buildAllWorkAppliedCondition test `%s` mismatch (-got +want):\n%s", name, diff)
+			}
+		})
+	}
+}
+
+func TestSetAllWorkDiffReportedCondition(t *testing.T) {
+	bindingTemplate := &fleetv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "binding",
+			Generation: 1,
+		},
+	}
+	testCases := []struct {
+		name                      string
+		works                     map[string]*fleetv1beta1.Work
+		wantDiffReportedCondition *metav1.Condition
+	}{
+		{
+			name: "all works have diff reported",
+			works: map[string]*fleetv1beta1.Work{
+				"work-1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-1",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+				"work-2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-2",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+			},
+			wantDiffReportedCondition: &metav1.Condition{
+				Status:             metav1.ConditionTrue,
+				Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+				Reason:             condition.AllWorkDiffReportedReason,
+				ObservedGeneration: 1,
+			},
+		},
+		{
+			name: "one of two works have diff reported, the other has not reported yet",
+			works: map[string]*fleetv1beta1.Work{
+				"work-1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-1",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+				"work-2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-2",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{},
+					},
+				},
+			},
+			wantDiffReportedCondition: &metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+				Reason:             condition.WorkNotDiffReportedReason,
+				ObservedGeneration: 1,
+			},
+		},
+		{
+			name: "one of two works have diff reported, the other has failed to report diff",
+			works: map[string]*fleetv1beta1.Work{
+				"work-1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-1",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+				"work-2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-2",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+								Status:             metav1.ConditionFalse,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+			},
+			wantDiffReportedCondition: &metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+				Reason:             condition.WorkNotDiffReportedReason,
+				ObservedGeneration: 1,
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			binding := bindingTemplate.DeepCopy()
+			setAllWorkDiffReportedCondition(tc.works, binding)
+			diffReportedCond := meta.FindStatusCondition(binding.Status.Conditions, string(fleetv1beta1.ResourceBindingDiffReported))
+			if diff := cmp.Diff(diffReportedCond, tc.wantDiffReportedCondition, cmpConditionOption); diff != "" {
+				t.Errorf("diff reported condition mismatches (-got +want):\n%s", diff)
 			}
 		})
 	}
@@ -2903,6 +3074,94 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 				if diff := cmp.Diff(latestRollout, rollout, statusCmpOptions...); diff != "" {
 					t.Errorf("updateBindingStatusWithRetry() ResourceBindingRolloutStarted Condition got = %v, want %v", rollout, latestRollout)
 				}
+			}
+		})
+	}
+}
+
+func TestSyncApplyStrategy(t *testing.T) {
+	bindingName := "test-binding-1"
+	workName := "test-work-1"
+
+	testCases := []struct {
+		name              string
+		resourceBinding   *fleetv1beta1.ClusterResourceBinding
+		work              *fleetv1beta1.Work
+		wantUpdated       bool
+		wantApplyStrategy *fleetv1beta1.ApplyStrategy
+	}{
+		{
+			name: "same apply strategy",
+			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: bindingName,
+				},
+				Spec: fleetv1beta1.ResourceBindingSpec{},
+			},
+			work: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: workName,
+				},
+				Spec: fleetv1beta1.WorkSpec{},
+			},
+		},
+		{
+			name: "apply strategy changed",
+			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: bindingName,
+				},
+				Spec: fleetv1beta1.ResourceBindingSpec{
+					ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+						ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+						Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
+						WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+						WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+					},
+				},
+			},
+			work: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: workName,
+				},
+				Spec: fleetv1beta1.WorkSpec{},
+			},
+			wantUpdated: true,
+			wantApplyStrategy: &fleetv1beta1.ApplyStrategy{
+				ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+				Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
+				WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+				WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			scheme := serviceScheme(t)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(tc.work).
+				Build()
+
+			r := &Reconciler{
+				Client: fakeClient,
+			}
+			workUpdated, err := r.syncApplyStrategy(ctx, tc.resourceBinding, tc.work)
+			if err != nil {
+				t.Fatalf("syncApplyStrategy() = %v, want no error", err)
+			}
+			if workUpdated != tc.wantUpdated {
+				t.Errorf("syncApplyStrategy() = %v, want %v", workUpdated, tc.wantUpdated)
+			}
+
+			updatedWork := &fleetv1beta1.Work{}
+			if err := r.Client.Get(ctx, client.ObjectKeyFromObject(tc.work), updatedWork); err != nil {
+				t.Fatalf("Get Work = %v, want no error", err)
+			}
+			if diff := cmp.Diff(updatedWork.Spec.ApplyStrategy, tc.wantApplyStrategy); diff != "" {
+				t.Errorf("applyStrategy mismatches (-got, +want):\n%s", diff)
 			}
 		})
 	}
