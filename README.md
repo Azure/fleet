@@ -1,4 +1,4 @@
-# Fleet
+# KubeFleet
 
 ![GitHub release (latest by date)][1]
 [![Go Report Card][2]][3]
@@ -6,7 +6,7 @@
 ![GitHub go.mod Go version][5]
 [![codecov][6]][7]
 
-Fleet provides the following capabilities 
+KubeFleet is an open source solution that works on any Kubernetes cluster. We are working towards our vision that we will eventually be able to treat each Kuberentes cluster as cattles.
 
 * Join/Leave is a feature that allows a member cluster to join and leave a fleet by registering a custom resource on the fleet's control plane (the hub cluster).
 * Workload Orchestration is a feature that allows users to create resources on the hub cluster and then selectively propagate these resources to desired member clusters in the fleet.
