@@ -355,7 +355,10 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(
 				}
 			case condition.AppliedCondition, condition.AvailableCondition:
 				if bindingCond.Status == metav1.ConditionFalse {
-					status.FailedPlacements = binding.Status.FailedPlacements
+					if crp.Spec.Strategy.ApplyStrategy.Type != fleetv1beta1.ApplyStrategyTypeReportDiff {
+						// Nothing is applied if the apply strategy is reportDiff.
+						status.FailedPlacements = binding.Status.FailedPlacements
+					}
 					status.DiffedPlacements = binding.Status.DiffedPlacements
 				}
 				// Note that configuration drifts can occur whether the manifests are applied
