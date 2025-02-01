@@ -283,7 +283,8 @@ func (r *Reconciler) updateBindingStatusWithRetry(ctx context.Context, resourceB
 		}
 		return nil
 	}
-	return err
+	klog.V(2).InfoS("Successfully updated the resourceBinding status", "resourceBinding", bindingRef, "resourceBindingStatus", resourceBinding.Status)
+	return nil
 }
 
 // handleDelete handle a deleting binding
