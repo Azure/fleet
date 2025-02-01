@@ -12,6 +12,11 @@ import (
 
 // HasBindingFailed checks if ClusterResourceBinding has failed based on its applied and available conditions.
 func HasBindingFailed(binding *placementv1beta1.ClusterResourceBinding) bool {
+	// the binding can't fail if the apply strategy is report Diff
+	diffReportCondition := binding.GetCondition(string(placementv1beta1.ResourceBindingDiffReported))
+	if diffReportCondition != nil && diffReportCondition.ObservedGeneration == binding.Generation {
+		return false
+	}
 	appliedCondition := binding.GetCondition(string(placementv1beta1.ResourceBindingApplied))
 	availableCondition := binding.GetCondition(string(placementv1beta1.ResourceBindingAvailable))
 	if condition.IsConditionStatusFalse(appliedCondition, binding.Generation) || condition.IsConditionStatusFalse(availableCondition, binding.Generation) {
