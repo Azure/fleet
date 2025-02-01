@@ -67,7 +67,7 @@ var (
 		}),
 	}
 
-	defaultUnavailablePeriodSeconds = time.Duration(5)
+	defaultUnavailablePeriod = time.Duration(5)
 )
 
 func serviceScheme(t *testing.T) *runtime.Scheme {
@@ -1125,7 +1125,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
-			wantWaitTime: defaultUnavailablePeriodSeconds * time.Second,
+			wantWaitTime: defaultUnavailablePeriod * time.Second,
 		},
 		"test one failed to apply bound binding and four failed non ready bound bindings, outdated resources with maxUnavailable specified - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1169,7 +1169,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
-			wantWaitTime: defaultUnavailablePeriodSeconds * time.Second,
+			wantWaitTime: defaultUnavailablePeriod * time.Second,
 		},
 		"test three failed to apply bound binding, two ready bound binding, outdated resources with maxUnavailable specified - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1213,7 +1213,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
-			wantWaitTime: defaultUnavailablePeriodSeconds * time.Second,
+			wantWaitTime: defaultUnavailablePeriod * time.Second,
 		},
 		"test bound ready bindings, maxUnavailable is set to zero - rollout blocked": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1911,7 +1911,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 						Type:   intstr.Int,
 						IntVal: 0,
 					},
-					UnavailablePeriodSeconds: ptr.To(int(defaultUnavailablePeriodSeconds)),
+					UnavailablePeriodSeconds: ptr.To(int(defaultUnavailablePeriod)),
 				}, nil)),
 			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
 				{},
@@ -1932,7 +1932,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantTobeUpdatedBindings:     []int{4, 5}, // no ready unscheduled bindings, so scheduled bindings were chosen.
 			wantStaleUnselectedBindings: []int{},
 			wantNeedRoll:                true,
-			wantWaitTime:                defaultUnavailablePeriodSeconds * time.Second,
+			wantWaitTime:                defaultUnavailablePeriod * time.Second,
 		},
 		"test downscale with resource snapshot change, evict ready bound binding - rollout allowed for one unscheduled binding": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -2214,7 +2214,7 @@ func generateDefaultRollingUpdateConfig() *fleetv1beta1.RollingUpdateConfig {
 			Type:   intstr.Int,
 			IntVal: 3,
 		},
-		UnavailablePeriodSeconds: ptr.To(int(defaultUnavailablePeriodSeconds)),
+		UnavailablePeriodSeconds: ptr.To(int(defaultUnavailablePeriod)),
 	}
 }
 
