@@ -157,6 +157,23 @@ var (
 			MinAvailable: &minAvailable,
 		},
 	}
+
+	volumeAttachmentTemplate = &storagev1.VolumeAttachment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "storage.k8s.io/v1",
+			Kind:       "VolumeAttachment",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-volume-attachment",
+		},
+		Spec: storagev1.VolumeAttachmentSpec{
+			Attacher: "my-attacher",
+			NodeName: "my-node",
+			Source: storagev1.VolumeAttachmentSource{
+				PersistentVolumeName: ptr.To("my-pv"),
+			},
+		},
+	}
 )
 
 // TestTrackDeploymentAvailability tests the trackDeploymentAvailability function.
@@ -773,6 +790,66 @@ func TestTrackPDBAvailability(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTrackVolumeAttachmentAvailability(t *testing.T) {
+	availableVolumeAttachment := volumeAttachmentTemplate.DeepCopy()
+	availableVolumeAttachment.Status = storagev1.VolumeAttachmentStatus{
+		Attached: true,
+	}
+
+	unavailableVolumeAttachmentAttachError := volumeAttachmentTemplate.DeepCopy()
+	unavailableVolumeAttachmentAttachError.Status = storagev1.VolumeAttachmentStatus{
+		Attached: false,
+		AttachError: &storagev1.VolumeError{
+			Time:    metav1.Now(),
+			Message: "attacher error",
+		},
+	}
+
+	unavailableVolumeAttachmentDetachError := volumeAttachmentTemplate.DeepCopy()
+	unavailableVolumeAttachmentDetachError.Status = storagev1.VolumeAttachmentStatus{
+		Attached: true,
+		DetachError: &storagev1.VolumeError{
+			Time:    metav1.Now(),
+			Message: "detacher error",
+		},
+	}
+
+	testCases := []struct {
+		name                                         string
+		volumeAttachment                             *storagev1.VolumeAttachment
+		wantManifestProcessingAvailabilityResultType ManifestProcessingAvailabilityResultType
+	}{
+		{
+			name:             "available volume attachment",
+			volumeAttachment: availableVolumeAttachment,
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+		},
+		{
+			name:             "unavailable attachment (attach error)",
+			volumeAttachment: unavailableVolumeAttachmentAttachError,
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+		},
+		{
+			name:             "unavailable attachment (detach error)",
+			volumeAttachment: unavailableVolumeAttachmentDetachError,
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotResTyp, err := trackVolumeAttachmentAvailability(toUnstructured(t, tc.volumeAttachment))
+			if err != nil {
+				t.Fatalf("trackVolumeAttachmentAvailability() = %v, want no error", err)
+			}
+			if gotResTyp != tc.wantManifestProcessingAvailabilityResultType {
+				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantManifestProcessingAvailabilityResultType)
+			}
+		})
+	}
+
 }
 
 // TestTrackInMemberClusterObjAvailabilityByGVR tests the trackInMemberClusterObjAvailabilityByGVR function.

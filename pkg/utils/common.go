@@ -394,6 +394,12 @@ var (
 		Resource: "validatingwebhookconfigurations",
 	}
 
+	VolumeAttachmentGVR = schema.GroupVersionResource{
+		Group:    storagev1.SchemeGroupVersion.Group,
+		Version:  storagev1.SchemeGroupVersion.Version,
+		Resource: "volumeattachments",
+	}
+
 	ClusterResourceOverrideSnapshotKind = schema.GroupVersionKind{
 		Group:   placementv1alpha1.GroupVersion.Group,
 		Version: placementv1alpha1.GroupVersion.Version,
