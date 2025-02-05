@@ -338,12 +338,17 @@ func (r *Reconciler) garbageCollectAppliedWork(ctx context.Context, work *fleetv
 		klog.V(2).InfoS("The appliedWork is already deleted", "appliedWork", work.Name)
 	case err != nil:
 		klog.ErrorS(err, "Failed to delete the appliedWork", "appliedWork", work.Name)
-		return ctrl.Result{}, err
+		return ctrl.Result{}, controller.NewAPIServerError(false, err)
 	default:
 		klog.InfoS("Successfully deleted the appliedWork", "appliedWork", work.Name)
 	}
 	controllerutil.RemoveFinalizer(work, fleetv1beta1.WorkFinalizer)
-	return ctrl.Result{}, r.hubClient.Update(ctx, work, &client.UpdateOptions{})
+
+	if err := r.hubClient.Update(ctx, work, &client.UpdateOptions{}); err != nil {
+		klog.ErrorS(err, "Failed to remove the finalizer from the work", "work", klog.KObj(work))
+		return ctrl.Result{}, controller.NewAPIServerError(false, err)
+	}
+	return ctrl.Result{}, nil
 }
 
 // ensureAppliedWork makes sure that an associated appliedWork and a finalizer on the work resource exists on the cluster.
@@ -377,12 +382,16 @@ func (r *Reconciler) ensureAppliedWork(ctx context.Context, work *fleetv1beta1.W
 	}
 	if err := r.spokeClient.Create(ctx, appliedWork); err != nil && !apierrors.IsAlreadyExists(err) {
 		klog.ErrorS(err, "AppliedWork create failed", "appliedWork", workRef.Name)
-		return nil, err
+		return nil, controller.NewAPIServerError(false, err)
 	}
 	if !hasFinalizer {
 		klog.InfoS("Add the finalizer to the work", "work", workRef)
 		work.Finalizers = append(work.Finalizers, fleetv1beta1.WorkFinalizer)
-		return appliedWork, r.hubClient.Update(ctx, work, &client.UpdateOptions{})
+
+		if err := r.hubClient.Update(ctx, work, &client.UpdateOptions{}); err != nil {
+			klog.ErrorS(err, "Failed to add the finalizer to the work", "work", workRef)
+			return nil, controller.NewAPIServerError(false, err)
+		}
 	}
 	klog.InfoS("Recreated the appliedWork resource", "appliedWork", workRef.Name)
 	return appliedWork, nil

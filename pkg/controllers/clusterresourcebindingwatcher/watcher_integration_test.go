@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
@@ -251,6 +252,356 @@ var _ = Describe("Test ClusterResourceBinding Watcher - update status", Serial, 
 			crb := &fleetv1beta1.ClusterResourceBinding{}
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testCRBName}, crb)).Should(Succeed(), "failed to get cluster resource binding")
 			crb.Status.FailedPlacements = []fleetv1beta1.FailedResourcePlacement{}
+			Expect(k8sClient.Status().Update(ctx, crb)).Should(Succeed(), "failed to update cluster resource binding status")
+
+			By("Checking placement controller queue")
+			eventuallyCheckPlacementControllerQueue(crb.GetLabels()[fleetv1beta1.CRPTrackingLabel])
+			fakePlacementController.ResetQueue()
+		})
+	})
+
+	Context("Should enqueue the clusterResourcePlacement name for reconciling, when the drifted placement list has changed", Serial, Ordered, func() {
+		startTime := metav1.Now()
+
+		It("Should enqueue the clusterResourcePlacement name for reconciling, when there are new drifted placements", func() {
+			crb := &fleetv1beta1.ClusterResourceBinding{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testCRBName}, crb)).Should(Succeed(), "failed to get cluster resource binding")
+			crb.Status.DriftedPlacements = []fleetv1beta1.DriftedResourcePlacement{
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+					ObservationTime:                 startTime,
+					TargetClusterObservedGeneration: 1,
+					FirstDriftedObservedTime:        startTime,
+					ObservedDrifts: []fleetv1beta1.PatchDetail{
+						{
+							Path:          "/metadata/labels/foo",
+							ValueInHub:    "bar",
+							ValueInMember: "baz",
+						},
+					},
+				},
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Name:      "config-name",
+						Namespace: "config-namespace",
+					},
+					ObservationTime:                 startTime,
+					TargetClusterObservedGeneration: 1,
+					FirstDriftedObservedTime:        startTime,
+					ObservedDrifts: []fleetv1beta1.PatchDetail{
+						{
+							Path:          "/metadata/labels/foo",
+							ValueInHub:    "qux",
+							ValueInMember: "quux",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, crb)).Should(Succeed(), "failed to update cluster resource binding status")
+
+			By("Checking placement controller queue")
+			eventuallyCheckPlacementControllerQueue(crb.GetLabels()[fleetv1beta1.CRPTrackingLabel])
+			fakePlacementController.ResetQueue()
+		})
+
+		It("Should not enqueue the clusterResourcePlacement name for reconciling, when there are only order changes in the drifted placement list", func() {
+			crb := &fleetv1beta1.ClusterResourceBinding{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testCRBName}, crb)).Should(Succeed(), "failed to get cluster resource binding")
+			crb.Status.DriftedPlacements = []fleetv1beta1.DriftedResourcePlacement{
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Name:      "config-name",
+						Namespace: "config-namespace",
+					},
+					ObservationTime:                 startTime,
+					TargetClusterObservedGeneration: 1,
+					FirstDriftedObservedTime:        startTime,
+					ObservedDrifts: []fleetv1beta1.PatchDetail{
+						{
+							Path:          "/metadata/labels/foo",
+							ValueInHub:    "qux",
+							ValueInMember: "quux",
+						},
+					},
+				},
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+					ObservationTime:                 startTime,
+					TargetClusterObservedGeneration: 1,
+					FirstDriftedObservedTime:        startTime,
+					ObservedDrifts: []fleetv1beta1.PatchDetail{
+						{
+							Path:          "/metadata/labels/foo",
+							ValueInHub:    "bar",
+							ValueInMember: "baz",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, crb)).Should(Succeed(), "failed to update cluster resource binding status")
+
+			By("Checking placement controller queue")
+			consistentlyCheckPlacementControllerQueueIsEmpty()
+		})
+
+		It("Should enqueue the clusterResourcePlacement name for reconciling, when there are one less drifted placement", func() {
+			crb := &fleetv1beta1.ClusterResourceBinding{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testCRBName}, crb)).Should(Succeed(), "failed to get cluster resource binding")
+			crb.Status.DriftedPlacements = []fleetv1beta1.DriftedResourcePlacement{
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+					ObservationTime:                 metav1.Now(),
+					TargetClusterObservedGeneration: 1,
+					FirstDriftedObservedTime:        metav1.Now(),
+					ObservedDrifts: []fleetv1beta1.PatchDetail{
+						{
+							Path:          "/metadata/labels/foo",
+							ValueInHub:    "bar",
+							ValueInMember: "baz",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, crb)).Should(Succeed(), "failed to update cluster resource binding status")
+
+			By("Checking placement controller queue")
+			eventuallyCheckPlacementControllerQueue(crb.GetLabels()[fleetv1beta1.CRPTrackingLabel])
+			fakePlacementController.ResetQueue()
+		})
+
+		It("Should enqueue the clusterResourcePlacement name for reconciling, when the drift details change", func() {
+			crb := &fleetv1beta1.ClusterResourceBinding{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testCRBName}, crb)).Should(Succeed(), "failed to get cluster resource binding")
+			crb.Status.DriftedPlacements = []fleetv1beta1.DriftedResourcePlacement{
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+					ObservationTime:                 metav1.Now(),
+					TargetClusterObservedGeneration: 1,
+					FirstDriftedObservedTime:        metav1.Now(),
+					ObservedDrifts: []fleetv1beta1.PatchDetail{
+						{
+							Path:          "/metadata/labels/foo",
+							ValueInHub:    "qux",
+							ValueInMember: "quux",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, crb)).Should(Succeed(), "failed to update cluster resource binding status")
+
+			By("Checking placement controller queue")
+			eventuallyCheckPlacementControllerQueue(crb.GetLabels()[fleetv1beta1.CRPTrackingLabel])
+			fakePlacementController.ResetQueue()
+		})
+
+		It("Should enqueue the clusterResourcePlacement name for reconciling, when there are no more drifted placements", func() {
+			crb := &fleetv1beta1.ClusterResourceBinding{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testCRBName}, crb)).Should(Succeed(), "failed to get cluster resource binding")
+			crb.Status.DriftedPlacements = []fleetv1beta1.DriftedResourcePlacement{}
+			Expect(k8sClient.Status().Update(ctx, crb)).Should(Succeed(), "failed to update cluster resource binding status")
+
+			By("Checking placement controller queue")
+			eventuallyCheckPlacementControllerQueue(crb.GetLabels()[fleetv1beta1.CRPTrackingLabel])
+			fakePlacementController.ResetQueue()
+		})
+	})
+
+	Context("Should enqueue the clusterResourcePlacement name for reconciling, when the diffed placement list has changed", Serial, Ordered, func() {
+		startTime := metav1.Now()
+
+		It("Should enqueue the clusterResourcePlacement name for reconciling, when there are new diffed placements", func() {
+			crb := &fleetv1beta1.ClusterResourceBinding{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testCRBName}, crb)).Should(Succeed(), "failed to get cluster resource binding")
+			crb.Status.DiffedPlacements = []fleetv1beta1.DiffedResourcePlacement{
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+					ObservationTime:                 startTime,
+					TargetClusterObservedGeneration: ptr.To(int64(1)),
+					FirstDiffedObservedTime:         startTime,
+					ObservedDiffs: []fleetv1beta1.PatchDetail{
+						{
+							Path:          "/metadata/labels/foo",
+							ValueInHub:    "bar",
+							ValueInMember: "baz",
+						},
+					},
+				},
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Name:      "config-name",
+						Namespace: "config-namespace",
+					},
+					ObservationTime:                 startTime,
+					TargetClusterObservedGeneration: ptr.To(int64(1)),
+					FirstDiffedObservedTime:         startTime,
+					ObservedDiffs: []fleetv1beta1.PatchDetail{
+						{
+							Path:          "/metadata/labels/foo",
+							ValueInHub:    "qux",
+							ValueInMember: "quux",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, crb)).Should(Succeed(), "failed to update cluster resource binding status")
+
+			By("Checking placement controller queue")
+			eventuallyCheckPlacementControllerQueue(crb.GetLabels()[fleetv1beta1.CRPTrackingLabel])
+			fakePlacementController.ResetQueue()
+		})
+
+		It("Should not enqueue the clusterResourcePlacement name for reconciling, when there are only order changes in the drifted placement list", func() {
+			crb := &fleetv1beta1.ClusterResourceBinding{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testCRBName}, crb)).Should(Succeed(), "failed to get cluster resource binding")
+			crb.Status.DiffedPlacements = []fleetv1beta1.DiffedResourcePlacement{
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Name:      "config-name",
+						Namespace: "config-namespace",
+					},
+					ObservationTime:                 startTime,
+					TargetClusterObservedGeneration: ptr.To(int64(1)),
+					FirstDiffedObservedTime:         startTime,
+					ObservedDiffs: []fleetv1beta1.PatchDetail{
+						{
+							Path:          "/metadata/labels/foo",
+							ValueInHub:    "qux",
+							ValueInMember: "quux",
+						},
+					},
+				},
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+					ObservationTime:                 startTime,
+					TargetClusterObservedGeneration: ptr.To(int64(1)),
+					FirstDiffedObservedTime:         startTime,
+					ObservedDiffs: []fleetv1beta1.PatchDetail{
+						{
+							Path:          "/metadata/labels/foo",
+							ValueInHub:    "bar",
+							ValueInMember: "baz",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, crb)).Should(Succeed(), "failed to update cluster resource binding status")
+
+			By("Checking placement controller queue")
+			consistentlyCheckPlacementControllerQueueIsEmpty()
+		})
+
+		It("Should enqueue the clusterResourcePlacement name for reconciling, when there are one less diffed placement", func() {
+			crb := &fleetv1beta1.ClusterResourceBinding{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testCRBName}, crb)).Should(Succeed(), "failed to get cluster resource binding")
+			crb.Status.DiffedPlacements = []fleetv1beta1.DiffedResourcePlacement{
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Name:      "config-name",
+						Namespace: "config-namespace",
+					},
+					ObservationTime:                 metav1.Now(),
+					TargetClusterObservedGeneration: ptr.To(int64(1)),
+					FirstDiffedObservedTime:         metav1.Now(),
+					ObservedDiffs: []fleetv1beta1.PatchDetail{
+						{
+							Path:          "/metadata/labels/foo",
+							ValueInHub:    "qux",
+							ValueInMember: "quux",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, crb)).Should(Succeed(), "failed to update cluster resource binding status")
+
+			By("Checking placement controller queue")
+			eventuallyCheckPlacementControllerQueue(crb.GetLabels()[fleetv1beta1.CRPTrackingLabel])
+			fakePlacementController.ResetQueue()
+		})
+
+		It("Should enqueue the clusterResourcePlacement name for reconciling, when the diff details change", func() {
+			crb := &fleetv1beta1.ClusterResourceBinding{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testCRBName}, crb)).Should(Succeed(), "failed to get cluster resource binding")
+			crb.Status.DiffedPlacements = []fleetv1beta1.DiffedResourcePlacement{
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Name:      "config-name",
+						Namespace: "config-namespace",
+					},
+					ObservationTime:         metav1.Now(),
+					FirstDiffedObservedTime: metav1.Now(),
+					ObservedDiffs: []fleetv1beta1.PatchDetail{
+						{
+							Path:       "/",
+							ValueInHub: "(the whole object)",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, crb)).Should(Succeed(), "failed to update cluster resource binding status")
+
+			By("Checking placement controller queue")
+			eventuallyCheckPlacementControllerQueue(crb.GetLabels()[fleetv1beta1.CRPTrackingLabel])
+			fakePlacementController.ResetQueue()
+		})
+
+		It("Should enqueue the clusterResourcePlacement name for reconciling, when there are no more drifted placements", func() {
+			crb := &fleetv1beta1.ClusterResourceBinding{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testCRBName}, crb)).Should(Succeed(), "failed to get cluster resource binding")
+			crb.Status.DiffedPlacements = []fleetv1beta1.DiffedResourcePlacement{}
 			Expect(k8sClient.Status().Update(ctx, crb)).Should(Succeed(), "failed to update cluster resource binding status")
 
 			By("Checking placement controller queue")
