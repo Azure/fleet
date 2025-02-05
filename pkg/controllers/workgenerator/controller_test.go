@@ -309,34 +309,6 @@ func TestUpsertWork(t *testing.T) {
 			},
 			expectChanged: false,
 		},
-		{
-			name: "apply strategy changes",
-			existingWork: &fleetv1beta1.Work{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      workName,
-					Namespace: namespace,
-					Labels: map[string]string{
-						fleetv1beta1.ParentResourceSnapshotIndexLabel: "1",
-					},
-					Annotations: map[string]string{
-						fleetv1beta1.ParentResourceSnapshotNameAnnotation:                "snapshot-1",
-						fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: "hash1",
-						fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        "hash2",
-					},
-				},
-				Spec: fleetv1beta1.WorkSpec{
-					Workload: fleetv1beta1.WorkloadTemplate{
-						Manifests: []fleetv1beta1.Manifest{{RawExtension: runtime.RawExtension{Object: &testDeployment}}},
-					},
-					ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-						ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
-						Type:             fleetv1beta1.ApplyStrategyTypeReportDiff,
-						WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
-					},
-				},
-			},
-			expectChanged: true,
-		},
 	}
 
 	for _, tt := range tests {
@@ -3106,7 +3078,7 @@ func TestSyncApplyStrategy(t *testing.T) {
 			},
 		},
 		{
-			name: "apply strategy changed",
+			name: "apply strategy changed (work has default apply strategy)",
 			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: bindingName,
@@ -3125,6 +3097,41 @@ func TestSyncApplyStrategy(t *testing.T) {
 					Name: workName,
 				},
 				Spec: fleetv1beta1.WorkSpec{},
+			},
+			wantUpdated: true,
+			wantApplyStrategy: &fleetv1beta1.ApplyStrategy{
+				ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+				Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
+				WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+				WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+			},
+		},
+		{
+			name: "apply strategy changed (work has custom apply strategy)",
+			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: bindingName,
+				},
+				Spec: fleetv1beta1.ResourceBindingSpec{
+					ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+						ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+						Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
+						WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+						WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+					},
+				},
+			},
+			work: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: workName,
+				},
+				Spec: fleetv1beta1.WorkSpec{
+					ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+						ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+						Type:             fleetv1beta1.ApplyStrategyTypeReportDiff,
+						WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+					},
+				},
 			},
 			wantUpdated: true,
 			wantApplyStrategy: &fleetv1beta1.ApplyStrategy{

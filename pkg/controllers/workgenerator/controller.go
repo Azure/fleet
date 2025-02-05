@@ -150,7 +150,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		// generate and apply the workUpdated works if we have all the works
 		overrideSucceeded, workUpdated, syncErr = r.syncAllWork(ctx, &resourceBinding, works, &cluster)
 	}
-	// Reset the conditions and failed placements.
+	// Reset the conditions and failed/drifted/diffed placements.
 	for i := condition.OverriddenCondition; i < condition.TotalCondition; i++ {
 		resourceBinding.RemoveCondition(string(i.ResourceBindingConditionType()))
 	}
@@ -411,7 +411,7 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 		return false, false, updateErr
 	}
 
-	// the hash256 function can can handle empty list https://go.dev/play/p/_4HW17fooXM
+	// the hash256 function can handle empty list https://go.dev/play/p/_4HW17fooXM
 	resourceOverrideSnapshotHash, err := resource.HashOf(resourceBinding.Spec.ResourceOverrideSnapshots)
 	if err != nil {
 		return false, false, controller.NewUnexpectedBehaviorError(err)
@@ -429,7 +429,7 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 			// the resourceIndex is deleted but the works might still be up to date with the binding.
 			if areAllWorkSynced(existingWorks, resourceBinding, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash) {
 				klog.V(2).InfoS("All the works are synced with the resourceBinding even if the resource snapshot index is removed", "resourceBinding", resourceBindingRef)
-				return true, false, nil
+				return true, updateAny.Load(), nil
 			}
 			return false, false, controller.NewUserError(err)
 		}
@@ -568,11 +568,6 @@ func (r *Reconciler) syncApplyStrategy(
 
 // areAllWorkSynced checks if all the works are synced with the resource binding.
 func areAllWorkSynced(existingWorks map[string]*fleetv1beta1.Work, resourceBinding *fleetv1beta1.ClusterResourceBinding, _, _ string) bool {
-	syncedCondition := resourceBinding.GetCondition(string(fleetv1beta1.ResourceBindingWorkSynchronized))
-	if !condition.IsConditionStatusTrue(syncedCondition, resourceBinding.Generation) {
-		// The binding has to be synced first before we can check the works
-		return false
-	}
 	// TODO: check resourceOverrideSnapshotHash and  clusterResourceOverrideSnapshotHash after all the work has the ParentResourceOverrideSnapshotHashAnnotation and ParentClusterResourceOverrideSnapshotHashAnnotation
 	resourceSnapshotName := resourceBinding.Spec.ResourceSnapshotName
 	for _, work := range existingWorks {
@@ -751,16 +746,16 @@ func (r *Reconciler) upsertWork(ctx context.Context, newWork, existingWork *flee
 	} else {
 		// we already checked the label in fetchAllResourceSnapShots function so no need to check again
 		resourceIndex, _ := labels.ExtractResourceIndexFromClusterResourceSnapshot(resourceSnapshot)
-		if workResourceIndex == resourceIndex && equality.Semantic.DeepEqual(existingWork.Spec.ApplyStrategy, newWork.Spec.ApplyStrategy) {
-			// no need to do anything if the work is generated from the same resource/override snapshots,
-			// and the apply strategy remains the same.
+		if workResourceIndex == resourceIndex {
+			// no need to do anything if the work is generated from the same resource/override snapshots.
+			// Note that apply strategy is updated separately beforehand.
 			if existingWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] == newWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] &&
 				existingWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] == newWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] {
-				klog.V(2).InfoS("Work is associated with the desired resource/override snapshots and apply strategy", "existingROHash", existingWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation],
+				klog.V(2).InfoS("Work is associated with the desired resource/override snapshots", "existingROHash", existingWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation],
 					"existingCROHash", existingWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation], "work", workObj)
 				return false, nil
 			}
-			klog.V(2).InfoS("Work is already associated with the desired resourceSnapshot and apply strategy but still not having the right override snapshots", "resourceIndex", resourceIndex, "work", workObj, "resourceSnapshot", resourceSnapshotObj)
+			klog.V(2).InfoS("Work is already associated with the desired resourceSnapshot but still not having the right override snapshots", "resourceIndex", resourceIndex, "work", workObj, "resourceSnapshot", resourceSnapshotObj)
 		}
 	}
 	// need to copy the new work to the existing work, only 5 possible changes:

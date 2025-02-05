@@ -1697,6 +1697,22 @@ var _ = Describe("Test Work Generator Controller", func() {
 			Eventually(applyStrategyUpdatedActual, timeout, interval).Should(Succeed(), "Failed to create expected work object")
 		})
 
+		It("should update binding status as expected", func() {
+			appliedCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingApplied),
+				Status:             metav1.ConditionFalse,
+				Reason:             condition.WorkNeedSyncedReason,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+
+			statusUpdatedActual := bindingStatusUpdatedActual(
+				clusterResourceBinding,
+				false,
+				&appliedCond, nil, nil,
+				nil, nil, nil)
+			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
 		It("can update apply strategy on the resource binding", func() {
 			// Update the apply strategy on the resource binding; use an Eventually
 			// block to avoid conflict induced errors.
@@ -1735,36 +1751,24 @@ var _ = Describe("Test Work Generator Controller", func() {
 			Eventually(applyStrategyUpdatedActual, timeout, interval).Should(Succeed(), "Failed to create expected work object")
 		})
 
+		It("should update binding status as expected", func() {
+			appliedCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingApplied),
+				Status:             metav1.ConditionFalse,
+				Reason:             condition.WorkNeedSyncedReason,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+
+			statusUpdatedActual := bindingStatusUpdatedActual(
+				clusterResourceBinding,
+				false,
+				&appliedCond, nil, nil,
+				nil, nil, nil)
+			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
 		AfterAll(func() {
-			// Note that this test spec will not check if the cleanup has been
-			// fully completed. This is OK as the suite is never run in parallel
-			// and a random suffix is used for each created resource.
-
-			// Delete the member cluster reserved namespace.
-			memberClusterNamespace := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: memberClusterNamespaceName,
-				},
-			}
-			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &memberClusterNamespace))).Should(Succeed(), "Failed to delete namespace")
-
-			// Delete the cluster resource binding.
-			if clusterResourceBinding != nil {
-				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, clusterResourceBinding))).Should(Succeed(), "Failed to delete cluster resource binding")
-			}
-
-			// Delete the master resource snapshot.
-			if masterResourceSnapshot != nil {
-				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, masterResourceSnapshot))).Should(Succeed(), "Failed to delete master resource snapshot")
-			}
-
-			// Delete the member cluster.
-			memberCluster := clusterv1beta1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: memberClusterName,
-				},
-			}
-			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &memberCluster))).Should(Succeed(), "Failed to delete member cluster")
+			cleanupResources(memberClusterNamespaceName, clusterResourceBinding, masterResourceSnapshot, nil, memberClusterName)
 		})
 	})
 
@@ -1815,6 +1819,22 @@ var _ = Describe("Test Work Generator Controller", func() {
 			Eventually(applyStrategyUpdatedActual, timeout, interval).Should(Succeed(), "Failed to create expected work object")
 		})
 
+		It("should update binding status as expected", func() {
+			appliedCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingApplied),
+				Status:             metav1.ConditionFalse,
+				Reason:             condition.WorkNeedSyncedReason,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+
+			statusUpdatedActual := bindingStatusUpdatedActual(
+				clusterResourceBinding,
+				false,
+				&appliedCond, nil, nil,
+				nil, nil, nil)
+			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
 		It("can delete the master resource snapshot", func() {
 			Expect(k8sClient.Delete(ctx, masterResourceSnapshot)).Should(Succeed(), "Failed to delete master resource snapshot")
 		})
@@ -1857,36 +1877,24 @@ var _ = Describe("Test Work Generator Controller", func() {
 			Eventually(applyStrategyUpdatedActual, timeout, interval).Should(Succeed(), "Failed to create expected work object")
 		})
 
+		It("should update binding status as expected", func() {
+			appliedCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingApplied),
+				Status:             metav1.ConditionFalse,
+				Reason:             condition.WorkNeedSyncedReason,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+
+			statusUpdatedActual := bindingStatusUpdatedActual(
+				clusterResourceBinding,
+				false,
+				&appliedCond, nil, nil,
+				nil, nil, nil)
+			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
 		AfterAll(func() {
-			// Note that this test spec will not check if the cleanup has been
-			// fully completed. This is OK as the suite is never run in parallel
-			// and a random suffix is used for each created resource.
-
-			// Delete the member cluster reserved namespace.
-			memberClusterNamespace := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: memberClusterNamespaceName,
-				},
-			}
-			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &memberClusterNamespace))).Should(Succeed(), "Failed to delete namespace")
-
-			// Delete the cluster resource binding.
-			if clusterResourceBinding != nil {
-				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, clusterResourceBinding))).Should(Succeed(), "Failed to delete cluster resource binding")
-			}
-
-			// Delete the master resource snapshot.
-			if masterResourceSnapshot != nil {
-				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, masterResourceSnapshot))).Should(Succeed(), "Failed to delete master resource snapshot")
-			}
-
-			// Delete the member cluster.
-			memberCluster := clusterv1beta1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: memberClusterName,
-				},
-			}
-			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &memberCluster))).Should(Succeed(), "Failed to delete member cluster")
+			cleanupResources(memberClusterNamespaceName, clusterResourceBinding, masterResourceSnapshot, nil, memberClusterName)
 		})
 	})
 
@@ -2209,40 +2217,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 		})
 
 		AfterAll(func() {
-			// Note that this test spec will not check if the cleanup has been
-			// fully completed. This is OK as the suite is never run in parallel
-			// and a random suffix is used for each created resource.
-
-			// Delete the member cluster reserved namespace.
-			memberClusterNamespace := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: memberClusterNamespaceName,
-				},
-			}
-			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &memberClusterNamespace))).Should(Succeed(), "Failed to delete namespace")
-
-			// Delete the cluster resource binding.
-			if clusterResourceBinding != nil {
-				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, clusterResourceBinding))).Should(Succeed(), "Failed to delete cluster resource binding")
-			}
-
-			// Delete the master resource snapshot.
-			if masterResourceSnapshot != nil {
-				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, masterResourceSnapshot))).Should(Succeed(), "Failed to delete master resource snapshot")
-			}
-
-			// Delete the secondary resource snapshot.
-			if secondaryResourceSnapshot != nil {
-				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, secondaryResourceSnapshot))).Should(Succeed(), "Failed to delete secondary resource snapshot")
-			}
-
-			// Delete the member cluster.
-			memberCluster := clusterv1beta1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: memberClusterName,
-				},
-			}
-			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &memberCluster))).Should(Succeed(), "Failed to delete member cluster")
+			cleanupResources(memberClusterNamespaceName, clusterResourceBinding, masterResourceSnapshot, []*placementv1beta1.ClusterResourceSnapshot{secondaryResourceSnapshot}, memberClusterName)
 		})
 	})
 })
@@ -3095,6 +3070,50 @@ func refreshWorkStatus(
 		}
 		return nil
 	}, timeout, interval).Should(Succeed(), "Failed to update work status")
+}
+
+// TO-DO (chenyu1): consider refactoring related code to reduce duplication.
+func cleanupResources(
+	memberClusterNamespaceName string,
+	clusterResourceBinding *placementv1beta1.ClusterResourceBinding,
+	masterResourceSnapshot *placementv1beta1.ClusterResourceSnapshot,
+	additionalResourceSnapshots []*placementv1beta1.ClusterResourceSnapshot,
+	memberClusterName string,
+) {
+	// Note that the cleanup logic here will not check if the process has been
+	// fully completed. This is OK as the suite is never run in parallel
+	// and a random suffix is used for each created resource.
+
+	if len(memberClusterNamespaceName) > 0 {
+		memberClusterNamespace := corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: memberClusterNamespaceName,
+			},
+		}
+		Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &memberClusterNamespace))).Should(Succeed(), "Failed to delete namespace")
+	}
+
+	if clusterResourceBinding != nil {
+		Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, clusterResourceBinding))).Should(Succeed(), "Failed to delete cluster resource binding")
+	}
+
+	if masterResourceSnapshot != nil {
+		Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, masterResourceSnapshot))).Should(Succeed(), "Failed to delete master resource snapshot")
+	}
+
+	for idx := range additionalResourceSnapshots {
+		snapshot := additionalResourceSnapshots[idx]
+		Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, snapshot))).Should(Succeed(), "Failed to delete additional resource snapshot")
+	}
+
+	if len(memberClusterName) > 0 {
+		memberCluster := clusterv1beta1.MemberCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: memberClusterName,
+			},
+		}
+		Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &memberCluster))).Should(Succeed(), "Failed to delete member cluster")
+	}
 }
 
 // markWorkWithFailedToApplyAndNotAvailable marks the work as not applied with failedPlacement
