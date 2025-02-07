@@ -32,7 +32,8 @@ type Reconciler struct {
 	PlacementController controller.Controller
 }
 
-// Reconcile reconciles the clusterResourceBinding.
+// Reconcile watches the clusterResourceBinding and enqueues the corresponding CRP name for those bindings whose
+// status has changed. This is for the CRP controller to update the corresponding placementStatuses.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	bindingRef := klog.KRef("", req.Name)
 

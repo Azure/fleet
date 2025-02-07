@@ -66,6 +66,8 @@ var (
 			return !t1.Time.Add(10 * time.Second).Before(t2.Time)
 		}),
 	}
+
+	defaultUnavailablePeriod = time.Duration(5)
 )
 
 func serviceScheme(t *testing.T) *runtime.Scheme {
@@ -188,9 +190,9 @@ func TestReconcilerHandleResourceBinding(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			queue := &controllertest.Queue{Interface: workqueue.New()}
-			handleResourceBinding(tt.resourceBinding, queue)
+			enqueueResourceBinding(tt.resourceBinding, queue)
 			if tt.shouldEnqueue && queue.Len() == 0 {
-				t.Errorf("handleResourceBinding test `%s` didn't queue the object when it should enqueue", name)
+				t.Errorf("enqueueResourceBinding test `%s` didn't queue the object when it should enqueue", name)
 			}
 			if !tt.shouldEnqueue && queue.Len() != 0 {
 				t.Errorf("handleResourceSnapshot test `%s` queue the object when it should not enqueue", name)
@@ -1094,7 +1096,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: 0,
 		},
-		"test bound binding with latest resources - rollout blocked": {
+		"test bound binding with latest resources - rollout not needed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
 			},
@@ -1105,7 +1107,6 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantTobeUpdatedBindings:     []int{},
 			wantStaleUnselectedBindings: []int{},
 			wantNeedRoll:                false,
-			wantWaitTime:                time.Second,
 		},
 		"test failed to apply bound binding, outdated resources - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1124,7 +1125,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
-			wantWaitTime: time.Second,
+			wantWaitTime: defaultUnavailablePeriod * time.Second,
 		},
 		"test one failed to apply bound binding and four failed non ready bound bindings, outdated resources with maxUnavailable specified - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1168,7 +1169,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
-			wantWaitTime: time.Second,
+			wantWaitTime: defaultUnavailablePeriod * time.Second,
 		},
 		"test three failed to apply bound binding, two ready bound binding, outdated resources with maxUnavailable specified - rollout allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1212,7 +1213,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantNeedRoll: true,
-			wantWaitTime: time.Second,
+			wantWaitTime: defaultUnavailablePeriod * time.Second,
 		},
 		"test bound ready bindings, maxUnavailable is set to zero - rollout blocked": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1303,7 +1304,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: 0,
 		},
-		"test canBeReady bound and scheduled binding - rollout allowed": {
+		"test canBeReady bound and scheduled binding - rollout allowed with unavailable period wait time": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateCanBeReadyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster2),
@@ -1395,12 +1396,12 @@ func TestPickBindingsToRoll(t *testing.T) {
 				createPlacementRolloutStrategyForTest(fleetv1beta1.RollingUpdateRolloutStrategyType, generateDefaultRollingUpdateConfig(), nil)),
 			wantErr: controller.ErrExpectedBehavior,
 		},
-		"test bound bindings with different waitTimes": {
+		"test bound bindings with different waitTimes and check the wait time should be the min of them all": {
 			// want the min wait time of bound bindings that are not ready
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
-				generateNotReadyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3, metav1.Time{Time: now.Add(-35 * time.Second)}), // notReady, waitTime = t - 35s
-				generateCanBeReadyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),                                              // notReady, no wait time because it does not have available condition yet,
-				generateReadyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-2", cluster2),                                                   // Ready
+				generateNotTrackableClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3, metav1.Time{Time: now.Add(-35 * time.Second)}), // notReady, waitTime = t - 35s
+				generateCanBeReadyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),                                                  // notReady, no wait time because it does not have available condition yet,
+				generateReadyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-2", cluster2),                                                       // Ready
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -1433,11 +1434,11 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantNeedRoll: true,
 			wantWaitTime: 25 * time.Second, // minWaitTime = (t - 35 seconds) - (t - 60 seconds) = 25 seconds
 		},
-		"test unscheduled bindings with different waitTimes": {
+		"test unscheduled bindings with different waitTimes and check the wait time is correct": {
 			// want the min wait time of unscheduled bindings that are not ready
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
-				generateNotReadyClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2, metav1.Time{Time: now.Add(-1 * time.Minute)}),  // NotReady, waitTime = t - 60s
-				generateNotReadyClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3, metav1.Time{Time: now.Add(-35 * time.Second)}), // NotReady,  waitTime = t - 35s
+				generateNotTrackableClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2, metav1.Time{Time: now.Add(-1 * time.Minute)}),  // NotReady, waitTime = t - 60s
+				generateNotTrackableClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3, metav1.Time{Time: now.Add(-35 * time.Second)}), // NotReady,  waitTime = t - 35s
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -1468,7 +1469,6 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantTobeUpdatedBindings:     []int{},
 			wantStaleUnselectedBindings: []int{},
 			wantNeedRoll:                false,
-			wantWaitTime:                time.Second,
 		},
 		"test policy change with MaxSurge specified, evict resources on unscheduled cluster - rollout allowed for one scheduled binding": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -1911,7 +1911,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 						Type:   intstr.Int,
 						IntVal: 0,
 					},
-					UnavailablePeriodSeconds: ptr.To(1),
+					UnavailablePeriodSeconds: ptr.To(int(defaultUnavailablePeriod)),
 				}, nil)),
 			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
 				{},
@@ -1932,7 +1932,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantTobeUpdatedBindings:     []int{4, 5}, // no ready unscheduled bindings, so scheduled bindings were chosen.
 			wantStaleUnselectedBindings: []int{},
 			wantNeedRoll:                true,
-			wantWaitTime:                time.Second,
+			wantWaitTime:                defaultUnavailablePeriod * time.Second,
 		},
 		"test downscale with resource snapshot change, evict ready bound binding - rollout allowed for one unscheduled binding": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
@@ -2083,9 +2083,10 @@ func TestPickBindingsToRoll(t *testing.T) {
 			if gotNeedRoll != tt.wantNeedRoll {
 				t.Errorf("pickBindingsToRoll() = needRoll %v, want %v", gotNeedRoll, tt.wantNeedRoll)
 			}
-
-			if gotWaitTime.Round(time.Second) != tt.wantWaitTime {
-				t.Errorf("pickBindingsToRoll() = waitTime %v, want %v", gotWaitTime, tt.wantWaitTime)
+			if tt.wantNeedRoll == true {
+				if gotWaitTime.Round(time.Second) != tt.wantWaitTime {
+					t.Errorf("pickBindingsToRoll() = waitTime %v, want %v", gotWaitTime, tt.wantWaitTime)
+				}
 			}
 		})
 	}
@@ -2179,7 +2180,7 @@ func generateReadyClusterResourceBinding(state fleetv1beta1.BindingState, resour
 	return binding
 }
 
-func generateNotReadyClusterResourceBinding(state fleetv1beta1.BindingState, resourceSnapshotName, targetCluster string, lastTransitionTime metav1.Time) *fleetv1beta1.ClusterResourceBinding {
+func generateNotTrackableClusterResourceBinding(state fleetv1beta1.BindingState, resourceSnapshotName, targetCluster string, lastTransitionTime metav1.Time) *fleetv1beta1.ClusterResourceBinding {
 	binding := generateClusterResourceBinding(state, resourceSnapshotName, targetCluster)
 	binding.Status.Conditions = []metav1.Condition{
 		{
@@ -2213,7 +2214,7 @@ func generateDefaultRollingUpdateConfig() *fleetv1beta1.RollingUpdateConfig {
 			Type:   intstr.Int,
 			IntVal: 3,
 		},
-		UnavailablePeriodSeconds: ptr.To(1),
+		UnavailablePeriodSeconds: ptr.To(int(defaultUnavailablePeriod)),
 	}
 }
 

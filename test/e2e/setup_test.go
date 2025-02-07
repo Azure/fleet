@@ -70,8 +70,8 @@ const (
 )
 
 const (
-	eventuallyDuration     = time.Minute * 2
-	longEventuallyDuration = time.Minute * 5
+	eventuallyDuration     = time.Second * 15 // Do not bump this value unless you have a good reason.
+	longEventuallyDuration = time.Minute * 2  // Do not bump this value unless you have a good reason.
 	eventuallyInterval     = time.Millisecond * 250
 	consistentlyDuration   = time.Second * 15
 	consistentlyInterval   = time.Millisecond * 500
