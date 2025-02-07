@@ -241,7 +241,7 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 }
 
 // handleClusterApprovalRequest finds the ClusterStagedUpdateRun creating the ClusterApprovalRequest,
-// and enqueues it to the ClusterStagedUpdateRun controller queue only when the approved condition gets changed.
+// and enqueues it to the ClusterStagedUpdateRun controller queue only when the approved condition is changed.
 func handleClusterApprovalRequest(oldObj, newObj client.Object, q workqueue.RateLimitingInterface) {
 	oldAppReq, ok := oldObj.(*placementv1beta1.ClusterApprovalRequest)
 	if !ok {
