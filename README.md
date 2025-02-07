@@ -93,8 +93,7 @@ This project has adopted the [Microsoft Open Source Code of Conduct][8]. For mor
 
 ## Support
 
-Kubefleet is an open source project that is [**NOT** covered by the Microsoft Azure support policy][10]. [Please search open issues here][11], and if your issue isn't already represented please [open a new one][12]. The project maintainers will respond to the best of their abilities.
-
+KubeFleet is an open source project that is [**NOT** covered by the Microsoft Azure support policy][10]. [Please search open issues here][11], and if your issue isn't already represented please [open a new one][12]. The project maintainers will respond to the best of their abilities.
 [1]:  https://img.shields.io/github/v/release/Azure/fleet
 [2]:  https://goreportcard.com/badge/go.goms.io/fleet
 [3]:  https://goreportcard.com/report/go.goms.io/fleet
