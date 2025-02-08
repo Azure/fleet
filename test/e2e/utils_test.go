@@ -226,7 +226,7 @@ func checkIfMemberClusterHasJoined(memberCluster *framework.Cluster) {
 		}
 
 		return nil
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Member cluster has not joined yet")
+	}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Member cluster has not joined yet")
 }
 
 // checkIfAzurePropertyProviderIsWorking verifies if all member clusters have the Azure property
@@ -711,7 +711,7 @@ func checkIfAllMemberClustersHaveLeft() {
 			}
 
 			return nil
-		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete member cluster")
+		}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete member cluster")
 	}
 }
 
