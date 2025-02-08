@@ -207,17 +207,31 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 			ObservedGeneration: resourceBinding.Generation,
 			Message:            "All of the works are synchronized to the latest",
 		})
-		if workUpdated {
-			// revert the applied condition if we made any changes to the work
+		switch {
+		case !workUpdated:
+			// The Work object itself is unchanged; refresh the cluster resource binding status
+			// based on the status information reported on the Work object(s).
+			setBindingStatus(works, &resourceBinding)
+		case resourceBinding.Spec.ApplyStrategy == nil || resourceBinding.Spec.ApplyStrategy.Type != fleetv1beta1.ApplyStrategyTypeReportDiff:
+			// The Work object itself has changed; set a False Applied condition which signals
+			// that resources are in the process of being applied.
 			resourceBinding.SetConditions(metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
-				Reason:             condition.WorkNeedSyncedReason,
-				Message:            "In the processing of synchronizing the work to the member cluster",
+				Reason:             condition.WorkApplyInProcess,
+				Message:            "Resources are being applied",
 				ObservedGeneration: resourceBinding.Generation,
 			})
-		} else {
-			setBindingStatus(works, &resourceBinding)
+		case resourceBinding.Spec.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff:
+			// The Work object itself has changed; set a False DiffReported condition which signals
+			// that diff reporting on resources are in progress.
+			resourceBinding.SetConditions(metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+				Reason:             condition.WorkDiffReportInProcess,
+				Message:            "Diff reporting on resources is in progress",
+				ObservedGeneration: resourceBinding.Generation,
+			})
 		}
 	}
 
@@ -802,11 +816,26 @@ func getWorkNamePrefixFromSnapshotName(resourceSnapshot *fleetv1beta1.ClusterRes
 	return fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, crpName, subIndexVal), nil
 }
 
+// workConditionSummarizedStatus helps produce a summary status of a group of Applied, Available, or
+// DiffReported conditions.
+type workConditionSummarizedStatus int
+
+const (
+	// workConditionSummarizedStatusIncomplete signals that some of the given conditions are not
+	// set yet, or have become stale.
+	workConditionSummarizedStatusIncomplete workConditionSummarizedStatus = iota
+	// workConditionSummarizedStatusTrue signals that all of the given conditions are fresh and set to True.
+	workConditionSummarizedStatusTrue
+	// workConditionSummarizedStatusFalse signals that all of the given conditions are fresh and
+	// at least one of the given conditions is set to False.
+	workConditionSummarizedStatusFalse
+)
+
 // setBindingStatus sets the binding status based on the works associated with the binding.
 func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *fleetv1beta1.ClusterResourceBinding) {
 	bindingRef := klog.KObj(resourceBinding)
 
-	// Note (chenyu1): the work generator will refresh the status of a ClusterResourceBinding with
+	// Note (chenyu1): the work generator will refresh the status of a ClusterResourceBinding using
 	// the following logic:
 	//
 	// a) If the currently active apply strategy (as dictated by the ClusterResourceBinding spec)
@@ -815,33 +844,26 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 	//    in the status, as appropriate; the DiffReported condition will not be updated.
 	// b) If the currently active apply strategy is ReportDiff, the work generator will update
 	//    the DiffReported condition in the status, plus the details about diffed placements;
-	//    the Applied condition will always be set to False, despite the fact that the work applier
-	//    will no longer report Applied condition on the Work objects, and the Available condition
+	//    the Applied and Available conditions (plus the details about failed and/or drifted placements)
 	//    will not be updated.
-	//
-	//    The always false Applied condition is set to allow the rollout controller to always
-	//    push new resource changes to all bindings, so that users can view configuration differences
-	//    without being blocked by the rollout process.
-	//
-	// Note that Fleet will not remove a condition from the status, even if it is no longer updated
-	// given the current apply strategy; a condition type is added when it is first updated.
 
 	// try to gather the resource binding applied status if we didn't update any associated work spec this time
-	appliedCond := buildAllWorkAppliedCondition(works, resourceBinding)
-	resourceBinding.SetConditions(appliedCond)
 
-	// Set the DiffReported condition if (and only if) a ReportDiff apply strategy is currently
-	// being used.
-	if resourceBinding.Spec.ApplyStrategy != nil && resourceBinding.Spec.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff {
-		setAllWorkDiffReportedCondition(works, resourceBinding)
+	var isReportDiffModeOn = resourceBinding.Spec.ApplyStrategy != nil && resourceBinding.Spec.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff
+	var appliedSummarizedStatus, availabilitySummarizedStatus, diffReportedSummarizedStatus workConditionSummarizedStatus
+	if isReportDiffModeOn {
+		// Set the DiffReported condition if (and only if) a ReportDiff apply strategy is currently
+		// being used.
+		diffReportedSummarizedStatus = setAllWorkDiffReportedCondition(works, resourceBinding)
+	} else {
+		// Set the Applied and Available condition if (and only if) a ClientSideApply or ServerSideApply
+		// apply strategy is currently being used.
+		appliedSummarizedStatus = setAllWorkAppliedCondition(works, resourceBinding)
+		// Note that Fleet will only set the Available condition if the apply op itself is successful, i.e.,
+		// the Applied condition is True.
+		availabilitySummarizedStatus = setAllWorkAvailableCondition(works, resourceBinding)
 	}
 
-	var availableCond metav1.Condition
-	// only try to gather the available status if all the work objects are applied
-	if appliedCond.Status == metav1.ConditionTrue {
-		availableCond = buildAllWorkAvailableCondition(works, resourceBinding)
-		resourceBinding.SetConditions(availableCond)
-	}
 	resourceBinding.Status.FailedPlacements = nil
 	resourceBinding.Status.DiffedPlacements = nil
 	resourceBinding.Status.DriftedPlacements = nil
@@ -855,20 +877,81 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 			continue // ignore the deleting work
 		}
 
-		// Failed placements (resources that cannot be applied or failed to get available) will only appear when either
-		// the Applied or Available conditions (on the work object) are set to False
-		if appliedCond.Status != metav1.ConditionTrue || availableCond.Status != metav1.ConditionTrue {
-			failedManifests := extractFailedResourcePlacementsFromWork(w)
-			failedResourcePlacements = append(failedResourcePlacements, failedManifests...)
-		}
-		// Diffed placements can only appear when the Applied condition is set to False.
-		if appliedCond.Status == metav1.ConditionFalse {
+		// Populate the failed, diffed, and drifted placements based on the summarized status of the Applied,
+		// Available, and DiffReported conditions on all Work objects.
+		//
+		// Note (chenyu1): Fleet will only report apply/availability check failures, diffs, and drifts (as applicable)
+		// when all the Work objects have completed their apply ops, availability checks, and diff reporting, as dictated
+		// by the currently specified apply strategy (successful or not). This is to make sure that previously
+		// populated failures, diffs, and/or drifts will not leak into the current reportings.
+		switch {
+		case isReportDiffModeOn && diffReportedSummarizedStatus == workConditionSummarizedStatusTrue:
+			// The ReportDiff apply straregy is in use and all works have reported configuration
+			// differences.
+			//
+			// In this case, set diffed placements only; failed and drifted placements will not
+			// be set (apply/availability check failure and drifts cannot occur in report diff mode).
 			diffedManifests := extractDiffedResourcePlacementsFromWork(w)
 			diffedResourcePlacements = append(diffedResourcePlacements, diffedManifests...)
+		case isReportDiffModeOn:
+			// The ReportDiff apply strategy is in use but not all works have reported configuration
+			// differences.
+			//
+			// In this case, no diffed, failed, or drifted placements will be set (diff information present
+			// might be incomplete or stale; apply/availability check failure and drifts cannot occur in
+			// report diff mode).
+		case appliedSummarizedStatus == workConditionSummarizedStatusIncomplete:
+			// The ClientSideApply or ServerSideApply apply strategy is in use but some of the works have
+			// not been applied yet.
+			//
+			// In this case, no diffed, failed, or drifted placements will be set (as information present
+			// might be incomplete or stale).
+		case appliedSummarizedStatus == workConditionSummarizedStatusFalse:
+			// The ClientSideApply or ServerSideApply apply strategy is in use but some of the works have
+			// apply op failures.
+			//
+			// In this case, set failed, diffed, and drifted placements.
+			failedManifests := extractFailedResourcePlacementsFromWork(w)
+			failedResourcePlacements = append(failedResourcePlacements, failedManifests...)
+
+			diffedManifests := extractDiffedResourcePlacementsFromWork(w)
+			diffedResourcePlacements = append(diffedResourcePlacements, diffedManifests...)
+
+			driftedManifests := extractDriftedResourcePlacementsFromWork(w)
+			driftedResourcePlacements = append(driftedResourcePlacements, driftedManifests...)
+		case availabilitySummarizedStatus == workConditionSummarizedStatusIncomplete:
+			// The ClientSideApply or ServerSideApply apply strategy is in use; all works have been applied but
+			// some of the works have not completed the availability check yet.
+			//
+			// In theory this would not happen as the Fleet work applier will always set the Applied and
+			// Available conditions together. However, Fleet can still handle this case for completeness reasons.
+			//
+			// In this case, set drifted placements; no failed or diffed placements will be set (availability
+			// check failure information might be incomplete or stale; diffs will only occur when there
+			// is an apply failure or the report diff mode is on).
+			driftedManifests := extractDriftedResourcePlacementsFromWork(w)
+			driftedResourcePlacements = append(driftedResourcePlacements, driftedManifests...)
+		case availabilitySummarizedStatus == workConditionSummarizedStatusFalse:
+			// The ClientSideApply or ServerSideApply apply strategy is in use; all works have been applied but
+			// some of them have failed the availability check.
+			//
+			// In this case, set failed and drifted placements; no diffed placements will be set (diffs
+			// will only occur when there is an apply failure or the report diff mode is on).
+			failedManifests := extractFailedResourcePlacementsFromWork(w)
+			failedResourcePlacements = append(failedResourcePlacements, failedManifests...)
+
+			driftedManifests := extractDriftedResourcePlacementsFromWork(w)
+			driftedResourcePlacements = append(driftedResourcePlacements, driftedManifests...)
+		default:
+			// The ClientSideApply or ServerSideApply apply strategy is in use; all works have been applied
+			// and are available.
+			//
+			// In this case, set only drifted placements (drifts might occur even if the apply op itself
+			// completes); no failed or diffed placements will be set (apply/availability
+			// check failure and diffs will not occur when all works are applied and available).
+			driftedManifests := extractDriftedResourcePlacementsFromWork(w)
+			driftedResourcePlacements = append(driftedResourcePlacements, driftedManifests...)
 		}
-		// Drifted placements can appear in any situation (Applied condition is True or False)
-		driftedManifests := extractDriftedResourcePlacementsFromWork(w)
-		driftedResourcePlacements = append(driftedResourcePlacements, driftedManifests...)
 	}
 	// cut the list to keep only the max limit
 	if len(failedResourcePlacements) > maxFailedResourcePlacementLimit {
@@ -906,55 +989,138 @@ func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *flee
 	}
 }
 
-func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) metav1.Condition {
-	allApplied := true
-	var notAppliedWork string
+// setAllWorkAppliedCondition sets the Applied condition on a ClusterResourceBinding
+// based on the Applied conditions on all the related Work objects.
+//
+// The Applied condition of a ClusterResourceBinding object is set to True if and only if all the
+// related Work objects have their Applied condition set to True.
+func setAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) workConditionSummarizedStatus {
+	// Fleet here makes a clear distinction between incomplete, failed, and successful apply operations.
+	// This is to ensure that stale apply information (esp. those set before
+	// an apply strategy change) will not leak into the current apply operations.
+	areAllWorksApplyOpsCompleted := true
+	areAllWorksApplyOpsSuccessful := true
+
+	var firstWorkWithIncompleteApplyOp *fleetv1beta1.Work
+	var firstWorkWithFailedApplyOp *fleetv1beta1.Work
+
 	for _, w := range works {
-		if !condition.IsConditionStatusTrue(meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied), w.GetGeneration()) {
-			allApplied = false
-			notAppliedWork = w.Name
-			break
+		applyCond := meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
+		switch {
+		case condition.IsConditionStatusTrue(applyCond, w.GetGeneration()):
+			// The Work object has completed the apply op successfully.
+		case condition.IsConditionStatusFalse(applyCond, w.GetGeneration()):
+			// An error has occurred during the apply op.
+			areAllWorksApplyOpsSuccessful = false
+			if firstWorkWithFailedApplyOp == nil {
+				firstWorkWithFailedApplyOp = w
+			}
+		default:
+			// The Work object has not yet completed the apply op.
+			areAllWorksApplyOpsCompleted = false
+			if firstWorkWithIncompleteApplyOp == nil {
+				firstWorkWithIncompleteApplyOp = w
+			}
 		}
 	}
-	if allApplied {
+
+	switch {
+	case !areAllWorksApplyOpsCompleted:
+		// Not all Work objects have completed the apply op.
+		klog.V(2).InfoS("Some works are not yet completed the apply op", "binding", klog.KObj(binding), "firstWorkWithIncompleteApplyOp", klog.KObj(firstWorkWithIncompleteApplyOp))
+		binding.SetConditions(metav1.Condition{
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1beta1.ResourceBindingApplied),
+			Reason:             condition.WorkNotAppliedReason,
+			Message:            fmt.Sprintf("Work object %s has not yet completed the apply op", firstWorkWithIncompleteApplyOp.Name),
+			ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusIncomplete
+	case !areAllWorksApplyOpsSuccessful:
+		// All Work objects have completed the apply op, but at least one of them has failed.
+		klog.V(2).InfoS("Some works have failed to apply", "binding", klog.KObj(binding), "firstWorkWithFailedApplyOp", klog.KObj(firstWorkWithFailedApplyOp))
+		binding.SetConditions(metav1.Condition{
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1beta1.ResourceBindingApplied),
+			Reason:             condition.WorkNotAppliedReason,
+			Message:            fmt.Sprintf("Work object %s has failed to apply", firstWorkWithFailedApplyOp.Name),
+			ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusFalse
+	default:
+		// All Work objects have completed the apply op successfully.
 		klog.V(2).InfoS("All works associated with the binding are applied", "binding", klog.KObj(binding))
-		return metav1.Condition{
+		binding.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingApplied),
 			Reason:             condition.AllWorkAppliedReason,
 			Message:            "All corresponding work objects are applied",
 			ObservedGeneration: binding.GetGeneration(),
-		}
-	}
-	// In the case where ReportDiff apply strategy is used, work applier will no longer update
-	// Applied condition on Work objects; since existing Applied conditions will all become stale,
-	// this function will return a False Applied condition.
-	return metav1.Condition{
-		Status:             metav1.ConditionFalse,
-		Type:               string(fleetv1beta1.ResourceBindingApplied),
-		Reason:             condition.WorkNotAppliedReason,
-		Message:            fmt.Sprintf("Work object %s is not applied", notAppliedWork),
-		ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusTrue
 	}
 }
 
 // setAllWorkDiffReportedCondition sets the DiffReported condition on a ClusterResourceBinding
 // based on the DiffReported conditions on all the related Work objects.
 //
-// The DiffReported condition of a ClusterResourceBinding object if and only if all the
+// The DiffReported condition of a ClusterResourceBinding object is set to True if and only if all the
 // related Work objects have their DiffReported condition set to True.
-func setAllWorkDiffReportedCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) {
-	allDiffReported := true
-	var notDiffReportedWork string
+func setAllWorkDiffReportedCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) workConditionSummarizedStatus {
+	// Fleet here makes a clear distinction between incomplete, failed, and successful diff reportings.
+	// This is to ensure that stale diff information (esp. those set before
+	// an apply strategy change) will not leak into the current reportings.
+	areAllWorksDiffReportingCompleted := true
+	areAllWorksDiffReportingSuccessful := true
+
+	var firstWorkWithIncompleteDiffReporting *fleetv1beta1.Work
+	var firstWorkWithFailedDiffReporting *fleetv1beta1.Work
+
 	for _, w := range works {
-		if !condition.IsConditionStatusTrue(meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeDiffReported), w.GetGeneration()) {
-			allDiffReported = false
-			notDiffReportedWork = w.Name
-			break
+		diffReportedCond := meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeDiffReported)
+		switch {
+		case condition.IsConditionStatusTrue(diffReportedCond, w.GetGeneration()):
+			// The Work object has completed diff reporting successfully.
+		case condition.IsConditionStatusFalse(diffReportedCond, w.GetGeneration()):
+			// An error has occurred during the diff reporting process.
+			areAllWorksDiffReportingSuccessful = false
+			if firstWorkWithFailedDiffReporting == nil {
+				firstWorkWithFailedDiffReporting = w
+			}
+		default:
+			// The Work object has not yet completed diff reporting.
+			areAllWorksDiffReportingCompleted = false
+			if firstWorkWithIncompleteDiffReporting == nil {
+				firstWorkWithIncompleteDiffReporting = w
+			}
 		}
 	}
 
-	if allDiffReported {
+	switch {
+	case !areAllWorksDiffReportingCompleted:
+		// Not all Work objects have completed diff reporting.
+		klog.V(2).InfoS("Some works are not yet completed diff reporting", "binding", klog.KObj(binding), "firstWorkWithIncompleteDiffReporting", klog.KObj(firstWorkWithIncompleteDiffReporting))
+		meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+			Reason:             condition.WorkNotDiffReportedReason,
+			Message:            fmt.Sprintf("Work object %s has not yet completed diff reporting", firstWorkWithIncompleteDiffReporting.Name),
+			ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusIncomplete
+	case !areAllWorksDiffReportingSuccessful:
+		// All Work objects have completed diff reporting, but at least one of them has failed.
+		klog.V(2).InfoS("Some works have failed to report diff", "binding", klog.KObj(binding), "firstWorkWithFailedDiffReporting", klog.KObj(firstWorkWithFailedDiffReporting))
+		meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+			Reason:             condition.WorkNotDiffReportedReason,
+			Message:            fmt.Sprintf("Work object %s has failed to report diff", firstWorkWithFailedDiffReporting.Name),
+			ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusFalse
+	default:
+		// All Work objects have completed diff reporting successfully.
 		klog.V(2).InfoS("All works associated with the binding have reported diff", "binding", klog.KObj(binding))
 		meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
 			Status:             metav1.ConditionTrue,
@@ -963,55 +1129,109 @@ func setAllWorkDiffReportedCondition(works map[string]*fleetv1beta1.Work, bindin
 			Message:            "All corresponding work objects have reported diff",
 			ObservedGeneration: binding.GetGeneration(),
 		})
-		return
+		return workConditionSummarizedStatusTrue
 	}
-	meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
-		Status:             metav1.ConditionFalse,
-		Type:               string(fleetv1beta1.ResourceBindingDiffReported),
-		Reason:             condition.WorkNotDiffReportedReason,
-		Message:            fmt.Sprintf("Work object %s has failed to reported diff", notDiffReportedWork),
-		ObservedGeneration: binding.GetGeneration(),
-	})
 }
 
-func buildAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) metav1.Condition {
-	allAvailable := true
-	var notAvailableWork string
-	var notTrackableWork string
+// setAllWorkAvailableCondition sets the Available condition on a ClusterResourceBinding
+// based on the Available conditions on all the related Work objects.
+//
+// The Available condition of a ClusterResourceBinding object is set to True if and only if all the
+// related Work objects have their Available condition set to True.
+func setAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) workConditionSummarizedStatus {
+	// If the Applied condition has been set to False, skip setting the Available condition.
+	appliedCond := meta.FindStatusCondition(binding.Status.Conditions, string(fleetv1beta1.ResourceBindingApplied))
+	if !condition.IsConditionStatusTrue(appliedCond, binding.GetGeneration()) {
+		klog.V(2).InfoS("Some works are not yet applied or have failed to get applied; skip populating the Available condition", "binding", klog.KObj(binding))
+		return workConditionSummarizedStatusFalse
+	}
+
+	// Fleet here makes a clear distinction between incomplete, failed and successful availability checks.
+	// This is to ensure that stale information will not leak into the current reportings.
+	areAllWorksAvailabilityCheckCompleted := true
+	areAllWorksAvailabilityCheckSuccessful := true
+
+	var firstWorkWithIncompleteAvailabilityCheck *fleetv1beta1.Work
+	var firstWorkWithFailedAvailabilityCheck *fleetv1beta1.Work
+	var firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes *fleetv1beta1.Work
 	for _, w := range works {
-		cond := meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
-		if !condition.IsConditionStatusTrue(cond, w.GetGeneration()) {
-			allAvailable = false
-			notAvailableWork = w.Name
-			break
-		}
-		if cond.Reason == work.WorkNotTrackableReason {
-			notTrackableWork = w.Name
+		availableCond := meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+		switch {
+		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()) && availableCond.Reason == work.WorkNotTrackableReason:
+			// The Work object has completed the availability check successfully, due to the resources being untrackable.
+			if firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes == nil {
+				firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes = w
+			}
+		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()):
+			// The Work object has completed the availability check successfully.
+		case condition.IsConditionStatusFalse(availableCond, w.GetGeneration()):
+			// The Work object has failed the availability check.
+			areAllWorksAvailabilityCheckSuccessful = false
+			if firstWorkWithFailedAvailabilityCheck == nil {
+				firstWorkWithFailedAvailabilityCheck = w
+			}
+		default:
+			// The Work object has not yet completed the availability check.
+			//
+			// This in theory should never happen as the Fleet work applier always set the Applied
+			// and Available conditions on a Work object together in one call and Fleet will not
+			// check resource availability if the apply op itself has failed. However, Fleet can
+			// still handle this case for completeness reasons.
+			areAllWorksAvailabilityCheckCompleted = false
+			if firstWorkWithIncompleteAvailabilityCheck == nil {
+				firstWorkWithIncompleteAvailabilityCheck = w
+			}
 		}
 	}
-	if allAvailable {
-		klog.V(2).InfoS("All works associated with the binding are available", "binding", klog.KObj(binding), "notTrackableWork", notTrackableWork)
-		reason := condition.AllWorkAvailableReason
-		message := "All corresponding work objects are available"
-		if len(notTrackableWork) > 0 {
-			reason = work.WorkNotTrackableReason
-			message = fmt.Sprintf("The availability of work object %s is not trackable", notTrackableWork)
-		}
 
-		return metav1.Condition{
+	switch {
+	case !areAllWorksAvailabilityCheckCompleted:
+		// Not all Work objects have completed the availability check.
+		//
+		// As previously explained, this should never happen in practice. Fleet here handles
+		// this case for completeness reasons.
+		klog.V(2).InfoS("Some works are not yet completed availability check", "binding", klog.KObj(binding), "firstWorkWithIncompleteAvailabilityCheck", klog.KObj(firstWorkWithIncompleteAvailabilityCheck))
+		meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1beta1.ResourceBindingAvailable),
+			Reason:             condition.WorkNotAvailableReason,
+			Message:            fmt.Sprintf("Work object %s has not yet completed availability check", firstWorkWithIncompleteAvailabilityCheck.Name),
+			ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusIncomplete
+	case !areAllWorksAvailabilityCheckSuccessful:
+		// All Work objects have completed the availability check, but at least one of them has failed.
+		klog.V(2).InfoS("Some works have failed to get available", "binding", klog.KObj(binding), "firstWorkWithFailedAvailabilityCheck", klog.KObj(firstWorkWithFailedAvailabilityCheck))
+		meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1beta1.ResourceBindingAvailable),
+			Reason:             condition.WorkNotAvailableReason,
+			Message:            fmt.Sprintf("Work object %s is not yet available", firstWorkWithFailedAvailabilityCheck.Name),
+			ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusFalse
+	case firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes != nil:
+		// All Work objects have completed the availability check successfully, and at least one of them has succeeded due to untrackable resources.
+		klog.V(2).InfoS("All works associated with the binding are available; untrackable resources are present", "binding", klog.KObj(binding), "firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes", klog.KObj(firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes))
+		meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingAvailable),
-			Reason:             reason,
-			Message:            message,
+			Reason:             work.WorkNotTrackableReason,
+			Message:            fmt.Sprintf("The availability of work object %s is not trackable", firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes.Name),
 			ObservedGeneration: binding.GetGeneration(),
-		}
-	}
-	return metav1.Condition{
-		Status:             metav1.ConditionFalse,
-		Type:               string(fleetv1beta1.ResourceBindingAvailable),
-		Reason:             condition.WorkNotAvailableReason,
-		Message:            fmt.Sprintf("Work object %s is not available", notAvailableWork),
-		ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusTrue
+	default:
+		// All Work objects have completed the availability check successfully.
+		klog.V(2).InfoS("All works associated with the binding are available", "binding", klog.KObj(binding))
+		meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
+			Status:             metav1.ConditionTrue,
+			Type:               string(fleetv1beta1.ResourceBindingAvailable),
+			Reason:             condition.AllWorkAvailableReason,
+			Message:            "All corresponding work objects are available",
+			ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusTrue
 	}
 }
 

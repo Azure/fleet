@@ -29,6 +29,7 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	fleetwork "go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
@@ -1650,7 +1651,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 		})
 	})
 
-	Context("Sync apply strategy changes (works with valid resource snapshots)", Ordered, func() {
+	Context("Sync apply strategy changes (apply -> apply, works with valid resource snapshots)", Ordered, func() {
 		var masterResourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 		var clusterResourceBinding *placementv1beta1.ClusterResourceBinding
 
@@ -1701,7 +1702,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			appliedCond := metav1.Condition{
 				Type:               string(placementv1beta1.ResourceBindingApplied),
 				Status:             metav1.ConditionFalse,
-				Reason:             condition.WorkNeedSyncedReason,
+				Reason:             condition.WorkApplyInProcess,
 				ObservedGeneration: clusterResourceBinding.GetGeneration(),
 			}
 
@@ -1755,7 +1756,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			appliedCond := metav1.Condition{
 				Type:               string(placementv1beta1.ResourceBindingApplied),
 				Status:             metav1.ConditionFalse,
-				Reason:             condition.WorkNeedSyncedReason,
+				Reason:             condition.WorkApplyInProcess,
 				ObservedGeneration: clusterResourceBinding.GetGeneration(),
 			}
 
@@ -1772,7 +1773,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 		})
 	})
 
-	Context("Sync apply strategy changes (works with missing resource snapshots)", Ordered, func() {
+	Context("Sync apply strategy changes (apply -> apply, works with missing resource snapshots)", Ordered, func() {
 		var masterResourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 		var clusterResourceBinding *placementv1beta1.ClusterResourceBinding
 
@@ -1823,7 +1824,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			appliedCond := metav1.Condition{
 				Type:               string(placementv1beta1.ResourceBindingApplied),
 				Status:             metav1.ConditionFalse,
-				Reason:             condition.WorkNeedSyncedReason,
+				Reason:             condition.WorkApplyInProcess,
 				ObservedGeneration: clusterResourceBinding.GetGeneration(),
 			}
 
@@ -1881,7 +1882,263 @@ var _ = Describe("Test Work Generator Controller", func() {
 			appliedCond := metav1.Condition{
 				Type:               string(placementv1beta1.ResourceBindingApplied),
 				Status:             metav1.ConditionFalse,
-				Reason:             condition.WorkNeedSyncedReason,
+				Reason:             condition.WorkApplyInProcess,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+
+			statusUpdatedActual := bindingStatusUpdatedActual(
+				clusterResourceBinding,
+				false,
+				&appliedCond, nil, nil,
+				nil, nil, nil)
+			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
+		AfterAll(func() {
+			cleanupResources(memberClusterNamespaceName, clusterResourceBinding, masterResourceSnapshot, nil, memberClusterName)
+		})
+	})
+
+	Context("Sync apply strategy changes (apply -> reportDiff, works with valid resource snapshots)", Ordered, func() {
+		var masterResourceSnapshot *placementv1beta1.ClusterResourceSnapshot
+		var clusterResourceBinding *placementv1beta1.ClusterResourceBinding
+
+		BeforeAll(func() {
+			memberClusterName = "cluster-" + utils.RandStr()
+			memberCluster := clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: memberClusterName,
+				},
+			}
+			Expect(k8sClient.Create(ctx, &memberCluster)).Should(Succeed(), "Failed to create member cluster")
+
+			memberClusterNamespaceName = fmt.Sprintf(utils.NamespaceNameFormat, memberClusterName)
+			memberClusterReservedNS := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: memberClusterNamespaceName,
+				},
+			}
+			Expect(k8sClient.Create(ctx, &memberClusterReservedNS)).Should(Succeed(), "Failed to create namespace")
+
+			testCRPName = "crp-" + utils.RandStr()
+		})
+
+		It("can create master resource snapshot and resource binding", func() {
+			// Create the master resource snapshot.
+			masterResourceSnapshot = generateResourceSnapshot(
+				1, 1, 0,
+				[][]byte{
+					testResourceCRD, testNameSpace, testResource,
+				})
+			Expect(k8sClient.Create(ctx, masterResourceSnapshot)).Should(Succeed(), "Failed to create master resource snapshot")
+
+			resourceBindingSpec := placementv1beta1.ResourceBindingSpec{
+				State:                placementv1beta1.BindingStateBound,
+				ResourceSnapshotName: masterResourceSnapshot.Name,
+				TargetCluster:        memberClusterName,
+				ApplyStrategy: &placementv1beta1.ApplyStrategy{
+					Type: placementv1beta1.ApplyStrategyTypeServerSideApply,
+				},
+			}
+			createClusterResourceBinding(&clusterResourceBinding, resourceBindingSpec)
+		})
+
+		It("should create work object with server side apply apply strategy", func() {
+			workName := fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName)
+			applyStrategy := &placementv1beta1.ApplyStrategy{
+				ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
+				Type:             placementv1beta1.ApplyStrategyTypeServerSideApply,
+				WhenToApply:      placementv1beta1.WhenToApplyTypeAlways,
+				WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeAlways,
+			}
+			applyStrategyUpdatedActual := workApplyStrategyUpdatedActual(memberClusterNamespaceName, workName, applyStrategy)
+			Eventually(applyStrategyUpdatedActual, timeout, interval).Should(Succeed(), "Failed to create expected work object")
+		})
+
+		It("should update binding status as expected", func() {
+			appliedCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingApplied),
+				Status:             metav1.ConditionFalse,
+				Reason:             condition.WorkApplyInProcess,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+
+			statusUpdatedActual := bindingStatusUpdatedActual(
+				clusterResourceBinding,
+				false,
+				&appliedCond, nil, nil,
+				nil, nil, nil)
+			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
+		It("can update apply strategy on the resource binding", func() {
+			// Update the apply strategy on the resource binding; use an Eventually
+			// block to avoid conflict induced errors.
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: clusterResourceBinding.Name}, clusterResourceBinding); err != nil {
+					return fmt.Errorf("failed to get resource binding: %w", err)
+				}
+
+				clusterResourceBinding.Spec.ApplyStrategy = &placementv1beta1.ApplyStrategy{
+					Type: placementv1beta1.ApplyStrategyTypeReportDiff,
+				}
+
+				if err := k8sClient.Update(ctx, clusterResourceBinding); err != nil {
+					return fmt.Errorf("failed to update resource binding: %w", err)
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "Failed to update apply strategy on the resource binding")
+		})
+
+		It("can add the rollout started condition to the resource binding", func() {
+			updateRolloutStartedGeneration(&clusterResourceBinding)
+		})
+
+		It("should update apply strategy on the work object", func() {
+			workName := fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName)
+			wantApplyStrategy := &placementv1beta1.ApplyStrategy{
+				ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
+				Type:             placementv1beta1.ApplyStrategyTypeReportDiff,
+				WhenToApply:      placementv1beta1.WhenToApplyTypeAlways,
+				WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeAlways,
+			}
+			applyStrategyUpdatedActual := workApplyStrategyUpdatedActual(memberClusterNamespaceName, workName, wantApplyStrategy)
+			Eventually(applyStrategyUpdatedActual, timeout, interval).Should(Succeed(), "Failed to create expected work object")
+		})
+
+		It("should update binding status as expected", func() {
+			appliedCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingDiffReported),
+				Status:             metav1.ConditionFalse,
+				Reason:             condition.WorkDiffReportInProcess,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+
+			statusUpdatedActual := bindingStatusUpdatedActual(
+				clusterResourceBinding,
+				false,
+				&appliedCond, nil, nil,
+				nil, nil, nil)
+			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
+		AfterAll(func() {
+			cleanupResources(memberClusterNamespaceName, clusterResourceBinding, masterResourceSnapshot, nil, memberClusterName)
+		})
+	})
+
+	Context("Sync apply strategy changes (reportDiff -> apply, works with valid resource snapshots)", Ordered, func() {
+		var masterResourceSnapshot *placementv1beta1.ClusterResourceSnapshot
+		var clusterResourceBinding *placementv1beta1.ClusterResourceBinding
+
+		BeforeAll(func() {
+			memberClusterName = "cluster-" + utils.RandStr()
+			memberCluster := clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: memberClusterName,
+				},
+			}
+			Expect(k8sClient.Create(ctx, &memberCluster)).Should(Succeed(), "Failed to create member cluster")
+
+			memberClusterNamespaceName = fmt.Sprintf(utils.NamespaceNameFormat, memberClusterName)
+			memberClusterReservedNS := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: memberClusterNamespaceName,
+				},
+			}
+			Expect(k8sClient.Create(ctx, &memberClusterReservedNS)).Should(Succeed(), "Failed to create namespace")
+
+			testCRPName = "crp-" + utils.RandStr()
+		})
+
+		It("can create master resource snapshot and resource binding", func() {
+			// Create the master resource snapshot.
+			masterResourceSnapshot = generateResourceSnapshot(
+				1, 1, 0,
+				[][]byte{
+					testResourceCRD, testNameSpace, testResource,
+				})
+			Expect(k8sClient.Create(ctx, masterResourceSnapshot)).Should(Succeed(), "Failed to create master resource snapshot")
+
+			resourceBindingSpec := placementv1beta1.ResourceBindingSpec{
+				State:                placementv1beta1.BindingStateBound,
+				ResourceSnapshotName: masterResourceSnapshot.Name,
+				TargetCluster:        memberClusterName,
+				ApplyStrategy: &placementv1beta1.ApplyStrategy{
+					Type: placementv1beta1.ApplyStrategyTypeReportDiff,
+				},
+			}
+			createClusterResourceBinding(&clusterResourceBinding, resourceBindingSpec)
+		})
+
+		It("should create work object with no apply strategy", func() {
+			workName := fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName)
+			applyStrategy := &placementv1beta1.ApplyStrategy{
+				ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
+				Type:             placementv1beta1.ApplyStrategyTypeReportDiff,
+				WhenToApply:      placementv1beta1.WhenToApplyTypeAlways,
+				WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeAlways,
+			}
+			applyStrategyUpdatedActual := workApplyStrategyUpdatedActual(memberClusterNamespaceName, workName, applyStrategy)
+			Eventually(applyStrategyUpdatedActual, timeout, interval).Should(Succeed(), "Failed to create expected work object")
+		})
+
+		It("should update binding status as expected", func() {
+			appliedCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingDiffReported),
+				Status:             metav1.ConditionFalse,
+				Reason:             condition.WorkDiffReportInProcess,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+
+			statusUpdatedActual := bindingStatusUpdatedActual(
+				clusterResourceBinding,
+				false,
+				&appliedCond, nil, nil,
+				nil, nil, nil)
+			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
+		It("can update apply strategy on the resource binding", func() {
+			// Update the apply strategy on the resource binding; use an Eventually
+			// block to avoid conflict induced errors.
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: clusterResourceBinding.Name}, clusterResourceBinding); err != nil {
+					return fmt.Errorf("failed to get resource binding: %w", err)
+				}
+
+				clusterResourceBinding.Spec.ApplyStrategy = &placementv1beta1.ApplyStrategy{
+					Type: placementv1beta1.ApplyStrategyTypeClientSideApply,
+				}
+
+				if err := k8sClient.Update(ctx, clusterResourceBinding); err != nil {
+					return fmt.Errorf("failed to update resource binding: %w", err)
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "Failed to update apply strategy on the resource binding")
+		})
+
+		It("can add the rollout started condition to the resource binding", func() {
+			updateRolloutStartedGeneration(&clusterResourceBinding)
+		})
+
+		It("should update apply strategy on the work object", func() {
+			workName := fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName)
+			wantApplyStrategy := &placementv1beta1.ApplyStrategy{
+				ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
+				Type:             placementv1beta1.ApplyStrategyTypeReportDiff,
+				WhenToApply:      placementv1beta1.WhenToApplyTypeAlways,
+				WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeAlways,
+			}
+			applyStrategyUpdatedActual := workApplyStrategyUpdatedActual(memberClusterNamespaceName, workName, wantApplyStrategy)
+			Eventually(applyStrategyUpdatedActual, timeout, interval).Should(Succeed(), "Failed to create expected work object")
+		})
+
+		It("should update binding status as expected", func() {
+			appliedCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingApplied),
+				Status:             metav1.ConditionFalse,
+				Reason:             condition.WorkApplyInProcess,
 				ObservedGeneration: clusterResourceBinding.GetGeneration(),
 			}
 
@@ -1903,7 +2160,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 		var secondaryResourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 		var clusterResourceBinding *placementv1beta1.ClusterResourceBinding
 
-		var diffObservedTimestamp *metav1.Time
+		now := metav1.Now().Rfc3339Copy()
 
 		BeforeAll(func() {
 			memberClusterName = "cluster-" + utils.RandStr()
@@ -1954,102 +2211,61 @@ var _ = Describe("Test Work Generator Controller", func() {
 			createClusterResourceBinding(&clusterResourceBinding, resourceBindingSpec)
 		})
 
-		It("can update work status", func() {
+		It("can update work status (only one work reported diff)", func() {
 			work := retrieveWork(memberClusterNamespaceName, fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName))
 
 			diffReportedCond := &metav1.Condition{
 				Type:               string(placementv1beta1.WorkConditionTypeDiffReported),
 				Status:             metav1.ConditionTrue,
-				Reason:             string(workapplier.ManifestProcessingReportDiffResultTypeNoDiffFound),
-				ObservedGeneration: work.GetGeneration(),
-			}
-			refreshWorkStatus(work, nil, nil, diffReportedCond, nil)
-		})
-
-		It("should update binding status as expected", func() {
-			appliedCond := metav1.Condition{
-				Type:               string(placementv1beta1.ResourceBindingApplied),
-				Status:             metav1.ConditionFalse,
-				Reason:             condition.WorkNotAppliedReason,
-				ObservedGeneration: clusterResourceBinding.GetGeneration(),
-			}
-			diffReportedCond := metav1.Condition{
-				Type:               string(placementv1beta1.ResourceBindingDiffReported),
-				Status:             metav1.ConditionFalse,
-				Reason:             condition.WorkNotDiffReportedReason,
-				ObservedGeneration: clusterResourceBinding.GetGeneration(),
-			}
-
-			statusUpdatedActual := bindingStatusUpdatedActual(
-				clusterResourceBinding,
-				false,
-				&appliedCond, nil, &diffReportedCond,
-				nil, nil, nil)
-			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
-		})
-
-		It("can update work status", func() {
-			work := retrieveWork(memberClusterNamespaceName, fmt.Sprintf(placementv1beta1.WorkNameWithSubindexFmt, testCRPName, 1))
-
-			diffReportedCond := &metav1.Condition{
-				Type:               string(placementv1beta1.WorkConditionTypeDiffReported),
-				Status:             metav1.ConditionFalse,
-				Reason:             string(workapplier.ManifestProcessingReportDiffResultTypeFailed),
-				ObservedGeneration: work.GetGeneration(),
-			}
-			refreshWorkStatus(work, nil, nil, diffReportedCond, nil)
-		})
-
-		It("should update binding status as expected", func() {
-			appliedCond := metav1.Condition{
-				Type:               string(placementv1beta1.ResourceBindingApplied),
-				Status:             metav1.ConditionFalse,
-				Reason:             condition.WorkNotAppliedReason,
-				ObservedGeneration: clusterResourceBinding.GetGeneration(),
-			}
-			diffReportedCond := metav1.Condition{
-				Type:               string(placementv1beta1.ResourceBindingDiffReported),
-				Status:             metav1.ConditionFalse,
-				Reason:             condition.WorkNotDiffReportedReason,
-				ObservedGeneration: clusterResourceBinding.GetGeneration(),
-			}
-
-			statusUpdatedActual := bindingStatusUpdatedActual(
-				clusterResourceBinding,
-				false,
-				&appliedCond, nil, &diffReportedCond,
-				nil, nil, nil)
-			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
-		})
-
-		It("can update work status", func() {
-			work := retrieveWork(memberClusterNamespaceName, fmt.Sprintf(placementv1beta1.WorkNameWithSubindexFmt, testCRPName, 1))
-
-			diffReportedCond := &metav1.Condition{
-				Type:               string(placementv1beta1.WorkConditionTypeDiffReported),
-				Status:             metav1.ConditionTrue,
-				Reason:             string(workapplier.ManifestProcessingReportDiffResultTypeFoundDiff),
+				Reason:             "DiffReportedOnAllManifests",
 				ObservedGeneration: work.GetGeneration(),
 			}
 
-			nowInRFC3339 := metav1.Now().Rfc3339Copy()
-			diffObservedTimestamp = &nowInRFC3339
 			manifestConds := []placementv1beta1.ManifestCondition{
 				{
 					Identifier: placementv1beta1.WorkResourceIdentifier{
-						Ordinal:   1,
+						Ordinal:  1,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     "work",
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               placementv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(workapplier.ManifestProcessingReportDiffResultTypeNoDiffFound),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+					},
+				},
+				{
+					Identifier: placementv1beta1.WorkResourceIdentifier{
+						Ordinal:   2,
 						Group:     "apps",
 						Version:   "v1",
 						Kind:      "Deployment",
-						Name:      "app",
-						Namespace: "default",
 						Resource:  "deployments",
+						Name:      "app",
+						Namespace: "work",
 					},
-					Conditions: []metav1.Condition{},
+					Conditions: []metav1.Condition{
+						{
+							Type:               placementv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(workapplier.ManifestProcessingReportDiffResultTypeFoundDiff),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+					},
 					DiffDetails: &placementv1beta1.DiffDetails{
-						ObservationTime:                   *diffObservedTimestamp,
-						ObservedInMemberClusterGeneration: ptr.To(int64(2)),
-						FirstDiffedObservedTime:           *diffObservedTimestamp,
+						ObservationTime:                   now,
+						FirstDiffedObservedTime:           now,
+						ObservedInMemberClusterGeneration: ptr.To(int64(1)),
 						ObservedDiffs: []placementv1beta1.PatchDetail{
 							{
 								Path:          "/spec/replicas",
@@ -2064,12 +2280,112 @@ var _ = Describe("Test Work Generator Controller", func() {
 		})
 
 		It("should update binding status as expected", func() {
-			appliedCond := metav1.Condition{
-				Type:               string(placementv1beta1.ResourceBindingApplied),
+			diffReportedCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingDiffReported),
 				Status:             metav1.ConditionFalse,
-				Reason:             condition.WorkNotAppliedReason,
+				Reason:             condition.WorkNotDiffReportedReason,
 				ObservedGeneration: clusterResourceBinding.GetGeneration(),
 			}
+
+			// Diff information is not populated as one Work object has not reported diff.
+			statusUpdatedActual := bindingStatusUpdatedActual(
+				clusterResourceBinding,
+				false,
+				nil, nil, &diffReportedCond,
+				nil, nil, nil)
+			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
+		It("can update work status (one work has reported diff; the other work has failed to report diff)", func() {
+			work := retrieveWork(memberClusterNamespaceName, fmt.Sprintf(placementv1beta1.WorkNameWithSubindexFmt, testCRPName, 1))
+
+			diffReportedCond := &metav1.Condition{
+				Type:               string(placementv1beta1.WorkConditionTypeDiffReported),
+				Status:             metav1.ConditionFalse,
+				Reason:             "DiffReportingFailedOnSomeManifests",
+				ObservedGeneration: work.GetGeneration(),
+			}
+
+			manifestConds := []placementv1beta1.ManifestCondition{
+				{
+					Identifier: placementv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Resource:  "configmaps",
+						Name:      "app",
+						Namespace: "work",
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               placementv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(workapplier.ManifestProcessingReportDiffResultTypeFailed),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+					},
+				},
+			}
+			refreshWorkStatus(work, nil, nil, diffReportedCond, manifestConds)
+		})
+
+		It("should update binding status as expected", func() {
+			diffReportedCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingDiffReported),
+				Status:             metav1.ConditionFalse,
+				Reason:             condition.WorkNotDiffReportedReason,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+
+			// Diff information is not populated as one Work object has failed to report diff.
+			statusUpdatedActual := bindingStatusUpdatedActual(
+				clusterResourceBinding,
+				false,
+				nil, nil, &diffReportedCond,
+				nil, nil, nil)
+			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
+		It("can update work status (all works have diff reported)", func() {
+			work := retrieveWork(memberClusterNamespaceName, fmt.Sprintf(placementv1beta1.WorkNameWithSubindexFmt, testCRPName, 1))
+
+			diffReportedCond := &metav1.Condition{
+				Type:               string(placementv1beta1.WorkConditionTypeDiffReported),
+				Status:             metav1.ConditionTrue,
+				Reason:             "DiffReportedOnAllManifests",
+				ObservedGeneration: work.GetGeneration(),
+			}
+
+			manifestConds := []placementv1beta1.ManifestCondition{
+				{
+					Identifier: placementv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Resource:  "configmaps",
+						Name:      "app",
+						Namespace: "work",
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               placementv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(workapplier.ManifestProcessingReportDiffResultTypeNoDiffFound),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+					},
+				},
+			}
+			refreshWorkStatus(work, nil, nil, diffReportedCond, manifestConds)
+		})
+
+		It("should update binding status as expected", func() {
 			diffReportedCond := metav1.Condition{
 				Type:               string(placementv1beta1.ResourceBindingDiffReported),
 				Status:             metav1.ConditionTrue,
@@ -2083,11 +2399,11 @@ var _ = Describe("Test Work Generator Controller", func() {
 						Version:   "v1",
 						Kind:      "Deployment",
 						Name:      "app",
-						Namespace: "default",
+						Namespace: "work",
 					},
-					ObservationTime:                 *diffObservedTimestamp,
-					TargetClusterObservedGeneration: ptr.To(int64(2)),
-					FirstDiffedObservedTime:         *diffObservedTimestamp,
+					ObservationTime:                 now,
+					TargetClusterObservedGeneration: ptr.To(int64(1)),
+					FirstDiffedObservedTime:         now,
 					ObservedDiffs: []placementv1beta1.PatchDetail{
 						{
 							Path:          "/spec/replicas",
@@ -2101,7 +2417,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			statusUpdatedActual := bindingStatusUpdatedActual(
 				clusterResourceBinding,
 				false,
-				&appliedCond, nil, &diffReportedCond,
+				nil, nil, &diffReportedCond,
 				nil, nil, diffedPlacements)
 			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
 		})
@@ -2117,7 +2433,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				clusterResourceBinding.Spec.ApplyStrategy = &placementv1beta1.ApplyStrategy{
 					ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
 					WhenToApply:      placementv1beta1.WhenToApplyTypeAlways,
-					Type:             placementv1beta1.ApplyStrategyTypeServerSideApply,
+					Type:             placementv1beta1.ApplyStrategyTypeClientSideApply,
 					WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeAlways,
 				}
 
@@ -2136,7 +2452,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			wantApplyStrategy := &placementv1beta1.ApplyStrategy{
 				ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
 				WhenToApply:      placementv1beta1.WhenToApplyTypeAlways,
-				Type:             placementv1beta1.ApplyStrategyTypeServerSideApply,
+				Type:             placementv1beta1.ApplyStrategyTypeClientSideApply,
 				WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeAlways,
 			}
 
@@ -2146,52 +2462,42 @@ var _ = Describe("Test Work Generator Controller", func() {
 			Eventually(applyStrategyUpdatedActual2, timeout, interval).Should(Succeed(), "Failed to update apply strategy on work object")
 		})
 
-		It("can update work status", func() {
-			// Update the status of the master work object.
+		It("can update work status (all works have completed apply op and become available)", func() {
+			// Update the status of the first work object.
 			work0 := retrieveWork(memberClusterNamespaceName, fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName))
 
 			appliedCond := &metav1.Condition{
 				Type:               string(placementv1beta1.WorkConditionTypeApplied),
 				Status:             metav1.ConditionTrue,
-				Reason:             string(workapplier.ManifestProcessingApplyResultTypeApplied),
+				Reason:             "AppliedAllManifests",
 				ObservedGeneration: work0.GetGeneration(),
 			}
 			availableCond := &metav1.Condition{
 				Type:               string(placementv1beta1.WorkConditionTypeAvailable),
 				Status:             metav1.ConditionTrue,
-				Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeAvailable),
+				Reason:             "AllManifestsAreAvailable",
 				ObservedGeneration: work0.GetGeneration(),
 			}
-			diffReportedCond := &metav1.Condition{
-				Type:               string(placementv1beta1.WorkConditionTypeDiffReported),
-				Status:             metav1.ConditionTrue,
-				Reason:             string(workapplier.ManifestProcessingReportDiffResultTypeNoDiffFound),
-				ObservedGeneration: work0.GetGeneration() - 1,
-			}
-			refreshWorkStatus(work0, appliedCond, availableCond, diffReportedCond, nil)
+			// The DiffReported condition added before has become stale.
+			refreshWorkStatus(work0, appliedCond, availableCond, nil, nil)
 
-			// Update the status of the secondary work object.
+			// Update the status of the second work object.
 			work1 := retrieveWork(memberClusterNamespaceName, fmt.Sprintf(placementv1beta1.WorkNameWithSubindexFmt, testCRPName, 1))
 
 			appliedCond = &metav1.Condition{
 				Type:               string(placementv1beta1.WorkConditionTypeApplied),
 				Status:             metav1.ConditionTrue,
-				Reason:             string(workapplier.ManifestProcessingApplyResultTypeApplied),
+				Reason:             "AppliedAllManifests",
 				ObservedGeneration: work1.GetGeneration(),
 			}
 			availableCond = &metav1.Condition{
 				Type:               string(placementv1beta1.WorkConditionTypeAvailable),
 				Status:             metav1.ConditionTrue,
-				Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeAvailable),
+				Reason:             "AllManifestsAreAvailable",
 				ObservedGeneration: work1.GetGeneration(),
 			}
-			diffReportedCond = &metav1.Condition{
-				Type:               string(placementv1beta1.WorkConditionTypeDiffReported),
-				Status:             metav1.ConditionFalse,
-				Reason:             string(workapplier.ManifestProcessingReportDiffResultTypeFailed),
-				ObservedGeneration: work1.GetGeneration() - 1,
-			}
-			refreshWorkStatus(work1, appliedCond, availableCond, diffReportedCond, nil)
+			// The DiffReported condition added before has become stale.
+			refreshWorkStatus(work1, appliedCond, availableCond, nil, nil)
 		})
 
 		It("should update binding status as expected", func() {
@@ -2208,10 +2514,911 @@ var _ = Describe("Test Work Generator Controller", func() {
 				ObservedGeneration: clusterResourceBinding.GetGeneration(),
 			}
 
+			// Not all work objects have been applied; the diff information left behind
+			// on the first Work object should not be populated in the binding status.
 			statusUpdatedActual := bindingStatusUpdatedActual(
 				clusterResourceBinding,
 				false,
 				&appliedCond, &availableCond, nil,
+				nil, nil, nil)
+			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
+		AfterAll(func() {
+			cleanupResources(memberClusterNamespaceName, clusterResourceBinding, masterResourceSnapshot, []*placementv1beta1.ClusterResourceSnapshot{secondaryResourceSnapshot}, memberClusterName)
+		})
+	})
+
+	Context("Refresh status given different apply strategies (ServerSideApply -> ReportDiff)", Ordered, func() {
+		var masterResourceSnapshot *placementv1beta1.ClusterResourceSnapshot
+		var secondaryResourceSnapshot *placementv1beta1.ClusterResourceSnapshot
+		var clusterResourceBinding *placementv1beta1.ClusterResourceBinding
+
+		now := metav1.Now().Rfc3339Copy()
+
+		BeforeAll(func() {
+			memberClusterName = "cluster-" + utils.RandStr()
+			memberCluster := clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: memberClusterName,
+				},
+			}
+			Expect(k8sClient.Create(ctx, &memberCluster)).Should(Succeed(), "Failed to create member cluster")
+
+			memberClusterNamespaceName = fmt.Sprintf(utils.NamespaceNameFormat, memberClusterName)
+			memberClusterReservedNS := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: memberClusterNamespaceName,
+				},
+			}
+			Expect(k8sClient.Create(ctx, &memberClusterReservedNS)).Should(Succeed(), "Failed to create namespace")
+
+			testCRPName = "crp-" + utils.RandStr()
+		})
+
+		It("can create multiple resource snapshots and resource binding", func() {
+			// Create the master resource snapshot.
+			masterResourceSnapshot = generateResourceSnapshot(
+				1, 2, 0,
+				[][]byte{
+					testResourceCRD, testNameSpace,
+				},
+			)
+			Expect(k8sClient.Create(ctx, masterResourceSnapshot)).Should(Succeed(), "Failed to create master resource snapshot")
+
+			secondaryResourceSnapshot = generateResourceSnapshot(
+				1, 2, 1,
+				[][]byte{
+					testResource,
+				},
+			)
+			Expect(k8sClient.Create(ctx, secondaryResourceSnapshot)).Should(Succeed(), "Failed to create secondary resource snapshot")
+
+			resourceBindingSpec := placementv1beta1.ResourceBindingSpec{
+				State:                placementv1beta1.BindingStateBound,
+				ResourceSnapshotName: masterResourceSnapshot.Name,
+				TargetCluster:        memberClusterName,
+				ApplyStrategy: &placementv1beta1.ApplyStrategy{
+					ComparisonOption: placementv1beta1.ComparisonOptionTypeFullComparison,
+					Type:             placementv1beta1.ApplyStrategyTypeServerSideApply,
+					WhenToApply:      placementv1beta1.WhenToApplyTypeIfNotDrifted,
+					WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeIfNoDiff,
+				},
+			}
+			createClusterResourceBinding(&clusterResourceBinding, resourceBindingSpec)
+		})
+
+		It("can update work status (one work has apply op failures with diffs + successful apply op with drifts; the other work has not been applied yet)", func() {
+			work := retrieveWork(memberClusterNamespaceName, fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName))
+
+			appliedCond := &metav1.Condition{
+				Type:               string(placementv1beta1.WorkConditionTypeApplied),
+				Status:             metav1.ConditionFalse,
+				Reason:             "FailedToApplySomeManifests",
+				ObservedGeneration: work.GetGeneration(),
+			}
+
+			manifestConds := []placementv1beta1.ManifestCondition{
+				{
+					Identifier: placementv1beta1.WorkResourceIdentifier{
+						Ordinal:  1,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     "work",
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               placementv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+					},
+					DiffDetails: &placementv1beta1.DiffDetails{
+						ObservationTime:                   now,
+						FirstDiffedObservedTime:           now,
+						ObservedInMemberClusterGeneration: ptr.To(int64(1)),
+						ObservedDiffs: []placementv1beta1.PatchDetail{
+							{
+								Path:       "/metadata/labels/foo",
+								ValueInHub: "bar",
+							},
+						},
+					},
+				},
+				{
+					Identifier: placementv1beta1.WorkResourceIdentifier{
+						Ordinal:   2,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Name:      "app",
+						Namespace: "work",
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               placementv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(workapplier.ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetection),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+						{
+							Type:               placementv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+					},
+					DriftDetails: &placementv1beta1.DriftDetails{
+						ObservationTime:                   now,
+						FirstDriftedObservedTime:          now,
+						ObservedInMemberClusterGeneration: 1,
+						ObservedDrifts: []placementv1beta1.PatchDetail{
+							{
+								Path:          "/spec/replicas",
+								ValueInMember: "1",
+								ValueInHub:    "2",
+							},
+						},
+					},
+				},
+			}
+			refreshWorkStatus(work, appliedCond, nil, nil, manifestConds)
+		})
+
+		It("should update binding status as expected", func() {
+			appliedCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingApplied),
+				Status:             metav1.ConditionFalse,
+				Reason:             condition.WorkNotAppliedReason,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+
+			// Apply op/availability check failure, diff and drift information is not
+			// populated as one Work object has not been applied.
+			statusUpdatedActual := bindingStatusUpdatedActual(
+				clusterResourceBinding,
+				false,
+				&appliedCond, nil, nil,
+				nil, nil, nil)
+			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
+		It("can update work status (one work has apply op failures with diffs and drifts; the other work also has apply op failures, but with no diffs/drifts)", func() {
+			work := retrieveWork(memberClusterNamespaceName, fmt.Sprintf(placementv1beta1.WorkNameWithSubindexFmt, testCRPName, 1))
+
+			appliedCond := &metav1.Condition{
+				Type:               string(placementv1beta1.WorkConditionTypeApplied),
+				Status:             metav1.ConditionFalse,
+				Reason:             "FailedToApplySomeManifests",
+				ObservedGeneration: work.GetGeneration(),
+			}
+
+			manifestConds := []placementv1beta1.ManifestCondition{
+				{
+					Identifier: placementv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Resource:  "configmaps",
+						Name:      "app",
+						Namespace: "work",
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               placementv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToApply),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+					},
+				},
+			}
+			refreshWorkStatus(work, appliedCond, nil, nil, manifestConds)
+		})
+
+		It("should update binding status as expected", func() {
+			appliedCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingApplied),
+				Status:             metav1.ConditionFalse,
+				Reason:             condition.WorkNotAppliedReason,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+
+			failedPlacements := []placementv1beta1.FailedResourcePlacement{
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:   "",
+						Version: "v1",
+						Kind:    "Namespace",
+						Name:    "work",
+					},
+					Condition: metav1.Condition{
+						Type:               string(placementv1beta1.WorkConditionTypeApplied),
+						Status:             metav1.ConditionFalse,
+						Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
+						ObservedGeneration: 1,
+						Message:            "",
+						LastTransitionTime: now,
+					},
+				},
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Name:      "app",
+						Namespace: "work",
+					},
+					Condition: metav1.Condition{
+						Type:               string(placementv1beta1.WorkConditionTypeApplied),
+						Status:             metav1.ConditionFalse,
+						Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToApply),
+						ObservedGeneration: 1,
+						Message:            "",
+						LastTransitionTime: now,
+					},
+				},
+			}
+			diffedPlacements := []placementv1beta1.DiffedResourcePlacement{
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:   "",
+						Version: "v1",
+						Kind:    "Namespace",
+						Name:    "work",
+					},
+					ObservationTime:                 now,
+					FirstDiffedObservedTime:         now,
+					TargetClusterObservedGeneration: ptr.To(int64(1)),
+					ObservedDiffs: []placementv1beta1.PatchDetail{
+						{
+							Path:       "/metadata/labels/foo",
+							ValueInHub: "bar",
+						},
+					},
+				},
+			}
+			driftedPlacements := []placementv1beta1.DriftedResourcePlacement{
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Name:      "app",
+						Namespace: "work",
+					},
+					ObservationTime:                 now,
+					FirstDriftedObservedTime:        now,
+					TargetClusterObservedGeneration: 1,
+					ObservedDrifts: []placementv1beta1.PatchDetail{
+						{
+							Path:          "/spec/replicas",
+							ValueInMember: "1",
+							ValueInHub:    "2",
+						},
+					},
+				},
+			}
+
+			// Apply op/availability check failure, diff, and drift information is
+			// now populated as all Work objects have been applied.
+			statusUpdatedActual := bindingStatusUpdatedActual(
+				clusterResourceBinding,
+				false,
+				&appliedCond, nil, nil,
+				failedPlacements, driftedPlacements, diffedPlacements)
+			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
+		It("can update work status (one work has apply op failures with diffs and drifts; the other work has become available)", func() {
+			work := retrieveWork(memberClusterNamespaceName, fmt.Sprintf(placementv1beta1.WorkNameWithSubindexFmt, testCRPName, 1))
+
+			appliedCond := &metav1.Condition{
+				Type:               string(placementv1beta1.WorkConditionTypeApplied),
+				Status:             metav1.ConditionTrue,
+				Reason:             "AppliedAllManifests",
+				ObservedGeneration: work.GetGeneration(),
+			}
+			availableCond := &metav1.Condition{
+				Type:   string(placementv1beta1.WorkConditionTypeAvailable),
+				Status: metav1.ConditionTrue,
+				// This is inconsistent with how Fleet (specificall the work applier)
+				// actually handles resources; ConfigMap objects are considered to be
+				// trackable (available immediately after placement). Here it is set
+				// to NotTrackable for testing purposes.
+				Reason:             fleetwork.WorkNotTrackableReason,
+				ObservedGeneration: work.GetGeneration(),
+			}
+
+			manifestConds := []placementv1beta1.ManifestCondition{
+				{
+					Identifier: placementv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Resource:  "configmaps",
+						Name:      "app",
+						Namespace: "work",
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               placementv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(workapplier.ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+						{
+							Type:   placementv1beta1.WorkConditionTypeAvailable,
+							Status: metav1.ConditionTrue,
+							// As explained earlier, for this spec the ConfigMap object is
+							// considered to be untrackable in availability check.
+							Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeNotTrackable),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+					},
+				},
+			}
+			refreshWorkStatus(work, appliedCond, availableCond, nil, manifestConds)
+		})
+
+		It("should update binding status as expected", func() {
+			appliedCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingApplied),
+				Status:             metav1.ConditionFalse,
+				Reason:             condition.WorkNotAppliedReason,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+
+			failedPlacements := []placementv1beta1.FailedResourcePlacement{
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:   "",
+						Version: "v1",
+						Kind:    "Namespace",
+						Name:    "work",
+					},
+					Condition: metav1.Condition{
+						Type:               string(placementv1beta1.WorkConditionTypeApplied),
+						Status:             metav1.ConditionFalse,
+						Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
+						ObservedGeneration: 1,
+						Message:            "",
+						LastTransitionTime: now,
+					},
+				},
+			}
+			diffedPlacements := []placementv1beta1.DiffedResourcePlacement{
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:   "",
+						Version: "v1",
+						Kind:    "Namespace",
+						Name:    "work",
+					},
+					ObservationTime:                 now,
+					FirstDiffedObservedTime:         now,
+					TargetClusterObservedGeneration: ptr.To(int64(1)),
+					ObservedDiffs: []placementv1beta1.PatchDetail{
+						{
+							Path:       "/metadata/labels/foo",
+							ValueInHub: "bar",
+						},
+					},
+				},
+			}
+			driftedPlacements := []placementv1beta1.DriftedResourcePlacement{
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Name:      "app",
+						Namespace: "work",
+					},
+					ObservationTime:                 now,
+					FirstDriftedObservedTime:        now,
+					TargetClusterObservedGeneration: 1,
+					ObservedDrifts: []placementv1beta1.PatchDetail{
+						{
+							Path:          "/spec/replicas",
+							ValueInMember: "1",
+							ValueInHub:    "2",
+						},
+					},
+				},
+			}
+
+			// Apply op/availability check failure, diff, and drift information is
+			// now populated as all Work objects have been applied.
+			statusUpdatedActual := bindingStatusUpdatedActual(
+				clusterResourceBinding,
+				false,
+				&appliedCond, nil, nil,
+				failedPlacements, driftedPlacements, diffedPlacements)
+			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
+		It("can update work status (one work has availability check failure; the other work has become available)", func() {
+			work := retrieveWork(memberClusterNamespaceName, fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName))
+
+			appliedCond := &metav1.Condition{
+				Type:               string(placementv1beta1.WorkConditionTypeApplied),
+				Status:             metav1.ConditionTrue,
+				Reason:             "AppliedAllManifests",
+				ObservedGeneration: work.GetGeneration(),
+			}
+			availableCond := &metav1.Condition{
+				Type:               string(placementv1beta1.WorkConditionTypeAvailable),
+				Status:             metav1.ConditionFalse,
+				Reason:             "NotAllManifestsAreAvailable",
+				ObservedGeneration: work.GetGeneration(),
+			}
+
+			manifestConds := []placementv1beta1.ManifestCondition{
+				{
+					Identifier: placementv1beta1.WorkResourceIdentifier{
+						Ordinal:  1,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     "work",
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               placementv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(workapplier.ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+						{
+							Type:               placementv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+					},
+				},
+				{
+					Identifier: placementv1beta1.WorkResourceIdentifier{
+						Ordinal:   2,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Name:      "app",
+						Namespace: "work",
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               placementv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(workapplier.ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetection),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+						{
+							Type:               placementv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeNotYetAvailable),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+					},
+					DriftDetails: &placementv1beta1.DriftDetails{
+						ObservationTime:                   now,
+						FirstDriftedObservedTime:          now,
+						ObservedInMemberClusterGeneration: 1,
+						ObservedDrifts: []placementv1beta1.PatchDetail{
+							{
+								Path:          "/spec/replicas",
+								ValueInMember: "1",
+								ValueInHub:    "2",
+							},
+						},
+					},
+				},
+			}
+			refreshWorkStatus(work, appliedCond, availableCond, nil, manifestConds)
+		})
+
+		It("should update binding status as expected", func() {
+			appliedCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingApplied),
+				Status:             metav1.ConditionTrue,
+				Reason:             condition.AllWorkAppliedReason,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+			availableCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingAvailable),
+				Status:             metav1.ConditionFalse,
+				Reason:             condition.WorkNotAvailableReason,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+
+			failedPlacements := []placementv1beta1.FailedResourcePlacement{
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Name:      "app",
+						Namespace: "work",
+					},
+					Condition: metav1.Condition{
+						Type:               string(placementv1beta1.WorkConditionTypeAvailable),
+						Status:             metav1.ConditionFalse,
+						Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeNotYetAvailable),
+						ObservedGeneration: 1,
+						Message:            "",
+						LastTransitionTime: now,
+					},
+				},
+			}
+			driftedPlacements := []placementv1beta1.DriftedResourcePlacement{
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Name:      "app",
+						Namespace: "work",
+					},
+					ObservationTime:                 now,
+					FirstDriftedObservedTime:        now,
+					TargetClusterObservedGeneration: 1,
+					ObservedDrifts: []placementv1beta1.PatchDetail{
+						{
+							Path:          "/spec/replicas",
+							ValueInMember: "1",
+							ValueInHub:    "2",
+						},
+					},
+				},
+			}
+
+			statusUpdatedActual := bindingStatusUpdatedActual(
+				clusterResourceBinding,
+				false,
+				&appliedCond, &availableCond, nil,
+				failedPlacements, driftedPlacements, nil)
+			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
+		It("can update work status (both works are available)", func() {
+			work := retrieveWork(memberClusterNamespaceName, fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName))
+
+			appliedCond := &metav1.Condition{
+				Type:               string(placementv1beta1.WorkConditionTypeApplied),
+				Status:             metav1.ConditionTrue,
+				Reason:             "AppliedAllManifests",
+				ObservedGeneration: work.GetGeneration(),
+			}
+			availableCond := &metav1.Condition{
+				Type:               string(placementv1beta1.WorkConditionTypeAvailable),
+				Status:             metav1.ConditionTrue,
+				Reason:             "AllManifestsAreAvailable",
+				ObservedGeneration: work.GetGeneration(),
+			}
+
+			manifestConds := []placementv1beta1.ManifestCondition{
+				{
+					Identifier: placementv1beta1.WorkResourceIdentifier{
+						Ordinal:  1,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     "work",
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               placementv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(workapplier.ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+						{
+							Type:               placementv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+					},
+				},
+				{
+					Identifier: placementv1beta1.WorkResourceIdentifier{
+						Ordinal:   2,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Name:      "app",
+						Namespace: "work",
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               placementv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(workapplier.ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetection),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+						{
+							Type:               placementv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+					},
+					DriftDetails: &placementv1beta1.DriftDetails{
+						ObservationTime:                   now,
+						FirstDriftedObservedTime:          now,
+						ObservedInMemberClusterGeneration: 1,
+						ObservedDrifts: []placementv1beta1.PatchDetail{
+							{
+								Path:          "/spec/replicas",
+								ValueInMember: "1",
+								ValueInHub:    "2",
+							},
+						},
+					},
+				},
+			}
+			refreshWorkStatus(work, appliedCond, availableCond, nil, manifestConds)
+		})
+
+		It("should update binding status as expected", func() {
+			appliedCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingApplied),
+				Status:             metav1.ConditionTrue,
+				Reason:             condition.AllWorkAppliedReason,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+			availableCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingAvailable),
+				Status:             metav1.ConditionTrue,
+				Reason:             fleetwork.WorkNotTrackableReason,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+
+			driftedPlacements := []placementv1beta1.DriftedResourcePlacement{
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Name:      "app",
+						Namespace: "work",
+					},
+					ObservationTime:                 now,
+					FirstDriftedObservedTime:        now,
+					TargetClusterObservedGeneration: 1,
+					ObservedDrifts: []placementv1beta1.PatchDetail{
+						{
+							Path:          "/spec/replicas",
+							ValueInMember: "1",
+							ValueInHub:    "2",
+						},
+					},
+				},
+			}
+
+			// Dirfts are reported even when all Work objects are available.
+			statusUpdatedActual := bindingStatusUpdatedActual(
+				clusterResourceBinding,
+				false,
+				&appliedCond, &availableCond, nil,
+				nil, driftedPlacements, nil)
+			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
+		It("can update work status (both works are available, no untrackable resource)", func() {
+			work := retrieveWork(memberClusterNamespaceName, fmt.Sprintf(placementv1beta1.WorkNameWithSubindexFmt, testCRPName, 1))
+
+			appliedCond := &metav1.Condition{
+				Type:               string(placementv1beta1.WorkConditionTypeApplied),
+				Status:             metav1.ConditionTrue,
+				Reason:             "AppliedAllManifests",
+				ObservedGeneration: work.GetGeneration(),
+			}
+			availableCond := &metav1.Condition{
+				Type:               string(placementv1beta1.WorkConditionTypeAvailable),
+				Status:             metav1.ConditionTrue,
+				Reason:             "AllManifestsAreAvailable",
+				ObservedGeneration: work.GetGeneration(),
+			}
+
+			manifestConds := []placementv1beta1.ManifestCondition{
+				{
+					Identifier: placementv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Resource:  "configmaps",
+						Name:      "app",
+						Namespace: "work",
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               placementv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(workapplier.ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+						{
+							Type:               placementv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 1,
+							Message:            "",
+							LastTransitionTime: now,
+						},
+					},
+				},
+			}
+			refreshWorkStatus(work, appliedCond, availableCond, nil, manifestConds)
+		})
+
+		It("should update binding status as expected", func() {
+			appliedCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingApplied),
+				Status:             metav1.ConditionTrue,
+				Reason:             condition.AllWorkAppliedReason,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+			availableCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingAvailable),
+				Status:             metav1.ConditionTrue,
+				Reason:             condition.AllWorkAvailableReason,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+
+			driftedPlacements := []placementv1beta1.DriftedResourcePlacement{
+				{
+					ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Name:      "app",
+						Namespace: "work",
+					},
+					ObservationTime:                 now,
+					FirstDriftedObservedTime:        now,
+					TargetClusterObservedGeneration: 1,
+					ObservedDrifts: []placementv1beta1.PatchDetail{
+						{
+							Path:          "/spec/replicas",
+							ValueInMember: "1",
+							ValueInHub:    "2",
+						},
+					},
+				},
+			}
+
+			// Dirfts are reported even when all Work objects are available.
+			statusUpdatedActual := bindingStatusUpdatedActual(
+				clusterResourceBinding,
+				false,
+				&appliedCond, &availableCond, nil,
+				nil, driftedPlacements, nil)
+			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
+		})
+
+		It("can update apply strategy on the resource binding", func() {
+			// Update the apply strategy on the resource binding; use an Eventually
+			// block to avoid conflict induced errors.
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: clusterResourceBinding.Name}, clusterResourceBinding); err != nil {
+					return fmt.Errorf("failed to get resource binding: %w", err)
+				}
+
+				clusterResourceBinding.Spec.ApplyStrategy = &placementv1beta1.ApplyStrategy{
+					ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
+					WhenToApply:      placementv1beta1.WhenToApplyTypeAlways,
+					Type:             placementv1beta1.ApplyStrategyTypeReportDiff,
+					WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeAlways,
+				}
+
+				if err := k8sClient.Update(ctx, clusterResourceBinding); err != nil {
+					return fmt.Errorf("failed to update resource binding: %w", err)
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "Failed to update apply strategy on the resource binding")
+
+			updateRolloutStartedGeneration(&clusterResourceBinding)
+		})
+
+		It("should update apply strategy on the work object", func() {
+			workName0 := fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName)
+			workName1 := fmt.Sprintf(placementv1beta1.WorkNameWithSubindexFmt, testCRPName, 1)
+			wantApplyStrategy := &placementv1beta1.ApplyStrategy{
+				ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
+				WhenToApply:      placementv1beta1.WhenToApplyTypeAlways,
+				Type:             placementv1beta1.ApplyStrategyTypeReportDiff,
+				WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeAlways,
+			}
+
+			applyStrategyUpdatedActual1 := workApplyStrategyUpdatedActual(memberClusterNamespaceName, workName0, wantApplyStrategy)
+			Eventually(applyStrategyUpdatedActual1, timeout, interval).Should(Succeed(), "Failed to update apply strategy on work object")
+			applyStrategyUpdatedActual2 := workApplyStrategyUpdatedActual(memberClusterNamespaceName, workName1, wantApplyStrategy)
+			Eventually(applyStrategyUpdatedActual2, timeout, interval).Should(Succeed(), "Failed to update apply strategy on work object")
+		})
+
+		It("can update work status (all works have reported diff)", func() {
+			// Update the status of the first work object.
+			work0 := retrieveWork(memberClusterNamespaceName, fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName))
+
+			diffReportedCond := &metav1.Condition{
+				Type:               string(placementv1beta1.WorkConditionTypeDiffReported),
+				Status:             metav1.ConditionTrue,
+				Reason:             "DiffReportedOnAllManifests",
+				ObservedGeneration: work0.GetGeneration(),
+			}
+			// The Applied and Available conditions added earlier have become stale.
+			refreshWorkStatus(work0, nil, nil, diffReportedCond, nil)
+
+			// Update the status of the second work object.
+			work1 := retrieveWork(memberClusterNamespaceName, fmt.Sprintf(placementv1beta1.WorkNameWithSubindexFmt, testCRPName, 1))
+
+			diffReportedCond = &metav1.Condition{
+				Type:               string(placementv1beta1.WorkConditionTypeDiffReported),
+				Status:             metav1.ConditionTrue,
+				Reason:             "DiffReportedOnAllManifests",
+				ObservedGeneration: work1.GetGeneration(),
+			}
+			// The Applied and Available conditions added earlier have become stale.
+			refreshWorkStatus(work1, nil, nil, diffReportedCond, nil)
+		})
+
+		It("should update binding status as expected", func() {
+			diffReportedCond := metav1.Condition{
+				Type:               string(placementv1beta1.ResourceBindingDiffReported),
+				Status:             metav1.ConditionTrue,
+				Reason:             condition.AllWorkDiffReportedReason,
+				ObservedGeneration: clusterResourceBinding.GetGeneration(),
+			}
+
+			// Not all work objects have been applied; the diff information left behind
+			// on the first Work object should not be populated in the binding status.
+			statusUpdatedActual := bindingStatusUpdatedActual(
+				clusterResourceBinding,
+				false,
+				nil, nil, &diffReportedCond,
 				nil, nil, nil)
 			Eventually(statusUpdatedActual, timeout, interval).Should(Succeed(), "Failed to update binding status")
 		})
@@ -2227,7 +3434,7 @@ func verifyBindingStatusSyncedNotApplied(binding *placementv1beta1.ClusterResour
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 		appliedReason := condition.WorkNotAppliedReason
 		if workSync {
-			appliedReason = condition.WorkNeedSyncedReason
+			appliedReason = condition.WorkApplyInProcess
 		}
 		overrideReason := condition.OverrideNotSpecifiedReason
 		if hasOverride {

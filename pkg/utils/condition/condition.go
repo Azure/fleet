@@ -93,8 +93,11 @@ const (
 	// SyncWorkFailedReason is the reason string of placement condition if some works failed to synchronize.
 	SyncWorkFailedReason = "SyncWorkFailed"
 
-	// WorkNeedSyncedReason is the reason string of placement condition if some works are in the processing of synchronizing.
-	WorkNeedSyncedReason = "StillNeedToSyncWork"
+	// WorkApplyInProcess is the reason string of placement condition if works are just synchronized and in the process of being applied.
+	WorkApplyInProcess = "ApplyInProgress"
+
+	// WorkDiffReportInProcess is the reason string of placement condition if works are just synchronized and diff reporting is in progress.
+	WorkDiffReportInProcess = "DiffReportInProgress"
 
 	// WorkNotAppliedReason is the reason string of placement condition if some works are not applied.
 	WorkNotAppliedReason = "NotAllWorkHaveBeenApplied"
