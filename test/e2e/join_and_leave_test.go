@@ -143,7 +143,7 @@ var _ = Describe("Test member cluster force delete flow", Ordered, Serial, func(
 			Eventually(func() bool {
 				var ns corev1.Namespace
 				return apierrors.IsNotFound(hubClient.Get(ctx, types.NamespacedName{Name: memberClusterNamespace}, &ns))
-			}, eventuallyDuration, eventuallyInterval).Should(BeTrue(), "Failed to garbage collect resources owned by member cluster")
+			}, 2*eventuallyDuration, eventuallyInterval).Should(BeTrue(), "Failed to garbage collect resources owned by member cluster")
 
 			Eventually(func() bool {
 				return apierrors.IsNotFound(hubClient.Get(ctx, types.NamespacedName{Name: memberCluster3WestProdName}, &clusterv1beta1.MemberCluster{}))

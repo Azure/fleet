@@ -924,7 +924,7 @@ func (r *Reconciler) processApplyStrategyUpdates(
 		// Verify if the binding has the latest apply strategy set.
 		if equality.Semantic.DeepEqual(binding.Spec.ApplyStrategy, applyStrategy) {
 			// The binding already has the latest apply strategy set; no need to push the update.
-			klog.V(2).InfoS("The binding already has the latest apply strategy; skip the apply strategy update", "clusterResourceBinding", klog.KObj(binding))
+			klog.V(3).InfoS("The binding already has the latest apply strategy; skip the apply strategy update", "clusterResourceBinding", klog.KObj(binding))
 			continue
 		}
 

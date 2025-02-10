@@ -67,7 +67,7 @@ var (
 		}),
 	}
 
-	defaultUnavailablePeriod = time.Duration(5)
+	defaultUnavailablePeriod = time.Duration(3)
 )
 
 func serviceScheme(t *testing.T) *runtime.Scheme {

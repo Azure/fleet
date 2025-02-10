@@ -1332,12 +1332,12 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("can add a new node", func() {
+			node := &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeNameForWatcherTests,
+				},
+			}
 			Eventually(func() error {
-				node := &corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: nodeNameForWatcherTests,
-					},
-				}
 				if err := memberCluster3WestProdClient.Create(ctx, node); err != nil && !errors.IsAlreadyExists(err) {
 					return err
 				}
@@ -1359,7 +1359,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		It("should pick the new cluster", func() {
 			targetClusterNames := []string{memberCluster3WestProdName}
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
-			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, 2*eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 

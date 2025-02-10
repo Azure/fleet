@@ -70,8 +70,10 @@ const (
 )
 
 const (
-	eventuallyDuration     = time.Second * 15 // Do not bump this value unless you have a good reason.
-	longEventuallyDuration = time.Minute * 2  // Do not bump this value unless you have a good reason.
+	// Do not bump this value unless you have a good reason. This is to safeguard any performance related regressions.
+	eventuallyDuration = time.Second * 15
+	// This is for cluster setup and workload related test cases.
+	longEventuallyDuration = time.Minute * 2
 	eventuallyInterval     = time.Millisecond * 250
 	consistentlyDuration   = time.Second * 15
 	consistentlyInterval   = time.Millisecond * 500
