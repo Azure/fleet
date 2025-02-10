@@ -40,6 +40,8 @@ kind: ClusterResourceOverride
 metadata:
   name: example-cro
 spec:
+  placement:
+    name: crp-example
   clusterResourceSelectors:
     - group: rbac.authorization.k8s.io
       kind: ClusterRole

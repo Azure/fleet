@@ -10,11 +10,16 @@ These changes can include updates to container images, environment variables, re
 
 ## API Components
 The ResourceOverride API consists of the following components:
+- **Placement**: This specifies which placement the override is applied to.
 - **Resource Selectors**: These specify the set of resources selected for overriding.
 - **Policy**: This specifies the policy to be applied to the selected resources.
 
 
 The following sections discuss these components in depth.
+
+## Placement
+
+To configure which placement the override is applied to, you can use the name of `ResourcePlacement`.
 
 ## Resource Selectors
 A `ResourceOverride` object may feature one or more resource selectors, specifying which resources to select to be overridden.
@@ -35,6 +40,8 @@ metadata:
   name: example-ro
   namespace: test-namespace
 spec:
+  placement:
+    name: crp-example
   resourceSelectors:
     -  group: apps
        kind: Deployment
@@ -95,7 +102,11 @@ resources on selected clusters.
 
 Each `OverrideRule` supports the following fields:
 - **Cluster Selector**: This specifies the set of clusters to which the override applies.
-- **JSON Patch Override**: This specifies the changes to be applied to the selected resources.
+- **Override Type**: This specifies the type of override to be applied. The default type is `JSONPatch`.
+    - `JSONPatch`: applies the JSON patch to the selected resources using [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
+    - `Delete`: deletes the selected resources on the target cluster.
+- **JSON Patch Override**: This specifies the changes to be applied to the selected resources when the override type is `JSONPatch`.
+
 
 To add an override rule, edit the `policy` field in the `ResourceOverride` spec:
 
@@ -106,6 +117,8 @@ metadata:
   name: example-ro
   namespace: test-namespace
 spec:
+  placement:
+    name: crp-example
   resourceSelectors:
     -  group: apps
        kind: Deployment
@@ -124,7 +137,7 @@ spec:
             value: "nginx:1.20.0"
 ```
 The `ResourceOverride` object above will replace the image of the container in the `Deployment` named `my-deployment` 
-with the image `nginx:1.20.0` on all clusters with the label `env: prod`.
+with the image `nginx:1.20.0` on all clusters with the label `env: prod` selected by the clusterResourcePlacement `crp-example`.
 > The ResourceOverride mentioned above utilizes the deployment displayed below:
 > ```
 > apiVersion: apps/v1
@@ -149,11 +162,43 @@ with the image `nginx:1.20.0` on all clusters with the label `env: prod`.
 >   ...
 >```
 
+To delete the `my-deployment` on the clusters with the label `env: test` selected by the clusterResourcePlacement `crp-example`,
+you can use the `Delete` override type.
+```yaml
+apiVersion: placement.kubernetes-fleet.io/v1alpha1
+kind: ResourceOverride
+metadata:
+  name: example-ro
+  namespace: test-namespace
+spec:
+  placement:
+    name: crp-example
+  resourceSelectors:
+    -  group: apps
+       kind: Deployment
+       version: v1
+       name: my-deployment
+  policy:
+    overrideRules:
+      - clusterSelector:
+          clusterSelectorTerms:
+            - labelSelector:
+                matchLabels:
+                  env: test
+        overrideType: Delete
+```
+
 ### Cluster Selector
 To specify the clusters to which the override applies, you can use the `clusterSelector` field in the `OverrideRule` spec.
 The `clusterSelector` field supports the following fields:
 - `clusterSelectorTerms`: A list of terms that are used to select clusters.
     * Each term in the list is used to select clusters based on the label selector.
+
+### Override Type
+To specify the type of override to be applied, you can use the overrideType field in the OverrideRule spec.
+The default value is `JSONPatch`.
+- `JSONPatch`: applies the JSON patch to the selected resources using [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
+- `Delete`: deletes the selected resources on the target cluster.
 
 ### JSON Patch Override
 To specify the changes to be applied to the selected resources, you can use the jsonPatchOverrides field in the OverrideRule spec.
@@ -186,6 +231,39 @@ The `jsonPatchOverrides` field supports the following fields:
 
 - `value`: The value to be set.
    * If the `op` is `remove`, the value cannot be set.
+  * There is a list of reserved variables that will be replaced by the actual values:
+      * `${MEMBER-CLUSTER-NAME}`:  this will be replaced by the name of the `memberCluster` that represents this cluster.
+
+For example, to add a label to the `Deployment` named `my-deployment` on clusters with the label `env: prod`,
+you can use the following configuration:
+```yaml
+apiVersion: placement.kubernetes-fleet.io/v1alpha1
+kind: ResourceOverride
+metadata:
+  name: example-ro
+  namespace: test-namespace
+spec:
+  placement:
+    name: crp-example
+  resourceSelectors:
+    -  group: apps
+       kind: Deployment
+       version: v1
+       name: my-deployment
+  policy:
+    overrideRules:
+      - clusterSelector:
+          clusterSelectorTerms:
+            - labelSelector:
+                matchLabels:
+                  env: prod
+        jsonPatchOverrides:
+          - op: add
+            path: /metadata/labels
+            value:
+              {"cluster-name":"${MEMBER-CLUSTER-NAME}"}
+```
+The `ResourceOverride` object above will add a label `cluster-name` with the value of the `memberCluster` name to the `Deployment` named `example-ro` on clusters with the label `env: prod`.
 
 
 ### Multiple Override Rules
@@ -197,6 +275,8 @@ metadata:
   name: example-ro
   namespace: test-namespace
 spec:
+  placement:
+    name: crp-example
   resourceSelectors:
     -  group: apps
        kind: Deployment
