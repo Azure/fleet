@@ -720,6 +720,11 @@ var LessFuncDiffedResourcePlacements = func(a, b placementv1beta1.DiffedResource
 	return aStr < bStr
 }
 
+// LessFuncCondition is a less function for sorting conditions based on its types.
+var LessFuncConditionByType = func(a, b metav1.Condition) bool {
+	return a.Type < b.Type
+}
+
 // IsDiffedResourcePlacementsEqual returns true if the two sets of diffed resource placements are equal.
 func IsDiffedResourcePlacementsEqual(oldDiffedResourcePlacements, newDiffedResourcePlacements []placementv1beta1.DiffedResourcePlacement) bool {
 	if len(oldDiffedResourcePlacements) != len(newDiffedResourcePlacements) {
