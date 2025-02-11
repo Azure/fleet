@@ -111,22 +111,24 @@ func NewReconciler(
 	}
 }
 
-const (
-	allManifestsAppliedMessage          = "All the specified manifests have been applied"
-	allAppliedObjectAvailableMessage    = "All of the applied manifests are available"
-	someAppliedObjectUntrackableMessage = "Some of the applied manifests cannot be tracked for availability"
-
-	notAllManifestsAppliedReason         = "FailedToApplyAllManifests"
-	notAllManifestsAppliedMessage        = "Failed to apply all the specified manifests (%d of %d manifests are applied)"
-	notAllAppliedObjectsAvailableReason  = "NotAllAppliedObjectAreAvailable"
-	notAllAppliedObjectsAvailableMessage = "Not all of the applied manifests are available (%d of %d manifests are available)"
-
-	someObjectsHaveDiffs = "Found configurations diffs on some objects (%d of %d objects have diffs)"
-)
-
 var (
-	// Some exported reasons. Currently only the untrackable reason is being actively used.
-	WorkNotTrackableReason = string(ManifestProcessingAvailabilityResultTypeNotTrackable)
+	// Some exported reasons for Work object conditions. Currently only the untrackable reason is being actively used.
+	WorkNotAllManfestsTrackableReason     = "SomeManifestsAreNotAvailabilityTrackable"
+	WorkAllManifestsAppliedReason         = "AllManifestsApplied"
+	WorkAllManifestsAvailableReason       = "AllManifestsAvailable"
+	WorkAllManifestsDiffReportedReason    = "AllManifestsDiffReported"
+	WorkNotAllManifestsAppliedReason      = "SomeManifestsAreNotApplied"
+	WorkNotAllManifestsAvailableReason    = "SomeManifestsAreNotAvailable"
+	WorkNotAllManifestsDiffReportedReason = "SomeManifestsHaveNotReportedDiff"
+
+	// Some condition messages for Work object conditions.
+	allManifestsAppliedMessage           = "All the specified manifests have been applied"
+	allManifestsHaveReportedDiffMessage  = "All the specified manifests have reported diff"
+	allAppliedObjectAvailableMessage     = "All of the applied manifests are available"
+	someAppliedObjectUntrackableMessage  = "Some of the applied manifests cannot be tracked for availability"
+	notAllManifestsAppliedMessage        = "Failed to apply all manifests (%d of %d manifests are applied)"
+	notAllAppliedObjectsAvailableMessage = "Some manifests are not available (%d of %d manifests are available)"
+	notAllManifestsHaveReportedDiff      = "Failed to report diff on all manifests (%d of %d manifests have reported diff)"
 )
 
 type manifestProcessingAppliedResultType string

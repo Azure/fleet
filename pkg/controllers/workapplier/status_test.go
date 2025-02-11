@@ -92,13 +92,13 @@ func TestRefreshWorkStatus(t *testing.T) {
 					{
 						Type:               fleetv1beta1.WorkConditionTypeApplied,
 						Status:             metav1.ConditionTrue,
-						Reason:             string(ManifestProcessingApplyResultTypeApplied),
+						Reason:             WorkAllManifestsAppliedReason,
 						ObservedGeneration: 1,
 					},
 					{
 						Type:               fleetv1beta1.WorkConditionTypeAvailable,
 						Status:             metav1.ConditionTrue,
-						Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+						Reason:             WorkAllManifestsAvailableReason,
 						ObservedGeneration: 1,
 					},
 				},
@@ -177,13 +177,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					{
 						Type:               fleetv1beta1.WorkConditionTypeApplied,
 						Status:             metav1.ConditionFalse,
-						Reason:             notAllManifestsAppliedReason,
-						ObservedGeneration: 2,
-					},
-					{
-						Type:               fleetv1beta1.WorkConditionTypeAvailable,
-						Status:             metav1.ConditionFalse,
-						Reason:             notAllAppliedObjectsAvailableReason,
+						Reason:             WorkNotAllManifestsAppliedReason,
 						ObservedGeneration: 2,
 					},
 				},
@@ -287,12 +281,12 @@ func TestRefreshWorkStatus(t *testing.T) {
 					{
 						Type:   fleetv1beta1.WorkConditionTypeApplied,
 						Status: metav1.ConditionTrue,
-						Reason: string(ManifestProcessingApplyResultTypeApplied),
+						Reason: WorkAllManifestsAppliedReason,
 					},
 					{
 						Type:   fleetv1beta1.WorkConditionTypeAvailable,
 						Status: metav1.ConditionFalse,
-						Reason: notAllAppliedObjectsAvailableReason,
+						Reason: WorkNotAllManifestsAvailableReason,
 					},
 				},
 				ManifestConditions: []fleetv1beta1.ManifestCondition{
@@ -381,7 +375,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             notAllManifestsAppliedReason,
+							Reason:             WorkNotAllManifestsAppliedReason,
 							ObservedGeneration: 1,
 						},
 					},
@@ -482,13 +476,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					{
 						Type:               fleetv1beta1.WorkConditionTypeApplied,
 						Status:             metav1.ConditionFalse,
-						Reason:             notAllManifestsAppliedReason,
-						ObservedGeneration: 2,
-					},
-					{
-						Type:               fleetv1beta1.WorkConditionTypeAvailable,
-						Status:             metav1.ConditionFalse,
-						Reason:             notAllAppliedObjectsAvailableReason,
+						Reason:             WorkNotAllManifestsAppliedReason,
 						ObservedGeneration: 2,
 					},
 				},
@@ -570,7 +558,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             notAllManifestsAppliedReason,
+							Reason:             WorkNotAllManifestsAppliedReason,
 							ObservedGeneration: 1,
 						},
 					},
@@ -625,15 +613,9 @@ func TestRefreshWorkStatus(t *testing.T) {
 			wantWorkStatus: &fleetv1beta1.WorkStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               fleetv1beta1.WorkConditionTypeApplied,
-						Status:             metav1.ConditionFalse,
-						Reason:             notAllManifestsAppliedReason,
-						ObservedGeneration: 1,
-					},
-					{
 						Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 						Status:             metav1.ConditionTrue,
-						Reason:             string(ManifestProcessingReportDiffResultTypeFoundDiff),
+						Reason:             WorkAllManifestsDiffReportedReason,
 						ObservedGeneration: 2,
 					},
 				},
@@ -649,11 +631,6 @@ func TestRefreshWorkStatus(t *testing.T) {
 							Resource:  "deployments",
 						},
 						Conditions: []metav1.Condition{
-							{
-								Type:   fleetv1beta1.WorkConditionTypeApplied,
-								Status: metav1.ConditionFalse,
-								Reason: string(ManifestProcessingApplyResultTypeFoundDrifts),
-							},
 							{
 								Type:   fleetv1beta1.WorkConditionTypeDiffReported,
 								Status: metav1.ConditionTrue,
