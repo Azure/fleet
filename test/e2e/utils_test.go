@@ -226,7 +226,7 @@ func checkIfMemberClusterHasJoined(memberCluster *framework.Cluster) {
 		}
 
 		return nil
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Member cluster has not joined yet")
+	}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Member cluster has not joined yet")
 }
 
 // checkIfAzurePropertyProviderIsWorking verifies if all member clusters have the Azure property
@@ -284,7 +284,7 @@ func checkIfAzurePropertyProviderIsWorking() {
 				return fmt.Errorf("member cluster status conditions diff (-got, +want):\n%s", diff)
 			}
 			return nil
-		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to confirm that Azure property provider is up and running")
+		}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to confirm that Azure property provider is up and running")
 	}
 }
 
@@ -475,7 +475,7 @@ func cleanupInvalidClusters() {
 			}
 			mcObj.Finalizers = []string{}
 			return hubClient.Update(ctx, mcObj)
-		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update member cluster object")
+		}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update member cluster object")
 		Expect(hubClient.Delete(ctx, mcObj)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete member cluster object")
 		Eventually(func() error {
 			mcObj := &clusterv1beta1.MemberCluster{}
@@ -483,7 +483,7 @@ func cleanupInvalidClusters() {
 				return fmt.Errorf("member cluster still exists or an unexpected error occurred: %w", err)
 			}
 			return nil
-		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if member cluster is deleted, member cluster still exists")
+		}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if member cluster is deleted, member cluster still exists")
 	}
 }
 
@@ -711,7 +711,7 @@ func checkIfAllMemberClustersHaveLeft() {
 			}
 
 			return nil
-		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete member cluster")
+		}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete member cluster")
 	}
 }
 

@@ -21,10 +21,14 @@ spec:
   versions:
   - additionalPrinterColumns:
     - jsonPath: .status.conditions[?(@.type=="WorkSynchronized")].status
-      name: WorkCreated
+      name: WorkSynchronized
       type: string
     - jsonPath: .status.conditions[?(@.type=="Applied")].status
       name: ResourcesApplied
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Available")].status
+      name: ResourceAvailable
+      priority: 1
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
@@ -388,10 +392,14 @@ spec:
       status: {}
   - additionalPrinterColumns:
     - jsonPath: .status.conditions[?(@.type=="WorkSynchronized")].status
-      name: WorkCreated
+      name: WorkSynchronized
       type: string
     - jsonPath: .status.conditions[?(@.type=="Applied")].status
       name: ResourcesApplied
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Available")].status
+      name: ResourceAvailable
+      priority: 1
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
