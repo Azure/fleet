@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -72,7 +73,9 @@ func (r *Reconciler) executeUpdatingStage(
 	toBeUpdatedBindings []*placementv1beta1.ClusterResourceBinding,
 ) (time.Duration, error) {
 	updatingStageStatus := &updateRun.Status.StagesStatus[updatingStageIndex]
-	resourceSnapshotName := updateRun.Spec.ResourceSnapshotIndex
+	// The parse error is ignored because the initialization should have caught it.
+	resourceIndex, _ := strconv.Atoi(updateRun.Spec.ResourceSnapshotIndex)
+	resourceSnapshotName := fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, updateRun.Spec.PlacementName, resourceIndex)
 	updateRunRef := klog.KObj(updateRun)
 	// Create the map of the toBeUpdatedBindings.
 	toBeUpdatedBindingsMap := make(map[string]*placementv1beta1.ClusterResourceBinding, len(toBeUpdatedBindings))
@@ -101,7 +104,7 @@ func (r *Reconciler) executeUpdatingStage(
 		binding := toBeUpdatedBindingsMap[clusterStatus.ClusterName]
 		if !condition.IsConditionStatusTrue(clusterStartedCond, updateRun.Generation) {
 			// The cluster has not started updating yet.
-			if !isBindingSyncedWithClusterStatus(updateRun, binding, clusterStatus) {
+			if !isBindingSyncedWithClusterStatus(resourceSnapshotName, updateRun, binding, clusterStatus) {
 				klog.V(2).InfoS("Found the first cluster that needs to be updated", "cluster", clusterStatus.ClusterName, "stage", updatingStageStatus.StageName, "clusterStagedUpdateRun", updateRunRef)
 				// The binding is not up-to-date with the cluster status.
 				binding.Spec.State = placementv1beta1.BindingStateBound
@@ -149,7 +152,7 @@ func (r *Reconciler) executeUpdatingStage(
 		}
 
 		// Now the cluster has to be updating, the binding should point to the right resource snapshot and the binding should be bound.
-		if !isBindingSyncedWithClusterStatus(updateRun, binding, clusterStatus) || binding.Spec.State != placementv1beta1.BindingStateBound ||
+		if !isBindingSyncedWithClusterStatus(resourceSnapshotName, updateRun, binding, clusterStatus) || binding.Spec.State != placementv1beta1.BindingStateBound ||
 			!condition.IsConditionStatusTrue(meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingRolloutStarted)), binding.Generation) {
 			unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the updating cluster `%s` in the stage %s does not match the cluster status: %+v, binding: %+v, condition: %+v",
 				clusterStatus.ClusterName, updatingStageStatus.StageName, clusterStatus, binding.Spec, binding.GetCondition(string(placementv1beta1.ResourceBindingRolloutStarted))))
@@ -303,11 +306,20 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 						klog.ErrorS(unexpectedErr, "Found an approval request targeting wrong stage", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
 						return false, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 					}
-					if !condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequest.Status.Conditions, string(placementv1beta1.ApprovalRequestConditionApproved)), approvalRequest.Generation) {
+					approvalAccepted := condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequest.Status.Conditions, string(placementv1beta1.ApprovalRequestConditionApprovalAccepted)), approvalRequest.Generation)
+					// Approved state should not change once the approval is accepted.
+					if !approvalAccepted && !condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequest.Status.Conditions, string(placementv1beta1.ApprovalRequestConditionApproved)), approvalRequest.Generation) {
 						klog.V(2).InfoS("The approval request has not been approved yet", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
 						return false, nil
 					}
 					klog.V(2).InfoS("The approval request has been approved", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
+					if !approvalAccepted {
+						if err := r.updateApprovalRequestAccepted(ctx, &approvalRequest); err != nil {
+							klog.ErrorS(err, "Failed to accept the approved approval request", "approvalRequest", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
+							// retriable err
+							return false, err
+						}
+					}
 					markAfterStageRequestApproved(&updatingStageStatus.AfterStageTaskStatus[i], updateRun.Generation)
 				} else {
 					// retriable error
@@ -335,7 +347,7 @@ func (r *Reconciler) updateBindingRolloutStarted(ctx context.Context, binding *p
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: binding.Generation,
 		Reason:             condition.RolloutStartedReason,
-		Message:            fmt.Sprintf("Detected the new changes on the resources and started the rollout process, resourceSnapshotName: %s, clusterStagedUpdateRun: %s", updateRun.Spec.ResourceSnapshotIndex, updateRun.Name),
+		Message:            fmt.Sprintf("Detected the new changes on the resources and started the rollout process, resourceSnapshotIndex: %s, clusterStagedUpdateRun: %s", updateRun.Spec.ResourceSnapshotIndex, updateRun.Name),
 	}
 	binding.SetConditions(cond)
 	if err := r.Client.Status().Update(ctx, binding); err != nil {
@@ -346,10 +358,27 @@ func (r *Reconciler) updateBindingRolloutStarted(ctx context.Context, binding *p
 	return nil
 }
 
+// updateApprovalRequestAccepted updates the *approved* clusterApprovalRequest status to indicate the approval accepted.
+func (r *Reconciler) updateApprovalRequestAccepted(ctx context.Context, appReq *placementv1beta1.ClusterApprovalRequest) error {
+	cond := metav1.Condition{
+		Type:               string(placementv1beta1.ApprovalRequestConditionApprovalAccepted),
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: appReq.Generation,
+		Reason:             condition.ApprovalRequestApprovalAcceptedReason,
+	}
+	meta.SetStatusCondition(&appReq.Status.Conditions, cond)
+	if err := r.Client.Status().Update(ctx, appReq); err != nil {
+		klog.ErrorS(err, "Failed to update approval request status", "clusterApprovalRequest", klog.KObj(appReq), "condition", cond)
+		return controller.NewUpdateIgnoreConflictError(err)
+	}
+	klog.V(2).InfoS("Updated binding as rolloutStarted", "clusterApprovalRequest", klog.KObj(appReq), "condition", cond)
+	return nil
+}
+
 // isBindingSyncedWithClusterStatus checks if the binding is up-to-date with the cluster status.
-func isBindingSyncedWithClusterStatus(updateRun *placementv1beta1.ClusterStagedUpdateRun, binding *placementv1beta1.ClusterResourceBinding, cluster *placementv1beta1.ClusterUpdatingStatus) bool {
-	if binding.Spec.ResourceSnapshotName != updateRun.Spec.ResourceSnapshotIndex {
-		klog.ErrorS(fmt.Errorf("binding has different resourceSnapshotName, want: %s, got: %s", updateRun.Spec.ResourceSnapshotIndex, binding.Spec.ResourceSnapshotName), "ClusterResourceBinding is not up-to-date", "clusterResourceBinding", klog.KObj(binding), "clusterStagedUpdateRun", klog.KObj(updateRun))
+func isBindingSyncedWithClusterStatus(resourceSnapshotName string, updateRun *placementv1beta1.ClusterStagedUpdateRun, binding *placementv1beta1.ClusterResourceBinding, cluster *placementv1beta1.ClusterUpdatingStatus) bool {
+	if binding.Spec.ResourceSnapshotName != resourceSnapshotName {
+		klog.ErrorS(fmt.Errorf("binding has different resourceSnapshotName, want: %s, got: %s", resourceSnapshotName, binding.Spec.ResourceSnapshotName), "ClusterResourceBinding is not up-to-date", "clusterResourceBinding", klog.KObj(binding), "clusterStagedUpdateRun", klog.KObj(updateRun))
 		return false
 	}
 	if !reflect.DeepEqual(cluster.ResourceOverrideSnapshots, binding.Spec.ResourceOverrideSnapshots) {
