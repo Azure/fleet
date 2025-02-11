@@ -730,6 +730,94 @@ func TestIsBindingReady(t *testing.T) {
 			wantReady:       false,
 			wantWaitTime:    -1,
 		},
+		"binding diff report true should return ready": {
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 2,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.NewTime(now.Add(-5 * time.Minute)),
+							ObservedGeneration: 2,
+						},
+					},
+				},
+			},
+			readyTimeCutOff: now,
+			wantReady:       true,
+			wantWaitTime:    0,
+		},
+		"binding diff report false should return not ready and a negative wait time": {
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 10,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionFalse,
+							LastTransitionTime: metav1.NewTime(now.Add(-5 * time.Minute)),
+							ObservedGeneration: 10,
+						},
+					},
+				},
+			},
+			readyTimeCutOff: now,
+			wantReady:       false,
+			wantWaitTime:    -1,
+		},
+		"binding diff report true on different generation should not be ready": {
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 10,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionFalse,
+							LastTransitionTime: metav1.NewTime(now.Add(-5 * time.Minute)),
+							ObservedGeneration: 9,
+						},
+					},
+				},
+			},
+			readyTimeCutOff: now,
+			wantReady:       false,
+			wantWaitTime:    -1,
+		},
+
+		"binding diff report false on different generation with successful current apply should be ready": {
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 10,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingAvailable),
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.NewTime(now.Add(-5 * time.Second)),
+							Reason:             work.WorkAvailableReason,
+							ObservedGeneration: 10,
+						},
+						{
+							Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionFalse,
+							LastTransitionTime: metav1.NewTime(now.Add(-5 * time.Minute)),
+							ObservedGeneration: 9, //previous generation
+						},
+					},
+				},
+			},
+			readyTimeCutOff: now,
+			wantReady:       true,
+			wantWaitTime:    0,
+		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {

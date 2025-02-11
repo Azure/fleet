@@ -358,7 +358,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 		case fleetv1beta1.BindingStateUnscheduled:
 			if bindingutils.HasBindingFailed(binding) {
 				klog.V(3).InfoS("Found a failed to be ready unscheduled binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
-			} else {
+			} else if !bindingutils.IsBindingReportDiff(binding) {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
 			}
 			waitTime, bindingReady := isBindingReady(binding, readyTimeCutOff)
@@ -407,7 +407,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			if bindingutils.HasBindingFailed(binding) {
 				klog.V(3).InfoS("Found a failed to be ready bound binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 				bindingFailed = true
-			} else {
+			} else if !bindingutils.IsBindingReportDiff(binding) {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
 			}
 
@@ -563,6 +563,12 @@ func (r *Reconciler) calculateRealTarget(crp *fleetv1beta1.ClusterResourcePlacem
 // A binding with not trackable resources is considered ready if the binding's current spec has been available before
 // the ready cutoff time.
 func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOff time.Time) (time.Duration, bool) {
+	// the binding is ready if the diff report has been reported
+	diffReportCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingDiffReported))
+	if condition.IsConditionStatusTrue(diffReportCondition, binding.GetGeneration()) {
+		// we can move to the next binding
+		return 0, true
+	}
 	// find the latest applied condition that has the same generation as the binding
 	availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
 	if condition.IsConditionStatusTrue(availableCondition, binding.GetGeneration()) {
@@ -580,6 +586,7 @@ func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOf
 		return waitTime, false
 	}
 	// we don't know when the current spec is available yet, return a negative wait time
+	// since we will reconcile again after the binding status changes
 	return -1, false
 }
 
