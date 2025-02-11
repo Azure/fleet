@@ -200,7 +200,8 @@ func (r *Reconciler) executeDeleteStage(
 	for i := range existingDeleteStageStatus.Clusters {
 		existingDeleteStageClusterMap[existingDeleteStageStatus.Clusters[i].ClusterName] = &existingDeleteStageStatus.Clusters[i]
 	}
-	deletingBinding := 0
+	// Mark the delete stage as started in case it's not.
+	markStageUpdatingStarted(updateRun.Status.DeletionStageStatus, updateRun.Generation)
 	for _, binding := range toBeDeletedBindings {
 		curCluster, exist := existingDeleteStageClusterMap[binding.Spec.TargetCluster]
 		if !exist {
@@ -225,7 +226,6 @@ func (r *Reconciler) executeDeleteStage(
 				klog.ErrorS(unexpectedErr, "The binding should be deleting before we mark a cluster deleting", "clusterStatus", curCluster, "clusterStagedUpdateRun", updateRunRef)
 				return false, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 			}
-			deletingBinding++
 			continue
 		}
 		// The cluster status is not deleting yet
@@ -235,10 +235,6 @@ func (r *Reconciler) executeDeleteStage(
 		}
 		klog.V(2).InfoS("Deleted a binding pointing to a to be deleted cluster", "binding", klog.KObj(binding), "cluster", curCluster.ClusterName, "clusterStagedUpdateRun", updateRunRef)
 		markClusterUpdatingStarted(curCluster, updateRun.Generation)
-		if deletingBinding == 0 {
-			markStageUpdatingStarted(updateRun.Status.DeletionStageStatus, updateRun.Generation)
-		}
-		deletingBinding++
 	}
 	// The rest of the clusters in the stage are not in the toBeDeletedBindings so it should be marked as delete succeeded.
 	for _, clusterStatus := range existingDeleteStageClusterMap {
