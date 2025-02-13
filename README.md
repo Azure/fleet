@@ -87,13 +87,16 @@ understand the details of various features offered by fleet.
 
 ## Code of Conduct
 
-This project has adopted the [Microsoft Open Source Code of Conduct][8]. For more information, see the [Code of Conduct FAQ][9] or contact [opencode@microsoft.com][19] with any additional questions or comments.
+This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information, see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
 ## Contributing
 
-## Support
+The [contribution guide](CONTRIBUTING.md) covers everything you need to know about how you can contribute to KubeFleet.
 
-KubeFleet is an open source project that is [**NOT** covered by the Microsoft Azure support policy][10]. [Please search open issues here][11], and if your issue isn't already represented please [open a new one][12]. The project maintainers will respond to the best of their abilities.
+
+## Support
+For more information, see [SUPPORT.md](SUPPORT.md).
+
 [1]:  https://img.shields.io/github/v/release/Azure/fleet
 [2]:  https://goreportcard.com/badge/go.goms.io/fleet
 [3]:  https://goreportcard.com/report/go.goms.io/fleet
