@@ -32,7 +32,7 @@ func (r *Reconciler) refreshWorkStatus(
 	appliedManifestsCount := 0
 	availableAppliedObjectsCount := 0
 	untrackableAppliedObjectsCount := 0
-	diffedObjectsCount := 0
+	diffReportedObjectsCount := 0
 
 	// Use the now timestamp as the observation time.
 	now := metav1.Now()
@@ -136,9 +136,6 @@ func (r *Reconciler) refreshWorkStatus(
 				FirstDiffedObservedTime:           *firstDiffedTimestamp,
 				ObservedDiffs:                     bundle.diffs,
 			}
-
-			// Tally the stats.
-			diffedObjectsCount++
 		}
 
 		// Tally the stats.
@@ -151,24 +148,27 @@ func (r *Reconciler) refreshWorkStatus(
 		if bundle.availabilityResTyp == ManifestProcessingAvailabilityResultTypeNotTrackable {
 			untrackableAppliedObjectsCount++
 		}
+		if isManifestObjectDiffReported(bundle.reportDiffResTyp) {
+			diffReportedObjectsCount++
+		}
 	}
 
 	// Refresh the Work object status conditions.
 
 	// Do a sanity check.
-	if appliedManifestsCount > manifestCount || availableAppliedObjectsCount > manifestCount {
+	if appliedManifestsCount > manifestCount || availableAppliedObjectsCount > manifestCount || untrackableAppliedObjectsCount > manifestCount || diffReportedObjectsCount > manifestCount {
 		// Normally this should never happen.
 		return controller.NewUnexpectedBehaviorError(
-			fmt.Errorf("the number of applied manifests (%d) or available applied objects (%d) exceeds the total number of manifests (%d)",
-				appliedManifestsCount, availableAppliedObjectsCount, manifestCount))
+			fmt.Errorf("the number of applied manifests (%d), available applied objects (%d), untrackable applied objects (%d), or diff reported objects (%d) exceeds the total number of manifests (%d)",
+				appliedManifestsCount, availableAppliedObjectsCount, untrackableAppliedObjectsCount, diffReportedObjectsCount, manifestCount))
 	}
 
 	if work.Status.Conditions == nil {
 		work.Status.Conditions = []metav1.Condition{}
 	}
 	setWorkAppliedCondition(work, manifestCount, appliedManifestsCount)
-	setWorkAvailableCondition(work, manifestCount, availableAppliedObjectsCount, untrackableAppliedObjectsCount)
-	setWorkDiffReportedCondition(work, manifestCount, diffedObjectsCount)
+	setWorkAvailableCondition(work, manifestCount, appliedManifestsCount, availableAppliedObjectsCount, untrackableAppliedObjectsCount)
+	setWorkDiffReportedCondition(work, manifestCount, diffReportedObjectsCount)
 	work.Status.ManifestConditions = rebuiltManifestConds
 
 	// Update the Work object status.
@@ -222,6 +222,12 @@ func isAppliedObjectAvailable(availabilityResTyp ManifestProcessingAvailabilityR
 	return availabilityResTyp == ManifestProcessingAvailabilityResultTypeAvailable || availabilityResTyp == ManifestProcessingAvailabilityResultTypeNotTrackable
 }
 
+// isManifestObjectDiffReported returns if a diff report result type indicates that a manifest
+// object has been checked for configuration differences.
+func isManifestObjectDiffReported(reportDiffResTyp ManifestProcessingReportDiffResultType) bool {
+	return reportDiffResTyp == ManifestProcessingReportDiffResultTypeFoundDiff || reportDiffResTyp == ManifestProcessingReportDiffResultTypeNoDiffFound
+}
+
 // setManifestAppliedCondition sets the Applied condition on an applied manifest.
 func setManifestAppliedCondition(
 	manifestCond *fleetv1beta1.ManifestCondition,
@@ -254,9 +260,7 @@ func setManifestAppliedCondition(
 		}
 	case ManifestProcessingApplyResultTypeNoApplyPerformed:
 		// ReportDiff mode is on and no apply op has been performed. In this case, Fleet
-		// will leave the Applied condition as it is (i.e., it might be unset, or has become
-		// stale).
-		return
+		// will reset the Applied condition.
 	default:
 		// The apply op fails.
 		appliedCond = &metav1.Condition{
@@ -268,7 +272,13 @@ func setManifestAppliedCondition(
 		}
 	}
 
-	meta.SetStatusCondition(&manifestCond.Conditions, *appliedCond)
+	if appliedCond != nil {
+		meta.SetStatusCondition(&manifestCond.Conditions, *appliedCond)
+	} else {
+		// As the conditions are ported back; removal must be performed if the DiffReported
+		// condition is not set.
+		meta.RemoveStatusCondition(&manifestCond.Conditions, fleetv1beta1.WorkConditionTypeApplied)
+	}
 }
 
 // setManifestAvailableCondition sets the Available condition on an applied manifest.
@@ -325,7 +335,7 @@ func setManifestAvailableCondition(
 	if availableCond != nil {
 		meta.SetStatusCondition(&manifestCond.Conditions, *availableCond)
 	} else {
-		// As the conditions are port back; removal must be performed if the Available
+		// As the conditions are ported back; removal must be performed if the Available
 		// condition is not set.
 		meta.RemoveStatusCondition(&manifestCond.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 	}
@@ -378,7 +388,7 @@ func setManifestDiffReportedCondition(
 	if diffReportedCond != nil {
 		meta.SetStatusCondition(&manifestCond.Conditions, *diffReportedCond)
 	} else {
-		// As the conditions are port back; removal must be performed if the DiffReported
+		// As the conditions are ported back; removal must be performed if the DiffReported
 		// condition is not set.
 		meta.RemoveStatusCondition(&manifestCond.Conditions, fleetv1beta1.WorkConditionTypeDiffReported)
 	}
@@ -396,14 +406,13 @@ func setWorkAppliedCondition(
 	case work.Spec.ApplyStrategy != nil && work.Spec.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff:
 		// ReportDiff mode is on; no apply op has been performed, and consequently
 		// Fleet will not update the Applied condition.
-		return
 	case appliedManifestCount == manifestCount:
 		// All manifests have been successfully applied.
 		appliedCond = &metav1.Condition{
 			Type:   fleetv1beta1.WorkConditionTypeApplied,
 			Status: metav1.ConditionTrue,
 			// Here Fleet reuses the same reason for individual manifests.
-			Reason:             string(ManifestProcessingApplyResultTypeApplied),
+			Reason:             WorkAllManifestsAppliedReason,
 			Message:            allManifestsAppliedMessage,
 			ObservedGeneration: work.Generation,
 		}
@@ -412,12 +421,19 @@ func setWorkAppliedCondition(
 		appliedCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeApplied,
 			Status:             metav1.ConditionFalse,
-			Reason:             notAllManifestsAppliedReason,
+			Reason:             WorkNotAllManifestsAppliedReason,
 			Message:            fmt.Sprintf(notAllManifestsAppliedMessage, appliedManifestCount, manifestCount),
 			ObservedGeneration: work.Generation,
 		}
 	}
-	meta.SetStatusCondition(&work.Status.Conditions, *appliedCond)
+
+	if appliedCond != nil {
+		meta.SetStatusCondition(&work.Status.Conditions, *appliedCond)
+	} else {
+		// For consistency reasons, Fleet will remove the Applied condition if the
+		// it is not set in the current run (i.e., ReportDiff mode is on).
+		meta.RemoveStatusCondition(&work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
+	}
 }
 
 // setWorkAvailableCondition sets the Available condition on a Work object.
@@ -425,20 +441,21 @@ func setWorkAppliedCondition(
 // A Work object is considered to be available if all of its applied manifests are available.
 func setWorkAvailableCondition(
 	work *fleetv1beta1.Work,
-	manifestCount, availableManifestCount, untrackableAppliedObjectsCount int,
+	manifestCount, appliedManifestCount, availableManifestCount, untrackableAppliedObjectsCount int,
 ) {
 	var availableCond *metav1.Condition
 	switch {
 	case work.Spec.ApplyStrategy != nil && work.Spec.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff:
 		// ReportDiff mode is on; no apply op has been performed, and consequently
 		// Fleet will not update the Available condition.
-		return
+	case appliedManifestCount != manifestCount:
+		// Not all manifests have been applied; skip updating the Available condition.
 	case availableManifestCount == manifestCount && untrackableAppliedObjectsCount == 0:
 		// All manifests are available.
 		availableCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeAvailable,
 			Status:             metav1.ConditionTrue,
-			Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+			Reason:             WorkAllManifestsAvailableReason,
 			Message:            allAppliedObjectAvailableMessage,
 			ObservedGeneration: work.Generation,
 		}
@@ -447,7 +464,7 @@ func setWorkAvailableCondition(
 		availableCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeAvailable,
 			Status:             metav1.ConditionTrue,
-			Reason:             string(ManifestProcessingAvailabilityResultTypeNotTrackable),
+			Reason:             WorkNotAllManfestsTrackableReason,
 			Message:            someAppliedObjectUntrackableMessage,
 			ObservedGeneration: work.Generation,
 		}
@@ -456,39 +473,46 @@ func setWorkAvailableCondition(
 		availableCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeAvailable,
 			Status:             metav1.ConditionFalse,
-			Reason:             notAllAppliedObjectsAvailableReason,
+			Reason:             WorkNotAllManifestsAvailableReason,
 			Message:            fmt.Sprintf(notAllAppliedObjectsAvailableMessage, availableManifestCount, manifestCount),
 			ObservedGeneration: work.Generation,
 		}
 	}
-	meta.SetStatusCondition(&work.Status.Conditions, *availableCond)
+
+	if availableCond != nil {
+		meta.SetStatusCondition(&work.Status.Conditions, *availableCond)
+	} else {
+		// Fleet will remove the Available condition if it is not set in the current run
+		// as it can change without Work object generation bumps.
+		meta.RemoveStatusCondition(&work.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+	}
 }
 
 // setWorkDiffReportedCondition sets the DiffReported condition on a Work object.
 func setWorkDiffReportedCondition(
 	work *fleetv1beta1.Work,
-	manifestCount, diffedObjectsCount int,
+	manifestCount, diffReportedObjectsCount int,
 ) {
 	var diffReportedCond *metav1.Condition
 	switch {
 	case work.Spec.ApplyStrategy == nil || work.Spec.ApplyStrategy.Type != fleetv1beta1.ApplyStrategyTypeReportDiff:
 		// ReportDiff mode is not on; Fleet will remove DiffReported condition.
-	case diffedObjectsCount == 0:
-		// No diff has been found.
+	case manifestCount == diffReportedObjectsCount:
+		// All objects have completed diff reporting.
 		diffReportedCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 			Status:             metav1.ConditionTrue,
-			Reason:             string(ManifestProcessingReportDiffResultTypeNoDiffFound),
-			Message:            ManifestProcessingReportDiffResultTypeNoDiffFoundDescription,
+			Reason:             WorkAllManifestsDiffReportedReason,
+			Message:            allManifestsHaveReportedDiffMessage,
 			ObservedGeneration: work.Generation,
 		}
 	default:
-		// Found diffs.
+		// Not all objects have completed diff reporting.
 		diffReportedCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeDiffReported,
-			Status:             metav1.ConditionTrue,
-			Reason:             string(ManifestProcessingReportDiffResultTypeFoundDiff),
-			Message:            fmt.Sprintf(someObjectsHaveDiffs, diffedObjectsCount, manifestCount),
+			Status:             metav1.ConditionFalse,
+			Reason:             WorkNotAllManifestsDiffReportedReason,
+			Message:            fmt.Sprintf(notAllManifestsHaveReportedDiff, diffReportedObjectsCount, manifestCount),
 			ObservedGeneration: work.Generation,
 		}
 	}
@@ -496,7 +520,7 @@ func setWorkDiffReportedCondition(
 	if diffReportedCond != nil {
 		meta.SetStatusCondition(&work.Status.Conditions, *diffReportedCond)
 	} else {
-		// For simplicity reasons, Fleet will remove the DiffReported condition if the
+		// For consistency reasons, Fleet will remove the DiffReported condition if the
 		// ReportDiff mode is not being used.
 		meta.RemoveStatusCondition(&work.Status.Conditions, fleetv1beta1.WorkConditionTypeDiffReported)
 	}
