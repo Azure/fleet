@@ -13,6 +13,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -357,13 +358,14 @@ func TestUpsertWork(t *testing.T) {
 	}
 }
 
-func TestBuildAllWorkAppliedCondition(t *testing.T) {
+func TestSetAllWorkAppliedCondition(t *testing.T) {
 	tests := map[string]struct {
-		works      map[string]*fleetv1beta1.Work
-		generation int64
-		want       metav1.Condition
+		works                            map[string]*fleetv1beta1.Work
+		generation                       int64
+		wantAppliedCond                  metav1.Condition
+		wantWorkAppliedCondSummaryStatus workConditionSummarizedStatus
 	}{
-		"applied should be true if all work applied": {
+		"all works are applied successfully": {
 			works: map[string]*fleetv1beta1.Work{
 				"appliedWork1": {
 					ObjectMeta: metav1.ObjectMeta{
@@ -397,14 +399,15 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 				},
 			},
 			generation: 1,
-			want: metav1.Condition{
+			wantAppliedCond: metav1.Condition{
 				Status:             metav1.ConditionTrue,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
 				Reason:             condition.AllWorkAppliedReason,
 				ObservedGeneration: 1,
 			},
+			wantWorkAppliedCondSummaryStatus: workConditionSummarizedStatusTrue,
 		},
-		"applied should be false if not all work applied to the latest generation": {
+		"one work has stale applied condition": {
 			works: map[string]*fleetv1beta1.Work{
 				"notAppliedWork1": {
 					ObjectMeta: metav1.ObjectMeta{
@@ -431,21 +434,22 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 							{
 								Type:               fleetv1beta1.WorkConditionTypeApplied,
 								Status:             metav1.ConditionTrue,
-								ObservedGeneration: 12,
+								ObservedGeneration: 11,
 							},
 						},
 					},
 				},
 			},
 			generation: 1,
-			want: metav1.Condition{
+			wantAppliedCond: metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
 				Reason:             condition.WorkNotAppliedReason,
 				ObservedGeneration: 1,
 			},
+			wantWorkAppliedCondSummaryStatus: workConditionSummarizedStatusIncomplete,
 		},
-		"applied should be false if not all work has applied": {
+		"one work has apply op failure": {
 			works: map[string]*fleetv1beta1.Work{
 				"appliedWork1": {
 					ObjectMeta: metav1.ObjectMeta{
@@ -457,7 +461,7 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 							{
 								Type:               fleetv1beta1.WorkConditionTypeApplied,
 								Status:             metav1.ConditionTrue,
-								ObservedGeneration: 122, // not the latest generation
+								ObservedGeneration: 123,
 							},
 						},
 					},
@@ -465,19 +469,29 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 				"notAppliedWork2": {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "work2",
-						Generation: 12,
+						Generation: 123,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeApplied,
+								Status:             metav1.ConditionFalse,
+								ObservedGeneration: 123,
+							},
+						},
 					},
 				},
 			},
 			generation: 1,
-			want: metav1.Condition{
+			wantAppliedCond: metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
 				Reason:             condition.WorkNotAppliedReason,
 				ObservedGeneration: 1,
 			},
+			wantWorkAppliedCondSummaryStatus: workConditionSummarizedStatusFalse,
 		},
-		"applied should be false if some work applied condition is unknown": {
+		"one work has not been applied yet": {
 			works: map[string]*fleetv1beta1.Work{
 				"appliedWork1": {
 					ObjectMeta: metav1.ObjectMeta{
@@ -494,29 +508,24 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 						},
 					},
 				},
-				"appliedWork2": {
+				"notAppliedWork2": {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "work2",
-						Generation: 12,
+						Generation: 123,
 					},
 					Status: fleetv1beta1.WorkStatus{
-						Conditions: []metav1.Condition{
-							{
-								Type:               fleetv1beta1.WorkConditionTypeApplied,
-								Status:             metav1.ConditionTrue,
-								ObservedGeneration: 12,
-							},
-						},
+						Conditions: []metav1.Condition{},
 					},
 				},
 			},
 			generation: 1,
-			want: metav1.Condition{
+			wantAppliedCond: metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
 				Reason:             condition.WorkNotAppliedReason,
 				ObservedGeneration: 1,
 			},
+			wantWorkAppliedCondSummaryStatus: workConditionSummarizedStatusIncomplete,
 		},
 	}
 	for name, tt := range tests {
@@ -527,19 +536,216 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 					Generation: tt.generation,
 				},
 			}
-			got := buildAllWorkAppliedCondition(tt.works, binding)
-			if diff := cmp.Diff(got, tt.want, cmpConditionOption); diff != "" {
+			workAppliedCondSummaryStatus := setAllWorkAppliedCondition(tt.works, binding)
+			if workAppliedCondSummaryStatus != tt.wantWorkAppliedCondSummaryStatus {
+				t.Errorf("setAllWorkAppliedCondition() = %v, want %v", workAppliedCondSummaryStatus, tt.wantWorkAppliedCondSummaryStatus)
+			}
+
+			appliedCond := meta.FindStatusCondition(binding.Status.Conditions, string(fleetv1beta1.ResourceBindingApplied))
+			if diff := cmp.Diff(appliedCond, &tt.wantAppliedCond, cmpConditionOption); diff != "" {
 				t.Errorf("buildAllWorkAppliedCondition test `%s` mismatch (-got +want):\n%s", name, diff)
 			}
 		})
 	}
 }
 
-func TestBuildAllWorkAvailableCondition(t *testing.T) {
+func TestSetAllWorkDiffReportedCondition(t *testing.T) {
+	bindingTemplate := &fleetv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "binding",
+			Generation: 1,
+		},
+	}
+	testCases := []struct {
+		name                                  string
+		works                                 map[string]*fleetv1beta1.Work
+		wantDiffReportedCondition             *metav1.Condition
+		wantWorkDiffReportedCondSummaryStatus workConditionSummarizedStatus
+	}{
+		{
+			name: "all works have diff reported",
+			works: map[string]*fleetv1beta1.Work{
+				"work-1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-1",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+				"work-2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-2",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+			},
+			wantDiffReportedCondition: &metav1.Condition{
+				Status:             metav1.ConditionTrue,
+				Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+				Reason:             condition.AllWorkDiffReportedReason,
+				ObservedGeneration: 1,
+			},
+			wantWorkDiffReportedCondSummaryStatus: workConditionSummarizedStatusTrue,
+		},
+		{
+			name: "one of two works have diff reported, the other has not reported yet",
+			works: map[string]*fleetv1beta1.Work{
+				"work-1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-1",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+				"work-2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-2",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{},
+					},
+				},
+			},
+			wantDiffReportedCondition: &metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+				Reason:             condition.WorkNotDiffReportedReason,
+				ObservedGeneration: 1,
+			},
+			wantWorkDiffReportedCondSummaryStatus: workConditionSummarizedStatusIncomplete,
+		},
+		{
+			name: "one of two works have diff reported, the other has failed to report diff",
+			works: map[string]*fleetv1beta1.Work{
+				"work-1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-1",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+				"work-2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-2",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+								Status:             metav1.ConditionFalse,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+			},
+			wantDiffReportedCondition: &metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+				Reason:             condition.WorkNotDiffReportedReason,
+				ObservedGeneration: 1,
+			},
+			wantWorkDiffReportedCondSummaryStatus: workConditionSummarizedStatusFalse,
+		},
+		{
+			name: "one of two works have diff reported, the other has stale diff information",
+			works: map[string]*fleetv1beta1.Work{
+				"work-1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-1",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1,
+							},
+						},
+					},
+				},
+				"work-2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work-2",
+						Generation: 1,
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+								Status:             metav1.ConditionFalse,
+								ObservedGeneration: 0,
+							},
+						},
+					},
+				},
+			},
+			wantDiffReportedCondition: &metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+				Reason:             condition.WorkNotDiffReportedReason,
+				ObservedGeneration: 1,
+			},
+			wantWorkDiffReportedCondSummaryStatus: workConditionSummarizedStatusIncomplete,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			binding := bindingTemplate.DeepCopy()
+			workDiffReportedCondSummaryStatus := setAllWorkDiffReportedCondition(tc.works, binding)
+			if workDiffReportedCondSummaryStatus != tc.wantWorkDiffReportedCondSummaryStatus {
+				t.Errorf("setAllWorkDiffReportedCondition() = %v, want %v", workDiffReportedCondSummaryStatus, tc.wantWorkDiffReportedCondSummaryStatus)
+			}
+			diffReportedCond := meta.FindStatusCondition(binding.Status.Conditions, string(fleetv1beta1.ResourceBindingDiffReported))
+			if diff := cmp.Diff(diffReportedCond, tc.wantDiffReportedCondition, cmpConditionOption); diff != "" {
+				t.Errorf("diff reported condition mismatches (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestSetAllWorkAvailableCondition(t *testing.T) {
 	tests := map[string]struct {
-		works   map[string]*fleetv1beta1.Work
-		binding *fleetv1beta1.ClusterResourceBinding
-		want    metav1.Condition
+		works                              map[string]*fleetv1beta1.Work
+		binding                            *fleetv1beta1.ClusterResourceBinding
+		wantAvailableCond                  *metav1.Condition
+		wantWorkAvailableCondSummaryStatus workConditionSummarizedStatus
 	}{
 		"All works are available": {
 			works: map[string]*fleetv1beta1.Work{
@@ -576,13 +782,23 @@ func TestBuildAllWorkAvailableCondition(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
 				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingApplied),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+				},
 			},
-			want: metav1.Condition{
+			wantAvailableCond: &metav1.Condition{
 				Status:             metav1.ConditionTrue,
 				Type:               string(fleetv1beta1.ResourceBindingAvailable),
 				Reason:             condition.AllWorkAvailableReason,
 				ObservedGeneration: 1,
 			},
+			wantWorkAvailableCondSummaryStatus: workConditionSummarizedStatusTrue,
 		},
 		"All works are available but one of them is not trackable": {
 			works: map[string]*fleetv1beta1.Work{
@@ -619,13 +835,23 @@ func TestBuildAllWorkAvailableCondition(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
 				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingApplied),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+				},
 			},
-			want: metav1.Condition{
+			wantAvailableCond: &metav1.Condition{
 				Status:             metav1.ConditionTrue,
 				Type:               string(fleetv1beta1.ResourceBindingAvailable),
 				Reason:             work.WorkNotTrackableReason,
 				ObservedGeneration: 1,
 			},
+			wantWorkAvailableCondSummaryStatus: workConditionSummarizedStatusTrue,
 		},
 		"Not all works are available": {
 			works: map[string]*fleetv1beta1.Work{
@@ -654,14 +880,24 @@ func TestBuildAllWorkAvailableCondition(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
 				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingApplied),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+				},
 			},
-			want: metav1.Condition{
+			wantAvailableCond: &metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingAvailable),
 				Reason:             condition.WorkNotAvailableReason,
 				Message:            "work object work2 is not available",
 				ObservedGeneration: 1,
 			},
+			wantWorkAvailableCondSummaryStatus: workConditionSummarizedStatusFalse,
 		},
 		"Available condition of one work is unknown": {
 			works: map[string]*fleetv1beta1.Work{
@@ -690,31 +926,127 @@ func TestBuildAllWorkAvailableCondition(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
 				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingApplied),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+				},
 			},
-			want: metav1.Condition{
+			wantAvailableCond: &metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingAvailable),
 				Reason:             condition.WorkNotAvailableReason,
 				Message:            "work object work2 is not available",
 				ObservedGeneration: 1,
 			},
+			wantWorkAvailableCondSummaryStatus: workConditionSummarizedStatusIncomplete,
+		},
+		// This is a case that should not happen in practice.
+		"one work has not completed availability check yet": {
+			works: map[string]*fleetv1beta1.Work{
+				"work1": {
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   fleetv1beta1.WorkConditionTypeAvailable,
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+				"work2": {
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{},
+					},
+				},
+			},
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingApplied),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			wantAvailableCond: &metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingAvailable),
+				Reason:             condition.WorkNotAvailableReason,
+				Message:            "work object work2 is not available",
+				ObservedGeneration: 1,
+			},
+			wantWorkAvailableCondSummaryStatus: workConditionSummarizedStatusIncomplete,
+		},
+		"works are not applied successfully": {
+			works: map[string]*fleetv1beta1.Work{
+				"work1": {},
+				"work2": {},
+			},
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingApplied),
+							Status:             metav1.ConditionFalse,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			wantAvailableCond:                  nil,
+			wantWorkAvailableCondSummaryStatus: workConditionSummarizedStatusFalse,
+		},
+		"works are not applied yet": {
+			works: map[string]*fleetv1beta1.Work{
+				"work1": {},
+				"work2": {},
+			},
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{},
+				},
+			},
+			wantAvailableCond:                  nil,
+			wantWorkAvailableCondSummaryStatus: workConditionSummarizedStatusFalse,
 		},
 	}
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			got := buildAllWorkAvailableCondition(tt.works, tt.binding)
-			if diff := cmp.Diff(got, tt.want, cmpConditionOption); diff != "" {
+			workAvailableCondSummaryStatus := setAllWorkAvailableCondition(tt.works, tt.binding)
+			if workAvailableCondSummaryStatus != tt.wantWorkAvailableCondSummaryStatus {
+				t.Errorf("buildAllWorkAvailableCondition() = %v, want %v", workAvailableCondSummaryStatus, tt.wantWorkAvailableCondSummaryStatus)
+			}
+			availableCond := meta.FindStatusCondition(tt.binding.Status.Conditions, string(fleetv1beta1.ResourceBindingAvailable))
+			if diff := cmp.Diff(availableCond, tt.wantAvailableCond, cmpConditionOption); diff != "" {
 				t.Errorf("buildAllWorkAvailableCondition test `%s` mismatch (-got +want):\n%s", name, diff)
 			}
 		})
 	}
 }
 
+// TO-DO (chenyu1): refactor this unit test to cover all branches.
 func TestSetBindingStatus(t *testing.T) {
 	timeNow := time.Now()
 	tests := map[string]struct {
 		works                            map[string]*fleetv1beta1.Work
+		applyStrategy                    *fleetv1beta1.ApplyStrategy
 		maxFailedResourcePlacementLimit  *int
 		wantFailedResourcePlacements     []fleetv1beta1.FailedResourcePlacement
 		maxDriftedResourcePlacementLimit *int
@@ -1492,6 +1824,299 @@ func TestSetBindingStatus(t *testing.T) {
 				},
 			},
 		},
+		"One work has reported diff but one work has not reported diff yet": {
+			works: map[string]*fleetv1beta1.Work{
+				"work1": {
+					Status: fleetv1beta1.WorkStatus{},
+				},
+				"work2": {
+					Status: fleetv1beta1.WorkStatus{
+						ManifestConditions: []fleetv1beta1.ManifestCondition{
+							{
+								Identifier: fleetv1beta1.WorkResourceIdentifier{
+									Ordinal:   0,
+									Group:     "",
+									Version:   "v1",
+									Kind:      "ConfigMap",
+									Name:      "config-name-1",
+									Namespace: "config-namespace",
+								},
+								Conditions: []metav1.Condition{
+									{
+										Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+							{
+								Identifier: fleetv1beta1.WorkResourceIdentifier{
+									Ordinal:   1,
+									Group:     "",
+									Version:   "v1",
+									Kind:      "Service",
+									Name:      "svc-name-1",
+									Namespace: "svc-namespace",
+								},
+								Conditions: []metav1.Condition{
+									{
+										Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+										Status: metav1.ConditionTrue,
+									},
+								},
+								DiffDetails: &fleetv1beta1.DiffDetails{
+									ObservationTime:         metav1.Time{Time: timeNow},
+									FirstDiffedObservedTime: metav1.Time{Time: timeNow},
+									ObservedDiffs: []fleetv1beta1.PatchDetail{
+										{
+											Path:       "/",
+											ValueInHub: "(the whole object)",
+										},
+									},
+								},
+							},
+						},
+						Conditions: []metav1.Condition{
+							{
+								Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			applyStrategy: &fleetv1beta1.ApplyStrategy{
+				Type: fleetv1beta1.ApplyStrategyTypeReportDiff,
+			},
+		},
+		"One work has reported diff but one work has failed to report diff": {
+			works: map[string]*fleetv1beta1.Work{
+				"work1": {
+					Status: fleetv1beta1.WorkStatus{
+						ManifestConditions: []fleetv1beta1.ManifestCondition{
+							{
+								Identifier: fleetv1beta1.WorkResourceIdentifier{
+									Ordinal:   0,
+									Group:     "",
+									Version:   "v1",
+									Kind:      "ConfigMap",
+									Name:      "config-name",
+									Namespace: "config-namespace",
+								},
+								Conditions: []metav1.Condition{
+									{
+										Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+										Status: metav1.ConditionFalse,
+									},
+								},
+							},
+							{
+								Identifier: fleetv1beta1.WorkResourceIdentifier{
+									Ordinal:   1,
+									Group:     "",
+									Version:   "v1",
+									Kind:      "Service",
+									Name:      "svc-name",
+									Namespace: "svc-namespace",
+								},
+								Conditions: []metav1.Condition{
+									{
+										Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+										Status: metav1.ConditionFalse,
+									},
+								},
+							},
+						},
+						Conditions: []metav1.Condition{
+							{
+								Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+								Status: metav1.ConditionFalse,
+							},
+						},
+					},
+				},
+				"work2": {
+					Status: fleetv1beta1.WorkStatus{
+						ManifestConditions: []fleetv1beta1.ManifestCondition{
+							{
+								Identifier: fleetv1beta1.WorkResourceIdentifier{
+									Ordinal:   0,
+									Group:     "",
+									Version:   "v1",
+									Kind:      "ConfigMap",
+									Name:      "config-name-1",
+									Namespace: "config-namespace",
+								},
+								Conditions: []metav1.Condition{
+									{
+										Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+							{
+								Identifier: fleetv1beta1.WorkResourceIdentifier{
+									Ordinal:   1,
+									Group:     "",
+									Version:   "v1",
+									Kind:      "Service",
+									Name:      "svc-name-1",
+									Namespace: "svc-namespace",
+								},
+								Conditions: []metav1.Condition{
+									{
+										Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+										Status: metav1.ConditionTrue,
+									},
+								},
+								DiffDetails: &fleetv1beta1.DiffDetails{
+									ObservationTime:         metav1.Time{Time: timeNow},
+									FirstDiffedObservedTime: metav1.Time{Time: timeNow},
+									ObservedDiffs: []fleetv1beta1.PatchDetail{
+										{
+											Path:       "/",
+											ValueInHub: "(the whole object)",
+										},
+									},
+								},
+							},
+						},
+						Conditions: []metav1.Condition{
+							{
+								Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			applyStrategy: &fleetv1beta1.ApplyStrategy{
+				Type: fleetv1beta1.ApplyStrategyTypeReportDiff,
+			},
+		},
+		"Both works have reported diff": {
+			works: map[string]*fleetv1beta1.Work{
+				"work1": {
+					Status: fleetv1beta1.WorkStatus{
+						ManifestConditions: []fleetv1beta1.ManifestCondition{
+							{
+								Identifier: fleetv1beta1.WorkResourceIdentifier{
+									Ordinal:   0,
+									Group:     "",
+									Version:   "v1",
+									Kind:      "ConfigMap",
+									Name:      "config-name",
+									Namespace: "config-namespace",
+								},
+								Conditions: []metav1.Condition{
+									{
+										Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+							{
+								Identifier: fleetv1beta1.WorkResourceIdentifier{
+									Ordinal:   1,
+									Group:     "",
+									Version:   "v1",
+									Kind:      "Service",
+									Name:      "svc-name",
+									Namespace: "svc-namespace",
+								},
+								Conditions: []metav1.Condition{
+									{
+										Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+						},
+						Conditions: []metav1.Condition{
+							{
+								Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+				"work2": {
+					Status: fleetv1beta1.WorkStatus{
+						ManifestConditions: []fleetv1beta1.ManifestCondition{
+							{
+								Identifier: fleetv1beta1.WorkResourceIdentifier{
+									Ordinal:   0,
+									Group:     "",
+									Version:   "v1",
+									Kind:      "ConfigMap",
+									Name:      "config-name-1",
+									Namespace: "config-namespace",
+								},
+								Conditions: []metav1.Condition{
+									{
+										Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+										Status: metav1.ConditionTrue,
+									},
+								},
+							},
+							{
+								Identifier: fleetv1beta1.WorkResourceIdentifier{
+									Ordinal:   1,
+									Group:     "",
+									Version:   "v1",
+									Kind:      "Service",
+									Name:      "svc-name-1",
+									Namespace: "svc-namespace",
+								},
+								Conditions: []metav1.Condition{
+									{
+										Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+										Status: metav1.ConditionTrue,
+									},
+								},
+								DiffDetails: &fleetv1beta1.DiffDetails{
+									ObservationTime:         metav1.Time{Time: timeNow},
+									FirstDiffedObservedTime: metav1.Time{Time: timeNow},
+									ObservedDiffs: []fleetv1beta1.PatchDetail{
+										{
+											Path:       "/",
+											ValueInHub: "(the whole object)",
+										},
+									},
+								},
+							},
+						},
+						Conditions: []metav1.Condition{
+							{
+								Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			applyStrategy: &fleetv1beta1.ApplyStrategy{
+				Type: fleetv1beta1.ApplyStrategyTypeReportDiff,
+			},
+			wantDiffedResourcePlacements: []fleetv1beta1.DiffedResourcePlacement{
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name-1",
+						Namespace: "svc-namespace",
+					},
+					ObservationTime:         metav1.Time{Time: timeNow},
+					FirstDiffedObservedTime: metav1.Time{Time: timeNow},
+					ObservedDiffs: []fleetv1beta1.PatchDetail{
+						{
+							Path:       "/",
+							ValueInHub: "(the whole object)",
+						},
+					},
+				},
+			},
+		},
 	}
 
 	originalMaxFailedResourcePlacementLimit := maxFailedResourcePlacementLimit
@@ -1522,7 +2147,11 @@ func TestSetBindingStatus(t *testing.T) {
 				maxDiffedResourcePlacementLimit = originalMaxDiffedResourcePlacementLimit
 			}
 
-			binding := &fleetv1beta1.ClusterResourceBinding{}
+			binding := &fleetv1beta1.ClusterResourceBinding{
+				Spec: fleetv1beta1.ResourceBindingSpec{
+					ApplyStrategy: tt.applyStrategy,
+				},
+			}
 			setBindingStatus(tt.works, binding)
 			got := binding.Status.FailedPlacements
 			// setBindingStatus is using map to populate the placements.
@@ -2855,7 +3484,7 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 							Type:               string(fleetv1beta1.ResourceBindingApplied),
 							Status:             metav1.ConditionFalse,
 							ObservedGeneration: 3,
-							Reason:             condition.WorkNeedSyncedReason,
+							Reason:             condition.WorkApplyInProcess,
 						},
 					},
 				},
@@ -2903,6 +3532,129 @@ func TestUpdateBindingStatusWithRetry(t *testing.T) {
 				if diff := cmp.Diff(latestRollout, rollout, statusCmpOptions...); diff != "" {
 					t.Errorf("updateBindingStatusWithRetry() ResourceBindingRolloutStarted Condition got = %v, want %v", rollout, latestRollout)
 				}
+			}
+		})
+	}
+}
+
+func TestSyncApplyStrategy(t *testing.T) {
+	bindingName := "test-binding-1"
+	workName := "test-work-1"
+
+	testCases := []struct {
+		name              string
+		resourceBinding   *fleetv1beta1.ClusterResourceBinding
+		work              *fleetv1beta1.Work
+		wantUpdated       bool
+		wantApplyStrategy *fleetv1beta1.ApplyStrategy
+	}{
+		{
+			name: "same apply strategy",
+			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: bindingName,
+				},
+				Spec: fleetv1beta1.ResourceBindingSpec{},
+			},
+			work: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: workName,
+				},
+				Spec: fleetv1beta1.WorkSpec{},
+			},
+		},
+		{
+			name: "apply strategy changed (work has default apply strategy)",
+			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: bindingName,
+				},
+				Spec: fleetv1beta1.ResourceBindingSpec{
+					ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+						ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+						Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
+						WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+						WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+					},
+				},
+			},
+			work: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: workName,
+				},
+				Spec: fleetv1beta1.WorkSpec{},
+			},
+			wantUpdated: true,
+			wantApplyStrategy: &fleetv1beta1.ApplyStrategy{
+				ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+				Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
+				WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+				WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+			},
+		},
+		{
+			name: "apply strategy changed (work has custom apply strategy)",
+			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: bindingName,
+				},
+				Spec: fleetv1beta1.ResourceBindingSpec{
+					ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+						ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+						Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
+						WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+						WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+					},
+				},
+			},
+			work: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: workName,
+				},
+				Spec: fleetv1beta1.WorkSpec{
+					ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+						ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+						Type:             fleetv1beta1.ApplyStrategyTypeReportDiff,
+						WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+					},
+				},
+			},
+			wantUpdated: true,
+			wantApplyStrategy: &fleetv1beta1.ApplyStrategy{
+				ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
+				Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
+				WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+				WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			scheme := serviceScheme(t)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(tc.work).
+				Build()
+
+			r := &Reconciler{
+				Client: fakeClient,
+			}
+			workUpdated, err := r.syncApplyStrategy(ctx, tc.resourceBinding, tc.work)
+			if err != nil {
+				t.Fatalf("syncApplyStrategy() = %v, want no error", err)
+			}
+			if workUpdated != tc.wantUpdated {
+				t.Errorf("syncApplyStrategy() = %v, want %v", workUpdated, tc.wantUpdated)
+			}
+
+			updatedWork := &fleetv1beta1.Work{}
+			if err := r.Client.Get(ctx, client.ObjectKeyFromObject(tc.work), updatedWork); err != nil {
+				t.Fatalf("Get Work = %v, want no error", err)
+			}
+			if diff := cmp.Diff(updatedWork.Spec.ApplyStrategy, tc.wantApplyStrategy); diff != "" {
+				t.Errorf("applyStrategy mismatches (-got, +want):\n%s", diff)
 			}
 		})
 	}
