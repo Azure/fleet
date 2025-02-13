@@ -1353,13 +1353,13 @@ var _ = Describe("responding to specific member cluster changes", func() {
 					corev1.ResourceMemory: resource.MustParse("10000Gi"),
 				}
 				return memberCluster3WestProdClient.Status().Update(ctx, node)
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create and update a new node")
+			}, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create and update a new node")
 		})
 
 		It("should pick the new cluster", func() {
 			targetClusterNames := []string{memberCluster3WestProdName}
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
-			Eventually(crpStatusUpdatedActual, 2*eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 

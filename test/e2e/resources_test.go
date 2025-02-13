@@ -17,6 +17,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
+
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
@@ -35,7 +36,7 @@ const (
 	endpointSliceExportNameTemplate   = "ep-%d"
 	crpEvictionNameTemplate           = "crpe-%d"
 
-	customDeletionBlockerFinalizer = "custom-deletion-blocker-finalizer"
+	customDeletionBlockerFinalizer = "kubernetes-fleet.io/custom-deletion-blocker-finalizer"
 	workNamespaceLabelName         = "process"
 )
 

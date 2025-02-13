@@ -683,7 +683,7 @@ func cleanWorkResourcesOnCluster(cluster *framework.Cluster) {
 	Expect(client.IgnoreNotFound(cluster.KubeClient.Delete(ctx, &ns))).To(Succeed(), "Failed to delete namespace %s", ns.Namespace)
 
 	workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
-	Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from %s cluster", cluster.ClusterName)
+	Eventually(workResourcesRemovedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from %s cluster", cluster.ClusterName)
 }
 
 // setAllMemberClustersToLeave sets all member clusters to leave the fleet.
@@ -769,9 +769,8 @@ func cleanupCRP(name string) {
 		}
 
 		// Delete the CRP (again, if applicable).
-		//
 		// This helps the After All node to run successfully even if the steps above fail early.
-		if err := hubClient.Delete(ctx, crp); err != nil {
+		if err = hubClient.Delete(ctx, crp); err != nil {
 			return err
 		}
 
@@ -781,7 +780,7 @@ func cleanupCRP(name string) {
 
 	// Wait until the CRP is removed.
 	removedActual := crpRemovedActual(name)
-	Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove CRP %s", name)
+	Eventually(removedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove CRP %s", name)
 }
 
 // createResourceOverrides creates a number of resource overrides.
@@ -903,12 +902,12 @@ func ensureCRPAndRelatedResourcesDeleted(crpName string, memberClusters []*frame
 		memberCluster := memberClusters[idx]
 
 		workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
-		Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
+		Eventually(workResourcesRemovedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
 	}
 
 	// Verify that related finalizers have been removed from the CRP.
 	finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
-	Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP")
+	Eventually(finalizerRemovedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP")
 
 	// Remove the custom deletion blocker finalizer from the CRP.
 	cleanupCRP(crpName)

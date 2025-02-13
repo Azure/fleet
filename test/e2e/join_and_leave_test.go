@@ -137,13 +137,13 @@ var _ = Describe("Test member cluster force delete flow", Ordered, Serial, func(
 			Expect(hubClient.Get(ctx, types.NamespacedName{Name: memberCluster3WestProdName}, &mc)).To(Succeed(), "Failed to get member cluster")
 			Expect(hubClient.Delete(ctx, &mc)).Should(Succeed())
 		})
-
+		// we set force delete time at 1 minute in the test env
 		It("Should garbage collect resources owned by member cluster and force delete member cluster CR after force delete wait time", func() {
 			memberClusterNamespace := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster3WestProdName)
 			Eventually(func() bool {
 				var ns corev1.Namespace
 				return apierrors.IsNotFound(hubClient.Get(ctx, types.NamespacedName{Name: memberClusterNamespace}, &ns))
-			}, 2*eventuallyDuration, eventuallyInterval).Should(BeTrue(), "Failed to garbage collect resources owned by member cluster")
+			}, longEventuallyDuration, eventuallyInterval).Should(BeTrue(), "Failed to garbage collect resources owned by member cluster")
 
 			Eventually(func() bool {
 				return apierrors.IsNotFound(hubClient.Get(ctx, types.NamespacedName{Name: memberCluster3WestProdName}, &clusterv1beta1.MemberCluster{}))
