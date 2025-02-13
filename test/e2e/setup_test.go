@@ -327,11 +327,13 @@ func beforeSuiteForProcess1() {
 	setupInvalidClusters()
 	createResourcesForFleetGuardRail()
 	createTestResourceCRD()
+	panic("")
 }
 
 var _ = SynchronizedBeforeSuite(beforeSuiteForProcess1, beforeSuiteForAllProcesses)
 
 var _ = SynchronizedAfterSuite(func() {}, func() {
+	panic("")
 	deleteResourcesForFleetGuardRail()
 	deleteTestResourceCRD()
 	setAllMemberClustersToLeave()
