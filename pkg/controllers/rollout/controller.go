@@ -358,7 +358,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 		case fleetv1beta1.BindingStateUnscheduled:
 			if bindingutils.HasBindingFailed(binding) {
 				klog.V(3).InfoS("Found a failed to be ready unscheduled binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
-			} else if !bindingutils.IsBindingReportDiff(binding) {
+			} else if !bindingutils.IsBindingDiffReported(binding) {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
 			}
 			waitTime, bindingReady := isBindingReady(binding, readyTimeCutOff)
@@ -407,7 +407,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			if bindingutils.HasBindingFailed(binding) {
 				klog.V(3).InfoS("Found a failed to be ready bound binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 				bindingFailed = true
-			} else if !bindingutils.IsBindingReportDiff(binding) {
+			} else if !bindingutils.IsBindingDiffReported(binding) {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
 			}
 

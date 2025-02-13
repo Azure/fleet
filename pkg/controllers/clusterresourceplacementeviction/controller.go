@@ -176,7 +176,7 @@ func (r *Reconciler) executeEviction(ctx context.Context, validationResult *evic
 	}
 
 	// Check to see if binding has failed or just reportDiff. If so no need to check disruption budget we can evict.
-	if bindingutils.HasBindingFailed(evictionTargetBinding) || bindingutils.IsBindingReportDiff(evictionTargetBinding) {
+	if bindingutils.HasBindingFailed(evictionTargetBinding) || bindingutils.IsBindingDiffReported(evictionTargetBinding) {
 		klog.V(2).InfoS("ClusterResourceBinding targeted by eviction is in failed state",
 			"clusterResourcePlacementEviction", eviction.Name, "clusterResourceBinding", evictionTargetBinding.Name, "targetCluster", eviction.Spec.ClusterName)
 		if err := r.deleteClusterResourceBinding(ctx, evictionTargetBinding); err != nil {
