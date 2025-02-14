@@ -716,8 +716,12 @@ func checkIfAllMemberClustersHaveLeft() {
 }
 
 func checkIfPlacedWorkResourcesOnAllMemberClusters() {
-	for idx := range allMemberClusters {
-		memberCluster := allMemberClusters[idx]
+	checkIfPlacedWorkResourcesOnMemberClusters(allMemberClusters)
+}
+
+func checkIfPlacedWorkResourcesOnMemberClusters(clusters []*framework.Cluster) {
+	for idx := range clusters {
+		memberCluster := clusters[idx]
 
 		workResourcesPlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster)
 		Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
@@ -725,11 +729,15 @@ func checkIfPlacedWorkResourcesOnAllMemberClusters() {
 }
 
 func checkIfPlacedWorkResourcesOnAllMemberClustersConsistently() {
-	for idx := range allMemberClusters {
-		memberCluster := allMemberClusters[idx]
+	checkIfPlacedWorkResourcesOnMemberClustersConsistently(allMemberClusters)
+}
+
+func checkIfPlacedWorkResourcesOnMemberClustersConsistently(clusters []*framework.Cluster) {
+	for idx := range clusters {
+		memberCluster := clusters[idx]
 
 		workResourcesPlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster)
-		Consistently(workResourcesPlacedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+		Consistently(workResourcesPlacedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s consistently", memberCluster.ClusterName)
 	}
 }
 
@@ -752,6 +760,19 @@ func checkIfRemovedWorkResourcesFromMemberClusters(clusters []*framework.Cluster
 
 		workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
 		Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
+	}
+}
+
+func checkIfRemovedWorkResourcesFromAllMemberClustersConsistently() {
+	checkIfRemovedWorkResourcesFromMemberClustersConsistently(allMemberClusters)
+}
+
+func checkIfRemovedWorkResourcesFromMemberClustersConsistently(clusters []*framework.Cluster) {
+	for idx := range clusters {
+		memberCluster := clusters[idx]
+
+		workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
+		Consistently(workResourcesRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s consistently", memberCluster.ClusterName)
 	}
 }
 
@@ -1258,4 +1279,29 @@ func createCRPWithApplyStrategy(crpName string, applyStrategy *placementv1beta1.
 // createCRP creates a ClusterResourcePlacement with the given name.
 func createCRP(crpName string) {
 	createCRPWithApplyStrategy(crpName, nil)
+}
+
+// ensureUpdateRunDeletion deletes the update run with the given name and checks all related approval requests are also deleted.
+func ensureUpdateRunDeletion(updateRunName string) {
+	updateRun := &placementv1beta1.ClusterStagedUpdateRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: updateRunName,
+		},
+	}
+	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, updateRun))).Should(Succeed(), "Failed to delete ClusterStagedUpdateRun %s", updateRunName)
+
+	removedActual := updateRunAndApprovalRequestsRemovedActual(updateRunName)
+	Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "ClusterStagedUpdateRun or ClusterApprovalRequests still exists")
+}
+
+// ensureUpdateRunStrategyDeletion deletes the update run strategy with the given name.
+func ensureUpdateRunStrategyDeletion(strategyName string) {
+	strategy := &placementv1beta1.ClusterStagedUpdateStrategy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: strategyName,
+		},
+	}
+	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, strategy))).Should(Succeed(), "Failed to delete ClusterStagedUpdateStrategy %s", strategyName)
+	removedActual := updateRunStrategyRemovedActual(strategyName)
+	Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "ClusterStagedUpdateStrategy still exists")
 }
