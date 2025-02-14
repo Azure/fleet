@@ -271,11 +271,11 @@ var _ = Describe("responding to specific member cluster changes", func() {
 				return memberCluster3WestProdClient.Create(ctx, node)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create a new node")
 		})
-
+		// need to wait for the resource change to be propagated back to the hub cluster
 		It("should pick the new cluster", func() {
 			targetClusterNames := []string{memberCluster3WestProdName}
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
-			Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, 2*workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
