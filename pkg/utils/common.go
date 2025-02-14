@@ -13,12 +13,16 @@ import (
 	"strings"
 	"time"
 
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -162,10 +166,34 @@ var (
 		Kind:    ConfigMapKind,
 	}
 
+	ControllerRevisionGVR = schema.GroupVersionResource{
+		Group:    appv1.SchemeGroupVersion.Group,
+		Version:  appv1.SchemeGroupVersion.Version,
+		Resource: "controllerrevisions",
+	}
+
 	CRDMetaGVK = metav1.GroupVersionKind{
 		Group:   apiextensionsv1.SchemeGroupVersion.Group,
 		Version: apiextensionsv1.SchemeGroupVersion.Version,
 		Kind:    "CustomResourceDefinition",
+	}
+
+	CSIDriverGVR = schema.GroupVersionResource{
+		Group:    storagev1.SchemeGroupVersion.Group,
+		Version:  storagev1.SchemeGroupVersion.Version,
+		Resource: "csidrivers",
+	}
+
+	CSINodeGVR = schema.GroupVersionResource{
+		Group:    storagev1.SchemeGroupVersion.Group,
+		Version:  storagev1.SchemeGroupVersion.Version,
+		Resource: "csinodes",
+	}
+
+	CSIStorageCapacityGVR = schema.GroupVersionResource{
+		Group:    storagev1.SchemeGroupVersion.Group,
+		Version:  storagev1.SchemeGroupVersion.Version,
+		Resource: "csistoragecapacities",
 	}
 
 	CustomResourceDefinitionGVR = schema.GroupVersionResource{
@@ -198,6 +226,12 @@ var (
 		Kind:    "InternalMemberCluster",
 	}
 
+	IngressClassGVR = schema.GroupVersionResource{
+		Group:    networkingv1.SchemeGroupVersion.Group,
+		Version:  networkingv1.SchemeGroupVersion.Version,
+		Resource: "ingressclasses",
+	}
+
 	InternalServiceExportMetaGVK = metav1.GroupVersionKind{
 		Group:   fleetnetworkingv1alpha1.GroupVersion.Group,
 		Version: fleetnetworkingv1alpha1.GroupVersion.Version,
@@ -214,6 +248,12 @@ var (
 		Group:   clusterv1beta1.GroupVersion.Group,
 		Version: clusterv1beta1.GroupVersion.Version,
 		Kind:    "InternalMemberCluster",
+	}
+
+	LimitRangeGVR = schema.GroupVersionResource{
+		Group:    corev1.SchemeGroupVersion.Group,
+		Version:  corev1.SchemeGroupVersion.Version,
+		Resource: "limitranges",
 	}
 
 	MCV1Alpha1MetaGVK = metav1.GroupVersionKind{
@@ -240,6 +280,12 @@ var (
 		Kind:    "MemberCluster",
 	}
 
+	MutatingWebhookConfigurationGVR = schema.GroupVersionResource{
+		Group:    admissionregistrationv1.SchemeGroupVersion.Group,
+		Version:  admissionregistrationv1.SchemeGroupVersion.Version,
+		Resource: "mutatingwebhookconfigurations",
+	}
+
 	NamespaceMetaGVK = metav1.GroupVersionKind{
 		Group:   corev1.GroupName,
 		Version: corev1.SchemeGroupVersion.Version,
@@ -258,6 +304,12 @@ var (
 		Resource: "namespaces",
 	}
 
+	NetworkPolicyGVR = schema.GroupVersionResource{
+		Group:    networkingv1.SchemeGroupVersion.Group,
+		Version:  networkingv1.SchemeGroupVersion.Version,
+		Resource: "networkpolicies",
+	}
+
 	PodMetaGVK = metav1.GroupVersionKind{
 		Group:   corev1.SchemeGroupVersion.Group,
 		Version: corev1.SchemeGroupVersion.Version,
@@ -268,6 +320,18 @@ var (
 		Group:    policyv1.GroupName,
 		Version:  policyv1.SchemeGroupVersion.Version,
 		Resource: "poddisruptionbudgets",
+	}
+
+	PriorityClassGVR = schema.GroupVersionResource{
+		Group:    schedulingv1.SchemeGroupVersion.Group,
+		Version:  schedulingv1.SchemeGroupVersion.Version,
+		Resource: "priorityclasses",
+	}
+
+	ResourceQuotaGVR = schema.GroupVersionResource{
+		Group:    corev1.SchemeGroupVersion.Group,
+		Version:  corev1.SchemeGroupVersion.Version,
+		Resource: "resourcequotas",
 	}
 
 	RoleMetaGVK = metav1.GroupVersionKind{
@@ -286,6 +350,18 @@ var (
 		Group:    corev1.GroupName,
 		Version:  corev1.SchemeGroupVersion.Version,
 		Resource: "services",
+	}
+
+	ServiceAccountGVR = schema.GroupVersionResource{
+		Group:    corev1.SchemeGroupVersion.Group,
+		Version:  corev1.SchemeGroupVersion.Version,
+		Resource: "serviceaccounts",
+	}
+
+	StorageClassGVR = schema.GroupVersionResource{
+		Group:    storagev1.SchemeGroupVersion.Group,
+		Version:  storagev1.SchemeGroupVersion.Version,
+		Resource: "storageclasses",
 	}
 
 	WorkV1Alpha1MetaGVK = metav1.GroupVersionKind{
@@ -310,6 +386,12 @@ var (
 		Group:   placementv1beta1.GroupVersion.Group,
 		Version: placementv1beta1.GroupVersion.Version,
 		Kind:    "Work",
+	}
+
+	ValidatingWebhookConfigurationGVR = schema.GroupVersionResource{
+		Group:    admissionregistrationv1.SchemeGroupVersion.Group,
+		Version:  admissionregistrationv1.SchemeGroupVersion.Version,
+		Resource: "validatingwebhookconfigurations",
 	}
 
 	ClusterResourceOverrideSnapshotKind = schema.GroupVersionKind{
@@ -636,6 +718,11 @@ var LessFuncDiffedResourcePlacements = func(a, b placementv1beta1.DiffedResource
 
 	}
 	return aStr < bStr
+}
+
+// LessFuncCondition is a less function for sorting conditions based on its types.
+var LessFuncConditionByType = func(a, b metav1.Condition) bool {
+	return a.Type < b.Type
 }
 
 // IsDiffedResourcePlacementsEqual returns true if the two sets of diffed resource placements are equal.

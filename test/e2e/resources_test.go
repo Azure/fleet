@@ -35,6 +35,8 @@ const (
 	internalServiceImportNameTemplate = "isi-%d"
 	endpointSliceExportNameTemplate   = "ep-%d"
 	crpEvictionNameTemplate           = "crpe-%d"
+	updateRunStrategyNameTemplate     = "curs-%d"
+	updateRunNameWithSubIndexTemplate = "cur-%d-%d"
 
 	customDeletionBlockerFinalizer = "kubernetes-fleet.io/custom-deletion-blocker-finalizer"
 	workNamespaceLabelName         = "process"
