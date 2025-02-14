@@ -22,7 +22,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -967,7 +967,7 @@ func markBindingAvailable(binding *fleetv1beta1.ClusterResourceBinding, trackabl
 	Eventually(func() error {
 		reason := "trackable"
 		if !trackable {
-			reason = work.WorkNotTrackableReason
+			reason = workapplier.WorkNotAllManfestsTrackableReason
 		}
 		binding.SetConditions(metav1.Condition{
 			Type:               string(fleetv1beta1.ResourceBindingAvailable),

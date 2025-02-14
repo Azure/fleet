@@ -32,7 +32,7 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	bindingutils "go.goms.io/fleet/pkg/utils/binding"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -146,7 +146,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	// pick the bindings to be updated according to the rollout plan
 	// staleBoundBindings is a list of "Bound" bindings and are not selected in this round because of the rollout strategy.
-	toBeUpdatedBindings, staleBoundBindings, needRoll, waitTime, err := r.pickBindingsToRoll(ctx, allBindings, latestResourceSnapshot, &crp, matchedCRO, matchedRO)
+	toBeUpdatedBindings, staleBoundBindings, upToDateBindings, needRoll, waitTime, err := r.pickBindingsToRoll(ctx, allBindings, latestResourceSnapshot, &crp, matchedCRO, matchedRO)
 	if err != nil {
 		klog.ErrorS(err, "Failed to pick the bindings to roll", "clusterResourcePlacement", crpName)
 		return runtime.Result{}, err
@@ -168,6 +168,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{}, err
 	}
 	klog.V(2).InfoS("Successfully updated status of the stale bindings", "clusterResourcePlacement", crpName, "numberOfStaleBindings", len(staleBoundBindings))
+
+	// Check if any of the up to date bindings needs a status refresh.
+	extractedUpToDateBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0, len(upToDateBindings))
+	for idx := range upToDateBindings {
+		extractedUpToDateBindings = append(extractedUpToDateBindings, upToDateBindings[idx].currentBinding)
+	}
+	if err := r.checkAndUpdateStaleBindingsStatus(ctx, extractedUpToDateBindings); err != nil {
+		return runtime.Result{}, err
+	}
+	klog.V(2).InfoS("Successfully verified if all the up-to-date bindings have fresh status", "clusterResourcePlacement", crpName, "numberOfUpToDateBindings", len(upToDateBindings))
 
 	// Update all the bindings in parallel according to the rollout plan.
 	// We need to requeue the request regardless if the binding updates succeed or not
@@ -312,7 +322,7 @@ func createUpdateInfo(binding *fleetv1beta1.ClusterResourceBinding,
 // Thus, it also returns a bool indicating whether there are out of sync bindings to be rolled to differentiate those
 // two cases.
 func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*fleetv1beta1.ClusterResourceBinding, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, crp *fleetv1beta1.ClusterResourcePlacement,
-	matchedCROs []*fleetv1alpha1.ClusterResourceOverrideSnapshot, matchedROs []*fleetv1alpha1.ResourceOverrideSnapshot) ([]toBeUpdatedBinding, []toBeUpdatedBinding, bool, time.Duration, error) {
+	matchedCROs []*fleetv1alpha1.ClusterResourceOverrideSnapshot, matchedROs []*fleetv1alpha1.ResourceOverrideSnapshot) ([]toBeUpdatedBinding, []toBeUpdatedBinding, []toBeUpdatedBinding, bool, time.Duration, error) {
 	// Those are the bindings that are chosen by the scheduler to be applied to selected clusters.
 	// They include the bindings that are already applied to the clusters and the bindings that are newly selected by the scheduler.
 	schedulerTargetedBinds := make([]*fleetv1beta1.ClusterResourceBinding, 0)
@@ -341,6 +351,10 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 	// We can safely update those bindings to latest resources even if we can't update the rest of the bindings when we don't meet the
 	// minimum AvailableNumber of copies as we won't reduce the total unavailable number of bindings.
 	applyFailedUpdateCandidates := make([]toBeUpdatedBinding, 0)
+
+	// Those are the bindings that have been updated to the latest resources yet its status, specifically
+	// the RolloutStarted condition, might have become stale.
+	upToDateBindings := make([]toBeUpdatedBinding, 0)
 
 	// calculate the cutoff time for a binding to be applied before so that it can be considered ready
 	readyTimeCutOff := time.Now().Add(-time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second)
@@ -387,7 +401,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			// PickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
 			cro, ro, err := overrider.PickFromResourceMatchedOverridesForTargetCluster(ctx, r.Client, binding.Spec.TargetCluster, matchedCROs, matchedROs)
 			if err != nil {
-				return nil, nil, false, minWaitTime, err
+				return nil, nil, nil, false, minWaitTime, err
 			}
 			boundingCandidates = append(boundingCandidates, createUpdateInfo(binding, latestResourceSnapshot, cro, ro))
 		case fleetv1beta1.BindingStateBound:
@@ -416,7 +430,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 				// PickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
 				cro, ro, err := overrider.PickFromResourceMatchedOverridesForTargetCluster(ctx, r.Client, binding.Spec.TargetCluster, matchedCROs, matchedROs)
 				if err != nil {
-					return nil, nil, false, 0, err
+					return nil, nil, nil, false, 0, err
 				}
 				// The binding needs update if it's not pointing to the latest resource resourceBinding or the overrides.
 				if binding.Spec.ResourceSnapshotName != latestResourceSnapshot.Name || !equality.Semantic.DeepEqual(binding.Spec.ClusterResourceOverrideSnapshots, cro) || !equality.Semantic.DeepEqual(binding.Spec.ResourceOverrideSnapshots, ro) {
@@ -427,6 +441,11 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 					} else {
 						updateCandidates = append(updateCandidates, updateInfo)
 					}
+				} else {
+					// The binding is already pointing to the latest set of resources; however,
+					// it might occur that the RolloutStarted condition in the status has become
+					// stale. Fleet needs to check the status of these bindings.
+					upToDateBindings = append(upToDateBindings, toBeUpdatedBinding{currentBinding: binding})
 				}
 			} else if bindingReady {
 				// it is being deleted, it can be removed from the cluster at any time, so it can be unavailable at any time
@@ -448,13 +467,13 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 	// the list of bindings that are to be updated by this rolling phase
 	toBeUpdatedBindingList := make([]toBeUpdatedBinding, 0)
 	if len(removeCandidates)+len(updateCandidates)+len(boundingCandidates)+len(applyFailedUpdateCandidates) == 0 {
-		return toBeUpdatedBindingList, nil, false, minWaitTime, nil
+		return toBeUpdatedBindingList, nil, upToDateBindings, false, minWaitTime, nil
 	}
 
 	toBeUpdatedBindingList, staleUnselectedBinding := determineBindingsToUpdate(crp, removeCandidates, updateCandidates, boundingCandidates, applyFailedUpdateCandidates, targetNumber,
 		readyBindings, canBeReadyBindings, canBeUnavailableBindings)
 
-	return toBeUpdatedBindingList, staleUnselectedBinding, true, minWaitTime, nil
+	return toBeUpdatedBindingList, staleUnselectedBinding, upToDateBindings, true, minWaitTime, nil
 }
 
 // determineBindingsToUpdate determines which bindings to update
@@ -572,7 +591,7 @@ func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOf
 	// find the latest applied condition that has the same generation as the binding
 	availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
 	if condition.IsConditionStatusTrue(availableCondition, binding.GetGeneration()) {
-		if availableCondition.Reason != work.WorkNotTrackableReason {
+		if availableCondition.Reason != workapplier.WorkNotAllManfestsTrackableReason {
 			return 0, true
 		}
 
@@ -901,6 +920,7 @@ func (r *Reconciler) processApplyStrategyUpdates(
 		if equality.Semantic.DeepEqual(binding.Spec.ApplyStrategy, applyStrategy) {
 			// The binding already has the latest apply strategy set; no need to push the update.
 			klog.V(2).InfoS("The binding already has the latest apply strategy; skip the apply strategy update", "clusterResourceBinding", klog.KObj(binding))
+			klog.V(2).InfoS("Apply strategy no update generations", "now", binding.Generation)
 			continue
 		}
 
@@ -911,12 +931,17 @@ func (r *Reconciler) processApplyStrategyUpdates(
 		updatedBinding := binding.DeepCopy()
 		updatedBinding.Spec.ApplyStrategy = applyStrategy
 
+		bidx := idx // Re-assign to avoid loop variable capture.
 		errs.Go(func() error {
 			if err := r.Client.Patch(childCtx, updatedBinding, client.MergeFrom(binding)); err != nil {
 				klog.ErrorS(err, "Failed to update binding with new apply strategy", "clusterResourceBinding", klog.KObj(binding))
 				return controller.NewAPIServerError(false, err)
 			}
 			klog.V(2).InfoS("Updated binding with new apply strategy", "clusterResourceBinding", klog.KObj(binding))
+			// Update the binding in the allBindings slice; this is a minor optimization to avoid
+			// future updates being rejected by concurrency control.
+			allBindings[bidx] = updatedBinding
+			klog.V(2).InfoS("Apply strategy update generations", "before", binding.Generation, "after", allBindings[bidx].Generation)
 			return nil
 		})
 	}

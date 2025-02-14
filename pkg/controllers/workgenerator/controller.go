@@ -44,7 +44,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -1157,7 +1157,7 @@ func setAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding *
 	for _, w := range works {
 		availableCond := meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 		switch {
-		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()) && availableCond.Reason == work.WorkNotTrackableReason:
+		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()) && availableCond.Reason == workapplier.WorkNotAllManfestsTrackableReason:
 			// The Work object has completed the availability check successfully, due to the resources being untrackable.
 			if firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes == nil {
 				firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes = w
@@ -1216,7 +1216,7 @@ func setAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding *
 		meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingAvailable),
-			Reason:             work.WorkNotTrackableReason,
+			Reason:             condition.WorkNotAvailabilityTrackableReason,
 			Message:            fmt.Sprintf("The availability of work object %s is not trackable", firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes.Name),
 			ObservedGeneration: binding.GetGeneration(),
 		})

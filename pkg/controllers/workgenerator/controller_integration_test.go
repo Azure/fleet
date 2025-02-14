@@ -29,7 +29,6 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	fleetwork "go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
@@ -2839,7 +2838,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				// actually handles resources; ConfigMap objects are considered to be
 				// trackable (available immediately after placement). Here it is set
 				// to NotTrackable for testing purposes.
-				Reason:             fleetwork.WorkNotTrackableReason,
+				Reason:             "SomeManifestsAreNotAvailabilityTrackable",
 				ObservedGeneration: work.GetGeneration(),
 			}
 
@@ -3209,7 +3208,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			availableCond := metav1.Condition{
 				Type:               string(placementv1beta1.ResourceBindingAvailable),
 				Status:             metav1.ConditionTrue,
-				Reason:             fleetwork.WorkNotTrackableReason,
+				Reason:             condition.WorkNotAvailabilityTrackableReason,
 				ObservedGeneration: clusterResourceBinding.GetGeneration(),
 			}
 

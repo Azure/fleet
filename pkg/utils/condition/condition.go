@@ -108,6 +108,9 @@ const (
 	// WorkNotAvailableReason is the reason string of placement condition if some works are not available.
 	WorkNotAvailableReason = "NotAllWorkAreAvailable"
 
+	// WorkNotAvailabilityTrackableReason is the reason string of placement condition if some works are not trackable for availability.
+	WorkNotAvailabilityTrackableReason = "NotAllWorkAreAvailabilityTrackable"
+
 	// AllWorkAvailableReason is the reason string of placement condition if all works are available.
 	AllWorkAvailableReason = "AllWorkAreAvailable"
 
