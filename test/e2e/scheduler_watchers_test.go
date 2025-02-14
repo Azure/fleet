@@ -1332,12 +1332,12 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("can add a new node", func() {
-			node := &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: nodeNameForWatcherTests,
-				},
-			}
 			Eventually(func() error {
+				node := &corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: nodeNameForWatcherTests,
+					},
+				}
 				if err := memberCluster3WestProdClient.Create(ctx, node); err != nil && !errors.IsAlreadyExists(err) {
 					return err
 				}
@@ -1353,7 +1353,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 					corev1.ResourceMemory: resource.MustParse("10000Gi"),
 				}
 				return memberCluster3WestProdClient.Status().Update(ctx, node)
-			}, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create and update a new node")
+			}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create and update a new node")
 		})
 
 		It("should pick the new cluster", func() {

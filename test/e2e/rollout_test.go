@@ -634,7 +634,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		workNamespace := appNamespace()
 		var wantSelectedResources []placementv1beta1.ResourceIdentifier
 		var testJob batchv1.Job
-
+		uavailablePeriodSeconds := 15
 		BeforeAll(func() {
 			// Create the test resources.
 			readJobTestManifest(&testJob)
@@ -665,13 +665,13 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			// the job we are trying to propagate takes 10s to complete. MaxUnavailable is set to 1. So setting UnavailablePeriodSeconds to 15s
 			// so that after each rollout phase we only wait for 15s before proceeding to the next since Job is not trackable,
 			// we want rollout to finish in a reasonable time.
-			crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds = ptr.To(15)
+			crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds = ptr.To(uavailablePeriodSeconds)
 			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
 		})
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", false)
-			Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, 2*time.Duration(uavailablePeriodSeconds)*time.Second, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
@@ -693,10 +693,10 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				return hubClient.Update(ctx, &job)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to suspend job")
 		})
-
+		// job is not trackable, so we need to wait for a bit longer for each roll out
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "1", false)
-			Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, 5*time.Duration(uavailablePeriodSeconds)*time.Second, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
