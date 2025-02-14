@@ -666,7 +666,7 @@ func TestIsBindingReady(t *testing.T) {
 							LastTransitionTime: metav1.Time{
 								Time: now.Add(-time.Millisecond),
 							},
-							Reason: workapplier.WorkNotAllManfestsTrackableReason,
+							Reason: condition.WorkNotAvailabilityTrackableReason,
 						},
 					},
 				},
@@ -689,7 +689,7 @@ func TestIsBindingReady(t *testing.T) {
 							LastTransitionTime: metav1.Time{
 								Time: now.Add(time.Millisecond),
 							},
-							Reason: workapplier.WorkNotAllManfestsTrackableReason,
+							Reason: condition.WorkNotAvailabilityTrackableReason,
 						},
 					},
 				},
@@ -2278,7 +2278,7 @@ func generateNotReadyClusterResourceBinding(state fleetv1beta1.BindingState, res
 			Type:               string(fleetv1beta1.ResourceBindingAvailable),
 			Status:             metav1.ConditionTrue,
 			LastTransitionTime: lastTransitionTime,
-			Reason:             workapplier.WorkNotAllManfestsTrackableReason, // Make it not ready
+			Reason:             condition.WorkNotAvailabilityTrackableReason, // Make it not ready
 		},
 	}
 	return binding

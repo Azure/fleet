@@ -32,7 +32,6 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/workapplier"
 	bindingutils "go.goms.io/fleet/pkg/utils/binding"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -591,7 +590,7 @@ func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOf
 	// find the latest applied condition that has the same generation as the binding
 	availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
 	if condition.IsConditionStatusTrue(availableCondition, binding.GetGeneration()) {
-		if availableCondition.Reason != workapplier.WorkNotAllManfestsTrackableReason {
+		if availableCondition.Reason != condition.WorkNotAvailabilityTrackableReason {
 			return 0, true
 		}
 
@@ -931,7 +930,7 @@ func (r *Reconciler) processApplyStrategyUpdates(
 		updatedBinding := binding.DeepCopy()
 		updatedBinding.Spec.ApplyStrategy = applyStrategy
 
-		bidx := idx // Re-assign to avoid loop variable capture.
+		bidx := idx // Re-assign variable to avoid loop variable capture.
 		errs.Go(func() error {
 			if err := r.Client.Patch(childCtx, updatedBinding, client.MergeFrom(binding)); err != nil {
 				klog.ErrorS(err, "Failed to update binding with new apply strategy", "clusterResourceBinding", klog.KObj(binding))
