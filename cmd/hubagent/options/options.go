@@ -145,7 +145,7 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.BoolVar(&o.EnableV1Beta1APIs, "enable-v1beta1-apis", true, "If set, the agents will watch for the v1beta1 APIs.")
 	flags.BoolVar(&o.EnableClusterInventoryAPIs, "enable-cluster-inventory-apis", false, "If set, the agents will watch for the ClusterInventory APIs.")
 	flags.DurationVar(&o.ForceDeleteWaitTime.Duration, "force-delete-wait-time", 15*time.Minute, "The duration the hub agent waits before force deleting a member cluster.")
-	flags.BoolVar(&o.EnableStagedUpdateRunAPIs, "enable-staged-update-run-apis", false, "If set, the agents will watch for the ClusterStagedUpdateRun APIs.")
+	flags.BoolVar(&o.EnableStagedUpdateRunAPIs, "enable-staged-update-run-apis", true, "If set, the agents will watch for the ClusterStagedUpdateRun APIs.")
 	flags.BoolVar(&o.EnableEvictionAPIs, "enable-eviction-apis", false, "If set, the agents will watch for the Eviction and PlacementDisruptionBudget APIs.")
 
 	o.RateLimiterOpts.AddFlags(flags)
