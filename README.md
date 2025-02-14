@@ -1,4 +1,4 @@
-# Fleet
+# KubeFleet
 
 ![GitHub release (latest by date)][1]
 [![Go Report Card][2]][3]
@@ -6,7 +6,8 @@
 ![GitHub go.mod Go version][5]
 [![codecov][6]][7]
 
-Fleet provides the following capabilities 
+KubeFleet is an open source solution that works on any Kubernetes cluster. We are working towards the
+vision that we will eventually be able to treat each Kubernetes cluster as [cattle](https://cloudscaling.com/blog/cloud-computing/the-history-of-pets-vs-cattle/).
 
 * Join/Leave is a feature that allows a member cluster to join and leave a fleet by registering a custom resource on the fleet's control plane (the hub cluster).
 * Workload Orchestration is a feature that allows users to create resources on the hub cluster and then selectively propagate these resources to desired member clusters in the fleet.
@@ -86,13 +87,15 @@ understand the details of various features offered by fleet.
 
 ## Code of Conduct
 
-This project has adopted the [Microsoft Open Source Code of Conduct][8]. For more information, see the [Code of Conduct FAQ][9] or contact [opencode@microsoft.com][19] with any additional questions or comments.
+This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information, see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
 ## Contributing
 
-## Support
+The [contribution guide](CONTRIBUTING.md) covers everything you need to know about how you can contribute to KubeFleet.
 
-Azure fleet is an open source project that is [**not** covered by the Microsoft Azure support policy][10]. [Please search open issues here][11], and if your issue isn't already represented please [open a new one][12]. The project maintainers will respond to the best of their abilities.
+
+## Support
+For more information, see [SUPPORT.md](SUPPORT.md).
 
 [1]:  https://img.shields.io/github/v/release/Azure/fleet
 [2]:  https://goreportcard.com/badge/go.goms.io/fleet
@@ -101,11 +104,3 @@ Azure fleet is an open source project that is [**not** covered by the Microsoft 
 [5]:  https://img.shields.io/github/go-mod/go-version/Azure/fleet
 [6]: https://opensource.microsoft.com/codeofconduct/
 [7]: https://opensource.microsoft.com/codeofconduct/faq
-
-## Trademarks
-
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft
-trademarks or logos is subject to and must follow
-[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
-Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
-Any use of third-party trademarks or logos are subject to those third-party's policies.
