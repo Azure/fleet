@@ -1236,7 +1236,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("can add a new member cluster in a region which would violate the topology spread constraint", func() {
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue1}, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionEast}, nil)
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 		})
 
@@ -1247,7 +1247,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("can add a new member cluster in a region which would re-balance the topology spread", func() {
-			createMemberCluster(fakeClusterName2ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue2}, nil)
+			createMemberCluster(fakeClusterName2ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionWest}, nil)
 			markMemberClusterAsHealthy(fakeClusterName2ForWatcherTests)
 		})
 
@@ -1439,7 +1439,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("can add a new member cluster in a region which would violate the topology spread constraint", func() {
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue1}, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionEast}, nil)
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 		})
 
@@ -1694,8 +1694,8 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create new member clusters.
-			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue1}, nil)
-			createMemberCluster(fakeClusterName2ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue2}, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionEast}, nil)
+			createMemberCluster(fakeClusterName2ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionWest}, nil)
 			// Mark the newly created member clusters as healthy.
 			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 			markMemberClusterAsHealthy(fakeClusterName2ForWatcherTests)
