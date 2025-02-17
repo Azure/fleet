@@ -388,7 +388,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		// topology spread constraints takes a bit longer to be applied
 		It("should update CRP status as expected", func() {
 			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1EastProdName, memberCluster3WestProdName}, nil, "0")
-			Eventually(statusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place resources on the newly picked clusters", func() {
