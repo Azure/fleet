@@ -263,8 +263,8 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 
 		It("Should rollout resources to member-cluster-2 only and completes stage canary", func() {
 			checkIfPlacedWorkResourcesOnMemberClustersInUpdateRun([]*framework.Cluster{allMemberClusters[1]})
-			validateAndApproveClusterApprovalRequests(updateRunNames[0], envCanary)
 			checkIfRemovedWorkResourcesFromMemberClustersConsistently([]*framework.Cluster{allMemberClusters[0], allMemberClusters[2]})
+			validateAndApproveClusterApprovalRequests(updateRunNames[0], envCanary)
 		})
 
 		It("Should rollout resources to member-cluster-1 too but not member-cluster-3 and complete the staged update run successfully", func() {
@@ -311,7 +311,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 			Eventually(func() error {
 				crp := &placementv1beta1.ClusterResourcePlacement{}
 				if err := hubClient.Get(ctx, client.ObjectKey{Name: crpName}, crp); err != nil {
-					return fmt.Errorf("Failed to get the crp: %w", err)
+					return fmt.Errorf("failed to get the crp: %w", err)
 				}
 				crp.Spec.Policy.ClusterNames = []string{allMemberClusterNames[2]}
 				return hubClient.Update(ctx, crp)

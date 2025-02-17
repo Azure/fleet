@@ -271,10 +271,10 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 		case placementv1beta1.AfterStageTaskTypeTimedWait:
 			waitStartTime := meta.FindStatusCondition(updatingStageStatus.Conditions, string(placementv1beta1.StageUpdatingConditionProgressing)).LastTransitionTime.Time
 			// Check if the wait time has passed.
-			waitTime := time.Since(waitStartTime.Add(task.WaitTime.Duration))
-			if waitTime < 0 {
+			waitTime := time.Until(waitStartTime.Add(task.WaitTime.Duration))
+			if waitTime > 0 {
 				klog.V(2).InfoS("The after stage task still need to wait", "waitStartTime", waitStartTime, "waitTime", task.WaitTime, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
-				return false, -waitTime, nil
+				return false, waitTime, nil
 			}
 			markAfterStageWaitTimeElapsed(&updatingStageStatus.AfterStageTaskStatus[i], updateRun.Generation)
 			klog.V(2).InfoS("The after stage wait task has completed", "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
