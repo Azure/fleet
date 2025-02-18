@@ -226,7 +226,7 @@ func checkIfMemberClusterHasJoined(memberCluster *framework.Cluster) {
 		}
 
 		return nil
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Member cluster has not joined yet")
+	}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Member cluster has not joined yet")
 }
 
 // checkIfAzurePropertyProviderIsWorking verifies if all member clusters have the Azure property
@@ -284,7 +284,7 @@ func checkIfAzurePropertyProviderIsWorking() {
 				return fmt.Errorf("member cluster status conditions diff (-got, +want):\n%s", diff)
 			}
 			return nil
-		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to confirm that Azure property provider is up and running")
+		}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to confirm that Azure property provider is up and running")
 	}
 }
 
@@ -475,7 +475,7 @@ func cleanupInvalidClusters() {
 			}
 			mcObj.Finalizers = []string{}
 			return hubClient.Update(ctx, mcObj)
-		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update member cluster object")
+		}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update member cluster object")
 		Expect(hubClient.Delete(ctx, mcObj)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete member cluster object")
 		Eventually(func() error {
 			mcObj := &clusterv1beta1.MemberCluster{}
@@ -483,7 +483,7 @@ func cleanupInvalidClusters() {
 				return fmt.Errorf("member cluster still exists or an unexpected error occurred: %w", err)
 			}
 			return nil
-		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if member cluster is deleted, member cluster still exists")
+		}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if member cluster is deleted, member cluster still exists")
 	}
 }
 
@@ -683,7 +683,7 @@ func cleanWorkResourcesOnCluster(cluster *framework.Cluster) {
 	Expect(client.IgnoreNotFound(cluster.KubeClient.Delete(ctx, &ns))).To(Succeed(), "Failed to delete namespace %s", ns.Namespace)
 
 	workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
-	Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from %s cluster", cluster.ClusterName)
+	Eventually(workResourcesRemovedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from %s cluster", cluster.ClusterName)
 }
 
 // setAllMemberClustersToLeave sets all member clusters to leave the fleet.
@@ -711,25 +711,20 @@ func checkIfAllMemberClustersHaveLeft() {
 			}
 
 			return nil
-		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete member cluster")
-	}
-}
-
-func checkIfPlacedWorkResourcesOnAllMemberClusters() {
-	for idx := range allMemberClusters {
-		memberCluster := allMemberClusters[idx]
-
-		workResourcesPlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster)
-		Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+		}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete member cluster")
 	}
 }
 
 func checkIfPlacedWorkResourcesOnAllMemberClustersConsistently() {
-	for idx := range allMemberClusters {
-		memberCluster := allMemberClusters[idx]
+	checkIfPlacedWorkResourcesOnMemberClustersConsistently(allMemberClusters)
+}
+
+func checkIfPlacedWorkResourcesOnMemberClustersConsistently(clusters []*framework.Cluster) {
+	for idx := range clusters {
+		memberCluster := clusters[idx]
 
 		workResourcesPlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster)
-		Consistently(workResourcesPlacedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+		Consistently(workResourcesPlacedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s consistently", memberCluster.ClusterName)
 	}
 }
 
@@ -755,6 +750,19 @@ func checkIfRemovedWorkResourcesFromMemberClusters(clusters []*framework.Cluster
 	}
 }
 
+func checkIfRemovedWorkResourcesFromAllMemberClustersConsistently() {
+	checkIfRemovedWorkResourcesFromMemberClustersConsistently(allMemberClusters)
+}
+
+func checkIfRemovedWorkResourcesFromMemberClustersConsistently(clusters []*framework.Cluster) {
+	for idx := range clusters {
+		memberCluster := clusters[idx]
+
+		workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
+		Consistently(workResourcesRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s consistently", memberCluster.ClusterName)
+	}
+}
+
 // cleanupCRP deletes the CRP and waits until the resources are not found.
 func cleanupCRP(name string) {
 	// TODO(Arvindthiru): There is a conflict which requires the Eventually block, not sure of series of operations that leads to it yet.
@@ -769,9 +777,8 @@ func cleanupCRP(name string) {
 		}
 
 		// Delete the CRP (again, if applicable).
-		//
 		// This helps the After All node to run successfully even if the steps above fail early.
-		if err := hubClient.Delete(ctx, crp); err != nil {
+		if err = hubClient.Delete(ctx, crp); err != nil {
 			return err
 		}
 
@@ -781,7 +788,7 @@ func cleanupCRP(name string) {
 
 	// Wait until the CRP is removed.
 	removedActual := crpRemovedActual(name)
-	Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove CRP %s", name)
+	Eventually(removedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove CRP %s", name)
 }
 
 // createResourceOverrides creates a number of resource overrides.
@@ -903,12 +910,12 @@ func ensureCRPAndRelatedResourcesDeleted(crpName string, memberClusters []*frame
 		memberCluster := memberClusters[idx]
 
 		workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
-		Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
+		Eventually(workResourcesRemovedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
 	}
 
 	// Verify that related finalizers have been removed from the CRP.
 	finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
-	Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP")
+	Eventually(finalizerRemovedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP")
 
 	// Remove the custom deletion blocker finalizer from the CRP.
 	cleanupCRP(crpName)
@@ -1258,4 +1265,29 @@ func createCRPWithApplyStrategy(crpName string, applyStrategy *placementv1beta1.
 // createCRP creates a ClusterResourcePlacement with the given name.
 func createCRP(crpName string) {
 	createCRPWithApplyStrategy(crpName, nil)
+}
+
+// ensureUpdateRunDeletion deletes the update run with the given name and checks all related approval requests are also deleted.
+func ensureUpdateRunDeletion(updateRunName string) {
+	updateRun := &placementv1beta1.ClusterStagedUpdateRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: updateRunName,
+		},
+	}
+	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, updateRun))).Should(Succeed(), "Failed to delete ClusterStagedUpdateRun %s", updateRunName)
+
+	removedActual := updateRunAndApprovalRequestsRemovedActual(updateRunName)
+	Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "ClusterStagedUpdateRun or ClusterApprovalRequests still exists")
+}
+
+// ensureUpdateRunStrategyDeletion deletes the update run strategy with the given name.
+func ensureUpdateRunStrategyDeletion(strategyName string) {
+	strategy := &placementv1beta1.ClusterStagedUpdateStrategy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: strategyName,
+		},
+	}
+	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, strategy))).Should(Succeed(), "Failed to delete ClusterStagedUpdateStrategy %s", strategyName)
+	removedActual := updateRunStrategyRemovedActual(strategyName)
+	Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "ClusterStagedUpdateStrategy still exists")
 }

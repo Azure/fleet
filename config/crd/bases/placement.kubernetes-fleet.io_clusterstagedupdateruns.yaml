@@ -24,10 +24,10 @@ spec:
       name: Placement
       type: string
     - jsonPath: .spec.resourceSnapshotIndex
-      name: Resource-Snapshot
+      name: Resource-Snapshot-Index
       type: string
     - jsonPath: .status.policySnapshotIndexUsed
-      name: Policy-Snapshot
+      name: Policy-Snapshot-Index
       type: string
     - jsonPath: .status.conditions[?(@.type=="Initialized")].status
       name: Initialized
@@ -1244,10 +1244,10 @@ spec:
       name: Placement
       type: string
     - jsonPath: .spec.resourceSnapshotIndex
-      name: Resource-Snapshot
+      name: Resource-Snapshot-Index
       type: string
     - jsonPath: .status.policySnapshotIndexUsed
-      name: Policy-Snapshot
+      name: Policy-Snapshot-Index
       type: string
     - jsonPath: .status.conditions[?(@.type=="Initialized")].status
       name: Initialized

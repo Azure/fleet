@@ -18,8 +18,8 @@ import (
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=crsur
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:printcolumn:JSONPath=`.spec.placementName`,name="Placement",type=string
-// +kubebuilder:printcolumn:JSONPath=`.spec.resourceSnapshotIndex`,name="Resource-Snapshot",type=string
-// +kubebuilder:printcolumn:JSONPath=`.status.policySnapshotIndexUsed`,name="Policy-Snapshot",type=string
+// +kubebuilder:printcolumn:JSONPath=`.spec.resourceSnapshotIndex`,name="Resource-Snapshot-Index",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.policySnapshotIndexUsed`,name="Policy-Snapshot-Index",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Initialized")].status`,name="Initialized",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Succeeded")].status`,name="Succeeded",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
@@ -462,6 +462,11 @@ const (
 	// Its condition status can be:
 	// - "True": The request is approved.
 	ApprovalRequestConditionApproved ApprovalRequestConditionType = "Approved"
+
+	// ApprovalRequestConditionApprovalAccepted indicates if the approved approval request was accepted.
+	// Its condition status can be:
+	// - "True": The request is approved.
+	ApprovalRequestConditionApprovalAccepted ApprovalRequestConditionType = "ApprovalAccepted"
 )
 
 // ClusterApprovalRequestList contains a list of ClusterApprovalRequest.

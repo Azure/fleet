@@ -80,6 +80,8 @@ const (
 	// DiffReportedStatusTrueReason is the reason string of the DiffReported condition when the
 	// diff reporting has been fully completed.
 	DiffReportedStatusTrueReason = "DiffReportingCompleted"
+
+	// TODO: Add a user error reason
 )
 
 // A group of condition reason string which is used to populate the placement condition per cluster.
@@ -93,8 +95,11 @@ const (
 	// SyncWorkFailedReason is the reason string of placement condition if some works failed to synchronize.
 	SyncWorkFailedReason = "SyncWorkFailed"
 
-	// WorkNeedSyncedReason is the reason string of placement condition if some works are in the processing of synchronizing.
-	WorkNeedSyncedReason = "StillNeedToSyncWork"
+	// WorkApplyInProcess is the reason string of placement condition if works are just synchronized and in the process of being applied.
+	WorkApplyInProcess = "ApplyInProgress"
+
+	// WorkDiffReportInProcess is the reason string of placement condition if works are just synchronized and diff reporting is in progress.
+	WorkDiffReportInProcess = "DiffReportInProgress"
 
 	// WorkNotAppliedReason is the reason string of placement condition if some works are not applied.
 	WorkNotAppliedReason = "NotAllWorkHaveBeenApplied"
@@ -107,6 +112,12 @@ const (
 
 	// AllWorkAvailableReason is the reason string of placement condition if all works are available.
 	AllWorkAvailableReason = "AllWorkAreAvailable"
+
+	// AllWorkDiffReportedReason is the reason string of placement condition if all works have diff reported.
+	AllWorkDiffReportedReason = "AllWorkHaveDiffReported"
+
+	// WorkNotDiffReportedReason is the reason string of placement condition if some works failed to have diff reported.
+	WorkNotDiffReportedReason = "NotAllWorkHaveDiffReported"
 )
 
 // A group of condition reason string which is used t populate the ClusterStagedUpdateRun condition.
@@ -155,6 +166,9 @@ const (
 
 	// AfterStageTaskWaitTimeElapsedReason is the reason string of condition if the wait time for after stage task has elapsed.
 	AfterStageTaskWaitTimeElapsedReason = "AfterStageTaskWaitTimeElapsed"
+
+	// ApprovalRequestApprovalAcceptedReason is the reason string of condition if the approval of the approval request has been accepted.
+	ApprovalRequestApprovalAcceptedReason = "ApprovalRequestApprovalAccepted"
 )
 
 // A group of condition reason & message string which is used to populate the ClusterResourcePlacementEviction condition.

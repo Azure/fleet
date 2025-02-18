@@ -43,7 +43,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 	BeforeEach(OncePerOrdered, func() {
 		testUpdateRunName = "updaterun-" + utils.RandStr()
 		testCRPName = "crp-" + utils.RandStr()
-		testResourceSnapshotName = "snapshot-" + utils.RandStr()
+		testResourceSnapshotName = testCRPName + "-" + testResourceSnapshotIndex + "-snapshot"
 		testUpdateStrategyName = "updatestrategy-" + utils.RandStr()
 		testCROName = "cro-" + utils.RandStr()
 		updateRunNamespacedName = types.NamespacedName{Name: testUpdateRunName}
@@ -134,7 +134,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 		By("Creating a new clusterStagedUpdateRun")
 		Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
-		By("Validating the initialization succeededand and the execution started")
+		By("Validating the initialization succeeded and the execution started")
 		initialized := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
 		wantStatus = generateExecutionStartedStatus(updateRun, initialized)
 		validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
@@ -283,7 +283,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			waitEndTime := meta.FindStatusCondition(updateRun.Status.StagesStatus[0].AfterStageTaskStatus[0].Conditions, string(placementv1beta1.AfterStageTaskConditionWaitTimeElapsed)).LastTransitionTime.Time
 			// In this test, I set wait time to be 4 seconds, while stageClusterUpdatingWaitTime is 3 seconds.
 			// So it needs 2 rounds of reconcile to wait for the waitTime to elapse, waitEndTime - waitStartTime should be around 6 seconds.
-			Expect(waitStartTime.Add(updateStrategy.Spec.Stages[0].AfterStageTasks[0].WaitTime.Duration).Before(waitEndTime)).Should(BeTrue(),
+			Expect(waitStartTime.Add(updateStrategy.Spec.Stages[0].AfterStageTasks[0].WaitTime.Duration).After(waitEndTime)).Should(BeFalse(),
 				fmt.Sprintf("waitEndTime %v did not pass waitStartTime %v long enough, want at least %v", waitEndTime, waitStartTime, updateStrategy.Spec.Stages[0].AfterStageTasks[0].WaitTime.Duration))
 		})
 
@@ -413,6 +413,14 @@ var _ = Describe("UpdateRun execution tests", func() {
 				wantStatus.DeletionStageStatus.Clusters[i].Conditions = append(wantStatus.DeletionStageStatus.Clusters[i].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
 			}
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
+
+			By("Validating the approvalRequest has ApprovalAccepted status")
+			Eventually(func() (bool, error) {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: wantApprovalRequest.Name}, approvalRequest); err != nil {
+					return false, err
+				}
+				return condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequest.Status.Conditions, string(placementv1beta1.ApprovalRequestConditionApprovalAccepted)), approvalRequest.Generation), nil
+			}, timeout, interval).Should(BeTrue(), "failed to validate the approvalRequest approval accepted")
 		})
 
 		It("Should delete all the clusterResourceBindings in the delete stage and complete the update run", func() {

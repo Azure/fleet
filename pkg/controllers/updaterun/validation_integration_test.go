@@ -42,7 +42,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 	BeforeEach(func() {
 		testUpdateRunName = "updaterun-" + utils.RandStr()
 		testCRPName = "crp-" + utils.RandStr()
-		testResourceSnapshotName = "snapshot-" + utils.RandStr()
+		testResourceSnapshotName = testCRPName + "-" + testResourceSnapshotIndex + "-snapshot"
 		testUpdateStrategyName = "updatestrategy-" + utils.RandStr()
 		testCROName = "cro-" + utils.RandStr()
 		updateRunNamespacedName = types.NamespacedName{Name: testUpdateRunName}
@@ -257,6 +257,24 @@ var _ = Describe("UpdateRun validation tests", func() {
 			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus,
 				"the cluster count initialized in the clusterStagedUpdateRun is outdated")
+		})
+
+		It("Should not fail due to different cluster count if it's pickAll policy", func() {
+			By("Updating the policySnapshot to pickAll")
+			policySnapshot.Spec.Policy.PlacementType = placementv1beta1.PickAllPlacementType
+			Expect(k8sClient.Update(ctx, policySnapshot)).Should(Succeed())
+
+			By("Setting the latest policy snapshot condition as fully scheduled")
+			meta.SetStatusCondition(&policySnapshot.Status.Conditions, metav1.Condition{
+				Type:               string(placementv1beta1.PolicySnapshotScheduled),
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: policySnapshot.Generation,
+				Reason:             "scheduled",
+			})
+			Expect(k8sClient.Status().Update(ctx, policySnapshot)).Should(Succeed(), "failed to update the policy snapshot condition")
+
+			By("Validating the validation does not fail")
+			validateClusterStagedUpdateRunStatusConsistently(ctx, updateRun, wantStatus, "")
 		})
 	})
 

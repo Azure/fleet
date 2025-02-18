@@ -259,7 +259,7 @@ var _ = Describe("creating resourceOverride with different rules for each cluste
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 									{
 										LabelSelector: &metav1.LabelSelector{
-											MatchLabels: map[string]string{regionLabelName: regionLabelValue1, envLabelName: envLabelValue1},
+											MatchLabels: map[string]string{regionLabelName: regionEast, envLabelName: envProd},
 										},
 									},
 								},
@@ -277,7 +277,7 @@ var _ = Describe("creating resourceOverride with different rules for each cluste
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 									{
 										LabelSelector: &metav1.LabelSelector{
-											MatchLabels: map[string]string{regionLabelName: regionLabelValue1, envLabelName: envLabelValue2},
+											MatchLabels: map[string]string{regionLabelName: regionEast, envLabelName: envCanary},
 										},
 									},
 								},
@@ -295,7 +295,7 @@ var _ = Describe("creating resourceOverride with different rules for each cluste
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 									{
 										LabelSelector: &metav1.LabelSelector{
-											MatchLabels: map[string]string{regionLabelName: regionLabelValue2, envLabelName: envLabelValue1},
+											MatchLabels: map[string]string{regionLabelName: regionWest, envLabelName: envProd},
 										},
 									},
 								},
@@ -693,7 +693,7 @@ var _ = Describe("creating resourceOverride with delete configMap", Ordered, fun
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 									{
 										LabelSelector: &metav1.LabelSelector{
-											MatchLabels: map[string]string{regionLabelName: regionLabelValue1},
+											MatchLabels: map[string]string{regionLabelName: regionEast},
 										},
 									},
 								},
@@ -711,7 +711,7 @@ var _ = Describe("creating resourceOverride with delete configMap", Ordered, fun
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 									{
 										LabelSelector: &metav1.LabelSelector{
-											MatchLabels: map[string]string{regionLabelName: regionLabelValue2},
+											MatchLabels: map[string]string{regionLabelName: regionWest},
 										},
 									},
 								},
