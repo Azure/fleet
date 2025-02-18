@@ -20,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	bindingutils "go.goms.io/fleet/pkg/utils/binding"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
@@ -413,15 +414,13 @@ func checkClusterUpdateResult(
 		markClusterUpdatingSucceeded(clusterStatus, updateRun.Generation)
 		return true, nil
 	}
-	for i := condition.OverriddenCondition; i <= condition.AppliedCondition; i++ {
-		bindingCond := binding.GetCondition(string(i.ResourceBindingConditionType()))
-		if condition.IsConditionStatusFalse(bindingCond, binding.Generation) {
-			// We have no way to know if the failed condition is recoverable or not so we just let it run
-			klog.InfoS("The cluster updating encountered an error", "failedCondition", bindingCond, "cluster", clusterStatus.ClusterName, "stage", updatingStage.StageName, "clusterStagedUpdateRun", klog.KObj(updateRun))
-			// TODO(wantjian): identify some non-recoverable error and mark the cluster updating as failed
-			return false, fmt.Errorf("the cluster updating encountered an error at stage `%s`, err := `%s`", string(i.ResourceBindingConditionType()), bindingCond.Message)
-		}
+	if bindingutils.HasBindingFailed(binding) {
+		// We have no way to know if the failed condition is recoverable or not so we just let it run
+		klog.InfoS("The cluster updating encountered an error", "cluster", clusterStatus.ClusterName, "stage", updatingStage.StageName, "clusterStagedUpdateRun", klog.KObj(updateRun))
+		// TODO(wantjian): identify some non-recoverable error and mark the cluster updating as failed
+		return false, fmt.Errorf("the cluster updating encountered an error at stage `%s`, updateRun := `%s`", updatingStage.StageName, updateRun.Name)
 	}
+	klog.InfoS("The application on the cluster is in the mid of being updated", "cluster", clusterStatus.ClusterName, "stage", updatingStage.StageName, "clusterStagedUpdateRun", klog.KObj(updateRun))
 	return false, nil
 }
 

@@ -332,8 +332,9 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		})
 
 		It("Should remove resources on member-cluster-1 and member-cluster-2 and complete the staged update run successfully", func() {
+			// need to go through two stages
 			updateRunSucceededActual := updateRunStatusSucceededActual(updateRunNames[2], policySnapshotIndex3rd, 1, nil, &strategy.Spec, [][]string{{}, {allMemberClusterNames[2]}}, []string{allMemberClusterNames[0], allMemberClusterNames[1]}, nil, nil)
-			Eventually(updateRunSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunNames[2])
+			Eventually(updateRunSucceededActual, 2*updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunNames[2])
 			checkIfRemovedWorkResourcesFromMemberClusters([]*framework.Cluster{allMemberClusters[0], allMemberClusters[1]})
 			checkIfPlacedWorkResourcesOnMemberClustersConsistently([]*framework.Cluster{allMemberClusters[2]})
 		})
