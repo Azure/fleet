@@ -254,7 +254,7 @@ var _ = Describe("picking N clusters with affinities and topology spread constra
 									{
 										LabelSelector: &metav1.LabelSelector{
 											MatchLabels: map[string]string{
-												regionLabelName: regionLabelValue1,
+												regionLabelName: regionEast,
 											},
 										},
 									},

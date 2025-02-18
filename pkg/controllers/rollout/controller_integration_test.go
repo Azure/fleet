@@ -271,9 +271,9 @@ var _ = Describe("Test the rollout Controller", func() {
 
 	It("Should rollout the selected and unselected bindings (not trackable resources)", func() {
 		// create CRP
-		var targetCluster int32 = 11
+		var initTargetClusterNum int32 = 11
 		rolloutCRP = clusterResourcePlacementForTest(testCRPName,
-			createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, targetCluster),
+			createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, initTargetClusterNum),
 			createPlacementRolloutStrategyForTest(fleetv1beta1.RollingUpdateRolloutStrategyType, generateDefaultRollingUpdateConfig(), nil))
 		Expect(k8sClient.Create(ctx, rolloutCRP)).Should(Succeed())
 		// create master resource snapshot that is latest
@@ -281,8 +281,8 @@ var _ = Describe("Test the rollout Controller", func() {
 		Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 		By(fmt.Sprintf("master resource snapshot  %s created", masterSnapshot.Name))
 		// create scheduled bindings for master snapshot on target clusters
-		clusters := make([]string, targetCluster)
-		for i := 0; i < int(targetCluster); i++ {
+		clusters := make([]string, initTargetClusterNum)
+		for i := 0; i < int(initTargetClusterNum); i++ {
 			clusters[i] = "cluster-" + strconv.Itoa(i)
 			binding := generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, masterSnapshot.Name, clusters[i])
 			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
@@ -308,34 +308,34 @@ var _ = Describe("Test the rollout Controller", func() {
 			markBindingAvailable(bindings[i], false)
 		}
 		// simulate another scheduling decision, pick some cluster to unselect from the bottom of the list
-		var newTarget int32 = 9
-		rolloutCRP.Spec.Policy.NumberOfClusters = &newTarget
+		var newTargetClusterNum int32 = 9
+		rolloutCRP.Spec.Policy.NumberOfClusters = &newTargetClusterNum
 		Expect(k8sClient.Update(ctx, rolloutCRP)).Should(Succeed())
 		secondRoundBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0)
 		deletedBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0)
-		stillScheduled := 6
+		stillScheduledClusterNum := 6 // the amount of clusters that are still scheduled in first round
 		// simulate that some of the bindings are available
 		// moved to before being set to unscheduled, otherwise, the rollout controller will try to delete the bindings before we mark them as available.
-		for i := int(newTarget); i < int(targetCluster); i++ {
+		for i := int(newTargetClusterNum); i < int(initTargetClusterNum); i++ {
 			markBindingAvailable(bindings[i], false)
 		}
-		for i := int(targetCluster - 1); i >= stillScheduled; i-- {
+		for i := int(initTargetClusterNum - 1); i >= stillScheduledClusterNum; i-- {
 			binding := bindings[i]
 			binding.Spec.State = fleetv1beta1.BindingStateUnscheduled
 			Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
 			By(fmt.Sprintf("resource binding `%s` is marked as not scheduled", binding.Name))
 			deletedBindings = append(deletedBindings, binding)
 		}
-		for i := 0; i < stillScheduled; i++ {
+		for i := 0; i < stillScheduledClusterNum; i++ {
 			secondRoundBindings = append(secondRoundBindings, bindings[i])
 		}
 		// simulate that some of the bindings are available and not trackable
-		for i := firstApplied; i < int(newTarget); i++ {
+		for i := firstApplied; i < int(newTargetClusterNum); i++ {
 			markBindingAvailable(bindings[i], false)
 		}
-		newScheduled := int(newTarget) - stillScheduled
-		for i := 0; i < newScheduled; i++ {
-			binding := generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, masterSnapshot.Name, "cluster-"+strconv.Itoa(int(targetCluster)+i))
+		newlyScheduledClusterNum := int(newTargetClusterNum) - stillScheduledClusterNum
+		for i := 0; i < newlyScheduledClusterNum; i++ {
+			binding := generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, masterSnapshot.Name, "cluster-"+strconv.Itoa(int(initTargetClusterNum)+i))
 			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
 			By(fmt.Sprintf("resource binding  %s created", binding.Name))
 			bindings = append(bindings, binding)
@@ -353,12 +353,12 @@ var _ = Describe("Test the rollout Controller", func() {
 				}
 			}
 			return true
-		}, timeout, interval).Should(BeTrue(), "rollout controller should roll all the bindings to Bound state")
+		}, 3*defaultUnavailablePeriod*time.Second, interval).Should(BeTrue(), "rollout controller should roll all the bindings to Bound state")
 		// simulate that the new bindings are available and not trackable
 		for i := 0; i < len(secondRoundBindings); i++ {
 			markBindingAvailable(secondRoundBindings[i], false)
 		}
-		// check that the unselected bindings are deleted
+		// check that the unselected bindings are deleted after 3 times of the default unavailable period
 		Eventually(func() bool {
 			for _, binding := range deletedBindings {
 				if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding); err != nil && !apierrors.IsNotFound(err) {
@@ -366,7 +366,7 @@ var _ = Describe("Test the rollout Controller", func() {
 				}
 			}
 			return true
-		}, timeout, interval).Should(BeTrue(), "rollout controller should delete all the unselected bindings")
+		}, 3*defaultUnavailablePeriod*time.Second, interval).Should(BeTrue(), "rollout controller should delete all the unselected bindings")
 	})
 
 	It("Should rollout both the new scheduling and the new resources (trackable)", func() {
@@ -668,7 +668,7 @@ var _ = Describe("Test the rollout Controller", func() {
 				}
 			}
 			return allMatch
-		}, timeout, interval).Should(BeTrue(), "rollout controller should roll all the bindings to use the latest resource snapshot")
+		}, 5*defaultUnavailablePeriod*time.Second, interval).Should(BeTrue(), "rollout controller should roll all the bindings to use the latest resource snapshot")
 	})
 
 	It("Should wait designated time before rolling out ", func() {
@@ -934,7 +934,7 @@ var _ = Describe("Test the rollout Controller", func() {
 				return fmt.Errorf("binding %s is in bound state, which is unexpected", newScheduledBinding.Name)
 			}
 			return nil
-		}, timeout, interval).Should(BeNil(), "rollout controller shouldn't roll new scheduled binding to bound state")
+		}, 3*defaultUnavailablePeriod*time.Second, interval).Should(BeNil(), "rollout controller shouldn't roll new scheduled binding to bound state")
 
 		// simulate eviction by deleting first bound binding.
 		firstBoundBinding := 1
@@ -953,7 +953,7 @@ var _ = Describe("Test the rollout Controller", func() {
 					return false
 				}
 				return true
-			}, timeout, interval).Should(BeTrue(), "rollout controller should roll all remaining bindings to Bound state")
+			}, 3*defaultUnavailablePeriod*time.Second, interval).Should(BeTrue(), "rollout controller should roll all remaining bindings to Bound state")
 		}
 	})
 
