@@ -150,9 +150,9 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		})
 
 		It("Should rollout resources to member-cluster-2 only and completes stage canary", func() {
-			By("Verify that new the configmap is updated on member-cluster-2")
+			By("Verify that the new configmap is updated on member-cluster-2")
 			configMapActual := configMapPlacedOnClusterActual(allMemberClusters[1], &newConfigMap)
-			Eventually(configMapActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to rollback the configmap change on cluster %s", allMemberClusterNames[1])
+			Eventually(configMapActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update to the new configmap %s on cluster %s", newConfigMap.Name, allMemberClusterNames[1])
 			By("Verify that the configmap is not updated on member-cluster-1 and member-cluster-3")
 			for _, cluster := range []*framework.Cluster{allMemberClusters[0], allMemberClusters[2]} {
 				configMapActual := configMapPlacedOnClusterActual(cluster, &oldConfigMap)
@@ -167,7 +167,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 			By("Verify that new the configmap is updated on all member clusters")
 			for idx := range allMemberClusters {
 				configMapActual := configMapPlacedOnClusterActual(allMemberClusters[idx], &newConfigMap)
-				Eventually(configMapActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to rollback the configmap %s data on cluster %s as expected", oldConfigMap.Name, allMemberClusterNames[idx])
+				Eventually(configMapActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update to the new configmap %s on cluster %s as expected", newConfigMap.Name, allMemberClusterNames[idx])
 			}
 		})
 
