@@ -77,7 +77,6 @@ const (
 	// This is for cluster setup.
 	longEventuallyDuration = time.Minute * 2
 	eventuallyInterval     = time.Millisecond * 250
-	longEventuallyInterval = time.Second
 	consistentlyDuration   = time.Second * 15
 	consistentlyInterval   = time.Millisecond * 500
 )
@@ -343,9 +342,9 @@ func beforeSuiteForProcess1() {
 var _ = SynchronizedBeforeSuite(beforeSuiteForProcess1, beforeSuiteForAllProcesses)
 
 var _ = SynchronizedAfterSuite(func() {}, func() {
-	//deleteResourcesForFleetGuardRail()
-	//deleteTestResourceCRD()
-	//setAllMemberClustersToLeave()
-	//checkIfAllMemberClustersHaveLeft()
-	//cleanupInvalidClusters()
+	deleteResourcesForFleetGuardRail()
+	deleteTestResourceCRD()
+	setAllMemberClustersToLeave()
+	checkIfAllMemberClustersHaveLeft()
+	cleanupInvalidClusters()
 })
