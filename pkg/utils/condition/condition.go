@@ -80,6 +80,8 @@ const (
 	// DiffReportedStatusTrueReason is the reason string of the DiffReported condition when the
 	// diff reporting has been fully completed.
 	DiffReportedStatusTrueReason = "DiffReportingCompleted"
+
+	// TODO: Add a user error reason
 )
 
 // A group of condition reason string which is used to populate the placement condition per cluster.
