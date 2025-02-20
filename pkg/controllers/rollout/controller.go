@@ -189,7 +189,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	klog.V(2).InfoS("Successfully updated status of the stale bindings", "clusterResourcePlacement", crpName, "numberOfStaleBindings", len(staleBoundBindings))
 
 	// upToDateBoundBindings contains all the ClusterResourceBindings that does not need to have
-	// their resource/overrride snapshots updated, but might need to have their status updated.
+	// their resource/override snapshots updated, but might need to have their status updated.
 	//
 	// Bindings might have up to date resource/override snapshots but stale status information when
 	// an apply strategy update has just been applied, or an error has occurred during the

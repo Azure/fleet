@@ -2584,7 +2584,7 @@ func TestRefreshUpToDateBindingStatus(t *testing.T) {
 			}
 			bindingList := &fleetv1beta1.ClusterResourceBindingList{}
 			if err := fakeClient.List(ctx, bindingList); err != nil {
-				t.Fatalf("ClusterResourceBinding List() = %v, want no errpr", err)
+				t.Fatalf("ClusterResourceBinding List() = %v, want no error", err)
 			}
 			if diff := cmp.Diff(bindingList.Items, tc.wantBindings, cmpOptions...); diff != "" {
 				t.Errorf("ClusterResourceBindings mismatches (-got, +want):\n%s", diff)
