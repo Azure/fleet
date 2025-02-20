@@ -15,6 +15,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -449,7 +450,7 @@ func setWorkAvailableCondition(
 	case work.Spec.ApplyStrategy != nil && work.Spec.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff:
 		// ReportDiff mode is on; no apply op has been performed, and consequently
 		// Fleet will not update the Available condition.
-	case appliedCond == nil || appliedCond.Status != metav1.ConditionTrue:
+	case !condition.IsConditionStatusTrue(appliedCond, work.Generation):
 		// Not all manifests have been applied; skip updating the Available condition.
 	case availableManifestCount == manifestCount && untrackableAppliedObjectsCount == 0:
 		// All manifests are available.
