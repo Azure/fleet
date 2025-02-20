@@ -23,3 +23,9 @@ func HasBindingFailed(binding *placementv1beta1.ClusterResourceBinding) bool {
 	}
 	return false
 }
+
+// IsBindingDiffReported checks if the binding is in diffReported state.
+func IsBindingDiffReported(binding *placementv1beta1.ClusterResourceBinding) bool {
+	diffReportCondition := binding.GetCondition(string(placementv1beta1.ResourceBindingDiffReported))
+	return diffReportCondition != nil && diffReportCondition.ObservedGeneration == binding.Generation
+}
