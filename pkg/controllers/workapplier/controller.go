@@ -113,7 +113,7 @@ func NewReconciler(
 
 var (
 	// Some exported reasons for Work object conditions. Currently only the untrackable reason is being actively used.
-	WorkNotAllManfestsTrackableReason     = "SomeManifestsAreNotAvailabilityTrackable"
+	WorkNotAllManifestsTrackableReason    = "SomeManifestsAreNotAvailabilityTrackable"
 	WorkAllManifestsAppliedReason         = "AllManifestsApplied"
 	WorkAllManifestsAvailableReason       = "AllManifestsAvailable"
 	WorkAllManifestsDiffReportedReason    = "AllManifestsDiffReported"
