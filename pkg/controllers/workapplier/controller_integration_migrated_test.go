@@ -84,12 +84,12 @@ var _ = Describe("Work Controller", func() {
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionTrue,
-					Reason: string(ManifestProcessingApplyResultTypeApplied),
+					Reason: WorkAllManifestsAppliedReason,
 				},
 				{
 					Type:   fleetv1beta1.WorkConditionTypeAvailable,
 					Status: metav1.ConditionTrue,
-					Reason: string(ManifestProcessingAvailabilityResultTypeAvailable),
+					Reason: WorkAllManifestsAvailableReason,
 				},
 			}
 			Expect(controller.CompareConditions(expected, resultWork.Status.Conditions)).Should(BeEmpty())
