@@ -378,7 +378,7 @@ func (r *Reconciler) pickBindingsToRoll(
 	// minimum AvailableNumber of copies as we won't reduce the total unavailable number of bindings.
 	applyFailedUpdateCandidates := make([]toBeUpdatedBinding, 0)
 
-	// Those are the bindings that have been bound to a cluster and have the lastest
+	// Those are the bindings that have been bound to a cluster and have the latest
 	// resource/override snapshots, but might or might not have the refresh status information.
 	upToDateBoundBindings := make([]toBeUpdatedBinding, 0)
 
