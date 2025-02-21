@@ -295,12 +295,52 @@ func TestDefaultResourceConfigGroupVersionKindParse(t *testing.T) {
 		},
 		{
 			Group:   "networking.fleet.azure.com",
+			Version: "v1beta1",
+			Kind:    "ServiceImport",
+		},
+		{
+			Group:   "networking.fleet.azure.com",
 			Version: "v1alpha1",
 			Kind:    "TrafficManagerProfile",
 		},
 		{
 			Group:   "networking.fleet.azure.com",
 			Version: "v1alpha1",
+			Kind:    "TrafficManagerBackend",
+		},
+		{
+			Group:   "networking.fleet.azure.com",
+			Version: "v1beta1",
+			Kind:    "TrafficManagerProfile",
+		},
+		{
+			Group:   "networking.fleet.azure.com",
+			Version: "v1beta1",
+			Kind:    "TrafficManagerBackend",
+		},
+		{
+			Group:   "networking.fleet.azure.com",
+			Version: "v1beta2",
+			Kind:    "TrafficManagerBackend",
+		},
+		{
+			Group:   "networking.fleet.azure.com",
+			Version: "v1",
+			Kind:    "TrafficManagerProfile",
+		},
+		{
+			Group:   "networking.fleet.azure.com",
+			Version: "v1",
+			Kind:    "TrafficManagerBackend",
+		},
+		{
+			Group:   "networking.fleet.azure.com",
+			Version: "v2",
+			Kind:    "TrafficManagerProfile",
+		},
+		{
+			Group:   "networking.fleet.azure.com",
+			Version: "v2",
 			Kind:    "TrafficManagerBackend",
 		},
 	}
@@ -324,6 +364,11 @@ func TestDefaultResourceConfigGroupVersionKindParse(t *testing.T) {
 		{
 			Group:   "networking.fleet.azure.com",
 			Version: "v1alpha1",
+			Kind:    "ServiceExport",
+		},
+		{
+			Group:   "networking.fleet.azure.com",
+			Version: "v1beta1",
 			Kind:    "ServiceExport",
 		},
 	}

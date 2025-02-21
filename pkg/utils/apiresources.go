@@ -34,22 +34,19 @@ var (
 		Kind:    "Node",
 	}
 
-	serviceImportGVK = schema.GroupVersionKind{
-		Group:   NetworkingGroupName,
-		Version: "v1alpha1",
-		Kind:    "ServiceImport",
+	serviceImportGK = schema.GroupKind{
+		Group: NetworkingGroupName,
+		Kind:  "ServiceImport",
 	}
 
-	trafficManagerProfileGVK = schema.GroupVersionKind{
-		Group:   NetworkingGroupName,
-		Version: "v1alpha1",
-		Kind:    "TrafficManagerProfile",
+	trafficManagerProfileGK = schema.GroupKind{
+		Group: NetworkingGroupName,
+		Kind:  "TrafficManagerProfile",
 	}
 
-	trafficManagerBackendGVK = schema.GroupVersionKind{
-		Group:   NetworkingGroupName,
-		Version: "v1alpha1",
-		Kind:    "TrafficManagerBackend",
+	trafficManagerBackendGK = schema.GroupKind{
+		Group: NetworkingGroupName,
+		Kind:  "TrafficManagerBackend",
 	}
 
 	// we use `;` to separate the different api groups
@@ -63,6 +60,8 @@ type ResourceConfig struct {
 	groups map[string]struct{}
 	// groupVersions holds a collection of API GroupVersion, all resource under this GroupVersion will be considered.
 	groupVersions map[schema.GroupVersion]struct{}
+	// groupKinds holds a collection of API GroupKind, all resource under this GroupKind will be considered.
+	groupKinds map[schema.GroupKind]struct{}
 	// groupVersionKinds holds a collection of resource that should be considered.
 	groupVersionKinds map[schema.GroupVersionKind]struct{}
 	// isAllowList indicates whether the ResourceConfig is an allow list or not.
@@ -75,6 +74,7 @@ func NewResourceConfig(isAllowList bool) *ResourceConfig {
 	r := &ResourceConfig{
 		groups:            map[string]struct{}{},
 		groupVersions:     map[schema.GroupVersion]struct{}{},
+		groupKinds:        map[schema.GroupKind]struct{}{},
 		groupVersionKinds: map[schema.GroupVersionKind]struct{}{},
 	}
 	r.isAllowList = isAllowList
@@ -94,9 +94,9 @@ func NewResourceConfig(isAllowList bool) *ResourceConfig {
 	r.AddGroupVersionKind(corev1PodGVK)
 	r.AddGroupVersionKind(corev1NodeGVK)
 	// disable networking resources
-	r.AddGroupVersionKind(serviceImportGVK)
-	r.AddGroupVersionKind(trafficManagerProfileGVK)
-	r.AddGroupVersionKind(trafficManagerBackendGVK)
+	r.AddGroupKind(serviceImportGK)
+	r.AddGroupKind(trafficManagerProfileGK)
+	r.AddGroupKind(trafficManagerBackendGK)
 	return r
 }
 
@@ -206,6 +206,10 @@ func (r *ResourceConfig) isResourceConfigured(gvk schema.GroupVersionKind) bool 
 		return true
 	}
 
+	if _, ok := r.groupKinds[gvk.GroupKind()]; ok {
+		return true
+	}
+
 	if _, ok := r.groupVersionKinds[gvk]; ok {
 		return true
 	}
@@ -221,6 +225,11 @@ func (r *ResourceConfig) AddGroup(g string) {
 // AddGroupVersion stores a group version in the resource config.
 func (r *ResourceConfig) AddGroupVersion(gv schema.GroupVersion) {
 	r.groupVersions[gv] = struct{}{}
+}
+
+// AddGroupKind stores a group kind in the resource config.
+func (r *ResourceConfig) AddGroupKind(gk schema.GroupKind) {
+	r.groupKinds[gk] = struct{}{}
 }
 
 // AddGroupVersionKind stores a GroupVersionKind in the resource config.
