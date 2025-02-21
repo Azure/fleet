@@ -24,6 +24,7 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
 )
 
 const (
@@ -37,6 +38,7 @@ const (
 var (
 	ignoreCRBTypeMetaAndStatusFields = cmpopts.IgnoreFields(fleetv1beta1.ClusterResourceBinding{}, "TypeMeta", "Status")
 	ignoreObjectMetaAutoGenFields    = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "CreationTimestamp", "Generation", "ResourceVersion", "SelfLink", "UID", "ManagedFields")
+	ignoreCondLTTAndMessageFields    = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "Message")
 )
 
 var testCRPName string
@@ -103,7 +105,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		}, timeout, interval).Should(BeTrue(), "rollout controller should roll all the bindings to Bound state")
 	})
 
-	It("should push apply strategy changes to all the bindings (if applicable)", func() {
+	It("should push apply strategy changes to all the bindings (if applicable) and refresh their status", func() {
 		// Create a CRP.
 		targetClusterCount := int32(3)
 		rolloutCRP = clusterResourcePlacementForTest(
@@ -176,6 +178,51 @@ var _ = Describe("Test the rollout Controller", func() {
 			return nil
 		}, timeout, interval).Should(Succeed(), "Failed to verify that all the bindings are bound")
 
+		// Verify that all bindings have their status refreshed (i.e., have fresh RolloutStarted
+		// conditions).
+		Eventually(func() error {
+			for _, binding := range bindings {
+				gotBinding := &fleetv1beta1.ClusterResourceBinding{}
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, gotBinding); err != nil {
+					return fmt.Errorf("failed to get binding %s: %w", binding.Name, err)
+				}
+
+				wantBindingStatus := &fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+							Status:             metav1.ConditionTrue,
+							Reason:             condition.RolloutStartedReason,
+							ObservedGeneration: gotBinding.Generation,
+						},
+					},
+				}
+				// The scheduled binding will be set to the Bound state with the RolloutStarted
+				// condition set to True; the unscheduled binding will receive a False
+				// RolloutStarted condition; the bound bindings will receive a True RolloutStarted
+				// condition.
+				if binding.Spec.State == fleetv1beta1.BindingStateUnscheduled {
+					wantBindingStatus = &fleetv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+								Status:             metav1.ConditionFalse,
+								Reason:             condition.RolloutNotStartedYetReason,
+								ObservedGeneration: gotBinding.Generation,
+							},
+						},
+					}
+				}
+				if diff := cmp.Diff(
+					&gotBinding.Status, wantBindingStatus,
+					ignoreCondLTTAndMessageFields,
+				); diff != "" {
+					return fmt.Errorf("binding status diff (%v/%v) (-got, +want):\n%s", binding.Spec.State, gotBinding.Spec.State, diff)
+				}
+			}
+			return nil
+		}, timeout, interval).Should(Succeed(), "Failed to verify that all the bindings have their status refreshed")
+
 		// Update the CRP with a new apply strategy.
 		rolloutCRP.Spec.Strategy.ApplyStrategy = &fleetv1beta1.ApplyStrategy{
 			ComparisonOption: fleetv1beta1.ComparisonOptionTypeFullComparison,
@@ -231,6 +278,51 @@ var _ = Describe("Test the rollout Controller", func() {
 			}
 			return nil
 		}, timeout, interval).Should(Succeed(), "Failed to update all bindings with the new apply strategy")
+
+		// Verify that all bindings have their status refreshed (i.e., have fresh RolloutStarted
+		// conditions).
+		Eventually(func() error {
+			for _, binding := range bindings {
+				gotBinding := &fleetv1beta1.ClusterResourceBinding{}
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, gotBinding); err != nil {
+					return fmt.Errorf("failed to get binding %s: %w", binding.Name, err)
+				}
+
+				wantBindingStatus := &fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+							Status:             metav1.ConditionTrue,
+							Reason:             condition.RolloutStartedReason,
+							ObservedGeneration: gotBinding.Generation,
+						},
+					},
+				}
+				// The scheduled binding will be set to the Bound state with the RolloutStarted
+				// condition set to True; the unscheduled binding will receive a False
+				// RolloutStarted condition; the bound bindings will receive a True RolloutStarted
+				// condition.
+				if binding.Spec.State == fleetv1beta1.BindingStateUnscheduled {
+					wantBindingStatus = &fleetv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+								Status:             metav1.ConditionFalse,
+								Reason:             condition.RolloutNotStartedYetReason,
+								ObservedGeneration: gotBinding.Generation,
+							},
+						},
+					}
+				}
+				if diff := cmp.Diff(
+					&gotBinding.Status, wantBindingStatus,
+					ignoreCondLTTAndMessageFields,
+				); diff != "" {
+					return fmt.Errorf("binding status diff (%v/%v) (-got, +want):\n%s", binding.Spec.State, gotBinding.Spec.State, diff)
+				}
+			}
+			return nil
+		}, timeout, interval).Should(Succeed(), "Failed to verify that all the bindings have their status refreshed")
 	})
 
 	It("Should rollout all the selected bindings when the rollout strategy is not set", func() {

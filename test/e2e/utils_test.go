@@ -716,10 +716,6 @@ func checkIfAllMemberClustersHaveLeft() {
 	}
 }
 
-func checkIfPlacedWorkResourcesOnAllMemberClustersConsistently() {
-	checkIfPlacedWorkResourcesOnMemberClustersConsistently(allMemberClusters)
-}
-
 func checkIfPlacedWorkResourcesOnMemberClustersConsistently(clusters []*framework.Cluster) {
 	for idx := range clusters {
 		memberCluster := clusters[idx]
