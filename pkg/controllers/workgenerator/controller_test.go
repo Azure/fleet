@@ -810,7 +810,7 @@ func TestSetAllWorkAvailableCondition(t *testing.T) {
 						Conditions: []metav1.Condition{
 							{
 								Type:   fleetv1beta1.WorkConditionTypeAvailable,
-								Reason: workapplier.WorkNotAllManfestsTrackableReason,
+								Reason: workapplier.WorkNotAllManifestsTrackableReason,
 								Status: metav1.ConditionTrue,
 							},
 						},

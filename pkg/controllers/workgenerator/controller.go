@@ -1159,7 +1159,7 @@ func setAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding *
 	for _, w := range works {
 		availableCond := meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 		switch {
-		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()) && availableCond.Reason == workapplier.WorkNotAllManfestsTrackableReason:
+		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()) && availableCond.Reason == workapplier.WorkNotAllManifestsTrackableReason:
 			// The Work object has completed the availability check successfully, due to the resources being untrackable.
 			if firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes == nil {
 				firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes = w

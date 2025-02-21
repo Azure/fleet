@@ -1059,7 +1059,7 @@ func markBindingAvailable(binding *fleetv1beta1.ClusterResourceBinding, trackabl
 	Eventually(func() error {
 		reason := "trackable"
 		if !trackable {
-			reason = workapplier.WorkNotAllManfestsTrackableReason
+			reason = workapplier.WorkNotAllManifestsTrackableReason
 		}
 		binding.SetConditions(metav1.Condition{
 			Type:               string(fleetv1beta1.ResourceBindingAvailable),
