@@ -134,7 +134,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 		By("Creating a new clusterStagedUpdateRun")
 		Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
-		By("Validating the initialization succeededand and the execution started")
+		By("Validating the initialization succeeded and the execution started")
 		initialized := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
 		wantStatus = generateExecutionStartedStatus(updateRun, initialized)
 		validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")

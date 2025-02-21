@@ -126,26 +126,23 @@ func (r *Reconciler) determinePolicySnapshot(
 	}
 	updateRun.Status.PolicySnapshotIndexUsed = policyIndex
 
-	// Get the cluster count from the policy snapshot.
-	if latestPolicySnapshot.Spec.Policy == nil {
-		nopolicyErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("policy snapshot `%s` does not have a policy", latestPolicySnapshot.Name))
-		klog.ErrorS(nopolicyErr, "Failed to get the policy from the latestPolicySnapshot", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
-		// no more retries here.
-		return nil, -1, fmt.Errorf("%w: %s", errInitializedFailed, nopolicyErr.Error())
-	}
-	// for pickAll policy, the observed cluster count is not included in the policy snapshot. We set it to -1. It will be validated in the binding stages.
+	// For pickAll policy, the observed cluster count is not included in the policy snapshot.
+	// We set it to -1. It will be validated in the binding stages.
+	// If policy is nil, it's default to pickAll.
 	clusterCount := -1
-	if latestPolicySnapshot.Spec.Policy.PlacementType == placementv1beta1.PickNPlacementType {
-		count, err := annotations.ExtractNumOfClustersFromPolicySnapshot(&latestPolicySnapshot)
-		if err != nil {
-			annErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("%w: the policy snapshot `%s` doesn't have valid cluster count annotation", err, latestPolicySnapshot.Name))
-			klog.ErrorS(annErr, "Failed to get the cluster count from the latestPolicySnapshot", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
-			// no more retries here.
-			return nil, -1, fmt.Errorf("%w, %s", errInitializedFailed, annErr.Error())
+	if latestPolicySnapshot.Spec.Policy != nil {
+		if latestPolicySnapshot.Spec.Policy.PlacementType == placementv1beta1.PickNPlacementType {
+			count, err := annotations.ExtractNumOfClustersFromPolicySnapshot(&latestPolicySnapshot)
+			if err != nil {
+				annErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("%w: the policy snapshot `%s` doesn't have valid cluster count annotation", err, latestPolicySnapshot.Name))
+				klog.ErrorS(annErr, "Failed to get the cluster count from the latestPolicySnapshot", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
+				// no more retries here.
+				return nil, -1, fmt.Errorf("%w, %s", errInitializedFailed, annErr.Error())
+			}
+			clusterCount = count
+		} else if latestPolicySnapshot.Spec.Policy.PlacementType == placementv1beta1.PickFixedPlacementType {
+			clusterCount = len(latestPolicySnapshot.Spec.Policy.ClusterNames)
 		}
-		clusterCount = count
-	} else if latestPolicySnapshot.Spec.Policy.PlacementType == placementv1beta1.PickFixedPlacementType {
-		clusterCount = len(latestPolicySnapshot.Spec.Policy.ClusterNames)
 	}
 	updateRun.Status.PolicyObservedClusterCount = clusterCount
 	klog.V(2).InfoS("Found the latest policy snapshot", "latestPolicySnapshot", latestPolicySnapshot.Name, "observedClusterCount", updateRun.Status.PolicyObservedClusterCount, "clusterStagedUpdateRun", updateRunRef)
@@ -195,7 +192,7 @@ func (r *Reconciler) collectScheduledClusters(
 				// no more retries here.
 				return nil, nil, fmt.Errorf("%w: %s", errInitializedFailed, stateErr.Error())
 			}
-			klog.V(2).InfoS("Found a to-be-deleted binding", "binding", binding.Name, "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
+			klog.V(2).InfoS("Found a to-be-deleted binding", "binding", binding.Name, "cluster", binding.Spec.TargetCluster, "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
 			toBeDeletedBindings = append(toBeDeletedBindings, &bindingList.Items[i])
 		}
 	}
@@ -209,6 +206,7 @@ func (r *Reconciler) collectScheduledClusters(
 
 	if updateRun.Status.PolicyObservedClusterCount == -1 {
 		// For pickAll policy, the observed cluster count is not included in the policy snapshot. We set it to the number of selected bindings.
+		// TODO (wantjian): refactor this part to update PolicyObservedClusterCount in one place.
 		updateRun.Status.PolicyObservedClusterCount = len(selectedBindings)
 	} else if updateRun.Status.PolicyObservedClusterCount != len(selectedBindings) {
 		countErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the number of selected bindings %d is not equal to the observed cluster count %d", len(selectedBindings), updateRun.Status.PolicyObservedClusterCount))

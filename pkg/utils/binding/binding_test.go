@@ -20,7 +20,7 @@ func TestHasBindingFailed(t *testing.T) {
 		want    bool
 	}{
 		{
-			name: "binding should not fail if neither apply nor available conditions is set for binding",
+			name: "binding should not fail if no conditions is set for binding",
 			binding: &placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test-binding",
@@ -91,7 +91,7 @@ func TestHasBindingFailed(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "binding should NOT fail if binding's available condition is true",
+			name: "binding should NOT fail if binding's conditions are true",
 			binding: &placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test-binding",
@@ -124,23 +124,42 @@ func TestHasBindingFailed(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "binding should NOT fail if apply condition not matching generation",
+			name: "binding with overridden condition false",
 			binding: &placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test-binding",
-					Generation: 2,
-				},
-				Spec: placementv1beta1.ResourceBindingSpec{
-					State: placementv1beta1.BindingStateBound,
+					Generation: 1,
 				},
 				Status: placementv1beta1.ResourceBindingStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(placementv1beta1.ResourceBindingApplied),
+							Type:               string(placementv1beta1.ResourceBindingOverridden),
 							Status:             metav1.ConditionFalse,
 							LastTransitionTime: metav1.Time{},
 							ObservedGeneration: 1,
-							Reason:             "applyFailed",
+							Reason:             "overriddenFailed",
+							Message:            "test message",
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "binding with overridden condition true",
+			binding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-binding",
+					Generation: 1,
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingOverridden),
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.Time{},
+							ObservedGeneration: 1,
+							Reason:             "overriddenSucceeded",
 							Message:            "test message",
 						},
 					},
@@ -149,23 +168,135 @@ func TestHasBindingFailed(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "binding should NOT fail if available condition not matching generation",
+			name: "binding with multiple conditions including overridden false",
+			binding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-binding",
+					Generation: 1,
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingApplied),
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.Time{},
+							ObservedGeneration: 1,
+							Reason:             "applySucceeded",
+							Message:            "test message",
+						},
+						{
+							Type:               string(placementv1beta1.ResourceBindingOverridden),
+							Status:             metav1.ConditionFalse,
+							LastTransitionTime: metav1.Time{},
+							ObservedGeneration: 1,
+							Reason:             "overriddenFailed",
+							Message:            "test message",
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "binding with multiple conditions all true",
+			binding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-binding",
+					Generation: 1,
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingApplied),
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.Time{},
+							ObservedGeneration: 1,
+							Reason:             "applySucceeded",
+							Message:            "test message",
+						},
+						{
+							Type:               string(placementv1beta1.ResourceBindingOverridden),
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.Time{},
+							ObservedGeneration: 1,
+							Reason:             "overriddenSucceeded",
+							Message:            "test message",
+						},
+						{
+							Type:               string(placementv1beta1.ResourceBindingWorkSynchronized),
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.Time{},
+							ObservedGeneration: 1,
+							Reason:             "resourceBindingWorkSynchronized",
+							Message:            "test message",
+						},
+
+						{
+							Type:               string(placementv1beta1.ResourceBindingAvailable),
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.Time{},
+							ObservedGeneration: 1,
+							Reason:             "available",
+							Message:            "test message",
+						},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "binding with multiple conditions including overridden false and different generation",
 			binding: &placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test-binding",
 					Generation: 2,
 				},
-				Spec: placementv1beta1.ResourceBindingSpec{
-					State: placementv1beta1.BindingStateBound,
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingApplied),
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.Time{},
+							ObservedGeneration: 1,
+							Reason:             "applySucceeded",
+							Message:            "test message",
+						},
+						{
+							Type:               string(placementv1beta1.ResourceBindingOverridden),
+							Status:             metav1.ConditionFalse,
+							LastTransitionTime: metav1.Time{},
+							ObservedGeneration: 1,
+							Reason:             "overriddenFailed",
+							Message:            "test message",
+						},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "binding with multiple conditions all true and different generation",
+			binding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-binding",
+					Generation: 2,
 				},
 				Status: placementv1beta1.ResourceBindingStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(placementv1beta1.ResourceBindingAvailable),
-							Status:             metav1.ConditionFalse,
+							Type:               string(placementv1beta1.ResourceBindingApplied),
+							Status:             metav1.ConditionTrue,
 							LastTransitionTime: metav1.Time{},
 							ObservedGeneration: 1,
-							Reason:             "availableFailed",
+							Reason:             "applySucceeded",
+							Message:            "test message",
+						},
+						{
+							Type:               string(placementv1beta1.ResourceBindingOverridden),
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.Time{},
+							ObservedGeneration: 1,
+							Reason:             "overriddenSucceeded",
 							Message:            "test message",
 						},
 					},
@@ -271,9 +402,9 @@ func TestIsBindingReportDiff(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := IsBindingReportDiff(tc.binding)
+			got := IsBindingDiffReported(tc.binding)
 			if got != tc.want {
-				t.Errorf("IsBindingReportDiff test `%s` failed got: %v, want: %v", tc.name, got, tc.want)
+				t.Errorf("IsBindingDiffReported test `%s` failed got: %v, want: %v", tc.name, got, tc.want)
 			}
 		})
 	}

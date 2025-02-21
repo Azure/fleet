@@ -70,8 +70,12 @@ const (
 )
 
 const (
-	eventuallyDuration     = time.Minute * 2
-	longEventuallyDuration = time.Minute * 5
+	// Do not bump this value unless you have a good reason. This is to safeguard any performance related regressions.
+	eventuallyDuration = time.Second * 10
+	// this is for workload related test cases
+	workloadEventuallyDuration = time.Second * 45
+	// This is for cluster setup.
+	longEventuallyDuration = time.Minute * 2
 	eventuallyInterval     = time.Millisecond * 250
 	consistentlyDuration   = time.Second * 15
 	consistentlyInterval   = time.Millisecond * 500
@@ -98,29 +102,29 @@ var (
 )
 
 var (
-	regionLabelName   = "region"
-	regionLabelValue1 = "east"
-	regionLabelValue2 = "west"
-	regionLabelValue3 = "south"
-	envLabelName      = "env"
-	envLabelValue1    = "prod"
-	envLabelValue2    = "canary"
-	clusterID1        = "test-cluster-id-1"
-	clusterID2        = "test-cluster-id-2"
-	clusterID3        = "test-cluster-id-3"
+	regionLabelName = "region"
+	regionEast      = "east"
+	regionWest      = "west"
+	regionSouth     = "south"
+	envLabelName    = "env"
+	envProd         = "prod"
+	envCanary       = "canary"
+	clusterID1      = "test-cluster-id-1"
+	clusterID2      = "test-cluster-id-2"
+	clusterID3      = "test-cluster-id-3"
 
 	labelsByClusterName = map[string]map[string]string{
 		memberCluster1EastProdName: {
-			regionLabelName: regionLabelValue1,
-			envLabelName:    envLabelValue1,
+			regionLabelName: regionEast,
+			envLabelName:    envProd,
 		},
 		memberCluster2EastCanaryName: {
-			regionLabelName: regionLabelValue1,
-			envLabelName:    envLabelValue2,
+			regionLabelName: regionEast,
+			envLabelName:    envCanary,
 		},
 		memberCluster3WestProdName: {
-			regionLabelName: regionLabelValue2,
-			envLabelName:    envLabelValue1,
+			regionLabelName: regionWest,
+			envLabelName:    envProd,
 		},
 	}
 	annotationsByClusterName = map[string]map[string]string{
@@ -137,13 +141,13 @@ var (
 
 	taintTolerationMap = map[string]map[string]string{
 		memberCluster1EastProdName: {
-			regionLabelName: regionLabelValue1,
+			regionLabelName: regionEast,
 		},
 		memberCluster2EastCanaryName: {
-			regionLabelName: regionLabelValue2,
+			regionLabelName: regionWest,
 		},
 		memberCluster3WestProdName: {
-			regionLabelName: regionLabelValue3,
+			regionLabelName: regionSouth,
 		},
 	}
 )
@@ -217,6 +221,12 @@ var (
 		cmpopts.SortSlices(utils.LessFuncFailedResourcePlacements),
 		utils.IgnoreConditionLTTAndMessageFields,
 		ignoreClusterNameField,
+		cmpopts.EquateEmpty(),
+	}
+
+	updateRunStatusCmpOption = cmp.Options{
+		utils.IgnoreConditionLTTAndMessageFields,
+		cmpopts.IgnoreFields(placementv1beta1.StageUpdatingStatus{}, "StartTime", "EndTime"),
 		cmpopts.EquateEmpty(),
 	}
 )

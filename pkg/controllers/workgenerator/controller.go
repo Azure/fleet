@@ -176,6 +176,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 
 	if syncErr != nil {
 		klog.ErrorS(syncErr, "Failed to sync all the works", "resourceBinding", bindingRef)
+		//TODO: check if it's user error and set a different failed reason
 		errorMessage := syncErr.Error()
 		// unwrap will return nil if syncErr is not wrapped
 		// the wrapped error string format is "%w: %s" so that remove ": " from messages
@@ -300,7 +301,8 @@ func (r *Reconciler) updateBindingStatusWithRetry(ctx context.Context, resourceB
 		}
 		return nil
 	}
-	return err
+	klog.V(2).InfoS("Successfully updated the resourceBinding status", "resourceBinding", bindingRef, "resourceBindingStatus", resourceBinding.Status)
+	return nil
 }
 
 // handleDelete handle a deleting binding
