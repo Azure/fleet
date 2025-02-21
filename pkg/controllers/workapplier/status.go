@@ -15,6 +15,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -167,7 +168,7 @@ func (r *Reconciler) refreshWorkStatus(
 		work.Status.Conditions = []metav1.Condition{}
 	}
 	setWorkAppliedCondition(work, manifestCount, appliedManifestsCount)
-	setWorkAvailableCondition(work, manifestCount, appliedManifestsCount, availableAppliedObjectsCount, untrackableAppliedObjectsCount)
+	setWorkAvailableCondition(work, manifestCount, availableAppliedObjectsCount, untrackableAppliedObjectsCount)
 	setWorkDiffReportedCondition(work, manifestCount, diffReportedObjectsCount)
 	work.Status.ManifestConditions = rebuiltManifestConds
 
@@ -275,7 +276,7 @@ func setManifestAppliedCondition(
 	if appliedCond != nil {
 		meta.SetStatusCondition(&manifestCond.Conditions, *appliedCond)
 	} else {
-		// As the conditions are ported back; removal must be performed if the DiffReported
+		// As the conditions are ported back; removal must be performed if the Applied
 		// condition is not set.
 		meta.RemoveStatusCondition(&manifestCond.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 	}
@@ -441,14 +442,15 @@ func setWorkAppliedCondition(
 // A Work object is considered to be available if all of its applied manifests are available.
 func setWorkAvailableCondition(
 	work *fleetv1beta1.Work,
-	manifestCount, appliedManifestCount, availableManifestCount, untrackableAppliedObjectsCount int,
+	manifestCount, availableManifestCount, untrackableAppliedObjectsCount int,
 ) {
+	appliedCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 	var availableCond *metav1.Condition
 	switch {
 	case work.Spec.ApplyStrategy != nil && work.Spec.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff:
 		// ReportDiff mode is on; no apply op has been performed, and consequently
 		// Fleet will not update the Available condition.
-	case appliedManifestCount != manifestCount:
+	case !condition.IsConditionStatusTrue(appliedCond, work.Generation):
 		// Not all manifests have been applied; skip updating the Available condition.
 	case availableManifestCount == manifestCount && untrackableAppliedObjectsCount == 0:
 		// All manifests are available.
@@ -464,7 +466,7 @@ func setWorkAvailableCondition(
 		availableCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeAvailable,
 			Status:             metav1.ConditionTrue,
-			Reason:             WorkNotAllManfestsTrackableReason,
+			Reason:             WorkNotAllManifestsTrackableReason,
 			Message:            someAppliedObjectUntrackableMessage,
 			ObservedGeneration: work.Generation,
 		}
