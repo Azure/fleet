@@ -1980,7 +1980,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				},
 			},
 			wantTobeUpdatedBindings:     []int{2}, // remove candidates (unscheduled bindings) are chosen before update candidates (bound bindings)
-			wantStaleUnselectedBindings: []int{1}, // since maxUnavailable is set to zero, we can't remove the ready unscheduled and ready bound binding
+			wantStaleUnselectedBindings: []int{1}, // since maxUnavailable is set to zero, we can't remove the ready unscheduled and ready bound binding (remove candidates aren't added to stale bindings)
 			wantNeedRoll:                true,
 			wantWaitTime:                0,
 		},
