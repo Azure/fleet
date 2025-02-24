@@ -656,7 +656,9 @@ var _ = Describe("detect drifts on placed resources", func() {
 					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+				// Use a longer eventually timeout, as the Fleet is set to detect drifts
+				// every 15 seconds by default.
+			}, eventuallyDuration*3, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should overwrite drifts on managed fields", func() {
@@ -824,7 +826,9 @@ var _ = Describe("detect drifts on placed resources", func() {
 					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+				// Use a longer eventually timeout, as the Fleet is set to detect drifts
+				// every 15 seconds by default.
+			}, eventuallyDuration*3, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should not overwrite drifts on fields", func() {
@@ -1047,7 +1051,9 @@ var _ = Describe("detect drifts on placed resources", func() {
 					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+				// Use a longer eventually timeout, as the Fleet is set to detect drifts
+				// every 15 seconds by default.
+			}, eventuallyDuration*3, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should not overwrite drifts on fields", func() {
