@@ -178,8 +178,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		"numberOfUpToDateBindings", len(upToDateBoundBindings))
 
 	// StaleBindings is the list that contains bindings that need to be updated (binding to a
-	// cluster, upgrading to a newer resource/override snapshot, or removing) but are blocked by
+	// cluster, upgrading to a newer resource/override snapshot) but are blocked by
 	// the rollout strategy.
+	//
+	// Note that Fleet does not consider unscheduled bindings as stale bindings, even if the
+	// status conditions on them have become stale (the work generator will handle them as an
+	// exception).
+	//
+	// TO-DO (chenyu1): evaluate how we could improve the flow to reduce coupling.
 	//
 	// Update the status first, so that if the rolling out (updateBindings func) fails in the
 	// middle, the controller will recompute the list and the result may be different.
@@ -514,26 +520,21 @@ func determineBindingsToUpdate(
 	maxNumberToRemove := calculateMaxToRemove(crp, targetNumber, readyBindings, canBeUnavailableBindings)
 	// we can still update the bindings that are failed to apply already regardless of the maxNumberToRemove
 	toBeUpdatedBindingList = append(toBeUpdatedBindingList, applyFailedUpdateCandidates...)
-	// pendingRemovalBindingList contains the bindings that are not selected for removal in this round.
-	pendingRemovalBindingList := make([]toBeUpdatedBinding, 0)
 
 	// updateCandidateUnselectedIndex stores the last index of the updateCandidate which are not selected to be updated.
 	// The rolloutStarted condition of these elements from this index should be updated.
 	updateCandidateUnselectedIndex := 0
-	i := 0
-	// we first remove the bindings that are not selected by the scheduler anymore
-	for ; i < maxNumberToRemove && i < len(removeCandidates); i++ {
-		toBeUpdatedBindingList = append(toBeUpdatedBindingList, removeCandidates[i])
-	}
-	j := i
-	for ; j < len(removeCandidates); j++ {
-		// Put all the bindings that are not picked for removal into the pendingRemovalBindingList.
-		pendingRemovalBindingList = append(pendingRemovalBindingList, removeCandidates[j])
-	}
-	// we then update the bound bindings to the latest resource resourceBinding which will lead them to be unavailable for a short period of time
-	for ; i < maxNumberToRemove && updateCandidateUnselectedIndex < len(updateCandidates); i++ {
-		toBeUpdatedBindingList = append(toBeUpdatedBindingList, updateCandidates[updateCandidateUnselectedIndex])
-		updateCandidateUnselectedIndex++
+	if maxNumberToRemove > 0 {
+		i := 0
+		// we first remove the bindings that are not selectedfgvvv by the scheduler anymore
+		for ; i < maxNumberToRemove && i < len(removeCandidates); i++ {
+			toBeUpdatedBindingList = append(toBeUpdatedBindingList, removeCandidates[i])
+		}
+		// we then update the bound bindings to the latest resource resourceBinding which will lead them to be unavailable for a short period of time
+		for ; i < maxNumberToRemove && updateCandidateUnselectedIndex < len(updateCandidates); i++ {
+			toBeUpdatedBindingList = append(toBeUpdatedBindingList, updateCandidates[updateCandidateUnselectedIndex])
+			updateCandidateUnselectedIndex++
+		}
 	}
 
 	// calculate the max number of bindings that can be added according to user specified MaxSurge
@@ -554,11 +555,6 @@ func determineBindingsToUpdate(
 	if boundingCandidatesUnselectedIndex < len(boundingCandidates) {
 		staleUnselectedBinding = append(staleUnselectedBinding, boundingCandidates[boundingCandidatesUnselectedIndex:]...)
 	}
-	// Append the pending removal bindings to the staleUnselectedBinding list.
-	//
-	// This is necessary as these bindings might also need a status update (e.g., their apply strategies
-	// have been updated).
-	staleUnselectedBinding = append(staleUnselectedBinding, pendingRemovalBindingList...)
 	return toBeUpdatedBindingList, staleUnselectedBinding
 }
 
@@ -909,6 +905,11 @@ func (r *Reconciler) updateStaleBindingsStatus(ctx context.Context, staleBinding
 	errs, cctx := errgroup.WithContext(ctx)
 	for i := 0; i < len(staleBindings); i++ {
 		binding := staleBindings[i]
+		if binding.currentBinding.Spec.State != fleetv1beta1.BindingStateScheduled && binding.currentBinding.Spec.State != fleetv1beta1.BindingStateBound {
+			klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("invalid stale binding state %s", binding.currentBinding.Spec.State)),
+				"Found a stale binding with unexpected state", "clusterResourceBinding", klog.KObj(binding.currentBinding))
+			continue
+		}
 		errs.Go(func() error {
 			return r.updateBindingStatus(cctx, binding.currentBinding, false)
 		})
