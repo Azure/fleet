@@ -1483,7 +1483,7 @@ var _ = Describe("report diff mode", func() {
 	})
 })
 
-var _ = FDescribe("mixed diff and drift reportings", Ordered, func() {
+var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	nsName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 	deployName := fmt.Sprintf(appDeploymentNameTemplate, GinkgoParallelProcess())
