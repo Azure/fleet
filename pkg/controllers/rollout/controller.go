@@ -188,7 +188,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	// TO-DO (chenyu1): evaluate how we could improve the flow to reduce coupling.
 	//
 	// Update the status first, so that if the rolling out (updateBindings func) fails in the
-	// middle, the controller will recompute the list and the result may be different.
+	// middle, the controller will recompute the list so the rollout can move forward.
 	if err := r.updateStaleBindingsStatus(ctx, staleBoundBindings); err != nil {
 		return runtime.Result{}, err
 	}
@@ -895,13 +895,14 @@ func handleResourceBindingUpdated(objectOld, objectNew client.Object, q workqueu
 	klog.V(2).InfoS("A resourceBinding is updated but we don't need to handle it", "resourceBinding", klog.KObj(newBinding))
 }
 
-// updateStaleBindingsStatus updates the status of the stale bindings to indicate that they are
-// blocked by the rollout strategy.
+// updateStaleBindingsStatus updates the status of the stale bindings to indicate that they are blocked by the rollout strategy.
+// Note: the binding state should be "Scheduled" or "Bound".
+// The desired binding will be ignored.
 func (r *Reconciler) updateStaleBindingsStatus(ctx context.Context, staleBindings []toBeUpdatedBinding) error {
 	if len(staleBindings) == 0 {
 		return nil
 	}
-	// Issue all the requests in parallel.
+	// issue all the update requests in parallel
 	errs, cctx := errgroup.WithContext(ctx)
 	for i := 0; i < len(staleBindings); i++ {
 		binding := staleBindings[i]
