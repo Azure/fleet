@@ -369,6 +369,8 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 				},
 			}
 			Expect(hubClient.Create(ctx, &strategy)).Should(Succeed())
+			Expect(strategy.Spec.Stages[0].AfterStageTasks[0].WaitTime).Should(Equal(metav1.Duration{Duration: 0}))
+			Expect(strategy.Spec.Stages[0].AfterStageTasks[1].WaitTime).Should(Equal(metav1.Duration{Duration: time.Second * 10}))
 			Expect(hubClient.Delete(ctx, &strategy)).Should(Succeed())
 		})
 	})

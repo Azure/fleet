@@ -820,7 +820,6 @@ spec:
                                 - Approval
                                 type: string
                               waitTime:
-                                default: 1h
                                 description: The time to wait after all the clusters
                                   in the current stage complete the update before
                                   moving to the next stage.
@@ -2040,7 +2039,6 @@ spec:
                                 - Approval
                                 type: string
                               waitTime:
-                                default: 1h
                                 description: The time to wait after all the clusters
                                   in the current stage complete the update before
                                   moving to the next stage.
