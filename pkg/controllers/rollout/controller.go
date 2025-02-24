@@ -526,7 +526,7 @@ func determineBindingsToUpdate(
 	updateCandidateUnselectedIndex := 0
 	if maxNumberToRemove > 0 {
 		i := 0
-		// we first remove the bindings that are not selectedfgvvv by the scheduler anymore
+		// we first remove the bindings that are not selected by the scheduler anymore
 		for ; i < maxNumberToRemove && i < len(removeCandidates); i++ {
 			toBeUpdatedBindingList = append(toBeUpdatedBindingList, removeCandidates[i])
 		}
