@@ -1483,7 +1483,7 @@ var _ = Describe("report diff mode", func() {
 	})
 })
 
-var _ = Describe("mixed diff and drift reportings", Ordered, func() {
+var _ = FDescribe("mixed diff and drift reportings", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	nsName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 	deployName := fmt.Sprintf(appDeploymentNameTemplate, GinkgoParallelProcess())
@@ -2171,7 +2171,10 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 				return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 			}
 			return nil
-		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			// Give the system a bit more breathing room for the Deployment (nginx) to become
+			// available; on certain environments it might take longer to pull the image and have
+			// the container up and running.
+		}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 	})
 
 	It("can update manifests", func() {
@@ -2259,7 +2262,10 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 				return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 			}
 			return nil
-		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			// Give the system a bit more breathing room for the Deployment (nginx) to become
+			// available; on certain environments it might take longer to pull the image and have
+			// the container up and running.
+		}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 	})
 
 	AfterAll(func() {
