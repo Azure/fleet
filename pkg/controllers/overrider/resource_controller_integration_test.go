@@ -12,6 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,21 +50,25 @@ func getResourceOverrideSpec() fleetv1alpha1.ResourceOverrideSpec {
 	}
 }
 
-func getResourceOverride(testOverrideName string) *fleetv1alpha1.ResourceOverride {
+func getResourceOverride(testOverrideName, namespaceName string) *fleetv1alpha1.ResourceOverride {
 	return &fleetv1alpha1.ResourceOverride{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: fleetv1alpha1.GroupVersion.String(),
+			Kind:       fleetv1alpha1.ResourceOverrideKind,
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      testOverrideName,
-			Namespace: "default",
+			Namespace: namespaceName,
 		},
 		Spec: getResourceOverrideSpec(),
 	}
 }
 
-func getResourceOverrideSnapshot(testOverrideName string, index int) *fleetv1alpha1.ResourceOverrideSnapshot {
+func getResourceOverrideSnapshot(testOverrideName, namespaceName string, index int) *fleetv1alpha1.ResourceOverrideSnapshot {
 	return &fleetv1alpha1.ResourceOverrideSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf(fleetv1alpha1.OverrideSnapshotNameFmt, testOverrideName, index),
-			Namespace: "default",
+			Namespace: namespaceName,
 			Labels: map[string]string{
 				fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(index),
 				fleetv1beta1.IsLatestSnapshotLabel:  "true",
@@ -80,15 +85,30 @@ func getResourceOverrideSnapshot(testOverrideName string, index int) *fleetv1alp
 var _ = Describe("Test ResourceOverride controller logic", func() {
 	var ro *fleetv1alpha1.ResourceOverride
 	var testROName string
+	var namespaceName string
 
 	BeforeEach(func() {
+		namespaceName = fmt.Sprintf("%s-%s", overrideNamespace, utils.RandStr())
+		namespace := &v1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespaceName,
+			},
+		}
+		Expect(k8sClient.Create(ctx, namespace)).Should(Succeed())
 		testROName = fmt.Sprintf("test-ro-%s", utils.RandStr())
-		ro = getResourceOverride(testROName)
+		ro = getResourceOverride(testROName, namespaceName)
 	})
 
 	AfterEach(func() {
 		By("Deleting the RO")
 		Expect(k8sClient.Delete(ctx, ro)).Should(SatisfyAny(Succeed(), &utils.NotFoundMatcher{}))
+		By("Deleting the namespace")
+		namespace := &v1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespaceName,
+			},
+		}
+		Expect(k8sClient.Delete(ctx, namespace)).Should(SatisfyAny(Succeed(), &utils.NotFoundMatcher{}))
 	})
 
 	It("Test create a new resourceOverride should result in one new snapshot", func() {
@@ -106,7 +126,7 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should have finalizer")
 
 		By("Checking if a new snapshot is created")
-		snapshot := getResourceOverrideSnapshot(testROName, 0) //index starts from 0
+		snapshot := getResourceOverrideSnapshot(testROName, namespaceName, 0) //index starts from 0
 		Eventually(func() error {
 			return k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name, Namespace: snapshot.Namespace}, snapshot)
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
@@ -121,7 +141,7 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 		diff = cmp.Diff(ro.Spec, snapshot.Spec.OverrideSpec)
 		Expect(diff).Should(BeEmpty(), "Snapshot spec mismatch (-want, +got)")
 		By("Make sure no other snapshot is created")
-		snapshot = getResourceOverrideSnapshot(testROName, 1)
+		snapshot = getResourceOverrideSnapshot(testROName, namespaceName, 1)
 		Consistently(func() bool {
 			return errors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name, Namespace: snapshot.Namespace}, snapshot))
 		}, consistentlyDuration, interval).Should(BeTrue(), "snapshot should not exist")
@@ -132,7 +152,7 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 		Expect(k8sClient.Create(ctx, ro)).Should(Succeed())
 
 		By("Waiting for a new snapshot is created")
-		snapshot := getResourceOverrideSnapshot(testROName, 0)
+		snapshot := getResourceOverrideSnapshot(testROName, namespaceName, 0)
 		Eventually(func() error {
 			return k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name, Namespace: snapshot.Namespace}, snapshot)
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
@@ -153,7 +173,7 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 		}
 		Expect(k8sClient.Update(ctx, ro)).Should(Succeed())
 		By("Checking if a new snapshot is created")
-		snapshot = getResourceOverrideSnapshot(testROName, 1)
+		snapshot = getResourceOverrideSnapshot(testROName, namespaceName, 1)
 		Eventually(func() error {
 			return k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name, Namespace: snapshot.Namespace}, snapshot)
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
@@ -168,7 +188,7 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 		diff = cmp.Diff(ro.Spec, snapshot.Spec.OverrideSpec)
 		Expect(diff).Should(BeEmpty(), diff, "Snapshot spec mismatch (-want, +got)")
 		By("Checking if the old snapshot is updated")
-		snapshot = getResourceOverrideSnapshot(testROName, 0)
+		snapshot = getResourceOverrideSnapshot(testROName, namespaceName, 0)
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name, Namespace: snapshot.Namespace}, snapshot)).Should(Succeed())
 		By("Make sure the old snapshot is correctly marked as not latest")
 		diff = cmp.Diff(map[string]string{
@@ -186,7 +206,7 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 		By("Creating a new RO")
 		Expect(k8sClient.Create(ctx, ro)).Should(Succeed())
 		By("Waiting for a new snapshot is created")
-		snapshot := getResourceOverrideSnapshot(testROName, 0)
+		snapshot := getResourceOverrideSnapshot(testROName, namespaceName, 0)
 		Eventually(func() error {
 			return k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name, Namespace: snapshot.Namespace}, snapshot)
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
@@ -206,7 +226,7 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 		}
 		Expect(k8sClient.Update(ctx, ro)).Should(Succeed())
 		By("Checking if a new snapshot is created")
-		snapshot = getResourceOverrideSnapshot(testROName, 1)
+		snapshot = getResourceOverrideSnapshot(testROName, namespaceName, 1)
 		Eventually(func() error {
 			return k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name, Namespace: snapshot.Namespace}, snapshot)
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
