@@ -19,5 +19,5 @@ spec:
                   env: canary
         jsonPatchOverrides:
           - op: add
-            path: /metadata/labels/new-label
-            value: "new-value"
+            path: /metadata/labels
+            value: {"new-label": "new-value"}
