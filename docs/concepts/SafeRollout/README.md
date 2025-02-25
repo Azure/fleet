@@ -13,7 +13,7 @@ won't affect all the running instances all at once.
 
 ## Rollout Strategy
 
-We currently only support the `RollingUpdate` rollout strategy. It updates the resources in the selected target clusters
+We currently support the `RollingUpdate` rollout strategy. It updates the resources in the selected target clusters
 gradually based on the `maxUnavailable` and `maxSurge` settings.
 
 ## In place update policy

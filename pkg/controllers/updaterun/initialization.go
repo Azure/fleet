@@ -7,6 +7,7 @@ package updaterun
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -76,7 +77,7 @@ func (r *Reconciler) validateCRP(ctx context.Context, updateRun *placementv1beta
 	// Check if the ClusterResourcePlacement has an external rollout strategy.
 	if crp.Spec.Strategy.Type != placementv1beta1.ExternalRolloutStrategyType {
 		klog.V(2).InfoS("The clusterResourcePlacement does not have an external rollout strategy", "clusterResourcePlacement", placementName, "clusterStagedUpdateRun", updateRunRef)
-		wrongRolloutTypeErr := controller.NewUserError(fmt.Errorf("parent clusterResourcePlacement does not have an external rollout strategy, current strategy: " + string(crp.Spec.Strategy.Type)))
+		wrongRolloutTypeErr := controller.NewUserError(errors.New("parent clusterResourcePlacement does not have an external rollout strategy, current strategy: " + string(crp.Spec.Strategy.Type)))
 		return "", fmt.Errorf("%w: %s", errInitializedFailed, wrongRolloutTypeErr.Error())
 	}
 	updateRun.Status.ApplyStrategy = crp.Spec.Strategy.ApplyStrategy
@@ -231,7 +232,7 @@ func (r *Reconciler) generateStagesByStrategy(
 		klog.ErrorS(err, "Failed to get StagedUpdateStrategy", "stagedUpdateStrategy", updateRun.Spec.StagedUpdateStrategyName, "clusterStagedUpdateRun", updateRunRef)
 		if apierrors.IsNotFound(err) {
 			// we won't continue or retry the initialization if the StagedUpdateStrategy is not found.
-			strategyNotFoundErr := controller.NewUserError(fmt.Errorf("referenced clusterStagedUpdateStrategy not found: " + updateRun.Spec.StagedUpdateStrategyName))
+			strategyNotFoundErr := controller.NewUserError(errors.New("referenced clusterStagedUpdateStrategy not found: " + updateRun.Spec.StagedUpdateStrategyName))
 			return fmt.Errorf("%w: %s", errInitializedFailed, strategyNotFoundErr.Error())
 		}
 		// other err can be retried.
