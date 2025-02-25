@@ -174,7 +174,7 @@ var _ = Describe("Test ClusterResourceOverride common logic", func() {
 				}, eventuallyTimeout, interval).Should(BeTrue(), "snapshot should be deleted")
 			}
 			By("verifying that only the latest snapshot is kept")
-			Eventually(func() error {
+			Consistently(func() error {
 				snapshot := getClusterResourceOverrideSnapshot(testCROName, 4)
 				return k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name}, snapshot)
 			}, consistentlyDuration, interval).Should(Succeed(), "snapshot should not be deleted")
@@ -241,7 +241,7 @@ var _ = Describe("Test ResourceOverride common logic", func() {
 	})
 
 	AfterEach(func() {
-		By("Deleting five clusterResourceOverrideSnapshot")
+		By("Deleting seven resourceOverrideSnapshots")
 		for i := 0; i < totalSnapshots; i++ {
 			snapshot := getResourceOverrideSnapshot(testROName, namespaceName, i)
 			Expect(k8sClient.Delete(ctx, snapshot)).Should(SatisfyAny(Succeed(), &utils.NotFoundMatcher{}))
@@ -368,7 +368,7 @@ var _ = Describe("Test ResourceOverride common logic", func() {
 				}, eventuallyTimeout, interval).Should(BeTrue(), "snapshot should be deleted")
 			}
 			By("verifying that only the latest snapshot is kept")
-			Eventually(func() error {
+			Consistently(func() error {
 				snapshot := getResourceOverrideSnapshot(testROName, ro.Namespace, totalSnapshots-1)
 				return k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name, Namespace: snapshot.Namespace}, snapshot)
 			}, consistentlyDuration, interval).Should(Succeed(), "snapshot should not be deleted")
