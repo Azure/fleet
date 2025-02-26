@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -89,7 +89,7 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 
 	BeforeEach(func() {
 		namespaceName = fmt.Sprintf("%s-%s", overrideNamespace, utils.RandStr())
-		namespace := &v1.Namespace{
+		namespace := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: namespaceName,
 			},
@@ -103,7 +103,7 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 		By("Deleting the RO")
 		Expect(k8sClient.Delete(ctx, ro)).Should(SatisfyAny(Succeed(), &utils.NotFoundMatcher{}))
 		By("Deleting the namespace")
-		namespace := &v1.Namespace{
+		namespace := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: namespaceName,
 			},

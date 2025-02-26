@@ -15,7 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -225,7 +225,7 @@ var _ = Describe("Test ResourceOverride common logic", func() {
 
 	BeforeEach(func() {
 		namespaceName = fmt.Sprintf("%s-%s", overrideNamespace, utils.RandStr())
-		namespace := &v1.Namespace{
+		namespace := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: namespaceName,
 			},
@@ -247,7 +247,7 @@ var _ = Describe("Test ResourceOverride common logic", func() {
 			Expect(k8sClient.Delete(ctx, snapshot)).Should(SatisfyAny(Succeed(), &utils.NotFoundMatcher{}))
 		}
 		By("Deleting the namespace")
-		namespace := &v1.Namespace{
+		namespace := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: namespaceName,
 			},
