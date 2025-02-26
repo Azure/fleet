@@ -198,24 +198,17 @@ var _ = Describe("Test the rollout Controller", func() {
 					},
 				}
 				// The scheduled binding will be set to the Bound state with the RolloutStarted
-				// condition set to True; the unscheduled binding will receive a False
-				// RolloutStarted condition; the bound bindings will receive a True RolloutStarted
-				// condition.
+				// condition set to True; the bound binding will receive a True RolloutStarted
+				// condition; the unscheduled binding will have no RolloutStarted condition update.
 				if binding.Spec.State == fleetv1beta1.BindingStateUnscheduled {
 					wantBindingStatus = &fleetv1beta1.ResourceBindingStatus{
-						Conditions: []metav1.Condition{
-							{
-								Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
-								Status:             metav1.ConditionFalse,
-								Reason:             condition.RolloutNotStartedYetReason,
-								ObservedGeneration: gotBinding.Generation,
-							},
-						},
+						Conditions: []metav1.Condition{},
 					}
 				}
 				if diff := cmp.Diff(
 					&gotBinding.Status, wantBindingStatus,
 					ignoreCondLTTAndMessageFields,
+					cmpopts.EquateEmpty(),
 				); diff != "" {
 					return fmt.Errorf("binding status diff (%v/%v) (-got, +want):\n%s", binding.Spec.State, gotBinding.Spec.State, diff)
 				}
@@ -299,24 +292,17 @@ var _ = Describe("Test the rollout Controller", func() {
 					},
 				}
 				// The scheduled binding will be set to the Bound state with the RolloutStarted
-				// condition set to True; the unscheduled binding will receive a False
-				// RolloutStarted condition; the bound bindings will receive a True RolloutStarted
-				// condition.
+				// condition set to True; the bound binding will receive a True RolloutStarted
+				// condition; the unscheduled binding will have no RolloutStarted condition update.
 				if binding.Spec.State == fleetv1beta1.BindingStateUnscheduled {
 					wantBindingStatus = &fleetv1beta1.ResourceBindingStatus{
-						Conditions: []metav1.Condition{
-							{
-								Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
-								Status:             metav1.ConditionFalse,
-								Reason:             condition.RolloutNotStartedYetReason,
-								ObservedGeneration: gotBinding.Generation,
-							},
-						},
+						Conditions: []metav1.Condition{},
 					}
 				}
 				if diff := cmp.Diff(
 					&gotBinding.Status, wantBindingStatus,
 					ignoreCondLTTAndMessageFields,
+					cmpopts.EquateEmpty(),
 				); diff != "" {
 					return fmt.Errorf("binding status diff (%v/%v) (-got, +want):\n%s", binding.Spec.State, gotBinding.Spec.State, diff)
 				}

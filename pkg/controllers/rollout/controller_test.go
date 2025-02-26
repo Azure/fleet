@@ -1440,7 +1440,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 2),
 				createPlacementRolloutStrategyForTest(fleetv1beta1.RollingUpdateRolloutStrategyType, generateDefaultRollingUpdateConfig(), nil)), // maxUnavailable is set to 1.
 			wantTobeUpdatedBindings:     []int{0}, // one ready unscheduled binding is removed since maxUnavailable is set to 1.
-			wantStaleUnselectedBindings: []int{1},
+			wantStaleUnselectedBindings: []int{},  // remove candidate doesn't get appended as stale binding.
 			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
 				{},
 				{},
@@ -2417,8 +2417,8 @@ func TestUpdateStaleBindingsStatus(t *testing.T) {
 						Conditions: []metav1.Condition{
 							{
 								Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
-								Status:             metav1.ConditionFalse,
-								ObservedGeneration: 15,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 14,
 								LastTransitionTime: metav1.NewTime(currentTime),
 								Reason:             condition.RolloutNotStartedYetReason,
 							},

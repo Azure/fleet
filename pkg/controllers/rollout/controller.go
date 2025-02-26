@@ -177,11 +177,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		"numberOfUpToDateBindings", len(upToDateBoundBindings))
 
 	// StaleBindings is the list that contains bindings that need to be updated (binding to a
-	// cluster, upgrading to a newer resource/override snapshot, or removing) but are blocked by
+	// cluster, upgrading to a newer resource/override snapshot) but are blocked by
 	// the rollout strategy.
 	//
+	// Note that Fleet does not consider unscheduled bindings as stale bindings, even if the
+	// status conditions on them have become stale (the work generator will handle them as an
+	// exception).
+	//
+	// TO-DO (chenyu1): evaluate how we could improve the flow to reduce coupling.
+	//
 	// Update the status first, so that if the rolling out (updateBindings func) fails in the
-	// middle, the controller will recompute the list and the result may be different.
+	// middle, the controller will recompute the list so the rollout can move forward.
 	if err := r.updateStaleBindingsStatus(ctx, staleBoundBindings); err != nil {
 		return runtime.Result{}, err
 	}
