@@ -22,7 +22,6 @@ import (
 
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/labels"
 	"go.goms.io/fleet/pkg/utils/resource"
@@ -81,7 +80,7 @@ func (r *ResourceReconciler) ensureResourceOverrideSnapshot(ctx context.Context,
 		return controller.NewUnexpectedBehaviorError(err)
 	}
 	// we need to list the snapshots anyway since we need to remove the extra snapshots if there are too many of them.
-	snapshotList, err := r.listSortedOverrideSnapshots(ctx, utils.ResourceOverrideSnapshotKind, ro.GetName())
+	snapshotList, err := r.listSortedOverrideSnapshots(ctx, ro)
 	if err != nil {
 		return err
 	}
@@ -140,11 +139,11 @@ func (r *ResourceReconciler) ensureResourceOverrideSnapshot(ctx context.Context,
 			OverrideHash: []byte(overrideSpecHash),
 		},
 	}
-	if err := r.Client.Create(ctx, newSnapshot); err != nil {
+	if err = r.Client.Create(ctx, newSnapshot); err != nil {
 		klog.ErrorS(err, "Failed to create new overrideSnapshot", "newOverrideSnapshot", klog.KObj(newSnapshot))
 		return controller.NewAPIServerError(false, err)
 	}
-	klog.V(2).InfoS("Created new overrideSnapshot", "ResourceOverride", croKObj, "newOverrideSnapshot", klog.KObj(newSnapshot))
+	klog.V(2).InfoS("Created a new overrideSnapshot", "ResourceOverride", croKObj, "newOverrideSnapshot", klog.KObj(newSnapshot))
 	return nil
 }
 

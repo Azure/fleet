@@ -108,6 +108,11 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				var works placementv1beta1.WorkList
 				listOpts := []client.ListOption{
 					client.InNamespace(fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.ClusterName)),
+					// This test spec runs in parallel with other suites; there might be unrelated
+					// Work objects in the namespace.
+					client.MatchingLabels{
+						placementv1beta1.CRPTrackingLabel: crpName,
+					},
 				}
 				Eventually(func() string {
 					if err := hubClient.List(ctx, &works, listOpts...); err != nil {

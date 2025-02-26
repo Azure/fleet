@@ -1,7 +1,7 @@
 apiVersion: placement.kubernetes-fleet.io/v1beta1
 kind: ClusterApprovalRequest
 metadata:
-  name: example-approvalrequest
+  name: example-run-canary
   labels:
     kubernetes-fleet.io/targetupdaterun: example-run
     kubernetes-fleet.io/targetUpdatingStage: canary

@@ -65,23 +65,30 @@ func (r *Reconciler) ensureFinalizer(ctx context.Context, parentOverrideObj clie
 }
 
 // listSortedOverrideSnapshots returns the override snapshots sorted by the override index. This is only needed if we can't find any latest snapshot.
-func (r *Reconciler) listSortedOverrideSnapshots(ctx context.Context, snapshotListGVK schema.GroupVersionKind, parentOverrideName string) (*unstructured.UnstructuredList, error) {
+func (r *Reconciler) listSortedOverrideSnapshots(ctx context.Context, parentOverrideObj client.Object) (*unstructured.UnstructuredList, error) {
+	parentOverrideRef := klog.KObj(parentOverrideObj)
 	snapshotList := &unstructured.UnstructuredList{}
+	var snapshotListGVK schema.GroupVersionKind
+	if parentOverrideObj.GetObjectKind().GroupVersionKind().Kind == placementv1alpha1.ClusterResourceOverrideKind {
+		snapshotListGVK = utils.ClusterResourceOverrideSnapshotKind
+	} else {
+		snapshotListGVK = utils.ResourceOverrideSnapshotKind
+	}
 	snapshotList.SetGroupVersionKind(snapshotListGVK)
-	if err := r.Client.List(ctx, snapshotList, client.MatchingLabels{placementv1alpha1.OverrideTrackingLabel: parentOverrideName}); err != nil {
-		klog.ErrorS(err, "Failed to list all overrideSnapshot", "snapshotListGVK", snapshotListGVK, "parentOverrideName", parentOverrideName)
+	if err := r.Client.List(ctx, snapshotList, client.InNamespace(parentOverrideObj.GetNamespace()), client.MatchingLabels{placementv1alpha1.OverrideTrackingLabel: parentOverrideObj.GetName()}); err != nil {
+		klog.ErrorS(err, "Failed to list all overrideSnapshot", "snapshotListGVK", snapshotListGVK, "parentOverride", parentOverrideRef)
 		return nil, controller.NewAPIServerError(false, err)
 	}
 	var errs []error
 	sort.Slice(snapshotList.Items, func(i, j int) bool {
 		ii, err := labels.ExtractIndex(&snapshotList.Items[i], placementv1alpha1.OverrideIndexLabel)
 		if err != nil {
-			klog.ErrorS(err, "Failed to parse the override index label", "snapshotListGVK", snapshotListGVK, "parentOverrideName", parentOverrideName, "overrideSnapshot", klog.KObj(&snapshotList.Items[i]))
+			klog.ErrorS(err, "Failed to parse the override index label", "snapshotListGVK", snapshotListGVK, "parentOverride", parentOverrideRef, "overrideSnapshot", klog.KObj(&snapshotList.Items[i]))
 			errs = append(errs, err)
 		}
 		ji, err := labels.ExtractIndex(&snapshotList.Items[j], placementv1alpha1.OverrideIndexLabel)
 		if err != nil {
-			klog.ErrorS(err, "Failed to parse the override index label", "snapshotListGVK", snapshotListGVK, "parentOverrideName", parentOverrideName, "overrideSnapshot", klog.KObj(&snapshotList.Items[j]))
+			klog.ErrorS(err, "Failed to parse the override index label", "snapshotListGVK", snapshotListGVK, "parentOverride", parentOverrideRef, "overrideSnapshot", klog.KObj(&snapshotList.Items[j]))
 			errs = append(errs, err)
 		}
 		return ii < ji

@@ -315,3 +315,97 @@ func TestHasBindingFailed(t *testing.T) {
 		})
 	}
 }
+
+func TestIsBindingReportDiff(t *testing.T) {
+	tests := []struct {
+		name    string
+		binding *placementv1beta1.ClusterResourceBinding
+		want    bool
+	}{
+		{
+			name: "binding should not be in diffReported state if diffReport condition is not set",
+			binding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-binding",
+					Generation: 1,
+				},
+			},
+			want: false,
+		},
+		{
+			name: "binding should be in diffReported state if diffReport condition is true and generation matches",
+			binding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-binding",
+					Generation: 1,
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.Time{},
+							ObservedGeneration: 1,
+							Reason:             "diffReported",
+							Message:            "test message",
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "binding should be in diffReported state if diffReport condition is current even if its false",
+			binding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-binding",
+					Generation: 1,
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionFalse,
+							LastTransitionTime: metav1.Time{},
+							ObservedGeneration: 1,
+							Reason:             "diffNotReported",
+							Message:            "test message",
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "binding should NOT be in diffReported state if diffReport condition is not current",
+			binding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-binding",
+					Generation: 2,
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.Time{},
+							ObservedGeneration: 1,
+							Reason:             "diffReported",
+							Message:            "test message",
+						},
+					},
+				},
+			},
+			want: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := IsBindingDiffReported(tc.binding)
+			if got != tc.want {
+				t.Errorf("IsBindingDiffReported test `%s` failed got: %v, want: %v", tc.name, got, tc.want)
+			}
+		})
+	}
+}

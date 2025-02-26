@@ -257,7 +257,7 @@ func (r *Reconciler) executeDeleteStage(
 }
 
 // checkAfterStageTasksStatus checks if the after stage tasks have finished.
-// Tt returns if the after stage tasks have finished or error if the after stage tasks failed.
+// It returns if the after stage tasks have finished or error if the after stage tasks failed.
 // It also returns the time to wait before rechecking the wait type of task. It turns -1 if the task is not a wait type.
 func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingStageIndex int, updateRun *placementv1beta1.ClusterStagedUpdateRun) (bool, time.Duration, error) {
 	updateRunRef := klog.KObj(updateRun)

@@ -2115,7 +2115,34 @@ func TestApplyJSONPatchOverride(t *testing.T) {
 			},
 		},
 		{
-			name: "add a label",
+			name: "add the first label key value",
+			deployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+				},
+			},
+			overrides: []placementv1alpha1.JSONPatchOverride{
+				{
+					Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+					Path:     "/metadata/labels",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`{"app": "nginx"}`)},
+				},
+			},
+			wantDeployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "nginx",
+					},
+				},
+			},
+		},
+		{
+			name: "add a label key value in the existing labels",
 			deployment: appsv1.Deployment{
 				TypeMeta: deploymentType,
 				ObjectMeta: metav1.ObjectMeta{
@@ -2145,7 +2172,6 @@ func TestApplyJSONPatchOverride(t *testing.T) {
 				},
 			},
 		},
-
 		{
 			name: "remove a label",
 			deployment: appsv1.Deployment{

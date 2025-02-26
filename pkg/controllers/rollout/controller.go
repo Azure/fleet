@@ -108,9 +108,23 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	// marked for deletion yet. Note that even unscheduled bindings will receive this update;
 	// as apply strategy changes might have an effect on its Applied and Available status, and
 	// consequently on the rollout progress.
-	if err := r.processApplyStrategyUpdates(ctx, &crp, allBindings); err != nil {
+	applyStrategyUpdated, err := r.processApplyStrategyUpdates(ctx, &crp, allBindings)
+	switch {
+	case err != nil:
 		klog.ErrorS(err, "Failed to process apply strategy updates", "clusterResourcePlacement", crpName)
 		return runtime.Result{}, err
+	case applyStrategyUpdated:
+		// After the apply strategy is updated (a spec change), all status conditions on the
+		// ClusterResourceBinding object will become stale. To simplify the workflow of
+		// the rollout controller, Fleet will requeue the request now, and let the subsequent
+		// reconciliation loop to handle the status condition refreshing.
+		//
+		// Note that work generator will skip processing ClusterResourceBindings with stale
+		// RolloutStarted conditions.
+		klog.V(2).InfoS("Apply strategy has been updated; requeue the request", "clusterResourcePlacement", crpName)
+		return reconcile.Result{Requeue: true}, nil
+	default:
+		klog.V(2).InfoS("Apply strategy is up to date on all bindings; continue with the rollout process", "clusterResourcePlacement", crpName)
 	}
 
 	// handle the case that a cluster was unselected by the scheduler and then selected again but the unselected binding is not completely deleted yet
@@ -144,7 +158,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	// pick the bindings to be updated according to the rollout plan
 	// staleBoundBindings is a list of "Bound" bindings and are not selected in this round because of the rollout strategy.
-	toBeUpdatedBindings, staleBoundBindings, needRoll, waitTime, err := r.pickBindingsToRoll(ctx, allBindings, latestResourceSnapshot, &crp, matchedCRO, matchedRO)
+	toBeUpdatedBindings, staleBoundBindings, upToDateBoundBindings, needRoll, waitTime, err := r.pickBindingsToRoll(ctx, allBindings, latestResourceSnapshot, &crp, matchedCRO, matchedRO)
 	if err != nil {
 		klog.ErrorS(err, "Failed to pick the bindings to roll", "clusterResourcePlacement", crpName)
 		return runtime.Result{}, err
@@ -157,15 +171,39 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		// Here it will correct the binding status just in case this happens last time.
 		return runtime.Result{}, r.checkAndUpdateStaleBindingsStatus(ctx, allBindings)
 	}
-	klog.V(2).InfoS("Picked the bindings to be updated", "clusterResourcePlacement", crpName, "numberOfBindings", len(toBeUpdatedBindings), "numberOfStaleBindings", len(staleBoundBindings))
+	klog.V(2).InfoS("Picked the bindings to be updated",
+		"clusterResourcePlacement", crpName,
+		"numberOfToBeUpdatedBindings", len(toBeUpdatedBindings),
+		"numberOfStaleBindings", len(staleBoundBindings),
+		"numberOfUpToDateBindings", len(upToDateBoundBindings))
 
-	// StaleBindings is the list that contains bindings that need to be updated but are blocked by the rollout strategy.
-	// Update the status first, so that if the rolling out (updateBindings func) fails in the middle, the controller will
-	// recompute the list and the result may be different.
+	// StaleBindings is the list that contains bindings that need to be updated (binding to a
+	// cluster, upgrading to a newer resource/override snapshot) but are blocked by
+	// the rollout strategy.
+	//
+	// Note that Fleet does not consider unscheduled bindings as stale bindings, even if the
+	// status conditions on them have become stale (the work generator will handle them as an
+	// exception).
+	//
+	// TO-DO (chenyu1): evaluate how we could improve the flow to reduce coupling.
+	//
+	// Update the status first, so that if the rolling out (updateBindings func) fails in the
+	// middle, the controller will recompute the list so the rollout can move forward.
 	if err := r.updateStaleBindingsStatus(ctx, staleBoundBindings); err != nil {
 		return runtime.Result{}, err
 	}
 	klog.V(2).InfoS("Successfully updated status of the stale bindings", "clusterResourcePlacement", crpName, "numberOfStaleBindings", len(staleBoundBindings))
+
+	// upToDateBoundBindings contains all the ClusterResourceBindings that does not need to have
+	// their resource/override snapshots updated, but might need to have their status updated.
+	//
+	// Bindings might have up to date resource/override snapshots but stale status information when
+	// an apply strategy update has just been applied, or an error has occurred during the
+	// previous rollout process (specifically after the spec update but before the status update).
+	if err := r.refreshUpToDateBindingStatus(ctx, upToDateBoundBindings); err != nil {
+		return runtime.Result{}, err
+	}
+	klog.V(2).InfoS("Successfully updated status of the up-to-date bindings", "clusterResourcePlacement", crpName, "numberOfUpToDateBindings", len(upToDateBoundBindings))
 
 	// Update all the bindings in parallel according to the rollout plan.
 	// We need to requeue the request regardless if the binding updates succeed or not
@@ -309,8 +347,14 @@ func createUpdateInfo(binding *fleetv1beta1.ClusterResourceBinding,
 // if there are out of sync bindings.
 // Thus, it also returns a bool indicating whether there are out of sync bindings to be rolled to differentiate those
 // two cases.
-func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*fleetv1beta1.ClusterResourceBinding, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, crp *fleetv1beta1.ClusterResourcePlacement,
-	matchedCROs []*fleetv1alpha1.ClusterResourceOverrideSnapshot, matchedROs []*fleetv1alpha1.ResourceOverrideSnapshot) ([]toBeUpdatedBinding, []toBeUpdatedBinding, bool, time.Duration, error) {
+func (r *Reconciler) pickBindingsToRoll(
+	ctx context.Context,
+	allBindings []*fleetv1beta1.ClusterResourceBinding,
+	latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot,
+	crp *fleetv1beta1.ClusterResourcePlacement,
+	matchedCROs []*fleetv1alpha1.ClusterResourceOverrideSnapshot,
+	matchedROs []*fleetv1alpha1.ResourceOverrideSnapshot,
+) ([]toBeUpdatedBinding, []toBeUpdatedBinding, []toBeUpdatedBinding, bool, time.Duration, error) {
 	// Those are the bindings that are chosen by the scheduler to be applied to selected clusters.
 	// They include the bindings that are already applied to the clusters and the bindings that are newly selected by the scheduler.
 	schedulerTargetedBinds := make([]*fleetv1beta1.ClusterResourceBinding, 0)
@@ -340,6 +384,10 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 	// minimum AvailableNumber of copies as we won't reduce the total unavailable number of bindings.
 	applyFailedUpdateCandidates := make([]toBeUpdatedBinding, 0)
 
+	// Those are the bindings that have been bound to a cluster and have the latest
+	// resource/override snapshots, but might or might not have the refresh status information.
+	upToDateBoundBindings := make([]toBeUpdatedBinding, 0)
+
 	// calculate the cutoff time for a binding to be applied before so that it can be considered ready
 	readyTimeCutOff := time.Now().Add(-time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second)
 
@@ -356,7 +404,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 		case fleetv1beta1.BindingStateUnscheduled:
 			if bindingutils.HasBindingFailed(binding) {
 				klog.V(2).InfoS("Found a failed to be ready unscheduled binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
-			} else {
+			} else if !bindingutils.IsBindingDiffReported(binding) {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
 			}
 			waitTime, bindingReady := isBindingReady(binding, readyTimeCutOff)
@@ -385,7 +433,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			// PickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
 			cro, ro, err := overrider.PickFromResourceMatchedOverridesForTargetCluster(ctx, r.Client, binding.Spec.TargetCluster, matchedCROs, matchedROs)
 			if err != nil {
-				return nil, nil, false, minWaitTime, err
+				return nil, nil, nil, false, minWaitTime, err
 			}
 			boundingCandidates = append(boundingCandidates, createUpdateInfo(binding, latestResourceSnapshot, cro, ro))
 		case fleetv1beta1.BindingStateBound:
@@ -405,7 +453,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			if bindingutils.HasBindingFailed(binding) {
 				klog.V(2).InfoS("Found a failed to be ready bound binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 				bindingFailed = true
-			} else {
+			} else if !bindingutils.IsBindingDiffReported(binding) {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
 			}
 
@@ -414,7 +462,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 				// PickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
 				cro, ro, err := overrider.PickFromResourceMatchedOverridesForTargetCluster(ctx, r.Client, binding.Spec.TargetCluster, matchedCROs, matchedROs)
 				if err != nil {
-					return nil, nil, false, 0, err
+					return nil, nil, nil, false, 0, err
 				}
 				// The binding needs update if it's not pointing to the latest resource resourceBinding or the overrides.
 				if binding.Spec.ResourceSnapshotName != latestResourceSnapshot.Name || !equality.Semantic.DeepEqual(binding.Spec.ClusterResourceOverrideSnapshots, cro) || !equality.Semantic.DeepEqual(binding.Spec.ResourceOverrideSnapshots, ro) {
@@ -425,6 +473,10 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 					} else {
 						updateCandidates = append(updateCandidates, updateInfo)
 					}
+				} else {
+					// The binding does not need update, but Fleet might need to refresh its status
+					// information.
+					upToDateBoundBindings = append(upToDateBoundBindings, toBeUpdatedBinding{currentBinding: binding})
 				}
 			} else if bindingReady {
 				// it is being deleted, it can be removed from the cluster at any time, so it can be unavailable at any time
@@ -447,13 +499,13 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 	// the list of bindings that are to be updated by this rolling phase
 	toBeUpdatedBindingList := make([]toBeUpdatedBinding, 0)
 	if len(removeCandidates)+len(updateCandidates)+len(boundingCandidates)+len(applyFailedUpdateCandidates) == 0 {
-		return toBeUpdatedBindingList, nil, false, minWaitTime, nil
+		return toBeUpdatedBindingList, nil, upToDateBoundBindings, false, minWaitTime, nil
 	}
 
 	toBeUpdatedBindingList, staleUnselectedBinding := determineBindingsToUpdate(crp, removeCandidates, updateCandidates, boundingCandidates, applyFailedUpdateCandidates, targetNumber,
 		readyBindings, canBeReadyBindings, canBeUnavailableBindings)
 
-	return toBeUpdatedBindingList, staleUnselectedBinding, true, minWaitTime, nil
+	return toBeUpdatedBindingList, staleUnselectedBinding, upToDateBoundBindings, true, minWaitTime, nil
 }
 
 // determineBindingsToUpdate determines which bindings to update
@@ -562,6 +614,12 @@ func (r *Reconciler) calculateRealTarget(crp *fleetv1beta1.ClusterResourcePlacem
 // A binding with not trackable resources is considered ready if the binding's current spec has been available before
 // the ready cutoff time.
 func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOff time.Time) (time.Duration, bool) {
+	// the binding is ready if the diff report has been reported
+	diffReportCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingDiffReported))
+	if condition.IsConditionStatusTrue(diffReportCondition, binding.GetGeneration()) {
+		// we can move to the next binding
+		return 0, true
+	}
 	// find the latest applied condition that has the same generation as the binding
 	availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
 	if condition.IsConditionStatusTrue(availableCondition, binding.GetGeneration()) {
@@ -866,6 +924,22 @@ func (r *Reconciler) updateStaleBindingsStatus(ctx context.Context, staleBinding
 	return errs.Wait()
 }
 
+// refreshUpToDateBindingStatus refreshes the status of all up-to-date bindings.
+func (r *Reconciler) refreshUpToDateBindingStatus(ctx context.Context, upToDateBindings []toBeUpdatedBinding) error {
+	if len(upToDateBindings) == 0 {
+		return nil
+	}
+	// Issue all the requests in parallel.
+	errs, cctx := errgroup.WithContext(ctx)
+	for i := 0; i < len(upToDateBindings); i++ {
+		binding := upToDateBindings[i]
+		errs.Go(func() error {
+			return r.updateBindingStatus(cctx, binding.currentBinding, true)
+		})
+	}
+	return errs.Wait()
+}
+
 func (r *Reconciler) updateBindingStatus(ctx context.Context, binding *fleetv1beta1.ClusterResourceBinding, rolloutStarted bool) error {
 	cond := metav1.Condition{
 		Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
@@ -898,7 +972,7 @@ func (r *Reconciler) processApplyStrategyUpdates(
 	ctx context.Context,
 	crp *fleetv1beta1.ClusterResourcePlacement,
 	allBindings []*fleetv1beta1.ClusterResourceBinding,
-) error {
+) (applyStrategyUpdated bool, err error) {
 	applyStrategy := crp.Spec.Strategy.ApplyStrategy
 	if applyStrategy == nil {
 		// Initialize the apply strategy with default values; normally this would not happen
@@ -934,6 +1008,7 @@ func (r *Reconciler) processApplyStrategyUpdates(
 		// controller; to avoid unnecessary conflicts, Fleet will patch the field directly.
 		updatedBinding := binding.DeepCopy()
 		updatedBinding.Spec.ApplyStrategy = applyStrategy
+		applyStrategyUpdated = true
 
 		errs.Go(func() error {
 			if err := r.Client.Patch(childCtx, updatedBinding, client.MergeFrom(binding)); err != nil {
@@ -947,7 +1022,7 @@ func (r *Reconciler) processApplyStrategyUpdates(
 
 	// The patches are issued in parallel; wait for all of them to complete (or the first error
 	// to return).
-	return errs.Wait()
+	return applyStrategyUpdated, errs.Wait()
 }
 
 // handleCRP handles the update event of a ClusterResourcePlacement, which the rollout controller

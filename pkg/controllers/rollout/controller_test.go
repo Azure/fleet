@@ -732,6 +732,94 @@ func TestIsBindingReady(t *testing.T) {
 			wantReady:       false,
 			wantWaitTime:    -1,
 		},
+		"binding diff report true should return ready": {
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 2,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.NewTime(now.Add(-5 * time.Minute)),
+							ObservedGeneration: 2,
+						},
+					},
+				},
+			},
+			readyTimeCutOff: now,
+			wantReady:       true,
+			wantWaitTime:    0,
+		},
+		"binding diff report false should return not ready and a negative wait time": {
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 10,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionFalse,
+							LastTransitionTime: metav1.NewTime(now.Add(-5 * time.Minute)),
+							ObservedGeneration: 10,
+						},
+					},
+				},
+			},
+			readyTimeCutOff: now,
+			wantReady:       false,
+			wantWaitTime:    -1,
+		},
+		"binding diff report true on different generation should not be ready": {
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 10,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionFalse,
+							LastTransitionTime: metav1.NewTime(now.Add(-5 * time.Minute)),
+							ObservedGeneration: 9,
+						},
+					},
+				},
+			},
+			readyTimeCutOff: now,
+			wantReady:       false,
+			wantWaitTime:    -1,
+		},
+
+		"binding diff report false on different generation with successful current apply should be ready": {
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 10,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingAvailable),
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.NewTime(now.Add(-5 * time.Second)),
+							Reason:             work.WorkAvailableReason,
+							ObservedGeneration: 10,
+						},
+						{
+							Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionFalse,
+							LastTransitionTime: metav1.NewTime(now.Add(-5 * time.Minute)),
+							ObservedGeneration: 9, //previous generation
+						},
+					},
+				},
+			},
+			readyTimeCutOff: now,
+			wantReady:       true,
+			wantWaitTime:    0,
+		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -757,6 +845,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 		wantTobeUpdatedBindings     []int
 		wantDesiredBindingsSpec     []fleetv1beta1.ResourceBindingSpec // used to construct the want toBeUpdatedBindings
 		wantStaleUnselectedBindings []int
+		wantUpToDateBoundBindings   []int
 		wantNeedRoll                bool
 		wantWaitTime                time.Duration
 		wantErr                     error
@@ -1106,6 +1195,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				createPlacementRolloutStrategyForTest(fleetv1beta1.RollingUpdateRolloutStrategyType, generateDefaultRollingUpdateConfig(), nil)),
 			wantTobeUpdatedBindings:     []int{},
 			wantStaleUnselectedBindings: []int{},
+			wantUpToDateBoundBindings:   []int{0},
 			wantNeedRoll:                false,
 		},
 		"test failed to apply bound binding, outdated resources - rollout allowed": {
@@ -1350,7 +1440,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 2),
 				createPlacementRolloutStrategyForTest(fleetv1beta1.RollingUpdateRolloutStrategyType, generateDefaultRollingUpdateConfig(), nil)), // maxUnavailable is set to 1.
 			wantTobeUpdatedBindings:     []int{0}, // one ready unscheduled binding is removed since maxUnavailable is set to 1.
-			wantStaleUnselectedBindings: []int{},  //  remove candidate doesn't get appended as stale binding.
+			wantStaleUnselectedBindings: []int{},  // remove candidate doesn't get appended as stale binding.
 			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
 				{},
 				{},
@@ -1418,6 +1508,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 					UnavailablePeriodSeconds: ptr.To(60),
 				}, nil)), // UnavailablePeriodSeconds is 60s -> readyTimeCutOff = t - 60s
 			wantStaleUnselectedBindings: []int{0, 1},
+			wantUpToDateBoundBindings:   []int{2},
 			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
 				{
 					State:                fleetv1beta1.BindingStateBound,
@@ -1683,6 +1774,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			},
 			wantTobeUpdatedBindings:     []int{2, 3}, // both new scheduled bindings are rolled out, target number by itself is greater than canBeReady bindings.
 			wantStaleUnselectedBindings: []int{},
+			wantUpToDateBoundBindings:   []int{1},
 			wantNeedRoll:                true,
 			wantWaitTime:                0,
 		},
@@ -1811,6 +1903,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			},
 			wantTobeUpdatedBindings:     []int{3}, // more ready bindings than required, we remove the unscheduled binding.
 			wantStaleUnselectedBindings: []int{},
+			wantUpToDateBoundBindings:   []int{0, 1},
 			wantNeedRoll:                true,
 			wantWaitTime:                0,
 		},
@@ -1843,6 +1936,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			},
 			wantTobeUpdatedBindings:     []int{2, 3}, // more ready bindings than required we remove the unscheduled binding, specified MaxUnavailable helps us remove one more unscheduled binding.
 			wantStaleUnselectedBindings: []int{},
+			wantUpToDateBoundBindings:   []int{1},
 			wantNeedRoll:                true,
 			wantWaitTime:                0,
 		},
@@ -2043,7 +2137,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 					Name: tt.latestResourceSnapshotName,
 				},
 			}
-			gotUpdatedBindings, gotStaleUnselectedBindings, gotNeedRoll, gotWaitTime, err := r.pickBindingsToRoll(context.Background(), tt.allBindings, resourceSnapshot, tt.crp, tt.matchedCROs, tt.matchedROs)
+			gotUpdatedBindings, gotStaleUnselectedBindings, gotUpToDateBoundBindings, gotNeedRoll, gotWaitTime, err := r.pickBindingsToRoll(context.Background(), tt.allBindings, resourceSnapshot, tt.crp, tt.matchedCROs, tt.matchedROs)
 			if (err != nil) != (tt.wantErr != nil) || err != nil && !errors.Is(err, tt.wantErr) {
 				t.Fatalf("pickBindingsToRoll() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -2073,12 +2167,19 @@ func TestPickBindingsToRoll(t *testing.T) {
 					wantStaleUnselectedBindings[i].currentBinding = tt.allBindings[index]
 				}
 			}
+			wantUpToDateBoundBindings := make([]toBeUpdatedBinding, len(tt.wantUpToDateBoundBindings))
+			for i, index := range tt.wantUpToDateBoundBindings {
+				wantUpToDateBoundBindings[i].currentBinding = tt.allBindings[index]
+			}
 
 			if diff := cmp.Diff(wantTobeUpdatedBindings, gotUpdatedBindings, cmpOptions...); diff != "" {
 				t.Errorf("pickBindingsToRoll() toBeUpdatedBindings mismatch (-want, +got):\n%s", diff)
 			}
 			if diff := cmp.Diff(wantStaleUnselectedBindings, gotStaleUnselectedBindings, cmpOptions...); diff != "" {
 				t.Errorf("pickBindingsToRoll() staleUnselectedBindings mismatch (-want, +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(wantUpToDateBoundBindings, gotUpToDateBoundBindings, cmpOptions...); diff != "" {
+				t.Errorf("pickBindingsToRoll() upToDateBoundBindings mismatch (-want, +got):\n%s", diff)
 			}
 			if gotNeedRoll != tt.wantNeedRoll {
 				t.Errorf("pickBindingsToRoll() = needRoll %v, want %v", gotNeedRoll, tt.wantNeedRoll)
@@ -2276,7 +2377,7 @@ func TestUpdateStaleBindingsStatus(t *testing.T) {
 				},
 			},
 		},
-		"skip updating unscheduled binding status": {
+		"update unscheduled binding status": {
 			bindings: []fleetv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -2293,7 +2394,7 @@ func TestUpdateStaleBindingsStatus(t *testing.T) {
 							{
 								Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
 								Status:             metav1.ConditionTrue,
-								ObservedGeneration: 15,
+								ObservedGeneration: 14,
 								LastTransitionTime: metav1.NewTime(currentTime),
 								Reason:             condition.RolloutStartedReason,
 							},
@@ -2317,7 +2418,7 @@ func TestUpdateStaleBindingsStatus(t *testing.T) {
 							{
 								Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
 								Status:             metav1.ConditionTrue,
-								ObservedGeneration: 15,
+								ObservedGeneration: 14,
 								LastTransitionTime: metav1.NewTime(currentTime),
 								Reason:             condition.RolloutStartedReason,
 							},
@@ -2443,6 +2544,138 @@ func TestUpdateStaleBindingsStatus(t *testing.T) {
 			}
 			if diff := cmp.Diff(tt.wantBindings, bindingList.Items, cmpOptions...); diff != "" {
 				t.Errorf("updateStaleBindingsStatus List() mismatch (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestRefreshUpToDateBindingStatus(t *testing.T) {
+	currentTime := time.Now()
+
+	testCases := []struct {
+		name             string
+		upToDateBindings []fleetv1beta1.ClusterResourceBinding
+		wantBindings     []fleetv1beta1.ClusterResourceBinding
+	}{
+		{
+			name:             "nil array",
+			upToDateBindings: nil,
+			wantBindings:     nil,
+		},
+		{
+			name:             "empty array",
+			upToDateBindings: []fleetv1beta1.ClusterResourceBinding{},
+			wantBindings:     nil,
+		},
+		{
+			name: "up to date bindings",
+			upToDateBindings: []fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "binding-1",
+						Generation: 1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:                fleetv1beta1.BindingStateBound,
+						TargetCluster:        cluster1,
+						ResourceSnapshotName: "snapshot-1",
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "binding-2",
+						Generation: 2,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:                fleetv1beta1.BindingStateBound,
+						TargetCluster:        cluster2,
+						ResourceSnapshotName: "snapshot-1",
+					},
+				},
+			},
+			wantBindings: []fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "binding-1",
+						Generation: 1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:                fleetv1beta1.BindingStateBound,
+						TargetCluster:        cluster1,
+						ResourceSnapshotName: "snapshot-1",
+					},
+					Status: fleetv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1,
+								LastTransitionTime: metav1.NewTime(currentTime),
+								Reason:             condition.RolloutStartedReason,
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "binding-2",
+						Generation: 2,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:                fleetv1beta1.BindingStateBound,
+						TargetCluster:        cluster2,
+						ResourceSnapshotName: "snapshot-1",
+					},
+					Status: fleetv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 2,
+								LastTransitionTime: metav1.NewTime(currentTime),
+								Reason:             condition.RolloutStartedReason,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var objects []client.Object
+			for i := range tc.upToDateBindings {
+				objects = append(objects, &tc.upToDateBindings[i])
+			}
+			scheme := serviceScheme(t)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(objects...).
+				WithStatusSubresource(objects...).
+				Build()
+			r := Reconciler{
+				Client: fakeClient,
+			}
+			ctx := context.Background()
+			upToDateBindings := make([]toBeUpdatedBinding, 0, len(tc.upToDateBindings))
+			for i := range tc.upToDateBindings {
+				// Get the data from the api server first so that the update won't fail because of the revision.
+				binding := &fleetv1beta1.ClusterResourceBinding{}
+				if err := fakeClient.Get(ctx, client.ObjectKey{Name: tc.upToDateBindings[i].Name}, binding); err != nil {
+					t.Fatalf("failed to get binding: %v", err)
+				}
+				upToDateBindings = append(upToDateBindings, toBeUpdatedBinding{currentBinding: binding})
+			}
+			if err := r.refreshUpToDateBindingStatus(ctx, upToDateBindings); err != nil {
+				t.Fatalf("updateStaleBindingsStatus() = %v, want no error", err)
+			}
+			bindingList := &fleetv1beta1.ClusterResourceBindingList{}
+			if err := fakeClient.List(ctx, bindingList); err != nil {
+				t.Fatalf("ClusterResourceBinding List() = %v, want no error", err)
+			}
+			if diff := cmp.Diff(bindingList.Items, tc.wantBindings, cmpOptions...); diff != "" {
+				t.Errorf("ClusterResourceBindings mismatches (-got, +want):\n%s", diff)
 			}
 		})
 	}
@@ -2644,10 +2877,11 @@ func TestProcessApplyStrategyUpdates(t *testing.T) {
 	now := metav1.Now().Rfc3339Copy()
 
 	testCases := []struct {
-		name            string
-		crp             *fleetv1beta1.ClusterResourcePlacement
-		allBindings     []*fleetv1beta1.ClusterResourceBinding
-		wantAllBindings []*fleetv1beta1.ClusterResourceBinding
+		name                     string
+		crp                      *fleetv1beta1.ClusterResourcePlacement
+		allBindings              []*fleetv1beta1.ClusterResourceBinding
+		wantAllBindings          []*fleetv1beta1.ClusterResourceBinding
+		wantApplyStrategyUpdated bool
 	}{
 		{
 			name: "nil apply strategy",
@@ -2682,6 +2916,7 @@ func TestProcessApplyStrategyUpdates(t *testing.T) {
 					},
 				},
 			},
+			wantApplyStrategyUpdated: true,
 		},
 		{
 			name: "push apply strategy to bindings of various states",
@@ -2788,6 +3023,97 @@ func TestProcessApplyStrategyUpdates(t *testing.T) {
 					},
 				},
 			},
+			wantApplyStrategyUpdated: true,
+		},
+		{
+			name: "no apply strategy update needed",
+			crp: &fleetv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+					Strategy: fleetv1beta1.RolloutStrategy{
+						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+							Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
+							ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+							WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+							WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeIfNoDiff,
+						},
+					},
+				},
+			},
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				// A binding that has been marked for deletion.
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "binding-1",
+						DeletionTimestamp: &now,
+						// The fake client requires that all objects that have been marked
+						// for deletion should have at least one finalizer set.
+						Finalizers: []string{
+							"custom-deletion-blocker",
+						},
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+							Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
+							ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+							WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+							WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeIfNoDiff,
+						},
+					},
+				},
+				// A binding that already has the latest apply strategy.
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "binding-2",
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						ResourceSnapshotName: "snapshot-2",
+						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+							Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
+							ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+							WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+							WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeIfNoDiff,
+						},
+					},
+				},
+			},
+			wantAllBindings: []*fleetv1beta1.ClusterResourceBinding{
+				// Binding that has been marked for deletion should not be updated.
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "binding-1",
+						DeletionTimestamp: &now,
+						Finalizers: []string{
+							"custom-deletion-blocker",
+						},
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+							Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
+							ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+							WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+							WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeIfNoDiff,
+						},
+					},
+				},
+				// Binding that already has the latest apply strategy should not be updated.
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "binding-2",
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						ResourceSnapshotName: "snapshot-2",
+						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+							Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
+							ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+							WhenToApply:      fleetv1beta1.WhenToApplyTypeIfNotDrifted,
+							WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeIfNoDiff,
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -2807,8 +3133,12 @@ func TestProcessApplyStrategyUpdates(t *testing.T) {
 				Client: fakeClient,
 			}
 
-			if err := r.processApplyStrategyUpdates(ctx, tc.crp, tc.allBindings); err != nil {
+			applyStrategyUpdated, err := r.processApplyStrategyUpdates(ctx, tc.crp, tc.allBindings)
+			if err != nil {
 				t.Errorf("processApplyStrategyUpdates() error = %v, want no error", err)
+			}
+			if applyStrategyUpdated != tc.wantApplyStrategyUpdated {
+				t.Errorf("processApplyStrategyUpdates() = %v, want %v", applyStrategyUpdated, tc.wantApplyStrategyUpdated)
 			}
 
 			for idx := range tc.wantAllBindings {
