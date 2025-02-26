@@ -2420,7 +2420,7 @@ func TestUpdateStaleBindingsStatus(t *testing.T) {
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 14,
 								LastTransitionTime: metav1.NewTime(currentTime),
-								Reason:             condition.RolloutNotStartedYetReason,
+								Reason:             condition.RolloutStartedReason,
 							},
 						},
 					},
