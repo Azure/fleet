@@ -50,7 +50,7 @@ spec:
 ```
 > Note: The ResourceOverride needs to be in the same namespace as the resources it is overriding.
 
-The example above will pick a `Deployment` named `my-deployment` from the namespace `test-namespace`, as shown below, to be overridden.
+The examples in the tutorial will pick a `Deployment` named `my-deployment` from the namespace `test-namespace`, as shown below, to be overridden.
 ```
 apiVersion: apps/v1
 kind: Deployment
@@ -107,87 +107,6 @@ Each `OverrideRule` supports the following fields:
     - `Delete`: deletes the selected resources on the target cluster.
 - **JSON Patch Override**: This specifies the changes to be applied to the selected resources when the override type is `JSONPatch`.
 
-
-To add an override rule, edit the `policy` field in the `ResourceOverride` spec:
-
-```yaml
-apiVersion: placement.kubernetes-fleet.io/v1alpha1
-kind: ResourceOverride
-metadata:
-  name: example-ro
-  namespace: test-namespace
-spec:
-  placement:
-    name: crp-example
-  resourceSelectors:
-    -  group: apps
-       kind: Deployment
-       version: v1
-       name: my-deployment
-  policy:
-    overrideRules:
-      - clusterSelector:
-          clusterSelectorTerms:
-            - labelSelector:
-                matchLabels:
-                  env: prod
-        jsonPatchOverrides:
-          - op: replace
-            path: /spec/template/spec/containers/0/image
-            value: "nginx:1.20.0"
-```
-The `ResourceOverride` object above will replace the image of the container in the `Deployment` named `my-deployment` 
-with the image `nginx:1.20.0` on all clusters with the label `env: prod` selected by the clusterResourcePlacement `crp-example`.
-> The ResourceOverride mentioned above utilizes the deployment displayed below:
-> ```
-> apiVersion: apps/v1
-> kind: Deployment
-> metadata:
->   ...
->   name: my-deployment
->   namespace: test-namespace
->   ...
-> spec:
->   ...
->   template:
->     ...
->     spec:
->       containers:
->       - image: nginx:1.14.2
->         imagePullPolicy: IfNotPresent
->         name: nginx
->         ports:
->        ...
->       ...
->   ...
->```
-
-To delete the `my-deployment` on the clusters with the label `env: test` selected by the clusterResourcePlacement `crp-example`,
-you can use the `Delete` override type.
-```yaml
-apiVersion: placement.kubernetes-fleet.io/v1alpha1
-kind: ResourceOverride
-metadata:
-  name: example-ro
-  namespace: test-namespace
-spec:
-  placement:
-    name: crp-example
-  resourceSelectors:
-    -  group: apps
-       kind: Deployment
-       version: v1
-       name: my-deployment
-  policy:
-    overrideRules:
-      - clusterSelector:
-          clusterSelectorTerms:
-            - labelSelector:
-                matchLabels:
-                  env: test
-        overrideType: Delete
-```
-
 ### Cluster Selector
 To specify the clusters to which the override applies, you can use the `clusterSelector` field in the `OverrideRule` spec.
 The `clusterSelector` field supports the following fields:
@@ -200,7 +119,7 @@ The default value is `JSONPatch`.
 - `JSONPatch`: applies the JSON patch to the selected resources using [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
 - `Delete`: deletes the selected resources on the target cluster.
 
-### JSON Patch Override
+#### JSON Patch Override
 To specify the changes to be applied to the selected resources, you can use the jsonPatchOverrides field in the OverrideRule spec.
 The jsonPatchOverrides field supports the following fields:
 
@@ -209,10 +128,9 @@ The jsonPatchOverrides field supports the following fields:
 
 The `jsonPatchOverrides` field supports the following fields:
 - `op`: The operation to be performed. The supported operations are `add`, `remove`, and `replace`.
-   * `add`: Adds a new value to the specified path.
-   * `remove`: Removes the value at the specified path.
-   * `replace`: Replaces the value at the specified path.
-  
+    * `add`: Adds a new value to the specified path.
+    * `remove`: Removes the value at the specified path.
+    * `replace`: Replaces the value at the specified path.
 
 - `path`: The path to the field to be modified.
     * Some guidelines for the path are as follows:
@@ -230,11 +148,13 @@ The `jsonPatchOverrides` field supports the following fields:
 
 
 - `value`: The value to be set.
-   * If the `op` is `remove`, the value cannot be set.
-  * There is a list of reserved variables that will be replaced by the actual values:
-      * `${MEMBER-CLUSTER-NAME}`:  this will be replaced by the name of the `memberCluster` that represents this cluster.
+    * If the `op` is `remove`, the value cannot be set.
+    * There is a list of reserved variables that will be replaced by the actual values:
+        * `${MEMBER-CLUSTER-NAME}`:  this will be replaced by the name of the `memberCluster` that represents this cluster.
 
-For example, to add a label to the `Deployment` named `my-deployment` on clusters with the label `env: prod`,
+##### Example: Override Labels
+
+To add a label to the `Deployment` named `my-deployment` on clusters with the label `env: prod`,
 you can use the following configuration:
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1alpha1
@@ -265,8 +185,95 @@ spec:
 ```
 The `ResourceOverride` object above will add a label `cluster-name` with the value of the `memberCluster` name to the `Deployment` named `example-ro` on clusters with the label `env: prod`.
 
+##### Example: Override Image
+
+To override the image of the container in the `Deployment` named `my-deployment` on all clusters with the label `env: prod`:
+```yaml
+apiVersion: placement.kubernetes-fleet.io/v1alpha1
+kind: ResourceOverride
+metadata:
+  name: example-ro
+  namespace: test-namespace
+spec:
+  placement:
+    name: crp-example
+  resourceSelectors:
+    -  group: apps
+       kind: Deployment
+       version: v1
+       name: my-deployment
+  policy:
+    overrideRules:
+      - clusterSelector:
+          clusterSelectorTerms:
+            - labelSelector:
+                matchLabels:
+                  env: prod
+        jsonPatchOverrides:
+          - op: replace
+            path: /spec/template/spec/containers/0/image
+            value: "nginx:1.20.0"
+```
+The `ResourceOverride` object above will replace the image of the container in the `Deployment` named `my-deployment`
+with the image `nginx:1.20.0` on all clusters with the label `env: prod` selected by the clusterResourcePlacement `crp-example`.
+> The ResourceOverride mentioned above utilizes the deployment displayed below:
+> ```
+> apiVersion: apps/v1
+> kind: Deployment
+> metadata:
+>   ...
+>   name: my-deployment
+>   namespace: test-namespace
+>   ...
+> spec:
+>   ...
+>   template:
+>     ...
+>     spec:
+>       containers:
+>       - image: nginx:1.14.2
+>         imagePullPolicy: IfNotPresent
+>         name: nginx
+>         ports:
+>        ...
+>       ...
+>   ...
+>```
+
+#### Delete
+
+The `Delete` override type can be used to delete the selected resources on the target cluster.
+
+##### Example: Delete Selected Resource
+
+To delete the `my-deployment` on the clusters with the label `env: test` selected by the clusterResourcePlacement `crp-example`,
+you can use the `Delete` override type.
+```yaml
+apiVersion: placement.kubernetes-fleet.io/v1alpha1
+kind: ResourceOverride
+metadata:
+  name: example-ro
+  namespace: test-namespace
+spec:
+  placement:
+    name: crp-example
+  resourceSelectors:
+    -  group: apps
+       kind: Deployment
+       version: v1
+       name: my-deployment
+  policy:
+    overrideRules:
+      - clusterSelector:
+          clusterSelectorTerms:
+            - labelSelector:
+                matchLabels:
+                  env: test
+        overrideType: Delete
+```
 
 ### Multiple Override Rules
+
 You may add multiple `OverrideRules` to a `Policy` to apply multiple changes to the selected resources.
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1alpha1
