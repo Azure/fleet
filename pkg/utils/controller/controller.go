@@ -37,6 +37,7 @@ const (
 	labelRequeueAfter = "requeue_after"
 	labelRequeue      = "requeue"
 	labelSuccess      = "success"
+	LabelComplete     = "complete"
 )
 
 var (

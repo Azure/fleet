@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,6 +29,7 @@ import (
 	"go.goms.io/fleet/pkg/utils/annotations"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/controller/metrics"
 	"go.goms.io/fleet/pkg/utils/defaulter"
 	"go.goms.io/fleet/pkg/utils/labels"
 	"go.goms.io/fleet/pkg/utils/resource"
@@ -99,6 +101,7 @@ func (r *Reconciler) handleDelete(ctx context.Context, crp *fleetv1beta1.Cluster
 	}
 	klog.V(2).InfoS("Removed crp-cleanup finalizer", "clusterResourcePlacement", crpKObj)
 	r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementCleanupFinalizerRemoved", "Deleted the snapshots and removed the placement cleanup finalizer")
+	metrics.FleetPlacementCount.Delete(prometheus.Labels{"name": crp.Name, "status": controller.LabelComplete})
 	return ctrl.Result{}, nil
 }
 
@@ -219,10 +222,12 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 			klog.V(2).InfoS("Placement has finished the rollout process and reached the desired status", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
 			r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementRolloutCompleted", "Placement has finished the rollout process and reached the desired status")
 		}
+		metrics.FleetPlacementCount.WithLabelValues(crp.Name, controller.LabelComplete).Set(1)
 		// We don't need to requeue any request now by watching the binding changes
 		return ctrl.Result{}, nil
 	}
 
+	metrics.FleetPlacementCount.WithLabelValues(crp.Name, controller.LabelComplete).Set(0)
 	if !isClusterScheduled {
 		// Note:
 		// If the scheduledCondition is failed, it means the placement requirement cannot be satisfied fully. For example,
@@ -238,7 +243,6 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 			"clusterResourcePlacement", crpKObj, "scheduledCondition", crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType)), "generation", crp.Generation)
 		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
-
 	klog.V(2).InfoS("Placement rollout has not finished yet and requeue the request", "clusterResourcePlacement", crpKObj, "status", crp.Status, "generation", crp.Generation)
 	// no need to requeue the request as the binding status will be changed but we add a long resync loop just in case.
 	return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
