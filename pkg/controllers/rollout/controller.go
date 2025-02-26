@@ -519,26 +519,21 @@ func determineBindingsToUpdate(
 	maxNumberToRemove := calculateMaxToRemove(crp, targetNumber, readyBindings, canBeUnavailableBindings)
 	// we can still update the bindings that are failed to apply already regardless of the maxNumberToRemove
 	toBeUpdatedBindingList = append(toBeUpdatedBindingList, applyFailedUpdateCandidates...)
-	// pendingRemovalBindingList contains the bindings that are not selected for removal in this round.
-	pendingRemovalBindingList := make([]toBeUpdatedBinding, 0)
 
 	// updateCandidateUnselectedIndex stores the last index of the updateCandidate which are not selected to be updated.
 	// The rolloutStarted condition of these elements from this index should be updated.
 	updateCandidateUnselectedIndex := 0
-	i := 0
-	// we first remove the bindings that are not selected by the scheduler anymore
-	for ; i < maxNumberToRemove && i < len(removeCandidates); i++ {
-		toBeUpdatedBindingList = append(toBeUpdatedBindingList, removeCandidates[i])
-	}
-	j := i
-	for ; j < len(removeCandidates); j++ {
-		// Put all the bindings that are not picked for removal into the pendingRemovalBindingList.
-		pendingRemovalBindingList = append(pendingRemovalBindingList, removeCandidates[j])
-	}
-	// we then update the bound bindings to the latest resource resourceBinding which will lead them to be unavailable for a short period of time
-	for ; i < maxNumberToRemove && updateCandidateUnselectedIndex < len(updateCandidates); i++ {
-		toBeUpdatedBindingList = append(toBeUpdatedBindingList, updateCandidates[updateCandidateUnselectedIndex])
-		updateCandidateUnselectedIndex++
+	if maxNumberToRemove > 0 {
+		i := 0
+		// we first remove the bindings that are not selected by the scheduler anymore
+		for ; i < maxNumberToRemove && i < len(removeCandidates); i++ {
+			toBeUpdatedBindingList = append(toBeUpdatedBindingList, removeCandidates[i])
+		}
+		// we then update the bound bindings to the latest resource resourceBinding which will lead them to be unavailable for a short period of time
+		for ; i < maxNumberToRemove && updateCandidateUnselectedIndex < len(updateCandidates); i++ {
+			toBeUpdatedBindingList = append(toBeUpdatedBindingList, updateCandidates[updateCandidateUnselectedIndex])
+			updateCandidateUnselectedIndex++
+		}
 	}
 
 	// calculate the max number of bindings that can be added according to user specified MaxSurge
@@ -559,11 +554,6 @@ func determineBindingsToUpdate(
 	if boundingCandidatesUnselectedIndex < len(boundingCandidates) {
 		staleUnselectedBinding = append(staleUnselectedBinding, boundingCandidates[boundingCandidatesUnselectedIndex:]...)
 	}
-	// Append the pending removal bindings to the staleUnselectedBinding list.
-	//
-	// This is necessary as these bindings might also need a status update (e.g., their apply strategies
-	// have been updated).
-	staleUnselectedBinding = append(staleUnselectedBinding, pendingRemovalBindingList...)
 	return toBeUpdatedBindingList, staleUnselectedBinding
 }
 
@@ -910,16 +900,22 @@ func handleResourceBindingUpdated(objectOld, objectNew client.Object, q workqueu
 	klog.V(2).InfoS("A resourceBinding is updated but we don't need to handle it", "resourceBinding", klog.KObj(newBinding))
 }
 
-// updateStaleBindingsStatus updates the status of the stale bindings to indicate that they are
-// blocked by the rollout strategy.
+// updateStaleBindingsStatus updates the status of the stale bindings to indicate that they are blocked by the rollout strategy.
+// Note: the binding state should be "Scheduled" or "Bound".
+// The desired binding will be ignored.
 func (r *Reconciler) updateStaleBindingsStatus(ctx context.Context, staleBindings []toBeUpdatedBinding) error {
 	if len(staleBindings) == 0 {
 		return nil
 	}
-	// Issue all the requests in parallel.
+	// issue all the update requests in parallel
 	errs, cctx := errgroup.WithContext(ctx)
 	for i := 0; i < len(staleBindings); i++ {
 		binding := staleBindings[i]
+		if binding.currentBinding.Spec.State != fleetv1beta1.BindingStateScheduled && binding.currentBinding.Spec.State != fleetv1beta1.BindingStateBound {
+			klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("invalid stale binding state %s", binding.currentBinding.Spec.State)),
+				"Found a stale binding with unexpected state", "clusterResourceBinding", klog.KObj(binding.currentBinding))
+			continue
+		}
 		errs.Go(func() error {
 			return r.updateBindingStatus(cctx, binding.currentBinding, false)
 		})
@@ -1001,8 +997,7 @@ func (r *Reconciler) processApplyStrategyUpdates(
 		// Verify if the binding has the latest apply strategy set.
 		if equality.Semantic.DeepEqual(binding.Spec.ApplyStrategy, applyStrategy) {
 			// The binding already has the latest apply strategy set; no need to push the update.
-			klog.V(2).InfoS("The binding already has the latest apply strategy; skip the apply strategy update", "clusterResourceBinding", klog.KObj(binding))
-			klog.V(2).InfoS("Apply strategy no update generations", "now", binding.Generation)
+			klog.V(2).InfoS("The binding already has the latest apply strategy; skip the apply strategy update", "clusterResourceBinding", klog.KObj(binding), "bindingGeneration", binding.Generation)
 			continue
 		}
 
@@ -1014,17 +1009,12 @@ func (r *Reconciler) processApplyStrategyUpdates(
 		updatedBinding.Spec.ApplyStrategy = applyStrategy
 		applyStrategyUpdated = true
 
-		bidx := idx // Re-assign variable to avoid loop variable capture.
 		errs.Go(func() error {
 			if err := r.Client.Patch(childCtx, updatedBinding, client.MergeFrom(binding)); err != nil {
 				klog.ErrorS(err, "Failed to update binding with new apply strategy", "clusterResourceBinding", klog.KObj(binding))
 				return controller.NewAPIServerError(false, err)
 			}
-			klog.V(2).InfoS("Updated binding with new apply strategy", "clusterResourceBinding", klog.KObj(binding))
-			// Update the binding in the allBindings slice; this is a minor optimization to avoid
-			// future updates being rejected by concurrency control.
-			allBindings[bidx] = updatedBinding
-			klog.V(2).InfoS("Apply strategy update generations", "before", binding.Generation, "after", allBindings[bidx].Generation)
+			klog.V(2).InfoS("Updated binding with new apply strategy", "clusterResourceBinding", klog.KObj(binding), "beforeUpdateBindingGeneration", binding.Generation, "afterUpdateBindingGeneration", updatedBinding.Generation)
 			return nil
 		})
 	}
