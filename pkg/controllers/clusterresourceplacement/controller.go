@@ -101,7 +101,7 @@ func (r *Reconciler) handleDelete(ctx context.Context, crp *fleetv1beta1.Cluster
 	}
 	klog.V(2).InfoS("Removed crp-cleanup finalizer", "clusterResourcePlacement", crpKObj)
 	r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementCleanupFinalizerRemoved", "Deleted the snapshots and removed the placement cleanup finalizer")
-	metrics.FleetPlacementCount.Delete(prometheus.Labels{"name": crp.Name, "status": controller.LabelComplete})
+	metrics.FleetPlacementStatus.Delete(prometheus.Labels{"name": crp.Name})
 	return ctrl.Result{}, nil
 }
 
@@ -222,12 +222,12 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 			klog.V(2).InfoS("Placement has finished the rollout process and reached the desired status", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
 			r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementRolloutCompleted", "Placement has finished the rollout process and reached the desired status")
 		}
-		metrics.FleetPlacementCount.WithLabelValues(crp.Name, controller.LabelComplete).Set(1)
+		metrics.FleetPlacementStatus.WithLabelValues(crp.Name).Set(1)
 		// We don't need to requeue any request now by watching the binding changes
 		return ctrl.Result{}, nil
 	}
 
-	metrics.FleetPlacementCount.WithLabelValues(crp.Name, controller.LabelComplete).Set(0)
+	metrics.FleetPlacementStatus.WithLabelValues(crp.Name).Set(0)
 	if !isClusterScheduled {
 		// Note:
 		// If the scheduledCondition is failed, it means the placement requirement cannot be satisfied fully. For example,
