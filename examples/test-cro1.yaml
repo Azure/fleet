@@ -19,5 +19,9 @@ spec:
                   env: canary
         jsonPatchOverrides:
           - op: add
+            # Note: the override will fail if there are no labels on the resource.
+            # To add a new label to an empty map or overwrite the existing labels, please use /metadata/labels.
+            # Path: /metadata/labels
+            # value: {"new-label": "new-value"}
             path: /metadata/labels/new-label
             value: "new-value"
