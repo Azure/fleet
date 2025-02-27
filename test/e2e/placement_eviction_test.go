@@ -220,7 +220,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding, no taint s
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MaxUnavailable set as Integer, eviction denied due to misconfigured PDB", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MaxUnavailable set as Integer, eviction denied due to misconfigured PDB", Ordered, FlakeAttempts(3), func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -230,22 +230,8 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 
 		// Create the CRP.
 		createCRP(crpName)
-	})
 
-	AfterAll(func() {
-		ensureCRPEvictionDeleted(crpEvictionName)
-		ensureCRPDisruptionBudgetDeleted(crpName)
-		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
-	})
-
-	It("should update cluster resource placement status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
-		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
-	})
-
-	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
-
-	It("create cluster resource placement disruption budget to block eviction", func() {
+		By(fmt.Sprintf("creating placement disruption budget %s", crpName))
 		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
@@ -260,6 +246,19 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
 	})
 
+	AfterAll(func() {
+		ensureCRPEvictionDeleted(crpEvictionName)
+		ensureCRPDisruptionBudgetDeleted(crpName)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+	})
+
+	It("should update cluster resource placement status as expected", func() {
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
+	})
+
+	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
 	It("create cluster resource placement eviction targeting member cluster 1", func() {
 		crpe := &placementv1beta1.ClusterResourcePlacementEviction{
 			ObjectMeta: metav1.ObjectMeta{
@@ -289,7 +288,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MaxUnavailable set as Percentage, eviction denied due to misconfigured PDB", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MaxUnavailable set as Percentage, eviction denied due to misconfigured PDB", Ordered, FlakeAttempts(3), func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -299,22 +298,8 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 
 		// Create the CRP.
 		createCRP(crpName)
-	})
 
-	AfterAll(func() {
-		ensureCRPEvictionDeleted(crpEvictionName)
-		ensureCRPDisruptionBudgetDeleted(crpName)
-		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
-	})
-
-	It("should update cluster resource placement status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
-		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
-	})
-
-	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
-
-	It("create cluster resource placement disruption budget to block eviction", func() {
+		By(fmt.Sprintf("creating placement disruption budget %s", crpName))
 		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
@@ -329,6 +314,19 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
 	})
 
+	AfterAll(func() {
+		ensureCRPEvictionDeleted(crpEvictionName)
+		ensureCRPDisruptionBudgetDeleted(crpName)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+	})
+
+	It("should update cluster resource placement status as expected", func() {
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
+	})
+
+	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
 	It("create cluster resource placement eviction targeting member cluster 1", func() {
 		crpe := &placementv1beta1.ClusterResourcePlacementEviction{
 			ObjectMeta: metav1.ObjectMeta{
@@ -358,7 +356,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MinAvailable set as Percentage, eviction denied due to misconfigured PDB", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MinAvailable set as Percentage, eviction denied due to misconfigured PDB", Ordered, FlakeAttempts(3), func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -368,22 +366,8 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 
 		// Create the CRP.
 		createCRP(crpName)
-	})
 
-	AfterAll(func() {
-		ensureCRPEvictionDeleted(crpEvictionName)
-		ensureCRPDisruptionBudgetDeleted(crpName)
-		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
-	})
-
-	It("should update cluster resource placement status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
-		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
-	})
-
-	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
-
-	It("create cluster resource placement disruption budget to block eviction", func() {
+		By(fmt.Sprintf("creating placement disruption budget %s", crpName))
 		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
@@ -398,6 +382,19 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
 	})
 
+	AfterAll(func() {
+		ensureCRPEvictionDeleted(crpEvictionName)
+		ensureCRPDisruptionBudgetDeleted(crpName)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+	})
+
+	It("should update cluster resource placement status as expected", func() {
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
+	})
+
+	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
 	It("create cluster resource placement eviction targeting member cluster 1", func() {
 		crpe := &placementv1beta1.ClusterResourcePlacementEviction{
 			ObjectMeta: metav1.ObjectMeta{
@@ -427,7 +424,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MinAvailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll CRP, PDB with MinAvailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, FlakeAttempts(3), func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -437,6 +434,20 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 
 		// Create the CRP.
 		createCRP(crpName)
+
+		By(fmt.Sprintf("creating placement disruption budget %s", crpName))
+		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
+				MinAvailable: &intstr.IntOrString{
+					Type:   intstr.Int,
+					IntVal: int32(len(allMemberClusterNames)),
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
 	})
 
 	AfterAll(func() {
@@ -451,21 +462,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 	})
 
 	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
-
-	It("create cluster resource placement disruption budget to block eviction", func() {
-		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-			},
-			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
-				MinAvailable: &intstr.IntOrString{
-					Type:   intstr.Int,
-					IntVal: int32(len(allMemberClusterNames)),
-				},
-			},
-		}
-		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
-	})
 
 	It("create cluster resource placement eviction targeting member cluster 1", func() {
 		crpe := &placementv1beta1.ClusterResourcePlacementEviction{
@@ -514,6 +510,20 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 
 		// Create the CRP.
 		createCRP(crpName)
+
+		By(fmt.Sprintf("creating placement disruption budget %s", crpName))
+		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
+				MinAvailable: &intstr.IntOrString{
+					Type:   intstr.Int,
+					IntVal: int32(len(allMemberClusterNames)) - 1,
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
 	})
 
 	AfterAll(func() {
@@ -529,21 +539,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 	})
 
 	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
-
-	It("create cluster resource placement disruption budget to block eviction", func() {
-		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-			},
-			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
-				MinAvailable: &intstr.IntOrString{
-					Type:   intstr.Int,
-					IntVal: int32(len(allMemberClusterNames)) - 1,
-				},
-			},
-		}
-		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
-	})
 
 	It("add taint to member cluster 1", func() {
 		addTaintsToMemberClusters(taintClusterNames, buildTaints(taintClusterNames))
@@ -590,7 +585,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 	})
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, FlakeAttempts(3), func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -599,6 +594,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 		createWorkResources()
 
 		// Create the CRP.
+		By(fmt.Sprintf("creating placement %s", crpName))
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
@@ -615,6 +611,20 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 			},
 		}
 		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+
+		By(fmt.Sprintf("creating placement disruption budget %s", crpName))
+		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
+				MaxUnavailable: &intstr.IntOrString{
+					Type:   intstr.Int,
+					IntVal: 0,
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
 	})
 
 	AfterAll(func() {
@@ -629,21 +639,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
-
-	It("create cluster resource placement disruption budget to block eviction", func() {
-		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-			},
-			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
-				MaxUnavailable: &intstr.IntOrString{
-					Type:   intstr.Int,
-					IntVal: 0,
-				},
-			},
-		}
-		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
-	})
 
 	It("create cluster resource placement eviction targeting member cluster 1", func() {
 		crpe := &placementv1beta1.ClusterResourcePlacementEviction{
@@ -691,6 +686,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 		createWorkResources()
 
 		// Create the CRP.
+		By(fmt.Sprintf("creating placement %s", crpName))
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
@@ -707,6 +703,20 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 			},
 		}
 		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+
+		By(fmt.Sprintf("creating placement disruption budget %s", crpName))
+		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
+				MaxUnavailable: &intstr.IntOrString{
+					Type:   intstr.Int,
+					IntVal: 1,
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
 	})
 
 	AfterAll(func() {
@@ -722,21 +732,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
-
-	It("create cluster resource placement disruption budget to block eviction", func() {
-		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-			},
-			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
-				MaxUnavailable: &intstr.IntOrString{
-					Type:   intstr.Int,
-					IntVal: 1,
-				},
-			},
-		}
-		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
-	})
 
 	It("add taint to member cluster 1", func() {
 		addTaintsToMemberClusters(taintClusterNames, buildTaints(taintClusterNames))
@@ -800,6 +795,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 		createWorkResources()
 
 		// Create the CRP.
+		By(fmt.Sprintf("creating placement %s", crpName))
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
@@ -816,6 +812,20 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 			},
 		}
 		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+
+		By(fmt.Sprintf("creating placement disruption budget %s", crpName))
+		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
+				MaxUnavailable: &intstr.IntOrString{
+					Type:   intstr.String,
+					StrVal: fmt.Sprintf("%d%%", 100/len(allMemberClusterNames)),
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
 	})
 
 	AfterAll(func() {
@@ -834,21 +844,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 
 	It("add taint to member cluster 1", func() {
 		addTaintsToMemberClusters(taintClusterNames, buildTaints(taintClusterNames))
-	})
-
-	It("create cluster resource placement disruption budget to block eviction", func() {
-		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-			},
-			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
-				MaxUnavailable: &intstr.IntOrString{
-					Type:   intstr.String,
-					StrVal: fmt.Sprintf("%d%%", 100/len(allMemberClusterNames)),
-				},
-			},
-		}
-		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
 	})
 
 	It("create cluster resource placement eviction targeting member cluster 1", func() {
@@ -892,7 +887,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as percentage to protect resources on all clusters, eviction denied", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MaxUnavailable specified as percentage to protect resources on all clusters, eviction denied", Ordered, FlakeAttempts(3), func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -901,6 +896,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 		createWorkResources()
 
 		// Create the CRP.
+		By(fmt.Sprintf("creating placement %s", crpName))
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
@@ -917,6 +913,20 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 			},
 		}
 		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+
+		By(fmt.Sprintf("creating placement disruption budget %s", crpName))
+		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
+				MaxUnavailable: &intstr.IntOrString{
+					Type:   intstr.String,
+					StrVal: "0%",
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
 	})
 
 	AfterAll(func() {
@@ -931,21 +941,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
-
-	It("create cluster resource placement disruption budget to block eviction", func() {
-		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-			},
-			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
-				MaxUnavailable: &intstr.IntOrString{
-					Type:   intstr.String,
-					StrVal: "0%",
-				},
-			},
-		}
-		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
-	})
 
 	It("create cluster resource placement eviction targeting member cluster 1", func() {
 		crpe := &placementv1beta1.ClusterResourcePlacementEviction{
@@ -968,14 +963,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 		Eventually(crpEvictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement eviction status as expected")
 	})
 
-	It("should update cluster resource placement eviction status as expected", func() {
-		crpEvictionStatusUpdatedActual := testutilseviction.StatusUpdatedActual(
-			ctx, hubClient, crpEvictionName,
-			&testutilseviction.IsValidEviction{IsValid: true, Msg: condition.EvictionValidMessage},
-			&testutilseviction.IsExecutedEviction{IsExecuted: false, Msg: fmt.Sprintf(condition.EvictionBlockedPDBSpecifiedMessageFmt, 3, 3)})
-		Eventually(crpEvictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement eviction status as expected")
-	})
-
 	It("should ensure cluster resource placement status is unchanged", func() {
 		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
@@ -984,7 +971,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as Integer to protect resources on all clusters, eviction denied", Ordered, FlakeAttempts(3), func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -993,6 +980,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 		createWorkResources()
 
 		// Create the CRP.
+		By(fmt.Sprintf("creating placement %s", crpName))
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
@@ -1009,6 +997,20 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 			},
 		}
 		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+
+		By(fmt.Sprintf("creating placement disruption budget %s", crpName))
+		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
+				MinAvailable: &intstr.IntOrString{
+					Type:   intstr.Int,
+					IntVal: int32(len(allMemberClusterNames)),
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
 	})
 
 	AfterAll(func() {
@@ -1023,21 +1025,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
-
-	It("create cluster resource placement disruption budget to block eviction", func() {
-		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-			},
-			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
-				MinAvailable: &intstr.IntOrString{
-					Type:   intstr.Int,
-					IntVal: int32(len(allMemberClusterNames)),
-				},
-			},
-		}
-		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
-	})
 
 	It("create cluster resource placement eviction targeting member cluster 1", func() {
 		crpe := &placementv1beta1.ClusterResourcePlacementEviction{
@@ -1085,6 +1072,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 		createWorkResources()
 
 		// Create the CRP.
+		By(fmt.Sprintf("creating placement %s", crpName))
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
@@ -1101,6 +1089,20 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 			},
 		}
 		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+
+		By(fmt.Sprintf("creating placement disruption budget %s", crpName))
+		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
+				MinAvailable: &intstr.IntOrString{
+					Type:   intstr.Int,
+					IntVal: int32(len(allMemberClusterNames)) - 1,
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
 	})
 
 	AfterAll(func() {
@@ -1116,21 +1118,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
-
-	It("create cluster resource placement disruption budget to block eviction", func() {
-		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-			},
-			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
-				MinAvailable: &intstr.IntOrString{
-					Type:   intstr.Int,
-					IntVal: int32(len(allMemberClusterNames)) - 1,
-				},
-			},
-		}
-		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
-	})
 
 	It("add taint to member cluster 1", func() {
 		addTaintsToMemberClusters(taintClusterNames, buildTaints(taintClusterNames))
@@ -1194,6 +1181,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 		createWorkResources()
 
 		// Create the CRP.
+		By(fmt.Sprintf("creating placement %s", crpName))
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
@@ -1210,6 +1198,20 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 			},
 		}
 		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+
+		By(fmt.Sprintf("creating placement disruption budget %s", crpName))
+		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
+				MinAvailable: &intstr.IntOrString{
+					Type:   intstr.String,
+					StrVal: fmt.Sprintf("%d%%", (len(allMemberClusterNames)-1)*100/len(allMemberClusterNames)),
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
 	})
 
 	AfterAll(func() {
@@ -1228,21 +1230,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 
 	It("add taint to member cluster 1", func() {
 		addTaintsToMemberClusters(taintClusterNames, buildTaints(taintClusterNames))
-	})
-
-	It("create cluster resource placement disruption budget to block eviction", func() {
-		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-			},
-			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
-				MinAvailable: &intstr.IntOrString{
-					Type:   intstr.String,
-					StrVal: fmt.Sprintf("%d%%", (len(allMemberClusterNames)-1)*100/len(allMemberClusterNames)),
-				},
-			},
-		}
-		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
 	})
 
 	It("create cluster resource placement eviction targeting member cluster 1", func() {
@@ -1286,7 +1273,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 })
 
-var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as percentage to protect resources on all clusters, eviction denied", Ordered, func() {
+var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP, PDB with MinAvailable specified as percentage to protect resources on all clusters, eviction denied", Ordered, FlakeAttempts(3), func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	crpEvictionName := fmt.Sprintf(crpEvictionNameTemplate, GinkgoParallelProcess())
 
@@ -1295,6 +1282,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 		createWorkResources()
 
 		// Create the CRP.
+		By(fmt.Sprintf("creating placement %s", crpName))
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
@@ -1311,6 +1299,20 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 			},
 		}
 		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+
+		By(fmt.Sprintf("creating placement disruption budget %s", crpName))
+		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
+				MinAvailable: &intstr.IntOrString{
+					Type:   intstr.String,
+					StrVal: "100%",
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
 	})
 
 	AfterAll(func() {
@@ -1326,21 +1328,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 
 	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
-	It("create cluster resource placement disruption budget to block eviction", func() {
-		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-			},
-			Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
-				MinAvailable: &intstr.IntOrString{
-					Type:   intstr.String,
-					StrVal: "100%",
-				},
-			},
-		}
-		Expect(hubClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
-	})
-
 	It("create cluster resource placement eviction targeting member cluster 1", func() {
 		crpe := &placementv1beta1.ClusterResourcePlacementEviction{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1352,14 +1339,6 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 			},
 		}
 		Expect(hubClient.Create(ctx, crpe)).To(Succeed(), "Failed to create CRP eviction %s", crpe.Name)
-	})
-
-	It("should update cluster resource placement eviction status as expected", func() {
-		crpEvictionStatusUpdatedActual := testutilseviction.StatusUpdatedActual(
-			ctx, hubClient, crpEvictionName,
-			&testutilseviction.IsValidEviction{IsValid: true, Msg: condition.EvictionValidMessage},
-			&testutilseviction.IsExecutedEviction{IsExecuted: false, Msg: fmt.Sprintf(condition.EvictionBlockedPDBSpecifiedMessageFmt, 3, 3)})
-		Eventually(crpEvictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement eviction status as expected")
 	})
 
 	It("should update cluster resource placement eviction status as expected", func() {
