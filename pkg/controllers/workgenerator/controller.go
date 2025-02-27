@@ -44,7 +44,6 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
@@ -1160,14 +1159,19 @@ func setAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding *
 	for _, w := range works {
 		availableCond := meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 		switch {
-		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()) && availableCond.Reason == workapplier.WorkNotAllManifestsTrackableReason:
-			// The Work object has completed the availability check successfully, due to the resources being untrackable.
+		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()) && availableCond.Reason == workapplier.WorkNotAllManifestsTrackableReasonNew:
+			// The Work object has completed the availability check successfully, due to the
+			// resources being untrackable.
+			//
+			// This branch is currently never visited as the work applier would still populate
+			// the Available condition using the old reason string for compatibility reasons.
 			if firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes == nil {
 				firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes = w
 			}
-		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()) && availableCond.Reason == work.WorkNotTrackableReason:
-			// This is a compatibility branch same as the one above as there might be cases
-			// where the hub agent and the member agent are not upgraded in synchronization.
+		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()) && availableCond.Reason == workapplier.WorkNotAllManifestsTrackableReason:
+			// The Work object has completed the availability check successfully, due to the
+			// resources being untrackable. This is the same branch as the one above but checks
+			// for the old reason string; it is kept for compatibility reasons.
 			//
 			// TO-DO (chenyu1): drop this branch after the rollout completes.
 			if firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes == nil {

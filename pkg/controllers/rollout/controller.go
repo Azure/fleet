@@ -30,7 +30,7 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	bindingutils "go.goms.io/fleet/pkg/utils/binding"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -623,10 +623,10 @@ func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOf
 	// find the latest applied condition that has the same generation as the binding
 	availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
 	if condition.IsConditionStatusTrue(availableCondition, binding.GetGeneration()) {
-		// TO-DO (chenyu1): currently it checks for the old reason (from the old work applier)
-		// as the Fleet hub agent and member agent might not get updated in synchronization; this
-		// can be removed once the rollout completes successfully.
-		if availableCondition.Reason != condition.WorkNotAvailabilityTrackableReason && availableCondition.Reason != work.WorkNotTrackableReason {
+		// TO-DO (chenyu1): currently it checks for both the new and the old reason
+		// (as set previously by the work generator) to avoid compatibility issues.
+		// the check for the old reason can be removed once the rollout completes successfully.
+		if availableCondition.Reason != condition.WorkNotAvailabilityTrackableReason && availableCondition.Reason != workapplier.WorkNotAllManifestsTrackableReason {
 			return 0, true
 		}
 

@@ -700,6 +700,29 @@ func TestIsBindingReady(t *testing.T) {
 			wantReady:       false,
 			wantWaitTime:    time.Millisecond,
 		},
+		"binding available (not trackable with old reason) after the ready time cut off should return not ready with a wait time": {
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 10,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingAvailable),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 10,
+							LastTransitionTime: metav1.Time{
+								Time: now.Add(time.Millisecond),
+							},
+							Reason: workapplier.WorkNotAllManifestsTrackableReason,
+						},
+					},
+				},
+			},
+			readyTimeCutOff: now,
+			wantReady:       false,
+			wantWaitTime:    time.Millisecond,
+		},
 		"binding not available should return not ready with a negative wait time": {
 			binding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
