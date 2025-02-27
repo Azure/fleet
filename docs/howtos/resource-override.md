@@ -19,7 +19,7 @@ The following sections discuss these components in depth.
 
 ## Placement
 
-To configure which placement the override is applied to, you can use the name of `ResourcePlacement`.
+To configure which placement the override is applied to, you can use the name of `ClusterResourcePlacement`.
 
 ## Resource Selectors
 A `ResourceOverride` object may feature one or more resource selectors, specifying which resources to select to be overridden.
@@ -154,7 +154,7 @@ The `jsonPatchOverrides` field supports the following fields:
 
 ##### Example: Override Labels
 
-To add a label to the `Deployment` named `my-deployment` on clusters with the label `env: prod`,
+To overwrite the existing labels on the `Deployment` named `my-deployment` on clusters with the label `env: prod`,
 you can use the following configuration:
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1alpha1
@@ -183,6 +183,14 @@ spec:
             value:
               {"cluster-name":"${MEMBER-CLUSTER-NAME}"}
 ```
+
+> Note: To add a new label to the existing labels, please use the below configuration:
+> ```yaml
+>  - op: add
+>    path: /metadata/labels/new-label
+>    value: "new-value"
+> ```
+
 The `ResourceOverride` object above will add a label `cluster-name` with the value of the `memberCluster` name to the `Deployment` named `example-ro` on clusters with the label `env: prod`.
 
 ##### Example: Override Image

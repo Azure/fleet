@@ -122,7 +122,7 @@ The jsonPatchOverrides field supports the following fields:
 
 ##### Example: Override Labels
     
-For example, to add a label to the `ClusterRole` named `secret-reader` on clusters with the label `env: prod`,
+To overwrite the existing labels on the `ClusterRole` named `secret-reader` on clusters with the label `env: prod`,
 you can use the following configuration:
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1alpha1
@@ -150,6 +150,14 @@ spec:
             value:
               {"cluster-name":"${MEMBER-CLUSTER-NAME}"}
 ```
+
+> Note: To add a new label to the existing labels, please use the below configuration:
+> ```yaml
+>  - op: add
+>    path: /metadata/labels/new-label
+>    value: "new-value"
+> ```
+
 The `ClusterResourceOverride` object above will add a label `cluster-name` with the value of the `memberCluster` name to the `ClusterRole` named `secret-reader` on clusters with the label `env: prod`.
 
 ##### Example: Remove Verbs
