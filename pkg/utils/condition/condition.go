@@ -14,6 +14,8 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
+// TO-DO (chenyu1): move condition reasons in use by the work applier here.
+
 // A group of condition reason string which is used to populate the placement condition.
 const (
 	// RolloutStartedUnknownReason is the reason string of placement condition if rollout status is
