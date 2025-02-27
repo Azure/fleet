@@ -40,6 +40,8 @@ kind: ClusterResourceOverride
 metadata:
   name: example-cro
 spec:
+  placement:
+    name: crp-example
   clusterResourceSelectors:
     - group: rbac.authorization.k8s.io
       kind: ClusterRole
@@ -47,7 +49,7 @@ spec:
       name: secret-reader
 ```
 
-The example above will pick the `ClusterRole` named `secret-reader`, as shown below, to be overridden.
+The example in the tutorial will pick the `ClusterRole` named `secret-reader`, as shown below, to be overridden.
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -58,7 +60,6 @@ rules:
   resources: ["secrets"]
   verbs: ["get", "watch", "list"]
 ```
-
 
 ## Policy
 The `Policy` is made up of a set of rules (`OverrideRules`) that specify the changes to be applied to the selected
@@ -71,82 +72,22 @@ Each `OverrideRule` supports the following fields:
   - `Delete`: deletes the selected resources on the target cluster.
 - **JSON Patch Override**: This specifies the changes to be applied to the selected resources when the override type is `JSONPatch`.
 
-To add an override rule, edit the `policy` field in the `ClusterResourceOverride` spec:
-```yaml
-apiVersion: placement.kubernetes-fleet.io/v1alpha1
-kind: ClusterResourceOverride
-metadata:
-  name: example-cro
-spec:
-  placement:
-    name: crp-example
-  clusterResourceSelectors:
-    - group: rbac.authorization.k8s.io
-      kind: ClusterRole
-      version: v1
-      name: secret-reader
-  policy:
-    overrideRules:
-      - clusterSelector:
-          clusterSelectorTerms:
-            - labelSelector:
-                matchLabels:
-                  env: prod
-        jsonPatchOverrides:
-          - op: remove
-            path: /rules/0/verbs/2
-```
-The `ClusterResourceOverride` object above will remove the verb "list" in the `ClusterRole` named `secret-reader` on 
-clusters with the label `env: prod` selected by the clusterResourcePlacement `crp-example`.
-
-> The ClusterResourceOverride mentioned above utilizes the cluster role displayed below:
-> ```
-> Name:         secret-reader
-> Labels:       <none>
-> Annotations:  <none>
-> PolicyRule:
-> Resources  Non-Resource URLs  Resource Names  Verbs
-> ---------  -----------------  --------------  -----
-> secrets    []                 []              [get watch list]
->```
-
-To delete the `secret-reader` on the clusters with the label `env: test` selected by the clusterResourcePlacement `crp-example`, you can use the `Delete` override type.
-```yaml
-apiVersion: placement.kubernetes-fleet.io/v1alpha1
-kind: ClusterResourceOverride
-metadata:
-  name: example-cro
-spec:
-  placement:
-    name: crp-example
-  clusterResourceSelectors:
-    - group: rbac.authorization.k8s.io
-      kind: ClusterRole
-      version: v1
-      name: secret-reader
-  policy:
-    overrideRules:
-      - clusterSelector:
-          clusterSelectorTerms:
-            - labelSelector:
-                matchLabels:
-                  env: test
-        overrideType: Delete
-```
-
 ### Cluster Selector
+
 To specify the clusters to which the override applies, you can use the `clusterSelector` field in the `OverrideRule` spec.
 The `clusterSelector` field supports the following fields:
 - `clusterSelectorTerms`: A list of terms that are used to select clusters.
     * Each term in the list is used to select clusters based on the label selector.
 
 ### Override Type
+
 To specify the type of override to be applied, you can use the overrideType field in the OverrideRule spec.
 The default value is `JSONPatch`. 
 - `JSONPatch`: applies the JSON patch to the selected resources using [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
 - `Delete`: deletes the selected resources on the target cluster.
 
-### JSON Patch Override
+#### JSON Patch Override
+
 To specify the changes to be applied to the selected resources, you can use the jsonPatchOverrides field in the OverrideRule spec. 
 The jsonPatchOverrides field supports the following fields:
 
@@ -179,7 +120,9 @@ The jsonPatchOverrides field supports the following fields:
     * There is a list of reserved variables that will be replaced by the actual values:
       * `${MEMBER-CLUSTER-NAME}`:  this will be replaced by the name of the `memberCluster` that represents this cluster.
 
-For example, to add a label to the `ClusterRole` named `secret-reader` on clusters with the label `env: prod`,
+##### Example: Override Labels
+    
+To overwrite the existing labels on the `ClusterRole` named `secret-reader` on clusters with the label `env: prod`,
 you can use the following configuration:
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1alpha1
@@ -207,7 +150,86 @@ spec:
             value:
               {"cluster-name":"${MEMBER-CLUSTER-NAME}"}
 ```
+
+> Note: To add a new label to the existing labels, please use the below configuration:
+> ```yaml
+>  - op: add
+>    path: /metadata/labels/new-label
+>    value: "new-value"
+> ```
+
 The `ClusterResourceOverride` object above will add a label `cluster-name` with the value of the `memberCluster` name to the `ClusterRole` named `secret-reader` on clusters with the label `env: prod`.
+
+##### Example: Remove Verbs
+
+To remove the verb "list" in the `ClusterRole` named `secret-reader` on clusters with the label `env: prod`,
+
+```yaml
+apiVersion: placement.kubernetes-fleet.io/v1alpha1
+kind: ClusterResourceOverride
+metadata:
+  name: example-cro
+spec:
+  placement:
+    name: crp-example
+  clusterResourceSelectors:
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+      version: v1
+      name: secret-reader
+  policy:
+    overrideRules:
+      - clusterSelector:
+          clusterSelectorTerms:
+            - labelSelector:
+                matchLabels:
+                  env: prod
+        jsonPatchOverrides:
+          - op: remove
+            path: /rules/0/verbs/2
+```
+The `ClusterResourceOverride` object above will remove the verb "list" in the `ClusterRole` named `secret-reader` on
+clusters with the label `env: prod` selected by the clusterResourcePlacement `crp-example`.
+
+> The ClusterResourceOverride mentioned above utilizes the cluster role displayed below:
+> ```
+> Name:         secret-reader
+> Labels:       <none>
+> Annotations:  <none>
+> PolicyRule:
+> Resources  Non-Resource URLs  Resource Names  Verbs
+> ---------  -----------------  --------------  -----
+> secrets    []                 []              [get watch list]
+>```
+
+#### Delete
+
+The `Delete` override type can be used to delete the selected resources on the target cluster.
+
+##### Example: Delete Selected Resource
+To delete the `secret-reader` on the clusters with the label `env: test` selected by the clusterResourcePlacement `crp-example`, you can use the `Delete` override type.
+```yaml
+apiVersion: placement.kubernetes-fleet.io/v1alpha1
+kind: ClusterResourceOverride
+metadata:
+  name: example-cro
+spec:
+  placement:
+    name: crp-example
+  clusterResourceSelectors:
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+      version: v1
+      name: secret-reader
+  policy:
+    overrideRules:
+      - clusterSelector:
+          clusterSelectorTerms:
+            - labelSelector:
+                matchLabels:
+                  env: test
+        overrideType: Delete
+```
 
 ### Multiple Override Patches
 You may add multiple `JSONPatchOverride` to an `OverrideRule` to apply multiple changes to the selected cluster resources.
@@ -290,7 +312,6 @@ spec:
 The `ClusterResourcePlacement` configuration outlined above will disperse resources across all clusters labeled with `env: prod`. 
 As the changes are implemented, the corresponding `ClusterResourceOverride` configurations will be applied to the 
 designated clusters, triggered by the selection of matching cluster role resource `secret-reader`.
-
 
 ## Verifying the Cluster Resource is Overridden
 To ensure that the `ClusterResourceOverride` object is applied to the selected clusters, verify the `ClusterResourcePlacement`
