@@ -24,8 +24,16 @@ var (
 )
 
 func main() {
+	hubClusterContext := flag.String("hubClusterContext", "", "the kubectl context for the hub cluster")
 	clusterName := flag.String("clusterName", "", "name of the cluster to cordon")
 	flag.Parse()
+
+	if *hubClusterContext == "" {
+		log.Fatalf("hub cluster context for kubectl cannot be empty")
+	}
+	if *clusterName == "" {
+		log.Fatalf("cluster name to cordon cannot be empty")
+	}
 
 	if err := clusterv1beta1.AddToScheme(scheme); err != nil {
 		log.Fatalf("failed to add custom APIs (cluster) to the runtime scheme: %v", err)
@@ -95,7 +103,8 @@ func main() {
 	}
 
 	// create eviction objects for all <crpName, targetCluster>.
-	for crpName, _ := range crpNameMap {
+	for crpName := range crpNameMap {
+		// TODO: check to see if eviction object already exists, delete it.
 		eviction := placementv1beta1.ClusterResourcePlacementEviction{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-eviction" + crpName,
@@ -116,15 +125,21 @@ func updateMemberClusterWithTaint(ctx context.Context, hubClient client.Client, 
 	if err := hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc); err != nil {
 		return err
 	}
+	cordonTaint := clusterv1beta1.Taint{
+		Key:    "cordon-key",
+		Value:  "cordon-value",
+		Effect: "NoSchedule",
+	}
+
+	// search to see cordonTaint already exists on the cluster.
+	for i := range mc.Spec.Taints {
+		if mc.Spec.Taints[i].Key == cordonTaint.Key {
+			return nil
+		}
+	}
 
 	// add taint to member cluster to cordon.
-	mc.Spec.Taints = []clusterv1beta1.Taint{
-		{
-			Key:    "cordon-key",
-			Value:  "cordon-value",
-			Effect: "NoSchedule",
-		},
-	}
+	mc.Spec.Taints = append(mc.Spec.Taints, cordonTaint)
 
 	return hubClient.Update(ctx, &mc)
 }
