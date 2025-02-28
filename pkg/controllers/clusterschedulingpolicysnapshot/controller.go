@@ -64,7 +64,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	return ctrl.NewControllerManagedBy(mgr).Named("clusterschedulingpolicysnapshot-watcher").
 		For(&fleetv1beta1.ClusterSchedulingPolicySnapshot{}).
 		WithEventFilter(predicate.Funcs{
 			// skipping delete and create events so that CRP controller does not need to update the status.

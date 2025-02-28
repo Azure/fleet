@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.15.0
+    controller-gen.kubebuilder.io/version: v0.16.0
   name: memberclusters.cluster.kubernetes-fleet.io
 spec:
   group: cluster.kubernetes-fleet.io
@@ -114,7 +114,6 @@ spec:
                 description: |-
                   If specified, the MemberCluster's taints.
 
-
                   This field is beta-level and is for the taints and tolerations feature.
                 items:
                   description: |-
@@ -157,18 +156,8 @@ spec:
                       description: Conditions is an array of current observed conditions
                         for the member agent.
                       items:
-                        description: "Condition contains details for one aspect of
-                          the current state of this API Resource.\n---\nThis struct
-                          is intended for direct use as an array at the field path
-                          .status.conditions.  For example,\n\n\n\ttype FooStatus
-                          struct{\n\t    // Represents the observations of a foo's
-                          current state.\n\t    // Known .status.conditions.type are:
-                          \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
-                          +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    //
-                          +listType=map\n\t    // +listMapKey=type\n\t    Conditions
-                          []metav1.Condition `json:\"conditions,omitempty\" patchStrategy:\"merge\"
-                          patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                          \   // other fields\n\t}"
+                        description: Condition contains details for one aspect of
+                          the current state of this API Resource.
                         properties:
                           lastTransitionTime:
                             description: |-
@@ -210,12 +199,7 @@ spec:
                             - Unknown
                             type: string
                           type:
-                            description: |-
-                              type of condition in CamelCase or in foo.example.com/CamelCase.
-                              ---
-                              Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                              useful (see .node.status.conditions), the ability to deconflict is important.
-                              The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                            description: type of condition in CamelCase or in foo.example.com/CamelCase.
                             maxLength: 316
                             pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                             type: string
@@ -246,16 +230,8 @@ spec:
                 description: Conditions is an array of current observed conditions
                   for the member cluster.
                 items:
-                  description: "Condition contains details for one aspect of the current
-                    state of this API Resource.\n---\nThis struct is intended for
-                    direct use as an array at the field path .status.conditions.  For
-                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
-                    observations of a foo's current state.\n\t    // Known .status.conditions.type
-                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
-                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
-                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                    \   // other fields\n\t}"
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
                   properties:
                     lastTransitionTime:
                       description: |-
@@ -296,12 +272,7 @@ spec:
                       - Unknown
                       type: string
                     type:
-                      description: |-
-                        type of condition in CamelCase or in foo.example.com/CamelCase.
-                        ---
-                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                        useful (see .node.status.conditions), the ability to deconflict is important.
-                        The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
                       maxLength: 316
                       pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                       type: string
@@ -329,7 +300,6 @@ spec:
                       description: |-
                         Value is the value of the cluster property.
 
-
                         Currently, it should be a valid Kubernetes quantity.
                         For more information, see
                         https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
@@ -340,7 +310,6 @@ spec:
                   type: object
                 description: |-
                   Properties is an array of properties observed for the member cluster.
-
 
                   This field is beta-level; it is for the property-based scheduling feature and is only
                   populated when a property provider is enabled in the deployment.
@@ -359,11 +328,9 @@ spec:
                     description: |-
                       Allocatable represents the total allocatable resources of all the nodes on a member cluster.
 
-
                       A node's allocatable capacity is the amount of resource that can actually be used
                       for user workloads, i.e.,
                       allocatable capacity = total capacity - capacities reserved for the OS, kubelet, etc.
-
 
                       For more information, see
                       https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/.
@@ -378,10 +345,8 @@ spec:
                     description: |-
                       Available represents the total available resources of all the nodes on a member cluster.
 
-
                       A node's available capacity is the amount of resource that has not been used yet, i.e.,
                       available capacity = allocatable capacity - capacity that has been requested by workloads.
-
 
                       This field is beta-level; it is for the property-based scheduling feature and is only
                       populated when a property provider is enabled in the deployment.
@@ -395,7 +360,6 @@ spec:
                       x-kubernetes-int-or-string: true
                     description: |-
                       Capacity represents the total resource capacity of all the nodes on a member cluster.
-
 
                       A node's total capacity is the amount of resource installed on the node.
                     type: object
@@ -510,7 +474,6 @@ spec:
                 description: |-
                   If specified, the MemberCluster's taints.
 
-
                   This field is beta-level and is for the taints and tolerations feature.
                 items:
                   description: |-
@@ -553,18 +516,8 @@ spec:
                       description: Conditions is an array of current observed conditions
                         for the member agent.
                       items:
-                        description: "Condition contains details for one aspect of
-                          the current state of this API Resource.\n---\nThis struct
-                          is intended for direct use as an array at the field path
-                          .status.conditions.  For example,\n\n\n\ttype FooStatus
-                          struct{\n\t    // Represents the observations of a foo's
-                          current state.\n\t    // Known .status.conditions.type are:
-                          \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
-                          +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    //
-                          +listType=map\n\t    // +listMapKey=type\n\t    Conditions
-                          []metav1.Condition `json:\"conditions,omitempty\" patchStrategy:\"merge\"
-                          patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                          \   // other fields\n\t}"
+                        description: Condition contains details for one aspect of
+                          the current state of this API Resource.
                         properties:
                           lastTransitionTime:
                             description: |-
@@ -606,12 +559,7 @@ spec:
                             - Unknown
                             type: string
                           type:
-                            description: |-
-                              type of condition in CamelCase or in foo.example.com/CamelCase.
-                              ---
-                              Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                              useful (see .node.status.conditions), the ability to deconflict is important.
-                              The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                            description: type of condition in CamelCase or in foo.example.com/CamelCase.
                             maxLength: 316
                             pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                             type: string
@@ -642,16 +590,8 @@ spec:
                 description: Conditions is an array of current observed conditions
                   for the member cluster.
                 items:
-                  description: "Condition contains details for one aspect of the current
-                    state of this API Resource.\n---\nThis struct is intended for
-                    direct use as an array at the field path .status.conditions.  For
-                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
-                    observations of a foo's current state.\n\t    // Known .status.conditions.type
-                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
-                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
-                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                    \   // other fields\n\t}"
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
                   properties:
                     lastTransitionTime:
                       description: |-
@@ -692,12 +632,7 @@ spec:
                       - Unknown
                       type: string
                     type:
-                      description: |-
-                        type of condition in CamelCase or in foo.example.com/CamelCase.
-                        ---
-                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                        useful (see .node.status.conditions), the ability to deconflict is important.
-                        The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
                       maxLength: 316
                       pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                       type: string
@@ -725,7 +660,6 @@ spec:
                       description: |-
                         Value is the value of the cluster property.
 
-
                         Currently, it should be a valid Kubernetes quantity.
                         For more information, see
                         https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
@@ -736,7 +670,6 @@ spec:
                   type: object
                 description: |-
                   Properties is an array of properties observed for the member cluster.
-
 
                   This field is beta-level; it is for the property-based scheduling feature and is only
                   populated when a property provider is enabled in the deployment.
@@ -755,11 +688,9 @@ spec:
                     description: |-
                       Allocatable represents the total allocatable resources of all the nodes on a member cluster.
 
-
                       A node's allocatable capacity is the amount of resource that can actually be used
                       for user workloads, i.e.,
                       allocatable capacity = total capacity - capacities reserved for the OS, kubelet, etc.
-
 
                       For more information, see
                       https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/.
@@ -774,10 +705,8 @@ spec:
                     description: |-
                       Available represents the total available resources of all the nodes on a member cluster.
 
-
                       A node's available capacity is the amount of resource that has not been used yet, i.e.,
                       available capacity = allocatable capacity - capacity that has been requested by workloads.
-
 
                       This field is beta-level; it is for the property-based scheduling feature and is only
                       populated when a property provider is enabled in the deployment.
@@ -791,7 +720,6 @@ spec:
                       x-kubernetes-int-or-string: true
                     description: |-
                       Capacity represents the total resource capacity of all the nodes on a member cluster.
-
 
                       A node's total capacity is the amount of resource installed on the node.
                     type: object

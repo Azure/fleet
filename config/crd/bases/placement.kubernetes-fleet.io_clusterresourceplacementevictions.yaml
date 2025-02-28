@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.15.0
+    controller-gen.kubebuilder.io/version: v0.16.0
   name: clusterresourceplacementevictions.placement.kubernetes-fleet.io
 spec:
   group: placement.kubernetes-fleet.io
@@ -27,17 +27,14 @@ spec:
           a ClusterResourcePlacement object; one may use this API to force the removal of specific
           resources from a cluster.
 
-
           An eviction is a voluntary disruption; its execution is subject to the disruption budget
           linked with the target ClusterResourcePlacement object (if present).
-
 
           Beware that an eviction alone does not guarantee that a placement will not re-appear; i.e.,
           after an eviction, the Fleet scheduler might still pick the previous target cluster for
           placement. To prevent this, considering adding proper taints to the target cluster before running
           an eviction that will exclude it from future placements; this is especially true in scenarios
           where one would like to perform a cluster replacement.
-
 
           For safety reasons, Fleet will only execute an eviction once; the spec in this object is immutable,
           and once executed, the object will be ignored after. To trigger another eviction attempt on the
@@ -48,11 +45,9 @@ spec:
           (e.g., the CRP object or the placement appears later). To fix the situation, re-create the
           Eviction object.
 
-
           Note: Eviction of resources from a cluster propagated by a PickFixed CRP is not allowed.
           If the user wants to remove resources from a cluster propagated by a PickFixed CRP simply
           remove the cluster name from cluster names field from the CRP spec.
-
 
           Executed evictions might be kept around for a while for auditing purposes; the Fleet controllers might
           have a TTL set up for such objects and will garbage collect them automatically. For further
@@ -78,7 +73,6 @@ spec:
           spec:
             description: |-
               Spec is the desired state of the ClusterResourcePlacementEviction.
-
 
               Note that all fields in the spec are immutable.
             properties:
@@ -111,21 +105,12 @@ spec:
                   Conditions is the list of currently observed conditions for the
                   PlacementEviction object.
 
-
                   Available condition types include:
                   * Valid: whether the Eviction object is valid, i.e., it targets at a valid placement.
                   * Executed: whether the Eviction object has been executed.
                 items:
-                  description: "Condition contains details for one aspect of the current
-                    state of this API Resource.\n---\nThis struct is intended for
-                    direct use as an array at the field path .status.conditions.  For
-                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
-                    observations of a foo's current state.\n\t    // Known .status.conditions.type
-                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
-                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
-                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                    \   // other fields\n\t}"
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
                   properties:
                     lastTransitionTime:
                       description: |-
@@ -166,12 +151,7 @@ spec:
                       - Unknown
                       type: string
                     type:
-                      description: |-
-                        type of condition in CamelCase or in foo.example.com/CamelCase.
-                        ---
-                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                        useful (see .node.status.conditions), the ability to deconflict is important.
-                        The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
                       maxLength: 316
                       pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                       type: string
@@ -206,17 +186,14 @@ spec:
           a ClusterResourcePlacement object; one may use this API to force the removal of specific
           resources from a cluster.
 
-
           An eviction is a voluntary disruption; its execution is subject to the disruption budget
           linked with the target ClusterResourcePlacement object (if present).
-
 
           Beware that an eviction alone does not guarantee that a placement will not re-appear; i.e.,
           after an eviction, the Fleet scheduler might still pick the previous target cluster for
           placement. To prevent this, considering adding proper taints to the target cluster before running
           an eviction that will exclude it from future placements; this is especially true in scenarios
           where one would like to perform a cluster replacement.
-
 
           For safety reasons, Fleet will only execute an eviction once; the spec in this object is immutable,
           and once executed, the object will be ignored after. To trigger another eviction attempt on the
@@ -227,11 +204,9 @@ spec:
           (e.g., the CRP object or the placement appears later). To fix the situation, re-create the
           Eviction object.
 
-
           Note: Eviction of resources from a cluster propagated by a PickFixed CRP is not allowed.
           If the user wants to remove resources from a cluster propagated by a PickFixed CRP simply
           remove the cluster name from cluster names field from the CRP spec.
-
 
           Executed evictions might be kept around for a while for auditing purposes; the Fleet controllers might
           have a TTL set up for such objects and will garbage collect them automatically. For further
@@ -257,7 +232,6 @@ spec:
           spec:
             description: |-
               Spec is the desired state of the ClusterResourcePlacementEviction.
-
 
               Note that all fields in the spec are immutable.
             properties:
@@ -290,21 +264,12 @@ spec:
                   Conditions is the list of currently observed conditions for the
                   PlacementEviction object.
 
-
                   Available condition types include:
                   * Valid: whether the Eviction object is valid, i.e., it targets at a valid placement.
                   * Executed: whether the Eviction object has been executed.
                 items:
-                  description: "Condition contains details for one aspect of the current
-                    state of this API Resource.\n---\nThis struct is intended for
-                    direct use as an array at the field path .status.conditions.  For
-                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
-                    observations of a foo's current state.\n\t    // Known .status.conditions.type
-                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
-                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
-                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                    \   // other fields\n\t}"
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
                   properties:
                     lastTransitionTime:
                       description: |-
@@ -345,12 +310,7 @@ spec:
                       - Unknown
                       type: string
                     type:
-                      description: |-
-                        type of condition in CamelCase or in foo.example.com/CamelCase.
-                        ---
-                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                        useful (see .node.status.conditions), the ability to deconflict is important.
-                        The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
                       maxLength: 316
                       pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                       type: string

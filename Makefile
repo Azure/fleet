@@ -1,5 +1,5 @@
 REGISTRY ?= ghcr.io
-KIND_IMAGE ?= kindest/node:v1.30.0
+KIND_IMAGE ?= kindest/node:v1.31.0
 ifndef TAG
 	TAG ?= $(shell git rev-parse --short=7 HEAD)
 endif
@@ -27,7 +27,7 @@ CLUSTER_CONFIG := $(abspath test/e2e/v1alpha1/kind-config.yaml)
 # Binaries
 # Note: Need to use abspath so we can invoke these from subdirectories
 
-CONTROLLER_GEN_VER := v0.15.0
+CONTROLLER_GEN_VER := v0.16.0
 CONTROLLER_GEN_BIN := controller-gen
 CONTROLLER_GEN := $(abspath $(TOOLS_BIN_DIR)/$(CONTROLLER_GEN_BIN)-$(CONTROLLER_GEN_VER))
 

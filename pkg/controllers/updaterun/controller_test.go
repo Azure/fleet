@@ -286,17 +286,14 @@ func TestHandleClusterApprovalRequest(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			queue := &controllertest.Queue{Interface: workqueue.New()}
+			queue := &controllertest.Queue{TypedInterface: workqueue.NewTypedRateLimitingQueue[reconcile.Request](
+				workqueue.DefaultTypedItemBasedRateLimiter[reconcile.Request]())}
 			handleClusterApprovalRequest(tt.oldObj, tt.newObj, queue)
 			if got := queue.Len() != 0; got != tt.shouldEnqueue {
 				t.Fatalf("handleClusterApprovalRequest() shouldEnqueue test `%s` got %t, want %t", name, got, tt.shouldEnqueue)
 			}
 			if tt.shouldEnqueue {
-				item, _ := queue.Get()
-				req, ok := item.(reconcile.Request)
-				if !ok {
-					t.Fatalf("handleClusterApprovalRequest() queuedItem test `%s` got %T, want reconcile.Request", name, item)
-				}
+				req, _ := queue.TypedInterface.Get()
 				if req.Name != tt.queuedName {
 					t.Fatalf("handleClusterApprovalRequest() queuedName test `%s` got %s, want %s", name, req.Name, tt.queuedName)
 				}

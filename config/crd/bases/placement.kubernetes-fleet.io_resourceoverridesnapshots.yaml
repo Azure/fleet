@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.15.0
+    controller-gen.kubebuilder.io/version: v0.16.0
   name: resourceoverridesnapshots.placement.kubernetes-fleet.io
 spec:
   group: placement.kubernetes-fleet.io
@@ -103,7 +103,6 @@ spec:
                                           LabelSelector is a label query over all the joined member clusters. Clusters matching
                                           the query are selected.
 
-
                                           If you specify both label and property selectors in the same term, the results are AND'd.
                                         properties:
                                           matchExpressions:
@@ -155,13 +154,10 @@ spec:
                                           PropertySelector is a property query over all joined member clusters. Clusters matching
                                           the query are selected.
 
-
                                           If you specify both label and property selectors in the same term, the results are AND'd.
-
 
                                           At this moment, PropertySelector can only be used with
                                           `RequiredDuringSchedulingIgnoredDuringExecution` affinity terms.
-
 
                                           This field is beta-level; it is for the property-based scheduling feature and is only
                                           functional when a property provider is enabled in the deployment.
@@ -191,10 +187,8 @@ spec:
                                                     the observed values of individual member clusters in accordance with the given
                                                     operator.
 
-
                                                     At this moment, each value should be a Kubernetes quantity. For more information, see
                                                     https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
-
 
                                                     If the operator is Gt (greater than), Ge (greater than or equal to), Lt (less than),
                                                     or `Le` (less than or equal to), Eq (equal to), or Ne (ne), exactly one value must be
@@ -217,10 +211,8 @@ spec:
                                           PropertySorter sorts all matching clusters by a specific property and assigns different weights
                                           to each cluster based on their observed property values.
 
-
                                           At this moment, PropertySorter can only be used with
                                           `PreferredDuringSchedulingIgnoredDuringExecution` affinity terms.
-
 
                                           This field is beta-level; it is for the property-based scheduling feature and is only
                                           functional when a property provider is enabled in the deployment.

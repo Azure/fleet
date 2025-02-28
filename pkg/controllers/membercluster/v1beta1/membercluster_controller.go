@@ -672,8 +672,9 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 		r.agents[clusterv1beta1.MultiClusterServiceAgent] = true
 		r.agents[clusterv1beta1.ServiceExportImportAgent] = true
 	}
-	return runtime.NewControllerManagedBy(mgr).
-		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}). // set the max number of concurrent reconciles
+
+	return runtime.NewControllerManagedBy(mgr).Named("memberclusterv1beta1-controller").
+		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles, SkipNameValidation: ptr.To(true)}). // set the max number of concurrent reconciles
 		For(&clusterv1beta1.MemberCluster{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&clusterv1beta1.InternalMemberCluster{}).
 		Complete(r)

@@ -173,7 +173,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		},
 	}
 
-	return ctrl.NewControllerManagedBy(mgr).
+	return ctrl.NewControllerManagedBy(mgr).Named("clusterschedulingpolicysnapshot-scheduler-watcher").
 		For(&fleetv1beta1.ClusterSchedulingPolicySnapshot{}).
 		WithEventFilter(customPredicate).
 		Complete(r)

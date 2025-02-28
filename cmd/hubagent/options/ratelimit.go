@@ -37,7 +37,7 @@ func (o *RateLimitOptions) AddFlags(fs *flag.FlagSet) {
 }
 
 // DefaultControllerRateLimiter provide a default rate limiter for controller, and users can tune it by corresponding flags.
-func DefaultControllerRateLimiter(opts RateLimitOptions) workqueue.RateLimiter {
+func DefaultControllerRateLimiter(opts RateLimitOptions) workqueue.TypedRateLimiter[any] {
 	// set defaults
 	if opts.RateLimiterBaseDelay <= 0 {
 		opts.RateLimiterBaseDelay = 5 * time.Millisecond
@@ -51,8 +51,8 @@ func DefaultControllerRateLimiter(opts RateLimitOptions) workqueue.RateLimiter {
 	if opts.RateLimiterBucketSize <= 0 {
 		opts.RateLimiterBucketSize = 100
 	}
-	return workqueue.NewMaxOfRateLimiter(
-		workqueue.NewItemExponentialFailureRateLimiter(opts.RateLimiterBaseDelay, opts.RateLimiterMaxDelay),
-		&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(opts.RateLimiterQPS), opts.RateLimiterBucketSize)},
+	return workqueue.NewTypedMaxOfRateLimiter[any](
+		workqueue.NewTypedItemExponentialFailureRateLimiter[any](opts.RateLimiterBaseDelay, opts.RateLimiterMaxDelay),
+		&workqueue.TypedBucketRateLimiter[any]{Limiter: rate.NewLimiter(rate.Limit(opts.RateLimiterQPS), opts.RateLimiterBucketSize)},
 	)
 }

@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.15.0
+    controller-gen.kubebuilder.io/version: v0.16.0
   name: clusterstagedupdateruns.placement.kubernetes-fleet.io
 spec:
   group: placement.kubernetes-fleet.io
@@ -116,7 +116,6 @@ spec:
                       on a Fleet-managed resource. If set to false, Fleet will refuse to apply manifests to
                       a resource that has been owned by one or more non-Fleet agents.
 
-
                       Note that Fleet does not support the case where one resource is being placed multiple
                       times by different CRPs on the same member cluster. An apply error will be returned if
                       Fleet finds that a resource has been owned by another placement attempt by Fleet, even
@@ -129,35 +128,27 @@ spec:
                       a hub cluster manifest, with the current state of the resource (if applicable) in the
                       member cluster.
 
-
                       Available options are:
-
 
                       * PartialComparison: with this option, Fleet will compare only fields that are managed by
                         Fleet, i.e., the fields that are specified explicitly in the hub cluster manifest.
                         Unmanaged fields are ignored. This is the default option.
 
-
                       * FullComparison: with this option, Fleet will compare all fields of the resource,
                         even if the fields are absent from the hub cluster manifest.
 
-
                       Consider using the PartialComparison option if you would like to:
-
 
                       * use the default values for certain fields; or
                       * let another agent, e.g., HPAs, VPAs, etc., on the member cluster side manage some fields; or
                       * allow ad-hoc or cluster-specific settings on the member cluster side.
 
-
                       To use the FullComparison option, it is recommended that you:
-
 
                       * specify all fields as appropriate in the hub cluster, even if you are OK with using default
                         values;
                       * make sure that no fields are managed by agents other than Fleet on the member cluster
                         side, such as HPAs, VPAs, or other controllers.
-
 
                       See the Fleet documentation for further explanations and usage examples.
                     enum:
@@ -176,7 +167,6 @@ spec:
                           target cluster, as well as take over ownership of such fields.
                           - If false, apply will fail with the reason ApplyConflictWithOtherApplier.
 
-
                           For non-conflicting fields, values stay unchanged and ownership are shared between appliers.
                         type: boolean
                     type: object
@@ -186,21 +176,16 @@ spec:
                       Type is the apply strategy to use; it determines how Fleet applies manifests from the
                       hub cluster to a member cluster.
 
-
                       Available options are:
-
 
                       * ClientSideApply: Fleet uses three-way merge to apply manifests, similar to how kubectl
                         performs a client-side apply. This is the default option.
-
 
                         Note that this strategy requires that Fleet keep the last applied configuration in the
                         annotation of an applied resource. If the object gets so large that apply ops can no longer
                         be executed, Fleet will switch to server-side apply.
 
-
                         Use ComparisonOption and WhenToApply settings to control when an apply op can be executed.
-
 
                       * ServerSideApply: Fleet uses server-side apply to apply manifests; Fleet itself will
                         become the field manager for specified fields in the manifests. Specify
@@ -210,22 +195,17 @@ spec:
                         information, please refer to the Kubernetes documentation
                         (https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply).
 
-
                         Use ComparisonOption and WhenToApply settings to control when an apply op can be executed.
-
 
                       * ReportDiff: Fleet will compare the desired state of a resource as kept in the hub cluster
                         with its current state (if applicable) on the member cluster side, and report any
                         differences. No actual apply ops would be executed, and resources will be left alone as they
                         are on the member clusters.
 
-
                         If configuration differences are found on a resource, Fleet will consider this as an apply
                         error, which might block rollout depending on the specified rollout strategy.
 
-
                         Use ComparisonOption setting to control how the difference is calculated.
-
 
                       ClientSideApply and ServerSideApply apply strategies only work when Fleet can assume
                       ownership of a resource (e.g., the resource is created by Fleet, or Fleet has taken over
@@ -234,7 +214,6 @@ spec:
                       status. One may set up a CRP with the ReportDiff strategy and the Never takeover option,
                       and this will turn Fleet into a detection tool that reports only configuration differences
                       but do not touch any resources on the member cluster side.
-
 
                       For a comparison between the different strategies and usage examples, refer to the
                       Fleet documentation.
@@ -249,15 +228,12 @@ spec:
                       WhenToApply controls when Fleet would apply the manifests on the hub cluster to the member
                       clusters.
 
-
                       Available options are:
-
 
                       * Always: with this option, Fleet will periodically apply hub cluster manifests
                         on the member cluster side; this will effectively overwrite any change in the fields
                         managed by Fleet (i.e., specified in the hub cluster manifest). This is the default
                         option.
-
 
                         Note that this option would revert any ad-hoc changes made on the member cluster side in
                         the managed fields; if you would like to make temporary edits on the member cluster side
@@ -265,12 +241,10 @@ spec:
                         fields will be left alone; if you use the FullDiff compare option, such changes will
                         be reported as drifts.
 
-
                       * IfNotDrifted: with this option, Fleet will stop applying hub cluster manifests on
                         clusters that have drifted from the desired state; apply ops would still continue on
                         the rest of the clusters. Drifts are calculated using the ComparisonOption,
                         as explained in the corresponding field.
-
 
                         Use this option if you would like Fleet to detect drifts in your multi-cluster setup.
                         A drift occurs when an agent makes an ad-hoc change on the member cluster side that
@@ -278,9 +252,7 @@ spec:
                         and this option grants you an opportunity to view the drift details and take actions
                         accordingly. The drift details will be reported in the CRP status.
 
-
                         To fix a drift, you may:
-
 
                         * revert the changes manually on the member cluster side
                         * update the hub cluster manifest; this will trigger Fleet to apply the latest revision
@@ -300,25 +272,19 @@ spec:
                       WhenToTakeOver determines the action to take when Fleet applies resources to a member
                       cluster for the first time and finds out that the resource already exists in the cluster.
 
-
                       This setting is most relevant in cases where you would like Fleet to manage pre-existing
                       resources on a member cluster.
 
-
                       Available options include:
-
 
                       * Always: with this action, Fleet will apply the hub cluster manifests to the member
                         clusters even if the affected resources already exist. This is the default action.
 
-
                         Note that this might lead to fields being overwritten on the member clusters, if they
                         are specified in the hub cluster manifests.
 
-
                       * IfNoDiff: with this action, Fleet will apply the hub cluster manifests to the member
                         clusters if (and only if) pre-existing resources look the same as the hub cluster manifests.
-
 
                         This is a safer option as pre-existing resources that are inconsistent with the hub cluster
                         manifests will not be overwritten; Fleet will ignore them until the inconsistencies
@@ -326,10 +292,8 @@ spec:
                         applied, and if you delete the manifests or even the ClusterResourcePlacement itself
                         from the hub cluster, these pre-existing resources would not be taken away.
 
-
                         Fleet will check for inconsistencies in accordance with the ComparisonOption setting. See also
                         the comments on the ComparisonOption field for more information.
-
 
                         If a diff has been found in a field that is **managed** by Fleet (i.e., the field
                         **is specified ** in the hub cluster manifest), consider one of the following actions:
@@ -340,28 +304,23 @@ spec:
                         * switch to the Always action, which will allow Fleet to overwrite the field with the
                           value in the hub cluster manifest.
 
-
                         If a diff has been found in a field that is **not managed** by Fleet (i.e., the field
                         **is not specified** in the hub cluster manifest), consider one of the following actions:
                         * remove the field from the member cluster.
                         * update the hub cluster manifest so that the field is included in the hub cluster manifest.
 
-
                         If appropriate, you may also delete the object from the member cluster; Fleet will recreate
                         it using the hub cluster manifest.
-
 
                       * Never: with this action, Fleet will not apply a hub cluster manifest to the member
                         clusters if there is a corresponding pre-existing resource. However, if a manifest
                         has never been applied yet; or it has a corresponding resource which Fleet has assumed
                         ownership, apply op will still be executed.
 
-
                         This is the safest option; one will have to remove the pre-existing resources (so that
                         Fleet can re-create them) or switch to a different
                         WhenToTakeOver option before Fleet starts processing the corresponding hub cluster
                         manifests.
-
 
                         If you prefer Fleet stop processing all manifests, use this option along with the
                         ReportDiff apply strategy type. This setup would instruct Fleet to touch nothing
@@ -379,16 +338,8 @@ spec:
                   Conditions is an array of current observed conditions for StagedUpdateRun.
                   Known conditions are "Initialized", "Progressing", "Succeeded".
                 items:
-                  description: "Condition contains details for one aspect of the current
-                    state of this API Resource.\n---\nThis struct is intended for
-                    direct use as an array at the field path .status.conditions.  For
-                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
-                    observations of a foo's current state.\n\t    // Known .status.conditions.type
-                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
-                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
-                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                    \   // other fields\n\t}"
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
                   properties:
                     lastTransitionTime:
                       description: |-
@@ -429,12 +380,7 @@ spec:
                       - Unknown
                       type: string
                     type:
-                      description: |-
-                        type of condition in CamelCase or in foo.example.com/CamelCase.
-                        ---
-                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                        useful (see .node.status.conditions), the ability to deconflict is important.
-                        The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
                       maxLength: 316
                       pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                       type: string
@@ -471,18 +417,8 @@ spec:
                             Conditions is an array of current observed conditions for the specific type of post-update task.
                             Known conditions are "ApprovalRequestCreated", "WaitTimeElapsed", and "ApprovalRequestApproved".
                           items:
-                            description: "Condition contains details for one aspect
-                              of the current state of this API Resource.\n---\nThis
-                              struct is intended for direct use as an array at the
-                              field path .status.conditions.  For example,\n\n\n\ttype
-                              FooStatus struct{\n\t    // Represents the observations
-                              of a foo's current state.\n\t    // Known .status.conditions.type
-                              are: \"Available\", \"Progressing\", and \"Degraded\"\n\t
-                              \   // +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t
-                              \   // +listType=map\n\t    // +listMapKey=type\n\t
-                              \   Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                              patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                              \   // other fields\n\t}"
+                            description: Condition contains details for one aspect
+                              of the current state of this API Resource.
                             properties:
                               lastTransitionTime:
                                 description: |-
@@ -524,12 +460,8 @@ spec:
                                 - Unknown
                                 type: string
                               type:
-                                description: |-
-                                  type of condition in CamelCase or in foo.example.com/CamelCase.
-                                  ---
-                                  Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                                  useful (see .node.status.conditions), the ability to deconflict is important.
-                                  The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                                description: type of condition in CamelCase or in
+                                  foo.example.com/CamelCase.
                                 maxLength: 316
                                 pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                                 type: string
@@ -579,18 +511,8 @@ spec:
                             Conditions is an array of current observed conditions for clusters. Empty if the cluster has not started updating.
                             Known conditions are "Started", "Succeeded".
                           items:
-                            description: "Condition contains details for one aspect
-                              of the current state of this API Resource.\n---\nThis
-                              struct is intended for direct use as an array at the
-                              field path .status.conditions.  For example,\n\n\n\ttype
-                              FooStatus struct{\n\t    // Represents the observations
-                              of a foo's current state.\n\t    // Known .status.conditions.type
-                              are: \"Available\", \"Progressing\", and \"Degraded\"\n\t
-                              \   // +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t
-                              \   // +listType=map\n\t    // +listMapKey=type\n\t
-                              \   Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                              patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                              \   // other fields\n\t}"
+                            description: Condition contains details for one aspect
+                              of the current state of this API Resource.
                             properties:
                               lastTransitionTime:
                                 description: |-
@@ -632,12 +554,8 @@ spec:
                                 - Unknown
                                 type: string
                               type:
-                                description: |-
-                                  type of condition in CamelCase or in foo.example.com/CamelCase.
-                                  ---
-                                  Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                                  useful (see .node.status.conditions), the ability to deconflict is important.
-                                  The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                                description: type of condition in CamelCase or in
+                                  foo.example.com/CamelCase.
                                 maxLength: 316
                                 pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                                 type: string
@@ -683,17 +601,8 @@ spec:
                       Conditions is an array of current observed updating conditions for the stage. Empty if the stage has not started updating.
                       Known conditions are "Progressing", "Succeeded".
                     items:
-                      description: "Condition contains details for one aspect of the
-                        current state of this API Resource.\n---\nThis struct is intended
-                        for direct use as an array at the field path .status.conditions.
-                        \ For example,\n\n\n\ttype FooStatus struct{\n\t    // Represents
-                        the observations of a foo's current state.\n\t    // Known
-                        .status.conditions.type are: \"Available\", \"Progressing\",
-                        and \"Degraded\"\n\t    // +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t
-                        \   // +listType=map\n\t    // +listMapKey=type\n\t    Conditions
-                        []metav1.Condition `json:\"conditions,omitempty\" patchStrategy:\"merge\"
-                        patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                        \   // other fields\n\t}"
+                      description: Condition contains details for one aspect of the
+                        current state of this API Resource.
                       properties:
                         lastTransitionTime:
                           description: |-
@@ -735,12 +644,7 @@ spec:
                           - Unknown
                           type: string
                         type:
-                          description: |-
-                            type of condition in CamelCase or in foo.example.com/CamelCase.
-                            ---
-                            Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                            useful (see .node.status.conditions), the ability to deconflict is important.
-                            The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                          description: type of condition in CamelCase or in foo.example.com/CamelCase.
                           maxLength: 316
                           pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                           type: string
@@ -924,18 +828,8 @@ spec:
                               Conditions is an array of current observed conditions for the specific type of post-update task.
                               Known conditions are "ApprovalRequestCreated", "WaitTimeElapsed", and "ApprovalRequestApproved".
                             items:
-                              description: "Condition contains details for one aspect
-                                of the current state of this API Resource.\n---\nThis
-                                struct is intended for direct use as an array at the
-                                field path .status.conditions.  For example,\n\n\n\ttype
-                                FooStatus struct{\n\t    // Represents the observations
-                                of a foo's current state.\n\t    // Known .status.conditions.type
-                                are: \"Available\", \"Progressing\", and \"Degraded\"\n\t
-                                \   // +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t
-                                \   // +listType=map\n\t    // +listMapKey=type\n\t
-                                \   Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                                patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                                \   // other fields\n\t}"
+                              description: Condition contains details for one aspect
+                                of the current state of this API Resource.
                               properties:
                                 lastTransitionTime:
                                   description: |-
@@ -977,12 +871,8 @@ spec:
                                   - Unknown
                                   type: string
                                 type:
-                                  description: |-
-                                    type of condition in CamelCase or in foo.example.com/CamelCase.
-                                    ---
-                                    Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                                    useful (see .node.status.conditions), the ability to deconflict is important.
-                                    The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                                  description: type of condition in CamelCase or in
+                                    foo.example.com/CamelCase.
                                   maxLength: 316
                                   pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                                   type: string
@@ -1032,18 +922,8 @@ spec:
                               Conditions is an array of current observed conditions for clusters. Empty if the cluster has not started updating.
                               Known conditions are "Started", "Succeeded".
                             items:
-                              description: "Condition contains details for one aspect
-                                of the current state of this API Resource.\n---\nThis
-                                struct is intended for direct use as an array at the
-                                field path .status.conditions.  For example,\n\n\n\ttype
-                                FooStatus struct{\n\t    // Represents the observations
-                                of a foo's current state.\n\t    // Known .status.conditions.type
-                                are: \"Available\", \"Progressing\", and \"Degraded\"\n\t
-                                \   // +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t
-                                \   // +listType=map\n\t    // +listMapKey=type\n\t
-                                \   Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                                patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                                \   // other fields\n\t}"
+                              description: Condition contains details for one aspect
+                                of the current state of this API Resource.
                               properties:
                                 lastTransitionTime:
                                   description: |-
@@ -1085,12 +965,8 @@ spec:
                                   - Unknown
                                   type: string
                                 type:
-                                  description: |-
-                                    type of condition in CamelCase or in foo.example.com/CamelCase.
-                                    ---
-                                    Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                                    useful (see .node.status.conditions), the ability to deconflict is important.
-                                    The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                                  description: type of condition in CamelCase or in
+                                    foo.example.com/CamelCase.
                                   maxLength: 316
                                   pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                                   type: string
@@ -1136,18 +1012,8 @@ spec:
                         Conditions is an array of current observed updating conditions for the stage. Empty if the stage has not started updating.
                         Known conditions are "Progressing", "Succeeded".
                       items:
-                        description: "Condition contains details for one aspect of
-                          the current state of this API Resource.\n---\nThis struct
-                          is intended for direct use as an array at the field path
-                          .status.conditions.  For example,\n\n\n\ttype FooStatus
-                          struct{\n\t    // Represents the observations of a foo's
-                          current state.\n\t    // Known .status.conditions.type are:
-                          \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
-                          +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    //
-                          +listType=map\n\t    // +listMapKey=type\n\t    Conditions
-                          []metav1.Condition `json:\"conditions,omitempty\" patchStrategy:\"merge\"
-                          patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                          \   // other fields\n\t}"
+                        description: Condition contains details for one aspect of
+                          the current state of this API Resource.
                         properties:
                           lastTransitionTime:
                             description: |-
@@ -1189,12 +1055,7 @@ spec:
                             - Unknown
                             type: string
                           type:
-                            description: |-
-                              type of condition in CamelCase or in foo.example.com/CamelCase.
-                              ---
-                              Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                              useful (see .node.status.conditions), the ability to deconflict is important.
-                              The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                            description: type of condition in CamelCase or in foo.example.com/CamelCase.
                             maxLength: 316
                             pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                             type: string
@@ -1335,7 +1196,6 @@ spec:
                       on a Fleet-managed resource. If set to false, Fleet will refuse to apply manifests to
                       a resource that has been owned by one or more non-Fleet agents.
 
-
                       Note that Fleet does not support the case where one resource is being placed multiple
                       times by different CRPs on the same member cluster. An apply error will be returned if
                       Fleet finds that a resource has been owned by another placement attempt by Fleet, even
@@ -1348,35 +1208,27 @@ spec:
                       a hub cluster manifest, with the current state of the resource (if applicable) in the
                       member cluster.
 
-
                       Available options are:
-
 
                       * PartialComparison: with this option, Fleet will compare only fields that are managed by
                         Fleet, i.e., the fields that are specified explicitly in the hub cluster manifest.
                         Unmanaged fields are ignored. This is the default option.
 
-
                       * FullComparison: with this option, Fleet will compare all fields of the resource,
                         even if the fields are absent from the hub cluster manifest.
 
-
                       Consider using the PartialComparison option if you would like to:
-
 
                       * use the default values for certain fields; or
                       * let another agent, e.g., HPAs, VPAs, etc., on the member cluster side manage some fields; or
                       * allow ad-hoc or cluster-specific settings on the member cluster side.
 
-
                       To use the FullComparison option, it is recommended that you:
-
 
                       * specify all fields as appropriate in the hub cluster, even if you are OK with using default
                         values;
                       * make sure that no fields are managed by agents other than Fleet on the member cluster
                         side, such as HPAs, VPAs, or other controllers.
-
 
                       See the Fleet documentation for further explanations and usage examples.
                     enum:
@@ -1395,7 +1247,6 @@ spec:
                           target cluster, as well as take over ownership of such fields.
                           - If false, apply will fail with the reason ApplyConflictWithOtherApplier.
 
-
                           For non-conflicting fields, values stay unchanged and ownership are shared between appliers.
                         type: boolean
                     type: object
@@ -1405,21 +1256,16 @@ spec:
                       Type is the apply strategy to use; it determines how Fleet applies manifests from the
                       hub cluster to a member cluster.
 
-
                       Available options are:
-
 
                       * ClientSideApply: Fleet uses three-way merge to apply manifests, similar to how kubectl
                         performs a client-side apply. This is the default option.
-
 
                         Note that this strategy requires that Fleet keep the last applied configuration in the
                         annotation of an applied resource. If the object gets so large that apply ops can no longer
                         be executed, Fleet will switch to server-side apply.
 
-
                         Use ComparisonOption and WhenToApply settings to control when an apply op can be executed.
-
 
                       * ServerSideApply: Fleet uses server-side apply to apply manifests; Fleet itself will
                         become the field manager for specified fields in the manifests. Specify
@@ -1429,22 +1275,17 @@ spec:
                         information, please refer to the Kubernetes documentation
                         (https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply).
 
-
                         Use ComparisonOption and WhenToApply settings to control when an apply op can be executed.
-
 
                       * ReportDiff: Fleet will compare the desired state of a resource as kept in the hub cluster
                         with its current state (if applicable) on the member cluster side, and report any
                         differences. No actual apply ops would be executed, and resources will be left alone as they
                         are on the member clusters.
 
-
                         If configuration differences are found on a resource, Fleet will consider this as an apply
                         error, which might block rollout depending on the specified rollout strategy.
 
-
                         Use ComparisonOption setting to control how the difference is calculated.
-
 
                       ClientSideApply and ServerSideApply apply strategies only work when Fleet can assume
                       ownership of a resource (e.g., the resource is created by Fleet, or Fleet has taken over
@@ -1453,7 +1294,6 @@ spec:
                       status. One may set up a CRP with the ReportDiff strategy and the Never takeover option,
                       and this will turn Fleet into a detection tool that reports only configuration differences
                       but do not touch any resources on the member cluster side.
-
 
                       For a comparison between the different strategies and usage examples, refer to the
                       Fleet documentation.
@@ -1468,15 +1308,12 @@ spec:
                       WhenToApply controls when Fleet would apply the manifests on the hub cluster to the member
                       clusters.
 
-
                       Available options are:
-
 
                       * Always: with this option, Fleet will periodically apply hub cluster manifests
                         on the member cluster side; this will effectively overwrite any change in the fields
                         managed by Fleet (i.e., specified in the hub cluster manifest). This is the default
                         option.
-
 
                         Note that this option would revert any ad-hoc changes made on the member cluster side in
                         the managed fields; if you would like to make temporary edits on the member cluster side
@@ -1484,12 +1321,10 @@ spec:
                         fields will be left alone; if you use the FullDiff compare option, such changes will
                         be reported as drifts.
 
-
                       * IfNotDrifted: with this option, Fleet will stop applying hub cluster manifests on
                         clusters that have drifted from the desired state; apply ops would still continue on
                         the rest of the clusters. Drifts are calculated using the ComparisonOption,
                         as explained in the corresponding field.
-
 
                         Use this option if you would like Fleet to detect drifts in your multi-cluster setup.
                         A drift occurs when an agent makes an ad-hoc change on the member cluster side that
@@ -1497,9 +1332,7 @@ spec:
                         and this option grants you an opportunity to view the drift details and take actions
                         accordingly. The drift details will be reported in the CRP status.
 
-
                         To fix a drift, you may:
-
 
                         * revert the changes manually on the member cluster side
                         * update the hub cluster manifest; this will trigger Fleet to apply the latest revision
@@ -1519,25 +1352,19 @@ spec:
                       WhenToTakeOver determines the action to take when Fleet applies resources to a member
                       cluster for the first time and finds out that the resource already exists in the cluster.
 
-
                       This setting is most relevant in cases where you would like Fleet to manage pre-existing
                       resources on a member cluster.
 
-
                       Available options include:
-
 
                       * Always: with this action, Fleet will apply the hub cluster manifests to the member
                         clusters even if the affected resources already exist. This is the default action.
 
-
                         Note that this might lead to fields being overwritten on the member clusters, if they
                         are specified in the hub cluster manifests.
 
-
                       * IfNoDiff: with this action, Fleet will apply the hub cluster manifests to the member
                         clusters if (and only if) pre-existing resources look the same as the hub cluster manifests.
-
 
                         This is a safer option as pre-existing resources that are inconsistent with the hub cluster
                         manifests will not be overwritten; Fleet will ignore them until the inconsistencies
@@ -1545,10 +1372,8 @@ spec:
                         applied, and if you delete the manifests or even the ClusterResourcePlacement itself
                         from the hub cluster, these pre-existing resources would not be taken away.
 
-
                         Fleet will check for inconsistencies in accordance with the ComparisonOption setting. See also
                         the comments on the ComparisonOption field for more information.
-
 
                         If a diff has been found in a field that is **managed** by Fleet (i.e., the field
                         **is specified ** in the hub cluster manifest), consider one of the following actions:
@@ -1559,28 +1384,23 @@ spec:
                         * switch to the Always action, which will allow Fleet to overwrite the field with the
                           value in the hub cluster manifest.
 
-
                         If a diff has been found in a field that is **not managed** by Fleet (i.e., the field
                         **is not specified** in the hub cluster manifest), consider one of the following actions:
                         * remove the field from the member cluster.
                         * update the hub cluster manifest so that the field is included in the hub cluster manifest.
 
-
                         If appropriate, you may also delete the object from the member cluster; Fleet will recreate
                         it using the hub cluster manifest.
-
 
                       * Never: with this action, Fleet will not apply a hub cluster manifest to the member
                         clusters if there is a corresponding pre-existing resource. However, if a manifest
                         has never been applied yet; or it has a corresponding resource which Fleet has assumed
                         ownership, apply op will still be executed.
 
-
                         This is the safest option; one will have to remove the pre-existing resources (so that
                         Fleet can re-create them) or switch to a different
                         WhenToTakeOver option before Fleet starts processing the corresponding hub cluster
                         manifests.
-
 
                         If you prefer Fleet stop processing all manifests, use this option along with the
                         ReportDiff apply strategy type. This setup would instruct Fleet to touch nothing
@@ -1598,16 +1418,8 @@ spec:
                   Conditions is an array of current observed conditions for StagedUpdateRun.
                   Known conditions are "Initialized", "Progressing", "Succeeded".
                 items:
-                  description: "Condition contains details for one aspect of the current
-                    state of this API Resource.\n---\nThis struct is intended for
-                    direct use as an array at the field path .status.conditions.  For
-                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
-                    observations of a foo's current state.\n\t    // Known .status.conditions.type
-                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
-                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
-                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                    \   // other fields\n\t}"
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
                   properties:
                     lastTransitionTime:
                       description: |-
@@ -1648,12 +1460,7 @@ spec:
                       - Unknown
                       type: string
                     type:
-                      description: |-
-                        type of condition in CamelCase or in foo.example.com/CamelCase.
-                        ---
-                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                        useful (see .node.status.conditions), the ability to deconflict is important.
-                        The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
                       maxLength: 316
                       pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                       type: string
@@ -1690,18 +1497,8 @@ spec:
                             Conditions is an array of current observed conditions for the specific type of post-update task.
                             Known conditions are "ApprovalRequestCreated", "WaitTimeElapsed", and "ApprovalRequestApproved".
                           items:
-                            description: "Condition contains details for one aspect
-                              of the current state of this API Resource.\n---\nThis
-                              struct is intended for direct use as an array at the
-                              field path .status.conditions.  For example,\n\n\n\ttype
-                              FooStatus struct{\n\t    // Represents the observations
-                              of a foo's current state.\n\t    // Known .status.conditions.type
-                              are: \"Available\", \"Progressing\", and \"Degraded\"\n\t
-                              \   // +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t
-                              \   // +listType=map\n\t    // +listMapKey=type\n\t
-                              \   Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                              patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                              \   // other fields\n\t}"
+                            description: Condition contains details for one aspect
+                              of the current state of this API Resource.
                             properties:
                               lastTransitionTime:
                                 description: |-
@@ -1743,12 +1540,8 @@ spec:
                                 - Unknown
                                 type: string
                               type:
-                                description: |-
-                                  type of condition in CamelCase or in foo.example.com/CamelCase.
-                                  ---
-                                  Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                                  useful (see .node.status.conditions), the ability to deconflict is important.
-                                  The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                                description: type of condition in CamelCase or in
+                                  foo.example.com/CamelCase.
                                 maxLength: 316
                                 pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                                 type: string
@@ -1798,18 +1591,8 @@ spec:
                             Conditions is an array of current observed conditions for clusters. Empty if the cluster has not started updating.
                             Known conditions are "Started", "Succeeded".
                           items:
-                            description: "Condition contains details for one aspect
-                              of the current state of this API Resource.\n---\nThis
-                              struct is intended for direct use as an array at the
-                              field path .status.conditions.  For example,\n\n\n\ttype
-                              FooStatus struct{\n\t    // Represents the observations
-                              of a foo's current state.\n\t    // Known .status.conditions.type
-                              are: \"Available\", \"Progressing\", and \"Degraded\"\n\t
-                              \   // +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t
-                              \   // +listType=map\n\t    // +listMapKey=type\n\t
-                              \   Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                              patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                              \   // other fields\n\t}"
+                            description: Condition contains details for one aspect
+                              of the current state of this API Resource.
                             properties:
                               lastTransitionTime:
                                 description: |-
@@ -1851,12 +1634,8 @@ spec:
                                 - Unknown
                                 type: string
                               type:
-                                description: |-
-                                  type of condition in CamelCase or in foo.example.com/CamelCase.
-                                  ---
-                                  Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                                  useful (see .node.status.conditions), the ability to deconflict is important.
-                                  The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                                description: type of condition in CamelCase or in
+                                  foo.example.com/CamelCase.
                                 maxLength: 316
                                 pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                                 type: string
@@ -1902,17 +1681,8 @@ spec:
                       Conditions is an array of current observed updating conditions for the stage. Empty if the stage has not started updating.
                       Known conditions are "Progressing", "Succeeded".
                     items:
-                      description: "Condition contains details for one aspect of the
-                        current state of this API Resource.\n---\nThis struct is intended
-                        for direct use as an array at the field path .status.conditions.
-                        \ For example,\n\n\n\ttype FooStatus struct{\n\t    // Represents
-                        the observations of a foo's current state.\n\t    // Known
-                        .status.conditions.type are: \"Available\", \"Progressing\",
-                        and \"Degraded\"\n\t    // +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t
-                        \   // +listType=map\n\t    // +listMapKey=type\n\t    Conditions
-                        []metav1.Condition `json:\"conditions,omitempty\" patchStrategy:\"merge\"
-                        patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                        \   // other fields\n\t}"
+                      description: Condition contains details for one aspect of the
+                        current state of this API Resource.
                       properties:
                         lastTransitionTime:
                           description: |-
@@ -1954,12 +1724,7 @@ spec:
                           - Unknown
                           type: string
                         type:
-                          description: |-
-                            type of condition in CamelCase or in foo.example.com/CamelCase.
-                            ---
-                            Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                            useful (see .node.status.conditions), the ability to deconflict is important.
-                            The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                          description: type of condition in CamelCase or in foo.example.com/CamelCase.
                           maxLength: 316
                           pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                           type: string
@@ -2143,18 +1908,8 @@ spec:
                               Conditions is an array of current observed conditions for the specific type of post-update task.
                               Known conditions are "ApprovalRequestCreated", "WaitTimeElapsed", and "ApprovalRequestApproved".
                             items:
-                              description: "Condition contains details for one aspect
-                                of the current state of this API Resource.\n---\nThis
-                                struct is intended for direct use as an array at the
-                                field path .status.conditions.  For example,\n\n\n\ttype
-                                FooStatus struct{\n\t    // Represents the observations
-                                of a foo's current state.\n\t    // Known .status.conditions.type
-                                are: \"Available\", \"Progressing\", and \"Degraded\"\n\t
-                                \   // +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t
-                                \   // +listType=map\n\t    // +listMapKey=type\n\t
-                                \   Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                                patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                                \   // other fields\n\t}"
+                              description: Condition contains details for one aspect
+                                of the current state of this API Resource.
                               properties:
                                 lastTransitionTime:
                                   description: |-
@@ -2196,12 +1951,8 @@ spec:
                                   - Unknown
                                   type: string
                                 type:
-                                  description: |-
-                                    type of condition in CamelCase or in foo.example.com/CamelCase.
-                                    ---
-                                    Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                                    useful (see .node.status.conditions), the ability to deconflict is important.
-                                    The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                                  description: type of condition in CamelCase or in
+                                    foo.example.com/CamelCase.
                                   maxLength: 316
                                   pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                                   type: string
@@ -2251,18 +2002,8 @@ spec:
                               Conditions is an array of current observed conditions for clusters. Empty if the cluster has not started updating.
                               Known conditions are "Started", "Succeeded".
                             items:
-                              description: "Condition contains details for one aspect
-                                of the current state of this API Resource.\n---\nThis
-                                struct is intended for direct use as an array at the
-                                field path .status.conditions.  For example,\n\n\n\ttype
-                                FooStatus struct{\n\t    // Represents the observations
-                                of a foo's current state.\n\t    // Known .status.conditions.type
-                                are: \"Available\", \"Progressing\", and \"Degraded\"\n\t
-                                \   // +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t
-                                \   // +listType=map\n\t    // +listMapKey=type\n\t
-                                \   Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                                patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                                \   // other fields\n\t}"
+                              description: Condition contains details for one aspect
+                                of the current state of this API Resource.
                               properties:
                                 lastTransitionTime:
                                   description: |-
@@ -2304,12 +2045,8 @@ spec:
                                   - Unknown
                                   type: string
                                 type:
-                                  description: |-
-                                    type of condition in CamelCase or in foo.example.com/CamelCase.
-                                    ---
-                                    Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                                    useful (see .node.status.conditions), the ability to deconflict is important.
-                                    The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                                  description: type of condition in CamelCase or in
+                                    foo.example.com/CamelCase.
                                   maxLength: 316
                                   pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                                   type: string
@@ -2355,18 +2092,8 @@ spec:
                         Conditions is an array of current observed updating conditions for the stage. Empty if the stage has not started updating.
                         Known conditions are "Progressing", "Succeeded".
                       items:
-                        description: "Condition contains details for one aspect of
-                          the current state of this API Resource.\n---\nThis struct
-                          is intended for direct use as an array at the field path
-                          .status.conditions.  For example,\n\n\n\ttype FooStatus
-                          struct{\n\t    // Represents the observations of a foo's
-                          current state.\n\t    // Known .status.conditions.type are:
-                          \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
-                          +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    //
-                          +listType=map\n\t    // +listMapKey=type\n\t    Conditions
-                          []metav1.Condition `json:\"conditions,omitempty\" patchStrategy:\"merge\"
-                          patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                          \   // other fields\n\t}"
+                        description: Condition contains details for one aspect of
+                          the current state of this API Resource.
                         properties:
                           lastTransitionTime:
                             description: |-
@@ -2408,12 +2135,7 @@ spec:
                             - Unknown
                             type: string
                           type:
-                            description: |-
-                              type of condition in CamelCase or in foo.example.com/CamelCase.
-                              ---
-                              Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                              useful (see .node.status.conditions), the ability to deconflict is important.
-                              The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                            description: type of condition in CamelCase or in foo.example.com/CamelCase.
                             maxLength: 316
                             pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                             type: string
