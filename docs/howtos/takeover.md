@@ -42,7 +42,7 @@ resources without taking any action.
 The steps below explain how the takeover experience functions. The code assumes that you have
 a fleet of two clusters, `member-1` and `member-2`:
 
-* Switch to the first member cluster, and create a namespace, `work-2`, with labels:
+* Switch to the second member cluster, and create a namespace, `work-2`, with labels:
 
     ```sh
     kubectl config use-context member-2-admin
@@ -353,9 +353,9 @@ corresponding pre-existing resource on a member cluster.
 > The `comparisonOptions` setting controls also how Fleet detect drifts. See the how-to guide on drift detection for more information.
 
 If `partialComparison` is used, Fleet will only report configuration differences in the managed
-fields, i.e., fields that are explictly specified in the resource template; the presence of additional
+fields, i.e., fields that are explicitly specified in the resource template; the presence of additional
 fields on the member cluster side will not stop Fleet from taking
-over the pre-existing resource; on the contrary, with `fullComparsion`, Fleet will only take over
+over the pre-existing resource; on the contrary, with `fullComparison`, Fleet will only take over
 a pre-existing resource if it looks exactly the same as its hub cluster counterpart.
 
 Below is the synergy table that summarizes the combos and their respective effects:
