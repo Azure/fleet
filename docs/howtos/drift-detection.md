@@ -1,12 +1,12 @@
 # How-to Guide: Enabling Drift Detection in Fleet
 
 This guide provides an overview on how to enable drift detection in Fleet. This feature can help
-developers and admins identify (and act upon) configuration drifts in their Kubernetes system,
+developers and admins identify (and act upon) configuration drifts in their KubeFleet system,
 which are often brought by temporary fixes, inadvertent changes, and failed automations.
 
 > Before you begin
 >
-> The new drift detection experience is currently in preview. Contact the Fleet team for more information on how to have a peek at the experience.
+> The new drift detection experience is currently in preview. 
 >
 > Note that the APIs for the new experience are only available in the Fleet v1beta1 API, not the v1 API. If you do not see the new APIs in command outputs, verify that you are explicitly requesting the v1beta1 API objects, as opposed to the v1 API objects (the default). 
 
@@ -211,12 +211,12 @@ and its details will be reported in the status of the CRP object:
     ```json
     [
         {
-            "firstDriftedObservedTime": "2024-11-19T14:55:39Z",
+            "firstDriftedObservedTime": "...",
             "group": "",
             "version": "v1",
             "kind": "Namespace",    
             "name": "work-1",
-            "observationTime": "2024-11-19T14:55:39Z",
+            "observationTime": "...",
             "observedDrifts": [
             {
                 "path": "/metadata/labels/owner",
@@ -255,7 +255,7 @@ and its details will be reported in the status of the CRP object:
 
     > Important:
     >
-    > The presence of drifts will NOT stop Fleet from rolling out newer resource versions. If you choose to edit the resource template on the hub cluster, Fleet will always apply the new resource template in the rollout process, which may also resolve the drift.
+    > The presence of drifts will **NOT** stop Fleet from rolling out newer resource versions. If you choose to edit the resource template on the hub cluster, Fleet will always apply the new resource template in the rollout process, which may also resolve the drift.
 
 ## Comparison options
 
