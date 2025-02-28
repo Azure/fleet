@@ -1,13 +1,13 @@
-apiVersion: placement.kubernetes-fleet.io/v1alpha1
+apiVersion: placement.kubernetes-fleet.io/v1beta1
 kind: ClusterStagedUpdateRun
 metadata:
   name: example-run
 spec:
   placementName: example-placement
-  resourceSnapshotIndex: "1"
+  resourceSnapshotIndex: "0"
   stagedRolloutStrategyName: example-strategy
 status:
-  policySnapshotIndexUsed: "1"
+  policySnapshotIndexUsed: "0"
   policyObservedClusterCount: 3
   appliedStrategy:
     type: Immediate

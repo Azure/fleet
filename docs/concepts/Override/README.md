@@ -36,6 +36,10 @@ and `ResourceOverride`.
 - At most 100 `ClusterResourceOverride` can be created.
 - At most 100 `ResourceOverride` can be created.
 
+## Placement
+
+This specifies which placement the override should be applied to.
+
 ## Resource Selector
 `ClusterResourceSelector` of `ClusterResourceOverride` selects which cluster-scoped resources need to be overridden before
 applying to the selected clusters.
@@ -64,13 +68,51 @@ Each override rule contains the following fields:
   - Select clusters by specifying the cluster labels.
   - An empty selector selects ALL the clusters.
   - A nil selector selects NO target cluster.
-- `JSONPatchOverrides`: a list of JSON path override rules applied to the selected resources following [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
+- `OverrideType`: which type of the override should be applied to the selected resources. The default type is `JSONPatch`.
+  - `JSONPatch`: applies the JSON patch to the selected resources using [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
+  - `Delete`: deletes the selected resources on the target cluster.
+- `JSONPatchOverrides`: a list of JSON path override rules applied to the selected resources following [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902) when the override type is `JSONPatch`.
 
 > **Note:** Updating the fields in the TypeMeta (e.g., `apiVersion`, `kind`) is not allowed.
 
 > **Note:** Updating the fields in the ObjectMeta (e.g., `name`, `namespace`) excluding annotations and labels is not allowed.
 
 > **Note:** Updating the fields in the Status (e.g., `status`) is not allowed.
+
+### Reserved Variables in the JSON Patch Override Value
+
+There is a list of reserved variables that will be replaced by the actual values used in the `value` of the JSON patch override rule:
+* `${MEMBER-CLUSTER-NAME}`:  this will be replaced by the name of the `memberCluster` that represents this cluster.
+
+For example, to add a label to the `ClusterRole` named `secret-reader` on clusters with the label `env: prod`,
+you can use the following configuration:
+```yaml
+apiVersion: placement.kubernetes-fleet.io/v1alpha1
+kind: ClusterResourceOverride
+metadata:
+  name: example-cro
+spec:
+  placement:
+    name: crp-example
+  clusterResourceSelectors:
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+      version: v1
+      name: secret-reader
+  policy:
+    overrideRules:
+      - clusterSelector:
+          clusterSelectorTerms:
+            - labelSelector:
+                matchLabels:
+                  env: prod
+        jsonPatchOverrides:
+          - op: add
+            path: /metadata/labels
+            value:
+              {"cluster-name":"${MEMBER-CLUSTER-NAME}"}
+```
+The `ClusterResourceOverride` object above will add a label `cluster-name` with the value of the `memberCluster` name to the `ClusterRole` named `secret-reader` on clusters with the label `env: prod`.
 
 ## When To Trigger Rollout
 
@@ -112,6 +154,8 @@ metadata:
   resourceVersion: "1436"
   uid: 32237804-7eb2-4d5f-9996-ff4d8ce778e7
 spec:
+  placement:
+    name: crp-example
   clusterResourceSelectors:
     - group: ""
       kind: Namespace
@@ -170,6 +214,8 @@ metadata:
   resourceVersion: "3859"
   uid: b4117925-bc3c-438d-a4f6-067bc4577364
 spec:
+  placement:
+    name: crp-example
   policy:
     overrideRules:
     - clusterSelector:

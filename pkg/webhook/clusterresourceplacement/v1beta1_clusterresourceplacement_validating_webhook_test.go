@@ -31,7 +31,7 @@ var (
 		Kind:    "ClusterRole",
 		Name:    "test-cluster-role",
 	}
-	errString = "the rollout Strategy field  is invalid: maxUnavailable must be greater than or equal to 1, got `0`"
+	errString = "the rollout Strategy field  is invalid: maxUnavailable must be greater than or equal to 0, got `-1`"
 )
 
 func TestHandle(t *testing.T) {
@@ -48,7 +48,7 @@ func TestHandle(t *testing.T) {
 			Strategy: placementv1beta1.RolloutStrategy{
 				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: 0},
+					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: -1},
 				},
 			},
 		},
@@ -68,7 +68,7 @@ func TestHandle(t *testing.T) {
 			Strategy: placementv1beta1.RolloutStrategy{
 				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: 0},
+					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: -1},
 					MaxSurge:       &intstr.IntOrString{Type: intstr.Int, IntVal: 0},
 				},
 			},
@@ -89,7 +89,7 @@ func TestHandle(t *testing.T) {
 			Strategy: placementv1beta1.RolloutStrategy{
 				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: 0},
+					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: -1},
 				},
 			},
 		},
@@ -108,7 +108,7 @@ func TestHandle(t *testing.T) {
 			Strategy: placementv1beta1.RolloutStrategy{
 				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: 0},
+					MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: -1},
 				},
 			},
 		},

@@ -27,3 +27,6 @@ Allow slightly different manifests depends on the cluster it lands.
 
 ## [PropertyProvider](PropertyProviderAndClusterProperties/README.md)
 More ways to select the clusters based on its property.
+
+## [Eviction & Placement Disruption Budget](EvictionAndDisruptionBudget/README.md)
+Understand how placements can be evicted and protected from voluntary disruptions in fleet.

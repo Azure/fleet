@@ -91,7 +91,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
-			Eventually(crpStatusUpdatedActual, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
@@ -108,6 +108,11 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				var works placementv1beta1.WorkList
 				listOpts := []client.ListOption{
 					client.InNamespace(fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.ClusterName)),
+					// This test spec runs in parallel with other suites; there might be unrelated
+					// Work objects in the namespace.
+					client.MatchingLabels{
+						placementv1beta1.CRPTrackingLabel: crpName,
+					},
 				}
 				Eventually(func() string {
 					if err := hubClient.List(ctx, &works, listOpts...); err != nil {
@@ -145,7 +150,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 
@@ -187,7 +192,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
-			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
@@ -219,12 +224,12 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				Namespace: testDeployment.Namespace,
 			}
 			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDeploymentResourceIdentifier, allMemberClusterNames, "1", 2)
-			Eventually(crpStatusActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 
@@ -265,14 +270,14 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", true)
-			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
 			for idx := range allMemberClusters {
 				memberCluster := allMemberClusters[idx]
 				workResourcesPlacedActual := waitForDaemonSetPlacementToReady(memberCluster, &testDaemonSet)
-				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+				Eventually(workResourcesPlacedActual, eventuallyInterval, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
 			}
 		})
 
@@ -285,7 +290,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				}
 				testEnvelopeDaemonSet.Data["daemonset.yaml"] = string(daemonSetByte)
 				return hubClient.Update(ctx, &testEnvelopeDaemonSet)
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to change the image name of daemonset in envelope object")
+			}, eventuallyInterval, eventuallyInterval).Should(Succeed(), "Failed to change the image name of daemonset in envelope object")
 		})
 
 		It("should update CRP status as expected", func() {
@@ -302,12 +307,12 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				},
 			}
 			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDaemonSetResourceIdentifier, allMemberClusterNames, "1", 2)
-			Eventually(crpStatusActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 
@@ -348,14 +353,14 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", true)
-			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, 2*workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
 			for idx := range allMemberClusters {
 				memberCluster := allMemberClusters[idx]
 				workResourcesPlacedActual := waitForStatefulSetPlacementToReady(memberCluster, &testStatefulSet)
-				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+				Eventually(workResourcesPlacedActual, eventuallyInterval, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
 			}
 		})
 
@@ -368,7 +373,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				}
 				testEnvelopeStatefulSet.Data["statefulset.yaml"] = string(daemonSetByte)
 				return hubClient.Update(ctx, &testEnvelopeStatefulSet)
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to change the image name in statefulset")
+			}, eventuallyInterval, eventuallyInterval).Should(Succeed(), "Failed to change the image name in statefulset")
 		})
 
 		It("should update CRP status as expected", func() {
@@ -385,12 +390,12 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				},
 			}
 			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedStatefulSetResourceIdentifier, allMemberClusterNames, "1", 2)
-			Eventually(crpStatusActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 
@@ -431,7 +436,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
-			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
@@ -464,12 +469,12 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			}
 			// failedResourceObservedGeneration is set to 0 because generation is not populated for service.
 			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDeploymentResourceIdentifier, allMemberClusterNames, "1", 0)
-			Eventually(crpStatusActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 
@@ -513,7 +518,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
-			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
@@ -545,7 +550,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				Namespace: testDeployment.Namespace,
 			}
 			crpStatusActual := safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResources, failedDeploymentResourceIdentifier, allMemberClusterNames, "1", 2)
-			Eventually(crpStatusActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("update work to trigger a work generator reconcile", func() {
@@ -610,7 +615,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				if err != nil {
 					return err
 				}
-				testDeployment.Spec.Template.Spec.Containers[0].Image = "1.26.2"
+				testDeployment.Spec.Template.Spec.Containers[0].Image = "nginx:1.26.2"
 				return hubClient.Update(ctx, &testDeployment)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to change the image name in deployment")
 		})
@@ -619,13 +624,13 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			for idx := range allMemberClusters {
 				memberCluster := allMemberClusters[idx]
 				workResourcesPlacedActual := waitForDeploymentPlacementToReady(memberCluster, &testDeployment)
-				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+				Eventually(workResourcesPlacedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
 			}
 		})
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 
@@ -634,7 +639,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		workNamespace := appNamespace()
 		var wantSelectedResources []placementv1beta1.ResourceIdentifier
 		var testJob batchv1.Job
-
+		unAvailablePeriodSeconds := 15
 		BeforeAll(func() {
 			// Create the test resources.
 			readJobTestManifest(&testJob)
@@ -665,13 +670,13 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			// the job we are trying to propagate takes 10s to complete. MaxUnavailable is set to 1. So setting UnavailablePeriodSeconds to 15s
 			// so that after each rollout phase we only wait for 15s before proceeding to the next since Job is not trackable,
 			// we want rollout to finish in a reasonable time.
-			crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds = ptr.To(15)
+			crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds = ptr.To(unAvailablePeriodSeconds)
 			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
 		})
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", false)
-			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, 2*time.Duration(unAvailablePeriodSeconds)*time.Second, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
@@ -693,15 +698,15 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				return hubClient.Update(ctx, &job)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to suspend job")
 		})
-
+		// job is not trackable, so we need to wait for a bit longer for each roll out
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "1", false)
-			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, 5*time.Duration(unAvailablePeriodSeconds)*time.Second, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 
@@ -711,7 +716,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		var wantSelectedResources []placementv1beta1.ResourceIdentifier
 		var testCustomResource testv1alpha1.TestResource
 		var crp *placementv1beta1.ClusterResourcePlacement
-
+		unAvailablePeriodSeconds := 30
 		BeforeAll(func() {
 			// Create the test resources.
 			readTestCustomResource(&testCustomResource)
@@ -758,13 +763,13 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 					memberCluster1EastProdName,
 				},
 			}
-			crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds = ptr.To(60)
+			crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds = ptr.To(unAvailablePeriodSeconds)
 			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
 		})
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, []string{memberCluster1EastProdName}, nil, "0", false)
-			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, 2*time.Duration(unAvailablePeriodSeconds)*time.Second, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on member cluster", func() {
@@ -803,12 +808,12 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, []string{memberCluster1EastProdName}, nil, "1", false)
-			Eventually(crpStatusUpdatedActual, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, 4*time.Duration(unAvailablePeriodSeconds)*time.Second, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd})
 		})
 	})
 
@@ -818,6 +823,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		var wantSelectedResources []placementv1beta1.ResourceIdentifier
 		var testCustomResource testv1alpha1.TestResource
 		var crp *placementv1beta1.ClusterResourcePlacement
+		unAvailablePeriodSeconds := 30
 
 		BeforeAll(func() {
 			// Create the test resources.
@@ -862,13 +868,13 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			crp.Spec.Policy = &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickAllPlacementType,
 			}
-			crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds = ptr.To(60)
+			crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds = ptr.To(unAvailablePeriodSeconds)
 			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
 		})
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", false)
-			Eventually(crpStatusUpdatedActual, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, 2*time.Duration(unAvailablePeriodSeconds)*time.Second, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on member clusters", func() {
@@ -931,12 +937,12 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("should update CRP status as expected", func() {
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "1", false)
-			Eventually(crpStatusUpdatedActual, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, 4*time.Duration(unAvailablePeriodSeconds)*time.Second, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
 			// Remove the custom deletion blocker finalizer from the CRP.
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 })

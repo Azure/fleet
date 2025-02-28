@@ -20,6 +20,16 @@ const (
 	WorkKind = "Work"
 	// AppliedWorkKind represents the kind of AppliedWork.
 	AppliedWorkKind = "AppliedWork"
+	// ClusterStagedUpdateRunKind is the kind of the ClusterStagedUpdateRun.
+	ClusterStagedUpdateRunKind = "ClusterStagedUpdateRun"
+	// ClusterStagedUpdateStrategyKind is the kind of the ClusterStagedUpdateStrategy.
+	ClusterStagedUpdateStrategyKind = "ClusterStagedUpdateStrategy"
+	// ClusterApprovalRequestKind is the kind of the ClusterApprovalRequest.
+	ClusterApprovalRequestKind = "ClusterApprovalRequest"
+	// ClusterResourcePlacementEvictionKind is the kind of the ClusterResourcePlacementEviction.
+	ClusterResourcePlacementEvictionKind = "ClusterResourcePlacementEviction"
+	// ClusterResourcePlacementDisruptionBudgetKind is the kind of the ClusterResourcePlacementDisruptionBudget.
+	ClusterResourcePlacementDisruptionBudgetKind = "ClusterResourcePlacementDisruptionBudget"
 )
 
 const (
@@ -91,6 +101,25 @@ const (
 	// PreviousBindingStateAnnotation records the previous state of a binding.
 	// This is used to remember if an "unscheduled" binding was moved from a "bound" state or a "scheduled" state.
 	PreviousBindingStateAnnotation = fleetPrefix + "previous-binding-state"
+
+	// ClusterStagedUpdateRunFinalizer is used by the ClusterStagedUpdateRun controller to make sure that the ClusterStagedUpdateRun
+	// object is not deleted until all its dependent resources are deleted.
+	ClusterStagedUpdateRunFinalizer = fleetPrefix + "stagedupdaterun-finalizer"
+
+	// TargetUpdateRunLabel indicates the target update run on a staged run related object.
+	TargetUpdateRunLabel = fleetPrefix + "targetupdaterun"
+
+	// UpdateRunDeleteStageName is the name of delete stage in the staged update run.
+	UpdateRunDeleteStageName = fleetPrefix + "deleteStage"
+
+	// IsLatestUpdateRunApprovalLabel indicates if the approval is the latest approval on a staged run.
+	IsLatestUpdateRunApprovalLabel = fleetPrefix + "isLatestUpdateRunApproval"
+
+	// TargetUpdatingStageNameLabel indicates the updating stage name on a staged run related object.
+	TargetUpdatingStageNameLabel = fleetPrefix + "targetUpdatingStage"
+
+	// ApprovalTaskNameFmt is the format of the approval task name.
+	ApprovalTaskNameFmt = "%s-%s"
 )
 
 // NamespacedName comprises a resource name, with a mandatory namespace.

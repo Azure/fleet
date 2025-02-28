@@ -13,14 +13,5 @@ func SetDefaultsWork(w *placementv1beta1.Work) {
 	if w.Spec.ApplyStrategy == nil {
 		w.Spec.ApplyStrategy = &placementv1beta1.ApplyStrategy{}
 	}
-
-	if w.Spec.ApplyStrategy.Type == "" {
-		w.Spec.ApplyStrategy.Type = placementv1beta1.ApplyStrategyTypeClientSideApply
-	}
-
-	if w.Spec.ApplyStrategy.Type == placementv1beta1.ApplyStrategyTypeServerSideApply && w.Spec.ApplyStrategy.ServerSideApplyConfig == nil {
-		w.Spec.ApplyStrategy.ServerSideApplyConfig = &placementv1beta1.ServerSideApplyConfig{
-			ForceConflicts: false,
-		}
-	}
+	SetDefaultsApplyStrategy(w.Spec.ApplyStrategy)
 }

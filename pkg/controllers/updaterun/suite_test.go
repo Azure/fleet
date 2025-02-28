@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -25,8 +26,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/informer"
 )
 
 var (
@@ -63,8 +67,9 @@ var _ = BeforeSuite(func() {
 	Expect(err).Should(Succeed())
 	Expect(cfg).NotTo(BeNil())
 
-	Expect(fleetv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
+	Expect(clusterv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(placementv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
+	Expect(placementv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(err).NotTo(HaveOccurred())
 
 	By("starting the controller manager")
@@ -84,8 +89,20 @@ var _ = BeforeSuite(func() {
 	By("set k8s client same as the controller manager")
 	k8sClient = mgr.GetClient()
 
+	// setup informer manager for the reconciler
+	dynamicClient, err := dynamic.NewForConfig(cfg)
+	Expect(err).Should(Succeed())
+	dynamicInformerManager := informer.NewInformerManager(dynamicClient, 0, ctx.Done())
+	dynamicInformerManager.AddStaticResource(informer.APIResourceMeta{
+		GroupVersionKind:     utils.NamespaceGVK,
+		GroupVersionResource: utils.NamespaceGVR,
+		IsClusterScoped:      true,
+	}, nil)
+
+	// setup our main reconciler
 	err = (&Reconciler{
-		Client: k8sClient,
+		Client:          k8sClient,
+		InformerManager: dynamicInformerManager,
 	}).SetupWithManager(mgr)
 	Expect(err).Should(Succeed())
 

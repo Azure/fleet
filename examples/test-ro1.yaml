@@ -4,6 +4,8 @@ metadata:
   name: ro-1
   namespace: test-namespace
 spec:
+  placement:
+    name: crp-example
   resourceSelectors:
     -  group: ""
        kind: ConfigMap
@@ -22,6 +24,9 @@ spec:
                   test-key: test-value2
         jsonPatchOverrides:
           - op: add
-            path: /metadata/labels
-            value:
-              new-label: new-value
+            # Note: the override will fail if there are no labels on the resource.
+            # To add a new label to an empty map or overwrite the existing labels, please use /metadata/labels.
+            # Path: /metadata/labels
+            # value: {"new-label": "new-value"}
+            path: /metadata/labels/new-label
+            value: "new-value"

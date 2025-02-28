@@ -18,6 +18,7 @@ import (
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,6 +56,10 @@ import (
 var (
 	// maxFailedResourcePlacementLimit indicates the max number of failed resource placements to include in the status.
 	maxFailedResourcePlacementLimit = 100
+	// maxDriftedResourcePlacementLimit indicates the max number of drifted resource placements to include in the status.
+	maxDriftedResourcePlacementLimit = 100
+	// maxDiffedResourcePlacementLimit indicates the max number of diffed resource placements to include in the status.
+	maxDiffedResourcePlacementLimit = 100
 
 	errResourceSnapshotNotFound = fmt.Errorf("the master resource snapshot is not found")
 )
@@ -128,7 +133,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		// Though the bounded binding is not taking the latest resourceSnapshot, we still needs to reconcile the works.
 		if !condition.IsConditionStatusFalse(rolloutStartedCondition, resourceBinding.Generation) &&
 			!condition.IsConditionStatusTrue(rolloutStartedCondition, resourceBinding.Generation) {
-			// The rollout controller is still in the processing of updating the condition
+			// The rollout controller is still in the processing of updating the condition.
+			//
+			// Note that running this branch would also skip the refreshing of apply strategies;
+			// it will resume once the rollout controller updates the rollout started condition.
 			klog.V(2).InfoS("Requeue the resource binding until the rollout controller finishes updating the status", "resourceBinding", bindingRef, "generation", resourceBinding.Generation, "rolloutStartedCondition", rolloutStartedCondition)
 			return controllerruntime.Result{Requeue: true}, nil
 		}
@@ -140,13 +148,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 	works, syncErr := r.listAllWorksAssociated(ctx, &resourceBinding)
 	if syncErr == nil {
 		// generate and apply the workUpdated works if we have all the works
-		overrideSucceeded, workUpdated, syncErr = r.syncAllWork(ctx, &resourceBinding, works, cluster)
+		overrideSucceeded, workUpdated, syncErr = r.syncAllWork(ctx, &resourceBinding, works, &cluster)
 	}
-	// Reset the conditions and failed placements.
+	// Reset the conditions and failed/drifted/diffed placements.
 	for i := condition.OverriddenCondition; i < condition.TotalCondition; i++ {
 		resourceBinding.RemoveCondition(string(i.ResourceBindingConditionType()))
 	}
 	resourceBinding.Status.FailedPlacements = nil
+	resourceBinding.Status.DriftedPlacements = nil
+	resourceBinding.Status.DiffedPlacements = nil
 	if overrideSucceeded {
 		overrideReason := condition.OverriddenSucceededReason
 		overrideMessage := "Successfully applied the override rules on the resources"
@@ -166,6 +176,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 
 	if syncErr != nil {
 		klog.ErrorS(syncErr, "Failed to sync all the works", "resourceBinding", bindingRef)
+		//TODO: check if it's user error and set a different failed reason
 		errorMessage := syncErr.Error()
 		// unwrap will return nil if syncErr is not wrapped
 		// the wrapped error string format is "%w: %s" so that remove ": " from messages
@@ -197,17 +208,31 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 			ObservedGeneration: resourceBinding.Generation,
 			Message:            "All of the works are synchronized to the latest",
 		})
-		if workUpdated {
-			// revert the applied condition if we made any changes to the work
+		switch {
+		case !workUpdated:
+			// The Work object itself is unchanged; refresh the cluster resource binding status
+			// based on the status information reported on the Work object(s).
+			setBindingStatus(works, &resourceBinding)
+		case resourceBinding.Spec.ApplyStrategy == nil || resourceBinding.Spec.ApplyStrategy.Type != fleetv1beta1.ApplyStrategyTypeReportDiff:
+			// The Work object itself has changed; set a False Applied condition which signals
+			// that resources are in the process of being applied.
 			resourceBinding.SetConditions(metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
-				Reason:             condition.WorkNeedSyncedReason,
-				Message:            "In the processing of synchronizing the work to the member cluster",
+				Reason:             condition.WorkApplyInProcess,
+				Message:            "Resources are being applied",
 				ObservedGeneration: resourceBinding.Generation,
 			})
-		} else {
-			setBindingStatus(works, &resourceBinding)
+		case resourceBinding.Spec.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff:
+			// The Work object itself has changed; set a False DiffReported condition which signals
+			// that diff reporting on resources are in progress.
+			resourceBinding.SetConditions(metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+				Reason:             condition.WorkDiffReportInProcess,
+				Message:            "Diff reporting on resources is in progress",
+				ObservedGeneration: resourceBinding.Generation,
+			})
 		}
 	}
 
@@ -276,7 +301,8 @@ func (r *Reconciler) updateBindingStatusWithRetry(ctx context.Context, resourceB
 		}
 		return nil
 	}
-	return err
+	klog.V(2).InfoS("Successfully updated the resourceBinding status", "resourceBinding", bindingRef, "resourceBindingStatus", resourceBinding.Status)
+	return nil
 }
 
 // handleDelete handle a deleting binding
@@ -372,10 +398,36 @@ func (r *Reconciler) listAllWorksAssociated(ctx context.Context, resourceBinding
 // it returns
 // 1: if we apply the overrides successfully
 // 2: if we actually made any changes on the hub cluster
-func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding, existingWorks map[string]*fleetv1beta1.Work, cluster clusterv1beta1.MemberCluster) (bool, bool, error) {
+func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding, existingWorks map[string]*fleetv1beta1.Work, cluster *clusterv1beta1.MemberCluster) (bool, bool, error) {
 	updateAny := atomic.NewBool(false)
 	resourceBindingRef := klog.KObj(resourceBinding)
-	// the hash256 function can can handle empty list https://go.dev/play/p/_4HW17fooXM
+
+	// Refresh the apply strategy for all existing works.
+	//
+	// This step is performed separately from other refreshes as apply strategy changes are
+	// CRP-scoped and independent from the resource snapshot management mechanism. In other
+	// words, even if a work has become stranded (i.e., it is linked to a resource snapshot that
+	// is no longer present in the system), it should still be able to receive the latest apply
+	// strategy update.
+	errs, cctx := errgroup.WithContext(ctx)
+	for workName := range existingWorks {
+		w := existingWorks[workName]
+		errs.Go(func() error {
+			updated, err := r.syncApplyStrategy(ctx, resourceBinding, w)
+			if err != nil {
+				return err
+			}
+			if updated {
+				updateAny.Store(true)
+			}
+			return nil
+		})
+	}
+	if updateErr := errs.Wait(); updateErr != nil {
+		return false, false, updateErr
+	}
+
+	// the hash256 function can handle empty list https://go.dev/play/p/_4HW17fooXM
 	resourceOverrideSnapshotHash, err := resource.HashOf(resourceBinding.Spec.ResourceOverrideSnapshots)
 	if err != nil {
 		return false, false, controller.NewUnexpectedBehaviorError(err)
@@ -393,7 +445,7 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 			// the resourceIndex is deleted but the works might still be up to date with the binding.
 			if areAllWorkSynced(existingWorks, resourceBinding, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash) {
 				klog.V(2).InfoS("All the works are synced with the resourceBinding even if the resource snapshot index is removed", "resourceBinding", resourceBindingRef)
-				return true, false, nil
+				return true, updateAny.Load(), nil
 			}
 			return false, false, controller.NewUserError(err)
 		}
@@ -413,7 +465,7 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 
 	// issue all the create/update requests for the corresponding works for each snapshot in parallel
 	activeWork := make(map[string]*fleetv1beta1.Work, len(resourceSnapshots))
-	errs, cctx := errgroup.WithContext(ctx)
+	errs, cctx = errgroup.WithContext(ctx)
 	// generate work objects for each resource snapshot
 	for i := range resourceSnapshots {
 		snapshot := resourceSnapshots[i]
@@ -425,17 +477,22 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 		}
 		var simpleManifests []fleetv1beta1.Manifest
 		for j := range snapshot.Spec.SelectedResources {
-			selectedResource := snapshot.Spec.SelectedResources[j]
-			if err := r.applyOverrides(&selectedResource, cluster, croMap, roMap); err != nil {
-				return false, false, err
+			selectedResource := snapshot.Spec.SelectedResources[j].DeepCopy()
+			// TODO: override the content of the wrapped resource instead of the envelope itself
+			resourceDeleted, overrideErr := r.applyOverrides(selectedResource, cluster, croMap, roMap)
+			if overrideErr != nil {
+				return false, false, overrideErr
 			}
-
+			if resourceDeleted {
+				klog.V(2).InfoS("The resource is deleted by the override rules", "snapshot", klog.KObj(snapshot), "selectedResource", snapshot.Spec.SelectedResources[j])
+				continue
+			}
 			// we need to special treat configMap with envelopeConfigMapAnnotation annotation,
 			// so we need to check the GVK and annotation of the selected resource
 			var uResource unstructured.Unstructured
-			if err := uResource.UnmarshalJSON(selectedResource.Raw); err != nil {
-				klog.ErrorS(err, "work has invalid content", "snapshot", klog.KObj(snapshot), "selectedResource", selectedResource.Raw)
-				return true, false, controller.NewUnexpectedBehaviorError(err)
+			if unMarshallErr := uResource.UnmarshalJSON(selectedResource.Raw); unMarshallErr != nil {
+				klog.ErrorS(unMarshallErr, "work has invalid content", "snapshot", klog.KObj(snapshot), "selectedResource", selectedResource.Raw)
+				return true, false, controller.NewUnexpectedBehaviorError(unMarshallErr)
 			}
 			if uResource.GetObjectKind().GroupVersionKind() == utils.ConfigMapGVK &&
 				len(uResource.GetAnnotations()[fleetv1beta1.EnvelopeConfigMapAnnotation]) != 0 {
@@ -447,11 +504,11 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 				activeWork[work.Name] = work
 				newWork = append(newWork, work)
 			} else {
-				simpleManifests = append(simpleManifests, fleetv1beta1.Manifest(selectedResource))
+				simpleManifests = append(simpleManifests, fleetv1beta1.Manifest(*selectedResource))
 			}
 		}
 		if len(simpleManifests) == 0 {
-			klog.V(2).InfoS("the snapshot contains enveloped resource only", "snapshot", klog.KObj(snapshot))
+			klog.V(2).InfoS("the snapshot contains no resource to apply either because of override or enveloped resources", "snapshot", klog.KObj(snapshot))
 		}
 		// generate a work object for the manifests even if there is nothing to place
 		// to allow CRP to collect the status of the placement
@@ -503,13 +560,30 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 	return true, updateAny.Load(), nil
 }
 
+// syncApplyStrategy syncs the apply strategy specified on a ClusterResourceBinding object
+// to a Work object.
+func (r *Reconciler) syncApplyStrategy(
+	ctx context.Context,
+	resourceBinding *fleetv1beta1.ClusterResourceBinding,
+	existingWork *fleetv1beta1.Work,
+) (bool, error) {
+	// Skip the update if no change on apply strategy is needed.
+	if equality.Semantic.DeepEqual(existingWork.Spec.ApplyStrategy, resourceBinding.Spec.ApplyStrategy) {
+		return false, nil
+	}
+
+	// Update the apply strategy on the work.
+	existingWork.Spec.ApplyStrategy = resourceBinding.Spec.ApplyStrategy.DeepCopy()
+	if err := r.Client.Update(ctx, existingWork); err != nil {
+		klog.ErrorS(err, "Failed to update the apply strategy on the work", "work", klog.KObj(existingWork), "binding", klog.KObj(resourceBinding))
+		return true, controller.NewUpdateIgnoreConflictError(err)
+	}
+	klog.V(2).InfoS("Successfully updated the apply strategy on the work", "work", klog.KObj(existingWork), "binding", klog.KObj(resourceBinding))
+	return true, nil
+}
+
 // areAllWorkSynced checks if all the works are synced with the resource binding.
 func areAllWorkSynced(existingWorks map[string]*fleetv1beta1.Work, resourceBinding *fleetv1beta1.ClusterResourceBinding, _, _ string) bool {
-	syncedCondition := resourceBinding.GetCondition(string(fleetv1beta1.ResourceBindingWorkSynchronized))
-	if !condition.IsConditionStatusTrue(syncedCondition, resourceBinding.Generation) {
-		// The binding has to be synced first before we can check the works
-		return false
-	}
 	// TODO: check resourceOverrideSnapshotHash and  clusterResourceOverrideSnapshotHash after all the work has the ParentResourceOverrideSnapshotHashAnnotation and ParentClusterResourceOverrideSnapshotHashAnnotation
 	resourceSnapshotName := resourceBinding.Spec.ResourceSnapshotName
 	for _, work := range existingWorks {
@@ -689,7 +763,8 @@ func (r *Reconciler) upsertWork(ctx context.Context, newWork, existingWork *flee
 		// we already checked the label in fetchAllResourceSnapShots function so no need to check again
 		resourceIndex, _ := labels.ExtractResourceIndexFromClusterResourceSnapshot(resourceSnapshot)
 		if workResourceIndex == resourceIndex {
-			// no need to do anything if the work is generated from the same resource/override snapshots
+			// no need to do anything if the work is generated from the same resource/override snapshots.
+			// Note that apply strategy is updated separately beforehand.
 			if existingWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] == newWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] &&
 				existingWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] == newWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] {
 				klog.V(2).InfoS("Work is associated with the desired resource/override snapshots", "existingROHash", existingWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation],
@@ -711,6 +786,7 @@ func (r *Reconciler) upsertWork(ctx context.Context, newWork, existingWork *flee
 	existingWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] = newWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation]
 	existingWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] = newWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation]
 	existingWork.Spec.Workload.Manifests = newWork.Spec.Workload.Manifests
+	existingWork.Spec.ApplyStrategy = newWork.Spec.ApplyStrategy
 	if err := r.Client.Update(ctx, existingWork); err != nil {
 		klog.ErrorS(err, "Failed to update the work associated with the resourceSnapshot", "resourceSnapshot", resourceSnapshotObj, "work", workObj)
 		return true, controller.NewUpdateIgnoreConflictError(err)
@@ -742,108 +818,422 @@ func getWorkNamePrefixFromSnapshotName(resourceSnapshot *fleetv1beta1.ClusterRes
 	return fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, crpName, subIndexVal), nil
 }
 
+// workConditionSummarizedStatus helps produce a summary status of a group of Applied, Available, or
+// DiffReported conditions.
+type workConditionSummarizedStatus int
+
+const (
+	// workConditionSummarizedStatusIncomplete signals that some of the given conditions are not
+	// set yet, or have become stale.
+	workConditionSummarizedStatusIncomplete workConditionSummarizedStatus = iota
+	// workConditionSummarizedStatusTrue signals that all of the given conditions are fresh and set to True.
+	workConditionSummarizedStatusTrue
+	// workConditionSummarizedStatusFalse signals that all of the given conditions are fresh and
+	// at least one of the given conditions is set to False.
+	workConditionSummarizedStatusFalse
+)
+
 // setBindingStatus sets the binding status based on the works associated with the binding.
 func setBindingStatus(works map[string]*fleetv1beta1.Work, resourceBinding *fleetv1beta1.ClusterResourceBinding) {
 	bindingRef := klog.KObj(resourceBinding)
+
+	// Note (chenyu1): the work generator will refresh the status of a ClusterResourceBinding using
+	// the following logic:
+	//
+	// a) If the currently active apply strategy (as dictated by the ClusterResourceBinding spec)
+	//    is ClientSideApply or ServerSideApply, the work generator will update the Applied and
+	//    Available conditions (plus the details about failed, diffed, and/or drifted placements)
+	//    in the status, as appropriate; the DiffReported condition will not be updated.
+	// b) If the currently active apply strategy is ReportDiff, the work generator will update
+	//    the DiffReported condition in the status, plus the details about diffed placements;
+	//    the Applied and Available conditions (plus the details about failed and/or drifted placements)
+	//    will not be updated.
+
 	// try to gather the resource binding applied status if we didn't update any associated work spec this time
-	appliedCond := buildAllWorkAppliedCondition(works, resourceBinding)
-	resourceBinding.SetConditions(appliedCond)
-	var availableCond metav1.Condition
-	// only try to gather the available status if all the work objects are applied
-	if appliedCond.Status == metav1.ConditionTrue {
-		availableCond = buildAllWorkAvailableCondition(works, resourceBinding)
-		resourceBinding.SetConditions(availableCond)
+
+	var isReportDiffModeOn = resourceBinding.Spec.ApplyStrategy != nil && resourceBinding.Spec.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff
+	var appliedSummarizedStatus, availabilitySummarizedStatus, diffReportedSummarizedStatus workConditionSummarizedStatus
+	if isReportDiffModeOn {
+		// Set the DiffReported condition if (and only if) a ReportDiff apply strategy is currently
+		// being used.
+		diffReportedSummarizedStatus = setAllWorkDiffReportedCondition(works, resourceBinding)
+	} else {
+		// Set the Applied and Available condition if (and only if) a ClientSideApply or ServerSideApply
+		// apply strategy is currently being used.
+		appliedSummarizedStatus = setAllWorkAppliedCondition(works, resourceBinding)
+		// Note that Fleet will only set the Available condition if the apply op itself is successful, i.e.,
+		// the Applied condition is True.
+		availabilitySummarizedStatus = setAllWorkAvailableCondition(works, resourceBinding)
 	}
+
 	resourceBinding.Status.FailedPlacements = nil
+	resourceBinding.Status.DiffedPlacements = nil
+	resourceBinding.Status.DriftedPlacements = nil
 	// collect and set the failed resource placements to the binding if not all the works are available
-	if appliedCond.Status != metav1.ConditionTrue || availableCond.Status != metav1.ConditionTrue {
-		failedResourcePlacements := make([]fleetv1beta1.FailedResourcePlacement, 0, maxFailedResourcePlacementLimit) // preallocate the memory
-		for _, w := range works {
-			if w.DeletionTimestamp != nil {
-				klog.V(2).InfoS("Ignoring the deleting work", "clusterResourceBinding", bindingRef, "work", klog.KObj(w))
-				continue // ignore the deleting work
-			}
+	driftedResourcePlacements := make([]fleetv1beta1.DriftedResourcePlacement, 0, maxDriftedResourcePlacementLimit) // preallocate the memory
+	failedResourcePlacements := make([]fleetv1beta1.FailedResourcePlacement, 0, maxFailedResourcePlacementLimit)    // preallocate the memory
+	diffedResourcePlacements := make([]fleetv1beta1.DiffedResourcePlacement, 0, maxDiffedResourcePlacementLimit)    // preallocate the memory
+	for _, w := range works {
+		if w.DeletionTimestamp != nil {
+			klog.V(2).InfoS("Ignoring the deleting work", "clusterResourceBinding", bindingRef, "work", klog.KObj(w))
+			continue // ignore the deleting work
+		}
+
+		// Populate the failed, diffed, and drifted placements based on the summarized status of the Applied,
+		// Available, and DiffReported conditions on all Work objects.
+		//
+		// Note (chenyu1): Fleet will only report apply/availability check failures, diffs, and drifts (as applicable)
+		// when all the Work objects have completed their apply ops, availability checks, and diff reporting, as dictated
+		// by the currently specified apply strategy (successful or not). This is to make sure that previously
+		// populated failures, diffs, and/or drifts will not leak into the current reportings.
+		switch {
+		case isReportDiffModeOn && diffReportedSummarizedStatus == workConditionSummarizedStatusTrue:
+			// The ReportDiff apply straregy is in use and all works have reported configuration
+			// differences.
+			//
+			// In this case, set diffed placements only; failed and drifted placements will not
+			// be set (apply/availability check failure and drifts cannot occur in report diff mode).
+			diffedManifests := extractDiffedResourcePlacementsFromWork(w)
+			diffedResourcePlacements = append(diffedResourcePlacements, diffedManifests...)
+		case isReportDiffModeOn:
+			// The ReportDiff apply strategy is in use but not all works have reported configuration
+			// differences.
+			//
+			// In this case, no diffed, failed, or drifted placements will be set (diff information present
+			// might be incomplete or stale; apply/availability check failure and drifts cannot occur in
+			// report diff mode).
+		case appliedSummarizedStatus == workConditionSummarizedStatusIncomplete:
+			// The ClientSideApply or ServerSideApply apply strategy is in use but some of the works have
+			// not been applied yet.
+			//
+			// In this case, no diffed, failed, or drifted placements will be set (as information present
+			// might be incomplete or stale).
+		case appliedSummarizedStatus == workConditionSummarizedStatusFalse:
+			// The ClientSideApply or ServerSideApply apply strategy is in use but some of the works have
+			// apply op failures.
+			//
+			// In this case, set failed, diffed, and drifted placements.
 			failedManifests := extractFailedResourcePlacementsFromWork(w)
 			failedResourcePlacements = append(failedResourcePlacements, failedManifests...)
+
+			diffedManifests := extractDiffedResourcePlacementsFromWork(w)
+			diffedResourcePlacements = append(diffedResourcePlacements, diffedManifests...)
+
+			driftedManifests := extractDriftedResourcePlacementsFromWork(w)
+			driftedResourcePlacements = append(driftedResourcePlacements, driftedManifests...)
+		case availabilitySummarizedStatus == workConditionSummarizedStatusIncomplete:
+			// The ClientSideApply or ServerSideApply apply strategy is in use; all works have been applied but
+			// some of the works have not completed the availability check yet.
+			//
+			// In theory this would not happen as the Fleet work applier will always set the Applied and
+			// Available conditions together. However, Fleet can still handle this case for completeness reasons.
+			//
+			// In this case, set drifted placements; no failed or diffed placements will be set (availability
+			// check failure information might be incomplete or stale; diffs will only occur when there
+			// is an apply failure or the report diff mode is on).
+			driftedManifests := extractDriftedResourcePlacementsFromWork(w)
+			driftedResourcePlacements = append(driftedResourcePlacements, driftedManifests...)
+		case availabilitySummarizedStatus == workConditionSummarizedStatusFalse:
+			// The ClientSideApply or ServerSideApply apply strategy is in use; all works have been applied but
+			// some of them have failed the availability check.
+			//
+			// In this case, set failed and drifted placements; no diffed placements will be set (diffs
+			// will only occur when there is an apply failure or the report diff mode is on).
+			failedManifests := extractFailedResourcePlacementsFromWork(w)
+			failedResourcePlacements = append(failedResourcePlacements, failedManifests...)
+
+			driftedManifests := extractDriftedResourcePlacementsFromWork(w)
+			driftedResourcePlacements = append(driftedResourcePlacements, driftedManifests...)
+		default:
+			// The ClientSideApply or ServerSideApply apply strategy is in use; all works have been applied
+			// and are available.
+			//
+			// In this case, set only drifted placements (drifts might occur even if the apply op itself
+			// completes); no failed or diffed placements will be set (apply/availability
+			// check failure and diffs will not occur when all works are applied and available).
+			driftedManifests := extractDriftedResourcePlacementsFromWork(w)
+			driftedResourcePlacements = append(driftedResourcePlacements, driftedManifests...)
 		}
-		// cut the list to keep only the max limit
-		if len(failedResourcePlacements) > maxFailedResourcePlacementLimit {
-			failedResourcePlacements = failedResourcePlacements[0:maxFailedResourcePlacementLimit]
-		}
+	}
+	// cut the list to keep only the max limit
+	if len(failedResourcePlacements) > maxFailedResourcePlacementLimit {
+		failedResourcePlacements = failedResourcePlacements[0:maxFailedResourcePlacementLimit]
+	}
+	if len(failedResourcePlacements) > 0 {
 		resourceBinding.Status.FailedPlacements = failedResourcePlacements
-		if len(failedResourcePlacements) > 0 {
-			klog.V(2).InfoS("Populated failed manifests", "clusterResourceBinding", bindingRef, "numberOfFailedPlacements", len(failedResourcePlacements))
-		}
+		klog.V(2).InfoS("Populated failed manifests", "clusterResourceBinding", bindingRef, "numberOfFailedPlacements", len(failedResourcePlacements))
+	}
+
+	// cut the list to keep only the max limit
+	if len(diffedResourcePlacements) > maxDiffedResourcePlacementLimit {
+		// Sort the slice
+		sort.Slice(diffedResourcePlacements, func(i, j int) bool {
+			return utils.LessFuncDiffedResourcePlacements(diffedResourcePlacements[i], diffedResourcePlacements[j])
+		})
+		diffedResourcePlacements = diffedResourcePlacements[0:maxDiffedResourcePlacementLimit]
+	}
+	if len(diffedResourcePlacements) > 0 {
+		resourceBinding.Status.DiffedPlacements = diffedResourcePlacements
+		klog.V(2).InfoS("Populated diffed manifests", "clusterResourceBinding", bindingRef, "numberOfDiffedPlacements", len(diffedResourcePlacements))
+	}
+
+	// cut the list to keep only the max limit
+	if len(driftedResourcePlacements) > maxDriftedResourcePlacementLimit {
+		// Sort the slice
+		sort.Slice(driftedResourcePlacements, func(i, j int) bool {
+			return utils.LessFuncDriftedResourcePlacements(driftedResourcePlacements[i], driftedResourcePlacements[j])
+		})
+		driftedResourcePlacements = driftedResourcePlacements[0:maxDriftedResourcePlacementLimit]
+	}
+	if len(driftedResourcePlacements) > 0 {
+		resourceBinding.Status.DriftedPlacements = driftedResourcePlacements
+		klog.V(2).InfoS("Populated drifted manifests", "clusterResourceBinding", bindingRef, "numberOfDriftedPlacements", len(driftedResourcePlacements))
 	}
 }
 
-func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) metav1.Condition {
-	allApplied := true
-	var notAppliedWork string
+// setAllWorkAppliedCondition sets the Applied condition on a ClusterResourceBinding
+// based on the Applied conditions on all the related Work objects.
+//
+// The Applied condition of a ClusterResourceBinding object is set to True if and only if all the
+// related Work objects have their Applied condition set to True.
+func setAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) workConditionSummarizedStatus {
+	// Fleet here makes a clear distinction between incomplete, failed, and successful apply operations.
+	// This is to ensure that stale apply information (esp. those set before
+	// an apply strategy change) will not leak into the current apply operations.
+	areAllWorksApplyOpsCompleted := true
+	areAllWorksApplyOpsSuccessful := true
+
+	var firstWorkWithIncompleteApplyOp *fleetv1beta1.Work
+	var firstWorkWithFailedApplyOp *fleetv1beta1.Work
+
 	for _, w := range works {
-		if !condition.IsConditionStatusTrue(meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied), w.GetGeneration()) {
-			allApplied = false
-			notAppliedWork = w.Name
-			break
+		applyCond := meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
+		switch {
+		case condition.IsConditionStatusTrue(applyCond, w.GetGeneration()):
+			// The Work object has completed the apply op successfully.
+		case condition.IsConditionStatusFalse(applyCond, w.GetGeneration()):
+			// An error has occurred during the apply op.
+			areAllWorksApplyOpsSuccessful = false
+			if firstWorkWithFailedApplyOp == nil {
+				firstWorkWithFailedApplyOp = w
+			}
+		default:
+			// The Work object has not yet completed the apply op.
+			areAllWorksApplyOpsCompleted = false
+			if firstWorkWithIncompleteApplyOp == nil {
+				firstWorkWithIncompleteApplyOp = w
+			}
 		}
 	}
-	if allApplied {
+
+	switch {
+	case !areAllWorksApplyOpsCompleted:
+		// Not all Work objects have completed the apply op.
+		klog.V(2).InfoS("Some works are not yet completed the apply op", "binding", klog.KObj(binding), "firstWorkWithIncompleteApplyOp", klog.KObj(firstWorkWithIncompleteApplyOp))
+		binding.SetConditions(metav1.Condition{
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1beta1.ResourceBindingApplied),
+			Reason:             condition.WorkNotAppliedReason,
+			Message:            fmt.Sprintf("Work object %s has not yet completed the apply op", firstWorkWithIncompleteApplyOp.Name),
+			ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusIncomplete
+	case !areAllWorksApplyOpsSuccessful:
+		// All Work objects have completed the apply op, but at least one of them has failed.
+		klog.V(2).InfoS("Some works have failed to apply", "binding", klog.KObj(binding), "firstWorkWithFailedApplyOp", klog.KObj(firstWorkWithFailedApplyOp))
+		binding.SetConditions(metav1.Condition{
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1beta1.ResourceBindingApplied),
+			Reason:             condition.WorkNotAppliedReason,
+			Message:            fmt.Sprintf("Work object %s has failed to apply", firstWorkWithFailedApplyOp.Name),
+			ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusFalse
+	default:
+		// All Work objects have completed the apply op successfully.
 		klog.V(2).InfoS("All works associated with the binding are applied", "binding", klog.KObj(binding))
-		return metav1.Condition{
+		binding.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingApplied),
 			Reason:             condition.AllWorkAppliedReason,
 			Message:            "All corresponding work objects are applied",
 			ObservedGeneration: binding.GetGeneration(),
-		}
-	}
-	return metav1.Condition{
-		Status:             metav1.ConditionFalse,
-		Type:               string(fleetv1beta1.ResourceBindingApplied),
-		Reason:             condition.WorkNotAppliedReason,
-		Message:            fmt.Sprintf("Work object %s is not applied", notAppliedWork),
-		ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusTrue
 	}
 }
 
-func buildAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) metav1.Condition {
-	allAvailable := true
-	var notAvailableWork string
-	var notTrackableWork string
+// setAllWorkDiffReportedCondition sets the DiffReported condition on a ClusterResourceBinding
+// based on the DiffReported conditions on all the related Work objects.
+//
+// The DiffReported condition of a ClusterResourceBinding object is set to True if and only if all the
+// related Work objects have their DiffReported condition set to True.
+func setAllWorkDiffReportedCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) workConditionSummarizedStatus {
+	// Fleet here makes a clear distinction between incomplete, failed, and successful diff reportings.
+	// This is to ensure that stale diff information (esp. those set before
+	// an apply strategy change) will not leak into the current reportings.
+	areAllWorksDiffReportingCompleted := true
+	areAllWorksDiffReportingSuccessful := true
+
+	var firstWorkWithIncompleteDiffReporting *fleetv1beta1.Work
+	var firstWorkWithFailedDiffReporting *fleetv1beta1.Work
+
 	for _, w := range works {
-		cond := meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
-		if !condition.IsConditionStatusTrue(cond, w.GetGeneration()) {
-			allAvailable = false
-			notAvailableWork = w.Name
-			break
-		}
-		if cond.Reason == work.WorkNotTrackableReason {
-			notTrackableWork = w.Name
+		diffReportedCond := meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeDiffReported)
+		switch {
+		case condition.IsConditionStatusTrue(diffReportedCond, w.GetGeneration()):
+			// The Work object has completed diff reporting successfully.
+		case condition.IsConditionStatusFalse(diffReportedCond, w.GetGeneration()):
+			// An error has occurred during the diff reporting process.
+			areAllWorksDiffReportingSuccessful = false
+			if firstWorkWithFailedDiffReporting == nil {
+				firstWorkWithFailedDiffReporting = w
+			}
+		default:
+			// The Work object has not yet completed diff reporting.
+			areAllWorksDiffReportingCompleted = false
+			if firstWorkWithIncompleteDiffReporting == nil {
+				firstWorkWithIncompleteDiffReporting = w
+			}
 		}
 	}
-	if allAvailable {
-		klog.V(2).InfoS("All works associated with the binding are available", "binding", klog.KObj(binding), "notTrackableWork", notTrackableWork)
-		reason := condition.AllWorkAvailableReason
-		message := "All corresponding work objects are available"
-		if len(notTrackableWork) > 0 {
-			reason = work.WorkNotTrackableReason
-			message = fmt.Sprintf("The availability of work object %s is not trackable", notTrackableWork)
-		}
 
-		return metav1.Condition{
+	switch {
+	case !areAllWorksDiffReportingCompleted:
+		// Not all Work objects have completed diff reporting.
+		klog.V(2).InfoS("Some works are not yet completed diff reporting", "binding", klog.KObj(binding), "firstWorkWithIncompleteDiffReporting", klog.KObj(firstWorkWithIncompleteDiffReporting))
+		meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+			Reason:             condition.WorkNotDiffReportedReason,
+			Message:            fmt.Sprintf("Work object %s has not yet completed diff reporting", firstWorkWithIncompleteDiffReporting.Name),
+			ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusIncomplete
+	case !areAllWorksDiffReportingSuccessful:
+		// All Work objects have completed diff reporting, but at least one of them has failed.
+		klog.V(2).InfoS("Some works have failed to report diff", "binding", klog.KObj(binding), "firstWorkWithFailedDiffReporting", klog.KObj(firstWorkWithFailedDiffReporting))
+		meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+			Reason:             condition.WorkNotDiffReportedReason,
+			Message:            fmt.Sprintf("Work object %s has failed to report diff", firstWorkWithFailedDiffReporting.Name),
+			ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusFalse
+	default:
+		// All Work objects have completed diff reporting successfully.
+		klog.V(2).InfoS("All works associated with the binding have reported diff", "binding", klog.KObj(binding))
+		meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
+			Status:             metav1.ConditionTrue,
+			Type:               string(fleetv1beta1.ResourceBindingDiffReported),
+			Reason:             condition.AllWorkDiffReportedReason,
+			Message:            "All corresponding work objects have reported diff",
+			ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusTrue
+	}
+}
+
+// setAllWorkAvailableCondition sets the Available condition on a ClusterResourceBinding
+// based on the Available conditions on all the related Work objects.
+//
+// The Available condition of a ClusterResourceBinding object is set to True if and only if all the
+// related Work objects have their Available condition set to True.
+func setAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) workConditionSummarizedStatus {
+	// If the Applied condition has been set to False, skip setting the Available condition.
+	appliedCond := meta.FindStatusCondition(binding.Status.Conditions, string(fleetv1beta1.ResourceBindingApplied))
+	if !condition.IsConditionStatusTrue(appliedCond, binding.GetGeneration()) {
+		klog.V(2).InfoS("Some works are not yet applied or have failed to get applied; skip populating the Available condition", "binding", klog.KObj(binding))
+		return workConditionSummarizedStatusFalse
+	}
+
+	// Fleet here makes a clear distinction between incomplete, failed and successful availability checks.
+	// This is to ensure that stale information will not leak into the current reportings.
+	areAllWorksAvailabilityCheckCompleted := true
+	areAllWorksAvailabilityCheckSuccessful := true
+
+	var firstWorkWithIncompleteAvailabilityCheck *fleetv1beta1.Work
+	var firstWorkWithFailedAvailabilityCheck *fleetv1beta1.Work
+	var firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes *fleetv1beta1.Work
+	for _, w := range works {
+		availableCond := meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+		switch {
+		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()) && availableCond.Reason == work.WorkNotTrackableReason:
+			// The Work object has completed the availability check successfully, due to the resources being untrackable.
+			if firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes == nil {
+				firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes = w
+			}
+		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()):
+			// The Work object has completed the availability check successfully.
+		case condition.IsConditionStatusFalse(availableCond, w.GetGeneration()):
+			// The Work object has failed the availability check.
+			areAllWorksAvailabilityCheckSuccessful = false
+			if firstWorkWithFailedAvailabilityCheck == nil {
+				firstWorkWithFailedAvailabilityCheck = w
+			}
+		default:
+			// The Work object has not yet completed the availability check.
+			//
+			// This in theory should never happen as the Fleet work applier always set the Applied
+			// and Available conditions on a Work object together in one call and Fleet will not
+			// check resource availability if the apply op itself has failed. However, Fleet can
+			// still handle this case for completeness reasons.
+			areAllWorksAvailabilityCheckCompleted = false
+			if firstWorkWithIncompleteAvailabilityCheck == nil {
+				firstWorkWithIncompleteAvailabilityCheck = w
+			}
+		}
+	}
+
+	switch {
+	case !areAllWorksAvailabilityCheckCompleted:
+		// Not all Work objects have completed the availability check.
+		//
+		// As previously explained, this should never happen in practice. Fleet here handles
+		// this case for completeness reasons.
+		klog.V(2).InfoS("Some works are not yet completed availability check", "binding", klog.KObj(binding), "firstWorkWithIncompleteAvailabilityCheck", klog.KObj(firstWorkWithIncompleteAvailabilityCheck))
+		meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1beta1.ResourceBindingAvailable),
+			Reason:             condition.WorkNotAvailableReason,
+			Message:            fmt.Sprintf("Work object %s has not yet completed availability check", firstWorkWithIncompleteAvailabilityCheck.Name),
+			ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusIncomplete
+	case !areAllWorksAvailabilityCheckSuccessful:
+		// All Work objects have completed the availability check, but at least one of them has failed.
+		klog.V(2).InfoS("Some works have failed to get available", "binding", klog.KObj(binding), "firstWorkWithFailedAvailabilityCheck", klog.KObj(firstWorkWithFailedAvailabilityCheck))
+		meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1beta1.ResourceBindingAvailable),
+			Reason:             condition.WorkNotAvailableReason,
+			Message:            fmt.Sprintf("Work object %s is not yet available", firstWorkWithFailedAvailabilityCheck.Name),
+			ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusFalse
+	case firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes != nil:
+		// All Work objects have completed the availability check successfully, and at least one of them has succeeded due to untrackable resources.
+		klog.V(2).InfoS("All works associated with the binding are available; untrackable resources are present", "binding", klog.KObj(binding), "firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes", klog.KObj(firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes))
+		meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingAvailable),
-			Reason:             reason,
-			Message:            message,
+			Reason:             work.WorkNotTrackableReason,
+			Message:            fmt.Sprintf("The availability of work object %s is not trackable", firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes.Name),
 			ObservedGeneration: binding.GetGeneration(),
-		}
-	}
-	return metav1.Condition{
-		Status:             metav1.ConditionFalse,
-		Type:               string(fleetv1beta1.ResourceBindingAvailable),
-		Reason:             condition.WorkNotAvailableReason,
-		Message:            fmt.Sprintf("Work object %s is not available", notAvailableWork),
-		ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusTrue
+	default:
+		// All Work objects have completed the availability check successfully.
+		klog.V(2).InfoS("All works associated with the binding are available", "binding", klog.KObj(binding))
+		meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
+			Status:             metav1.ConditionTrue,
+			Type:               string(fleetv1beta1.ResourceBindingAvailable),
+			Reason:             condition.AllWorkAvailableReason,
+			Message:            "All corresponding work objects are available",
+			ObservedGeneration: binding.GetGeneration(),
+		})
+		return workConditionSummarizedStatusTrue
 	}
 }
 
@@ -955,6 +1345,106 @@ func extractFailedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1b
 	return res
 }
 
+// extractDriftedResourcePlacementsFromWork extracts the drifted placements from work
+func extractDriftedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1beta1.DriftedResourcePlacement {
+	// check if the work is generated by an enveloped object
+	envelopeType, isEnveloped := work.GetLabels()[fleetv1beta1.EnvelopeTypeLabel]
+	var envelopObjName, envelopObjNamespace string
+	if isEnveloped {
+		// If the work  generated by an enveloped object, it must contain those labels.
+		envelopObjName = work.GetLabels()[fleetv1beta1.EnvelopeNameLabel]
+		envelopObjNamespace = work.GetLabels()[fleetv1beta1.EnvelopeNamespaceLabel]
+	}
+	res := make([]fleetv1beta1.DriftedResourcePlacement, 0, len(work.Status.ManifestConditions))
+	for _, manifestCondition := range work.Status.ManifestConditions {
+		if manifestCondition.DriftDetails == nil {
+			continue
+		}
+		driftedManifest := fleetv1beta1.DriftedResourcePlacement{
+			ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+				Group:     manifestCondition.Identifier.Group,
+				Version:   manifestCondition.Identifier.Version,
+				Kind:      manifestCondition.Identifier.Kind,
+				Name:      manifestCondition.Identifier.Name,
+				Namespace: manifestCondition.Identifier.Namespace,
+			},
+			ObservationTime:                 manifestCondition.DriftDetails.ObservationTime,
+			TargetClusterObservedGeneration: manifestCondition.DriftDetails.ObservedInMemberClusterGeneration,
+			FirstDriftedObservedTime:        manifestCondition.DriftDetails.FirstDriftedObservedTime,
+			ObservedDrifts:                  manifestCondition.DriftDetails.ObservedDrifts,
+		}
+
+		if isEnveloped {
+			driftedManifest.ResourceIdentifier.Envelope = &fleetv1beta1.EnvelopeIdentifier{
+				Name:      envelopObjName,
+				Namespace: envelopObjNamespace,
+				Type:      fleetv1beta1.EnvelopeType(envelopeType),
+			}
+			klog.V(2).InfoS("Found a drifted enveloped manifest",
+				"manifestName", manifestCondition.Identifier.Name,
+				"group", manifestCondition.Identifier.Group,
+				"version", manifestCondition.Identifier.Version, "kind", manifestCondition.Identifier.Kind,
+				"envelopeType", envelopeType, "envelopObjName", envelopObjName, "envelopObjNamespace", envelopObjNamespace)
+		} else {
+			klog.V(2).InfoS("Found a drifted manifest",
+				"manifestName", manifestCondition.Identifier.Name, "group", manifestCondition.Identifier.Group,
+				"version", manifestCondition.Identifier.Version, "kind", manifestCondition.Identifier.Kind)
+		}
+		res = append(res, driftedManifest)
+	}
+	return res
+}
+
+// extractDiffedResourcePlacementsFromWork extracts the diffed placements from work
+func extractDiffedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1beta1.DiffedResourcePlacement {
+	// check if the work is generated by an enveloped object
+	envelopeType, isEnveloped := work.GetLabels()[fleetv1beta1.EnvelopeTypeLabel]
+	var envelopObjName, envelopObjNamespace string
+	if isEnveloped {
+		// If the work  generated by an enveloped object, it must contain those labels.
+		envelopObjName = work.GetLabels()[fleetv1beta1.EnvelopeNameLabel]
+		envelopObjNamespace = work.GetLabels()[fleetv1beta1.EnvelopeNamespaceLabel]
+	}
+	res := make([]fleetv1beta1.DiffedResourcePlacement, 0, len(work.Status.ManifestConditions))
+	for _, manifestCondition := range work.Status.ManifestConditions {
+		if manifestCondition.DiffDetails == nil {
+			continue
+		}
+		diffedManifest := fleetv1beta1.DiffedResourcePlacement{
+			ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+				Group:     manifestCondition.Identifier.Group,
+				Version:   manifestCondition.Identifier.Version,
+				Kind:      manifestCondition.Identifier.Kind,
+				Name:      manifestCondition.Identifier.Name,
+				Namespace: manifestCondition.Identifier.Namespace,
+			},
+			ObservationTime:                 manifestCondition.DiffDetails.ObservationTime,
+			TargetClusterObservedGeneration: manifestCondition.DiffDetails.ObservedInMemberClusterGeneration,
+			FirstDiffedObservedTime:         manifestCondition.DiffDetails.FirstDiffedObservedTime,
+			ObservedDiffs:                   manifestCondition.DiffDetails.ObservedDiffs,
+		}
+
+		if isEnveloped {
+			diffedManifest.ResourceIdentifier.Envelope = &fleetv1beta1.EnvelopeIdentifier{
+				Name:      envelopObjName,
+				Namespace: envelopObjNamespace,
+				Type:      fleetv1beta1.EnvelopeType(envelopeType),
+			}
+			klog.V(2).InfoS("Found a diffed enveloped manifest",
+				"manifestName", manifestCondition.Identifier.Name,
+				"group", manifestCondition.Identifier.Group,
+				"version", manifestCondition.Identifier.Version, "kind", manifestCondition.Identifier.Kind,
+				"envelopeType", envelopeType, "envelopObjName", envelopObjName, "envelopObjNamespace", envelopObjNamespace)
+		} else {
+			klog.V(2).InfoS("Found a diffed manifest",
+				"manifestName", manifestCondition.Identifier.Name, "group", manifestCondition.Identifier.Group,
+				"version", manifestCondition.Identifier.Version, "kind", manifestCondition.Identifier.Kind)
+		}
+		res = append(res, diffedManifest)
+	}
+	return res
+}
+
 // SetupWithManager sets up the controller with the Manager.
 // It watches binding events and also update/delete events for work.
 func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
@@ -1009,42 +1499,29 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 						"Failed to process an update event for work object")
 					return
 				}
-				oldAppliedCondition := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
-				newAppliedCondition := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
-				oldAvailableCondition := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
-				newAvailableCondition := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 
-				// we try to filter out events, we only need to handle the updated event if the applied or available condition flip between true and false
-				// or the failed placements are changed.
-				if condition.EqualCondition(oldAppliedCondition, newAppliedCondition) && condition.EqualCondition(oldAvailableCondition, newAvailableCondition) {
-					if condition.IsConditionStatusFalse(newAppliedCondition, newWork.Generation) || condition.IsConditionStatusFalse(newAvailableCondition, newWork.Generation) {
-						// we need to compare the failed placement if the work is not applied or available
-						oldFailedPlacements := extractFailedResourcePlacementsFromWork(oldWork)
-						newFailedPlacements := extractFailedResourcePlacementsFromWork(newWork)
-						if utils.IsFailedResourcePlacementsEqual(oldFailedPlacements, newFailedPlacements) {
-							klog.V(2).InfoS("The failed placement list didn't change on failed work, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
-							return
-						}
-					} else {
-						oldResourceSnapshot := oldWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
-						newResourceSnapshot := newWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
-						if oldResourceSnapshot == "" || newResourceSnapshot == "" {
-							klog.ErrorS(controller.NewUnexpectedBehaviorError(errors.New("found an invalid work without parent-resource-snapshot-index")),
-								"Could not find the parent resource snapshot index label", "oldWork", klog.KObj(oldWork), "oldResourceSnapshotLabelValue", oldResourceSnapshot,
-								"newWork", klog.KObj(newWork), "newResourceSnapshotLabelValue", newResourceSnapshot)
-							return
-						}
-						// There is an edge case that, the work spec is the same but from different resourceSnapshots.
-						// WorkGenerator will update the work because of the label changes, but the generation is the same.
-						// When the normal update happens, the controller will set the applied condition as false and wait
-						// until the work condition has been changed.
-						// In this edge case, we need to requeue the binding to update the binding status.
-						if oldResourceSnapshot == newResourceSnapshot {
-							klog.V(2).InfoS("The work applied or available condition stayed as true, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
-							return
-						}
+				if !equality.Semantic.DeepEqual(oldWork.Status, newWork.Status) {
+					klog.V(2).InfoS("Work status has been changed", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
+				} else {
+					oldResourceSnapshot := oldWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
+					newResourceSnapshot := newWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
+					if oldResourceSnapshot == "" || newResourceSnapshot == "" {
+						klog.ErrorS(controller.NewUnexpectedBehaviorError(errors.New("found an invalid work without parent-resource-snapshot-index")),
+							"Could not find the parent resource snapshot index label", "oldWork", klog.KObj(oldWork), "oldResourceSnapshotLabelValue", oldResourceSnapshot,
+							"newWork", klog.KObj(newWork), "newResourceSnapshotLabelValue", newResourceSnapshot)
+						return
+					}
+					// There is an edge case that, the work spec is the same but from different resourceSnapshots.
+					// WorkGenerator will update the work because of the label changes, but the generation is the same.
+					// When the normal update happens, the controller will set the applied condition as false and wait
+					// until the work condition has been changed.
+					// In this edge case, we need to requeue the binding to update the binding status.
+					if oldResourceSnapshot == newResourceSnapshot {
+						klog.V(2).InfoS("The work applied or available condition stayed as true, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
+						return
 					}
 				}
+
 				// We need to update the binding status in this case
 				klog.V(2).InfoS("Received a work update event that we need to handle", "work", klog.KObj(newWork), "parentBindingName", parentBindingName)
 				queue.Add(reconcile.Request{NamespacedName: types.NamespacedName{

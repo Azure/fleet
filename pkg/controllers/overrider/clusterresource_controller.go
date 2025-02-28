@@ -22,7 +22,6 @@ import (
 
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/labels"
 	"go.goms.io/fleet/pkg/utils/resource"
@@ -80,7 +79,7 @@ func (r *ClusterResourceReconciler) ensureClusterResourceOverrideSnapshot(ctx co
 		return controller.NewUnexpectedBehaviorError(err)
 	}
 	// we need to list the snapshots anyway since we need to remove the extra snapshots if there are too many of them.
-	snapshotList, err := r.listSortedOverrideSnapshots(ctx, utils.ClusterResourceOverrideSnapshotKind, cro.GetName())
+	snapshotList, err := r.listSortedOverrideSnapshots(ctx, cro)
 	if err != nil {
 		return err
 	}

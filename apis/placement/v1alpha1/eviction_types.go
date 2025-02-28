@@ -6,13 +6,13 @@ Licensed under the MIT license.
 package v1alpha1
 
 import (
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=crpe
 // +kubebuilder:subresource:status
-// +kubebuilder:storageversion
 
 // ClusterResourcePlacementEviction is an eviction attempt on a specific placement from
 // a ClusterResourcePlacement object; one may use this API to force the removal of specific
@@ -35,6 +35,10 @@ import (
 // a placement that does not exist yet), even if it does become valid later
 // (e.g., the CRP object or the placement appears later). To fix the situation, re-create the
 // Eviction object.
+//
+// Note: Eviction of resources from a cluster propagated by a PickFixed CRP is not allowed.
+// If the user wants to remove resources from a cluster propagated by a PickFixed CRP simply
+// remove the cluster name from cluster names field from the CRP spec.
 //
 // Executed evictions might be kept around for a while for auditing purposes; the Fleet controllers might
 // have a TTL set up for such objects and will garbage collect them automatically. For further
@@ -116,6 +120,18 @@ type ClusterResourcePlacementEvictionList struct {
 
 	// Items is the list of ClusterResourcePlacementEviction objects.
 	Items []ClusterResourcePlacementEviction `json:"items"`
+}
+
+// SetConditions set the given conditions on the ClusterResourcePlacementEviction.
+func (e *ClusterResourcePlacementEviction) SetConditions(conditions ...metav1.Condition) {
+	for _, c := range conditions {
+		meta.SetStatusCondition(&e.Status.Conditions, c)
+	}
+}
+
+// GetCondition returns the condition of the given ClusterResourcePlacementEviction.
+func (e *ClusterResourcePlacementEviction) GetCondition(conditionType string) *metav1.Condition {
+	return meta.FindStatusCondition(e.Status.Conditions, conditionType)
 }
 
 func init() {

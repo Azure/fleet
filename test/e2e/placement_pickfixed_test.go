@@ -64,7 +64,7 @@ var _ = Describe("placing resources using a CRP of PickFixed placement type", fu
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd})
 		})
 	})
 
@@ -131,7 +131,7 @@ var _ = Describe("placing resources using a CRP of PickFixed placement type", fu
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster2EastCanary})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster2EastCanary})
 		})
 	})
 
@@ -177,7 +177,7 @@ var _ = Describe("placing resources using a CRP of PickFixed placement type", fu
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{})
 		})
 	})
 })

@@ -70,7 +70,6 @@ spec:
                             - Approval
                             type: string
                           waitTime:
-                            default: 1h
                             description: The time to wait after all the clusters in
                               the current stage complete the update before moving
                               to the next stage.
@@ -134,7 +133,145 @@ spec:
                       description: The name of the stage. This MUST be unique within
                         the same StagedUpdateStrategy.
                       maxLength: 63
-                      pattern: '[A-Za-z0-9]+$'
+                      pattern: ^[a-z0-9]+$
+                      type: string
+                    sortingLabelKey:
+                      description: |-
+                        The label key used to sort the selected clusters.
+                        The clusters within the stage are updated sequentially following the rule below:
+                          - primary: Ascending order based on the value of the label key, interpreted as integers if present.
+                          - secondary: Ascending order based on the name of the cluster if the label key is absent or the label value is the same.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                maxItems: 31
+                type: array
+            required:
+            - stages
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: false
+    subresources:
+      status: {}
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          ClusterStagedUpdateStrategy defines a reusable strategy that specifies the stages and the sequence
+          in which the selected cluster resources will be updated on the member clusters.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: The desired state of ClusterStagedUpdateStrategy.
+            properties:
+              stages:
+                description: Stage specifies the configuration for each update stage.
+                items:
+                  description: |-
+                    StageConfig describes a single update stage.
+                    The clusters in each stage are updated sequentially.
+                    The update stops if any of the updates fail.
+                  properties:
+                    afterStageTasks:
+                      description: |-
+                        The collection of tasks that each stage needs to complete successfully before moving to the next stage.
+                        Each task is executed in parallel and there cannot be more than one task of the same type.
+                      items:
+                        description: AfterStageTask is the collection of post-stage
+                          tasks that ALL need to be completed before moving to the
+                          next stage.
+                        properties:
+                          type:
+                            description: The type of the after-stage task.
+                            enum:
+                            - TimedWait
+                            - Approval
+                            type: string
+                          waitTime:
+                            description: The time to wait after all the clusters in
+                              the current stage complete the update before moving
+                              to the next stage.
+                            pattern: ^0|([0-9]+(\.[0-9]+)?(s|m|h))+$
+                            type: string
+                        required:
+                        - type
+                        type: object
+                      maxItems: 2
+                      type: array
+                    labelSelector:
+                      description: |-
+                        LabelSelector is a label query over all the joined member clusters. Clusters matching the query are selected
+                        for this stage. There cannot be overlapping clusters between stages when the stagedUpdateRun is created.
+                        If the label selector is absent, the stage includes all the selected clusters.
+                      properties:
+                        matchExpressions:
+                          description: matchExpressions is a list of label selector
+                            requirements. The requirements are ANDed.
+                          items:
+                            description: |-
+                              A label selector requirement is a selector that contains values, a key, and an operator that
+                              relates the key and values.
+                            properties:
+                              key:
+                                description: key is the label key that the selector
+                                  applies to.
+                                type: string
+                              operator:
+                                description: |-
+                                  operator represents a key's relationship to a set of values.
+                                  Valid operators are In, NotIn, Exists and DoesNotExist.
+                                type: string
+                              values:
+                                description: |-
+                                  values is an array of string values. If the operator is In or NotIn,
+                                  the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                  the values array must be empty. This array is replaced during a strategic
+                                  merge patch.
+                                items:
+                                  type: string
+                                type: array
+                                x-kubernetes-list-type: atomic
+                            required:
+                            - key
+                            - operator
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
+                        matchLabels:
+                          additionalProperties:
+                            type: string
+                          description: |-
+                            matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                            map is equivalent to an element of matchExpressions, whose key field is "key", the
+                            operator is "In", and the values array contains only "value". The requirements are ANDed.
+                          type: object
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    name:
+                      description: The name of the stage. This MUST be unique within
+                        the same StagedUpdateStrategy.
+                      maxLength: 63
+                      pattern: ^[a-z0-9]+$
                       type: string
                     sortingLabelKey:
                       description: |-

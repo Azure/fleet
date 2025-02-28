@@ -12,7 +12,6 @@ import (
 
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=crpdb
-// +kubebuilder:storageversion
 
 // ClusterResourcePlacementDisruptionBudget is the policy applied to a ClusterResourcePlacement
 // object that specifies its disruption budget, i.e., how many placements (clusters) can be
@@ -44,11 +43,9 @@ type PlacementDisruptionBudgetSpec struct {
 	// If a percentage is specified, Fleet will calculate the corresponding absolute values
 	// as follows:
 	// * if the linked Placement object is of the PickFixed placement type,
-	//   the percentage is against the number of clusters specified in the placement (i.e., the
-	//   length of ClusterNames field in the placement policy);
-	// * if the linked Placement object is of the PickAll placement type,
-	//   the percentage is against the total number of clusters being selected by the scheduler
-	//   at the time of the evaluation of the disruption budget;
+	//   we don't perform any calculation because eviction is not allowed for PickFixed CRP.
+	// * if the linked Placement object is of the PickAll placement type, MaxUnavailable cannot
+	//   be specified since we cannot derive the total number of clusters selected.
 	// * if the linked Placement object is of the PickN placement type,
 	//   the percentage is against the number of clusters specified in the placement (i.e., the
 	//   value of the NumberOfClusters fields in the placement policy).
@@ -61,7 +58,7 @@ type PlacementDisruptionBudgetSpec struct {
 	// of them can be set at a time.
 	//
 	// +kubebuilder:validation:XIntOrString
-	// +kubebuilder:validation:XValidation:rule="type(self) == string ? self.matches('^(100|[0-9]{1,2}%)$') : self >= 0",message="If supplied value is String should match regex '^(100|[0-9]{1,2}%)$' or If supplied value is Integer must be greater than or equal to 0"
+	// +kubebuilder:validation:XValidation:rule="type(self) == string ? self.matches('^(100|[0-9]{1,2})%$') : self >= 0",message="If supplied value is String should match regex '^(100|[0-9]{1,2})%$' or If supplied value is Integer must be greater than or equal to 0"
 	// +optional
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 
@@ -75,11 +72,9 @@ type PlacementDisruptionBudgetSpec struct {
 	// If a percentage is specified, Fleet will calculate the corresponding absolute values
 	// as follows:
 	// * if the linked Placement object is of the PickFixed placement type,
-	//   the percentage is against the number of clusters specified in the placement (i.e., the
-	//   length of ClusterNames field in the placement policy);
-	// * if the linked Placement object is of the PickAll placement type,
-	//   the percentage is against the total number of clusters being selected by the scheduler
-	//   at the time of the evaluation of the disruption budget;
+	//   we don't perform any calculation because eviction is not allowed for PickFixed CRP.
+	// * if the linked Placement object is of the PickAll placement type, MinAvailable can be
+	//   specified but only as an integer since we cannot derive the total number of clusters selected.
 	// * if the linked Placement object is of the PickN placement type,
 	//   the percentage is against the number of clusters specified in the placement (i.e., the
 	//   value of the NumberOfClusters fields in the placement policy).
@@ -92,7 +87,7 @@ type PlacementDisruptionBudgetSpec struct {
 	// of them can be set at a time.
 	//
 	// +kubebuilder:validation:XIntOrString
-	// +kubebuilder:validation:XValidation:rule="type(self) == string ? self.matches('^(100|[0-9]{1,2}%)$') : self >= 0",message="If supplied value is String should match regex '^(100|[0-9]{1,2}%)$' or If supplied value is Integer must be greater than or equal to 0"
+	// +kubebuilder:validation:XValidation:rule="type(self) == string ? self.matches('^(100|[0-9]{1,2})%$') : self >= 0",message="If supplied value is String should match regex '^(100|[0-9]{1,2})%$' or If supplied value is Integer must be greater than or equal to 0"
 	// +optional
 	MinAvailable *intstr.IntOrString `json:"minAvailable,omitempty"`
 }

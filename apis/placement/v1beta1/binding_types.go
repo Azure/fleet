@@ -20,8 +20,9 @@ const (
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=rb
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
-// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Bound")].status`,name="WorkCreated",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="WorkSynchronized")].status`,name="WorkSynchronized",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Applied")].status`,name="ResourcesApplied",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Available")].status`,name="ResourceAvailable",priority=1,type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 
 // ClusterResourceBinding represents a scheduling decision that binds a group of resources to a cluster.
@@ -174,6 +175,18 @@ const (
 	// - "False" means not all the resources are available in the target cluster yet.
 	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
 	ResourceBindingAvailable ResourceBindingConditionType = "Available"
+
+	// ResourceBindingDiffReported indicates that Fleet has successfully reported configuration
+	// differences between the hub cluster and a specific member cluster for the given resources.
+	//
+	// This condition is added only when the ReportDiff apply strategy is used.
+	//
+	// It can have the following condition statuses:
+	// * True: Fleet has successfully reported configuration differences for all resources.
+	// * False: Fleet has not yet reported configuration differences for some resources, or an
+	//   error has occurred.
+	// * Unknown: Fleet has not finished processing the diff reporting yet.
+	ResourceBindingDiffReported ResourceBindingConditionType = "DiffReported"
 )
 
 // ClusterResourceBindingList is a collection of ClusterResourceBinding.
