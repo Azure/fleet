@@ -53,6 +53,7 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/defaulter"
 	testcontroller "go.goms.io/fleet/test/utils/controller"
 )
 
@@ -1025,7 +1026,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 			err:      nil,
 		},
 		"Test StatefulSet available": {
-			gvr: utils.StatefulSettGVR,
+			gvr: utils.StatefulSetGVR,
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "apps/v1",
@@ -1049,7 +1050,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 			err:      nil,
 		},
 		"Test StatefulSet not available": {
-			gvr: utils.StatefulSettGVR,
+			gvr: utils.StatefulSetGVR,
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "apps/v1",
@@ -1073,7 +1074,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 			err:      nil,
 		},
 		"Test StatefulSet observed old generation": {
-			gvr: utils.StatefulSettGVR,
+			gvr: utils.StatefulSetGVR,
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "apps/v1",
@@ -1097,7 +1098,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 			err:      nil,
 		},
 		"Test DaemonSet Available": {
-			gvr: utils.DaemonSettGVR,
+			gvr: utils.DaemonSetGVR,
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "apps/v1",
@@ -1118,7 +1119,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 			err:      nil,
 		},
 		"Test DaemonSet not available": {
-			gvr: utils.DaemonSettGVR,
+			gvr: utils.DaemonSetGVR,
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "apps/v1",
@@ -1139,7 +1140,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 			err:      nil,
 		},
 		"Test DaemonSet not observe current generation": {
-			gvr: utils.DaemonSettGVR,
+			gvr: utils.DaemonSetGVR,
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "apps/v1",
@@ -1233,6 +1234,191 @@ func TestTrackResourceAvailability(t *testing.T) {
 			},
 			obj:      &unstructured.Unstructured{},
 			expected: manifestNotTrackableAction,
+			err:      nil,
+		},
+		"Test CustomResourceDefinition available": {
+			gvr: utils.CustomResourceDefinitionGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apiextensions.k8s.io/v1",
+					"kind":       "CustomResourceDefinition",
+					"metadata": map[string]interface{}{
+						"name": "testresources.example.com",
+					},
+					"spec": map[string]interface{}{
+						"group": "example.com",
+						"names": map[string]interface{}{
+							"plural":     "testresources",
+							"singular":   "testresource",
+							"kind":       "TestResource",
+							"shortNames": []string{"tr"},
+						},
+						"scope": "Namespaced",
+						"versions": []interface{}{
+							map[string]interface{}{
+								"name":    "v1",
+								"served":  true,
+								"storage": true,
+								"schema": map[string]interface{}{
+									"openAPIV3Schema": map[string]interface{}{
+										"type": "object",
+										"properties": map[string]interface{}{
+											"spec": map[string]interface{}{
+												"type": "object",
+												"properties": map[string]interface{}{
+													"field": map[string]interface{}{
+														"type": "string",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"type":               "Established",
+								"status":             "True",
+								"lastTransitionTime": metav1.Now(),
+								"reason":             "InitialNamesAccepted",
+								"message":            "the initial names have been accepted",
+							},
+							map[string]interface{}{
+								"type":               "NamesAccepted",
+								"status":             "True",
+								"lastTransitionTime": metav1.Now(),
+								"reason":             "NoConflicts",
+								"message":            "no conflicts found",
+							},
+						},
+					},
+				},
+			},
+			expected: manifestAvailableAction,
+			err:      nil,
+		},
+		"Test CustomResourceDefinition unavailable (not established)": {
+			gvr: utils.CustomResourceDefinitionGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apiextensions.k8s.io/v1",
+					"kind":       "CustomResourceDefinition",
+					"metadata": map[string]interface{}{
+						"name": "testresources.example.com",
+					},
+					"spec": map[string]interface{}{
+						"group": "example.com",
+						"names": map[string]interface{}{
+							"plural":     "testresources",
+							"singular":   "testresource",
+							"kind":       "TestResource",
+							"shortNames": []string{"tr"},
+						},
+						"scope": "Namespaced",
+						"versions": []interface{}{
+							map[string]interface{}{
+								"name":    "v1",
+								"served":  true,
+								"storage": true,
+								"schema": map[string]interface{}{
+									"openAPIV3Schema": map[string]interface{}{
+										"type": "object",
+										"properties": map[string]interface{}{
+											"spec": map[string]interface{}{
+												"type": "object",
+												"properties": map[string]interface{}{
+													"field": map[string]interface{}{
+														"type": "string",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"type":               "Established",
+								"status":             "False",
+								"lastTransitionTime": metav1.Now(),
+								"reason":             "Installing",
+								"message":            "the initial names have been accepted",
+							},
+							map[string]interface{}{
+								"type":               "NamesAccepted",
+								"status":             "True",
+								"lastTransitionTime": metav1.Now(),
+								"reason":             "NoConflicts",
+								"message":            "no conflicts found",
+							},
+						},
+					},
+				},
+			},
+			expected: manifestNotAvailableYetAction,
+			err:      nil,
+		},
+		"Test CustomResourceDefinition unavailable (name not accepted)": {
+			gvr: utils.CustomResourceDefinitionGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apiextensions.k8s.io/v1",
+					"kind":       "CustomResourceDefinition",
+					"metadata": map[string]interface{}{
+						"name": "testresources.example.com",
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"type":               "NamesAccepted",
+								"status":             "False",
+								"lastTransitionTime": metav1.Now(),
+								"reason":             "NameConflict",
+								"message":            "names conflict",
+							},
+						},
+					},
+				},
+			},
+			expected: manifestNotAvailableYetAction,
+			err:      nil,
+		},
+		"Test CustomResourceDefinition unavailable (established but name not accepted)": {
+			gvr: utils.CustomResourceDefinitionGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apiextensions.k8s.io/v1",
+					"kind":       "CustomResourceDefinition",
+					"metadata": map[string]interface{}{
+						"name": "testresources.example.com",
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"type":               "Established",
+								"status":             "True",
+								"lastTransitionTime": metav1.Now(),
+								"reason":             "InitialNamesAccepted",
+								"message":            "the initial names have been accepted",
+							},
+							map[string]interface{}{
+								"type":               "NamesAccepted",
+								"status":             "False",
+								"lastTransitionTime": metav1.Now(),
+								"reason":             "NotAccepted",
+								"message":            "not all names are accepted",
+							},
+						},
+					},
+				},
+			},
+			expected: manifestNotAvailableYetAction,
 			err:      nil,
 		},
 	}
@@ -1618,6 +1804,7 @@ func TestApplyUnstructuredAndTrackAvailability(t *testing.T) {
 							Spec: fleetv1beta1.WorkSpec{
 								ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 									AllowCoOwnership: true,
+									Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
 								},
 							},
 						}
@@ -1821,6 +2008,12 @@ func TestApplyUnstructuredAndTrackAvailability(t *testing.T) {
 				Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
 				AllowCoOwnership: testCase.allowCoOwnership,
 			}
+			// Certain path of the applyUnstructuredAndTrackAvailability method will attempt
+			// to set default values of the retrieved apply strategy from the mock Work object and
+			// compare it with the passed-in apply strategy.
+			// To keep things consistent, here the test spec sets the passed-in apply strategy
+			// as well.
+			defaulter.SetDefaultsApplyStrategy(strategy)
 			applyResult, applyAction, err := r.applyUnstructuredAndTrackAvailability(context.Background(), utils.DeploymentGVR, testCase.workObj, strategy)
 			assert.Equalf(t, testCase.resultAction, applyAction, "updated boolean not matching for Testcase %s", testName)
 			if testCase.resultErr != nil {

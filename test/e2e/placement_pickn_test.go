@@ -67,7 +67,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster3WestProd})
 		})
 	})
 
@@ -139,7 +139,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster3WestProd})
 		})
 	})
 
@@ -207,7 +207,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd, memberCluster2EastCanary})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster3WestProd, memberCluster2EastCanary})
 		})
 	})
 
@@ -244,7 +244,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 										{
 											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
-													regionLabelName: regionLabelValue1,
+													regionLabelName: regionEast,
 												},
 											},
 										},
@@ -285,7 +285,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary})
 		})
 	})
 
@@ -316,7 +316,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 										{
 											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
-													regionLabelName: regionLabelValue1,
+													regionLabelName: regionEast,
 												},
 											},
 										},
@@ -367,7 +367,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 								Preference: placementv1beta1.ClusterSelectorTerm{
 									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
-											envLabelName: envLabelValue1,
+											envLabelName: envProd,
 										},
 									},
 								},
@@ -385,10 +385,10 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 				return hubClient.Update(ctx, crp)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP with new affinity and topology spread constraints")
 		})
-
+		// topology spread constraints takes a bit longer to be applied
 		It("should update CRP status as expected", func() {
 			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1EastProdName, memberCluster3WestProdName}, nil, "0")
-			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(statusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place resources on the newly picked clusters", func() {
@@ -405,7 +405,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster3WestProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster3WestProd})
 		})
 	})
 
@@ -445,7 +445,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 										{
 											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
-													regionLabelName: regionLabelValue1,
+													regionLabelName: regionEast,
 												},
 											},
 										},
@@ -479,7 +479,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary})
 		})
 	})
 
@@ -549,7 +549,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, nil)
+			ensureCRPAndRelatedResourcesDeleted(crpName, nil)
 		})
 	})
 
@@ -624,7 +624,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary})
 		})
 	})
 
@@ -708,7 +708,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd, memberCluster2EastCanary})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster3WestProd, memberCluster2EastCanary})
 		})
 	})
 
@@ -750,7 +750,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 										Preference: placementv1beta1.ClusterSelectorTerm{
 											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
-													regionLabelName: regionLabelValue1,
+													regionLabelName: regionEast,
 												},
 											},
 											PropertySorter: &placementv1beta1.PropertySorter{
@@ -764,7 +764,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 										Preference: placementv1beta1.ClusterSelectorTerm{
 											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
-													envLabelName: envLabelValue2,
+													envLabelName: envCanary,
 												},
 											},
 											PropertySorter: &placementv1beta1.PropertySorter{
@@ -802,7 +802,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster2EastCanary, memberCluster1EastProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster2EastCanary, memberCluster1EastProd})
 		})
 	})
 
@@ -843,7 +843,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 										{
 											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
-													envLabelName: envLabelValue1,
+													envLabelName: envProd,
 												},
 											},
 											PropertySelector: &placementv1beta1.PropertySelector{
@@ -915,7 +915,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster3WestProd})
 		})
 	})
 })

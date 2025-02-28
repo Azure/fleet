@@ -199,7 +199,7 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 
 	AfterAll(func() {
 		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 
 	It("should deny update on CRP with invalid label selector", func() {
@@ -319,7 +319,7 @@ var _ = Describe("webhook tests for CRP tolerations", Ordered, func() {
 
 	AfterAll(func() {
 		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 
 	It("should deny update on CRP with invalid toleration", func() {
@@ -1197,47 +1197,39 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 	})
 
 	It("should deny update RO with invalid resource override", func() {
-		Eventually(func(g Gomega) error {
-			By("creating a new resource override")
-			ro1 := &placementv1alpha1.ResourceOverride{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("test-ro-%d", GinkgoParallelProcess()),
-					Namespace: roNamespace,
-				},
-				Spec: placementv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []placementv1alpha1.ResourceSelector{
+		newSelector := placementv1alpha1.ResourceSelector{
+			Group:   "apps",
+			Kind:    "Deployment",
+			Version: "v1",
+			Name:    "test-deployment-x",
+		}
+		ro1 := &placementv1alpha1.ResourceOverride{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("test-ro-%d", GinkgoParallelProcess()),
+				Namespace: roNamespace,
+			},
+			Spec: placementv1alpha1.ResourceOverrideSpec{
+				Policy: &placementv1alpha1.OverridePolicy{
+					OverrideRules: []placementv1alpha1.OverrideRule{
 						{
-							Group:   "apps",
-							Kind:    "Deployment",
-							Version: "v1",
-							Name:    "test-deployment-1",
-						},
-					},
-					Policy: &placementv1alpha1.OverridePolicy{
-						OverrideRules: []placementv1alpha1.OverrideRule{
-							{
-								ClusterSelector: nil,
-								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
-									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
-										Path:     "/meta/labels/test-key",
-									},
+							ClusterSelector: nil,
+							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+								{
+									Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+									Path:     "/meta/labels/test-key",
 								},
 							},
 						},
 					},
 				},
-			}
-			Expect(hubClient.Create(ctx, ro1)).To(Succeed(), "Failed to create RO %s", ro1.Name)
-
+			},
+		}
+		ro1.Spec.ResourceSelectors = append(ro1.Spec.ResourceSelectors, newSelector)
+		By("creating a new resource override")
+		Expect(hubClient.Create(ctx, ro1)).To(Succeed(), "Failed to create RO %s", ro1.Name)
+		Eventually(func(g Gomega) error {
 			var ro placementv1alpha1.ResourceOverride
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: roName, Namespace: roNamespace}, &ro)).Should(Succeed())
-			newSelector := placementv1alpha1.ResourceSelector{
-				Group:   "apps",
-				Kind:    "Deployment",
-				Version: "v1",
-				Name:    fmt.Sprintf("test-deployment-%d", 1),
-			}
 			ro.Spec.ResourceSelectors = append(ro.Spec.ResourceSelectors, newSelector)
 			clusterSelectorTerm := placementv1beta1.ClusterSelectorTerm{
 				PropertySelector: &placementv1beta1.PropertySelector{

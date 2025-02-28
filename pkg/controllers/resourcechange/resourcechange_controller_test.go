@@ -109,7 +109,7 @@ func TestFindPlacementsSelectedDeletedResV1Alpha1(t *testing.T) {
 					Status: fleetv1alpha1.ClusterResourcePlacementStatus{
 						SelectedResources: []fleetv1alpha1.ResourceIdentifier{
 							{
-								Group:     "abd",
+								Group:     "xyz",
 								Name:      "not-deleted",
 								Namespace: "bar",
 							},
@@ -229,7 +229,7 @@ func TestFindPlacementsSelectedDeletedResV1Beta11(t *testing.T) {
 					Status: placementv1beta1.ClusterResourcePlacementStatus{
 						SelectedResources: []placementv1beta1.ResourceIdentifier{
 							{
-								Group:     "abd",
+								Group:     "xyz",
 								Name:      "not-deleted",
 								Namespace: "bar",
 							},

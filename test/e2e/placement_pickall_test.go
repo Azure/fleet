@@ -56,7 +56,7 @@ var _ = Describe("placing resources using a CRP with no placement policy specifi
 	It("should place the resources on all member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 	AfterAll(func() {
-		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 })
 
@@ -101,7 +101,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		It("should place the resources on all member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 
@@ -131,14 +131,14 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 										{
 											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
-													regionLabelName: regionLabelValue1,
+													regionLabelName: regionEast,
 												},
 												MatchExpressions: []metav1.LabelSelectorRequirement{
 													{
 														Key:      envLabelName,
 														Operator: metav1.LabelSelectorOpIn,
 														Values: []string{
-															envLabelValue1,
+															envProd,
 														},
 													},
 												},
@@ -171,7 +171,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd})
 		})
 	})
 
@@ -201,14 +201,14 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 										{
 											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
-													regionLabelName: regionLabelValue1,
+													regionLabelName: regionEast,
 												},
 												MatchExpressions: []metav1.LabelSelectorRequirement{
 													{
 														Key:      envLabelName,
 														Operator: metav1.LabelSelectorOpIn,
 														Values: []string{
-															envLabelValue1,
+															envProd,
 														},
 													},
 												},
@@ -250,14 +250,14 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 								{
 									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
-											regionLabelName: regionLabelValue2,
+											regionLabelName: regionWest,
 										},
 										MatchExpressions: []metav1.LabelSelectorRequirement{
 											{
 												Key:      envLabelName,
 												Operator: metav1.LabelSelectorOpIn,
 												Values: []string{
-													envLabelValue1,
+													envProd,
 												},
 											},
 										},
@@ -287,7 +287,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster3WestProd})
 		})
 	})
 
@@ -317,14 +317,14 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 										{
 											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
-													regionLabelName: regionLabelValue2,
+													regionLabelName: regionWest,
 												},
 												MatchExpressions: []metav1.LabelSelectorRequirement{
 													{
 														Key:      envLabelName,
 														Operator: metav1.LabelSelectorOpIn,
 														Values: []string{
-															envLabelValue2,
+															envCanary,
 														},
 													},
 												},
@@ -354,7 +354,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		It("should not place resources on any cluster", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, nil)
+			ensureCRPAndRelatedResourcesDeleted(crpName, nil)
 		})
 	})
 
@@ -428,7 +428,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd})
 		})
 	})
 
@@ -581,7 +581,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd})
 		})
 	})
 
@@ -656,7 +656,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		It("should not place resources on any cluster", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, nil)
+			ensureCRPAndRelatedResourcesDeleted(crpName, nil)
 		})
 	})
 
@@ -690,7 +690,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 										{
 											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
-													regionLabelName: regionLabelValue1,
+													regionLabelName: regionEast,
 												},
 											},
 											PropertySelector: &placementv1beta1.PropertySelector{
@@ -732,7 +732,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster2EastCanary})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster2EastCanary})
 		})
 	})
 
@@ -766,7 +766,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 										{
 											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
-													regionLabelName: regionLabelValue1,
+													regionLabelName: regionEast,
 												},
 											},
 											PropertySelector: &placementv1beta1.PropertySelector{
@@ -826,14 +826,14 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 								{
 									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
-											regionLabelName: regionLabelValue1,
+											regionLabelName: regionEast,
 										},
 										MatchExpressions: []metav1.LabelSelectorRequirement{
 											{
 												Key:      envLabelName,
 												Operator: metav1.LabelSelectorOpIn,
 												Values: []string{
-													envLabelValue2,
+													envCanary,
 												},
 											},
 										},
@@ -857,14 +857,14 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 												Key:      regionLabelName,
 												Operator: metav1.LabelSelectorOpNotIn,
 												Values: []string{
-													regionLabelValue2,
+													regionWest,
 												},
 											},
 											{
 												Key:      envLabelName,
 												Operator: metav1.LabelSelectorOpIn,
 												Values: []string{
-													envLabelValue1,
+													envProd,
 												},
 											},
 										},
@@ -912,7 +912,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd})
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd})
 		})
 	})
 
@@ -946,7 +946,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 										{
 											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
-													regionLabelName: regionLabelValue1,
+													regionLabelName: regionEast,
 												},
 											},
 											PropertySelector: &placementv1beta1.PropertySelector{
@@ -985,7 +985,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		It("should not place resources on any cluster", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, nil)
+			ensureCRPAndRelatedResourcesDeleted(crpName, nil)
 		})
 	})
 })

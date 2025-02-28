@@ -92,19 +92,26 @@ func validateOverridePolicy(policy *fleetv1alpha1.OverridePolicy) error {
 			for _, selector := range rule.ClusterSelector.ClusterSelectorTerms {
 				// Check that only label selector is supported
 				if selector.PropertySelector != nil || selector.PropertySorter != nil {
-					allErr = append(allErr, fmt.Errorf("invalid clusterSelector %v: only labelSelector is supported", selector))
+					allErr = append(allErr, fmt.Errorf("invalid clusterSelector %+v: only labelSelector is supported", selector))
 					continue
 				}
 				if selector.LabelSelector == nil {
-					allErr = append(allErr, fmt.Errorf("invalid clusterSelector %v: labelSelector is required", selector))
+					allErr = append(allErr, fmt.Errorf("invalid clusterSelector %+v: labelSelector is required", selector))
 				} else if err := validateLabelSelector(selector.LabelSelector, "cluster selector"); err != nil {
 					allErr = append(allErr, err)
 				}
 			}
 		}
+		switch rule.OverrideType {
+		case fleetv1alpha1.DeleteOverrideType:
+			if len(rule.JSONPatchOverrides) != 0 {
+				return errors.New("invalid JSONPatchOverrides: JSONPatchOverrides cannot be set when the override type is Delete")
+			}
 
-		if err := validateJSONPatchOverride(rule.JSONPatchOverrides); err != nil {
-			allErr = append(allErr, err)
+		case fleetv1alpha1.JSONPatchOverrideType:
+			if err := validateJSONPatchOverride(rule.JSONPatchOverrides); err != nil {
+				allErr = append(allErr, err)
+			}
 		}
 	}
 	return apierrors.NewAggregate(allErr)

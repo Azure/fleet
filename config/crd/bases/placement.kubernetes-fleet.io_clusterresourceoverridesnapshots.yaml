@@ -143,6 +143,19 @@ spec:
                     maxItems: 20
                     minItems: 1
                     type: array
+                  placement:
+                    description: |-
+                      Placement defines whether the override is applied to a specific placement or not.
+                      If set, the override will trigger the placement rollout immediately when the rollout strategy type is RollingUpdate.
+                      Otherwise, it will be applied to the next rollout.
+                      The recommended way is to set the placement so that the override can be rolled out immediately.
+                    properties:
+                      name:
+                        description: Name is the reference to the name of placement.
+                        type: string
+                    required:
+                    - name
+                    type: object
                   policy:
                     description: Policy defines how to override the selected resources
                       on the target clusters.
@@ -317,8 +330,9 @@ spec:
                               - clusterSelectorTerms
                               type: object
                             jsonPatchOverrides:
-                              description: JSONPatchOverrides defines a list of JSON
-                                patch override rules.
+                              description: |-
+                                JSONPatchOverrides defines a list of JSON patch override rules.
+                                This field is only allowed when OverrideType is JSONPatch.
                               items:
                                 description: JSONPatchOverride applies a JSON patch
                                   on the selected resources following [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
@@ -340,6 +354,10 @@ spec:
                                     description: |-
                                       Value defines the content to be applied on the target location.
                                       Value should be empty when operator is `remove`.
+                                      We have reserved a few variables in this field that will be replaced by the actual values.
+                                      Those variables all start with `$` and are case sensitive.
+                                      Here is the list of currently supported variables:
+                                      `${MEMBER-CLUSTER-NAME}`:  this will be replaced by the name of the memberCluster CR that represents this cluster.
                                     x-kubernetes-preserve-unknown-fields: true
                                 required:
                                 - op
@@ -348,8 +366,14 @@ spec:
                               maxItems: 20
                               minItems: 1
                               type: array
-                          required:
-                          - jsonPatchOverrides
+                            overrideType:
+                              default: JSONPatch
+                              description: OverrideType defines the type of the override
+                                rules.
+                              enum:
+                              - JSONPatch
+                              - Delete
+                              type: string
                           type: object
                         maxItems: 20
                         minItems: 1

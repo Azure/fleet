@@ -535,7 +535,18 @@ type ApplyStrategy struct {
 	//   differences. No actual apply ops would be executed, and resources will be left alone as they
 	//   are on the member clusters.
 	//
+	//   If configuration differences are found on a resource, Fleet will consider this as an apply
+	//   error, which might block rollout depending on the specified rollout strategy.
+	//
 	//   Use ComparisonOption setting to control how the difference is calculated.
+	//
+	// ClientSideApply and ServerSideApply apply strategies only work when Fleet can assume
+	// ownership of a resource (e.g., the resource is created by Fleet, or Fleet has taken over
+	// the resource). See the comments on the WhenToTakeOver field for more information.
+	// ReportDiff apply strategy, however, will function regardless of Fleet's ownership
+	// status. One may set up a CRP with the ReportDiff strategy and the Never takeover option,
+	// and this will turn Fleet into a detection tool that reports only configuration differences
+	// but do not touch any resources on the member cluster side.
 	//
 	// For a comparison between the different strategies and usage examples, refer to the
 	// Fleet documentation.
@@ -545,10 +556,14 @@ type ApplyStrategy struct {
 	// +kubebuilder:validation:Optional
 	Type ApplyStrategyType `json:"type,omitempty"`
 
-	// AllowCoOwnership defines whether to apply the resource if it already exists in the target cluster and is not
-	// solely owned by fleet (i.e., metadata.ownerReferences contains only fleet custom resources).
-	// If true, apply the resource and add fleet as a co-owner.
-	// If false, leave the resource unchanged and fail the apply.
+	// AllowCoOwnership controls whether co-ownership between Fleet and other agents are allowed
+	// on a Fleet-managed resource. If set to false, Fleet will refuse to apply manifests to
+	// a resource that has been owned by one or more non-Fleet agents.
+	//
+	// Note that Fleet does not support the case where one resource is being placed multiple
+	// times by different CRPs on the same member cluster. An apply error will be returned if
+	// Fleet finds that a resource has been owned by another placement attempt by Fleet, even
+	// with the AllowCoOwnership setting set to true.
 	AllowCoOwnership bool `json:"allowCoOwnership,omitempty"`
 
 	// ServerSideApplyConfig defines the configuration for server side apply. It is honored only when type is ServerSideApply.
@@ -571,8 +586,9 @@ type ApplyStrategy struct {
 	//
 	// * IfNoDiff: with this action, Fleet will apply the hub cluster manifests to the member
 	//   clusters if (and only if) pre-existing resources look the same as the hub cluster manifests.
+	//
 	//   This is a safer option as pre-existing resources that are inconsistent with the hub cluster
-	//   manifests will not be overwritten; in fact, Fleet will ignore them until the inconsistencies
+	//   manifests will not be overwritten; Fleet will ignore them until the inconsistencies
 	//   are resolved properly: any change you make to the hub cluster manifests would not be
 	//   applied, and if you delete the manifests or even the ClusterResourcePlacement itself
 	//   from the hub cluster, these pre-existing resources would not be taken away.
@@ -597,8 +613,24 @@ type ApplyStrategy struct {
 	//   If appropriate, you may also delete the object from the member cluster; Fleet will recreate
 	//   it using the hub cluster manifest.
 	//
+	// * Never: with this action, Fleet will not apply a hub cluster manifest to the member
+	//   clusters if there is a corresponding pre-existing resource. However, if a manifest
+	//   has never been applied yet; or it has a corresponding resource which Fleet has assumed
+	//   ownership, apply op will still be executed.
+	//
+	//   This is the safest option; one will have to remove the pre-existing resources (so that
+	//   Fleet can re-create them) or switch to a different
+	//   WhenToTakeOver option before Fleet starts processing the corresponding hub cluster
+	//   manifests.
+	//
+	//   If you prefer Fleet stop processing all manifests, use this option along with the
+	//   ReportDiff apply strategy type. This setup would instruct Fleet to touch nothing
+	//   on the member cluster side but still report configuration differences between the
+	//   hub cluster and member clusters. Fleet will not give up ownership
+	//   that it has already assumed though.
+	//
 	// +kubebuilder:default=Always
-	// +kubebuilder:validation:Enum=Always;IfNoDiff
+	// +kubebuilder:validation:Enum=Always;IfNoDiff;Never
 	// +kubebuilder:validation:Optional
 	WhenToTakeOver WhenToTakeOverType `json:"whenToTakeOver,omitempty"`
 }
@@ -676,14 +708,35 @@ type ServerSideApplyConfig struct {
 type WhenToTakeOverType string
 
 const (
-	// WhenToTakeOverTypeIfNoDiff will apply manifests from the hub cluster only if there is no difference
-	// between the current resource snapshot version on the hub cluster and the existing
-	// resources on the member cluster. Otherwise, we will report the difference.
+	// WhenToTakeOverTypeIfNoDiff instructs Fleet to apply a manifest with a corresponding
+	// pre-existing resource on a member cluster if and only if the pre-existing resource
+	// looks the same as the manifest. Should there be any inconsistency, Fleet will skip
+	// the apply op; no change will be made on the resource and Fleet will not claim
+	// ownership on it.
+	//
+	// Note that this will not stop Fleet from processing other manifests in the same
+	// placement that do not concern the takeover process (e.g., the manifests that have
+	// not been created yet, or that are already under the management of Fleet).
 	WhenToTakeOverTypeIfNoDiff WhenToTakeOverType = "IfNoDiff"
 
-	// WhenToTakeOverTypeAlways will always apply the resource to the member cluster regardless
-	// if there are differences between the resource on the hub cluster and the existing resources on the member cluster.
+	// WhenToTakeOverTypeAlways instructs Fleet to always apply manifests to a member cluster,
+	// even if there are some corresponding pre-existing resources. Some fields on these
+	// resources might be overwritten, and Fleet will claim ownership on them.
 	WhenToTakeOverTypeAlways WhenToTakeOverType = "Always"
+
+	// WhenToTakeOverTypeNever instructs Fleet to never apply a manifest to a member cluster
+	// if there is a corresponding pre-existing resource.
+	//
+	// Note that this will not stop Fleet from processing other manifests in the same placement
+	// that do not concern the takeover process (e.g., the manifests that have not been created
+	// yet, or that are already under the management of Fleet).
+	//
+	// If you would like Fleet to stop processing manifests all together and do not assume
+	// ownership on any pre-existing resources, use this option along with the ReportDiff
+	// apply strategy type. This setup would instruct Fleet to touch nothing on the member
+	// cluster side but still report configuration differences between the hub cluster
+	// and member clusters. Fleet will not give up ownership that it has already assumed, though.
+	WhenToTakeOverTypeNever WhenToTakeOverType = "Never"
 )
 
 // +enum
@@ -709,7 +762,8 @@ type RollingUpdateConfig struct {
 	// Absolute number is calculated from percentage by rounding up.
 	// We consider a resource unavailable when we either remove it from a cluster or in-place
 	// upgrade the resources content on the same cluster.
-	// The minimum of MaxUnavailable is 1 to avoid rolling out stuck during in-place resource update.
+	// The minimum of MaxUnavailable is 0 to allow no downtime moving a placement from one cluster to another.
+	// Please set it to be greater than 0 to avoid rolling out stuck during in-place resource update.
 	// Defaults to 25%.
 	// +kubebuilder:default="25%"
 	// +kubebuilder:validation:XIntOrString
@@ -978,8 +1032,11 @@ type DiffedResourcePlacement struct {
 
 	// TargetClusterObservedGeneration is the generation of the resource on the target cluster
 	// that contains the configuration differences.
-	// +kubebuilder:validation:Required
-	TargetClusterObservedGeneration int64 `json:"targetClusterObservedGeneration"`
+	//
+	// This might be nil if the resource has not been created yet on the target cluster.
+	//
+	// +kubebuilder:validation:Optional
+	TargetClusterObservedGeneration *int64 `json:"targetClusterObservedGeneration"`
 
 	// FirstDiffedObservedTime is the first time the resource on the target cluster is
 	// observed to have configuration differences.
@@ -1085,6 +1142,17 @@ const (
 	// array.
 	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
 	ClusterResourcePlacementAvailableConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementAvailable"
+
+	// ClusterResourcePlacementDiffReportedConditionType indicates whether Fleet has reported
+	// configuration differences between the desired states of resources as kept in the hub cluster
+	// and the current states on the all member clusters.
+	//
+	// It can have the following condition statuses:
+	// * True: Fleet has reported complete sets of configuration differences on all member clusters.
+	// * False: Fleet has not yet reported complete sets of configuration differences on some member
+	//   clusters, or an error has occurred.
+	// * Unknown: Fleet has not finished processing the diff reporting yet.
+	ClusterResourcePlacementDiffReportedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementDiffReported"
 )
 
 // ResourcePlacementConditionType defines a specific condition of a resource placement.
@@ -1140,6 +1208,17 @@ const (
 	// - "False" means some of them are not available yet.
 	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
 	ResourcesAvailableConditionType ResourcePlacementConditionType = "Available"
+
+	// ResourceDiffReportedConditionType indicates whether Fleet has reported configuration
+	// differences between the desired states of resources as kept in the hub cluster and the
+	// current states on the selected member cluster.
+	//
+	// It can have the following condition statuses:
+	// * True: Fleet has reported the complete set of configuration differences on the member cluster.
+	// * False: Fleet has not yet reported the complete set of configuration differences on the
+	//   member cluster, or an error has occurred.
+	// * Unknown: Fleet has not finished processing the diff reporting yet.
+	ResourcesDiffReportedConditionType ResourcePlacementConditionType = "DiffReported"
 )
 
 // PlacementType identifies the type of placement.
