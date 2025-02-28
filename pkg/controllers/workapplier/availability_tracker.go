@@ -14,12 +14,16 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	apiextensionshelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/component-helpers/apps/poddisruptionbudget"
 	"k8s.io/klog/v2"
 
+	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
+	"go.goms.io/fleet-networking/pkg/common/objectmeta"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
@@ -83,6 +87,8 @@ func trackInMemberClusterObjAvailabilityByGVR(
 		return trackCRDAvailability(inMemberClusterObj)
 	case utils.PodDisruptionBudgetGVR:
 		return trackPDBAvailability(inMemberClusterObj)
+	case utils.ServiceExportGVR:
+		return trackServiceExportAvailability(inMemberClusterObj)
 	default:
 		if isDataResource(*gvr) {
 			klog.V(2).InfoS("The object from the member cluster is a data object, consider it to be immediately available",
@@ -244,6 +250,30 @@ func trackPDBAvailability(curObj *unstructured.Unstructured) (ManifestProcessing
 		return ManifestProcessingAvailabilityResultTypeAvailable, nil
 	}
 	klog.V(2).InfoS("Still need to wait for PodDisruptionBudget to be available", "pdb", klog.KObj(curObj))
+	return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
+}
+
+// trackServiceExportAvailability tracks the availability of a service export in the member cluster.
+// It is available if it has a weight annotation and the ServiceExportValid condition is True.
+func trackServiceExportAvailability(curObj *unstructured.Unstructured) (ManifestProcessingAvailabilityResultType, error) {
+	var svcExport fleetnetworkingv1alpha1.ServiceExport
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &svcExport); err != nil {
+		return ManifestProcessingAvailabilityResultTypeFailed, controller.NewUnexpectedBehaviorError(err)
+	}
+
+	weight, hasAnnotation := svcExport.Annotations[objectmeta.ServiceExportAnnotationWeight]
+	validCond := meta.FindStatusCondition(svcExport.Status.Conditions, string(fleetnetworkingv1alpha1.ServiceExportValid))
+	conflictCond := meta.FindStatusCondition(svcExport.Status.Conditions, string(fleetnetworkingv1alpha1.ServiceExportConflict))
+
+	isValid := validCond != nil && validCond.Status == metav1.ConditionTrue
+	hasNoConflict := conflictCond != nil && conflictCond.Status == metav1.ConditionFalse
+
+	if hasAnnotation && ((weight == "0" && isValid) || (isValid && hasNoConflict)) {
+		klog.V(2).InfoS("ServiceExport is available", "serviceExport", klog.KObj(curObj))
+		return ManifestProcessingAvailabilityResultTypeAvailable, nil
+	}
+
+	klog.V(2).InfoS("Still need to wait for ServiceExport to be available", "serviceExport", klog.KObj(curObj))
 	return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
 }
 

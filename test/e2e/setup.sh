@@ -126,9 +126,9 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set logFileMaxSize=1000000
 
 # Download CRDs from Fleet networking repo
-export ENDPOINT_SLICE_EXPORT_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.2.7/config/crd/bases/networking.fleet.azure.com_endpointsliceexports.yaml
-export INTERNAL_SERVICE_EXPORT_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.2.7/config/crd/bases/networking.fleet.azure.com_internalserviceexports.yaml
-export INTERNAL_SERVICE_IMPORT_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.2.7/config/crd/bases/networking.fleet.azure.com_internalserviceimports.yaml
+export ENDPOINT_SLICE_EXPORT_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.3.3/config/crd/bases/networking.fleet.azure.com_endpointsliceexports.yaml
+export INTERNAL_SERVICE_EXPORT_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.3.3/config/crd/bases/networking.fleet.azure.com_internalserviceexports.yaml
+export INTERNAL_SERVICE_IMPORT_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.3.3/config/crd/bases/networking.fleet.azure.com_internalserviceimports.yaml
 curl $ENDPOINT_SLICE_EXPORT_CRD_URL | kubectl apply -f -
 curl $INTERNAL_SERVICE_EXPORT_CRD_URL | kubectl apply -f -
 curl $INTERNAL_SERVICE_IMPORT_CRD_URL | kubectl apply -f -

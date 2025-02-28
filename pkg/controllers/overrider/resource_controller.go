@@ -16,8 +16,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	ctrlruntime "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
@@ -151,6 +153,7 @@ func (r *ResourceReconciler) ensureResourceOverrideSnapshot(ctx context.Context,
 func (r *ResourceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("resourceoverride-controller").
+		WithOptions(ctrlruntime.Options{SkipNameValidation: ptr.To(true)}).
 		For(&placementv1alpha1.ResourceOverride{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Complete(r)
 }

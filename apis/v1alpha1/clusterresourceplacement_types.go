@@ -160,7 +160,7 @@ type ClusterResourcePlacementStatus struct {
 // ResourceIdentifier identifies one Kubernetes resource.
 type ResourceIdentifier struct {
 	// Group is the group name of the selected resource.
-	// +required
+	// +optional
 	Group string `json:"group,omitempty"`
 
 	// Version is the version of the selected resource.
@@ -183,7 +183,6 @@ type ResourceIdentifier struct {
 // FailedResourcePlacement contains the failure details of a failed resource placement.
 type FailedResourcePlacement struct {
 	// The resource failed to be placed.
-	// +required
 	ResourceIdentifier `json:",inline"`
 
 	// Name of the member cluster that the resource is placed to.

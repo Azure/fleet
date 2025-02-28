@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlruntime "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -106,6 +108,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
+		WithOptions(ctrlruntime.Options{SkipNameValidation: ptr.To(true)}).
 		For(&fleetv1beta1.ClusterResourceBinding{}).
 		WithEventFilter(customPredicate).
 		Complete(r)

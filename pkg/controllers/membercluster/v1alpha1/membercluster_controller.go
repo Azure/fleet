@@ -24,6 +24,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlruntime "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
@@ -576,6 +577,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		r.agents[fleetv1alpha1.ServiceExportImportAgent] = true
 	}
 	return ctrl.NewControllerManagedBy(mgr).
+		WithOptions(ctrlruntime.Options{SkipNameValidation: ptr.To(true)}).
 		For(&fleetv1alpha1.MemberCluster{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&fleetv1alpha1.InternalMemberCluster{}).
 		Complete(r)

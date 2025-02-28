@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
+	ctrlruntime "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -41,6 +43,7 @@ func (r *Reconciler) Reconcile(_ context.Context, req ctrl.Request) (ctrl.Result
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		WithOptions(ctrlruntime.Options{SkipNameValidation: ptr.To(true)}).
 		For(&fleetv1beta1.ClusterResourcePlacement{}).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)

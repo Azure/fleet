@@ -97,7 +97,6 @@ type OverrideRule struct {
 
 	// JSONPatchOverrides defines a list of JSON patch override rules.
 	// This field is only allowed when OverrideType is JSONPatch.
-	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=20
 	// +optional
