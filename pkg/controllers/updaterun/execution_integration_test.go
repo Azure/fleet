@@ -254,19 +254,57 @@ var _ = Describe("UpdateRun execution tests", func() {
 			meta.SetStatusCondition(&binding.Status.Conditions, generateTrueCondition(binding, placementv1beta1.ResourceBindingAvailable))
 			Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "failed to update the binding status")
 
-			By("Validating the 5th cluster has succeeded and stage waiting for AfterStageTask")
+			By("Validating the 5th cluster has succeeded and stage waiting for AfterStageTasks")
 			stageWaitingCondition := generateFalseCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing)
 			stageWaitingCondition.Reason = condition.StageUpdatingWaitingReason
 			wantStatus.StagesStatus[0].Clusters[4].Conditions = append(wantStatus.StagesStatus[0].Clusters[4].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
 			wantStatus.StagesStatus[0].Conditions[0] = stageWaitingCondition // The progressing condition now becomes false with waiting reason.
+			wantStatus.StagesStatus[0].AfterStageTaskStatus[1].Conditions = append(wantStatus.StagesStatus[0].AfterStageTaskStatus[1].Conditions,
+				generateTrueCondition(updateRun, placementv1beta1.AfterStageTaskConditionApprovalRequestCreated))
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
 
-		It("Should complete the 1st stage after wait time passed and move on to the 2nd stage", func() {
-			By("Validating the waitTime after stage task has completed and 2nd stage has started")
-			// AfterStageTask completed.
+		It("Should complete the 1st stage after wait time passed and approval request approved and move on to the 2nd stage", func() {
+			By("Validating the approvalRequest has been created")
+			approvalRequest := &placementv1beta1.ClusterApprovalRequest{}
+			wantApprovalRequest := &placementv1beta1.ClusterApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: updateRun.Status.StagesStatus[0].AfterStageTaskStatus[1].ApprovalRequestName,
+					Labels: map[string]string{
+						placementv1beta1.TargetUpdatingStageNameLabel:   updateRun.Status.StagesStatus[0].StageName,
+						placementv1beta1.TargetUpdateRunLabel:           updateRun.Name,
+						placementv1beta1.IsLatestUpdateRunApprovalLabel: "true",
+					},
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: updateRun.Name,
+					TargetStage:     updateRun.Status.StagesStatus[0].StageName,
+				},
+			}
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: wantApprovalRequest.Name}, approvalRequest); err != nil {
+					return err
+				}
+				if diff := cmp.Diff(wantApprovalRequest.Spec, approvalRequest.Spec); diff != "" {
+					return fmt.Errorf("approvalRequest has different spec (-want +got):\n%s", diff)
+				}
+				if diff := cmp.Diff(wantApprovalRequest.Labels, approvalRequest.Labels); diff != "" {
+					return fmt.Errorf("approvalRequest has different labels (-want +got):\n%s", diff)
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "failed to validate the approvalRequest")
+
+			By("Approving the approvalRequest")
+			meta.SetStatusCondition(&approvalRequest.Status.Conditions, generateTrueCondition(approvalRequest, placementv1beta1.ApprovalRequestConditionApproved))
+			Expect(k8sClient.Status().Update(ctx, approvalRequest)).Should(Succeed(), "failed to update the approvalRequest status")
+
+			By("Validating both after stage tasks have completed and 2nd stage has started")
+			// Timedwait afterStageTask completed.
 			wantStatus.StagesStatus[0].AfterStageTaskStatus[0].Conditions = append(wantStatus.StagesStatus[0].AfterStageTaskStatus[0].Conditions,
 				generateTrueCondition(updateRun, placementv1beta1.AfterStageTaskConditionWaitTimeElapsed))
+			// Approval afterStageTask completed.
+			wantStatus.StagesStatus[0].AfterStageTaskStatus[1].Conditions = append(wantStatus.StagesStatus[0].AfterStageTaskStatus[1].Conditions,
+				generateTrueCondition(updateRun, placementv1beta1.AfterStageTaskConditionApprovalRequestApproved))
 			// 1st stage completed.
 			wantStatus.StagesStatus[0].Conditions = append(wantStatus.StagesStatus[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 			// 2nd stage started.
@@ -281,10 +319,12 @@ var _ = Describe("UpdateRun execution tests", func() {
 			By("Validating the waitTime after stage task only completes after the wait time")
 			waitStartTime := meta.FindStatusCondition(updateRun.Status.StagesStatus[0].Conditions, string(placementv1beta1.StageUpdatingConditionProgressing)).LastTransitionTime.Time
 			waitEndTime := meta.FindStatusCondition(updateRun.Status.StagesStatus[0].AfterStageTaskStatus[0].Conditions, string(placementv1beta1.AfterStageTaskConditionWaitTimeElapsed)).LastTransitionTime.Time
-			// In this test, I set wait time to be 4 seconds, while stageClusterUpdatingWaitTime is 3 seconds.
-			// So it needs 2 rounds of reconcile to wait for the waitTime to elapse, waitEndTime - waitStartTime should be around 6 seconds.
 			Expect(waitStartTime.Add(updateStrategy.Spec.Stages[0].AfterStageTasks[0].WaitTime.Duration).After(waitEndTime)).Should(BeFalse(),
 				fmt.Sprintf("waitEndTime %v did not pass waitStartTime %v long enough, want at least %v", waitEndTime, waitStartTime, updateStrategy.Spec.Stages[0].AfterStageTasks[0].WaitTime.Duration))
+
+			By("Validating the creation time of the approval request is before the complete time of the timedwait task")
+			approvalCreateTime := meta.FindStatusCondition(updateRun.Status.StagesStatus[0].AfterStageTaskStatus[1].Conditions, string(placementv1beta1.AfterStageTaskConditionApprovalRequestCreated)).LastTransitionTime.Time
+			Expect(approvalCreateTime.Before(waitEndTime)).Should(BeTrue())
 		})
 
 		It("Should mark the 1st cluster in the 2nd stage as succeeded after marking the binding available", func() {
@@ -369,7 +409,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 		})
 
-		It("Should complete the 2nd stage after the ApprovalRequest is approved and move on to the delete stage", func() {
+		It("Should complete the 2nd stage after both after stage tasks are completed and move on to the delete stage", func() {
 			By("Validating the approvalRequest has been created")
 			approvalRequest := &placementv1beta1.ClusterApprovalRequest{}
 			wantApprovalRequest := &placementv1beta1.ClusterApprovalRequest{
@@ -406,6 +446,8 @@ var _ = Describe("UpdateRun execution tests", func() {
 			By("Validating the 2nd stage has completed and the delete stage has started")
 			wantStatus.StagesStatus[1].AfterStageTaskStatus[0].Conditions = append(wantStatus.StagesStatus[1].AfterStageTaskStatus[0].Conditions,
 				generateTrueCondition(updateRun, placementv1beta1.AfterStageTaskConditionApprovalRequestApproved))
+			wantStatus.StagesStatus[1].AfterStageTaskStatus[1].Conditions = append(wantStatus.StagesStatus[1].AfterStageTaskStatus[1].Conditions,
+				generateTrueCondition(updateRun, placementv1beta1.AfterStageTaskConditionWaitTimeElapsed))
 			wantStatus.StagesStatus[1].Conditions = append(wantStatus.StagesStatus[1].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
 
 			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing))
@@ -413,6 +455,19 @@ var _ = Describe("UpdateRun execution tests", func() {
 				wantStatus.DeletionStageStatus.Clusters[i].Conditions = append(wantStatus.DeletionStageStatus.Clusters[i].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
 			}
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
+
+			By("Validating the 2nd stage has endTime set")
+			Expect(updateRun.Status.StagesStatus[1].EndTime).ShouldNot(BeNil())
+
+			By("Validating the waitTime after stage task only completes after the wait time")
+			waitStartTime := meta.FindStatusCondition(updateRun.Status.StagesStatus[1].Conditions, string(placementv1beta1.StageUpdatingConditionProgressing)).LastTransitionTime.Time
+			waitEndTime := meta.FindStatusCondition(updateRun.Status.StagesStatus[1].AfterStageTaskStatus[1].Conditions, string(placementv1beta1.AfterStageTaskConditionWaitTimeElapsed)).LastTransitionTime.Time
+			Expect(waitStartTime.Add(updateStrategy.Spec.Stages[1].AfterStageTasks[1].WaitTime.Duration).After(waitEndTime)).Should(BeFalse(),
+				fmt.Sprintf("waitEndTime %v did not pass waitStartTime %v long enough, want at least %v", waitEndTime, waitStartTime, updateStrategy.Spec.Stages[1].AfterStageTasks[1].WaitTime.Duration))
+
+			By("Validating the creation time of the approval request is before the complete time of the timedwait task")
+			approvalCreateTime := meta.FindStatusCondition(updateRun.Status.StagesStatus[1].AfterStageTaskStatus[0].Conditions, string(placementv1beta1.AfterStageTaskConditionApprovalRequestCreated)).LastTransitionTime.Time
+			Expect(approvalCreateTime.Before(waitEndTime)).Should(BeTrue())
 
 			By("Validating the approvalRequest has ApprovalAccepted status")
 			Eventually(func() (bool, error) {

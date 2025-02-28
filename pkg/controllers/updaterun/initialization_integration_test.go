@@ -770,6 +770,10 @@ func generateSucceededInitializationStatus(
 				},
 				AfterStageTaskStatus: []placementv1beta1.AfterStageTaskStatus{
 					{Type: placementv1beta1.AfterStageTaskTypeTimedWait},
+					{
+						Type:                placementv1beta1.AfterStageTaskTypeApproval,
+						ApprovalRequestName: updateRun.Name + "-stage1",
+					},
 				},
 			},
 			{
@@ -786,6 +790,7 @@ func generateSucceededInitializationStatus(
 						Type:                placementv1beta1.AfterStageTaskTypeApproval,
 						ApprovalRequestName: updateRun.Name + "-stage2",
 					},
+					{Type: placementv1beta1.AfterStageTaskTypeTimedWait},
 				},
 			},
 		},
