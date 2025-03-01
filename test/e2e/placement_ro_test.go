@@ -20,7 +20,7 @@ import (
 )
 
 // Note that this container will run in parallel with other containers.
-var _ = Describe("creating resourceOverride (selecting all clusters) to override configMap", Ordered, func() {
+var _ = Context("creating resourceOverride (selecting all clusters) to override configMap", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
@@ -125,7 +125,7 @@ var _ = Describe("creating resourceOverride (selecting all clusters) to override
 		}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, wantRONames)
 		// use the long duration to wait until the rollout is finished.
-		Eventually(crpStatusUpdatedActual, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
 	// This check will ignore the annotation of resources.
@@ -135,9 +135,24 @@ var _ = Describe("creating resourceOverride (selecting all clusters) to override
 		want := map[string]string{roTestAnnotationKey: roTestAnnotationValue1}
 		checkIfOverrideAnnotationsOnAllMemberClusters(false, want)
 	})
+
+	It("delete the ro attached to this CRP", func() {
+		cleanupResourceOverride(roName, roNamespace)
+	})
+
+	It("should update CRP status to not select any override", func() {
+		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, nil)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	It("should not have annotations on the configmap", func() {
+		for _, memberCluster := range allMemberClusters {
+			Expect(validateConfigMapNoAnnotationKeyOnCluster(memberCluster, roTestAnnotationKey)).Should(Succeed(), "Failed to remove the annotation of config map on %s", memberCluster.ClusterName)
+		}
+	})
 })
 
-var _ = Describe("creating resourceOverride with multiple jsonPatchOverrides to override configMap", Ordered, func() {
+var _ = Context("creating resourceOverride with multiple jsonPatchOverrides to override configMap", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
@@ -231,7 +246,7 @@ var _ = Describe("creating resourceOverride with multiple jsonPatchOverrides to 
 
 })
 
-var _ = Describe("creating resourceOverride with different rules for each cluster to override configMap", Ordered, func() {
+var _ = Context("creating resourceOverride with different rules for each cluster to override configMap", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
@@ -343,7 +358,7 @@ var _ = Describe("creating resourceOverride with different rules for each cluste
 	})
 })
 
-var _ = Describe("creating resourceOverride and clusterResourceOverride, resourceOverride should win to override configMap", Ordered, func() {
+var _ = Context("creating resourceOverride and clusterResourceOverride, resourceOverride should win to override configMap", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
@@ -448,7 +463,7 @@ var _ = Describe("creating resourceOverride and clusterResourceOverride, resourc
 	})
 })
 
-var _ = Describe("creating resourceOverride with incorrect path", Ordered, func() {
+var _ = Context("creating resourceOverride with incorrect path", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
@@ -512,7 +527,7 @@ var _ = Describe("creating resourceOverride with incorrect path", Ordered, func(
 	It("should not place the selected resources on member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 })
 
-var _ = Describe("creating resourceOverride and resource becomes invalid after override", Ordered, func() {
+var _ = Context("creating resourceOverride and resource becomes invalid after override", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
@@ -575,7 +590,7 @@ var _ = Describe("creating resourceOverride and resource becomes invalid after o
 	It("should not place the selected resources on member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 })
 
-var _ = Describe("creating resourceOverride with a templated rules with cluster name to override configMap", Ordered, func() {
+var _ = Context("creating resourceOverride with a templated rules with cluster name to override configMap", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
@@ -669,7 +684,7 @@ var _ = Describe("creating resourceOverride with a templated rules with cluster 
 	})
 })
 
-var _ = Describe("creating resourceOverride with delete configMap", Ordered, func() {
+var _ = Context("creating resourceOverride with delete configMap", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())

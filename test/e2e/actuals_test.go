@@ -103,6 +103,21 @@ func validateOverrideAnnotationOfConfigMapOnCluster(cluster *framework.Cluster, 
 	return nil
 }
 
+func validateConfigMapNoAnnotationKeyOnCluster(cluster *framework.Cluster, key string) error {
+	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	appConfigMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
+
+	configMap := &corev1.ConfigMap{}
+	if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: appConfigMapName}, configMap); err != nil {
+		return err
+	}
+
+	if len(configMap.Annotations) == 0 || configMap.Annotations[key] == "" {
+		return nil
+	}
+	return fmt.Errorf("app config map annotation still got  key `%s`, value `%s`", key, configMap.Annotations[key])
+}
+
 func workNamespaceAndConfigMapPlacedOnClusterActual(cluster *framework.Cluster) func() error {
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 	appConfigMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
@@ -582,25 +597,23 @@ func crpStatusWithOverrideUpdatedActual(
 	wantClusterResourceOverrides []string,
 	wantResourceOverrides []placementv1beta1.NamespacedName) func() error {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-
 	return func() error {
 		crp := &placementv1beta1.ClusterResourcePlacement{}
+		hasOverride := len(wantResourceOverrides) > 0 || len(wantClusterResourceOverrides) > 0
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
 			return err
 		}
-
 		var wantPlacementStatus []placementv1beta1.ResourcePlacementStatus
 		for _, name := range wantSelectedClusters {
 			wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.ResourcePlacementStatus{
 				ClusterName:                        name,
-				Conditions:                         resourcePlacementRolloutCompletedConditions(crp.Generation, true, true),
+				Conditions:                         resourcePlacementRolloutCompletedConditions(crp.Generation, true, hasOverride),
 				ApplicableResourceOverrides:        wantResourceOverrides,
 				ApplicableClusterResourceOverrides: wantClusterResourceOverrides,
 			})
 		}
-
 		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
-			Conditions:            crpRolloutCompletedConditions(crp.Generation, true),
+			Conditions:            crpRolloutCompletedConditions(crp.Generation, hasOverride),
 			PlacementStatuses:     wantPlacementStatus,
 			SelectedResources:     wantSelectedResourceIdentifiers,
 			ObservedResourceIndex: wantObservedResourceIndex,

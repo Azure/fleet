@@ -149,7 +149,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	// fill out all the default values for CRP just in case the mutation webhook is not enabled.
 	defaulter.SetDefaultsClusterResourcePlacement(&crp)
-
+	// Note: there is a corner case that an override is in-between snapshots (the old one is marked as not the latest while the new one is not created yet)
+	// This will result in one of the override is removed by the rollout controller so the first instance of the updated cluster can experience
+	// a complete removal of the override effect following by applying the new override effect.
+	// This is hard to avoid as the system is eventual consistent and we would recommend users to use updateRun
 	matchedCRO, matchedRO, err := overrider.FetchAllMatchingOverridesForResourceSnapshot(ctx, r.Client, r.InformerManager, crp.Name, latestResourceSnapshot)
 	if err != nil {
 		klog.ErrorS(err, "Failed to find all matching overrides for the clusterResourcePlacement", "clusterResourcePlacement", crpName)
@@ -709,6 +712,10 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 				klog.V(2).InfoS("Handling a clusterResourceOverrideSnapshot create event", "clusterResourceOverrideSnapshot", klog.KObj(e.Object))
 				handleClusterResourceOverrideSnapshot(e.Object, q)
 			},
+			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+				klog.V(2).InfoS("Handling a clusterResourceOverrideSnapshot delete event", "clusterResourceOverrideSnapshot", klog.KObj(e.Object))
+				handleClusterResourceOverrideSnapshot(e.Object, q)
+			},
 			GenericFunc: func(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
 				klog.V(2).InfoS("Handling a clusterResourceOverrideSnapshot generic event", "clusterResourceOverrideSnapshot", klog.KObj(e.Object))
 				handleClusterResourceOverrideSnapshot(e.Object, q)
@@ -717,6 +724,10 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 		Watches(&fleetv1alpha1.ResourceOverrideSnapshot{}, handler.Funcs{
 			CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
 				klog.V(2).InfoS("Handling a resourceOverrideSnapshot create event", "resourceOverrideSnapshot", klog.KObj(e.Object))
+				handleResourceOverrideSnapshot(e.Object, q)
+			},
+			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+				klog.V(2).InfoS("Handling a resourceOverrideSnapshot delete event", "resourceOverrideSnapshot", klog.KObj(e.Object))
 				handleResourceOverrideSnapshot(e.Object, q)
 			},
 			GenericFunc: func(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
@@ -803,7 +814,7 @@ func handleResourceOverrideSnapshot(o client.Object, q workqueue.RateLimitingInt
 	if !isLatest {
 		// All newly created resource snapshots should start with the latest label to be true.
 		// However, this can happen if the label is removed fast by the time this reconcile loop is triggered.
-		klog.V(2).InfoS("Newly created resource resourceOverrideSnapshot %s is not the latest", "resourceOverrideSnapshot", snapshotKRef)
+		klog.V(2).InfoS("Newly changed resource resourceOverrideSnapshot %s is not the latest", "resourceOverrideSnapshot", snapshotKRef)
 		return
 	}
 	if snapshot.Spec.OverrideSpec.Placement == nil {
@@ -835,7 +846,7 @@ func handleResourceSnapshot(snapshot client.Object, q workqueue.RateLimitingInte
 	if !isLatest {
 		// All newly created resource snapshots should start with the latest label to be true.
 		// However, this can happen if the label is removed fast by the time this reconcile loop is triggered.
-		klog.V(2).InfoS("Newly created resource clusterResourceSnapshot %s is not the latest", "clusterResourceSnapshot", snapshotKRef)
+		klog.V(2).InfoS("Newly changed resource clusterResourceSnapshot %s is not the latest", "clusterResourceSnapshot", snapshotKRef)
 		return
 	}
 	// get the CRP name from the label
