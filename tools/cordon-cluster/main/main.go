@@ -76,17 +76,18 @@ func main() {
 		log.Fatalf("failed to find member cluster %s to cordon", *clusterName)
 	}
 
-	var crbList placementv1beta1.ClusterResourceBindingList
-	if err := hubClient.List(ctx, &crbList); err != nil {
-		log.Fatalf("failed to list cluster resource bindings: %v", err)
+	var crpList placementv1beta1.ClusterResourcePlacementList
+	if err := hubClient.List(ctx, &crpList); err != nil {
+		log.Fatalf("failed to list cluster resource placements: %v", err)
 	}
 
 	// find all unique CRP names for which eviction need to occur.
 	crpNameMap := make(map[string]bool)
-	for i := range crbList.Items {
-		if crbList.Items[i].Spec.TargetCluster == *clusterName {
-			if !crpNameMap[crbList.Items[i].Labels[placementv1beta1.CRPTrackingLabel]] {
-				crpNameMap[crbList.Items[i].Labels[placementv1beta1.CRPTrackingLabel]] = true
+	for i := range crpList.Items {
+		for j := range crpList.Items[i].Status.PlacementStatuses {
+			if crpList.Items[i].Status.PlacementStatuses[j].ClusterName == *clusterName {
+				crpNameMap[crpList.Items[i].Name] = true
+				break
 			}
 		}
 	}
