@@ -1254,12 +1254,10 @@ func extractResFromConfigMap(uConfigMap *unstructured.Unstructured) ([]fleetv1be
 		var uManifest unstructured.Unstructured
 		if unMarshallErr := uManifest.UnmarshalJSON(content); unMarshallErr != nil {
 			klog.ErrorS(unMarshallErr, "manifest has invalid content", "manifestKey", key, "envelopResource", klog.KObj(uConfigMap))
-			userErr := fmt.Errorf("failed to unmarshal the manifest key `%s` in evenlop config `%s`, err: %w", key, klog.KObj(uConfigMap), unMarshallErr)
-			return nil, controller.NewUserError(userErr)
+			return nil, fmt.Errorf("failed to unmarshal the manifest key `%s` in evenlop config `%s`, err: %w", key, klog.KObj(uConfigMap), unMarshallErr)
 		}
-		if uManifest.GetNamespace() != configMap.Namespace {
-			userErr := fmt.Errorf("the object `%s` in evenlop config `%s` is placed in a different namespace `%s` ", uManifest.GetName(), klog.KObj(uConfigMap), uManifest.GetNamespace())
-			return nil, controller.NewUserError(userErr)
+		if len(uManifest.GetNamespace()) != 0 && uManifest.GetNamespace() != configMap.Namespace {
+			return nil, fmt.Errorf("the object `%s` in evenlop config `%s` is placed in a different namespace `%s` ", uManifest.GetName(), klog.KObj(uConfigMap), uManifest.GetNamespace())
 		}
 		manifests = append(manifests, fleetv1beta1.Manifest{
 			RawExtension: runtime.RawExtension{Raw: content},
