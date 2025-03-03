@@ -27,10 +27,13 @@ export REFRESH_TOKEN_IMAGE="${REFRESH_TOKEN_IMAGE:-refresh-token}"
 export GIT_TAG="${GIT_TAG:-}"
 
 PREVIOUS_BRANCH=""
+PREVIOUS_COMMIT=""
 if [ -z "${GIT_TAG}" ]; then
     echo "No tag is specified; use the latest tag."
 
     PREVIOUS_BRANCH=$(git branch --show-current)
+    PREVIOUS_COMMIT=$(git rev-parse HEAD)
+    echo "Current at branch $PREVIOUS_BRANCH, commit $PREVIOUS_COMMIT."
 
     echo "Fetch all tags..."
     git fetch --all
@@ -140,7 +143,7 @@ do
 done
 
 # Restore to the previous branch.
-if [ -n "$PREVIOUS_BRANCH" ]; then
-    git checkout $PREVIOUS_BRANCH
-    echo "Checked out source code at $PREVIOUS_BRANCH."
+if [ -n "$PREVIOUS_COMMIT" ]; then
+    git checkout $PREVIOUS_COMMIT
+    echo "Checked out source code at $PREVIOUS_COMMIT."
 fi
