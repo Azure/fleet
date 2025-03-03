@@ -26,6 +26,10 @@ var (
 	kubeconfigPath = os.Getenv("KUBECONFIG")
 )
 
+const (
+	testEvictionNamePrefix = "test-eviction-"
+)
+
 func main() {
 	hubClusterContext := flag.String("hubClusterContext", "", "the kubectl context for the hub cluster")
 	clusterName := flag.String("clusterName", "", "name of the cluster to cordon")
@@ -128,7 +132,7 @@ func main() {
 
 	// create eviction objects for all <crpName, targetCluster>.
 	for crpName := range crpNameMap {
-		evictionName := "test-eviction" + crpName
+		evictionName := testEvictionNamePrefix + crpName
 
 		if err = removeExistingEviction(ctx, hubClient, evictionName); err != nil {
 			log.Fatalf("failed to remove existing eviction for CRP %s", crpName)
@@ -158,7 +162,7 @@ func main() {
 	// TODO: move isEvictionInTerminalState to a function in the utils package.
 	for crpName := range crpNameMap {
 		err = wait.ExponentialBackoffWithContext(ctx, retry.DefaultBackoff, func(ctx context.Context) (bool, error) {
-			evictionName := "test-eviction-" + crpName
+			evictionName := testEvictionNamePrefix + crpName
 			eviction := placementv1beta1.ClusterResourcePlacementEviction{}
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
 				return false, err
@@ -179,7 +183,7 @@ func main() {
 		}
 	}
 
-	log.Printf("Issued evictions to cordon cluster %s, please verify to ensure eviction were successfully executed", *clusterName)
+	log.Printf("Issued evictions to cordon cluster %s, please verify to ensure evictions were successfully executed", *clusterName)
 }
 
 func removeExistingEviction(ctx context.Context, client client.Client, evictionName string) error {
