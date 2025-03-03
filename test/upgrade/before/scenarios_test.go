@@ -1,0 +1,361 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
+package before
+
+import (
+	"fmt"
+
+	"github.com/google/go-cmp/cmp"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+)
+
+var _ = Describe("CRP with trackable resources, all available (before upgrade)", Ordered, func() {
+	// The names specified must match with those in the corresponding node from the after upgrade
+	// test stage.
+	crpName := "crp-trackable-available"
+	workNamespaceName := "work-trackable-available"
+	appConfigMapName := "app-configmap-trackable-available"
+
+	BeforeAll(func() {
+		// Create the resources.
+		createWorkResources(workNamespaceName, appConfigMapName, crpName)
+
+		// Create the CRP.
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				ResourceSelectors: workResourceSelector(workNamespaceName),
+				Strategy: placementv1beta1.RolloutStrategy{
+					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+						UnavailablePeriodSeconds: ptr.To(2),
+					},
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+	})
+
+	It("should update CRP status as expected", func() {
+		crpStatusUpdatedActual := crpStatusUpdatedActual(crpName, workResourceIdentifiers(workNamespaceName, appConfigMapName), allMemberClusterNames, nil, "0")
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+	})
+
+	It("should place the resources on all member clusters", func() {
+		checkIfPlacedWorkResourcesOnAllMemberClusters(workNamespaceName, appConfigMapName)
+	})
+})
+
+var _ = Describe("CRP with non-trackable resources, all available (before upgrade)", Ordered, func() {
+	// The names specified must match with those in the corresponding node from the after upgrade
+	// test stage.
+	crpName := "crp-non-trackable-available"
+	workNamespaceName := "work-non-trackable-available"
+	jobName := "job-non-trackable-available"
+
+	BeforeAll(func() {
+		// Create the resources.
+		ns := appNamespace(workNamespaceName, crpName)
+		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
+
+		// Job is currently untrackable in Fleet.
+		job := batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      jobName,
+				Namespace: workNamespaceName,
+			},
+			Spec: batchv1.JobSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Image:           "busybox",
+								ImagePullPolicy: corev1.PullIfNotPresent,
+								Name:            "busybox",
+							},
+						},
+						RestartPolicy: corev1.RestartPolicyNever,
+					},
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, &job)).To(Succeed(), "Failed to create job %s", job.Name)
+
+		// Create the CRP.
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				ResourceSelectors: workResourceSelector(workNamespaceName),
+				Strategy: placementv1beta1.RolloutStrategy{
+					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+						UnavailablePeriodSeconds: ptr.To(2),
+					},
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+	})
+
+	It("should update CRP status as expected", func() {
+		wantResourceIdentifiers := []placementv1beta1.ResourceIdentifier{
+			{
+				Kind:    "Namespace",
+				Name:    workNamespaceName,
+				Version: "v1",
+			},
+			{
+				Group:     "batch",
+				Kind:      "Job",
+				Name:      jobName,
+				Version:   "v1",
+				Namespace: workNamespaceName,
+			},
+		}
+		crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantResourceIdentifiers, allMemberClusterNames, nil, "0", false)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+	})
+
+	It("should place the resources on all member clusters", func() {
+		for idx := range allMemberClusters {
+			memberCluster := allMemberClusters[idx]
+			// Give the system a bit more breathing room when process resource placement.
+			Eventually(func() error {
+				if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: workNamespaceName}); err != nil {
+					return err
+				}
+
+				return validateJobOnCluster(memberCluster, types.NamespacedName{Name: jobName, Namespace: workNamespaceName})
+			}, eventuallyDuration*2, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+		}
+	})
+})
+
+var _ = Describe("CRP with availability failure (before upgrade)", Ordered, func() {
+	// The names specified must match with those in the corresponding node from the after upgrade
+	// test stage.
+	crpName := "crp-availability-failure"
+	workNamespaceName := "work-availability-failure"
+	svcName := "svc-availability-failure"
+
+	BeforeAll(func() {
+		// Create the resources.
+		ns := appNamespace(workNamespaceName, crpName)
+		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
+
+		// Use a Service of the LoadBalancer type as by default KinD environment does not support
+		// this service type and such services will always be unavailable.
+		//
+		// Fleet support a few other API types for availability checks (e.g., Deployment, DaemonSet.
+		// etc.); however, they cannot be used in this test spec as they might spawn derived
+		// resources (ReplicaSets, ClusterRevisions, etc.) and may cause ownership conflicts if
+		// placed.
+		svc := corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      svcName,
+				Namespace: workNamespaceName,
+			},
+			Spec: corev1.ServiceSpec{
+				Type: corev1.ServiceTypeLoadBalancer,
+				Selector: map[string]string{
+					"app": "nginx",
+				},
+				Ports: []corev1.ServicePort{
+					{
+						Port:       80,
+						TargetPort: intstr.FromInt(80),
+					},
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, &svc)).To(Succeed(), "Failed to create daement set")
+
+		// Create the CRP.
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				ResourceSelectors: workResourceSelector(workNamespaceName),
+				Policy: &placementv1beta1.PlacementPolicy{
+					PlacementType: placementv1beta1.PickFixedPlacementType,
+					ClusterNames:  []string{memberCluster1EastProdName},
+				},
+				Strategy: placementv1beta1.RolloutStrategy{
+					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+						UnavailablePeriodSeconds: ptr.To(2),
+					},
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+	})
+
+	It("should update CRP status as expected", func() {
+		wantResourceIdentifiers := []placementv1beta1.ResourceIdentifier{
+			{
+				Kind:    "Namespace",
+				Name:    workNamespaceName,
+				Version: "v1",
+			},
+			{
+				Kind:      "Service",
+				Name:      svcName,
+				Version:   "v1",
+				Namespace: workNamespaceName,
+			},
+		}
+		wantFailedWorkloadResourceIdentifier := placementv1beta1.ResourceIdentifier{
+			Kind:      "Service",
+			Name:      svcName,
+			Version:   "v1",
+			Namespace: workNamespaceName,
+		}
+		crpStatusUpdatedActual := crpWithOneFailedAvailabilityCheckStatusUpdatedActual(
+			crpName,
+			wantResourceIdentifiers,
+			[]string{memberCluster1EastProdName},
+			wantFailedWorkloadResourceIdentifier, 0,
+			[]string{},
+			"0",
+		)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+	})
+
+	It("should place the resources on the member cluster", func() {
+		// Give the system a bit more breathing room when process resource placement.
+		Eventually(func() error {
+			if err := validateWorkNamespaceOnCluster(memberCluster1EastProd, types.NamespacedName{Name: workNamespaceName}); err != nil {
+				return err
+			}
+
+			return validateServiceOnCluster(memberCluster1EastProd, types.NamespacedName{Name: svcName, Namespace: workNamespaceName})
+		}, eventuallyDuration*2, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster1EastProd.ClusterName)
+	})
+})
+
+var _ = Describe("CRP with apply op failure (before upgrade)", Ordered, func() {
+	// The names specified must match with those in the corresponding node from the after upgrade
+	// test stage.
+	crpName := "crp-apply-failure"
+	workNamespaceName := "work-apply-failure"
+	appConfigMapName := "app-configmap-apply-failure"
+
+	BeforeAll(func() {
+		// Create the resources on the hub cluster.
+		createWorkResources(workNamespaceName, appConfigMapName, crpName)
+
+		// Create the resources on the member cluster with a custom manager
+		ns := appNamespace(workNamespaceName, crpName)
+		Expect(memberCluster1EastProdClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
+
+		configMap := appConfigMap(workNamespaceName, appConfigMapName)
+		configMap.Data = map[string]string{
+			"data": "foo",
+		}
+		Expect(memberCluster1EastProdClient.Create(ctx, &configMap, &client.CreateOptions{FieldManager: "custom"})).To(Succeed(), "Failed to create configMap")
+
+		// Create the CRP.
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				ResourceSelectors: workResourceSelector(workNamespaceName),
+				Policy: &placementv1beta1.PlacementPolicy{
+					PlacementType: placementv1beta1.PickFixedPlacementType,
+					ClusterNames:  []string{memberCluster1EastProdName},
+				},
+				Strategy: placementv1beta1.RolloutStrategy{
+					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+						UnavailablePeriodSeconds: ptr.To(2),
+					},
+					ApplyStrategy: &placementv1beta1.ApplyStrategy{
+						Type: placementv1beta1.ApplyStrategyTypeServerSideApply,
+					},
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+	})
+
+	It("should update CRP status as expected", func() {
+		wantFailedWorkloadResourceIdentifier := placementv1beta1.ResourceIdentifier{
+			Kind:      "ConfigMap",
+			Name:      appConfigMapName,
+			Version:   "v1",
+			Namespace: workNamespaceName,
+		}
+		crpStatusUpdatedActual := crpWithOneFailedApplyOpStatusUpdatedActual(
+			crpName,
+			workResourceIdentifiers(workNamespaceName, appConfigMapName),
+			[]string{memberCluster1EastProdName},
+			wantFailedWorkloadResourceIdentifier, 0,
+			[]string{},
+			"0",
+		)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+	})
+
+	It("should place some resources on the member cluster", func() {
+		// Give the system a bit more breathing room when process resource placement.
+		Eventually(func() error {
+			return validateWorkNamespaceOnCluster(memberCluster1EastProd, types.NamespacedName{Name: workNamespaceName})
+		}, eventuallyDuration*2, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster1EastProd.ClusterName)
+	})
+
+	It("should not place some resources on the member cluster", func() {
+		// Give the system a bit more breathing room when process resource placement.
+		Eventually(func() error {
+			configMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      appConfigMapName,
+					Namespace: workNamespaceName,
+				},
+				Data: map[string]string{
+					"data": "foo",
+				},
+			}
+
+			wantConfigMap := &corev1.ConfigMap{}
+			if err := memberCluster1EastProdClient.Get(ctx, types.NamespacedName{Name: appConfigMapName, Namespace: workNamespaceName}, wantConfigMap); err != nil {
+				return err
+			}
+
+			if diff := cmp.Diff(
+				configMap, wantConfigMap,
+				ignoreObjectMetaAutoGeneratedFields,
+				ignoreObjectMetaAnnotationField,
+			); diff != "" {
+				return fmt.Errorf("app config map diff (-got, +want): %s", diff)
+			}
+
+			return nil
+		}, eventuallyDuration*2, eventuallyInterval).Should(Succeed(), "Failed to skip resource placement")
+	})
+})
+
+var _ = Describe("CRP stuck in the rollout process (blocked by availability failure)", Ordered, func() {})
+
+var _ = Describe("CRP stuck in the rollout process (blocked by apply op failure)", Ordered, func() {})
+
+var _ = Describe("CRP stuck in the rollout process (long wait time)", Ordered, func() {})
