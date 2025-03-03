@@ -63,6 +63,7 @@ done
 
 # Upgrade the agent image in the hub cluster.
 if [ -n "$UPGRADE_HUB_SIDE" ]; then
+    echo "Upgrading the hub agent in the hub cluster..."
     kind export kubeconfig --name $HUB_CLUSTER
     helm upgrade hub-agent ../../charts/hub-agent/ \
         --set image.pullPolicy=Never \
@@ -83,6 +84,7 @@ HUB_SERVER_URL="https://$(docker inspect $HUB_CLUSTER-control-plane --format='{{
 
 # Upgrade the agent images in all member clusters.
 if [ -n "$UPGRADE_MEMBER_SIDE" ]; then
+    echo "Upgrading the member agents in the member clusters..."
     for (( i=0; i<${MEMBER_CLUSTER_COUNT}; i++ ));
     do
         kind export kubeconfig --name "${MEMBER_CLUSTERS[$i]}"

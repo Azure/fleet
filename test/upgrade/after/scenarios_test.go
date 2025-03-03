@@ -38,7 +38,7 @@ var _ = Describe("CRP with trackable resources, all available (after upgrade)", 
 })
 
 var _ = Describe("CRP with untrackable resources, all available (after upgrade)", Ordered, func() {
-	// The names specified must match with those in the corresponding node from the after upgrade
+	// The names specified must match with those in the corresponding node from the before upgrade
 	// test stage.
 	crpName := "crp-non-trackable-available"
 	workNamespaceName := "work-non-trackable-available"
@@ -80,8 +80,8 @@ var _ = Describe("CRP with untrackable resources, all available (after upgrade)"
 	})
 })
 
-var _ = Describe("CRP with availability failure (before upgrade)", Ordered, func() {
-	// The names specified must match with those in the corresponding node from the after upgrade
+var _ = Describe("CRP with availability failure (after upgrade)", Ordered, func() {
+	// The names specified must match with those in the corresponding node from the before upgrade
 	// test stage.
 	crpName := "crp-availability-failure"
 	workNamespaceName := "work-availability-failure"
@@ -130,8 +130,8 @@ var _ = Describe("CRP with availability failure (before upgrade)", Ordered, func
 	})
 })
 
-var _ = Describe("CRP with apply op failure (before upgrade)", Ordered, func() {
-	// The names specified must match with those in the corresponding node from the after upgrade
+var _ = Describe("CRP with apply op failure (after upgrade)", Ordered, func() {
+	// The names specified must match with those in the corresponding node from the before upgrade
 	// test stage.
 	crpName := "crp-apply-failure"
 	workNamespaceName := "work-apply-failure"
