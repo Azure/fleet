@@ -10,12 +10,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/condition"
 )
 
 var (
@@ -81,7 +83,7 @@ func main() {
 		log.Fatalf("failed to list cluster resource placements: %v", err)
 	}
 
-	// find all unique CRP names for which eviction need to occur.
+	// find all unique CRP names for which eviction needs to occur.
 	crpNameMap := make(map[string]bool)
 	for i := range crpList.Items {
 		for j := range crpList.Items[i].Status.PlacementStatuses {
@@ -151,6 +153,33 @@ func main() {
 			log.Fatalf("failed to create eviction for CRP %s: %v", crpName, err)
 		}
 	}
+
+	// wait until all evictions reach a terminal state.
+	// TODO: move isEvictionInTerminalState to a function in the utils package.
+	for crpName := range crpNameMap {
+		err = wait.ExponentialBackoffWithContext(ctx, retry.DefaultBackoff, func(ctx context.Context) (bool, error) {
+			evictionName := "test-eviction-" + crpName
+			eviction := placementv1beta1.ClusterResourcePlacementEviction{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
+				return false, err
+			}
+			validCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeValid))
+			if condition.IsConditionStatusFalse(validCondition, eviction.GetGeneration()) {
+				return true, nil
+			}
+			executedCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeExecuted))
+			if executedCondition != nil {
+				return true, nil
+			}
+			return false, nil
+		})
+
+		if err != nil {
+			log.Fatalf("failed to wait for evictions to reach terminal state: %v", err)
+		}
+	}
+
+	log.Printf("Issued evictions to cordon cluster %s, please verify to ensure eviction were successfully executed", *clusterName)
 }
 
 func removeExistingEviction(ctx context.Context, client client.Client, evictionName string) error {
