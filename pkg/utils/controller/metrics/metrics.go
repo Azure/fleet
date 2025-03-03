@@ -49,6 +49,11 @@ var (
 		Name: "fleet_workload_active_workers",
 		Help: "Number of currently used workers per controller",
 	}, []string{"controller"})
+
+	FleetPlacementStatus = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "fleet_workload_placement_complete",
+		Help: "Placement complete status ",
+	}, []string{"name"})
 )
 
 func init() {
@@ -58,5 +63,6 @@ func init() {
 		FleetReconcileTime,
 		FleetWorkerCount,
 		FleetActiveWorkers,
+		FleetPlacementStatus,
 	)
 }
