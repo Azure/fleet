@@ -48,12 +48,21 @@ jobs:
 
       - name: Prepare the fleet
         run: cd test/upgrade && chmod +x setup.sh && ./setup.sh 3 && cd -
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'
+          HUB_SERVER_URL: 'https://172.19.0.2:6443'
 
       - name: Run the Before suite
         run: cd test/upgrade/before && ginkgo -v -p . && cd -
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'
     
       - name: Upgrade the Fleet hub agent
-        run: cd test/upgrade && chmod +x upgrade.sh && ./upgrade.sh 3 && cd -
+        run: cd test/upgrade && chmod +x upgrade.sh && UPGRADE_HUB_SIDE=true ./upgrade.sh 3 && cd -
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'
     
       - name: Run the After suite
         run: cd test/upgrade/after && ginkgo -v -p . && cd -
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'
