@@ -47,13 +47,13 @@ jobs:
           go install github.com/onsi/ginkgo/v2/ginkgo@v2.19.1
 
       - name: Prepare the fleet
-        run: cd test/upgrade && chmod +x setup.sh && echo "$PWD" && ls && cd -
+        run: cd test/upgrade && chmod +x setup.sh && ./setup.sh 3 && cd -
 
       - name: Run the Before suite
-        run: cd test/upgrade/before && echo "$PWD" && ls && cd -
+        run: cd test/upgrade/before && ginkgo -v -p . && cd -
     
       - name: Upgrade the Fleet hub agent
-        run: cd test/upgrade && echo "$PWD" && ls && cd -
+        run: cd test/upgrade && chmod +x upgrade.sh && ./upgrade.sh 3 && cd -
     
       - name: Run the After suite
-        run: cd after/ && echo "$PWD" && ls && cd -
+        run: cd test/upgrade/after && ginkgo -v -p . && cd -
