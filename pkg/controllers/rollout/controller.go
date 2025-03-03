@@ -152,7 +152,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	// Note: there is a corner case that an override is in-between snapshots (the old one is marked as not the latest while the new one is not created yet)
 	// This will result in one of the override is removed by the rollout controller so the first instance of the updated cluster can experience
 	// a complete removal of the override effect following by applying the new override effect.
-	// This is hard to avoid as the system is eventual consistent and we would recommend users to use updateRun
+	// TODO: detect this situation in the FetchAllMatchingOverridesForResourceSnapshot and retry here
 	matchedCRO, matchedRO, err := overrider.FetchAllMatchingOverridesForResourceSnapshot(ctx, r.Client, r.InformerManager, crp.Name, latestResourceSnapshot)
 	if err != nil {
 		klog.ErrorS(err, "Failed to find all matching overrides for the clusterResourcePlacement", "clusterResourcePlacement", crpName)
@@ -712,10 +712,6 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 				klog.V(2).InfoS("Handling a clusterResourceOverrideSnapshot create event", "clusterResourceOverrideSnapshot", klog.KObj(e.Object))
 				handleClusterResourceOverrideSnapshot(e.Object, q)
 			},
-			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
-				klog.V(2).InfoS("Handling a clusterResourceOverrideSnapshot delete event", "clusterResourceOverrideSnapshot", klog.KObj(e.Object))
-				handleClusterResourceOverrideSnapshot(e.Object, q)
-			},
 			GenericFunc: func(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
 				klog.V(2).InfoS("Handling a clusterResourceOverrideSnapshot generic event", "clusterResourceOverrideSnapshot", klog.KObj(e.Object))
 				handleClusterResourceOverrideSnapshot(e.Object, q)
@@ -726,13 +722,43 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 				klog.V(2).InfoS("Handling a resourceOverrideSnapshot create event", "resourceOverrideSnapshot", klog.KObj(e.Object))
 				handleResourceOverrideSnapshot(e.Object, q)
 			},
-			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
-				klog.V(2).InfoS("Handling a resourceOverrideSnapshot delete event", "resourceOverrideSnapshot", klog.KObj(e.Object))
-				handleResourceOverrideSnapshot(e.Object, q)
-			},
 			GenericFunc: func(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
 				klog.V(2).InfoS("Handling a resourceOverrideSnapshot generic event", "resourceOverrideSnapshot", klog.KObj(e.Object))
 				handleResourceOverrideSnapshot(e.Object, q)
+			},
+		}).
+		Watches(&fleetv1alpha1.ClusterResourceOverride{}, handler.Funcs{
+			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+				cro, ok := e.Object.(*fleetv1alpha1.ClusterResourceOverride)
+				if !ok {
+					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("non ClusterResourceOverride type resource: %+v", e.Object)),
+						"Rollout controller received invalid ClusterResourceOverride event", "object", klog.KObj(e.Object))
+					return
+				}
+				if cro.Spec.Placement == nil {
+					return
+				}
+				klog.V(2).InfoS("Handling a clusterResourceOverride delete event", "clusterResourceOverride", klog.KObj(cro))
+				q.Add(reconcile.Request{
+					NamespacedName: types.NamespacedName{Name: cro.Spec.Placement.Name},
+				})
+			},
+		}).
+		Watches(&fleetv1alpha1.ResourceOverride{}, handler.Funcs{
+			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+				ro, ok := e.Object.(*fleetv1alpha1.ResourceOverride)
+				if !ok {
+					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("non ResourceOverride type resource: %+v", e.Object)),
+						"Rollout controller received invalid ResourceOverride event", "object", klog.KObj(e.Object))
+					return
+				}
+				if ro.Spec.Placement == nil {
+					return
+				}
+				klog.V(2).InfoS("Handling a resourceOverride delete event", "resourceOverride", klog.KObj(ro))
+				q.Add(reconcile.Request{
+					NamespacedName: types.NamespacedName{Name: ro.Spec.Placement.Name},
+				})
 			},
 		}).
 		Watches(&fleetv1beta1.ClusterResourceBinding{}, handler.Funcs{

@@ -153,9 +153,10 @@ var _ = Context("creating clusterResourceOverride (selecting all clusters) to ov
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
-	It("should not have annotations on the configmap", func() {
+	It("should not have annotations on the cluster", func() {
 		for _, memberCluster := range allMemberClusters {
-			Expect(validateConfigMapNoAnnotationKeyOnCluster(memberCluster, croTestAnnotationKey)).Should(Succeed(), "Failed to override the annotation of config map on %s", memberCluster.ClusterName)
+			Expect(validateNamespaceNoAnnotationOnCluster(memberCluster, croTestAnnotationKey)).Should(Succeed(), "Failed to remove the annotation of namespace on %s", memberCluster.ClusterName)
+			Expect(validateConfigMapNoAnnotationKeyOnCluster(memberCluster, croTestAnnotationKey)).Should(Succeed(), "Failed to remove the annotation of config map on %s", memberCluster.ClusterName)
 		}
 	})
 })

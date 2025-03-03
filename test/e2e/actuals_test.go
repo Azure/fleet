@@ -63,6 +63,19 @@ func validateAnnotationOfWorkNamespaceOnCluster(cluster *framework.Cluster, want
 	return nil
 }
 
+func validateNamespaceNoAnnotationOnCluster(cluster *framework.Cluster, key string) error {
+	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	ns := &corev1.Namespace{}
+	if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: workNamespaceName}, ns); err != nil {
+		return err
+	}
+
+	if _, exist := ns.Annotations[key]; !exist {
+		return nil
+	}
+	return fmt.Errorf("namespace `%s` annotation still got  key `%s`, value `%s`", workNamespaceName, key, ns.Annotations[key])
+}
+
 func validateConfigMapOnCluster(cluster *framework.Cluster, name types.NamespacedName) error {
 	configMap := &corev1.ConfigMap{}
 	if err := cluster.KubeClient.Get(ctx, name, configMap); err != nil {
@@ -112,7 +125,7 @@ func validateConfigMapNoAnnotationKeyOnCluster(cluster *framework.Cluster, key s
 		return err
 	}
 
-	if len(configMap.Annotations) == 0 || configMap.Annotations[key] == "" {
+	if _, exist := configMap.Annotations[key]; !exist {
 		return nil
 	}
 	return fmt.Errorf("app config map annotation still got  key `%s`, value `%s`", key, configMap.Annotations[key])

@@ -64,11 +64,20 @@ var _ = Context("creating resourceOverride (selecting all clusters) to override 
 	})
 
 	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
-
 		By(fmt.Sprintf("deleting resourceOverride %s", roName))
 		cleanupResourceOverride(roName, roNamespace)
+
+		By("should update CRP status to not select any override")
+		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, nil)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+
+		By("should not have annotations on the configmap")
+		for _, memberCluster := range allMemberClusters {
+			Expect(validateConfigMapNoAnnotationKeyOnCluster(memberCluster, roTestAnnotationKey)).Should(Succeed(), "Failed to remove the annotation of config map on %s", memberCluster.ClusterName)
+		}
+
+		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 
 	It("should update CRP status as expected", func() {
@@ -124,7 +133,6 @@ var _ = Context("creating resourceOverride (selecting all clusters) to override 
 			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 1)},
 		}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, wantRONames)
-		// use the long duration to wait until the rollout is finished.
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -134,21 +142,6 @@ var _ = Context("creating resourceOverride (selecting all clusters) to override 
 	It("should have override annotations on the configmap", func() {
 		want := map[string]string{roTestAnnotationKey: roTestAnnotationValue1}
 		checkIfOverrideAnnotationsOnAllMemberClusters(false, want)
-	})
-
-	It("delete the ro attached to this CRP", func() {
-		cleanupResourceOverride(roName, roNamespace)
-	})
-
-	It("should update CRP status to not select any override", func() {
-		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, nil)
-		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
-	})
-
-	It("should not have annotations on the configmap", func() {
-		for _, memberCluster := range allMemberClusters {
-			Expect(validateConfigMapNoAnnotationKeyOnCluster(memberCluster, roTestAnnotationKey)).Should(Succeed(), "Failed to remove the annotation of config map on %s", memberCluster.ClusterName)
-		}
 	})
 })
 
