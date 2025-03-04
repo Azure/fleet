@@ -753,7 +753,7 @@ func generateSucceededInitializationStatus(
 	updateStrategy *placementv1beta1.ClusterStagedUpdateStrategy,
 	clusterResourceOverride *placementv1alpha1.ClusterResourceOverrideSnapshot,
 ) *placementv1beta1.StagedUpdateRunStatus {
-	return &placementv1beta1.StagedUpdateRunStatus{
+	status := &placementv1beta1.StagedUpdateRunStatus{
 		PolicySnapshotIndexUsed:      policySnapshot.Labels[placementv1beta1.PolicyIndexLabel],
 		PolicyObservedClusterCount:   numberOfClustersAnnotation,
 		ApplyStrategy:                crp.Spec.Strategy.ApplyStrategy.DeepCopy(),
@@ -768,9 +768,6 @@ func generateSucceededInitializationStatus(
 					{ClusterName: "cluster-3", ClusterResourceOverrideSnapshots: []string{clusterResourceOverride.Name}},
 					{ClusterName: "cluster-1", ClusterResourceOverrideSnapshots: []string{clusterResourceOverride.Name}},
 				},
-				AfterStageTaskStatus: []placementv1beta1.AfterStageTaskStatus{
-					{Type: placementv1beta1.AfterStageTaskTypeTimedWait},
-				},
 			},
 			{
 				StageName: "stage2",
@@ -780,12 +777,6 @@ func generateSucceededInitializationStatus(
 					{ClusterName: "cluster-4"},
 					{ClusterName: "cluster-6"},
 					{ClusterName: "cluster-8"},
-				},
-				AfterStageTaskStatus: []placementv1beta1.AfterStageTaskStatus{
-					{
-						Type:                placementv1beta1.AfterStageTaskTypeApproval,
-						ApprovalRequestName: updateRun.Name + "-stage2",
-					},
 				},
 			},
 		},
@@ -802,6 +793,18 @@ func generateSucceededInitializationStatus(
 			generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionInitialized),
 		},
 	}
+	for i := range status.StagesStatus {
+		var tasks []placementv1beta1.AfterStageTaskStatus
+		for _, task := range updateStrategy.Spec.Stages[i].AfterStageTasks {
+			taskStatus := placementv1beta1.AfterStageTaskStatus{Type: task.Type}
+			if task.Type == placementv1beta1.AfterStageTaskTypeApproval {
+				taskStatus.ApprovalRequestName = updateRun.Name + "-" + status.StagesStatus[i].StageName
+			}
+			tasks = append(tasks, taskStatus)
+		}
+		status.StagesStatus[i].AfterStageTaskStatus = tasks
+	}
+	return status
 }
 
 func generateExecutionStartedStatus(
