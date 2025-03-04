@@ -12,7 +12,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -20,6 +22,61 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 )
+
+func getClusterResourceOverrideSpec() fleetv1alpha1.ClusterResourceOverrideSpec {
+	return fleetv1alpha1.ClusterResourceOverrideSpec{
+		ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
+			{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Namespace",
+			},
+		},
+		Policy: &fleetv1alpha1.OverridePolicy{
+			OverrideRules: []fleetv1alpha1.OverrideRule{
+				{
+					JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+						{
+							Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+							Path:     "spec.replica",
+							Value:    apiextensionsv1.JSON{Raw: []byte("3")},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func getClusterResourceOverride(testOverrideName string) *fleetv1alpha1.ClusterResourceOverride {
+	return &fleetv1alpha1.ClusterResourceOverride{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: fleetv1alpha1.GroupVersion.String(),
+			Kind:       fleetv1alpha1.ClusterResourceOverrideKind,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: testOverrideName,
+		},
+		Spec: getClusterResourceOverrideSpec(),
+	}
+}
+
+func getClusterResourceOverrideSnapshot(testOverrideName string, index int) *fleetv1alpha1.ClusterResourceOverrideSnapshot {
+	return &fleetv1alpha1.ClusterResourceOverrideSnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(fleetv1alpha1.OverrideSnapshotNameFmt, testOverrideName, index),
+			Labels: map[string]string{
+				fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(index),
+				fleetv1beta1.IsLatestSnapshotLabel:  "true",
+				fleetv1alpha1.OverrideTrackingLabel: testOverrideName,
+			},
+		},
+		Spec: fleetv1alpha1.ClusterResourceOverrideSnapshotSpec{
+			OverrideHash: []byte("hash"),
+			OverrideSpec: getClusterResourceOverrideSpec(),
+		},
+	}
+}
 
 var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 	var cro *fleetv1alpha1.ClusterResourceOverride

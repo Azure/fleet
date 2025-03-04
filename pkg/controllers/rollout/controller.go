@@ -149,7 +149,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	// fill out all the default values for CRP just in case the mutation webhook is not enabled.
 	defaulter.SetDefaultsClusterResourcePlacement(&crp)
-
+	// Note: there is a corner case that an override is in-between snapshots (the old one is marked as not the latest while the new one is not created yet)
+	// This will result in one of the override is removed by the rollout controller so the first instance of the updated cluster can experience
+	// a complete removal of the override effect following by applying the new override effect.
+	// TODO: detect this situation in the FetchAllMatchingOverridesForResourceSnapshot and retry here
 	matchedCRO, matchedRO, err := overrider.FetchAllMatchingOverridesForResourceSnapshot(ctx, r.Client, r.InformerManager, crp.Name, latestResourceSnapshot)
 	if err != nil {
 		klog.ErrorS(err, "Failed to find all matching overrides for the clusterResourcePlacement", "clusterResourcePlacement", crpName)
@@ -727,6 +730,40 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 				handleResourceOverrideSnapshot(e.Object, q)
 			},
 		}).
+		Watches(&fleetv1alpha1.ClusterResourceOverride{}, handler.Funcs{
+			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+				cro, ok := e.Object.(*fleetv1alpha1.ClusterResourceOverride)
+				if !ok {
+					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("non ClusterResourceOverride type resource: %+v", e.Object)),
+						"Rollout controller received invalid ClusterResourceOverride event", "object", klog.KObj(e.Object))
+					return
+				}
+				if cro.Spec.Placement == nil {
+					return
+				}
+				klog.V(2).InfoS("Handling a clusterResourceOverride delete event", "clusterResourceOverride", klog.KObj(cro))
+				q.Add(reconcile.Request{
+					NamespacedName: types.NamespacedName{Name: cro.Spec.Placement.Name},
+				})
+			},
+		}).
+		Watches(&fleetv1alpha1.ResourceOverride{}, handler.Funcs{
+			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+				ro, ok := e.Object.(*fleetv1alpha1.ResourceOverride)
+				if !ok {
+					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("non ResourceOverride type resource: %+v", e.Object)),
+						"Rollout controller received invalid ResourceOverride event", "object", klog.KObj(e.Object))
+					return
+				}
+				if ro.Spec.Placement == nil {
+					return
+				}
+				klog.V(2).InfoS("Handling a resourceOverride delete event", "resourceOverride", klog.KObj(ro))
+				q.Add(reconcile.Request{
+					NamespacedName: types.NamespacedName{Name: ro.Spec.Placement.Name},
+				})
+			},
+		}).
 		Watches(&fleetv1beta1.ClusterResourceBinding{}, handler.Funcs{
 			CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
 				klog.V(2).InfoS("Handling a resourceBinding create event", "resourceBinding", klog.KObj(e.Object))
@@ -806,7 +843,7 @@ func handleResourceOverrideSnapshot(o client.Object, q workqueue.RateLimitingInt
 	if !isLatest {
 		// All newly created resource snapshots should start with the latest label to be true.
 		// However, this can happen if the label is removed fast by the time this reconcile loop is triggered.
-		klog.V(2).InfoS("Newly created resource resourceOverrideSnapshot %s is not the latest", "resourceOverrideSnapshot", snapshotKRef)
+		klog.V(2).InfoS("Newly changed resource resourceOverrideSnapshot %s is not the latest", "resourceOverrideSnapshot", snapshotKRef)
 		return
 	}
 	if snapshot.Spec.OverrideSpec.Placement == nil {
@@ -838,7 +875,7 @@ func handleResourceSnapshot(snapshot client.Object, q workqueue.RateLimitingInte
 	if !isLatest {
 		// All newly created resource snapshots should start with the latest label to be true.
 		// However, this can happen if the label is removed fast by the time this reconcile loop is triggered.
-		klog.V(2).InfoS("Newly created resource clusterResourceSnapshot %s is not the latest", "clusterResourceSnapshot", snapshotKRef)
+		klog.V(2).InfoS("Newly changed resource clusterResourceSnapshot %s is not the latest", "clusterResourceSnapshot", snapshotKRef)
 		return
 	}
 	// get the CRP name from the label
