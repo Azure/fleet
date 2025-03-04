@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.15.0
+    controller-gen.kubebuilder.io/version: v0.16.0
   name: clusterresourceplacementdisruptionbudgets.placement.kubernetes-fleet.io
 spec:
   group: placement.kubernetes-fleet.io
@@ -27,7 +27,6 @@ spec:
           object that specifies its disruption budget, i.e., how many placements (clusters) can be
           down at the same time due to voluntary disruptions (e.g., evictions). Involuntary
           disruptions are not subject to this budget, but will still count against it.
-
 
           To apply a ClusterResourcePlacementDisruptionBudget to a ClusterResourcePlacement, use the
           same name for the ClusterResourcePlacementDisruptionBudget object as the ClusterResourcePlacement
@@ -63,9 +62,7 @@ spec:
                   a voluntary disruption (e.g., an eviction) can only happen if all placements (clusters)
                   from the linked Placement object are applied and available.
 
-
                   This can be either an absolute value (e.g., 1) or a percentage (e.g., 10%).
-
 
                   If a percentage is specified, Fleet will calculate the corresponding absolute values
                   as follows:
@@ -78,10 +75,8 @@ spec:
                     value of the NumberOfClusters fields in the placement policy).
                   The end result will be rounded up to the nearest integer if applicable.
 
-
                   One may use a value of 0 for this field; in this case, no voluntary disruption would be
                   allowed.
-
 
                   This field is mutually exclusive with the MinAvailable field in the spec; exactly one
                   of them can be set at a time.
@@ -102,9 +97,7 @@ spec:
                   a voluntary disruption (e.g., an eviction) can only happen if there are at least 11
                   placements (clusters) from the linked Placement object are applied and available.
 
-
                   This can be either an absolute value (e.g., 1) or a percentage (e.g., 10%).
-
 
                   If a percentage is specified, Fleet will calculate the corresponding absolute values
                   as follows:
@@ -117,10 +110,8 @@ spec:
                     value of the NumberOfClusters fields in the placement policy).
                   The end result will be rounded up to the nearest integer if applicable.
 
-
                   One may use a value of 0 for this field; in this case, voluntary disruption would be
                   allowed at any time.
-
 
                   This field is mutually exclusive with the MaxUnavailable field in the spec; exactly one
                   of them can be set at a time.
@@ -149,7 +140,6 @@ spec:
           down at the same time due to voluntary disruptions (e.g., evictions). Involuntary
           disruptions are not subject to this budget, but will still count against it.
 
-
           To apply a ClusterResourcePlacementDisruptionBudget to a ClusterResourcePlacement, use the
           same name for the ClusterResourcePlacementDisruptionBudget object as the ClusterResourcePlacement
           object. This guarantees a 1:1 link between the two objects.
@@ -184,9 +174,7 @@ spec:
                   a voluntary disruption (e.g., an eviction) can only happen if all placements (clusters)
                   from the linked Placement object are applied and available.
 
-
                   This can be either an absolute value (e.g., 1) or a percentage (e.g., 10%).
-
 
                   If a percentage is specified, Fleet will calculate the corresponding absolute values
                   as follows:
@@ -199,10 +187,8 @@ spec:
                     value of the NumberOfClusters fields in the placement policy).
                   The end result will be rounded up to the nearest integer if applicable.
 
-
                   One may use a value of 0 for this field; in this case, no voluntary disruption would be
                   allowed.
-
 
                   This field is mutually exclusive with the MinAvailable field in the spec; exactly one
                   of them can be set at a time.
@@ -223,9 +209,7 @@ spec:
                   a voluntary disruption (e.g., an eviction) can only happen if there are at least 11
                   placements (clusters) from the linked Placement object are applied and available.
 
-
                   This can be either an absolute value (e.g., 1) or a percentage (e.g., 10%).
-
 
                   If a percentage is specified, Fleet will calculate the corresponding absolute values
                   as follows:
@@ -238,10 +222,8 @@ spec:
                     value of the NumberOfClusters fields in the placement policy).
                   The end result will be rounded up to the nearest integer if applicable.
 
-
                   One may use a value of 0 for this field; in this case, voluntary disruption would be
                   allowed at any time.
-
 
                   This field is mutually exclusive with the MaxUnavailable field in the spec; exactly one
                   of them can be set at a time.

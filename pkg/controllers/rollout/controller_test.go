@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
@@ -153,7 +154,7 @@ func TestReconcilerHandleResourceSnapshot(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			queue := &controllertest.Queue{Interface: workqueue.New()}
+			queue := &controllertest.Queue{TypedInterface: workqueue.NewTypedRateLimitingQueue[reconcile.Request](workqueue.DefaultTypedItemBasedRateLimiter[reconcile.Request]())}
 			handleResourceSnapshot(tt.snapshot, queue)
 			if tt.shouldEnqueue && queue.Len() == 0 {
 				t.Errorf("handleResourceSnapshot test `%s` didn't queue the object when it should enqueue", name)
@@ -189,7 +190,7 @@ func TestReconcilerHandleResourceBinding(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			queue := &controllertest.Queue{Interface: workqueue.New()}
+			queue := &controllertest.Queue{TypedInterface: workqueue.NewTypedRateLimitingQueue[reconcile.Request](workqueue.DefaultTypedItemBasedRateLimiter[reconcile.Request]())}
 			enqueueResourceBinding(tt.resourceBinding, queue)
 			if tt.shouldEnqueue && queue.Len() == 0 {
 				t.Errorf("enqueueResourceBinding test `%s` didn't queue the object when it should enqueue", name)

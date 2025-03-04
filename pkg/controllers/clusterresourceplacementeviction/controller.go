@@ -346,7 +346,7 @@ func markEvictionNotExecuted(eviction *placementv1beta1.ClusterResourcePlacement
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 	return runtime.NewControllerManagedBy(mgr).
-		WithOptions(ctrl.Options{MaxConcurrentReconciles: 1}). // max concurrent reconciles is currently set to 1 for concurrency control.
+		WithOptions(ctrl.Options{MaxConcurrentReconciles: 1, SkipNameValidation: ptr.To(true)}). // max concurrent reconciles is currently set to 1 for concurrency control.
 		For(&placementv1beta1.ClusterResourcePlacementEviction{}).
 		Complete(r)
 }

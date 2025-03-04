@@ -1450,12 +1450,12 @@ func extractDiffedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1b
 func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("work generator")
 	return controllerruntime.NewControllerManagedBy(mgr).Named("work-generator").
-		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}). // set the max number of concurrent reconciles
+		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles, SkipNameValidation: ptr.To(true)}). // set the max number of concurrent reconciles
 		For(&fleetv1beta1.ClusterResourceBinding{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&fleetv1beta1.Work{}, &handler.Funcs{
 			// we care about work delete event as we want to know when a work is deleted so that we can
 			// delete the corresponding resource binding fast.
-			DeleteFunc: func(ctx context.Context, evt event.DeleteEvent, queue workqueue.RateLimitingInterface) {
+			DeleteFunc: func(ctx context.Context, evt event.DeleteEvent, queue workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				if evt.Object == nil {
 					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("deleteEvent %v received with no metadata", evt)),
 						"Failed to process a delete event for work object")
@@ -1475,7 +1475,7 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 			},
 			// we care about work update event as we want to know when a work is applied so that we can
 			// update the corresponding resource binding status fast.
-			UpdateFunc: func(ctx context.Context, evt event.UpdateEvent, queue workqueue.RateLimitingInterface) {
+			UpdateFunc: func(ctx context.Context, evt event.UpdateEvent, queue workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				if evt.ObjectOld == nil || evt.ObjectNew == nil {
 					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("updateEvent %v received with no metadata", evt)),
 						"Failed to process an update event for work object")

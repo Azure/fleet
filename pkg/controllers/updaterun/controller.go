@@ -18,9 +18,11 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 	runtime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlruntime "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -230,10 +232,11 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("clusterresource-stagedupdaterun-controller")
 	return runtime.NewControllerManagedBy(mgr).
 		Named("clusterresource-stagedupdaterun-controller").
+		WithOptions(ctrlruntime.Options{SkipNameValidation: ptr.To(true)}).
 		For(&placementv1beta1.ClusterStagedUpdateRun{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&placementv1beta1.ClusterApprovalRequest{}, &handler.Funcs{
 			// We only care about when an approval request is approved.
-			UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+			UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				klog.V(2).InfoS("Handling a clusterApprovalRequest update event", "clusterApprovalRequest", klog.KObj(e.ObjectNew))
 				handleClusterApprovalRequest(e.ObjectOld, e.ObjectNew, q)
 			},
@@ -242,7 +245,7 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 
 // handleClusterApprovalRequest finds the ClusterStagedUpdateRun creating the ClusterApprovalRequest,
 // and enqueues it to the ClusterStagedUpdateRun controller queue only when the approved condition is changed.
-func handleClusterApprovalRequest(oldObj, newObj client.Object, q workqueue.RateLimitingInterface) {
+func handleClusterApprovalRequest(oldObj, newObj client.Object, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	oldAppReq, ok := oldObj.(*placementv1beta1.ClusterApprovalRequest)
 	if !ok {
 		klog.V(2).ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("cannot cast runtime object to ClusterApprovalRequest")),
