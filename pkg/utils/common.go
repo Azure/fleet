@@ -310,6 +310,12 @@ var (
 		Resource: "networkpolicies",
 	}
 
+	PersistentVolumeClaimGVR = schema.GroupVersionResource{
+		Group:    corev1.SchemeGroupVersion.Group,
+		Version:  corev1.SchemeGroupVersion.Version,
+		Resource: "persistentvolumeclaims",
+	}
+
 	PodMetaGVK = metav1.GroupVersionKind{
 		Group:   corev1.SchemeGroupVersion.Group,
 		Version: corev1.SchemeGroupVersion.Version,

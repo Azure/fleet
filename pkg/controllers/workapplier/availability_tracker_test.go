@@ -157,6 +157,23 @@ var (
 			MinAvailable: &minAvailable,
 		},
 	}
+
+	pvcTemplate = &corev1.PersistentVolumeClaim{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "PersistentVolumeClaim",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pvc",
+			Namespace: nsName,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			},
+			StorageClassName: ptr.To("test-storage-class"),
+		},
+	}
 )
 
 // TestTrackDeploymentAvailability tests the trackDeploymentAvailability function.
@@ -767,6 +784,57 @@ func TestTrackPDBAvailability(t *testing.T) {
 			gotResTyp, err := trackPDBAvailability(toUnstructured(t, tc.pdb))
 			if err != nil {
 				t.Fatalf("trackPDBAvailability() = %v, want no error", err)
+			}
+			if gotResTyp != tc.wantManifestProcessingAvailabilityResultType {
+				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantManifestProcessingAvailabilityResultType)
+			}
+		})
+	}
+}
+
+// TestTrackPVCAvailability tests the trackPVCAvailability function.
+func TestTrackPVCAvailability(t *testing.T) {
+	availablePVC := pvcTemplate.DeepCopy()
+	availablePVC.Status = corev1.PersistentVolumeClaimStatus{
+		Phase: corev1.ClaimBound,
+	}
+
+	unavailablePVCLost := pvcTemplate.DeepCopy()
+	unavailablePVCLost.Status = corev1.PersistentVolumeClaimStatus{
+		Phase: corev1.ClaimLost,
+	}
+	unavailablePVCPending := pvcTemplate.DeepCopy()
+	unavailablePVCPending.Status = corev1.PersistentVolumeClaimStatus{
+		Phase: corev1.ClaimPending,
+	}
+
+	testCases := []struct {
+		name                                         string
+		pvc                                          *corev1.PersistentVolumeClaim
+		wantManifestProcessingAvailabilityResultType ManifestProcessingAvailabilityResultType
+	}{
+		{
+			name: "available PVC",
+			pvc:  availablePVC,
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+		},
+		{
+			name: "unavailable PVC (claim lost)",
+			pvc:  unavailablePVCLost,
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+		},
+		{
+			name: "unavailablePVC (claim pending)",
+			pvc:  unavailablePVCPending,
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotResTyp, err := trackPVCAvailability(toUnstructured(t, tc.pvc))
+			if err != nil {
+				t.Fatalf("trackPVCAvailability() = %v, want no error", err)
 			}
 			if gotResTyp != tc.wantManifestProcessingAvailabilityResultType {
 				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantManifestProcessingAvailabilityResultType)
