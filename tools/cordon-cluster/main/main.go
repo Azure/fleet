@@ -128,8 +128,8 @@ func main() {
 		}
 	}
 
-	// wait until all evictions reach a terminal state.
 	// TODO: move isEvictionInTerminalState to a function in the pkg/utils package.
+	// wait until all evictions reach a terminal state.
 	for crpName := range crpNameMap {
 		err = wait.ExponentialBackoffWithContext(ctx, retry.DefaultBackoff, func(ctx context.Context) (bool, error) {
 			evictionName := fmt.Sprintf(testEvictionNameFormat, crpName, *clusterName)

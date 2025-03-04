@@ -65,5 +65,9 @@ func main() {
 		return hubClient.Update(ctx, &mc)
 	})
 
+	if err != nil {
+		log.Fatalf("failed to remove taints from member cluster %s: %v", *clusterName, err)
+	}
+
 	log.Printf("uncordoned member cluster %s", *clusterName)
 }
