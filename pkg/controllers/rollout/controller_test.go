@@ -11,13 +11,6 @@ import (
 	"testing"
 	"time"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
-	"go.goms.io/fleet/pkg/utils/condition"
-	"go.goms.io/fleet/pkg/utils/controller"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
@@ -30,6 +23,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 var (
