@@ -83,6 +83,8 @@ func trackInMemberClusterObjAvailabilityByGVR(
 		return trackCRDAvailability(inMemberClusterObj)
 	case utils.PodDisruptionBudgetGVR:
 		return trackPDBAvailability(inMemberClusterObj)
+	case utils.PersistentVolumeClaimGVR:
+		return trackPVCAvailability(inMemberClusterObj)
 	default:
 		if isDataResource(*gvr) {
 			klog.V(2).InfoS("The object from the member cluster is a data object, consider it to be immediately available",
@@ -244,6 +246,21 @@ func trackPDBAvailability(curObj *unstructured.Unstructured) (ManifestProcessing
 		return ManifestProcessingAvailabilityResultTypeAvailable, nil
 	}
 	klog.V(2).InfoS("Still need to wait for PodDisruptionBudget to be available", "pdb", klog.KObj(curObj))
+	return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
+}
+
+// trackPVCAvailability tracks the availability of a persistent volume claim the member cluster.
+// A PVC is available if it has a bound phase, which means that it has been bound to a PV.
+func trackPVCAvailability(curObj *unstructured.Unstructured) (ManifestProcessingAvailabilityResultType, error) {
+	var pvc corev1.PersistentVolumeClaim
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &pvc); err != nil {
+		return ManifestProcessingAvailabilityResultTypeFailed, controller.NewUnexpectedBehaviorError(err)
+	}
+	if pvc.Status.Phase == corev1.ClaimBound {
+		klog.V(2).InfoS("PersistentVolumeClaim is available", "pvc", klog.KObj(curObj))
+		return ManifestProcessingAvailabilityResultTypeAvailable, nil
+	}
+	klog.V(2).InfoS("Still need to wait for PersistentVolumeClaim to be available", "pvc", klog.KObj(curObj))
 	return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
 }
 
