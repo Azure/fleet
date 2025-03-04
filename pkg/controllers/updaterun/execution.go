@@ -315,16 +315,13 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 					}
 					approvalAccepted := condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequest.Status.Conditions, string(placementv1beta1.ApprovalRequestConditionApprovalAccepted)), approvalRequest.Generation)
 					approved := condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequest.Status.Conditions, string(placementv1beta1.ApprovalRequestConditionApproved)), approvalRequest.Generation)
-					// Approved state should not change once the approval is accepted.
 					if !approvalAccepted && !approved {
 						klog.V(2).InfoS("The approval request has not been approved yet", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
 						passed = false
-					} else {
-						if !approved {
-							klog.V(2).InfoS("The approval request has been approval-accepted, ignoring changing back to unapproved", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
-						} else {
-							klog.V(2).InfoS("The approval request has been approved", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
-						}
+						continue
+					}
+					if approved {
+						klog.V(2).InfoS("The approval request has been approved", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
 						if !approvalAccepted {
 							if err = r.updateApprovalRequestAccepted(ctx, &approvalRequest); err != nil {
 								klog.ErrorS(err, "Failed to accept the approved approval request", "approvalRequest", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
@@ -332,8 +329,11 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 								return false, -1, err
 							}
 						}
-						markAfterStageRequestApproved(&updatingStageStatus.AfterStageTaskStatus[i], updateRun.Generation)
+					} else {
+						// Approved state should not change once the approval is accepted.
+						klog.V(2).InfoS("The approval request has been approval-accepted, ignoring changing back to unapproved", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
 					}
+					markAfterStageRequestApproved(&updatingStageStatus.AfterStageTaskStatus[i], updateRun.Generation)
 				} else {
 					// retriable error
 					klog.ErrorS(err, "Failed to create the approval request", "approvalRequest", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
