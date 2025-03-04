@@ -41,6 +41,13 @@ func main() {
 		log.Fatalf("cluster name to cordon cannot be empty")
 	}
 
+	if err := clusterv1beta1.AddToScheme(scheme); err != nil {
+		log.Fatalf("failed to add custom APIs (cluster) to the runtime scheme: %v", err)
+	}
+	if err := placementv1beta1.AddToScheme(scheme); err != nil {
+		log.Fatalf("failed to add custom APIs (placement) to the runtime scheme: %v", err)
+	}
+
 	hubClient, err := utils.GetClusterClientFromClusterContext(*hubClusterContext, scheme)
 	if err != nil {
 		log.Fatalf("failed to create hub cluster client: %v", err)
