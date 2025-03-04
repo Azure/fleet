@@ -24,16 +24,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils"
 )
 
 const (
-	workNameTemplate   = "work-%s"
-	nsNameTemplate     = "ns-%s"
-	deployNameTemplate = "deploy-%s"
+	workNameTemplate = "work-%s"
+	nsNameTemplate   = "ns-%s"
 )
 
 const (
-	eventuallyDuration   = time.Second * 30
+	eventuallyDuration   = time.Second * 10
 	eventuallyInterval   = time.Second * 1
 	consistentlyDuration = time.Second * 5
 	consistentlyInterval = time.Millisecond * 500
@@ -471,11 +471,10 @@ func regularDeployNotRemovedActual(nsName, deployName string) func() error {
 
 var _ = Describe("applying manifests", func() {
 	Context("apply new manifests (regular)", Ordered, func() {
-		workName := fmt.Sprintf(workNameTemplate, "a1")
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
 		// The environment prepared by the envtest package does not support namespace
 		// deletion; each test case would use a new namespace.
-		nsName := fmt.Sprintf(nsNameTemplate, "a1")
-		deployName := fmt.Sprintf(deployNameTemplate, "a1")
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
 
 		var appliedWorkOwnerRef *metav1.OwnerReference
 		var regularNS *corev1.Namespace
@@ -646,11 +645,10 @@ var _ = Describe("applying manifests", func() {
 	})
 
 	Context("garbage collect removed manifests", Ordered, func() {
-		workName := fmt.Sprintf(workNameTemplate, "a3")
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
 		// The environment prepared by the envtest package does not support namespace
 		// deletion; each test case would use a new namespace.
-		nsName := fmt.Sprintf(nsNameTemplate, "a3")
-		deployName := fmt.Sprintf(deployNameTemplate, "a3")
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
 
 		var appliedWorkOwnerRef *metav1.OwnerReference
 		var regularNS *corev1.Namespace
@@ -901,11 +899,10 @@ var _ = Describe("applying manifests", func() {
 
 var _ = Describe("drift detection and takeover", func() {
 	Context("take over pre-existing resources (take over if no diff, no diff present)", Ordered, func() {
-		workName := fmt.Sprintf(workNameTemplate, "b1")
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
 		// The environment prepared by the envtest package does not support namespace
 		// deletion; each test case would use a new namespace.
-		nsName := fmt.Sprintf(nsNameTemplate, "b1")
-		deployName := fmt.Sprintf(deployNameTemplate, "b1")
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
 
 		var appliedWorkOwnerRef *metav1.OwnerReference
 		var regularNS *corev1.Namespace
@@ -1084,11 +1081,10 @@ var _ = Describe("drift detection and takeover", func() {
 	})
 
 	Context("take over pre-existing resources (take over if no diff, with diff present, partial comparison)", Ordered, func() {
-		workName := fmt.Sprintf(workNameTemplate, "b2")
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
 		// The environment prepared by the envtest package does not support namespace
 		// deletion; each test case would use a new namespace.
-		nsName := fmt.Sprintf(nsNameTemplate, "b2")
-		deployName := fmt.Sprintf(deployNameTemplate, "b2")
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
 
 		var appliedWorkOwnerRef *metav1.OwnerReference
 		var regularNS *corev1.Namespace
@@ -1151,7 +1147,7 @@ var _ = Describe("drift detection and takeover", func() {
 			wantNS.Labels = map[string]string{
 				dummyLabelKey: dummyLabelValue1,
 				// The label below is added by K8s itself (system-managed well-known label).
-				"kubernetes.io/metadata.name": "ns-b2",
+				"kubernetes.io/metadata.name": nsName,
 			}
 			wantNS.OwnerReferences = []metav1.OwnerReference{
 				*appliedWorkOwnerRef,
@@ -1348,11 +1344,10 @@ var _ = Describe("drift detection and takeover", func() {
 	})
 
 	Context("take over pre-existing resources (take over if no diff, with diff, full comparison)", Ordered, func() {
-		workName := fmt.Sprintf(workNameTemplate, "b3")
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
 		// The environment prepared by the envtest package does not support namespace
 		// deletion; each test case would use a new namespace.
-		nsName := fmt.Sprintf(nsNameTemplate, "b3")
-		deployName := fmt.Sprintf(deployNameTemplate, "b3")
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
 
 		var regularNS *corev1.Namespace
 		var regularDeploy *appsv1.Deployment
@@ -1411,7 +1406,7 @@ var _ = Describe("drift detection and takeover", func() {
 			wantNS.Labels = map[string]string{
 				dummyLabelKey: dummyLabelValue1,
 				// The label below is added by K8s itself (system-managed well-known label).
-				"kubernetes.io/metadata.name": "ns-b3",
+				"kubernetes.io/metadata.name": nsName,
 			}
 
 			Consistently(func() error {
@@ -1624,11 +1619,10 @@ var _ = Describe("drift detection and takeover", func() {
 	})
 
 	Context("detect drifts (apply if no drift, drift occurred, partial comparison)", Ordered, func() {
-		workName := fmt.Sprintf(workNameTemplate, "b6")
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
 		// The environment prepared by the envtest package does not support namespace
 		// deletion; each test case would use a new namespace.
-		nsName := fmt.Sprintf(nsNameTemplate, "b6")
-		deployName := fmt.Sprintf(deployNameTemplate, "b6")
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
 
 		var appliedWorkOwnerRef *metav1.OwnerReference
 		var regularNS *corev1.Namespace
@@ -1835,7 +1829,7 @@ var _ = Describe("drift detection and takeover", func() {
 			wantNS.Labels = map[string]string{
 				dummyLabelKey: dummyLabelValue1,
 				// The label below is added by K8s itself (system-managed well-known label).
-				"kubernetes.io/metadata.name": "ns-b6",
+				"kubernetes.io/metadata.name": nsName,
 			}
 			wantNS.OwnerReferences = []metav1.OwnerReference{
 				*appliedWorkOwnerRef,
@@ -2037,10 +2031,10 @@ var _ = Describe("drift detection and takeover", func() {
 
 	// For simplicity reasons, this test case will only involve a NS object.
 	Context("detect drifts (apply if no drift, drift occurred, full comparison)", Ordered, func() {
-		workName := fmt.Sprintf(workNameTemplate, "b7")
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
 		// The environment prepared by the envtest package does not support namespace
 		// deletion; each test case would use a new namespace.
-		nsName := fmt.Sprintf(nsNameTemplate, "b7")
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
 
 		var appliedWorkOwnerRef *metav1.OwnerReference
 		var regularNS *corev1.Namespace
@@ -2178,7 +2172,7 @@ var _ = Describe("drift detection and takeover", func() {
 			wantNS.Labels = map[string]string{
 				dummyLabelKey: dummyLabelValue1,
 				// The label below is added by K8s itself (system-managed well-known label).
-				"kubernetes.io/metadata.name": "ns-b7",
+				"kubernetes.io/metadata.name": nsName,
 			}
 
 			Consistently(func() error {
@@ -2272,10 +2266,10 @@ var _ = Describe("drift detection and takeover", func() {
 
 	// For simplicity reasons, this test case will only involve a NS object.
 	Context("overwrite drifts (always apply, partial comparison)", Ordered, func() {
-		workName := fmt.Sprintf(workNameTemplate, "b8")
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
 		// The environment prepared by the envtest package does not support namespace
 		// deletion; each test case would use a new namespace.
-		nsName := fmt.Sprintf(nsNameTemplate, "b8")
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
 
 		var appliedWorkOwnerRef *metav1.OwnerReference
 		var regularNS *corev1.Namespace
@@ -2413,7 +2407,7 @@ var _ = Describe("drift detection and takeover", func() {
 			wantNS.Labels = map[string]string{
 				dummyLabelKey: dummyLabelValue1,
 				// The label below is added by K8s itself (system-managed well-known label).
-				"kubernetes.io/metadata.name": "ns-b8",
+				"kubernetes.io/metadata.name": nsName,
 			}
 			wantNS.OwnerReferences = []metav1.OwnerReference{
 				*appliedWorkOwnerRef,
@@ -2523,10 +2517,10 @@ var _ = Describe("drift detection and takeover", func() {
 
 	// For simplicity reasons, this test case will only involve a NS object.
 	Context("overwrite drifts (apply if no drift, drift occurred before manifest version bump, partial comparison)", Ordered, func() {
-		workName := fmt.Sprintf(workNameTemplate, "b9")
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
 		// The environment prepared by the envtest package does not support namespace
 		// deletion; each test case would use a new namespace.
-		nsName := fmt.Sprintf(nsNameTemplate, "b9")
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
 
 		var appliedWorkOwnerRef *metav1.OwnerReference
 		var regularNS *corev1.Namespace
@@ -2665,7 +2659,7 @@ var _ = Describe("drift detection and takeover", func() {
 			wantNS.Labels = map[string]string{
 				dummyLabelKey: dummyLabelValue2,
 				// The label below is added by K8s itself (system-managed well-known label).
-				"kubernetes.io/metadata.name": "ns-b9",
+				"kubernetes.io/metadata.name": nsName,
 			}
 
 			Consistently(func() error {
@@ -2769,7 +2763,7 @@ var _ = Describe("drift detection and takeover", func() {
 			wantNS.Labels = map[string]string{
 				dummyLabelKey: dummyLabelValue3,
 				// The label below is added by K8s itself (system-managed well-known label).
-				"kubernetes.io/metadata.name": "ns-b9",
+				"kubernetes.io/metadata.name": nsName,
 			}
 			wantNS.OwnerReferences = []metav1.OwnerReference{
 				*appliedWorkOwnerRef,
@@ -2877,10 +2871,10 @@ var _ = Describe("drift detection and takeover", func() {
 
 	// For simplicity reasons, this test case will only involve a NS object.
 	Context("first drifted time preservation", Ordered, func() {
-		workName := fmt.Sprintf(workNameTemplate, "b10")
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
 		// The environment prepared by the envtest package does not support namespace
 		// deletion; each test case would use a new namespace.
-		nsName := fmt.Sprintf(nsNameTemplate, "b10")
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
 
 		var appliedWorkOwnerRef *metav1.OwnerReference
 		var regularNS *corev1.Namespace
@@ -3135,11 +3129,10 @@ var _ = Describe("drift detection and takeover", func() {
 	})
 
 	Context("never take over", Ordered, func() {
-		workName := fmt.Sprintf(workNameTemplate, "b12")
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
 		// The environment prepared by the envtest package does not support namespace
 		// deletion; each test case would use a new namespace.
-		nsName := fmt.Sprintf(nsNameTemplate, "b12")
-		deployName := fmt.Sprintf(deployNameTemplate, "b12")
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
 
 		var appliedWorkOwnerRef *metav1.OwnerReference
 		var regularNS *corev1.Namespace
@@ -3317,10 +3310,10 @@ var _ = Describe("drift detection and takeover", func() {
 var _ = Describe("report diff", func() {
 	// For simplicity reasons, this test case will only involve a NS object.
 	Context("report diff only (new object)", Ordered, func() {
-		workName := fmt.Sprintf(workNameTemplate, "c1")
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
 		// The environment prepared by the envtest package does not support namespace
 		// deletion; each test case would use a new namespace.
-		nsName := fmt.Sprintf(nsNameTemplate, "c1")
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
 
 		var regularNS *corev1.Namespace
 
@@ -3417,11 +3410,10 @@ var _ = Describe("report diff", func() {
 	})
 
 	Context("report diff only (with diff present, diff disappears later, partial comparison)", Ordered, func() {
-		workName := fmt.Sprintf(workNameTemplate, "c2")
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
 		// The environment prepared by the envtest package does not support namespace
 		// deletion; each test case would use a new namespace.
-		nsName := fmt.Sprintf(nsNameTemplate, "c2")
-		deployName := fmt.Sprintf(deployNameTemplate, "c2")
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
 
 		var appliedWorkOwnerRef *metav1.OwnerReference
 		var regularNS *corev1.Namespace
@@ -3442,6 +3434,7 @@ var _ = Describe("report diff", func() {
 			// Create the objects first in the member cluster.
 			Expect(memberClient.Create(ctx, regularNS)).To(Succeed(), "Failed to create the NS object")
 
+			// Create a diff in the replica count field.
 			regularDeploy.Spec.Replicas = ptr.To(int32(2))
 			Expect(memberClient.Create(ctx, regularDeploy)).To(Succeed(), "Failed to create the Deployment object")
 
@@ -3626,7 +3619,7 @@ var _ = Describe("report diff", func() {
 			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
-		It("should update the AppliedWork object status", func() {
+		It("should have no applied object reportings in the AppliedWork status", func() {
 			// Prepare the status information.
 			var appliedResourceMeta []fleetv1beta1.AppliedResourceMeta
 
@@ -3716,7 +3709,7 @@ var _ = Describe("report diff", func() {
 			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
-		It("should update the AppliedWork object status", func() {
+		It("should have no applied object reportings in the AppliedWork status", func() {
 			// Prepare the status information.
 			var appliedResourceMeta []fleetv1beta1.AppliedResourceMeta
 
@@ -3742,11 +3735,10 @@ var _ = Describe("report diff", func() {
 	})
 
 	Context("report diff only (w/ not taken over resources, partial comparison, a.k.a. do not touch anything and just report diff)", Ordered, func() {
-		workName := fmt.Sprintf(workNameTemplate, "c6")
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
 		// The environment prepared by the envtest package does not support namespace
 		// deletion; each test case would use a new namespace.
-		nsName := fmt.Sprintf(nsNameTemplate, "c6")
-		deployName := fmt.Sprintf(deployNameTemplate, "c6")
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
 
 		var regularNS *corev1.Namespace
 		var regularDeploy *appsv1.Deployment
@@ -3766,6 +3758,7 @@ var _ = Describe("report diff", func() {
 			// Create the objects first in the member cluster.
 			Expect(memberClient.Create(ctx, regularNS)).To(Succeed(), "Failed to create the NS object")
 
+			// Create a diff in the replica count field.
 			regularDeploy.Spec.Replicas = ptr.To(int32(2))
 			Expect(memberClient.Create(ctx, regularDeploy)).To(Succeed(), "Failed to create the Deployment object")
 
@@ -3928,9 +3921,997 @@ var _ = Describe("report diff", func() {
 			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
 
-		It("should update the AppliedWork object status", func() {
+		It("should have no applied object reportings in the AppliedWork status", func() {
 			// Prepare the status information.
 			var appliedResourceMeta []fleetv1beta1.AppliedResourceMeta
+
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		AfterAll(func() {
+			// Delete the Work object and related resources.
+			cleanupWorkObject(workName)
+
+			// Ensure that all applied manifests have been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			regularDeployRemovedActual := regularDeployRemovedActual(nsName, deployName)
+			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the deployment object")
+
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt so verify its deletion.
+		})
+	})
+})
+
+var _ = Describe("switch apply strategies", func() {
+	Context("switch from report diff to CSA", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+
+		var appliedWorkOwnerRef *metav1.OwnerReference
+		var regularNS *corev1.Namespace
+		var regularDeploy *appsv1.Deployment
+
+		BeforeAll(func() {
+			// Prepare a NS object.
+			regularNS = ns.DeepCopy()
+			regularNS.Name = nsName
+			regularNSJSON := marshalK8sObjJSON(regularNS)
+
+			// Prepare a Deployment object.
+			regularDeploy = deploy.DeepCopy()
+			regularDeploy.Namespace = nsName
+			regularDeploy.Name = deployName
+			regularDeployJSON := marshalK8sObjJSON(regularDeploy)
+
+			// Create the objects first in the member cluster.
+			Expect(memberClient.Create(ctx, regularNS)).To(Succeed(), "Failed to create the NS object")
+
+			// Create a diff in the replica count field.
+			regularDeploy.Spec.Replicas = ptr.To(int32(2))
+			Expect(memberClient.Create(ctx, regularDeploy)).To(Succeed(), "Failed to create the Deployment object")
+
+			// Create a new Work object with all the manifest JSONs and proper apply strategy.
+			applyStrategy := &fleetv1beta1.ApplyStrategy{
+				ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+				Type:             fleetv1beta1.ApplyStrategyTypeReportDiff,
+			}
+			createWorkObject(workName, applyStrategy, regularNSJSON, regularDeployJSON)
+		})
+
+		It("should add cleanup finalizer to the Work object", func() {
+			finalizerAddedActual := workFinalizerAddedActual(workName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+		})
+
+		It("should prepare an AppliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
+
+			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
+		})
+
+		It("should own the objects, but not apply any manifests", func() {
+			// Verify that the Deployment manifest has not been applied, yet Fleet has assumed
+			// its ownership.
+			wantDeploy := deploy.DeepCopy()
+			wantDeploy.TypeMeta = metav1.TypeMeta{}
+			wantDeploy.Namespace = nsName
+			wantDeploy.Name = deployName
+			wantDeploy.OwnerReferences = []metav1.OwnerReference{
+				*appliedWorkOwnerRef,
+			}
+			wantDeploy.Spec.Replicas = ptr.To(int32(2))
+
+			deployOwnedButNotApplied := func() error {
+				if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, regularDeploy); err != nil {
+					return fmt.Errorf("failed to retrieve the Deployment object: %w", err)
+				}
+
+				if len(regularDeploy.Spec.Template.Spec.Containers) != 1 {
+					return fmt.Errorf("number of containers in the Deployment object, got %d, want %d", len(regularDeploy.Spec.Template.Spec.Containers), 1)
+				}
+				if len(regularDeploy.Spec.Template.Spec.Containers[0].Ports) != 1 {
+					return fmt.Errorf("number of ports in the first container, got %d, want %d", len(regularDeploy.Spec.Template.Spec.Containers[0].Ports), 1)
+				}
+
+				// To ignore default values automatically, here the test suite rebuilds the objects.
+				rebuiltGotDeploy := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:       regularDeploy.Namespace,
+						Name:            regularDeploy.Name,
+						OwnerReferences: regularDeploy.OwnerReferences,
+					},
+					Spec: appsv1.DeploymentSpec{
+						Replicas: regularDeploy.Spec.Replicas,
+						Selector: regularDeploy.Spec.Selector,
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								Labels: regularDeploy.Spec.Template.ObjectMeta.Labels,
+							},
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:  regularDeploy.Spec.Template.Spec.Containers[0].Name,
+										Image: regularDeploy.Spec.Template.Spec.Containers[0].Image,
+										Ports: []corev1.ContainerPort{
+											{
+												ContainerPort: regularDeploy.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				if diff := cmp.Diff(rebuiltGotDeploy, wantDeploy); diff != "" {
+					return fmt.Errorf("deployment diff (-got +want):\n%s", diff)
+				}
+				return nil
+			}
+
+			Eventually(deployOwnedButNotApplied, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to own the Deployment object without applying the manifest")
+			Consistently(deployOwnedButNotApplied, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to own the Deployment object without applying the manifest")
+
+			// Verify that Fleet has assumed ownership of the NS object.
+			wantNS := ns.DeepCopy()
+			wantNS.TypeMeta = metav1.TypeMeta{}
+			wantNS.Name = nsName
+			wantNS.OwnerReferences = []metav1.OwnerReference{
+				*appliedWorkOwnerRef,
+			}
+
+			nsOwnedButNotApplied := func() error {
+				if err := memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS); err != nil {
+					return fmt.Errorf("failed to retrieve the NS object: %w", err)
+				}
+
+				// To ignore default values automatically, here the test suite rebuilds the objects.
+				rebuiltGotNS := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            regularNS.Name,
+						OwnerReferences: regularNS.OwnerReferences,
+					},
+				}
+
+				if diff := cmp.Diff(rebuiltGotNS, wantNS); diff != "" {
+					return fmt.Errorf("namespace diff (-got +want):\n%s", diff)
+				}
+				return nil
+			}
+			Eventually(nsOwnedButNotApplied, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to own the NS object without applying the manifest")
+			Consistently(nsOwnedButNotApplied, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to own the NS object without applying the manifest")
+		})
+
+		It("should update the Work object status", func() {
+			noLaterThanTimestamp := metav1.Time{
+				Time: time.Now().Add(time.Second * 30),
+			}
+
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+					Status: metav1.ConditionTrue,
+					Reason: WorkAllManifestsDiffReportedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingReportDiffResultTypeNoDiffFound),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Name:      deployName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingReportDiffResultTypeFoundDiff),
+							ObservedGeneration: 1,
+						},
+					},
+					DiffDetails: &fleetv1beta1.DiffDetails{
+						ObservedInMemberClusterGeneration: &regularDeploy.Generation,
+						ObservedDiffs: []fleetv1beta1.PatchDetail{
+							{
+								Path:          "/spec/replicas",
+								ValueInMember: "2",
+								ValueInHub:    "1",
+							},
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, &noLaterThanTimestamp, &noLaterThanTimestamp)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should have no applied object reportings in the AppliedWork status", func() {
+			// Prepare the status information.
+			var appliedResourceMeta []fleetv1beta1.AppliedResourceMeta
+
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		It("can update the apply strategy", func() {
+			Eventually(func() error {
+				work := &fleetv1beta1.Work{}
+				if err := hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: memberReservedNSName}, work); err != nil {
+					return fmt.Errorf("failed to retrieve the Work object: %w", err)
+				}
+
+				work.Spec.ApplyStrategy = &fleetv1beta1.ApplyStrategy{
+					Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
+					ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+					WhenToApply:      fleetv1beta1.WhenToApplyTypeAlways,
+					WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeAlways,
+				}
+				if err := hubClient.Update(ctx, work); err != nil {
+					return fmt.Errorf("failed to update the Work object: %w", err)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the apply strategy")
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: WorkAllManifestsAppliedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionFalse,
+					Reason: WorkNotAllManifestsAvailableReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Name:      deployName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 2,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeNotYetAvailable),
+							ObservedGeneration: 2,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should update the AppliedWork object status", func() {
+			// Prepare the status information.
+			appliedResourceMeta := []fleetv1beta1.AppliedResourceMeta{
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					UID: regularNS.UID,
+				},
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Name:      deployName,
+						Namespace: nsName,
+					},
+					UID: regularDeploy.UID,
+				},
+			}
+
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		AfterAll(func() {
+			// Delete the Work object and related resources.
+			cleanupWorkObject(workName)
+
+			// Ensure that all applied manifests have been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			regularDeployRemovedActual := regularDeployRemovedActual(nsName, deployName)
+			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the deployment object")
+
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt so verify its deletion.
+		})
+	})
+
+	Context("switch from SSA to report diff", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+
+		var appliedWorkOwnerRef *metav1.OwnerReference
+		var regularNS *corev1.Namespace
+		var regularDeploy *appsv1.Deployment
+
+		BeforeAll(func() {
+			// Prepare a NS object.
+			regularNS = ns.DeepCopy()
+			regularNS.Name = nsName
+			regularNSJSON := marshalK8sObjJSON(regularNS)
+
+			// Prepare a Deployment object.
+			regularDeploy = deploy.DeepCopy()
+			regularDeploy.Namespace = nsName
+			regularDeploy.Name = deployName
+			regularDeployJSON := marshalK8sObjJSON(regularDeploy)
+
+			// Create a new Work object with all the manifest JSONs and proper apply strategy.
+			applyStrategy := &fleetv1beta1.ApplyStrategy{
+				ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+				Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
+			}
+			createWorkObject(workName, applyStrategy, regularNSJSON, regularDeployJSON)
+		})
+
+		It("should add cleanup finalizer to the Work object", func() {
+			finalizerAddedActual := workFinalizerAddedActual(workName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+		})
+
+		It("should prepare an AppliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
+
+			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
+		})
+
+		It("should apply the manifests", func() {
+			// Ensure that the NS object has been applied as expected.
+			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
+
+			// Ensure that the Deployment object has been applied as expected.
+			regularDeploymentObjectAppliedActual := regularDeploymentObjectAppliedActual(nsName, deployName, appliedWorkOwnerRef)
+			Eventually(regularDeploymentObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the deployment object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, regularDeploy)).To(Succeed(), "Failed to retrieve the Deployment object")
+		})
+
+		It("should update the AppliedWork object status", func() {
+			// Prepare the status information.
+			appliedResourceMeta := []fleetv1beta1.AppliedResourceMeta{
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					UID: regularNS.UID,
+				},
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Name:      deployName,
+						Namespace: nsName,
+					},
+					UID: regularDeploy.UID,
+				},
+			}
+
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: WorkAllManifestsAppliedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionFalse,
+					Reason: WorkNotAllManifestsAvailableReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Name:      deployName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 1,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeNotYetAvailable),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("can update the apply strategy", func() {
+			Eventually(func() error {
+				work := &fleetv1beta1.Work{}
+				if err := hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: memberReservedNSName}, work); err != nil {
+					return fmt.Errorf("failed to retrieve the Work object: %w", err)
+				}
+
+				work.Spec.ApplyStrategy = &fleetv1beta1.ApplyStrategy{
+					ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+					Type:             fleetv1beta1.ApplyStrategyTypeReportDiff,
+				}
+				if err := hubClient.Update(ctx, work); err != nil {
+					return fmt.Errorf("failed to update the Work object: %w", err)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the apply strategy")
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+					Status: metav1.ConditionTrue,
+					Reason: WorkAllManifestsDiffReportedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingReportDiffResultTypeNoDiffFound),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Name:      deployName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingReportDiffResultTypeNoDiffFound),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should have no applied object reportings in the AppliedWork status", func() {
+			// Prepare the status information.
+			var appliedResourceMeta []fleetv1beta1.AppliedResourceMeta
+
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		AfterAll(func() {
+			// Delete the Work object and related resources.
+			cleanupWorkObject(workName)
+
+			// Ensure that all applied manifests have been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			regularDeployRemovedActual := regularDeployRemovedActual(nsName, deployName)
+			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the deployment object")
+
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt so verify its deletion.
+		})
+	})
+
+	Context("switch from never takeover to takeover if no diff", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+
+		var appliedWorkOwnerRef *metav1.OwnerReference
+		var regularNS *corev1.Namespace
+		var regularDeploy *appsv1.Deployment
+
+		BeforeAll(func() {
+			// Prepare a NS object.
+			regularNS = ns.DeepCopy()
+			regularNS.Name = nsName
+			regularNSJSON := marshalK8sObjJSON(regularNS)
+
+			// Prepare a Deployment object.
+			regularDeploy = deploy.DeepCopy()
+			regularDeploy.Namespace = nsName
+			regularDeploy.Name = deployName
+			regularDeployJSON := marshalK8sObjJSON(regularDeploy)
+
+			// Create objects in the member cluster.
+			preExistingNS := regularNS.DeepCopy()
+			Expect(memberClient.Create(ctx, preExistingNS)).To(Succeed(), "Failed to create the NS object")
+			preExistingDeploy := regularDeploy.DeepCopy()
+			preExistingDeploy.Spec.Replicas = ptr.To(int32(2))
+			Expect(memberClient.Create(ctx, preExistingDeploy)).To(Succeed(), "Failed to create the Deployment object")
+
+			// Create a new Work object with all the manifest JSONs and proper apply strategy.
+			applyStrategy := &fleetv1beta1.ApplyStrategy{
+				ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+				Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
+				WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeNever,
+			}
+			createWorkObject(workName, applyStrategy, regularNSJSON, regularDeployJSON)
+		})
+
+		It("should add cleanup finalizer to the Work object", func() {
+			finalizerAddedActual := workFinalizerAddedActual(workName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+		})
+
+		It("should prepare an AppliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
+
+			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
+		})
+
+		It("should not take over some objects", func() {
+			// Verify that the NS object has not been taken over.
+			wantNS := ns.DeepCopy()
+			wantNS.TypeMeta = metav1.TypeMeta{}
+			wantNS.Name = nsName
+
+			Consistently(func() error {
+				preExistingNS := &corev1.Namespace{}
+				if err := memberClient.Get(ctx, client.ObjectKey{Name: nsName}, preExistingNS); err != nil {
+					return fmt.Errorf("failed to retrieve the NS object: %w", err)
+				}
+
+				// To ignore default values automatically, here the test suite rebuilds the objects.
+				rebuiltGotNS := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            preExistingNS.Name,
+						OwnerReferences: preExistingNS.OwnerReferences,
+					},
+				}
+				if diff := cmp.Diff(rebuiltGotNS, wantNS); diff != "" {
+					return fmt.Errorf("namespace diff (-got +want):\n%s", diff)
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to leave the NS object alone")
+
+			// Verify that the Deployment object has not been taken over.
+			wantDeploy := regularDeploy.DeepCopy()
+			wantDeploy.TypeMeta = metav1.TypeMeta{}
+			wantDeploy.Namespace = nsName
+			wantDeploy.Name = deployName
+			wantDeploy.Spec.Replicas = ptr.To(int32(2))
+
+			Consistently(func() error {
+				preExistingDeploy := &appsv1.Deployment{}
+				if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, preExistingDeploy); err != nil {
+					return fmt.Errorf("failed to retrieve the Deployment object: %w", err)
+				}
+
+				if len(preExistingDeploy.Spec.Template.Spec.Containers) != 1 {
+					return fmt.Errorf("number of containers in the Deployment object, got %d, want %d", len(preExistingDeploy.Spec.Template.Spec.Containers), 1)
+				}
+				if len(preExistingDeploy.Spec.Template.Spec.Containers[0].Ports) != 1 {
+					return fmt.Errorf("number of ports in the first container, got %d, want %d", len(preExistingDeploy.Spec.Template.Spec.Containers[0].Ports), 1)
+				}
+
+				// To ignore default values automatically, here the test suite rebuilds the objects.
+				rebuiltGotDeploy := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:       preExistingDeploy.Namespace,
+						Name:            preExistingDeploy.Name,
+						OwnerReferences: preExistingDeploy.OwnerReferences,
+					},
+					Spec: appsv1.DeploymentSpec{
+						Replicas: preExistingDeploy.Spec.Replicas,
+						Selector: preExistingDeploy.Spec.Selector,
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								Labels: preExistingDeploy.Spec.Template.ObjectMeta.Labels,
+							},
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:  preExistingDeploy.Spec.Template.Spec.Containers[0].Name,
+										Image: preExistingDeploy.Spec.Template.Spec.Containers[0].Image,
+										Ports: []corev1.ContainerPort{
+											{
+												ContainerPort: preExistingDeploy.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				if diff := cmp.Diff(rebuiltGotDeploy, wantDeploy); diff != "" {
+					return fmt.Errorf("deployment diff (-got +want):\n%s", diff)
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to leave the Deployment object alone")
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionFalse,
+					Reason: WorkNotAllManifestsAppliedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(ManifestProcessingApplyResultTypeNotTakenOver),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Name:      deployName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(ManifestProcessingApplyResultTypeNotTakenOver),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("can update the apply strategy", func() {
+			Eventually(func() error {
+				work := &fleetv1beta1.Work{}
+				if err := hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: memberReservedNSName}, work); err != nil {
+					return fmt.Errorf("failed to retrieve the Work object: %w", err)
+				}
+
+				work.Spec.ApplyStrategy = &fleetv1beta1.ApplyStrategy{
+					ComparisonOption: fleetv1beta1.ComparisonOptionTypePartialComparison,
+					Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
+					WhenToTakeOver:   fleetv1beta1.WhenToTakeOverTypeIfNoDiff,
+				}
+				if err := hubClient.Update(ctx, work); err != nil {
+					return fmt.Errorf("failed to update the Work object: %w", err)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the apply strategy")
+		})
+
+		It("should take over some objects", func() {
+			// Ensure that the NS object has been applied as expected.
+			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
+		})
+
+		It("should not take over some objects", func() {
+			// Verify that the Deployment object has not been taken over.
+			wantDeploy := deploy.DeepCopy()
+			wantDeploy.TypeMeta = metav1.TypeMeta{}
+			wantDeploy.Namespace = nsName
+			wantDeploy.Name = deployName
+			wantDeploy.Spec.Replicas = ptr.To(int32(2))
+
+			Consistently(func() error {
+				preExistingDeploy := &appsv1.Deployment{}
+				if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, preExistingDeploy); err != nil {
+					return fmt.Errorf("failed to retrieve the Deployment object: %w", err)
+				}
+
+				if len(preExistingDeploy.Spec.Template.Spec.Containers) != 1 {
+					return fmt.Errorf("number of containers in the Deployment object, got %d, want %d", len(preExistingDeploy.Spec.Template.Spec.Containers), 1)
+				}
+				if len(preExistingDeploy.Spec.Template.Spec.Containers[0].Ports) != 1 {
+					return fmt.Errorf("number of ports in the first container, got %d, want %d", len(preExistingDeploy.Spec.Template.Spec.Containers[0].Ports), 1)
+				}
+
+				// To ignore default values automatically, here the test suite rebuilds the objects.
+				rebuiltGotDeploy := &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:       preExistingDeploy.Namespace,
+						Name:            preExistingDeploy.Name,
+						OwnerReferences: preExistingDeploy.OwnerReferences,
+					},
+					Spec: appsv1.DeploymentSpec{
+						Replicas: preExistingDeploy.Spec.Replicas,
+						Selector: preExistingDeploy.Spec.Selector,
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								Labels: preExistingDeploy.Spec.Template.ObjectMeta.Labels,
+							},
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:  preExistingDeploy.Spec.Template.Spec.Containers[0].Name,
+										Image: preExistingDeploy.Spec.Template.Spec.Containers[0].Image,
+										Ports: []corev1.ContainerPort{
+											{
+												ContainerPort: preExistingDeploy.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				if diff := cmp.Diff(rebuiltGotDeploy, wantDeploy); diff != "" {
+					return fmt.Errorf("deployment diff (-got +want):\n%s", diff)
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to leave the Deployment object alone")
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionFalse,
+					Reason: WorkNotAllManifestsAppliedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Name:      deployName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(ManifestProcessingApplyResultTypeFailedToTakeOver),
+							ObservedGeneration: 1,
+						},
+					},
+					DiffDetails: &fleetv1beta1.DiffDetails{
+						ObservedInMemberClusterGeneration: ptr.To(int64(1)),
+						ObservedDiffs: []fleetv1beta1.PatchDetail{
+							{
+								Path:          "/spec/replicas",
+								ValueInMember: "2",
+								ValueInHub:    "1",
+							},
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should update the AppliedWork object status", func() {
+			// Prepare the status information.
+			appliedResourceMeta := []fleetv1beta1.AppliedResourceMeta{
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					UID: regularNS.UID,
+				},
+			}
 
 			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
 			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
