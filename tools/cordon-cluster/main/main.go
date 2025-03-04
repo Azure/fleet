@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 
@@ -27,7 +28,7 @@ var (
 )
 
 const (
-	testEvictionNamePrefix = "test-eviction-"
+	testEvictionNameFormat = "test-eviction-%s-%s"
 )
 
 func main() {
@@ -132,7 +133,7 @@ func main() {
 
 	// create eviction objects for all <crpName, targetCluster>.
 	for crpName := range crpNameMap {
-		evictionName := testEvictionNamePrefix + crpName
+		evictionName := fmt.Sprintf(testEvictionNameFormat, crpName, *clusterName)
 
 		if err = removeExistingEviction(ctx, hubClient, evictionName); err != nil {
 			log.Fatalf("failed to remove existing eviction for CRP %s", crpName)
@@ -162,7 +163,7 @@ func main() {
 	// TODO: move isEvictionInTerminalState to a function in the utils package.
 	for crpName := range crpNameMap {
 		err = wait.ExponentialBackoffWithContext(ctx, retry.DefaultBackoff, func(ctx context.Context) (bool, error) {
-			evictionName := testEvictionNamePrefix + crpName
+			evictionName := fmt.Sprintf(testEvictionNameFormat, crpName, *clusterName)
 			eviction := placementv1beta1.ClusterResourcePlacementEviction{}
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
 				return false, err
