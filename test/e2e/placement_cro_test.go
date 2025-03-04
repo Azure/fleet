@@ -23,7 +23,7 @@ import (
 // the CRP status has all the information to debug the issue.
 
 // Note that this container will run in parallel with other containers.
-var _ = Describe("creating clusterResourceOverride (selecting all clusters) to override all resources under the namespace", Ordered, func() {
+var _ = Context("creating clusterResourceOverride (selecting all clusters) to override all resources under the namespace", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 
@@ -130,11 +130,10 @@ var _ = Describe("creating clusterResourceOverride (selecting all clusters) to o
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cro as expected", crpName)
 	})
 
-	It("should update CRP status as expected", func() {
+	It("should update CRP status on demand as expected", func() {
 		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 1)}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
-		// use the long duration to wait until the rollout is finished.
-		Eventually(crpStatusUpdatedActual, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
 	// This check will ignore the annotation of resources.
@@ -144,9 +143,25 @@ var _ = Describe("creating clusterResourceOverride (selecting all clusters) to o
 		want := map[string]string{croTestAnnotationKey: croTestAnnotationValue1}
 		checkIfOverrideAnnotationsOnAllMemberClusters(true, want)
 	})
+
+	It("delete the cro attached to this CRP", func() {
+		cleanupClusterResourceOverride(croName)
+	})
+
+	It("should update CRP status on demand to not select any override", func() {
+		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, nil)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	It("should not have annotations on the cluster", func() {
+		for _, memberCluster := range allMemberClusters {
+			Expect(validateNamespaceNoAnnotationOnCluster(memberCluster, croTestAnnotationKey)).Should(Succeed(), "Failed to remove the annotation of namespace on %s", memberCluster.ClusterName)
+			Expect(validateConfigMapNoAnnotationKeyOnCluster(memberCluster, croTestAnnotationKey)).Should(Succeed(), "Failed to remove the annotation of config map on %s", memberCluster.ClusterName)
+		}
+	})
 })
 
-var _ = Describe("creating clusterResourceOverride with multiple jsonPatchOverrides", Ordered, func() {
+var _ = Context("creating clusterResourceOverride with multiple jsonPatchOverrides", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 
@@ -245,7 +260,7 @@ var _ = Describe("creating clusterResourceOverride with multiple jsonPatchOverri
 	})
 })
 
-var _ = Describe("creating clusterResourceOverride with different rules for each cluster", Ordered, func() {
+var _ = Context("creating clusterResourceOverride with different rules for each cluster", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 
@@ -365,7 +380,7 @@ var _ = Describe("creating clusterResourceOverride with different rules for each
 	})
 })
 
-var _ = Describe("creating clusterResourceOverride with different rules for each cluster", Ordered, func() {
+var _ = Context("creating clusterResourceOverride with different rules for each cluster", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 
@@ -440,7 +455,7 @@ var _ = Describe("creating clusterResourceOverride with different rules for each
 	})
 })
 
-var _ = Describe("creating clusterResourceOverride with incorrect path", Ordered, func() {
+var _ = Context("creating clusterResourceOverride with incorrect path", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 
@@ -510,7 +525,7 @@ var _ = Describe("creating clusterResourceOverride with incorrect path", Ordered
 	It("should not place the selected resources on member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 })
 
-var _ = Describe("creating clusterResourceOverride with and resource becomes invalid after override", Ordered, func() {
+var _ = Context("creating clusterResourceOverride with and resource becomes invalid after override", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 
@@ -580,7 +595,7 @@ var _ = Describe("creating clusterResourceOverride with and resource becomes inv
 	It("should not place the selected resources on member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 })
 
-var _ = Describe("creating clusterResourceOverride with delete rules for one cluster", Ordered, func() {
+var _ = Context("creating clusterResourceOverride with delete rules for one cluster", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 
