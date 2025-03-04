@@ -335,6 +335,9 @@ func generateTestClusterStagedUpdateStrategy() *placementv1beta1.ClusterStagedUp
 								Duration: time.Second * 4,
 							},
 						},
+						{
+							Type: placementv1beta1.AfterStageTaskTypeApproval,
+						},
 					},
 				},
 				{
@@ -349,6 +352,12 @@ func generateTestClusterStagedUpdateStrategy() *placementv1beta1.ClusterStagedUp
 					AfterStageTasks: []placementv1beta1.AfterStageTask{
 						{
 							Type: placementv1beta1.AfterStageTaskTypeApproval,
+						},
+						{
+							Type: placementv1beta1.AfterStageTaskTypeTimedWait,
+							WaitTime: metav1.Duration{
+								Duration: time.Second * 4,
+							},
 						},
 					},
 				},

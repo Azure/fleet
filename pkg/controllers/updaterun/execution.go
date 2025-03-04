@@ -267,6 +267,8 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 		klog.V(2).InfoS("There is no after stage task for this stage", "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
 		return true, 0, nil
 	}
+	passed := true
+	afterStageWaitTime := time.Duration(-1)
 	for i, task := range updatingStage.AfterStageTasks {
 		switch task.Type {
 		case placementv1beta1.AfterStageTaskTypeTimedWait:
@@ -275,10 +277,12 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 			waitTime := time.Until(waitStartTime.Add(task.WaitTime.Duration))
 			if waitTime > 0 {
 				klog.V(2).InfoS("The after stage task still need to wait", "waitStartTime", waitStartTime, "waitTime", task.WaitTime, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
-				return false, waitTime, nil
+				passed = false
+				afterStageWaitTime = waitTime
+			} else {
+				markAfterStageWaitTimeElapsed(&updatingStageStatus.AfterStageTaskStatus[i], updateRun.Generation)
+				klog.V(2).InfoS("The after stage wait task has completed", "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
 			}
-			markAfterStageWaitTimeElapsed(&updatingStageStatus.AfterStageTaskStatus[i], updateRun.Generation)
-			klog.V(2).InfoS("The after stage wait task has completed", "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
 		case placementv1beta1.AfterStageTaskTypeApproval:
 			// Check if the approval request has been created.
 			approvalRequest := placementv1beta1.ClusterApprovalRequest{
@@ -310,18 +314,24 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 						return false, -1, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 					}
 					approvalAccepted := condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequest.Status.Conditions, string(placementv1beta1.ApprovalRequestConditionApprovalAccepted)), approvalRequest.Generation)
-					// Approved state should not change once the approval is accepted.
-					if !approvalAccepted && !condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequest.Status.Conditions, string(placementv1beta1.ApprovalRequestConditionApproved)), approvalRequest.Generation) {
+					approved := condition.IsConditionStatusTrue(meta.FindStatusCondition(approvalRequest.Status.Conditions, string(placementv1beta1.ApprovalRequestConditionApproved)), approvalRequest.Generation)
+					if !approvalAccepted && !approved {
 						klog.V(2).InfoS("The approval request has not been approved yet", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
-						return false, -1, nil
+						passed = false
+						continue
 					}
-					klog.V(2).InfoS("The approval request has been approved", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
-					if !approvalAccepted {
-						if err = r.updateApprovalRequestAccepted(ctx, &approvalRequest); err != nil {
-							klog.ErrorS(err, "Failed to accept the approved approval request", "approvalRequest", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
-							// retriable err
-							return false, 0, err
+					if approved {
+						klog.V(2).InfoS("The approval request has been approved", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
+						if !approvalAccepted {
+							if err = r.updateApprovalRequestAccepted(ctx, &approvalRequest); err != nil {
+								klog.ErrorS(err, "Failed to accept the approved approval request", "approvalRequest", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
+								// retriable err
+								return false, -1, err
+							}
 						}
+					} else {
+						// Approved state should not change once the approval is accepted.
+						klog.V(2).InfoS("The approval request has been approval-accepted, ignoring changing back to unapproved", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
 					}
 					markAfterStageRequestApproved(&updatingStageStatus.AfterStageTaskStatus[i], updateRun.Generation)
 				} else {
@@ -333,12 +343,14 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 				// The approval request has been created for the first time.
 				klog.V(2).InfoS("The approval request has been created", "approvalRequestTask", requestRef, "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
 				markAfterStageRequestCreated(&updatingStageStatus.AfterStageTaskStatus[i], updateRun.Generation)
-				return false, -1, nil
+				passed = false
 			}
 		}
 	}
-	// All the after stage tasks have been finished or the for loop will return before this line.
-	return true, 0, nil
+	if passed {
+		afterStageWaitTime = 0
+	}
+	return passed, afterStageWaitTime, nil
 }
 
 // updateBindingRolloutStarted updates the binding status to indicate the rollout has started.
