@@ -5,26 +5,24 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os"
 
 	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/tools/utils"
 )
 
 var (
-	scheme         = runtime.NewScheme()
-	ctx            = context.Background()
-	kubeconfigPath = os.Getenv("KUBECONFIG")
+	scheme = runtime.NewScheme()
+	ctx    = context.Background()
 )
 
 const (
@@ -43,48 +41,18 @@ func main() {
 		log.Fatalf("cluster name to cordon cannot be empty")
 	}
 
-	if err := clusterv1beta1.AddToScheme(scheme); err != nil {
-		log.Fatalf("failed to add custom APIs (cluster) to the runtime scheme: %v", err)
-	}
-	if err := placementv1beta1.AddToScheme(scheme); err != nil {
-		log.Fatalf("failed to add custom APIs (placement) to the runtime scheme: %v", err)
-	}
-
-	clusterConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigPath},
-		&clientcmd.ConfigOverrides{
-			CurrentContext: *hubClusterContext,
-		})
-
-	restConfig, err := clusterConfig.ClientConfig()
+	hubClient, err := utils.GetClusterClientFromClusterContext(*hubClusterContext, scheme)
 	if err != nil {
-		log.Fatalf("failed to set up rest config: %v", err)
+		log.Fatalf("failed to create hub cluster client: %v", err)
 	}
 
-	hubClient, err := client.New(restConfig, client.Options{Scheme: scheme})
-	if err != nil {
-		log.Fatalf("failed to create hub cluster client")
-	}
-
-	var memberClusterList clusterv1beta1.MemberClusterList
-	if err := hubClient.List(ctx, &memberClusterList); err != nil {
-		log.Fatalf("failed to list member clusters: %v", err)
-	}
-
-	var memberCluster *clusterv1beta1.MemberCluster
-	for i := range memberClusterList.Items {
-		if memberClusterList.Items[i].Name == *clusterName {
-			memberCluster = &memberClusterList.Items[i]
-			break
-		}
-	}
-
-	if memberCluster == nil {
-		log.Fatalf("failed to find member cluster %s to cordon", *clusterName)
+	var mc clusterv1beta1.MemberCluster
+	if err = hubClient.Get(ctx, types.NamespacedName{Name: *clusterName}, &mc); err != nil {
+		log.Fatalf("failed to get member cluster %s: %v", *clusterName, err)
 	}
 
 	var crpList placementv1beta1.ClusterResourcePlacementList
-	if err := hubClient.List(ctx, &crpList); err != nil {
+	if err = hubClient.List(ctx, &crpList); err != nil {
 		log.Fatalf("failed to list cluster resource placements: %v", err)
 	}
 
@@ -103,6 +71,7 @@ func main() {
 		log.Fatalf("failed to find any CRP which has propagated resource to cluster %s", *clusterName)
 	}
 
+	// add taint to member cluster to ensure resources aren't scheduled on it.
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var mc clusterv1beta1.MemberCluster
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: *clusterName}, &mc); err != nil {
@@ -160,7 +129,7 @@ func main() {
 	}
 
 	// wait until all evictions reach a terminal state.
-	// TODO: move isEvictionInTerminalState to a function in the utils package.
+	// TODO: move isEvictionInTerminalState to a function in the pkg/utils package.
 	for crpName := range crpNameMap {
 		err = wait.ExponentialBackoffWithContext(ctx, retry.DefaultBackoff, func(ctx context.Context) (bool, error) {
 			evictionName := fmt.Sprintf(testEvictionNameFormat, crpName, *clusterName)
@@ -184,7 +153,7 @@ func main() {
 		}
 	}
 
-	log.Printf("Issued evictions to cordon cluster %s, please verify to ensure evictions were successfully executed", *clusterName)
+	log.Printf("Issued evictions to cordon member cluster %s, please verify to ensure evictions were successfully executed", *clusterName)
 }
 
 func removeExistingEviction(ctx context.Context, client client.Client, evictionName string) error {
