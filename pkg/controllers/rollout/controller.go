@@ -729,7 +729,7 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 			},
 		}).
 		Watches(&fleetv1alpha1.ClusterResourceOverride{}, handler.Funcs{
-			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				cro, ok := e.Object.(*fleetv1alpha1.ClusterResourceOverride)
 				if !ok {
 					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("non ClusterResourceOverride type resource: %+v", e.Object)),
@@ -746,7 +746,7 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 			},
 		}).
 		Watches(&fleetv1alpha1.ResourceOverride{}, handler.Funcs{
-			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				ro, ok := e.Object.(*fleetv1alpha1.ResourceOverride)
 				if !ok {
 					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("non ResourceOverride type resource: %+v", e.Object)),
