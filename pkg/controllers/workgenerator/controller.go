@@ -44,7 +44,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -1159,8 +1159,21 @@ func setAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding *
 	for _, w := range works {
 		availableCond := meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 		switch {
-		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()) && availableCond.Reason == work.WorkNotTrackableReason:
-			// The Work object has completed the availability check successfully, due to the resources being untrackable.
+		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()) && availableCond.Reason == workapplier.WorkNotAllManifestsTrackableReasonNew:
+			// The Work object has completed the availability check successfully, due to the
+			// resources being untrackable.
+			//
+			// This branch is currently never visited as the work applier would still populate
+			// the Available condition using the old reason string for compatibility reasons.
+			if firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes == nil {
+				firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes = w
+			}
+		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()) && availableCond.Reason == workapplier.WorkNotAllManifestsTrackableReason:
+			// The Work object has completed the availability check successfully, due to the
+			// resources being untrackable. This is the same branch as the one above but checks
+			// for the old reason string; it is kept for compatibility reasons.
+			//
+			// TO-DO (chenyu1): drop this branch after the rollout completes.
 			if firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes == nil {
 				firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes = w
 			}
@@ -1218,7 +1231,7 @@ func setAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding *
 		meta.SetStatusCondition(&binding.Status.Conditions, metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingAvailable),
-			Reason:             work.WorkNotTrackableReason,
+			Reason:             condition.WorkNotAvailabilityTrackableReason,
 			Message:            fmt.Sprintf("The availability of work object %s is not trackable", firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes.Name),
 			ObservedGeneration: binding.GetGeneration(),
 		})

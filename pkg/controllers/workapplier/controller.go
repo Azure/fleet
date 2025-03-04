@@ -44,6 +44,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/defaulter"
 	"go.goms.io/fleet/pkg/utils/parallelizer"
@@ -113,7 +114,18 @@ func NewReconciler(
 
 var (
 	// Some exported reasons for Work object conditions. Currently only the untrackable reason is being actively used.
-	WorkNotAllManifestsTrackableReason    = "SomeManifestsAreNotAvailabilityTrackable"
+
+	// This is a new reason for the Availability condition when the manifests are not
+	// trackable for availability. This value is currently unused.
+	//
+	// TO-DO (chenyu1): switch to the new reason after proper rollout.
+	WorkNotAllManifestsTrackableReasonNew = "SomeManifestsAreNotAvailabilityTrackable"
+	// This reason uses the exact same value as the one kept in the old work applier for
+	// compatibility reasons. It helps guard the case where the member agent is upgraded
+	// before the hub agent.
+	//
+	// TO-DO (chenyu1): switch off the old reason after proper rollout.
+	WorkNotAllManifestsTrackableReason    = work.WorkNotTrackableReason
 	WorkAllManifestsAppliedReason         = "AllManifestsApplied"
 	WorkAllManifestsAvailableReason       = "AllManifestsAvailable"
 	WorkAllManifestsDiffReportedReason    = "AllManifestsDiffReported"

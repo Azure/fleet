@@ -11,6 +11,7 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,6 +26,7 @@ import (
 const (
 	workNamespaceNameTemplate         = "application-%d"
 	appConfigMapNameTemplate          = "app-config-%d"
+	appDeploymentNameTemplate         = "app-deploy-%d"
 	appSecretNameTemplate             = "app-secret-%d" // #nosec G101
 	crpNameTemplate                   = "crp-%d"
 	crpNameWithSubIndexTemplate       = "crp-%d-%d"
@@ -97,6 +99,39 @@ func appConfigMap() corev1.ConfigMap {
 		},
 		Data: map[string]string{
 			"data": "test",
+		},
+	}
+}
+
+func appDeployment() appsv1.Deployment {
+	return appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf(appDeploymentNameTemplate, GinkgoParallelProcess()),
+			Namespace: fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: ptr.To(int32(1)),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "nginx",
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": "nginx",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx",
+						},
+					},
+					TerminationGracePeriodSeconds: ptr.To(int64(60)),
+				},
+			},
 		},
 	}
 }

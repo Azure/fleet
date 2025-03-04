@@ -18,7 +18,7 @@ import (
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
-	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	scheduler "go.goms.io/fleet/pkg/scheduler/framework"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -322,6 +322,45 @@ func crpNotAvailableConditions(generation int64, hasOverride bool) []metav1.Cond
 	}
 }
 
+func crpDiffReportedConditions(generation int64, hasOverride bool) []metav1.Condition {
+	overrideConditionReason := condition.OverrideNotSpecifiedReason
+	if hasOverride {
+		overrideConditionReason = condition.OverriddenSucceededReason
+	}
+	return []metav1.Condition{
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             scheduler.FullyScheduledReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.RolloutStartedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementOverriddenConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             overrideConditionReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.WorkSynchronizedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementDiffReportedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.DiffReportedStatusTrueReason,
+			ObservedGeneration: generation,
+		},
+	}
+}
+
 func crpRolloutCompletedConditions(generation int64, hasOverride bool) []metav1.Condition {
 	overrideConditionReason := condition.OverrideNotSpecifiedReason
 	if hasOverride {
@@ -419,8 +458,43 @@ func resourcePlacementApplyFailedConditions(generation int64) []metav1.Condition
 	}
 }
 
+func resourcePlacementDiffReportedConditions(generation int64) []metav1.Condition {
+	return []metav1.Condition{
+		{
+			Type:               string(placementv1beta1.ResourceScheduledConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.ScheduleSucceededReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourceRolloutStartedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.RolloutStartedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourceOverriddenConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.OverrideNotSpecifiedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourceWorkSynchronizedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.AllWorkSyncedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourceBindingDiffReported),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.AllWorkDiffReportedReason,
+			ObservedGeneration: generation,
+		},
+	}
+}
+
 func resourcePlacementRolloutCompletedConditions(generation int64, resourceIsTrackable bool, hasOverride bool) []metav1.Condition {
-	availableConditionReason := work.WorkNotTrackableReason
+	availableConditionReason := condition.WorkNotAvailabilityTrackableReason
 	if resourceIsTrackable {
 		availableConditionReason = condition.AllWorkAvailableReason
 	}
@@ -837,7 +911,7 @@ func safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResourceIdentifiers [
 					Condition: metav1.Condition{
 						Type:               string(placementv1beta1.ResourcesAvailableConditionType),
 						Status:             metav1.ConditionFalse,
-						Reason:             "ManifestNotAvailableYet",
+						Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeNotYetAvailable),
 						ObservedGeneration: failedResourceObservedGeneration,
 					},
 				},
