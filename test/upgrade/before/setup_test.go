@@ -109,8 +109,8 @@ var (
 	ignorePodTemplateSpecObjectMetaField   = cmpopts.IgnoreFields(corev1.PodTemplateSpec{}, "ObjectMeta")
 	ignoreJobStatusField                   = cmpopts.IgnoreFields(batchv1.Job{}, "Status")
 	ignoreServiceStatusField               = cmpopts.IgnoreFields(corev1.Service{}, "Status")
-	ignoreServiceSpecClusterIPField        = cmpopts.IgnoreFields(corev1.ServiceSpec{}, "ClusterIP", "ClusterIPs")
-	ignoreServicePortNodePortField         = cmpopts.IgnoreFields(corev1.ServicePort{}, "NodePort")
+	ignoreServiceSpecIPAndPolicyFields     = cmpopts.IgnoreFields(corev1.ServiceSpec{}, "ClusterIP", "ClusterIPs", "ExternalIPs", "SessionAffinity", "IPFamilies", "IPFamilyPolicy", "InternalTrafficPolicy")
+	ignoreServicePortNodePortProtocolField = cmpopts.IgnoreFields(corev1.ServicePort{}, "NodePort", "Protocol")
 	ignoreRPSClusterNameField              = cmpopts.IgnoreFields(placementv1beta1.ResourcePlacementStatus{}, "ClusterName")
 
 	crpStatusCmpOptions = cmp.Options{
