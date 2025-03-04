@@ -513,6 +513,306 @@ func crpWithOneFailedApplyOpStatusUpdatedActual(
 	}
 }
 
+func crpWithStuckRolloutDueToOneFailedAvailabilityCheckStatusUpdatedActual(
+	crpName string,
+	wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier,
+	failedWorkloadResourceIdentifier placementv1beta1.ResourceIdentifier,
+	failedResourceObservedGeneration int64,
+	wantSelectedClusters []string,
+	wantObservedResourceIndex string,
+) func() error {
+	return func() error {
+		crp := &placementv1beta1.ClusterResourcePlacement{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+			return err
+		}
+
+		var wantPlacementStatus []placementv1beta1.ResourcePlacementStatus
+		// We only expect the deployment to not be available on one cluster.
+		unavailableResourcePlacementStatus := placementv1beta1.ResourcePlacementStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(placementv1beta1.ResourceScheduledConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.ScheduleSucceededReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourceRolloutStartedConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.RolloutStartedReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourceOverriddenConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.OverrideNotSpecifiedReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourceWorkSynchronizedConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.AllWorkSyncedReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.AllWorkAppliedReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourcesAvailableConditionType),
+					Status:             metav1.ConditionFalse,
+					Reason:             condition.WorkNotAvailableReason,
+					ObservedGeneration: crp.Generation,
+				},
+			},
+			FailedPlacements: []placementv1beta1.FailedResourcePlacement{
+				{
+					ResourceIdentifier: failedWorkloadResourceIdentifier,
+					Condition: metav1.Condition{
+						Type:   string(placementv1beta1.ResourcesAvailableConditionType),
+						Status: metav1.ConditionFalse,
+						// TO-DO (chenyu1): this reason string is subject to change.
+						Reason:             "ManifestNotAvailableYet",
+						ObservedGeneration: failedResourceObservedGeneration,
+					},
+				},
+			},
+		}
+		wantPlacementStatus = append(wantPlacementStatus, unavailableResourcePlacementStatus)
+
+		// For all the other connected member clusters rollout will be blocked.
+		rolloutBlockedPlacementStatus := placementv1beta1.ResourcePlacementStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(placementv1beta1.ResourceScheduledConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.ScheduleSucceededReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourceRolloutStartedConditionType),
+					Status:             metav1.ConditionFalse,
+					Reason:             condition.RolloutNotStartedYetReason,
+					ObservedGeneration: crp.Generation,
+				},
+			},
+		}
+
+		for i := 0; i < len(wantSelectedClusters)-1; i++ {
+			wantPlacementStatus = append(wantPlacementStatus, rolloutBlockedPlacementStatus)
+		}
+
+		wantCRPConditions := []metav1.Condition{
+			{
+				Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+				Status:             metav1.ConditionTrue,
+				Reason:             scheduler.FullyScheduledReason,
+				ObservedGeneration: crp.Generation,
+			},
+			{
+				Type:               string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+				Status:             metav1.ConditionFalse,
+				Reason:             condition.RolloutNotStartedYetReason,
+				ObservedGeneration: crp.Generation,
+			},
+		}
+
+		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+			Conditions:            wantCRPConditions,
+			PlacementStatuses:     wantPlacementStatus,
+			SelectedResources:     wantSelectedResourceIdentifiers,
+			ObservedResourceIndex: wantObservedResourceIndex,
+		}
+
+		if diff := cmp.Diff(crp.Status, wantStatus, crpWithStuckRolloutStatusCmpOptions...); diff != "" {
+			return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
+		}
+		return nil
+	}
+}
+
+func crpWithStuckRolloutDueToOneFailedApplyOpStatusUpdatedActual(
+	crpName string,
+	wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier,
+	failedWorkloadResourceIdentifier placementv1beta1.ResourceIdentifier,
+	failedResourceObservedGeneration int64,
+	wantSelectedClusters []string,
+	wantObservedResourceIndex string,
+) func() error {
+	return func() error {
+		crp := &placementv1beta1.ClusterResourcePlacement{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+			return err
+		}
+
+		var wantPlacementStatus []placementv1beta1.ResourcePlacementStatus
+		// We only expect the deployment to not be available on one cluster.
+		unavailableResourcePlacementStatus := placementv1beta1.ResourcePlacementStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(placementv1beta1.ResourceScheduledConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.ScheduleSucceededReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourceRolloutStartedConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.RolloutStartedReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourceOverriddenConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.OverrideNotSpecifiedReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourceWorkSynchronizedConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.AllWorkSyncedReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+					Status:             metav1.ConditionFalse,
+					Reason:             condition.WorkNotAppliedReason,
+					ObservedGeneration: crp.Generation,
+				},
+			},
+			FailedPlacements: []placementv1beta1.FailedResourcePlacement{
+				{
+					ResourceIdentifier: failedWorkloadResourceIdentifier,
+					Condition: metav1.Condition{
+						Type:   string(placementv1beta1.ResourcesAppliedConditionType),
+						Status: metav1.ConditionFalse,
+						// TO-DO (chenyu1): this reason string is subject to change.
+						Reason:             "ManifestApplyFailed",
+						ObservedGeneration: failedResourceObservedGeneration,
+					},
+				},
+			},
+		}
+		wantPlacementStatus = append(wantPlacementStatus, unavailableResourcePlacementStatus)
+
+		// For all the other connected member clusters rollout will be blocked.
+		rolloutBlockedPlacementStatus := placementv1beta1.ResourcePlacementStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(placementv1beta1.ResourceScheduledConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.ScheduleSucceededReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourceRolloutStartedConditionType),
+					Status:             metav1.ConditionFalse,
+					Reason:             condition.RolloutNotStartedYetReason,
+					ObservedGeneration: crp.Generation,
+				},
+			},
+		}
+
+		for i := 0; i < len(wantSelectedClusters)-1; i++ {
+			wantPlacementStatus = append(wantPlacementStatus, rolloutBlockedPlacementStatus)
+		}
+
+		wantCRPConditions := []metav1.Condition{
+			{
+				Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+				Status:             metav1.ConditionTrue,
+				Reason:             scheduler.FullyScheduledReason,
+				ObservedGeneration: crp.Generation,
+			},
+			{
+				Type:               string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+				Status:             metav1.ConditionFalse,
+				Reason:             condition.RolloutNotStartedYetReason,
+				ObservedGeneration: crp.Generation,
+			},
+		}
+
+		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+			Conditions:            wantCRPConditions,
+			PlacementStatuses:     wantPlacementStatus,
+			SelectedResources:     wantSelectedResourceIdentifiers,
+			ObservedResourceIndex: wantObservedResourceIndex,
+		}
+
+		if diff := cmp.Diff(crp.Status, wantStatus, crpWithStuckRolloutStatusCmpOptions...); diff != "" {
+			return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
+		}
+		return nil
+	}
+}
+
+func crpWithStuckRolloutDueToUntrackableResourcesStatusUpdatedActual(
+	crpName string,
+	wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier,
+	wantSelectedClusters []string,
+	wantObservedResourceIndex string,
+) func() error {
+	return func() error {
+		crp := &placementv1beta1.ClusterResourcePlacement{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+			return err
+		}
+
+		var wantPlacementStatus []placementv1beta1.ResourcePlacementStatus
+		// For all the other connected member clusters rollout will be blocked.
+		rolloutBlockedPlacementStatus := placementv1beta1.ResourcePlacementStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(placementv1beta1.ResourceScheduledConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.ScheduleSucceededReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ResourceRolloutStartedConditionType),
+					Status:             metav1.ConditionFalse,
+					Reason:             condition.RolloutNotStartedYetReason,
+					ObservedGeneration: crp.Generation,
+				},
+			},
+		}
+
+		for i := 0; i < len(wantSelectedClusters); i++ {
+			wantPlacementStatus = append(wantPlacementStatus, rolloutBlockedPlacementStatus)
+		}
+
+		wantCRPConditions := []metav1.Condition{
+			{
+				Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+				Status:             metav1.ConditionTrue,
+				Reason:             scheduler.FullyScheduledReason,
+				ObservedGeneration: crp.Generation,
+			},
+			{
+				Type:               string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+				Status:             metav1.ConditionFalse,
+				Reason:             condition.RolloutNotStartedYetReason,
+				ObservedGeneration: crp.Generation,
+			},
+		}
+
+		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+			Conditions:            wantCRPConditions,
+			PlacementStatuses:     wantPlacementStatus,
+			SelectedResources:     wantSelectedResourceIdentifiers,
+			ObservedResourceIndex: wantObservedResourceIndex,
+		}
+
+		if diff := cmp.Diff(crp.Status, wantStatus, crpWithStuckRolloutStatusCmpOptions...); diff != "" {
+			return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
+		}
+		return nil
+	}
+}
+
 func validateWorkNamespaceOnCluster(cluster *framework.Cluster, name types.NamespacedName) error {
 	ns := &corev1.Namespace{}
 	if err := cluster.KubeClient.Get(ctx, name, ns); err != nil {
@@ -613,8 +913,8 @@ func validateServiceOnCluster(cluster *framework.Cluster, name types.NamespacedN
 		ignoreObjectMetaAutoGeneratedFields,
 		ignoreObjectMetaAnnotationField,
 		ignoreServiceStatusField,
-		ignoreServiceSpecClusterIPField,
-		ignoreServicePortNodePortField,
+		ignoreServiceSpecIPAndPolicyFields,
+		ignoreServicePortNodePortProtocolField,
 	); diff != "" {
 		return fmt.Errorf("service diff (-got, +want): %s", diff)
 	}
