@@ -1269,6 +1269,12 @@ func createCRPWithApplyStrategy(crpName string, applyStrategy *placementv1beta1.
 		},
 		Spec: placementv1beta1.ClusterResourcePlacementSpec{
 			ResourceSelectors: workResourceSelector(),
+			Strategy: placementv1beta1.RolloutStrategy{
+				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+					UnavailablePeriodSeconds: ptr.To(2),
+				},
+			},
 		},
 	}
 	if applyStrategy != nil {

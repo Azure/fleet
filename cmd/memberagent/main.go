@@ -50,6 +50,7 @@ import (
 	"go.goms.io/fleet/pkg/propertyprovider/azure"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/httpclient"
+	"go.goms.io/fleet/pkg/utils/parallelizer"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -358,8 +359,11 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 			memberMgr.GetClient(),
 			restMapper,
 			hubMgr.GetEventRecorderFor("work_applier"),
+			// The number of concurrent reconcilations. This is set to 5 to boost performance in
+			// resource processing.
 			5,
-			4,
+			// Use the default worker count (4) for parallelized manifest processing.
+			parallelizer.DefaultNumOfWorkers,
 			time.Second*time.Duration(*availabilityCheckInterval),
 			time.Second*time.Duration(*driftDetectionInterval))
 

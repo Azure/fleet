@@ -53,34 +53,17 @@ var _ = Describe("take over existing resources", func() {
 			Expect(memberCluster1EastProdClient.Create(ctx, &ns)).To(Succeed())
 
 			cm := appConfigMap()
-			// Update the cinfigMap data (unmanaged field).
+			// Update the configMap data (unmanaged field).
 			cm.Data = map[string]string{
 				managedDataFieldKey: managedDataFieldVal1,
 			}
 			Expect(memberCluster1EastProdClient.Create(ctx, &cm)).To(Succeed())
 
-			crp := &placementv1beta1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName,
-					// Add a custom finalizer; this would allow us to better observe
-					// the behavior of the controllers.
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
-					ResourceSelectors: workResourceSelector(),
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-						ApplyStrategy: &placementv1beta1.ApplyStrategy{
-							ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
-							WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeAlways,
-						},
-					},
-				},
+			applyStrategy := &placementv1beta1.ApplyStrategy{
+				ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
+				WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeAlways,
 			}
-			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+			createCRPWithApplyStrategy(crpName, applyStrategy)
 		})
 
 		It("should update CRP status as expected", func() {
@@ -170,34 +153,17 @@ var _ = Describe("take over existing resources", func() {
 			Expect(memberCluster1EastProdClient.Create(ctx, &ns)).To(Succeed())
 
 			cm := appConfigMap()
-			// Update the cinfigMap data (unmanaged field).
+			// Update the configMap data (unmanaged field).
 			cm.Data = map[string]string{
 				managedDataFieldKey: managedDataFieldVal1,
 			}
 			Expect(memberCluster1EastProdClient.Create(ctx, &cm)).To(Succeed())
 
-			crp := &placementv1beta1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName,
-					// Add a custom finalizer; this would allow us to better observe
-					// the behavior of the controllers.
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
-					ResourceSelectors: workResourceSelector(),
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-						ApplyStrategy: &placementv1beta1.ApplyStrategy{
-							ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
-							WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeIfNoDiff,
-						},
-					},
-				},
+			applyStrategy := &placementv1beta1.ApplyStrategy{
+				ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
+				WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeIfNoDiff,
 			}
-			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+			createCRPWithApplyStrategy(crpName, applyStrategy)
 		})
 
 		It("should update CRP status as expected", func() {
@@ -271,7 +237,7 @@ var _ = Describe("take over existing resources", func() {
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
-		It("should take over existing resources w/n diff on clusters", func() {
+		It("should take over existing resources with no diff on clusters", func() {
 			expectedOwnerRef := buildOwnerReference(memberCluster1EastProd, crpName)
 
 			ns := &corev1.Namespace{}
@@ -296,7 +262,7 @@ var _ = Describe("take over existing resources", func() {
 			Expect(diff).To(BeEmpty(), "Namespace diff (-got +want):\n%s", diff)
 		})
 
-		It("should not take over existing resources w/ diff on clusters", func() {
+		It("should not take over existing resources with diff on clusters", func() {
 			cm := &corev1.ConfigMap{}
 			Expect(memberCluster1EastProdClient.Get(ctx, client.ObjectKey{Name: cmName, Namespace: nsName}, cm)).To(Succeed())
 
@@ -356,34 +322,17 @@ var _ = Describe("take over existing resources", func() {
 			Expect(memberCluster1EastProdClient.Create(ctx, &ns)).To(Succeed())
 
 			cm := appConfigMap()
-			// Update the cinfigMap data (unmanaged field).
+			// Update the configMap data (unmanaged field).
 			cm.Data = map[string]string{
 				managedDataFieldKey: managedDataFieldVal1,
 			}
 			Expect(memberCluster1EastProdClient.Create(ctx, &cm)).To(Succeed())
 
-			crp := &placementv1beta1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName,
-					// Add a custom finalizer; this would allow us to better observe
-					// the behavior of the controllers.
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
-					ResourceSelectors: workResourceSelector(),
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-						ApplyStrategy: &placementv1beta1.ApplyStrategy{
-							ComparisonOption: placementv1beta1.ComparisonOptionTypeFullComparison,
-							WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeIfNoDiff,
-						},
-					},
-				},
+			applyStrategy := &placementv1beta1.ApplyStrategy{
+				ComparisonOption: placementv1beta1.ComparisonOptionTypeFullComparison,
+				WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeIfNoDiff,
 			}
-			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+			createCRPWithApplyStrategy(crpName, applyStrategy)
 		})
 
 		It("should update CRP status as expected", func() {
@@ -484,7 +433,7 @@ var _ = Describe("take over existing resources", func() {
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
-		It("should not take over existing resources w/ diff on clusters", func() {
+		It("should not take over existing resources with diff on clusters", func() {
 			ns := &corev1.Namespace{}
 			Expect(memberCluster1EastProdClient.Get(ctx, client.ObjectKey{Name: nsName}, ns)).To(Succeed())
 
@@ -556,28 +505,11 @@ var _ = Describe("detect drifts on placed resources", func() {
 			// Create the resources on the hub cluster.
 			createWorkResources()
 
-			crp := &placementv1beta1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName,
-					// Add a custom finalizer; this would allow us to better observe
-					// the behavior of the controllers.
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
-					ResourceSelectors: workResourceSelector(),
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-						ApplyStrategy: &placementv1beta1.ApplyStrategy{
-							ComparisonOption: placementv1beta1.ComparisonOptionTypeFullComparison,
-							WhenToApply:      placementv1beta1.WhenToApplyTypeAlways,
-						},
-					},
-				},
+			applyStrategy := &placementv1beta1.ApplyStrategy{
+				ComparisonOption: placementv1beta1.ComparisonOptionTypeFullComparison,
+				WhenToApply:      placementv1beta1.WhenToApplyTypeAlways,
 			}
-			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+			createCRPWithApplyStrategy(crpName, applyStrategy)
 		})
 
 		It("should update CRP status as expected", func() {
@@ -709,28 +641,11 @@ var _ = Describe("detect drifts on placed resources", func() {
 			// Create the resources on the hub cluster.
 			createWorkResources()
 
-			crp := &placementv1beta1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName,
-					// Add a custom finalizer; this would allow us to better observe
-					// the behavior of the controllers.
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
-					ResourceSelectors: workResourceSelector(),
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-						ApplyStrategy: &placementv1beta1.ApplyStrategy{
-							ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
-							WhenToApply:      placementv1beta1.WhenToApplyTypeIfNotDrifted,
-						},
-					},
-				},
+			applyStrategy := &placementv1beta1.ApplyStrategy{
+				ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
+				WhenToApply:      placementv1beta1.WhenToApplyTypeIfNotDrifted,
 			}
-			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+			createCRPWithApplyStrategy(crpName, applyStrategy)
 		})
 
 		It("should update CRP status as expected", func() {
@@ -907,28 +822,11 @@ var _ = Describe("detect drifts on placed resources", func() {
 			// Create the resources on the hub cluster.
 			createWorkResources()
 
-			crp := &placementv1beta1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName,
-					// Add a custom finalizer; this would allow us to better observe
-					// the behavior of the controllers.
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
-					ResourceSelectors: workResourceSelector(),
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-						ApplyStrategy: &placementv1beta1.ApplyStrategy{
-							ComparisonOption: placementv1beta1.ComparisonOptionTypeFullComparison,
-							WhenToApply:      placementv1beta1.WhenToApplyTypeIfNotDrifted,
-						},
-					},
-				},
+			applyStrategy := &placementv1beta1.ApplyStrategy{
+				ComparisonOption: placementv1beta1.ComparisonOptionTypeFullComparison,
+				WhenToApply:      placementv1beta1.WhenToApplyTypeIfNotDrifted,
 			}
-			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+			createCRPWithApplyStrategy(crpName, applyStrategy)
 		})
 
 		It("should update CRP status as expected", func() {
@@ -1150,29 +1048,12 @@ var _ = Describe("report diff mode", func() {
 			}
 			Expect(memberCluster1EastProdClient.Create(ctx, &cm)).To(Succeed())
 
-			crp := &placementv1beta1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName,
-					// Add a custom finalizer; this would allow us to better observe
-					// the behavior of the controllers.
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
-					ResourceSelectors: workResourceSelector(),
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-						ApplyStrategy: &placementv1beta1.ApplyStrategy{
-							ComparisonOption: placementv1beta1.ComparisonOptionTypeFullComparison,
-							Type:             placementv1beta1.ApplyStrategyTypeReportDiff,
-							WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeNever,
-						},
-					},
-				},
+			applyStrategy := &placementv1beta1.ApplyStrategy{
+				ComparisonOption: placementv1beta1.ComparisonOptionTypeFullComparison,
+				Type:             placementv1beta1.ApplyStrategyTypeReportDiff,
+				WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeNever,
 			}
-			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+			createCRPWithApplyStrategy(crpName, applyStrategy)
 		})
 
 		It("should update CRP status as expected", func() {
