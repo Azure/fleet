@@ -13,6 +13,7 @@ import (
 	. "github.com/onsi/gomega"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -354,7 +355,206 @@ var _ = Describe("CRP with apply op failure (before upgrade)", Ordered, func() {
 	})
 })
 
-var _ = Describe("CRP stuck in the rollout process (blocked by availability failure)", Ordered, func() {})
+var _ = FDescribe("CRP stuck in the rollout process (blocked by availability failure)", Ordered, func() {
+	// The names specified must match with those in the corresponding node from the after upgrade
+	// test stage.
+	crpName := "crp-availability-failure-stuck"
+	workNamespaceName := "work-availability-failure-stuck"
+	svcName := "svc-availability-failure-stuck"
+
+	var originalSvc *corev1.Service
+	BeforeAll(func() {
+		// Create the resources.
+		ns := appNamespace(workNamespaceName, crpName)
+		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
+
+		// Use a Service of the ClusterIP type. KinD supports it and it will become available
+		// once an IP has been assigned.
+		//
+		// Fleet support a few other API types for availability checks (e.g., Deployment, DaemonSet.
+		// etc.); however, they cannot be used in this test spec as they might spawn derived
+		// resources (ReplicaSets, ClusterRevisions, etc.) and may cause ownership conflicts if
+		// placed.
+		originalSvc = &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      svcName,
+				Namespace: workNamespaceName,
+			},
+			Spec: corev1.ServiceSpec{
+				Type: corev1.ServiceTypeClusterIP,
+				Selector: map[string]string{
+					"app": "nginx",
+				},
+				Ports: []corev1.ServicePort{
+					{
+						Port:       80,
+						TargetPort: intstr.FromInt(80),
+					},
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, originalSvc.DeepCopy())).To(Succeed(), "Failed to create daement set")
+
+		// Create the CRP.
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				ResourceSelectors: workResourceSelector(workNamespaceName),
+				Policy: &placementv1beta1.PlacementPolicy{
+					PlacementType: placementv1beta1.PickAllPlacementType,
+				},
+				Strategy: placementv1beta1.RolloutStrategy{
+					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+						UnavailablePeriodSeconds: ptr.To(2),
+						MaxUnavailable:           ptr.To(intstr.FromInt(1)),
+					},
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+	})
+
+	It("should update CRP status as expected", func() {
+		wantResourceIdentifiers := []placementv1beta1.ResourceIdentifier{
+			{
+				Kind:    "Namespace",
+				Name:    workNamespaceName,
+				Version: "v1",
+			},
+			{
+				Kind:      "Service",
+				Name:      svcName,
+				Version:   "v1",
+				Namespace: workNamespaceName,
+			},
+		}
+		crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(
+			crpName,
+			wantResourceIdentifiers,
+			allMemberClusterNames,
+			[]string{},
+			"0",
+			true,
+		)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+	})
+
+	It("should place the resources on the member cluster", func() {
+		// Give the system a bit more breathing room when process resource placement.
+		Eventually(func() error {
+			if err := validateWorkNamespaceOnCluster(memberCluster1EastProd, types.NamespacedName{Name: workNamespaceName}); err != nil {
+				return err
+			}
+
+			return validateServiceOnCluster(memberCluster1EastProd, types.NamespacedName{Name: svcName, Namespace: workNamespaceName})
+		}, eventuallyDuration*2, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster1EastProd.ClusterName)
+	})
+
+	It("can update the service objects", func() {
+		// Update the service object.
+		svc := &corev1.Service{}
+		Expect(hubClient.Get(ctx, types.NamespacedName{Name: svcName, Namespace: workNamespaceName}, svc)).To(Succeed(), "Failed to get service %s", svcName)
+
+		// KinD does not support LoadBalancer typed Services; no LB can be provisioned and Fleet
+		// will consider the service to be of an unavailable state.
+		svc.Spec.Type = corev1.ServiceTypeLoadBalancer
+		Expect(hubClient.Update(ctx, svc)).To(Succeed(), "Failed to update service %s", svcName)
+	})
+
+	It("should update CRP status as expected (rollout blocked due to unavailable objects)", func() {
+		wantSelectedResourceIdentifiers := []placementv1beta1.ResourceIdentifier{
+			{
+				Kind:    "Namespace",
+				Name:    workNamespaceName,
+				Version: "v1",
+			},
+			{
+				Kind:      "Service",
+				Name:      svcName,
+				Version:   "v1",
+				Namespace: workNamespaceName,
+			},
+		}
+		failedWorkloadResourceIdentifier := placementv1beta1.ResourceIdentifier{
+			Kind:      "Service",
+			Name:      svcName,
+			Version:   "v1",
+			Namespace: workNamespaceName,
+		}
+		crpStatusUpdatedActual := crpWithStuckRolloutDueToOneFailedAvailabilityCheckStatusUpdatedActual(
+			crpName,
+			wantSelectedResourceIdentifiers,
+			failedWorkloadResourceIdentifier, 0,
+			allMemberClusterNames,
+			"1",
+		)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+	})
+
+	It("should update objects and leave objects alone on respective clusters", func() {
+		// Retrieve the CRP for its status.
+		crp := &placementv1beta1.ClusterResourcePlacement{}
+		Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp)).To(Succeed(), "Failed to get CRP")
+
+		// Find the clusters that have the updated Service object and those that do not.
+		clustersWithUpdatedService := map[string]struct{}{}
+		clustersWithOldService := map[string]struct{}{}
+		for idx := range crp.Status.PlacementStatuses {
+			rps := crp.Status.PlacementStatuses[idx]
+			availableCond := meta.FindStatusCondition(rps.Conditions, string(placementv1beta1.ResourcesAvailableConditionType))
+			switch {
+			case availableCond == nil:
+				clustersWithOldService[rps.ClusterName] = struct{}{}
+			case availableCond.Status == metav1.ConditionFalse:
+				clustersWithUpdatedService[rps.ClusterName] = struct{}{}
+			default:
+				Fail(fmt.Sprintf("Found an unexpected availability reporting \n(%v)", rps))
+			}
+		}
+
+		// Validate things on the clusters with updated resources.
+		Eventually(func() error {
+			for idx := range allMemberClusters {
+				memberCluster := allMemberClusters[idx]
+				if _, ok := clustersWithUpdatedService[memberCluster.ClusterName]; ok {
+					// No need to validate the NS as it is unchanged.
+					if err := validateServiceOnCluster(memberCluster, types.NamespacedName{Name: svcName, Namespace: workNamespaceName}); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}, eventuallyDuration*2, eventuallyInterval).Should(Succeed(), "Failed to update objects on clusters")
+
+		// Validate things on the clusters with old resources.
+		Eventually(func() error {
+			for idx := range allMemberClusters {
+				memberCluster := allMemberClusters[idx]
+				if _, ok := clustersWithOldService[memberCluster.ClusterName]; ok {
+					svc := &corev1.Service{}
+					if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: svcName, Namespace: workNamespaceName}, svc); err != nil {
+						return fmt.Errorf("failed to retrieve svc on cluster %s: %w", memberCluster.ClusterName, err)
+					}
+
+					if diff := cmp.Diff(
+						svc, originalSvc,
+						ignoreObjectMetaAutoGeneratedFields,
+						ignoreObjectMetaAnnotationField,
+						ignoreServiceStatusField,
+						ignoreServiceSpecClusterIPField,
+						ignoreServicePortNodePortField,
+					); diff != "" {
+						return fmt.Errorf("service diff (-got, +want): %s", diff)
+					}
+				}
+			}
+			return nil
+		}, eventuallyDuration*2, eventuallyInterval).Should(Succeed(), "Failed to leave objects alone on clusters")
+	})
+})
 
 var _ = Describe("CRP stuck in the rollout process (blocked by apply op failure)", Ordered, func() {})
 

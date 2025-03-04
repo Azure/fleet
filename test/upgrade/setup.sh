@@ -40,14 +40,27 @@ if [ -z "${GIT_TAG}" ]; then
     GIT_TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
     git checkout $GIT_TAG
     echo "Checked out source code at $GIT_TAG."
+
+    echo "Switch back to the root directory to avoid consistency issues."
+    cd ../..
 fi
 
 # Build the Fleet agent images.
 echo "Building and the Fleet agent images..."
 
-TAG=$IMAGE_TAG make -C "../.." docker-build-hub-agent
-TAG=$IMAGE_TAG make -C "../.." docker-build-member-agent
-TAG=$IMAGE_TAG make -C "../.." docker-build-refresh-token
+TAG=$IMAGE_TAG make docker-build-hub-agent
+TAG=$IMAGE_TAG make docker-build-member-agent
+TAG=$IMAGE_TAG make docker-build-refresh-token
+
+# Restore to the previous branch. This must be done immediately after the image building to avoid
+# consistency issues.
+if [ -n "$PREVIOUS_COMMIT" ]; then
+    git checkout $PREVIOUS_COMMIT
+    echo "Checked out source code at $PREVIOUS_COMMIT."
+fi
+
+echo "Switch back to the test/upgrade directory to avoid consistency issues."
+cd test/upgrade
 
 # Create the kind clusters.
 echo "Creating the kind clusters..."
@@ -141,9 +154,3 @@ do
         --set enableV1Alpha1APIs=false \
         --set enableV1Beta1APIs=true
 done
-
-# Restore to the previous branch.
-if [ -n "$PREVIOUS_COMMIT" ]; then
-    git checkout $PREVIOUS_COMMIT
-    echo "Checked out source code at $PREVIOUS_COMMIT."
-fi
