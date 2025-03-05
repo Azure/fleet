@@ -663,7 +663,7 @@ func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.Conditioned
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
+func (r *Reconciler) SetupWithManager(mgr runtime.Manager, name string) error {
 	r.recorder = mgr.GetEventRecorderFor("mcv1beta1")
 	r.agents = make(map[clusterv1beta1.AgentType]bool)
 	r.agents[clusterv1beta1.MemberAgent] = true
@@ -673,8 +673,8 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 		r.agents[clusterv1beta1.ServiceExportImportAgent] = true
 	}
 
-	return runtime.NewControllerManagedBy(mgr).Named("membercluster-controller").
-		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles, SkipNameValidation: ptr.To(true)}). // set the max number of concurrent reconciles
+	return runtime.NewControllerManagedBy(mgr).Named(name).
+		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}). // set the max number of concurrent reconciles
 		For(&clusterv1beta1.MemberCluster{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&clusterv1beta1.InternalMemberCluster{}).
 		Complete(r)

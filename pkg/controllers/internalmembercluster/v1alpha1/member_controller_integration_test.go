@@ -61,7 +61,7 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 		workController := workv1alpha1.NewApplyWorkReconciler(
 			k8sClient, nil, k8sClient, nil, nil, 5, memberClusterNamespace)
 		r = NewReconciler(k8sClient, k8sClient, workController)
-		err := r.SetupWithManager(mgr)
+		err := r.SetupWithManager(mgr, memberClusterName+"-controller")
 		Expect(err).ToNot(HaveOccurred())
 	})
 

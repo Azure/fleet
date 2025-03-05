@@ -18,11 +18,9 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	ctrlruntime "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -331,10 +329,9 @@ func (r *Reconciler) markInternalMemberClusterLeaveFailed(imc fleetv1alpha1.Cond
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *Reconciler) SetupWithManager(mgr ctrl.Manager, name string) error {
 	r.recorder = mgr.GetEventRecorderFor("v1alpha1InternalMemberClusterController")
-	return ctrl.NewControllerManagedBy(mgr).Named("internalmemberclusterv1alpha1-controller").
-		WithOptions(ctrlruntime.Options{SkipNameValidation: ptr.To(true)}).
+	return ctrl.NewControllerManagedBy(mgr).Named(name).
 		For(&fleetv1alpha1.InternalMemberCluster{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Complete(r)
 }

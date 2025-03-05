@@ -176,7 +176,7 @@ func NewController(Name string, KeyFunc KeyFunc, ReconcileFunc ReconcileFunc, ra
 		name:          Name,
 		keyFunc:       KeyFunc,
 		reconcileFunc: ReconcileFunc,
-		queue:         workqueue.NewTypedRateLimitingQueue[any](rateLimiter),
+		queue:         workqueue.NewTypedRateLimitingQueueWithConfig[any](rateLimiter, workqueue.TypedRateLimitingQueueConfig[any]{Name: Name}),
 	}
 }
 
