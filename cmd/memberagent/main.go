@@ -339,7 +339,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		}
 
 		klog.Info("Setting up the internalMemberCluster v1alpha1 controller")
-		if err = imcv1alpha1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
+		if err = imcv1alpha1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr, "internalmemberclusterv1alpha1-controller"); err != nil {
 			klog.ErrorS(err, "Failed to create v1alpha1 controller", "controller", "internalMemberCluster")
 			return fmt.Errorf("unable to create internalMemberCluster v1alpha1 controller: %w", err)
 		}
@@ -401,7 +401,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 			klog.ErrorS(err, "Failed to create InternalMemberCluster v1beta1 reconciler")
 			return fmt.Errorf("failed to create InternalMemberCluster v1beta1 reconciler: %w", err)
 		}
-		if err := imcReconciler.SetupWithManager(hubMgr); err != nil {
+		if err := imcReconciler.SetupWithManager(hubMgr, "internalmembercluster-controller"); err != nil {
 			klog.ErrorS(err, "Failed to set up InternalMemberCluster v1beta1 controller with the controller manager")
 			return fmt.Errorf("failed to set up InternalMemberCluster v1beta1 controller with the controller manager: %w", err)
 		}

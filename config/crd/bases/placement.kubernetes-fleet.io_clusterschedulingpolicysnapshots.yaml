@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.15.0
+    controller-gen.kubebuilder.io/version: v0.16.0
   name: clusterschedulingpolicysnapshots.placement.kubernetes-fleet.io
 spec:
   group: placement.kubernetes-fleet.io
@@ -94,7 +94,6 @@ spec:
                                         LabelSelector is a label query over all the joined member clusters. Clusters matching
                                         the query are selected.
 
-
                                         If you specify both label and property selectors in the same term, the results are AND'd.
                                       properties:
                                         matchExpressions:
@@ -146,13 +145,10 @@ spec:
                                         PropertySelector is a property query over all joined member clusters. Clusters matching
                                         the query are selected.
 
-
                                         If you specify both label and property selectors in the same term, the results are AND'd.
-
 
                                         At this moment, PropertySelector can only be used with
                                         `RequiredDuringSchedulingIgnoredDuringExecution` affinity terms.
-
 
                                         This field is beta-level; it is for the property-based scheduling feature and is only
                                         functional when a property provider is enabled in the deployment.
@@ -182,10 +178,8 @@ spec:
                                                   the observed values of individual member clusters in accordance with the given
                                                   operator.
 
-
                                                   At this moment, each value should be a Kubernetes quantity. For more information, see
                                                   https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
-
 
                                                   If the operator is Gt (greater than), Ge (greater than or equal to), Lt (less than),
                                                   or `Le` (less than or equal to), Eq (equal to), or Ne (ne), exactly one value must be
@@ -208,10 +202,8 @@ spec:
                                         PropertySorter sorts all matching clusters by a specific property and assigns different weights
                                         to each cluster based on their observed property values.
 
-
                                         At this moment, PropertySorter can only be used with
                                         `PreferredDuringSchedulingIgnoredDuringExecution` affinity terms.
-
 
                                         This field is beta-level; it is for the property-based scheduling feature and is only
                                         functional when a property provider is enabled in the deployment.
@@ -261,7 +253,6 @@ spec:
                                         LabelSelector is a label query over all the joined member clusters. Clusters matching
                                         the query are selected.
 
-
                                         If you specify both label and property selectors in the same term, the results are AND'd.
                                       properties:
                                         matchExpressions:
@@ -313,13 +304,10 @@ spec:
                                         PropertySelector is a property query over all joined member clusters. Clusters matching
                                         the query are selected.
 
-
                                         If you specify both label and property selectors in the same term, the results are AND'd.
-
 
                                         At this moment, PropertySelector can only be used with
                                         `RequiredDuringSchedulingIgnoredDuringExecution` affinity terms.
-
 
                                         This field is beta-level; it is for the property-based scheduling feature and is only
                                         functional when a property provider is enabled in the deployment.
@@ -349,10 +337,8 @@ spec:
                                                   the observed values of individual member clusters in accordance with the given
                                                   operator.
 
-
                                                   At this moment, each value should be a Kubernetes quantity. For more information, see
                                                   https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
-
 
                                                   If the operator is Gt (greater than), Ge (greater than or equal to), Lt (less than),
                                                   or `Le` (less than or equal to), Eq (equal to), or Ne (ne), exactly one value must be
@@ -375,10 +361,8 @@ spec:
                                         PropertySorter sorts all matching clusters by a specific property and assigns different weights
                                         to each cluster based on their observed property values.
 
-
                                         At this moment, PropertySorter can only be used with
                                         `PreferredDuringSchedulingIgnoredDuringExecution` affinity terms.
-
 
                                         This field is beta-level; it is for the property-based scheduling feature and is only
                                         functional when a property provider is enabled in the deployment.
@@ -431,7 +415,6 @@ spec:
                     description: |-
                       If specified, the ClusterResourcePlacement's Tolerations.
                       Tolerations cannot be updated or deleted.
-
 
                       This field is beta-level and is for the taints and tolerations feature.
                     items:
@@ -529,16 +512,8 @@ spec:
                 description: Conditions is an array of current observed conditions
                   for SchedulingPolicySnapshot.
                 items:
-                  description: "Condition contains details for one aspect of the current
-                    state of this API Resource.\n---\nThis struct is intended for
-                    direct use as an array at the field path .status.conditions.  For
-                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
-                    observations of a foo's current state.\n\t    // Known .status.conditions.type
-                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
-                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
-                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                    \   // other fields\n\t}"
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
                   properties:
                     lastTransitionTime:
                       description: |-
@@ -579,12 +554,7 @@ spec:
                       - Unknown
                       type: string
                     type:
-                      description: |-
-                        type of condition in CamelCase or in foo.example.com/CamelCase.
-                        ---
-                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                        useful (see .node.status.conditions), the ability to deconflict is important.
-                        The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
                       maxLength: 316
                       pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                       type: string
@@ -740,7 +710,6 @@ spec:
                                         LabelSelector is a label query over all the joined member clusters. Clusters matching
                                         the query are selected.
 
-
                                         If you specify both label and property selectors in the same term, the results are AND'd.
                                       properties:
                                         matchExpressions:
@@ -792,13 +761,10 @@ spec:
                                         PropertySelector is a property query over all joined member clusters. Clusters matching
                                         the query are selected.
 
-
                                         If you specify both label and property selectors in the same term, the results are AND'd.
-
 
                                         At this moment, PropertySelector can only be used with
                                         `RequiredDuringSchedulingIgnoredDuringExecution` affinity terms.
-
 
                                         This field is beta-level; it is for the property-based scheduling feature and is only
                                         functional when a property provider is enabled in the deployment.
@@ -828,10 +794,8 @@ spec:
                                                   the observed values of individual member clusters in accordance with the given
                                                   operator.
 
-
                                                   At this moment, each value should be a Kubernetes quantity. For more information, see
                                                   https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
-
 
                                                   If the operator is Gt (greater than), Ge (greater than or equal to), Lt (less than),
                                                   or `Le` (less than or equal to), Eq (equal to), or Ne (ne), exactly one value must be
@@ -854,10 +818,8 @@ spec:
                                         PropertySorter sorts all matching clusters by a specific property and assigns different weights
                                         to each cluster based on their observed property values.
 
-
                                         At this moment, PropertySorter can only be used with
                                         `PreferredDuringSchedulingIgnoredDuringExecution` affinity terms.
-
 
                                         This field is beta-level; it is for the property-based scheduling feature and is only
                                         functional when a property provider is enabled in the deployment.
@@ -907,7 +869,6 @@ spec:
                                         LabelSelector is a label query over all the joined member clusters. Clusters matching
                                         the query are selected.
 
-
                                         If you specify both label and property selectors in the same term, the results are AND'd.
                                       properties:
                                         matchExpressions:
@@ -959,13 +920,10 @@ spec:
                                         PropertySelector is a property query over all joined member clusters. Clusters matching
                                         the query are selected.
 
-
                                         If you specify both label and property selectors in the same term, the results are AND'd.
-
 
                                         At this moment, PropertySelector can only be used with
                                         `RequiredDuringSchedulingIgnoredDuringExecution` affinity terms.
-
 
                                         This field is beta-level; it is for the property-based scheduling feature and is only
                                         functional when a property provider is enabled in the deployment.
@@ -995,10 +953,8 @@ spec:
                                                   the observed values of individual member clusters in accordance with the given
                                                   operator.
 
-
                                                   At this moment, each value should be a Kubernetes quantity. For more information, see
                                                   https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
-
 
                                                   If the operator is Gt (greater than), Ge (greater than or equal to), Lt (less than),
                                                   or `Le` (less than or equal to), Eq (equal to), or Ne (ne), exactly one value must be
@@ -1021,10 +977,8 @@ spec:
                                         PropertySorter sorts all matching clusters by a specific property and assigns different weights
                                         to each cluster based on their observed property values.
 
-
                                         At this moment, PropertySorter can only be used with
                                         `PreferredDuringSchedulingIgnoredDuringExecution` affinity terms.
-
 
                                         This field is beta-level; it is for the property-based scheduling feature and is only
                                         functional when a property provider is enabled in the deployment.
@@ -1077,7 +1031,6 @@ spec:
                     description: |-
                       If specified, the ClusterResourcePlacement's Tolerations.
                       Tolerations cannot be updated or deleted.
-
 
                       This field is beta-level and is for the taints and tolerations feature.
                     items:
@@ -1175,16 +1128,8 @@ spec:
                 description: Conditions is an array of current observed conditions
                   for SchedulingPolicySnapshot.
                 items:
-                  description: "Condition contains details for one aspect of the current
-                    state of this API Resource.\n---\nThis struct is intended for
-                    direct use as an array at the field path .status.conditions.  For
-                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
-                    observations of a foo's current state.\n\t    // Known .status.conditions.type
-                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
-                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
-                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                    \   // other fields\n\t}"
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
                   properties:
                     lastTransitionTime:
                       description: |-
@@ -1225,12 +1170,7 @@ spec:
                       - Unknown
                       type: string
                     type:
-                      description: |-
-                        type of condition in CamelCase or in foo.example.com/CamelCase.
-                        ---
-                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                        useful (see .node.status.conditions), the ability to deconflict is important.
-                        The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
                       maxLength: 316
                       pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                       type: string

@@ -268,7 +268,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		},
 	}
 
-	return ctrl.NewControllerManagedBy(mgr).
+	return ctrl.NewControllerManagedBy(mgr).Named("membercluster-scheduler-watcher").
 		For(&clusterv1beta1.MemberCluster{}).
 		WithEventFilter(customPredicate).
 		Complete(r)

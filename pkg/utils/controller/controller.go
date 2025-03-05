@@ -166,17 +166,17 @@ type controller struct {
 	reconcileFunc ReconcileFunc
 
 	// queue allowing parallel processing of resources.
-	queue workqueue.RateLimitingInterface
+	queue workqueue.TypedRateLimitingInterface[any]
 }
 
 // NewController returns a controller which can process resource periodically. We create the queue during the creation
 // of the controller which means it can only be run once. We can move that to the run if we need to run it multiple times
-func NewController(Name string, KeyFunc KeyFunc, ReconcileFunc ReconcileFunc, rateLimiter workqueue.RateLimiter) Controller {
+func NewController(Name string, KeyFunc KeyFunc, ReconcileFunc ReconcileFunc, rateLimiter workqueue.TypedRateLimiter[any]) Controller {
 	return &controller{
 		name:          Name,
 		keyFunc:       KeyFunc,
 		reconcileFunc: ReconcileFunc,
-		queue:         workqueue.NewNamedRateLimitingQueue(rateLimiter, Name),
+		queue:         workqueue.NewTypedRateLimitingQueueWithConfig[any](rateLimiter, workqueue.TypedRateLimitingQueueConfig[any]{Name: Name}),
 	}
 }
 

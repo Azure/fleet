@@ -59,7 +59,7 @@ type ClusterResourcePlacementSchedulingQueue interface {
 // In the future, when more features, e.g., inter-placement affinity/anti-affinity, are added,
 // more queues, such as a backoff queue, might become necessary.
 type simpleClusterResourcePlacementSchedulingQueue struct {
-	active workqueue.RateLimitingInterface
+	active workqueue.TypedRateLimitingInterface[any]
 }
 
 // Verify that simpleClusterResourcePlacementSchedulingQueue implements
@@ -69,7 +69,7 @@ var _ ClusterResourcePlacementSchedulingQueue = &simpleClusterResourcePlacementS
 // simpleClusterResourcePlacementSchedulingQueueOptions are the options for the
 // simpleClusterResourcePlacementSchedulingQueue.
 type simpleClusterResourcePlacementSchedulingQueueOptions struct {
-	rateLimiter workqueue.RateLimiter
+	rateLimiter workqueue.TypedRateLimiter[any]
 	name        string
 }
 
@@ -77,12 +77,12 @@ type simpleClusterResourcePlacementSchedulingQueueOptions struct {
 type Option func(*simpleClusterResourcePlacementSchedulingQueueOptions)
 
 var defaultSimpleClusterResourcePlacementSchedulingQueueOptions = simpleClusterResourcePlacementSchedulingQueueOptions{
-	rateLimiter: workqueue.DefaultControllerRateLimiter(),
+	rateLimiter: workqueue.DefaultTypedControllerRateLimiter[any](),
 	name:        "clusterResourcePlacementSchedulingQueue",
 }
 
 // WithRateLimiter sets a rate limiter for the workqueue.
-func WithRateLimiter(rateLimiter workqueue.RateLimiter) Option {
+func WithRateLimiter(rateLimiter workqueue.TypedRateLimiter[any]) Option {
 	return func(o *simpleClusterResourcePlacementSchedulingQueueOptions) {
 		o.rateLimiter = rateLimiter
 	}
@@ -166,7 +166,7 @@ func NewSimpleClusterResourcePlacementSchedulingQueue(opts ...Option) ClusterRes
 	}
 
 	return &simpleClusterResourcePlacementSchedulingQueue{
-		active: workqueue.NewRateLimitingQueueWithConfig(options.rateLimiter, workqueue.RateLimitingQueueConfig{
+		active: workqueue.NewTypedRateLimitingQueueWithConfig(options.rateLimiter, workqueue.TypedRateLimitingQueueConfig[any]{
 			Name: options.name,
 		}),
 	}

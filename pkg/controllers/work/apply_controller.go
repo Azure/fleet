@@ -683,7 +683,7 @@ func (r *ApplyWorkReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			SpokeDynamicClient: r.spokeDynamicClient,
 		},
 	}
-	return ctrl.NewControllerManagedBy(mgr).
+	return ctrl.NewControllerManagedBy(mgr).Named("work-controller").
 		WithOptions(ctrloption.Options{
 			MaxConcurrentReconciles: r.concurrency,
 		}).

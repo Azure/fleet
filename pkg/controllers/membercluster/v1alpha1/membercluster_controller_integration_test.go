@@ -53,7 +53,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			r = &Reconciler{
 				Client: k8sClient,
 			}
-			err := r.SetupWithManager(mgr)
+			err := r.SetupWithManager(mgr, memberClusterName+"-controller")
 			Expect(err).Should(Succeed())
 
 			By("create member cluster for join")
@@ -236,7 +236,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				Client:                  k8sClient,
 				NetworkingAgentsEnabled: true,
 			}
-			err := r.SetupWithManager(mgr)
+			err := r.SetupWithManager(mgr, memberClusterName+"-controller")
 			Expect(err).Should(Succeed())
 
 			By("create member cluster for join")

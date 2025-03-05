@@ -126,7 +126,7 @@ func main() {
 		if err = (&mcv1alpha1.Reconciler{
 			Client:                  mgr.GetClient(),
 			NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
-		}).SetupWithManager(mgr); err != nil {
+		}).SetupWithManager(mgr, "memberclusterv1alpha1-controller"); err != nil {
 			klog.ErrorS(err, "unable to create v1alpha1 controller", "controller", "MemberCluster")
 			exitWithErrorFunc()
 		}
@@ -138,7 +138,7 @@ func main() {
 			NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
 			MaxConcurrentReconciles: int(math.Ceil(float64(opts.MaxFleetSizeSupported) / 100)), //one member cluster reconciler routine per 100 member clusters
 			ForceDeleteWaitTime:     opts.ForceDeleteWaitTime.Duration,
-		}).SetupWithManager(mgr); err != nil {
+		}).SetupWithManager(mgr, "membercluster-controller"); err != nil {
 			klog.ErrorS(err, "unable to create v1beta1 controller", "controller", "MemberCluster")
 			exitWithErrorFunc()
 		}
