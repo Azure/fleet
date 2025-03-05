@@ -54,7 +54,7 @@ jobs:
           go install github.com/onsi/ginkgo/v2/ginkgo@v2.19.1
 
       - name: Prepare the fleet
-        run: cd test/upgrade && GIT_TAG=${{ github.event.inputs.beforeTagOrCommit }}" chmod +x setup.sh && ./setup.sh 3 && cd -
+        run: cd test/upgrade && GIT_TAG="${{ github.event.inputs.beforeTagOrCommit }}" chmod +x setup.sh && ./setup.sh 3 && cd -
         env:
           KUBECONFIG: '/home/runner/.kube/config'
           HUB_SERVER_URL: 'https://172.19.0.2:6443'
@@ -65,7 +65,7 @@ jobs:
           KUBECONFIG: '/home/runner/.kube/config'
     
       - name: Upgrade the Fleet hub agent
-        run: cd test/upgrade && GIT_TAG=${{ github.event.inputs.afterTagOrCommit }}" chmod +x upgrade.sh && UPGRADE_HUB_SIDE=true ./upgrade.sh 3 && cd -
+        run: cd test/upgrade && GIT_TAG="${{ github.event.inputs.afterTagOrCommit }}" chmod +x upgrade.sh && UPGRADE_HUB_SIDE=true ./upgrade.sh 3 && cd -
         env:
           KUBECONFIG: '/home/runner/.kube/config'
     
@@ -92,7 +92,7 @@ jobs:
           go install github.com/onsi/ginkgo/v2/ginkgo@v2.19.1
 
       - name: Prepare the fleet
-        run: cd test/upgrade && GIT_TAG=${{ github.event.inputs.beforeTagOrCommit }}" chmod +x setup.sh && ./setup.sh 3 && cd -
+        run: cd test/upgrade && GIT_TAG="${{ github.event.inputs.beforeTagOrCommit }}" chmod +x setup.sh && ./setup.sh 3 && cd -
         env:
           KUBECONFIG: '/home/runner/.kube/config'
           HUB_SERVER_URL: 'https://172.19.0.2:6443'
@@ -103,7 +103,7 @@ jobs:
           KUBECONFIG: '/home/runner/.kube/config'
     
       - name: Upgrade the Fleet member agent
-        run: cd test/upgrade && GIT_TAG=${{ github.event.inputs.afterTagOrCommit }}" chmod +x upgrade.sh && UPGRADE_MEMBER_SIDE=true ./upgrade.sh 3 && cd -
+        run: cd test/upgrade && GIT_TAG="${{ github.event.inputs.afterTagOrCommit }}" chmod +x upgrade.sh && UPGRADE_MEMBER_SIDE=true ./upgrade.sh 3 && cd -
         env:
           KUBECONFIG: '/home/runner/.kube/config'
     
@@ -130,7 +130,7 @@ jobs:
           go install github.com/onsi/ginkgo/v2/ginkgo@v2.19.1
 
       - name: Prepare the fleet
-        run: cd test/upgrade && GIT_TAG=${{ github.event.inputs.beforeTagOrCommit }}" chmod +x setup.sh && ./setup.sh 3 && cd -
+        run: cd test/upgrade && GIT_TAG="${{ github.event.inputs.beforeTagOrCommit }}" chmod +x setup.sh && ./setup.sh 3 && cd -
         env:
           KUBECONFIG: '/home/runner/.kube/config'
           HUB_SERVER_URL: 'https://172.19.0.2:6443'
@@ -141,7 +141,7 @@ jobs:
           KUBECONFIG: '/home/runner/.kube/config'
     
       - name: Upgrade all Fleet agents
-        run: cd test/upgrade && GIT_TAG=${{ github.event.inputs.afterTagOrCommit }}" chmod +x upgrade.sh && UPGRADE_HUB_SIDE=true UPGRADE_MEMBER_SIDE=true ./upgrade.sh 3 && cd -
+        run: cd test/upgrade && GIT_TAG="${{ github.event.inputs.afterTagOrCommit }}" chmod +x upgrade.sh && UPGRADE_HUB_SIDE=true UPGRADE_MEMBER_SIDE=true ./upgrade.sh 3 && cd -
         env:
           KUBECONFIG: '/home/runner/.kube/config'
     
