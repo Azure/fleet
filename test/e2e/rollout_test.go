@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appv1 "k8s.io/api/apps/v1"
@@ -26,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
 	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -124,13 +127,13 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 							{
 								Type:               placementv1beta1.WorkConditionTypeApplied,
 								Status:             metav1.ConditionTrue,
-								Reason:             "WorkAppliedCompleted",
+								Reason:             workapplier.WorkAllManifestsAppliedReason,
 								ObservedGeneration: 1,
 							},
 							{
 								Type:               placementv1beta1.WorkConditionTypeAvailable,
 								Status:             metav1.ConditionTrue,
-								Reason:             "WorkAvailable",
+								Reason:             workapplier.WorkAllManifestsAvailableReason,
 								ObservedGeneration: 1,
 							},
 						}
@@ -716,6 +719,9 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		var wantSelectedResources []placementv1beta1.ResourceIdentifier
 		var testCustomResource testv1alpha1.TestResource
 		var crp *placementv1beta1.ClusterResourcePlacement
+
+		var observedResourceIdx string
+
 		unAvailablePeriodSeconds := 30
 		BeforeAll(func() {
 			// Create the test resources.
@@ -768,7 +774,25 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, []string{memberCluster1EastProdName}, nil, "0", false)
+			// Wait until all the expected resources have been selected.
+			//
+			// This is to address a flakiness situation where it might take a while for Fleet
+			// to recognize the custom resource (even if it is created before the CRP).
+			Eventually(func() error {
+				crp := &placementv1beta1.ClusterResourcePlacement{}
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+					return fmt.Errorf("failed to get CRP: %w", err)
+				}
+
+				if diff := cmp.Diff(crp.Status.SelectedResources, wantSelectedResources, cmpopts.SortSlices(utils.LessFuncResourceIdentifier)); diff != "" {
+					return fmt.Errorf("selected resources mismatched (-got, +want): %s", diff)
+				}
+				// Use the fresh observed resource index to verify the CRP status later.
+				observedResourceIdx = crp.Status.ObservedResourceIndex
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to select all the expected resources")
+
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, []string{memberCluster1EastProdName}, nil, observedResourceIdx, false)
 			Eventually(crpStatusUpdatedActual, 2*time.Duration(unAvailablePeriodSeconds)*time.Second, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -807,7 +831,24 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, []string{memberCluster1EastProdName}, nil, "1", false)
+			// Refresh the observed resource index.
+			Eventually(func() error {
+				crp := &placementv1beta1.ClusterResourcePlacement{}
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+					return fmt.Errorf("failed to get CRP: %w", err)
+				}
+
+				if crp.Status.ObservedResourceIndex == observedResourceIdx {
+					// It is expected that the observed resource index has been bumped by 1
+					// due to the resource change.
+					return fmt.Errorf("observed resource index is not updated")
+				}
+				// Use the fresh observed resource index to verify the CRP status later.
+				observedResourceIdx = crp.Status.ObservedResourceIndex
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to select all the expected resources")
+
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, []string{memberCluster1EastProdName}, nil, observedResourceIdx, false)
 			Eventually(crpStatusUpdatedActual, 4*time.Duration(unAvailablePeriodSeconds)*time.Second, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 

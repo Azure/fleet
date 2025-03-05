@@ -30,7 +30,7 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	bindingutils "go.goms.io/fleet/pkg/utils/binding"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -626,7 +626,10 @@ func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOf
 	// find the latest applied condition that has the same generation as the binding
 	availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
 	if condition.IsConditionStatusTrue(availableCondition, binding.GetGeneration()) {
-		if availableCondition.Reason != work.WorkNotTrackableReason {
+		// TO-DO (chenyu1): currently it checks for both the new and the old reason
+		// (as set previously by the work generator) to avoid compatibility issues.
+		// the check for the old reason can be removed once the rollout completes successfully.
+		if availableCondition.Reason != condition.WorkNotAvailabilityTrackableReason && availableCondition.Reason != workapplier.WorkNotAllManifestsTrackableReason {
 			return 0, true
 		}
 
@@ -1035,7 +1038,7 @@ func (r *Reconciler) processApplyStrategyUpdates(
 		// Verify if the binding has the latest apply strategy set.
 		if equality.Semantic.DeepEqual(binding.Spec.ApplyStrategy, applyStrategy) {
 			// The binding already has the latest apply strategy set; no need to push the update.
-			klog.V(3).InfoS("The binding already has the latest apply strategy; skip the apply strategy update", "clusterResourceBinding", klog.KObj(binding))
+			klog.V(2).InfoS("The binding already has the latest apply strategy; skip the apply strategy update", "clusterResourceBinding", klog.KObj(binding), "bindingGeneration", binding.Generation)
 			continue
 		}
 
@@ -1052,7 +1055,7 @@ func (r *Reconciler) processApplyStrategyUpdates(
 				klog.ErrorS(err, "Failed to update binding with new apply strategy", "clusterResourceBinding", klog.KObj(binding))
 				return controller.NewAPIServerError(false, err)
 			}
-			klog.V(2).InfoS("Updated binding with new apply strategy", "clusterResourceBinding", klog.KObj(binding))
+			klog.V(2).InfoS("Updated binding with new apply strategy", "clusterResourceBinding", klog.KObj(binding), "beforeUpdateBindingGeneration", binding.Generation, "afterUpdateBindingGeneration", updatedBinding.Generation)
 			return nil
 		})
 	}

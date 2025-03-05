@@ -26,7 +26,7 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
@@ -668,7 +668,7 @@ func TestIsBindingReady(t *testing.T) {
 							LastTransitionTime: metav1.Time{
 								Time: now.Add(-time.Millisecond),
 							},
-							Reason: work.WorkNotTrackableReason,
+							Reason: condition.WorkNotAvailabilityTrackableReason,
 						},
 					},
 				},
@@ -691,7 +691,30 @@ func TestIsBindingReady(t *testing.T) {
 							LastTransitionTime: metav1.Time{
 								Time: now.Add(time.Millisecond),
 							},
-							Reason: work.WorkNotTrackableReason,
+							Reason: condition.WorkNotAvailabilityTrackableReason,
+						},
+					},
+				},
+			},
+			readyTimeCutOff: now,
+			wantReady:       false,
+			wantWaitTime:    time.Millisecond,
+		},
+		"binding available (not trackable with old reason) after the ready time cut off should return not ready with a wait time": {
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 10,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingAvailable),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 10,
+							LastTransitionTime: metav1.Time{
+								Time: now.Add(time.Millisecond),
+							},
+							Reason: workapplier.WorkNotAllManifestsTrackableReason,
 						},
 					},
 				},
@@ -804,7 +827,7 @@ func TestIsBindingReady(t *testing.T) {
 							Type:               string(fleetv1beta1.ResourceBindingAvailable),
 							Status:             metav1.ConditionTrue,
 							LastTransitionTime: metav1.NewTime(now.Add(-5 * time.Second)),
-							Reason:             work.WorkAvailableReason,
+							Reason:             workapplier.WorkAllManifestsAvailableReason,
 							ObservedGeneration: 10,
 						},
 						{
@@ -2275,7 +2298,7 @@ func generateReadyClusterResourceBinding(state fleetv1beta1.BindingState, resour
 		{
 			Type:   string(fleetv1beta1.ResourceBindingAvailable),
 			Status: metav1.ConditionTrue,
-			Reason: work.WorkAvailableReason, // Make it ready
+			Reason: workapplier.WorkAllManifestsAvailableReason, // Make it ready
 		},
 	}
 	return binding
@@ -2292,7 +2315,7 @@ func generateNotTrackableClusterResourceBinding(state fleetv1beta1.BindingState,
 			Type:               string(fleetv1beta1.ResourceBindingAvailable),
 			Status:             metav1.ConditionTrue,
 			LastTransitionTime: lastTransitionTime,
-			Reason:             work.WorkNotTrackableReason, // Make it not ready
+			Reason:             condition.WorkNotAvailabilityTrackableReason, // Make it not ready
 		},
 	}
 	return binding
