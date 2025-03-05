@@ -12,6 +12,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	scheduler "go.goms.io/fleet/pkg/scheduler/framework"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -427,8 +428,9 @@ func crpWithOneFailedAvailabilityCheckStatusUpdatedActual(
 						Condition: metav1.Condition{
 							Type:   string(placementv1beta1.ResourcesAvailableConditionType),
 							Status: metav1.ConditionFalse,
-							// TO-DO (chenyu1): this reason string is subject to change.
-							Reason:             "ManifestNotAvailableYet",
+							// The new and old applier uses the same reason string to make things
+							// a bit easier.
+							Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeNotYetAvailable),
 							ObservedGeneration: wantFailedResourceObservedGeneration,
 						},
 					},
@@ -484,8 +486,9 @@ func crpWithOneFailedApplyOpStatusUpdatedActual(
 						Condition: metav1.Condition{
 							Type:   string(placementv1beta1.ResourcesAppliedConditionType),
 							Status: metav1.ConditionFalse,
-							// TO-DO (chenyu1): this reason string is subject to change.
-							Reason:             "ManifestApplyFailed",
+							// The new and old applier uses the same reason string to make things
+							// a bit easier.
+							Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToApply),
 							ObservedGeneration: wantFailedResourceObservedGeneration,
 						},
 					},
@@ -575,8 +578,9 @@ func crpWithStuckRolloutDueToOneFailedAvailabilityCheckStatusUpdatedActual(
 					Condition: metav1.Condition{
 						Type:   string(placementv1beta1.ResourcesAvailableConditionType),
 						Status: metav1.ConditionFalse,
-						// TO-DO (chenyu1): this reason string is subject to change.
-						Reason:             "ManifestNotAvailableYet",
+						// The new and old applier uses the same reason string to make things
+						// a bit easier.
+						Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeNotYetAvailable),
 						ObservedGeneration: failedResourceObservedGeneration,
 					},
 				},
@@ -690,8 +694,9 @@ func crpWithStuckRolloutDueToOneFailedApplyOpStatusUpdatedActual(
 					Condition: metav1.Condition{
 						Type:   string(placementv1beta1.ResourcesAppliedConditionType),
 						Status: metav1.ConditionFalse,
-						// TO-DO (chenyu1): this reason string is subject to change.
-						Reason:             "ManifestApplyFailed",
+						// The new and old applier uses the same reason string to make things
+						// a bit easier.
+						Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToApply),
 						ObservedGeneration: failedResourceObservedGeneration,
 					},
 				},

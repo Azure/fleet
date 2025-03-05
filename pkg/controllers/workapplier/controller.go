@@ -155,7 +155,8 @@ const (
 	ManifestProcessingApplyResultTypeNotTakenOver                   manifestProcessingAppliedResultType = "NotTakenOver"
 	ManifestProcessingApplyResultTypeFailedToRunDriftDetection      manifestProcessingAppliedResultType = "FailedToRunDriftDetection"
 	ManifestProcessingApplyResultTypeFoundDrifts                    manifestProcessingAppliedResultType = "FoundDrifts"
-	ManifestProcessingApplyResultTypeFailedToApply                  manifestProcessingAppliedResultType = "FailedToApply"
+	// Note that the reason string below uses the same value as kept in the old work applier.
+	ManifestProcessingApplyResultTypeFailedToApply manifestProcessingAppliedResultType = "ManifestApplyFailed"
 
 	// The result type and description for partially successfully processing attempts.
 	ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetection manifestProcessingAppliedResultType = "AppliedWithFailedDriftDetection"
@@ -180,13 +181,17 @@ const (
 	// The result type for availability check failures.
 	ManifestProcessingAvailabilityResultTypeFailed ManifestProcessingAvailabilityResultType = "Failed"
 
+	// The description for availability check failures.
 	ManifestProcessingAvailabilityResultTypeFailedDescription = "Failed to track the availability of the applied manifest (error = %s)"
 
 	// The result types for completed availability checks.
-	ManifestProcessingAvailabilityResultTypeAvailable       ManifestProcessingAvailabilityResultType = "Available"
-	ManifestProcessingAvailabilityResultTypeNotYetAvailable ManifestProcessingAvailabilityResultType = "NotYetAvailable"
-	ManifestProcessingAvailabilityResultTypeNotTrackable    ManifestProcessingAvailabilityResultType = "NotTrackable"
+	ManifestProcessingAvailabilityResultTypeAvailable ManifestProcessingAvailabilityResultType = "Available"
+	// Note that the reason string below uses the same value as kept in the old work applier.
+	ManifestProcessingAvailabilityResultTypeNotYetAvailable ManifestProcessingAvailabilityResultType = "ManifestNotAvailableYet"
 
+	ManifestProcessingAvailabilityResultTypeNotTrackable ManifestProcessingAvailabilityResultType = "NotTrackable"
+
+	// The descriptions for completed availability checks.
 	ManifestProcessingAvailabilityResultTypeAvailableDescription       = "Manifest is available"
 	ManifestProcessingAvailabilityResultTypeNotYetAvailableDescription = "Manifest is not yet available; Fleet will check again later"
 	ManifestProcessingAvailabilityResultTypeNotTrackableDescription    = "Manifest's availability is not trackable; Fleet assumes that the applied manifest is available"
