@@ -40,7 +40,7 @@ func (r *Reconciler) Reconcile(_ context.Context, req ctrl.Request) (ctrl.Result
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).Named("clusterresourceplacementv1beta1-watcher").
+	return ctrl.NewControllerManagedBy(mgr).Named("clusterresourceplacement-watcher").
 		For(&fleetv1beta1.ClusterResourcePlacement{}).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)

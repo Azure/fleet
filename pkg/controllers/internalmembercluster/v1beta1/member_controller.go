@@ -686,7 +686,7 @@ func (r *Reconciler) markInternalMemberClusterLeaveFailed(imc clusterv1beta1.Con
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("v1beta1InternalMemberClusterController")
-	return ctrl.NewControllerManagedBy(mgr).Named("internalmemberclusterv1beta1-controller").
+	return ctrl.NewControllerManagedBy(mgr).Named("internalmembercluster-controller").
 		WithOptions(ctrlruntime.Options{SkipNameValidation: ptr.To(true)}).
 		For(&clusterv1beta1.InternalMemberCluster{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Complete(r)

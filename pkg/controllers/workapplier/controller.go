@@ -472,7 +472,7 @@ func (r *Reconciler) Leave(ctx context.Context) error {
 
 // SetupWithManager wires up the controller.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).Named("workapplier-controller").
+	return ctrl.NewControllerManagedBy(mgr).Named("work-applier-controller").
 		WithOptions(ctrloption.Options{
 			MaxConcurrentReconciles: r.concurrentReconciles,
 		}).
