@@ -71,10 +71,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{}, err
 	}
 	if !validationResult.isValid {
-		if err = r.updateEvictionStatus(ctx, &eviction); err != nil {
+		err = r.updateEvictionStatus(ctx, &eviction)
+		if err != nil {
 			internalError = err
-			return runtime.Result{}, err
 		}
+		return runtime.Result{}, err
 	}
 
 	markEvictionValid(&eviction)
