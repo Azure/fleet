@@ -6,8 +6,7 @@
 ![GitHub go.mod Go version][5]
 [![codecov][6]][7]
 
-KubeFleet is an open source solution that works on any Kubernetes cluster. We are working towards the
-vision that we will eventually be able to treat each Kubernetes cluster as [cattle](https://cloudscaling.com/blog/cloud-computing/the-history-of-pets-vs-cattle/).
+KubeFleet is an open source solution that works on any Kubernetes cluster. We are a Cloud Native Computing Foundation sandbox project that is working towards the vision where we will eventually be able to treat each Kubernetes cluster as [cattle](https://cloudscaling.com/blog/cloud-computing/the-history-of-pets-vs-cattle/).
 
 * Join/Leave is a feature that allows a member cluster to join and leave a fleet by registering a custom resource on the fleet's control plane (the hub cluster).
 * Workload Orchestration is a feature that allows users to create resources on the hub cluster and then selectively propagate these resources to desired member clusters in the fleet.
@@ -87,12 +86,11 @@ understand the details of various features offered by fleet.
 
 ## Code of Conduct
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information, see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+This project has adopted the [CNCF Open Source Code of Conduct](https://github.com/cncf/foundation/blob/master/code-of-conduct.md). See the [Code of Conduct](CODE_OF_CONDUCT.md) for more information.
 
 ## Contributing
 
 The [contribution guide](CONTRIBUTING.md) covers everything you need to know about how you can contribute to KubeFleet.
-
 
 ## Support
 For more information, see [SUPPORT.md](SUPPORT.md).
@@ -104,3 +102,6 @@ For more information, see [SUPPORT.md](SUPPORT.md).
 [5]:  https://img.shields.io/github/go-mod/go-version/Azure/fleet
 [6]: https://opensource.microsoft.com/codeofconduct/
 [7]: https://opensource.microsoft.com/codeofconduct/faq
+
+Copyright The KubeFleet Authors.
+The Linux Foundation® (TLF) has registered trademarks and uses trademarks. For a list of TLF trademarks, see [Trademark Usage](https://www.linuxfoundation.org/trademark-usage/).
