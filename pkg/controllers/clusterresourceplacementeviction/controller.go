@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -24,6 +25,7 @@ import (
 	bindingutils "go.goms.io/fleet/pkg/utils/binding"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/controller/metrics"
 	"go.goms.io/fleet/pkg/utils/defaulter"
 )
 
@@ -39,35 +41,57 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	startTime := time.Now()
 	evictionName := req.NamespacedName.Name
 	klog.V(2).InfoS("ClusterResourcePlacementEviction reconciliation starts", "clusterResourcePlacementEviction", evictionName)
+	var internalError error
 	defer func() {
+		if internalError != nil {
+			metrics.FleetEvictionStatus.WithLabelValues(evictionName).Set(0)
+		}
 		latency := time.Since(startTime).Milliseconds()
 		klog.V(2).InfoS("ClusterResourcePlacementEviction reconciliation ends", "clusterResourcePlacementEviction", evictionName, "latency", latency)
 	}()
 
 	var eviction placementv1beta1.ClusterResourcePlacementEviction
 	if err := r.Client.Get(ctx, req.NamespacedName, &eviction); err != nil {
+		internalError = err
 		klog.ErrorS(err, "Failed to get cluster resource placement eviction", "clusterResourcePlacementEviction", evictionName)
 		return runtime.Result{}, client.IgnoreNotFound(err)
 	}
 
+	if eviction.DeletionTimestamp != nil {
+		klog.V(2).InfoS("ClusterResourcePlacementEviction is being deleted", "clusterResourcePlacementEviction", evictionName)
+		metrics.FleetPlacementStatus.Delete(prometheus.Labels{"name": evictionName})
+		return runtime.Result{}, nil
+	}
+
 	if isEvictionInTerminalState(&eviction) {
+		metrics.FleetEvictionStatus.WithLabelValues(evictionName).Set(1)
 		return runtime.Result{}, nil
 	}
 
 	validationResult, err := r.validateEviction(ctx, &eviction)
 	if err != nil {
+		internalError = err
 		return runtime.Result{}, err
 	}
 	if !validationResult.isValid {
-		return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
+		err = r.updateEvictionStatus(ctx, &eviction)
+		if err != nil {
+			internalError = err
+		}
+		return runtime.Result{}, err
 	}
 
 	markEvictionValid(&eviction)
 
 	if err = r.executeEviction(ctx, validationResult, &eviction); err != nil {
+		internalError = err
 		return runtime.Result{}, err
 	}
 
+	err = r.updateEvictionStatus(ctx, &eviction)
+	if err != nil {
+		internalError = err
+	}
 	return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
 }
 

@@ -54,6 +54,13 @@ var (
 		Name: "fleet_workload_placement_complete",
 		Help: "Placement complete status ",
 	}, []string{"name"})
+
+	// FleetEvictionStatus is prometheus metrics which holds the
+	// status of eviction completion.
+	FleetEvictionStatus = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "fleet_workload_eviction_complete",
+		Help: "Eviction complete status ",
+	}, []string{"name"})
 )
 
 func init() {
