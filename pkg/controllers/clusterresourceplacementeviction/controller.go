@@ -70,11 +70,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{}, err
 	}
 	if !validationResult.isValid {
-		err = r.updateEvictionStatus(ctx, &eviction)
-		if err != nil {
+		if err = r.updateEvictionStatus(ctx, &eviction); err != nil {
 			internalError = err
+			return runtime.Result{}, err
 		}
-		return runtime.Result{}, err
 	}
 
 	markEvictionValid(&eviction)
@@ -88,7 +87,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	if err != nil {
 		internalError = err
 	}
-	return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
+	return runtime.Result{}, err
 }
 
 // validateEviction performs validation for eviction object's spec and returns a wrapped validation result.
