@@ -71,5 +71,6 @@ func init() {
 		FleetWorkerCount,
 		FleetActiveWorkers,
 		FleetPlacementStatus,
+		FleetEvictionStatus,
 	)
 }

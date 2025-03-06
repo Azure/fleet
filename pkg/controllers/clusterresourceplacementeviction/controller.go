@@ -8,9 +8,11 @@ package clusterresourceplacementeviction
 import (
 	"context"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -55,12 +57,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		internalError = err
 		klog.ErrorS(err, "Failed to get cluster resource placement eviction", "clusterResourcePlacementEviction", evictionName)
 		return runtime.Result{}, client.IgnoreNotFound(err)
-	}
-
-	if eviction.DeletionTimestamp != nil {
-		klog.V(2).InfoS("ClusterResourcePlacementEviction is being deleted", "clusterResourcePlacementEviction", evictionName)
-		metrics.FleetPlacementStatus.Delete(prometheus.Labels{"name": evictionName})
-		return runtime.Result{}, nil
 	}
 
 	if isEvictionInTerminalState(&eviction) {
@@ -372,7 +368,14 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 	return runtime.NewControllerManagedBy(mgr).Named("clusterresourceplacementeviction-controller").
 		WithOptions(ctrl.Options{MaxConcurrentReconciles: 1}). // max concurrent reconciles is currently set to 1 for concurrency control.
 		For(&placementv1beta1.ClusterResourcePlacementEviction{}).
-		Complete(r)
+		WithEventFilter(predicate.Funcs{
+			DeleteFunc: func(e event.DeleteEvent) bool {
+				// delete status metric for eviction and skip reconciliation.
+				klog.V(2).InfoS("ClusterResourcePlacementEviction is being deleted", "clusterResourcePlacementEviction", e.Object.GetName())
+				metrics.FleetEvictionStatus.Delete(prometheus.Labels{"name": e.Object.GetName()})
+				return false
+			},
+		}).Complete(r)
 }
 
 type evictionValidationResult struct {
