@@ -46,7 +46,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	var internalError error
 	defer func() {
 		if internalError != nil {
-			metrics.FleetEvictionStatus.WithLabelValues(evictionName).Set(0)
+			metrics.FleetEvictionStatus.WithLabelValues(evictionName, "false").SetToCurrentTime()
 		}
 		latency := time.Since(startTime).Milliseconds()
 		klog.V(2).InfoS("ClusterResourcePlacementEviction reconciliation ends", "clusterResourcePlacementEviction", evictionName, "latency", latency)
@@ -60,7 +60,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	}
 
 	if isEvictionInTerminalState(&eviction) {
-		metrics.FleetEvictionStatus.WithLabelValues(evictionName).Set(1)
+		metrics.FleetEvictionStatus.Delete(prometheus.Labels{"name": evictionName, "isCompleted": "false"})
+		metrics.FleetEvictionStatus.WithLabelValues(evictionName, "true").SetToCurrentTime()
 		return runtime.Result{}, nil
 	}
 
@@ -371,7 +372,9 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 			DeleteFunc: func(e event.DeleteEvent) bool {
 				// delete status metric for eviction and skip reconciliation.
 				klog.V(2).InfoS("ClusterResourcePlacementEviction is being deleted", "clusterResourcePlacementEviction", e.Object.GetName())
-				metrics.FleetEvictionStatus.Delete(prometheus.Labels{"name": e.Object.GetName()})
+				// delete both variants of the metric just in case.
+				metrics.FleetEvictionStatus.Delete(prometheus.Labels{"name": e.Object.GetName(), "isCompleted": "false"})
+				metrics.FleetEvictionStatus.Delete(prometheus.Labels{"name": e.Object.GetName(), "isCompleted": "true"})
 				return false
 			},
 		}).Complete(r)
