@@ -261,16 +261,15 @@ func trackServiceExportAvailability(curObj *unstructured.Unstructured) (Manifest
 		return ManifestProcessingAvailabilityResultTypeFailed, controller.NewUnexpectedBehaviorError(err)
 	}
 
-	weight, _ := svcExport.Annotations[objectmeta.ServiceExportAnnotationWeight]
-	validCond := meta.FindStatusCondition(svcExport.Status.Conditions, string(fleetnetworkingv1alpha1.ServiceExportValid))
-
 	// Check if ServiceExport is valid and up to date
+	validCond := meta.FindStatusCondition(svcExport.Status.Conditions, string(fleetnetworkingv1alpha1.ServiceExportValid))
 	if validCond == nil || svcExport.Generation != validCond.ObservedGeneration ||
 		meta.IsStatusConditionFalse(svcExport.Status.Conditions, string(fleetnetworkingv1alpha1.ServiceExportValid)) {
 		klog.V(2).InfoS("Still need to wait for ServiceExport to be available", "serviceExport", klog.KObj(curObj))
 		return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
 	}
 
+	weight := svcExport.Annotations[objectmeta.ServiceExportAnnotationWeight]
 	if weight != "0" {
 		// Check conflict condition for non-zero weight
 		conflictCond := meta.FindStatusCondition(svcExport.Status.Conditions, string(fleetnetworkingv1alpha1.ServiceExportConflict))
