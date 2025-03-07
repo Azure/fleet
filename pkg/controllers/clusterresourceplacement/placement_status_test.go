@@ -100,11 +100,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			name: "empty policy and resource status",
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
@@ -113,10 +113,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -145,11 +145,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			name: "unknown status of policy snapshot",
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
@@ -172,10 +172,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -204,11 +204,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			name: "scheduler does not report the latest status for policy snapshot (annotation change)",
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
@@ -231,10 +231,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -264,11 +264,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			name: "scheduler does not report the latest status for policy snapshot and snapshot observation does not match",
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
@@ -290,10 +290,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -323,11 +323,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			policy: placementPolicyForTest(),
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
@@ -370,10 +370,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -468,11 +468,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			name: "the placement has been scheduled for pickAll; none of clusters are selected; no clusterResourceBindings and works",
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
@@ -504,10 +504,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -537,11 +537,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			policy: placementPolicyForTest(),
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
@@ -580,10 +580,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -666,15 +666,15 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							Name:               testName,
+							Name:               testCRPName,
 							BlockOwnerDeletion: ptr.To(true),
 							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
@@ -713,15 +713,15 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							Name:               testName,
+							Name:               testCRPName,
 							BlockOwnerDeletion: ptr.To(true),
 							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
@@ -758,11 +758,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
@@ -795,10 +795,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -812,12 +812,12 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-1",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						ResourceSnapshotName: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						ResourceOverrideSnapshots: []fleetv1beta1.NamespacedName{
 							{
 								Name:      "override-1",
@@ -828,7 +828,7 @@ func TestSetPlacementStatus(t *testing.T) {
 							},
 						},
 						ClusterResourceOverrideSnapshots: []string{"o-1", "o-2"},
-						SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                    "member-1",
 					},
 					Status: fleetv1beta1.ResourceBindingStatus{
@@ -984,11 +984,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
@@ -1026,10 +1026,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -1043,13 +1043,13 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-1",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
-						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                "member-1",
 					},
 					Status: fleetv1beta1.ResourceBindingStatus{
@@ -1091,13 +1091,13 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-2",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
-						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                "member-2",
 					},
 					Status: fleetv1beta1.ResourceBindingStatus{
@@ -1290,11 +1290,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
@@ -1353,10 +1353,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -1370,15 +1370,15 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "deleting-binding",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation:        1,
 						DeletionTimestamp: &metav1.Time{Time: time.Date(00002, time.January, 1, 1, 1, 1, 1, time.UTC)},
 						Finalizers:        []string{"dummy-finalizer"},
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
-						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                "member-1",
 					},
 				},
@@ -1386,13 +1386,13 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "not-latest-binding-with-old-observed-generation",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
-						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                "member-2",
 					},
 					Status: fleetv1beta1.ResourceBindingStatus{
@@ -1416,13 +1416,13 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-with-unknown-condition",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
-						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                "member-3",
 					},
 					Status: fleetv1beta1.ResourceBindingStatus{
@@ -1453,13 +1453,13 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-with-nil-condition",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
-						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                "member-5",
 					},
 					Status: fleetv1beta1.ResourceBindingStatus{
@@ -1489,13 +1489,13 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "not-having-latest-resource-binding",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
 						ResourceSnapshotName:         "not-latest-resource-snapshot",
-						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                "member-6",
 					},
 					Status: fleetv1beta1.ResourceBindingStatus{
@@ -1525,12 +1525,12 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-without-latest-policy-snapshot",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						SchedulingPolicySnapshotName: "not-latest-policy-snapshot",
 						TargetCluster:                "member-7",
 					},
@@ -1753,11 +1753,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
@@ -1786,10 +1786,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -1803,13 +1803,13 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-with-not-latest-resource-snapshot",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
 						ResourceSnapshotName:         "not-latest",
-						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                "member-1",
 					},
 					Status: fleetv1beta1.ResourceBindingStatus{
@@ -1875,11 +1875,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
@@ -1913,10 +1913,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -1930,13 +1930,13 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-with-false-apply-and-works",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
-						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                "member-1",
 					},
 					Status: fleetv1beta1.ResourceBindingStatus{
@@ -2005,12 +2005,12 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-with-false-work-created",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						ResourceSnapshotName: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						ResourceOverrideSnapshots: []fleetv1beta1.NamespacedName{
 							{
 								Name:      "override-1",
@@ -2021,7 +2021,7 @@ func TestSetPlacementStatus(t *testing.T) {
 							},
 						},
 						ClusterResourceOverrideSnapshots: []string{"o-1", "o-2"},
-						SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                    "member-2",
 					},
 					Status: fleetv1beta1.ResourceBindingStatus{
@@ -2237,11 +2237,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
@@ -2270,10 +2270,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -2287,13 +2287,13 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-with-false-available-and-works",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
-						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                "member-1",
 					},
 					Status: fleetv1beta1.ResourceBindingStatus{
@@ -2611,11 +2611,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
@@ -2648,10 +2648,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -2714,11 +2714,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Generation: 1,
 				},
@@ -2747,10 +2747,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -2821,11 +2821,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Generation: 1,
 				},
@@ -2854,10 +2854,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -3025,11 +3025,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Generation: 1,
 				},
@@ -3058,10 +3058,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -3137,11 +3137,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
@@ -3175,10 +3175,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -3192,13 +3192,13 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-diff-reported-1",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
-						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                "member-1",
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 							Type: fleetv1beta1.ApplyStrategyTypeReportDiff,
@@ -3243,12 +3243,12 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-diff-reported-2",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						ResourceSnapshotName: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						ResourceOverrideSnapshots: []fleetv1beta1.NamespacedName{
 							{
 								Name:      "override-1",
@@ -3259,7 +3259,7 @@ func TestSetPlacementStatus(t *testing.T) {
 							},
 						},
 						ClusterResourceOverrideSnapshots: []string{"o-1", "o-2"},
-						SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                    "member-2",
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 							Type: fleetv1beta1.ApplyStrategyTypeReportDiff,
@@ -3487,11 +3487,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
@@ -3525,10 +3525,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -3542,13 +3542,13 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-diff-reported-1",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
-						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                "member-1",
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 							Type: fleetv1beta1.ApplyStrategyTypeReportDiff,
@@ -3593,12 +3593,12 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-diff-reported-2",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						ResourceSnapshotName: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						ResourceOverrideSnapshots: []fleetv1beta1.NamespacedName{
 							{
 								Name:      "override-1",
@@ -3609,7 +3609,7 @@ func TestSetPlacementStatus(t *testing.T) {
 							},
 						},
 						ClusterResourceOverrideSnapshots: []string{"o-1", "o-2"},
-						SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                    "member-2",
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 							Type: fleetv1beta1.ApplyStrategyTypeReportDiff,
@@ -3787,11 +3787,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
@@ -3825,10 +3825,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -3842,13 +3842,13 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-diff-reported-1",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
-						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                "member-1",
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 							Type: fleetv1beta1.ApplyStrategyTypeReportDiff,
@@ -3893,12 +3893,12 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-diff-reported-2",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						ResourceSnapshotName: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						ResourceOverrideSnapshots: []fleetv1beta1.NamespacedName{
 							{
 								Name:      "override-1",
@@ -3909,7 +3909,7 @@ func TestSetPlacementStatus(t *testing.T) {
 							},
 						},
 						ClusterResourceOverrideSnapshots: []string{"o-1", "o-2"},
-						SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                    "member-2",
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 							Type: fleetv1beta1.ApplyStrategyTypeReportDiff,
@@ -4099,11 +4099,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
@@ -4137,10 +4137,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -4154,13 +4154,13 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-diff-reported-1",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
-						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                "member-1",
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 							Type: fleetv1beta1.ApplyStrategyTypeReportDiff,
@@ -4205,12 +4205,12 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-diff-reported-2",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						ResourceSnapshotName: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						ResourceOverrideSnapshots: []fleetv1beta1.NamespacedName{
 							{
 								Name:      "override-1",
@@ -4221,7 +4221,7 @@ func TestSetPlacementStatus(t *testing.T) {
 							},
 						},
 						ClusterResourceOverrideSnapshots: []string{"o-1", "o-2"},
-						SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                    "member-2",
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 							Type: fleetv1beta1.ApplyStrategyTypeReportDiff,
@@ -4385,11 +4385,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
@@ -4418,10 +4418,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -4435,13 +4435,13 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-diff-reported-1",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
-						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                "member-1",
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 							Type: fleetv1beta1.ApplyStrategyTypeReportDiff,
@@ -4678,11 +4678,11 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.PolicyIndexLabel:      "0",
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
@@ -4711,10 +4711,10 @@ func TestSetPlacementStatus(t *testing.T) {
 			},
 			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 					Labels: map[string]string{
 						fleetv1beta1.ResourceIndexLabel:    "0",
-						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.CRPTrackingLabel:      testCRPName,
 						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					Annotations: map[string]string{
@@ -4728,13 +4728,13 @@ func TestSetPlacementStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-diff-reported-1",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						Generation: 1,
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
-						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
-						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						ResourceSnapshotName:         fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						SchedulingPolicySnapshotName: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						TargetCluster:                "member-1",
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 							Type: fleetv1beta1.ApplyStrategyTypeServerSideApply,
@@ -4964,7 +4964,7 @@ func TestSetPlacementStatus(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			crp := &fleetv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: testName,
+					Name: testCRPName,
 				},
 				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
 					ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
@@ -5131,7 +5131,7 @@ func TestBuildClusterResourceBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "deleting-binding",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 						DeletionTimestamp: &metav1.Time{Time: time.Date(00002, time.January, 1, 1, 1, 1, 1, time.UTC)},
 						Finalizers:        []string{"dummy-finalizer"},
@@ -5147,7 +5147,7 @@ func TestBuildClusterResourceBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-without-latest-policy-snapshot",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
@@ -5165,7 +5165,7 @@ func TestBuildClusterResourceBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-1",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
@@ -5177,7 +5177,7 @@ func TestBuildClusterResourceBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-2",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
@@ -5191,7 +5191,7 @@ func TestBuildClusterResourceBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-1",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
@@ -5203,7 +5203,7 @@ func TestBuildClusterResourceBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-2",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
@@ -5220,7 +5220,7 @@ func TestBuildClusterResourceBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding-without-latest-policy-snapshot",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: testName,
+							fleetv1beta1.CRPTrackingLabel: testCRPName,
 						},
 					},
 				},
@@ -5232,7 +5232,7 @@ func TestBuildClusterResourceBindings(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			crp := fleetv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: testName,
+					Name: testCRPName,
 				},
 			}
 			policySnapshot := fleetv1beta1.ClusterSchedulingPolicySnapshot{
@@ -5270,7 +5270,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 
 	crp := &fleetv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       testName,
+			Name:       testCRPName,
 			Generation: crpGeneration,
 		},
 	}
@@ -5399,7 +5399,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 						},
 					},
 					ClusterResourceOverrideSnapshots: []string{"o-1", "o-2"},
-					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					TargetCluster:                    cluster,
 				},
 				Status: fleetv1beta1.ResourceBindingStatus{
@@ -5618,7 +5618,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 						},
 					},
 					ClusterResourceOverrideSnapshots: []string{"o-1", "o-2"},
-					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					TargetCluster:                    cluster,
 				},
 				Status: fleetv1beta1.ResourceBindingStatus{
@@ -5704,7 +5704,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 						},
 					},
 					ClusterResourceOverrideSnapshots: []string{"o-1", "o-2"},
-					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					TargetCluster:                    cluster,
 				},
 				Status: fleetv1beta1.ResourceBindingStatus{
@@ -5833,7 +5833,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 						},
 					},
 					ClusterResourceOverrideSnapshots: []string{"o-1", "o-2"},
-					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					TargetCluster:                    cluster,
 				},
 				Status: fleetv1beta1.ResourceBindingStatus{
@@ -5967,7 +5967,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					ResourceSnapshotName:             resourceSnapshotName,
 					ResourceOverrideSnapshots:        []fleetv1beta1.NamespacedName{},
 					ClusterResourceOverrideSnapshots: []string{},
-					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					TargetCluster:                    cluster,
 				},
 				Status: fleetv1beta1.ResourceBindingStatus{
@@ -6170,7 +6170,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					ResourceSnapshotName:             resourceSnapshotName,
 					ResourceOverrideSnapshots:        []fleetv1beta1.NamespacedName{},
 					ClusterResourceOverrideSnapshots: []string{},
-					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					TargetCluster:                    cluster,
 				},
 				Status: fleetv1beta1.ResourceBindingStatus{
@@ -6308,7 +6308,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					ResourceSnapshotName:             resourceSnapshotName,
 					ResourceOverrideSnapshots:        []fleetv1beta1.NamespacedName{},
 					ClusterResourceOverrideSnapshots: []string{},
-					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					TargetCluster:                    cluster,
 					ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 						Type: fleetv1beta1.ApplyStrategyTypeReportDiff,
@@ -6442,7 +6442,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					ResourceSnapshotName:             resourceSnapshotName,
 					ResourceOverrideSnapshots:        []fleetv1beta1.NamespacedName{},
 					ClusterResourceOverrideSnapshots: []string{},
-					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					TargetCluster:                    cluster,
 					ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 						Type: fleetv1beta1.ApplyStrategyTypeReportDiff,
@@ -6549,7 +6549,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					ResourceSnapshotName:             resourceSnapshotName,
 					ResourceOverrideSnapshots:        []fleetv1beta1.NamespacedName{},
 					ClusterResourceOverrideSnapshots: []string{},
-					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					SchedulingPolicySnapshotName:     fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 					TargetCluster:                    cluster,
 					ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 						Type: fleetv1beta1.ApplyStrategyTypeReportDiff,

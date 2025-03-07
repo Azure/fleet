@@ -27,28 +27,16 @@ func (r *Reconciler) processManifests(
 	work *fleetv1beta1.Work,
 	expectedAppliedWorkOwnerRef *metav1.OwnerReference,
 ) {
-	workRef := klog.KObj(work)
-
-	// Process all the manifests in parallel.
-	//
-	// This is concurrency safe as the bundles slice has been pre-allocated.
-
-	// Prepare a child context.
-	// Cancel the child context anyway to avoid leaks.
-	childCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	doWork := func(pieces int) {
-		bundle := bundles[pieces]
+	// TODO: We have to apply the namespace/crd/secret/configmap/pvc first
+	// then we can process some of the manifests in parallel.
+	for _, bundle := range bundles {
 		if bundle.applyErr != nil {
 			// Skip a manifest if it has failed pre-processing.
 			return
 		}
-
-		r.processOneManifest(childCtx, bundle, work, expectedAppliedWorkOwnerRef)
-		klog.V(2).InfoS("Processed a manifest", "manifestObj", klog.KObj(bundle.manifestObj), "work", workRef)
+		r.processOneManifest(ctx, bundle, work, expectedAppliedWorkOwnerRef)
+		klog.V(2).InfoS("Processed a manifest", "manifestObj", klog.KObj(bundle.manifestObj), "work", klog.KObj(work))
 	}
-	r.parallelizer.ParallelizeUntil(childCtx, len(bundles), doWork, "processingManifests")
 }
 
 // processOneManifest processes a manifest (in the JSON format) embedded in the Work object.
