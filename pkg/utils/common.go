@@ -358,6 +358,12 @@ var (
 		Resource: "serviceaccounts",
 	}
 
+	ServiceExportGVR = schema.GroupVersionResource{
+		Group:    fleetnetworkingv1alpha1.GroupVersion.Group,
+		Version:  fleetnetworkingv1alpha1.GroupVersion.Version,
+		Resource: "serviceexports",
+	}
+
 	StorageClassGVR = schema.GroupVersionResource{
 		Group:    storagev1.SchemeGroupVersion.Group,
 		Version:  storagev1.SchemeGroupVersion.Version,
