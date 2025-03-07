@@ -28,6 +28,7 @@ import (
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	"go.goms.io/fleet-networking/pkg/common/objectmeta"
+
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/parallelizer"
@@ -988,25 +989,23 @@ func TestTrackInMemberClusterObjAvailabilityByGVR(t *testing.T) {
 func TestServiceExportAvailability(t *testing.T) {
 	svcExportTemplate := &fleetnetworkingv1alpha1.ServiceExport{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-svcExport",
-			Namespace: nsName,
-			Annotations: map[string]string{
-				objectmeta.ServiceExportAnnotationWeight: "0",
-			},
-			Generation: 3,
+			Name:        "test-svcExport",
+			Namespace:   nsName,
+			Annotations: map[string]string{},
+			Generation:  3,
 		},
 	}
 
 	testCases := []struct {
 		name                                         string
 		weight                                       string
-		status                                       *fleetnetworkingv1alpha1.ServiceExportStatus
+		status                                       fleetnetworkingv1alpha1.ServiceExportStatus
 		wantManifestProcessingAvailabilityResultType ManifestProcessingAvailabilityResultType
 	}{
 		{
 			name:   "available svcExport (annotation weight is 0)",
 			weight: "0",
-			status: &fleetnetworkingv1alpha1.ServiceExportStatus{
+			status: fleetnetworkingv1alpha1.ServiceExportStatus{
 				Conditions: []metav1.Condition{
 					{
 						Type:               string(fleetnetworkingv1alpha1.ServiceExportValid),
@@ -1021,7 +1020,7 @@ func TestServiceExportAvailability(t *testing.T) {
 		{
 			name:   "unavailable svcExport (ServiceExportValid is false)",
 			weight: "0",
-			status: &fleetnetworkingv1alpha1.ServiceExportStatus{
+			status: fleetnetworkingv1alpha1.ServiceExportStatus{
 				Conditions: []metav1.Condition{
 					{
 						Type:               string(fleetnetworkingv1alpha1.ServiceExportValid),
@@ -1036,7 +1035,7 @@ func TestServiceExportAvailability(t *testing.T) {
 		{
 			name:   "unavailable svcExport (different generation, annotation weight is 0)",
 			weight: "0",
-			status: &fleetnetworkingv1alpha1.ServiceExportStatus{
+			status: fleetnetworkingv1alpha1.ServiceExportStatus{
 				Conditions: []metav1.Condition{
 					{
 						Type:               string(fleetnetworkingv1alpha1.ServiceExportValid),
@@ -1051,7 +1050,7 @@ func TestServiceExportAvailability(t *testing.T) {
 		{
 			name:   "available svcExport with no conflict (annotation weight is 1)",
 			weight: "1",
-			status: &fleetnetworkingv1alpha1.ServiceExportStatus{
+			status: fleetnetworkingv1alpha1.ServiceExportStatus{
 				Conditions: []metav1.Condition{
 					{
 						Type:               string(fleetnetworkingv1alpha1.ServiceExportValid),
@@ -1072,7 +1071,7 @@ func TestServiceExportAvailability(t *testing.T) {
 		{
 			name:   "unavailable svcExport with conflict (annotation weight is 1)",
 			weight: "1",
-			status: &fleetnetworkingv1alpha1.ServiceExportStatus{
+			status: fleetnetworkingv1alpha1.ServiceExportStatus{
 				Conditions: []metav1.Condition{
 					{
 						Type:               string(fleetnetworkingv1alpha1.ServiceExportValid),
@@ -1093,12 +1092,13 @@ func TestServiceExportAvailability(t *testing.T) {
 		{
 			name:   "unavailable invalid svcExport (annotation weight is 1)",
 			weight: "1",
-			status: &fleetnetworkingv1alpha1.ServiceExportStatus{
+			status: fleetnetworkingv1alpha1.ServiceExportStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:   string(fleetnetworkingv1alpha1.ServiceExportValid),
-						Status: metav1.ConditionFalse,
-						Reason: "ServiceIneligible",
+						Type:               string(fleetnetworkingv1alpha1.ServiceExportValid),
+						Status:             metav1.ConditionFalse,
+						Reason:             "ServiceIneligible",
+						ObservedGeneration: 3,
 					},
 				},
 			},
@@ -1107,7 +1107,7 @@ func TestServiceExportAvailability(t *testing.T) {
 		{
 			name:   "unavailable svcExport (different generation, annotation weight is 1)",
 			weight: "1",
-			status: &fleetnetworkingv1alpha1.ServiceExportStatus{
+			status: fleetnetworkingv1alpha1.ServiceExportStatus{
 				Conditions: []metav1.Condition{
 					{
 						Type:               string(fleetnetworkingv1alpha1.ServiceExportValid),
@@ -1125,13 +1125,108 @@ func TestServiceExportAvailability(t *testing.T) {
 			},
 			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
 		},
+		{
+			name:   "unavailable svcExport (no annotation weight, no conflict condition)",
+			weight: "",
+			status: fleetnetworkingv1alpha1.ServiceExportStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(fleetnetworkingv1alpha1.ServiceExportValid),
+						Status:             metav1.ConditionTrue,
+						Reason:             "ServiceIsValid",
+						ObservedGeneration: 3,
+					},
+				},
+			},
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+		},
+		{
+			name:   "available svcExport (no annotation weight)",
+			weight: "",
+			status: fleetnetworkingv1alpha1.ServiceExportStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(fleetnetworkingv1alpha1.ServiceExportValid),
+						Status:             metav1.ConditionTrue,
+						Reason:             "ServiceIsValid",
+						ObservedGeneration: 3,
+					},
+					{
+						Type:               string(fleetnetworkingv1alpha1.ServiceExportConflict),
+						Status:             metav1.ConditionFalse,
+						Reason:             "NoConflictFound",
+						ObservedGeneration: 3,
+					},
+				},
+			},
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+		},
+		{
+			name:   "unavailable svcExport (no annotation weight with conflict)",
+			weight: "",
+			status: fleetnetworkingv1alpha1.ServiceExportStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(fleetnetworkingv1alpha1.ServiceExportValid),
+						Status:             metav1.ConditionTrue,
+						Reason:             "ServiceIsValid",
+						ObservedGeneration: 3,
+					},
+					{
+						Type:               string(fleetnetworkingv1alpha1.ServiceExportConflict),
+						Status:             metav1.ConditionTrue,
+						Reason:             "ConflictFound",
+						ObservedGeneration: 3,
+					},
+				},
+			},
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+		},
+		{
+			name:   "unavailable svcExport (no annotation weight, different generation)",
+			weight: "",
+			status: fleetnetworkingv1alpha1.ServiceExportStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(fleetnetworkingv1alpha1.ServiceExportValid),
+						Status:             metav1.ConditionTrue,
+						Reason:             "ServiceIsValid",
+						ObservedGeneration: 3,
+					},
+					{
+						Type:               string(fleetnetworkingv1alpha1.ServiceExportConflict),
+						Status:             metav1.ConditionFalse,
+						Reason:             "NoConflictFound",
+						ObservedGeneration: 2,
+					},
+				},
+			},
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+		},
+		{
+			name:   "unavailable svcExport (no annotation weight, invalid service export)",
+			weight: "",
+			status: fleetnetworkingv1alpha1.ServiceExportStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(fleetnetworkingv1alpha1.ServiceExportValid),
+						Status:             metav1.ConditionFalse,
+						Reason:             "ServiceIsNotValid",
+						ObservedGeneration: 3,
+					},
+				},
+			},
+			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			svcExport := svcExportTemplate.DeepCopy()
-			svcExport.Annotations[objectmeta.ServiceExportAnnotationWeight] = tc.weight
-			svcExport.Status = *tc.status
+			if tc.weight != "" {
+				svcExport.Annotations[objectmeta.ServiceExportAnnotationWeight] = tc.weight
+			}
+			svcExport.Status = tc.status
 			gotResTyp, err := trackServiceExportAvailability(toUnstructured(t, svcExport))
 			if err != nil {
 				t.Fatalf("trackServiceExportAvailability() = %v, want no error", err)

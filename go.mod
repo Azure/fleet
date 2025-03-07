@@ -19,7 +19,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.10.0
 	github.com/wI2L/jsondiff v0.6.0
-	go.goms.io/fleet-networking v0.3.3
+	go.goms.io/fleet-networking v0.3.5
 	go.uber.org/atomic v1.11.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20241004190924-225e2abe05e6

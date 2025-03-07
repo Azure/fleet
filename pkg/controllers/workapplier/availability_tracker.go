@@ -23,7 +23,9 @@ import (
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	"go.goms.io/fleet-networking/pkg/common/objectmeta"
+
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -262,25 +264,28 @@ func trackServiceExportAvailability(curObj *unstructured.Unstructured) (Manifest
 	}
 
 	// Check if ServiceExport is valid and up to date
+	svcExportObj := klog.KObj(curObj)
 	validCond := meta.FindStatusCondition(svcExport.Status.Conditions, string(fleetnetworkingv1alpha1.ServiceExportValid))
-	if validCond == nil || svcExport.Generation != validCond.ObservedGeneration ||
-		meta.IsStatusConditionFalse(svcExport.Status.Conditions, string(fleetnetworkingv1alpha1.ServiceExportValid)) {
-		klog.V(2).InfoS("Still need to wait for ServiceExport to be available", "serviceExport", klog.KObj(curObj))
+	if !condition.IsConditionStatusTrue(validCond, svcExport.Generation) {
+		klog.V(2).InfoS("Still need to wait for ServiceExport to be valid", "serviceExport", svcExportObj, "validCondition", validCond)
 		return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
 	}
 
-	weight := svcExport.Annotations[objectmeta.ServiceExportAnnotationWeight]
-	if weight != "0" {
+	weight, err := objectmeta.ExtractWeightFromServiceExport(&svcExport)
+	if err != nil {
+		klog.V(2).InfoS("ServiceExport has invalid weight", "serviceExport", svcExportObj, "error", err)
+		return ManifestProcessingAvailabilityResultTypeFailed, err
+	}
+	if weight != 0 {
 		// Check conflict condition for non-zero weight
 		conflictCond := meta.FindStatusCondition(svcExport.Status.Conditions, string(fleetnetworkingv1alpha1.ServiceExportConflict))
-		if conflictCond == nil || svcExport.Generation != conflictCond.ObservedGeneration ||
-			meta.IsStatusConditionTrue(svcExport.Status.Conditions, string(fleetnetworkingv1alpha1.ServiceExportConflict)) {
-			klog.V(2).InfoS("Still need to wait for ServiceExport to be available", "serviceExport", klog.KObj(curObj))
+		if !condition.IsConditionStatusFalse(conflictCond, svcExport.Generation) {
+			klog.V(2).InfoS("Still need to wait for ServiceExport to not have conflicts", "serviceExport", svcExportObj, "conflictCondition", conflictCond)
 			return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
 		}
 	}
-
-	klog.V(2).InfoS("ServiceExport is available", "serviceExport", klog.KObj(curObj))
+	klog.V(2).InfoS("Skipping checking the conflict condition for the weight 0", "serviceExport", svcExportObj)
+	klog.V(2).InfoS("ServiceExport is available", "serviceExport", svcExportObj)
 	return ManifestProcessingAvailabilityResultTypeAvailable, nil
 }
 
