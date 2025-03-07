@@ -371,11 +371,9 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 		For(&placementv1beta1.ClusterResourcePlacementEviction{}).
 		WithEventFilter(predicate.Funcs{
 			DeleteFunc: func(e event.DeleteEvent) bool {
-				// delete status metric for eviction and skip reconciliation.
+				// delete complete status metric for eviction and skip reconciliation.
 				klog.V(2).InfoS("ClusterResourcePlacementEviction is being deleted", "clusterResourcePlacementEviction", e.Object.GetName())
-				// delete both variants of the metric just in case.
-				metrics.FleetEvictionStatus.Delete(prometheus.Labels{"name": e.Object.GetName(), "isCompleted": "false"})
-				metrics.FleetEvictionStatus.Delete(prometheus.Labels{"name": e.Object.GetName(), "isCompleted": "true"})
+				metrics.FleetEvictionStatus.DeletePartialMatch(prometheus.Labels{"name": e.Object.GetName()})
 				return false
 			},
 		}).Complete(r)
