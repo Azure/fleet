@@ -157,7 +157,7 @@ func main() {
 		executedCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeExecuted))
 		if executedCondition == nil || executedCondition.Status == metav1.ConditionFalse {
 			isDrainSuccessful = false
-			log.Fatalf("eviction %s was not executed successfully for CRP %s", evictionName, crpName)
+			log.Printf("eviction %s was not executed successfully for CRP %s", evictionName, crpName)
 		}
 		log.Printf("eviction %s was executed successfully for CRP %s", evictionName, crpName)
 		// log each resource evicted by CRP.
