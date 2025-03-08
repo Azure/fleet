@@ -43,9 +43,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	startTime := time.Now()
 	evictionName := req.NamespacedName.Name
 	klog.V(2).InfoS("ClusterResourcePlacementEviction reconciliation starts", "clusterResourcePlacementEviction", evictionName)
-	var internalError error
+	var internalError bool
 	defer func() {
-		if internalError != nil {
+		if internalError {
 			metrics.FleetEvictionStatus.WithLabelValues(evictionName, "false").SetToCurrentTime()
 		}
 		latency := time.Since(startTime).Milliseconds()
@@ -54,7 +54,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	var eviction placementv1beta1.ClusterResourcePlacementEviction
 	if err := r.Client.Get(ctx, req.NamespacedName, &eviction); err != nil {
-		internalError = err
+		internalError = true
 		klog.ErrorS(err, "Failed to get cluster resource placement eviction", "clusterResourcePlacementEviction", evictionName)
 		return runtime.Result{}, client.IgnoreNotFound(err)
 	}
@@ -67,13 +67,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	validationResult, err := r.validateEviction(ctx, &eviction)
 	if err != nil {
-		internalError = err
+		internalError = true
 		return runtime.Result{}, err
 	}
 	if !validationResult.isValid {
 		err = r.updateEvictionStatus(ctx, &eviction)
 		if err != nil {
-			internalError = err
+			internalError = true
 		}
 		return runtime.Result{}, err
 	}
@@ -81,13 +81,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	markEvictionValid(&eviction)
 
 	if err = r.executeEviction(ctx, validationResult, &eviction); err != nil {
-		internalError = err
+		internalError = true
 		return runtime.Result{}, err
 	}
 
 	err = r.updateEvictionStatus(ctx, &eviction)
 	if err != nil {
-		internalError = err
+		internalError = true
 	}
 	return runtime.Result{}, err
 }
@@ -372,8 +372,8 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 		WithEventFilter(predicate.Funcs{
 			DeleteFunc: func(e event.DeleteEvent) bool {
 				// delete complete status metric for eviction and skip reconciliation.
-				klog.V(2).InfoS("ClusterResourcePlacementEviction is being deleted", "clusterResourcePlacementEviction", e.Object.GetName())
-				metrics.FleetEvictionStatus.DeletePartialMatch(prometheus.Labels{"name": e.Object.GetName()})
+				count := metrics.FleetEvictionStatus.DeletePartialMatch(prometheus.Labels{"name": e.Object.GetName()})
+				klog.V(2).InfoS("ClusterResourcePlacementEviction is being deleted", "clusterResourcePlacementEviction", e.Object.GetName(), "metricCount", count)
 				return false
 			},
 		}).Complete(r)
