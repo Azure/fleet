@@ -4,15 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
-	"os"
-
 	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
+	"log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
@@ -71,106 +69,25 @@ func main() {
 		log.Fatalf("failed to cordon member cluster %s: %v", drainCluster.ClusterName, err)
 	}
 
-	var crpList placementv1beta1.ClusterResourcePlacementList
-	if err = drainCluster.hubClient.List(ctx, &crpList); err != nil {
-		log.Fatalf("failed to list cluster resource placements: %v", err)
-	}
-
-	// find all unique CRP names for which eviction needs to occur.
-	for i := range crpList.Items {
-		crpStatus := crpList.Items[i].Status
-		for j := range crpStatus.PlacementStatuses {
-			placementStatus := crpStatus.PlacementStatuses[j]
-			if placementStatus.ClusterName == *clusterName {
-				drainCluster.ClusterResourcePlacementResourcesMap[crpList.Items[i].Name] = resourcePropagatedByCRP(crpStatus.SelectedResources, placementStatus.FailedPlacements)
-				break
-			}
-		}
-	}
-
-	if len(drainCluster.ClusterResourcePlacementResourcesMap) == 0 {
-		log.Printf("There are no resources propagated to %s from fleet using ClusterResourcePlacement resources", *clusterName)
-		os.Exit(0)
-	}
-
-	// create eviction objects for all <crpName, targetCluster>.
-	for crpName := range drainCluster.ClusterResourcePlacementResourcesMap {
-		evictionName := fmt.Sprintf(testEvictionNameFormat, crpName, *clusterName)
-
-		if err = removeExistingEviction(ctx, drainCluster.hubClient, evictionName); err != nil {
-			log.Fatalf("failed to remove existing eviction for CRP %s", crpName)
-		}
-
-		err = retry.OnError(retry.DefaultBackoff, func(err error) bool {
-			return k8errors.IsAlreadyExists(err)
-		}, func() error {
-			eviction := placementv1beta1.ClusterResourcePlacementEviction{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: evictionName,
-				},
-				Spec: placementv1beta1.PlacementEvictionSpec{
-					PlacementName: crpName,
-					ClusterName:   *clusterName,
-				},
-			}
-			return drainCluster.hubClient.Create(ctx, &eviction)
-		})
-
-		if err != nil {
-			log.Fatalf("failed to create eviction for CRP %s: %v", crpName, err)
-		}
-	}
-
-	// TODO: move isEvictionInTerminalState to a function in the pkg/utils package.
-	// wait until all evictions reach a terminal state.
-	for crpName := range drainCluster.ClusterResourcePlacementResourcesMap {
-		err = wait.ExponentialBackoffWithContext(ctx, retry.DefaultBackoff, func(ctx context.Context) (bool, error) {
-			evictionName := fmt.Sprintf(testEvictionNameFormat, crpName, *clusterName)
-			eviction := placementv1beta1.ClusterResourcePlacementEviction{}
-			if err := drainCluster.hubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
-				return false, err
-			}
-			validCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeValid))
-			if condition.IsConditionStatusFalse(validCondition, eviction.GetGeneration()) {
-				return true, nil
-			}
-			executedCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeExecuted))
-			if executedCondition != nil {
-				return true, nil
-			}
-			return false, nil
-		})
-
-		if err != nil {
-			log.Fatalf("failed to wait for evictions to reach terminal state: %v", err)
-		}
-	}
-
-	isDrainSuccessful := true
-	// check if all evictions have been executed.
-	for crpName := range drainCluster.ClusterResourcePlacementResourcesMap {
-		evictionName := fmt.Sprintf(testEvictionNameFormat, crpName, *clusterName)
-		eviction := placementv1beta1.ClusterResourcePlacementEviction{}
-		if err := drainCluster.hubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
-			log.Fatalf("failed to get eviction %s: %v", evictionName, err)
-		}
-		executedCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeExecuted))
-		if executedCondition == nil || executedCondition.Status == metav1.ConditionFalse {
-			isDrainSuccessful = false
-			log.Printf("eviction %s was not executed successfully for CRP %s", evictionName, crpName)
-		}
-		log.Printf("eviction %s was executed successfully for CRP %s", evictionName, crpName)
-		// log each resource evicted by CRP.
-		for i := range drainCluster.ClusterResourcePlacementResourcesMap[crpName] {
-			resourceIdentifier := drainCluster.ClusterResourcePlacementResourcesMap[crpName][i]
-			log.Printf("evicted resource %s propagated by CRP %s", fmt.Sprintf(resourceIdentifierKeyFormat, resourceIdentifier.Group, resourceIdentifier.Version, resourceIdentifier.Kind, resourceIdentifier.Name, resourceIdentifier.Namespace), crpName)
-		}
+	isDrainSuccessful, err := drainCluster.drainCluster()
+	if err != nil {
+		log.Fatalf("failed to drain member cluster %s: %v", drainCluster.ClusterName, err)
 	}
 
 	if isDrainSuccessful {
 		log.Printf("drain was successful for cluster %s", *clusterName)
 	} else {
 		log.Printf("drain was not successful for cluster %s, some eviction were not successfully executed", *clusterName)
+		log.Printf("retrying drain to evict the resources that were not successfully executed")
+		isDrainRetrySuccessful, err := drainCluster.drainCluster()
+		if err != nil {
+			log.Fatalf("failed to drain member cluster again %s: %v", drainCluster.ClusterName, err)
+		}
+		if isDrainRetrySuccessful {
+			log.Printf("drain retry was successful for cluster %s", *clusterName)
+		} else {
+			log.Printf("drain retry was not successful for cluster %s, some eviction were not successfully executed", *clusterName)
+		}
 	}
 }
 
@@ -199,6 +116,106 @@ func (d *DrainCluster) cordonCluster() error {
 
 		return d.hubClient.Update(ctx, &mc)
 	})
+}
+
+func (d *DrainCluster) drainCluster() (bool, error) {
+	var crpList placementv1beta1.ClusterResourcePlacementList
+	if err := d.hubClient.List(ctx, &crpList); err != nil {
+		return false, fmt.Errorf("failed to list cluster resource placements: %v", err)
+	}
+
+	// find all unique CRP names for which eviction needs to occur.
+	for i := range crpList.Items {
+		crpStatus := crpList.Items[i].Status
+		for j := range crpStatus.PlacementStatuses {
+			placementStatus := crpStatus.PlacementStatuses[j]
+			if placementStatus.ClusterName == d.ClusterName {
+				d.ClusterResourcePlacementResourcesMap[crpList.Items[i].Name] = resourcePropagatedByCRP(crpStatus.SelectedResources, placementStatus.FailedPlacements)
+				break
+			}
+		}
+	}
+
+	if len(d.ClusterResourcePlacementResourcesMap) == 0 {
+		log.Printf("There are no resources propagated to %s from fleet using ClusterResourcePlacement resources", d.ClusterName)
+		return true, nil
+	}
+
+	// create eviction objects for all <crpName, targetCluster>.
+	for crpName := range d.ClusterResourcePlacementResourcesMap {
+		evictionName := fmt.Sprintf(testEvictionNameFormat, crpName, d.ClusterName)
+
+		if err := removeExistingEviction(ctx, d.hubClient, evictionName); err != nil {
+			return false, fmt.Errorf("failed to remove existing eviction for CRP %s", crpName)
+		}
+
+		err := retry.OnError(retry.DefaultBackoff, func(err error) bool {
+			return k8errors.IsAlreadyExists(err)
+		}, func() error {
+			eviction := placementv1beta1.ClusterResourcePlacementEviction{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: evictionName,
+				},
+				Spec: placementv1beta1.PlacementEvictionSpec{
+					PlacementName: crpName,
+					ClusterName:   d.ClusterName,
+				},
+			}
+			return d.hubClient.Create(ctx, &eviction)
+		})
+
+		if err != nil {
+			return false, fmt.Errorf("failed to create eviction for CRP %s: %v", crpName, err)
+		}
+	}
+
+	// TODO: move isEvictionInTerminalState to a function in the pkg/utils package.
+	// wait until all evictions reach a terminal state.
+	for crpName := range d.ClusterResourcePlacementResourcesMap {
+		err := wait.ExponentialBackoffWithContext(ctx, retry.DefaultBackoff, func(ctx context.Context) (bool, error) {
+			evictionName := fmt.Sprintf(testEvictionNameFormat, crpName, d.ClusterName)
+			eviction := placementv1beta1.ClusterResourcePlacementEviction{}
+			if err := d.hubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
+				return false, err
+			}
+			validCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeValid))
+			if condition.IsConditionStatusFalse(validCondition, eviction.GetGeneration()) {
+				return true, nil
+			}
+			executedCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeExecuted))
+			if executedCondition != nil {
+				return true, nil
+			}
+			return false, nil
+		})
+
+		if err != nil {
+			return false, fmt.Errorf("failed to wait for evictions to reach terminal state: %v", err)
+		}
+	}
+
+	isDrainSuccessful := true
+	// check if all evictions have been executed.
+	for crpName := range d.ClusterResourcePlacementResourcesMap {
+		evictionName := fmt.Sprintf(testEvictionNameFormat, crpName, d.ClusterName)
+		eviction := placementv1beta1.ClusterResourcePlacementEviction{}
+		if err := d.hubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
+			return false, fmt.Errorf("failed to get eviction %s: %v", evictionName, err)
+		}
+		executedCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeExecuted))
+		if executedCondition == nil || executedCondition.Status == metav1.ConditionFalse {
+			isDrainSuccessful = false
+			log.Printf("eviction %s was not executed successfully for CRP %s", evictionName, crpName)
+		}
+		log.Printf("eviction %s was executed successfully for CRP %s", evictionName, crpName)
+		// log each resource evicted by CRP.
+		for i := range d.ClusterResourcePlacementResourcesMap[crpName] {
+			resourceIdentifier := d.ClusterResourcePlacementResourcesMap[crpName][i]
+			log.Printf("evicted resource %s propagated by CRP %s", fmt.Sprintf(resourceIdentifierKeyFormat, resourceIdentifier.Group, resourceIdentifier.Version, resourceIdentifier.Kind, resourceIdentifier.Name, resourceIdentifier.Namespace), crpName)
+		}
+	}
+
+	return isDrainSuccessful, nil
 }
 
 func resourcePropagatedByCRP(selectedResources []placementv1beta1.ResourceIdentifier, failedPlacements []placementv1beta1.FailedResourcePlacement) []placementv1beta1.ResourceIdentifier {
