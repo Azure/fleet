@@ -25,7 +25,7 @@ var (
 )
 
 const (
-	testEvictionNameFormat      = "test-eviction-%s-%s"
+	drainEvictionNameFormat     = "drain-eviction-%s-%s"
 	resourceIdentifierKeyFormat = "%s/%s/%s/%s/%s"
 )
 
@@ -77,16 +77,16 @@ func main() {
 	if isDrainSuccessful {
 		log.Printf("drain was successful for cluster %s", *clusterName)
 	} else {
-		log.Printf("drain was not successful for cluster %s, some eviction were not successfully executed", *clusterName)
-		log.Printf("retrying drain to evict the resources that were not successfully executed")
+		log.Printf("drain was not successful for cluster %s, some evictions were not successfully executed", *clusterName)
+		log.Printf("retrying drain to evict the resources that were not successfully removed")
 		isDrainRetrySuccessful, err := drainCluster.drainCluster()
 		if err != nil {
-			log.Fatalf("failed to drain member cluster again %s: %v", drainCluster.ClusterName, err)
+			log.Fatalf("failed to drain cluster again %s: %v", drainCluster.ClusterName, err)
 		}
 		if isDrainRetrySuccessful {
 			log.Printf("drain retry was successful for cluster %s", *clusterName)
 		} else {
-			log.Printf("drain retry was not successful for cluster %s, some eviction were not successfully executed", *clusterName)
+			log.Printf("drain retry was not successful for cluster %s, some evictions were not successfully executed", *clusterName)
 		}
 	}
 }
@@ -143,7 +143,7 @@ func (d *DrainCluster) drainCluster() (bool, error) {
 
 	// create eviction objects for all <crpName, targetCluster>.
 	for crpName := range d.ClusterResourcePlacementResourcesMap {
-		evictionName := fmt.Sprintf(testEvictionNameFormat, crpName, d.ClusterName)
+		evictionName := fmt.Sprintf(drainEvictionNameFormat, crpName, d.ClusterName)
 
 		if err := removeExistingEviction(ctx, d.hubClient, evictionName); err != nil {
 			return false, fmt.Errorf("failed to remove existing eviction for CRP %s", crpName)
@@ -173,7 +173,7 @@ func (d *DrainCluster) drainCluster() (bool, error) {
 	// wait until all evictions reach a terminal state.
 	for crpName := range d.ClusterResourcePlacementResourcesMap {
 		err := wait.ExponentialBackoffWithContext(ctx, retry.DefaultBackoff, func(ctx context.Context) (bool, error) {
-			evictionName := fmt.Sprintf(testEvictionNameFormat, crpName, d.ClusterName)
+			evictionName := fmt.Sprintf(drainEvictionNameFormat, crpName, d.ClusterName)
 			eviction := placementv1beta1.ClusterResourcePlacementEviction{}
 			if err := d.hubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
 				return false, err
@@ -197,7 +197,7 @@ func (d *DrainCluster) drainCluster() (bool, error) {
 	isDrainSuccessful := true
 	// check if all evictions have been executed.
 	for crpName := range d.ClusterResourcePlacementResourcesMap {
-		evictionName := fmt.Sprintf(testEvictionNameFormat, crpName, d.ClusterName)
+		evictionName := fmt.Sprintf(drainEvictionNameFormat, crpName, d.ClusterName)
 		eviction := placementv1beta1.ClusterResourcePlacementEviction{}
 		if err := d.hubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
 			return false, fmt.Errorf("failed to get eviction %s: %v", evictionName, err)
@@ -206,6 +206,7 @@ func (d *DrainCluster) drainCluster() (bool, error) {
 		if executedCondition == nil || executedCondition.Status == metav1.ConditionFalse {
 			isDrainSuccessful = false
 			log.Printf("eviction %s was not executed successfully for CRP %s", evictionName, crpName)
+			continue
 		}
 		log.Printf("eviction %s was executed successfully for CRP %s", evictionName, crpName)
 		// log each resource evicted by CRP.
