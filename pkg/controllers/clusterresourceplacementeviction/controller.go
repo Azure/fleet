@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -19,11 +20,14 @@ import (
 	runtime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	bindingutils "go.goms.io/fleet/pkg/utils/binding"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/controller/metrics"
 	"go.goms.io/fleet/pkg/utils/defaulter"
 )
 
@@ -39,36 +43,53 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	startTime := time.Now()
 	evictionName := req.NamespacedName.Name
 	klog.V(2).InfoS("ClusterResourcePlacementEviction reconciliation starts", "clusterResourcePlacementEviction", evictionName)
+	var internalError bool
 	defer func() {
+		if internalError {
+			metrics.FleetEvictionStatus.WithLabelValues(evictionName, "false").SetToCurrentTime()
+		}
 		latency := time.Since(startTime).Milliseconds()
 		klog.V(2).InfoS("ClusterResourcePlacementEviction reconciliation ends", "clusterResourcePlacementEviction", evictionName, "latency", latency)
 	}()
 
 	var eviction placementv1beta1.ClusterResourcePlacementEviction
 	if err := r.Client.Get(ctx, req.NamespacedName, &eviction); err != nil {
+		internalError = true
 		klog.ErrorS(err, "Failed to get cluster resource placement eviction", "clusterResourcePlacementEviction", evictionName)
 		return runtime.Result{}, client.IgnoreNotFound(err)
 	}
 
 	if isEvictionInTerminalState(&eviction) {
+		metrics.FleetEvictionStatus.Delete(prometheus.Labels{"name": evictionName, "isCompleted": "false"})
+		metrics.FleetEvictionStatus.WithLabelValues(evictionName, "true").SetToCurrentTime()
 		return runtime.Result{}, nil
 	}
 
 	validationResult, err := r.validateEviction(ctx, &eviction)
 	if err != nil {
+		internalError = true
 		return runtime.Result{}, err
 	}
 	if !validationResult.isValid {
-		return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
+		err = r.updateEvictionStatus(ctx, &eviction)
+		if err != nil {
+			internalError = true
+		}
+		return runtime.Result{}, err
 	}
 
 	markEvictionValid(&eviction)
 
 	if err = r.executeEviction(ctx, validationResult, &eviction); err != nil {
+		internalError = true
 		return runtime.Result{}, err
 	}
 
-	return runtime.Result{}, r.updateEvictionStatus(ctx, &eviction)
+	err = r.updateEvictionStatus(ctx, &eviction)
+	if err != nil {
+		internalError = true
+	}
+	return runtime.Result{}, err
 }
 
 // validateEviction performs validation for eviction object's spec and returns a wrapped validation result.
@@ -348,7 +369,14 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 	return runtime.NewControllerManagedBy(mgr).Named("clusterresourceplacementeviction-controller").
 		WithOptions(ctrl.Options{MaxConcurrentReconciles: 1}). // max concurrent reconciles is currently set to 1 for concurrency control.
 		For(&placementv1beta1.ClusterResourcePlacementEviction{}).
-		Complete(r)
+		WithEventFilter(predicate.Funcs{
+			DeleteFunc: func(e event.DeleteEvent) bool {
+				// delete complete status metric for eviction and skip reconciliation.
+				count := metrics.FleetEvictionStatus.DeletePartialMatch(prometheus.Labels{"name": e.Object.GetName()})
+				klog.V(2).InfoS("ClusterResourcePlacementEviction is being deleted", "clusterResourcePlacementEviction", e.Object.GetName(), "metricCount", count)
+				return false
+			},
+		}).Complete(r)
 }
 
 type evictionValidationResult struct {
