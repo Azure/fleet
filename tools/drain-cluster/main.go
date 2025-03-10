@@ -1,4 +1,4 @@
-package main
+package drain_cluster
 
 import (
 	"context"
@@ -15,13 +15,8 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils/condition"
-	"go.goms.io/fleet/tools/utils"
-)
-
-var (
-	scheme = runtime.NewScheme()
-	ctx    = context.Background()
+	evictionutils "go.goms.io/fleet/pkg/utils/eviction"
+	toolsutils "go.goms.io/fleet/tools/utils"
 )
 
 const (
@@ -36,6 +31,9 @@ type DrainCluster struct {
 }
 
 func main() {
+	scheme := runtime.NewScheme()
+	ctx := context.Background()
+
 	hubClusterContext := flag.String("hubClusterContext", "", "the kubectl context for the hub cluster")
 	clusterName := flag.String("clusterName", "", "name of the cluster to cordon")
 	flag.Parse()
@@ -54,7 +52,7 @@ func main() {
 		log.Fatalf("failed to add custom APIs (placement) to the runtime scheme: %v", err)
 	}
 
-	hubClient, err := utils.GetClusterClientFromClusterContext(*hubClusterContext, scheme)
+	hubClient, err := toolsutils.GetClusterClientFromClusterContext(*hubClusterContext, scheme)
 	if err != nil {
 		log.Fatalf("failed to create hub cluster client: %v", err)
 	}
@@ -65,11 +63,11 @@ func main() {
 		ClusterResourcePlacementResourcesMap: make(map[string][]placementv1beta1.ResourceIdentifier),
 	}
 
-	if err = drainCluster.cordonCluster(); err != nil {
+	if err = drainCluster.cordonCluster(ctx); err != nil {
 		log.Fatalf("failed to cordon member cluster %s: %v", drainCluster.ClusterName, err)
 	}
 
-	isDrainSuccessful, err := drainCluster.drainCluster()
+	isDrainSuccessful, err := drainCluster.drainCluster(ctx)
 	if err != nil {
 		log.Fatalf("failed to drain member cluster %s: %v", drainCluster.ClusterName, err)
 	}
@@ -79,7 +77,7 @@ func main() {
 	} else {
 		log.Printf("drain was not successful for cluster %s, some evictions were not successfully executed", *clusterName)
 		log.Printf("retrying drain to evict the resources that were not successfully removed")
-		isDrainRetrySuccessful, err := drainCluster.drainCluster()
+		isDrainRetrySuccessful, err := drainCluster.drainCluster(ctx)
 		if err != nil {
 			log.Fatalf("failed to drain cluster again %s: %v", drainCluster.ClusterName, err)
 		}
@@ -91,7 +89,7 @@ func main() {
 	}
 }
 
-func (d *DrainCluster) cordonCluster() error {
+func (d *DrainCluster) cordonCluster(ctx context.Context) error {
 	// add taint to member cluster to ensure resources aren't scheduled on it.
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var mc clusterv1beta1.MemberCluster
@@ -118,7 +116,7 @@ func (d *DrainCluster) cordonCluster() error {
 	})
 }
 
-func (d *DrainCluster) drainCluster() (bool, error) {
+func (d *DrainCluster) drainCluster(ctx context.Context) (bool, error) {
 	var crpList placementv1beta1.ClusterResourcePlacementList
 	if err := d.hubClient.List(ctx, &crpList); err != nil {
 		return false, fmt.Errorf("failed to list cluster resource placements: %v", err)
@@ -169,7 +167,6 @@ func (d *DrainCluster) drainCluster() (bool, error) {
 		}
 	}
 
-	// TODO: move isEvictionInTerminalState to a function in the pkg/utils package.
 	// wait until all evictions reach a terminal state.
 	for crpName := range d.ClusterResourcePlacementResourcesMap {
 		err := wait.ExponentialBackoffWithContext(ctx, retry.DefaultBackoff, func(ctx context.Context) (bool, error) {
@@ -178,15 +175,7 @@ func (d *DrainCluster) drainCluster() (bool, error) {
 			if err := d.hubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
 				return false, err
 			}
-			validCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeValid))
-			if condition.IsConditionStatusFalse(validCondition, eviction.GetGeneration()) {
-				return true, nil
-			}
-			executedCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeExecuted))
-			if executedCondition != nil {
-				return true, nil
-			}
-			return false, nil
+			return evictionutils.IsEvictionInTerminalState(&eviction), nil
 		})
 
 		if err != nil {
