@@ -1,4 +1,4 @@
-package uncordon_cluster
+package main
 
 import (
 	"context"
