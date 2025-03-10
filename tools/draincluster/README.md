@@ -8,7 +8,7 @@ event like upgrade or reconfiguration.
 The `drain` tool can be used to drain a member cluster by running the following command:
 
 ```
-go run tools/drain-cluster/main.go --hubClusterContext <hub-cluster-context> --clusterName <memberClusterName>
+go run tools/draincluster/main.go --hubClusterContext <hub-cluster-context> --clusterName <memberClusterName>
 ```
 
 the tool currently is a go program that takes the hub cluster context and the member cluster name as arguments.
