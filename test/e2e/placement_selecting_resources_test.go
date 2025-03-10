@@ -15,6 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apiResource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -29,7 +30,7 @@ import (
 
 var (
 	// we are propagating large secrets from hub to member clusters the timeout needs to be large.
-	largeEventuallyDuration = time.Minute * 5
+	largeEventuallyDuration = time.Second * 15
 )
 
 // Note that this container will run in parallel with other containers.
@@ -1182,6 +1183,138 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 	It("should remove controller finalizers from CRP", func() {
 		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
+	})
+})
+
+// This test verifies that resources are selected and ordered correctly according to the sortResources logic
+var _ = FDescribe("creating CRP and checking selected resources order", Ordered, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	nsName := fmt.Sprintf("test-ns-order-%d", GinkgoParallelProcess())
+	var configMap *corev1.ConfigMap
+	var secret *corev1.Secret
+	var pvc *corev1.PersistentVolumeClaim
+	var role *rbacv1.Role
+	BeforeAll(func() {
+		By("creating test resources in specific order for ordering verification")
+		// Create a namespace for our test resources
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nsName,
+				Labels: map[string]string{
+					"test-label": "selected",
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, ns)).To(Succeed(), "Failed to create test namespace")
+
+		// Create ConfigMap
+		configMap = &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("test-configmap-%d", GinkgoParallelProcess()),
+				Namespace: nsName,
+			},
+			Data: map[string]string{
+				"key1": "value1",
+			},
+		}
+		Expect(hubClient.Create(ctx, configMap)).To(Succeed(), "Failed to create ConfigMap")
+
+		// Create Secret
+		secret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("test-secret-%d", GinkgoParallelProcess()),
+				Namespace: nsName,
+			},
+			StringData: map[string]string{
+				"username": "test-user",
+				"password": "test-password",
+			},
+			Type: corev1.SecretTypeOpaque,
+		}
+		Expect(hubClient.Create(ctx, secret)).To(Succeed(), "Failed to create Secret")
+
+		// Create PersistentVolumeClaim
+		pvc = &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("test-pvc-%d", GinkgoParallelProcess()),
+				Namespace: nsName,
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				StorageClassName: ptr.To("standard"),
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: apiResource.MustParse("1Gi"),
+					},
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, pvc)).To(Succeed(), "Failed to create PVC")
+
+		// Create Role
+		role = &rbacv1.Role{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("test-role-%d", GinkgoParallelProcess()),
+				Namespace: nsName,
+			},
+			Rules: []rbacv1.PolicyRule{
+				{
+					APIGroups: []string{""},
+					Resources: []string{"configmaps"},
+					Verbs:     []string{"get", "list"},
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, role)).To(Succeed(), "Failed to create Role")
+
+		// Create the CRP
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       crpName,
+				Finalizers: []string{customDeletionBlockerFinalizer},
+			},
+			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					{
+						Group:   "",
+						Kind:    "Namespace",
+						Version: "v1",
+						Name:    nsName,
+					},
+				},
+			},
+		}
+		By(fmt.Sprintf("creating placement %s", crpName))
+		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+	})
+
+	AfterAll(func() {
+		By(fmt.Sprintf("garbage collect all things related to placement %s", crpName))
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+
+		// Delete the namespace which will cascade delete all resources
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nsName,
+			},
+		}
+		Expect(client.IgnoreNotFound(hubClient.Delete(ctx, ns))).To(Succeed(), "Failed to delete test namespace")
+	})
+
+	It("should update CRP status with the correct resources and target clusters", func() {
+		// Define the expected resources in order
+		expectedResources := []placementv1beta1.ResourceIdentifier{
+			{Kind: "Namespace", Name: nsName, Version: "v1"},
+			{Kind: "ConfigMap", Name: configMap.Name, Namespace: nsName, Version: "v1"},
+			{Kind: "Secret", Name: secret.Name, Namespace: nsName, Version: "v1"},
+			{Kind: "PersistentVolumeClaim", Name: pvc.Name, Namespace: nsName, Version: "v1"},
+			{Kind: "Role", Name: role.Name, Namespace: nsName, Version: "v1"},
+		}
+
+		// Use the common crpStatusUpdatedActual function to verify the status
+		crpStatusUpdatedActual := crpStatusUpdatedActual(expectedResources, allMemberClusterNames, nil, "1")
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(),
+			"Failed to update CRP %s status as expected", crpName)
 	})
 })
 
