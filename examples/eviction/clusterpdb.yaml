@@ -1,6 +1,6 @@
 apiVersion: placement.kubernetes-fleet.io/v1beta1
 kind: ClusterResourcePlacementDisruptionBudget
 metadata:
-  name: pick-all-crp
+  name: test-crp
 spec:
   minAvailable: 1
