@@ -2038,6 +2038,197 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "test multiple rules with cluster name template",
+			deployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "nginx",
+					},
+				},
+			},
+			roMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot{
+				{
+					Group:     utils.DeploymentGVK.Group,
+					Version:   utils.DeploymentGVK.Version,
+					Kind:      utils.DeploymentGVK.Kind,
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+				}: {
+					{
+						Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+							OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+								Policy: &placementv1alpha1.OverridePolicy{
+									OverrideRules: []placementv1alpha1.OverrideRule{
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{}, // matching all the clusters
+											OverrideType:    placementv1alpha1.JSONPatchOverrideType,
+											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+												{
+													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+													Path:     "/metadata/labels/app",
+													Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s"`, placementv1alpha1.OverrideClusterNameVariable))},
+												},
+												{
+													Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+													Path:     "/metadata/annotations",
+													Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf("{\"app\": \"workload-%s\", \"test\": \"nginx\"}", placementv1alpha1.OverrideClusterNameVariable))},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantDeployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "cluster-1",
+					},
+					Annotations: map[string]string{
+						"app":  "workload-cluster-1",
+						"test": "nginx",
+					},
+				},
+			},
+		},
+		{
+			name: "replace using cluster label key variables",
+			deployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "nginx",
+					},
+				},
+			},
+			cluster: clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+					Labels: map[string]string{
+						"region": "us-west",
+						"env":    "production",
+						"zone":   "west-1a",
+					},
+				},
+			},
+			croMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot{},
+			roMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot{
+				{
+					Group:     utils.DeploymentGVK.Group,
+					Version:   utils.DeploymentGVK.Version,
+					Kind:      utils.DeploymentGVK.Kind,
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+				}: {
+					{
+						Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+							OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+								Policy: &placementv1alpha1.OverridePolicy{
+									OverrideRules: []placementv1alpha1.OverrideRule{
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{}, // matching all the clusters
+											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+												{
+													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+													Path:     "/metadata/labels/app",
+													Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s-region"`, placementv1alpha1.OverrideClusterLabelKeyVariablePrefix+"region}"))},
+												},
+												{
+													Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+													Path:     "/metadata/annotations",
+													Value: apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"environment": "%s", "zone": "%s"}`,
+														placementv1alpha1.OverrideClusterLabelKeyVariablePrefix+"env}",
+														placementv1alpha1.OverrideClusterLabelKeyVariablePrefix+"zone}"))},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantDeployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "us-west-region",
+					},
+					Annotations: map[string]string{
+						"environment": "production",
+						"zone":        "west-1a",
+					},
+				},
+			},
+		},
+		{
+			name: "replace with non-existent label key",
+			deployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "nginx",
+					},
+				},
+			},
+			cluster: clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+					Labels: map[string]string{
+						"region": "us-west",
+					},
+				},
+			},
+			croMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot{},
+			roMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot{
+				{
+					Group:     utils.DeploymentGVK.Group,
+					Version:   utils.DeploymentGVK.Version,
+					Kind:      utils.DeploymentGVK.Kind,
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+				}: {
+					{
+						Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+							OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+								Policy: &placementv1alpha1.OverridePolicy{
+									OverrideRules: []placementv1alpha1.OverrideRule{
+										{
+											ClusterSelector: &placementv1beta1.ClusterSelector{}, // matching all the clusters
+											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+												{
+													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+													Path:     "/metadata/labels/app",
+													Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s-app"`, placementv1alpha1.OverrideClusterLabelKeyVariablePrefix+"non-existent}"))},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: controller.ErrUserError,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2458,6 +2649,78 @@ func TestApplyJSONPatchOverride(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "replace using cluster label key variables",
+			deployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "nginx",
+					},
+				},
+			},
+			overrides: []placementv1alpha1.JSONPatchOverride{
+				{
+					Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+					Path:     "/metadata/labels/app",
+					Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s-app"`, placementv1alpha1.OverrideClusterLabelKeyVariablePrefix+"region}"))},
+				},
+				{
+					Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+					Path:     "/metadata/annotations",
+					Value: apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"environment": "%s", "zone": "%s"}`,
+						placementv1alpha1.OverrideClusterLabelKeyVariablePrefix+"fleet-kubernetes.io/env}",
+						placementv1alpha1.OverrideClusterLabelKeyVariablePrefix+"zone}"))},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+					Labels: map[string]string{
+						"region":                  "us-west",
+						"fleet-kubernetes.io/env": "production",
+						"zone":                    "west-1a",
+					},
+				},
+			},
+			wantDeployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "us-west-app",
+					},
+					Annotations: map[string]string{
+						"environment": "production",
+						"zone":        "west-1a",
+					},
+				},
+			},
+		},
+		{
+			name: "replace with non-existent label key",
+			deployment: appsv1.Deployment{
+				TypeMeta: deploymentType,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "deployment-name",
+					Namespace: "deployment-namespace",
+					Labels: map[string]string{
+						"app": "nginx",
+					},
+				},
+			},
+			overrides: []placementv1alpha1.JSONPatchOverride{
+				{
+					Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+					Path:     "/metadata/labels/app",
+					Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s-app"`, placementv1alpha1.OverrideClusterLabelKeyVariablePrefix+"non-existent}"))},
+				},
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -2492,6 +2755,91 @@ func TestApplyJSONPatchOverride(t *testing.T) {
 
 			if diff := cmp.Diff(tc.wantDeployment, deployment); diff != "" {
 				t.Errorf("applyJSONPatchOverride() deployment mismatch (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_replaceClusterLabelKeyVariables(t *testing.T) {
+	tests := map[string]struct {
+		cluster   *clusterv1beta1.MemberCluster
+		input     string
+		expected  string
+		expectErr bool
+	}{
+		"No clusterLabelKey variables": {
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"region": "us-west-1",
+					},
+				},
+			},
+			input:    "The cluster is in us-west-1",
+			expected: "The cluster is in us-west-1",
+		},
+		"ClusterLabelKey Variable replaced": {
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"region": "us-west-1",
+					},
+				},
+			},
+			input:    "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-region}",
+			expected: "The cluster is in us-west-1",
+		},
+		"The clusterLabelKey key is misspelled": {
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{},
+				},
+			},
+			input:    "The cluster is in $MEMBER-CLUSTER-LABEL-KEY-region",
+			expected: "The cluster is in $MEMBER-CLUSTER-LABEL-KEY-region",
+		},
+		"Multiple complex clusterLabelKey variables replaced": {
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"fleet.azure.com/location-region_public": "us-west-1",
+						"fleet.azure.com/env":                    "prod",
+					},
+				},
+			},
+			input:    "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-fleet.azure.com/location-region_public} and environment is ${MEMBER-CLUSTER-LABEL-KEY-fleet.azure.com/env}",
+			expected: "The cluster is in us-west-1 and environment is prod",
+		},
+		"The clusterLabelKey key is not found": {
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{},
+				},
+			},
+			input:     "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-region}",
+			expectErr: true,
+		},
+		"Invalid  clusterLabelKey variable format": {
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"region": "us-west-1",
+					},
+				},
+			},
+			input:     "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-region",
+			expectErr: true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			result, err := replaceClusterLabelKeyVariables(tc.input, tc.cluster)
+			if gotErr := err != nil; gotErr != tc.expectErr {
+				t.Fatalf("applyJSONPatchOverride() = error %v, want %v", err, tc.expectErr)
+			}
+			if result != tc.expected {
+				t.Errorf("replaceClusterLabelKeyVariables() = %v, want %v", result, tc.expected)
 			}
 		})
 	}
