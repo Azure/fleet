@@ -61,7 +61,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	if isEvictionInTerminalState(&eviction) {
 		metrics.FleetEvictionStatus.Delete(prometheus.Labels{"name": evictionName, "isCompleted": "false"})
-		metrics.FleetEvictionStatus.WithLabelValues(evictionName, "true").SetToCurrentTime()
+		// check to see if eviction is valid.
+		if condition.IsConditionStatusTrue(eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeValid)), eviction.GetGeneration()) {
+			metrics.FleetEvictionStatus.WithLabelValues(evictionName, "true", "true").SetToCurrentTime()
+		} else {
+			metrics.FleetEvictionStatus.WithLabelValues(evictionName, "true", "false").SetToCurrentTime()
+		}
 		return runtime.Result{}, nil
 	}
 

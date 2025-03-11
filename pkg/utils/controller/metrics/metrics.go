@@ -60,7 +60,7 @@ var (
 	FleetEvictionStatus = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "fleet_workload_eviction_complete",
 		Help: "Eviction complete status ",
-	}, []string{"name", "isCompleted"})
+	}, []string{"name", "isCompleted", "isValid"})
 )
 
 func init() {
