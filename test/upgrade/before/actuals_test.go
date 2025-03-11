@@ -9,12 +9,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/controllers/clusterresourceplacement"
-	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
-	scheduler "github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
-	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
+	scheduler "go.goms.io/fleet/pkg/scheduler/framework"
+	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/test/e2e/framework"
 )
 
 func resourcePlacementRolloutCompletedConditions(generation int64, resourceIsTrackable bool, hasOverride bool) []metav1.Condition {
