@@ -19,9 +19,9 @@ const (
 	OverrideClusterNameVariable = "${MEMBER-CLUSTER-NAME}"
 
 	// OverrideClusterLabelKeyVariablePrefix is the reserved variable prefix in the override expression.
-	// The string will be replaced by the actual label value with the given the name of the key following the prefix.
-	// The key name ends with a "}" character.
-	// The key name has a maximum length of 63 characters and must be a valid label name.
-	// For example, if the key name is "region", the variable will be "${MEMBER-CLUSTER-LABEL-KEY-region}"
+	// The string will be replaced by the actual label value associated with the key following the prefix.
+	// The key name ends with a "}" character (but not include it).
+	// The key name must be a valid label name and case-sensitive.
+	// For example, if the key name is "kube-fleet.io/region", the variable will be "${MEMBER-CLUSTER-LABEL-KEY-kube-fleet.io/region}"
 	OverrideClusterLabelKeyVariablePrefix = "${MEMBER-CLUSTER-LABEL-KEY-"
 )

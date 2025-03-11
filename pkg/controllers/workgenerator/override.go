@@ -239,7 +239,7 @@ func applyJSONPatchOverride(resourceContent *placementv1beta1.ResourceContent, c
 // replaceClusterLabelKeyVariables finds all occurrences of the OverrideClusterLabelKeyVariablePrefix pattern
 // (e.g. ${MEMBER-CLUSTER-LABEL-KEY-region}) in the input string and replaces them with
 // the corresponding label values from the cluster.
-// If a label with the specified key doesn't exist, the variable remains unchanged.
+// If a label with the specified key doesn't exist, it returns an error.
 func replaceClusterLabelKeyVariables(input string, cluster *clusterv1beta1.MemberCluster) (string, error) {
 	prefixLen := len(placementv1alpha1.OverrideClusterLabelKeyVariablePrefix)
 	result := input

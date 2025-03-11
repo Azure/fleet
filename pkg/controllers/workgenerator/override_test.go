@@ -2760,7 +2760,7 @@ func TestApplyJSONPatchOverride(t *testing.T) {
 	}
 }
 
-func Test_replaceClusterLabelKeyVariables(t *testing.T) {
+func TestReplaceClusterLabelKeyVariables(t *testing.T) {
 	tests := map[string]struct {
 		cluster   *clusterv1beta1.MemberCluster
 		input     string
@@ -2819,6 +2819,17 @@ func Test_replaceClusterLabelKeyVariables(t *testing.T) {
 			input:     "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-region}",
 			expectErr: true,
 		},
+		"ClusterLabelKey Variable key case not match": {
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"region": "us-west-1",
+					},
+				},
+			},
+			input:     "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-REGION}",
+			expectErr: true,
+		},
 		"Invalid  clusterLabelKey variable format": {
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -2828,6 +2839,17 @@ func Test_replaceClusterLabelKeyVariables(t *testing.T) {
 				},
 			},
 			input:     "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-region",
+			expectErr: true,
+		},
+		"ClusterLabelKey variable key empty": {
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"region": "us-west-1",
+					},
+				},
+			},
+			input:     "The cluster is in ${MEMBER-CLUSTER-LABEL-KEY-}",
 			expectErr: true,
 		},
 	}
