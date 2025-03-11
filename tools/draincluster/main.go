@@ -64,11 +64,16 @@ func main() {
 		ClusterResourcePlacementResourcesMap: make(map[string][]placementv1beta1.ResourceIdentifier),
 	}
 
-	if err = drainCluster.cordonCluster(ctx); err != nil {
+	uncordonCluster := toolsutils.UncordonCluster{
+		HubClient:   hubClient,
+		ClusterName: *clusterName,
+	}
+
+	if err = drainCluster.cordon(ctx); err != nil {
 		log.Fatalf("failed to cordon member cluster %s: %v", drainCluster.ClusterName, err)
 	}
 
-	isDrainSuccessful, err := drainCluster.drainCluster(ctx)
+	isDrainSuccessful, err := drainCluster.drain(ctx)
 	if err != nil {
 		log.Fatalf("failed to drain member cluster %s: %v", drainCluster.ClusterName, err)
 	}
@@ -78,19 +83,24 @@ func main() {
 	} else {
 		log.Printf("drain was not successful for cluster %s, some evictions were not successfully executed", *clusterName)
 		log.Printf("retrying drain to evict the resources that were not successfully removed")
-		isDrainRetrySuccessful, err := drainCluster.drainCluster(ctx)
+		// reset ClusterResourcePlacementResourcesMap for retry.
+		drainCluster.ClusterResourcePlacementResourcesMap = map[string][]placementv1beta1.ResourceIdentifier{}
+		isDrainRetrySuccessful, err := drainCluster.drain(ctx)
 		if err != nil {
 			log.Fatalf("failed to drain cluster again %s: %v", drainCluster.ClusterName, err)
 		}
 		if isDrainRetrySuccessful {
 			log.Printf("drain retry was successful for cluster %s", *clusterName)
 		} else {
-			log.Printf("drain retry was not successful for cluster %s, some evictions were not successfully executed", *clusterName)
+			if err = uncordonCluster.Uncordon(ctx); err != nil {
+				log.Fatalf("failed to uncordon cluster %s: %v", *clusterName, err)
+			}
+			log.Fatalf("drain retry was not successful for cluster %s, some evictions were not successfully executed", *clusterName)
 		}
 	}
 }
 
-func (d *DrainCluster) cordonCluster(ctx context.Context) error {
+func (d *DrainCluster) cordon(ctx context.Context) error {
 	// add taint to member cluster to ensure resources aren't scheduled on it.
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var mc clusterv1beta1.MemberCluster
@@ -117,7 +127,7 @@ func (d *DrainCluster) cordonCluster(ctx context.Context) error {
 	})
 }
 
-func (d *DrainCluster) drainCluster(ctx context.Context) (bool, error) {
+func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 	var crpList placementv1beta1.ClusterResourcePlacementList
 	if err := d.hubClient.List(ctx, &crpList); err != nil {
 		return false, fmt.Errorf("failed to list cluster resource placements: %v", err)
@@ -125,12 +135,36 @@ func (d *DrainCluster) drainCluster(ctx context.Context) (bool, error) {
 
 	// find all unique CRP names for which eviction needs to occur.
 	for i := range crpList.Items {
-		crpStatus := crpList.Items[i].Status
-		for j := range crpStatus.PlacementStatuses {
-			placementStatus := crpStatus.PlacementStatuses[j]
-			if placementStatus.ClusterName == d.ClusterName {
-				d.ClusterResourcePlacementResourcesMap[crpList.Items[i].Name] = resourcePropagatedByCRP(crpStatus.SelectedResources, placementStatus.FailedPlacements)
-				break
+		// list all bindings for the CRP.
+		crp := crpList.Items[i]
+		var crbList placementv1beta1.ClusterResourceBindingList
+		if err := d.hubClient.List(ctx, &crbList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
+			return false, fmt.Errorf("failed to list cluster resource bindings for CRP %s: %v", crp.Name, err)
+		}
+		var targetBinding *placementv1beta1.ClusterResourceBinding
+		for j := range crbList.Items {
+			crb := crbList.Items[j]
+			if crb.Spec.TargetCluster == d.ClusterName {
+				targetBinding = &crb
+			}
+		}
+		if targetBinding != nil && targetBinding.DeletionTimestamp == nil {
+			// check if placement is present.
+			if !evictionutils.IsPlacementPresent(targetBinding) {
+				return false, fmt.Errorf("placement is not present in cluster %s for CRP %s, please retry drain once resources are propagated to the cluster", d.ClusterName, crp.Name)
+			}
+			isCRPStatusUpdated := false
+			crpStatus := crp.Status
+			for j := range crpStatus.PlacementStatuses {
+				placementStatus := crpStatus.PlacementStatuses[j]
+				if placementStatus.ClusterName == d.ClusterName {
+					isCRPStatusUpdated = true
+					d.ClusterResourcePlacementResourcesMap[crpList.Items[i].Name] = resourcePropagatedByCRP(crpStatus.SelectedResources, placementStatus.FailedPlacements)
+					break
+				}
+			}
+			if !isCRPStatusUpdated {
+				return false, fmt.Errorf("failed to determine all resources propagated to cluster %s for CRP %s", d.ClusterName, crp.Name)
 			}
 		}
 	}

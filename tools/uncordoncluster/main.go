@@ -6,8 +6,6 @@ import (
 	"log"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/retry"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -41,30 +39,13 @@ func main() {
 		log.Fatalf("failed to create hub cluster client: %v", err)
 	}
 
-	var mc clusterv1beta1.MemberCluster
-	if err = hubClient.Get(ctx, types.NamespacedName{Name: *clusterName}, &mc); err != nil {
-		log.Fatalf("failed to get member cluster %s: %v", *clusterName, err)
+	uncordonCluster := toolsutils.UncordonCluster{
+		HubClient:   hubClient,
+		ClusterName: *clusterName,
 	}
 
-	// remove existing taints from member cluster.
-	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		var mc clusterv1beta1.MemberCluster
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: *clusterName}, &mc); err != nil {
-			return err
-		}
-
-		if mc.Spec.Taints == nil {
-			return nil
-		}
-
-		// remove all taints from member cluster.
-		mc.Spec.Taints = nil
-
-		return hubClient.Update(ctx, &mc)
-	})
-
-	if err != nil {
-		log.Fatalf("failed to remove taints from member cluster %s: %v", *clusterName, err)
+	if err = uncordonCluster.Uncordon(ctx); err != nil {
+		log.Fatalf("failed to uncordon cluster %s: %v", *clusterName, err)
 	}
 
 	log.Printf("uncordoned member cluster %s", *clusterName)

@@ -20,3 +20,18 @@ func IsEvictionInTerminalState(eviction *placementv1beta1.ClusterResourcePlaceme
 	}
 	return false
 }
+
+// IsPlacementPresent checks to see if placement on target cluster could be present.
+func IsPlacementPresent(binding *placementv1beta1.ClusterResourceBinding) bool {
+	if binding.Spec.State == placementv1beta1.BindingStateBound {
+		return true
+	}
+	if binding.Spec.State == placementv1beta1.BindingStateUnscheduled {
+		currentAnnotation := binding.GetAnnotations()
+		previousState, exist := currentAnnotation[placementv1beta1.PreviousBindingStateAnnotation]
+		if exist && placementv1beta1.BindingState(previousState) == placementv1beta1.BindingStateBound {
+			return true
+		}
+	}
+	return false
+}
