@@ -130,7 +130,7 @@ func (d *DrainCluster) cordon(ctx context.Context) error {
 func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 	var crpList placementv1beta1.ClusterResourcePlacementList
 	if err := d.hubClient.List(ctx, &crpList); err != nil {
-		return false, fmt.Errorf("failed to list cluster resource placements: %v", err)
+		return false, fmt.Errorf("failed to list cluster resource placements: %w", err)
 	}
 
 	// find all unique CRP names for which eviction needs to occur.
@@ -139,7 +139,7 @@ func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 		crp := crpList.Items[i]
 		var crbList placementv1beta1.ClusterResourceBindingList
 		if err := d.hubClient.List(ctx, &crbList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
-			return false, fmt.Errorf("failed to list cluster resource bindings for CRP %s: %v", crp.Name, err)
+			return false, fmt.Errorf("failed to list cluster resource bindings for CRP %s: %w", crp.Name, err)
 		}
 		var targetBinding *placementv1beta1.ClusterResourceBinding
 		for j := range crbList.Items {
@@ -198,7 +198,7 @@ func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 		})
 
 		if err != nil {
-			return false, fmt.Errorf("failed to create eviction for CRP %s: %v", crpName, err)
+			return false, fmt.Errorf("failed to create eviction for CRP %s: %w", crpName, err)
 		}
 	}
 
@@ -214,7 +214,7 @@ func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 		})
 
 		if err != nil {
-			return false, fmt.Errorf("failed to wait for evictions to reach terminal state: %v", err)
+			return false, fmt.Errorf("failed to wait for evictions to reach terminal state: %w", err)
 		}
 	}
 
@@ -224,7 +224,7 @@ func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 		evictionName := fmt.Sprintf(drainEvictionNameFormat, crpName, d.ClusterName)
 		eviction := placementv1beta1.ClusterResourcePlacementEviction{}
 		if err := d.hubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
-			return false, fmt.Errorf("failed to get eviction %s: %v", evictionName, err)
+			return false, fmt.Errorf("failed to get eviction %s: %w", evictionName, err)
 		}
 		executedCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeExecuted))
 		if executedCondition == nil || executedCondition.Status == metav1.ConditionFalse {
