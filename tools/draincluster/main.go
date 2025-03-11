@@ -1,3 +1,8 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package main
 
 import (
@@ -64,11 +69,6 @@ func main() {
 		ClusterResourcePlacementResourcesMap: make(map[string][]placementv1beta1.ResourceIdentifier),
 	}
 
-	uncordonCluster := toolsutils.UncordonCluster{
-		HubClient:   hubClient,
-		ClusterName: *clusterName,
-	}
-
 	if err = drainCluster.cordon(ctx); err != nil {
 		log.Fatalf("failed to cordon member cluster %s: %v", drainCluster.ClusterName, err)
 	}
@@ -81,21 +81,26 @@ func main() {
 	if isDrainSuccessful {
 		log.Printf("drain was successful for cluster %s", *clusterName)
 	} else {
-		log.Printf("drain was not successful for cluster %s, some evictions were not successfully executed", *clusterName)
-		log.Printf("retrying drain to evict the resources that were not successfully removed")
+		log.Printf("drain was not successful for cluster %s, some evictions were not successfully executed, "+
+			"retrying drain to evict the resources that were not successfully removed", *clusterName)
 		// reset ClusterResourcePlacementResourcesMap for retry.
 		drainCluster.ClusterResourcePlacementResourcesMap = map[string][]placementv1beta1.ResourceIdentifier{}
 		isDrainRetrySuccessful, err := drainCluster.drain(ctx)
 		if err != nil {
-			log.Fatalf("failed to drain cluster again %s: %v", drainCluster.ClusterName, err)
+			log.Fatalf("failed to drain cluster on retry %s: %v", drainCluster.ClusterName, err)
 		}
 		if isDrainRetrySuccessful {
 			log.Printf("drain retry was successful for cluster %s", *clusterName)
 		} else {
+			uncordonCluster := toolsutils.UncordonCluster{
+				HubClient:   hubClient,
+				ClusterName: *clusterName,
+			}
+
 			if err = uncordonCluster.Uncordon(ctx); err != nil {
 				log.Fatalf("failed to uncordon cluster %s: %v", *clusterName, err)
 			}
-			log.Fatalf("drain retry was not successful for cluster %s, some evictions were not successfully executed", *clusterName)
+			log.Printf("drain retry was not successful for cluster %s, some evictions were not successfully executed", *clusterName)
 		}
 	}
 }
@@ -107,21 +112,16 @@ func (d *DrainCluster) cordon(ctx context.Context) error {
 		if err := d.hubClient.Get(ctx, types.NamespacedName{Name: d.ClusterName}, &mc); err != nil {
 			return err
 		}
-		cordonTaint := clusterv1beta1.Taint{
-			Key:    "cordon-key",
-			Value:  "cordon-value",
-			Effect: "NoSchedule",
-		}
 
 		// search to see cordonTaint already exists on the cluster.
 		for i := range mc.Spec.Taints {
-			if mc.Spec.Taints[i].Key == cordonTaint.Key {
+			if mc.Spec.Taints[i] == toolsutils.CordonTaint {
 				return nil
 			}
 		}
 
 		// add taint to member cluster to cordon.
-		mc.Spec.Taints = append(mc.Spec.Taints, cordonTaint)
+		mc.Spec.Taints = append(mc.Spec.Taints, toolsutils.CordonTaint)
 
 		return d.hubClient.Update(ctx, &mc)
 	})
@@ -151,7 +151,8 @@ func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 		if targetBinding != nil && targetBinding.DeletionTimestamp == nil {
 			// check if placement is present.
 			if !evictionutils.IsPlacementPresent(targetBinding) {
-				return false, fmt.Errorf("placement is not present in cluster %s for CRP %s, please retry drain once resources are propagated to the cluster", d.ClusterName, crp.Name)
+				return false, fmt.Errorf("placement is not present in cluster %s for CRP %s, "+
+					"please retry drain once resources are propagated to the cluster", d.ClusterName, crp.Name)
 			}
 			isCRPStatusUpdated := false
 			crpStatus := crp.Status
@@ -164,7 +165,8 @@ func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 				}
 			}
 			if !isCRPStatusUpdated {
-				return false, fmt.Errorf("failed to determine all resources propagated to cluster %s for CRP %s", d.ClusterName, crp.Name)
+				return false, fmt.Errorf("failed to determine all resources propagated to cluster %s for CRP %s,"+
+					" please retry drain once ClusterResourcePlacement status is updated", d.ClusterName, crp.Name)
 			}
 		}
 	}

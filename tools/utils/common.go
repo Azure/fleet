@@ -1,3 +1,8 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package utils
 
 import (
@@ -16,6 +21,11 @@ import (
 
 var (
 	kubeConfigPath = os.Getenv("KUBECONFIG")
+	CordonTaint    = clusterv1beta1.Taint{
+		Key:    "cordon-key",
+		Value:  "cordon-value",
+		Effect: "NoSchedule",
+	}
 )
 
 type UncordonCluster struct {
