@@ -951,7 +951,6 @@ type ResourcePlacementStatus struct {
 // FailedResourcePlacement contains the failure details of a failed resource placement.
 type FailedResourcePlacement struct {
 	// The resource failed to be placed.
-	// +kubebuilder:validation:Required
 	ResourceIdentifier `json:",inline"`
 
 	// The failed condition status.
@@ -986,7 +985,6 @@ type PatchDetail struct {
 // DriftedResourcePlacement contains the details of a resource with configuration drifts.
 type DriftedResourcePlacement struct {
 	// The resource that has drifted.
-	// +kubebuilder:validation:Required
 	ResourceIdentifier `json:",inline"`
 
 	// ObservationTime is the time when we observe the configuration drifts for the resource.
@@ -1021,7 +1019,6 @@ type DriftedResourcePlacement struct {
 // DiffedResourcePlacement contains the details of a resource with configuration differences.
 type DiffedResourcePlacement struct {
 	// The resource that has drifted.
-	// +kubebuilder:validation:Required
 	ResourceIdentifier `json:",inline"`
 
 	// ObservationTime is the time when we observe the configuration differences for the resource.

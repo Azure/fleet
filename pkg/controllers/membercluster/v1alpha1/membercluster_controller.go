@@ -566,7 +566,7 @@ func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.Conditioned
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *Reconciler) SetupWithManager(mgr ctrl.Manager, name string) error {
 	r.recorder = mgr.GetEventRecorderFor("mcv1alpha1")
 	r.agents = make(map[fleetv1alpha1.AgentType]bool)
 	r.agents[fleetv1alpha1.MemberAgent] = true
@@ -575,7 +575,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		r.agents[fleetv1alpha1.MultiClusterServiceAgent] = true
 		r.agents[fleetv1alpha1.ServiceExportImportAgent] = true
 	}
-	return ctrl.NewControllerManagedBy(mgr).
+	return ctrl.NewControllerManagedBy(mgr).Named(name).
 		For(&fleetv1alpha1.MemberCluster{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&fleetv1alpha1.InternalMemberCluster{}).
 		Complete(r)

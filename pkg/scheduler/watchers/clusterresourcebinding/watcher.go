@@ -96,7 +96,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		},
 	}
 
-	return ctrl.NewControllerManagedBy(mgr).
+	return ctrl.NewControllerManagedBy(mgr).Named("clusterresourcebinding-scheduler-watcher").
 		For(&fleetv1beta1.ClusterResourceBinding{}).
 		WithEventFilter(customPredicate).
 		Complete(r)

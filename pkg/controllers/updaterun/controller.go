@@ -233,7 +233,7 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 		For(&placementv1beta1.ClusterStagedUpdateRun{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&placementv1beta1.ClusterApprovalRequest{}, &handler.Funcs{
 			// We only care about when an approval request is approved.
-			UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+			UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				klog.V(2).InfoS("Handling a clusterApprovalRequest update event", "clusterApprovalRequest", klog.KObj(e.ObjectNew))
 				handleClusterApprovalRequest(e.ObjectOld, e.ObjectNew, q)
 			},
@@ -242,7 +242,7 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 
 // handleClusterApprovalRequest finds the ClusterStagedUpdateRun creating the ClusterApprovalRequest,
 // and enqueues it to the ClusterStagedUpdateRun controller queue only when the approved condition is changed.
-func handleClusterApprovalRequest(oldObj, newObj client.Object, q workqueue.RateLimitingInterface) {
+func handleClusterApprovalRequest(oldObj, newObj client.Object, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	oldAppReq, ok := oldObj.(*placementv1beta1.ClusterApprovalRequest)
 	if !ok {
 		klog.V(2).ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("cannot cast runtime object to ClusterApprovalRequest")),

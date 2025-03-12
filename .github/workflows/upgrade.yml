@@ -1,0 +1,151 @@
+name: Fleet Agent Compatibility Tests
+
+on:
+  push:
+    branches:
+      - main
+      - release-*
+  workflow_dispatch:
+    inputs:
+      beforeTagOrCommit:
+        description: 'The baseline tag or commit to build Fleet agents from; if not specified, the latest tag will be used'     
+        required: false
+      afterTagOrCommit:
+        description: 'The new tag or commit to build Fleet agents from; if not specified, the last commit in the codebase (PR or branch) will be used'     
+        required: false
+  pull_request:
+    branches:
+      - main
+      - release-*
+    paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
+
+env:
+  GO_VERSION: '1.22.12'
+
+jobs:
+  detect-noop:
+    runs-on: ubuntu-latest
+    outputs:
+      noop: ${{ steps.noop.outputs.should_skip }}
+    steps:
+      - name: Detect No-op Changes
+        id: noop
+        uses: fkirc/skip-duplicate-actions@v5.3.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          do_not_skip: '["workflow_dispatch", "schedule", "push"]'
+          concurrent_skipping: false
+
+  hub-agent-backward-compatibility:
+    runs-on: ubuntu-latest
+    needs: detect-noop
+    if: needs.detect-noop.outputs.noop != 'true'
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v4
+              
+      - name: Set up Ginkgo CLI
+        run: |
+          go install github.com/onsi/ginkgo/v2/ginkgo@v2.19.1
+
+      - name: Prepare the fleet
+        run: cd test/upgrade && GIT_TAG="${{ github.event.inputs.beforeTagOrCommit }}" chmod +x setup.sh && ./setup.sh 3 && cd -
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'
+          HUB_SERVER_URL: 'https://172.19.0.2:6443'
+
+      - name: Run the Before suite
+        run: cd test/upgrade/before && ginkgo -v -p . && cd -
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'
+    
+      - name: Upgrade the Fleet hub agent
+        run: cd test/upgrade && GIT_TAG="${{ github.event.inputs.afterTagOrCommit }}" chmod +x upgrade.sh && UPGRADE_HUB_SIDE=true ./upgrade.sh 3 && cd -
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'
+    
+      - name: Run the After suite
+        run: cd test/upgrade/after && ginkgo -v -p . && cd -
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'
+
+  member-agent-backward-compatibility:
+    runs-on: ubuntu-latest
+    needs: detect-noop
+    if: needs.detect-noop.outputs.noop != 'true'
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v4
+              
+      - name: Set up Ginkgo CLI
+        run: |
+          go install github.com/onsi/ginkgo/v2/ginkgo@v2.19.1
+
+      - name: Prepare the fleet
+        run: cd test/upgrade && GIT_TAG="${{ github.event.inputs.beforeTagOrCommit }}" chmod +x setup.sh && ./setup.sh 3 && cd -
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'
+          HUB_SERVER_URL: 'https://172.19.0.2:6443'
+
+      - name: Run the Before suite
+        run: cd test/upgrade/before && ginkgo -v -p . && cd -
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'
+    
+      - name: Upgrade the Fleet member agent
+        run: cd test/upgrade && GIT_TAG="${{ github.event.inputs.afterTagOrCommit }}" chmod +x upgrade.sh && UPGRADE_MEMBER_SIDE=true ./upgrade.sh 3 && cd -
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'
+    
+      - name: Run the After suite
+        run: cd test/upgrade/after && ginkgo -v -p . && cd -
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'
+
+  full-backward-compatibility:
+    runs-on: ubuntu-latest
+    needs: detect-noop
+    if: needs.detect-noop.outputs.noop != 'true'
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v4
+              
+      - name: Set up Ginkgo CLI
+        run: |
+          go install github.com/onsi/ginkgo/v2/ginkgo@v2.19.1
+
+      - name: Prepare the fleet
+        run: cd test/upgrade && GIT_TAG="${{ github.event.inputs.beforeTagOrCommit }}" chmod +x setup.sh && ./setup.sh 3 && cd -
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'
+          HUB_SERVER_URL: 'https://172.19.0.2:6443'
+
+      - name: Run the Before suite
+        run: cd test/upgrade/before && ginkgo -v -p . && cd -
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'
+    
+      - name: Upgrade all Fleet agents
+        run: cd test/upgrade && GIT_TAG="${{ github.event.inputs.afterTagOrCommit }}" chmod +x upgrade.sh && UPGRADE_HUB_SIDE=true UPGRADE_MEMBER_SIDE=true ./upgrade.sh 3 && cd -
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'
+    
+      - name: Run the After suite
+        run: cd test/upgrade/after && ginkgo -v -p . && cd -
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'

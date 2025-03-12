@@ -329,9 +329,9 @@ func (r *Reconciler) markInternalMemberClusterLeaveFailed(imc fleetv1alpha1.Cond
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *Reconciler) SetupWithManager(mgr ctrl.Manager, name string) error {
 	r.recorder = mgr.GetEventRecorderFor("v1alpha1InternalMemberClusterController")
-	return ctrl.NewControllerManagedBy(mgr).
+	return ctrl.NewControllerManagedBy(mgr).Named(name).
 		For(&fleetv1alpha1.InternalMemberCluster{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Complete(r)
 }

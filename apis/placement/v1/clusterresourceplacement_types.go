@@ -664,7 +664,6 @@ type ResourcePlacementStatus struct {
 // FailedResourcePlacement contains the failure details of a failed resource placement.
 type FailedResourcePlacement struct {
 	// The resource failed to be placed.
-	// +required
 	ResourceIdentifier `json:",inline"`
 
 	// The failed condition status.

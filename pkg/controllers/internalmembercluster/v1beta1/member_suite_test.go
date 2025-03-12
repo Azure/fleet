@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -30,7 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/propertyprovider"
 )
 
@@ -60,8 +61,8 @@ var (
 	hubClient         client.Client
 	member1Client     client.Client
 	member2Client     client.Client
-	workApplier1      *work.ApplyWorkReconciler
-	workApplier2      *work.ApplyWorkReconciler
+	workApplier1      *workapplier.Reconciler
+	workApplier2      *workapplier.Reconciler
 	propertyProvider1 *manuallyUpdatedProvider
 
 	ctx    context.Context
@@ -367,12 +368,12 @@ var _ = BeforeSuite(func() {
 
 	// This controller is created for testing purposes only; no reconciliation loop is actually
 	// run.
-	workApplier1 = work.NewApplyWorkReconciler(hubClient, nil, nil, nil, nil, 0, "")
+	workApplier1 = workapplier.NewReconciler(hubClient, member1ReservedNSName, nil, nil, nil, nil, 0, 1, time.Second*5, time.Second*5)
 
 	propertyProvider1 = &manuallyUpdatedProvider{}
 	member1Reconciler, err := NewReconciler(ctx, hubClient, member1Cfg, member1Client, workApplier1, propertyProvider1)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(member1Reconciler.SetupWithManager(member1Mgr)).To(Succeed())
+	Expect(member1Reconciler.SetupWithManager(member1Mgr, member1Name+"-controller")).To(Succeed())
 
 	member2Mgr, err = ctrl.NewManager(hubCfg, ctrl.Options{
 		Scheme: scheme.Scheme,
@@ -390,11 +391,11 @@ var _ = BeforeSuite(func() {
 
 	// This controller is created for testing purposes only; no reconciliation loop is actually
 	// run.
-	workApplier2 = work.NewApplyWorkReconciler(hubClient, nil, nil, nil, nil, 0, "")
+	workApplier2 = workapplier.NewReconciler(hubClient, member2ReservedNSName, nil, nil, nil, nil, 0, 1, time.Second*5, time.Second*5)
 
 	member2Reconciler, err := NewReconciler(ctx, hubClient, member2Cfg, member2Client, workApplier2, nil)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(member2Reconciler.SetupWithManager(member2Mgr)).To(Succeed())
+	Expect(member2Reconciler.SetupWithManager(member2Mgr, member2Name+"-controller")).To(Succeed())
 
 	go func() {
 		defer GinkgoRecover()

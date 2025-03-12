@@ -28,13 +28,14 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/propertyprovider/azure"
 	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
@@ -715,10 +716,6 @@ func checkIfAllMemberClustersHaveLeft() {
 	}
 }
 
-func checkIfPlacedWorkResourcesOnAllMemberClustersConsistently() {
-	checkIfPlacedWorkResourcesOnMemberClustersConsistently(allMemberClusters)
-}
-
 func checkIfPlacedWorkResourcesOnMemberClustersConsistently(clusters []*framework.Cluster) {
 	for idx := range clusters {
 		memberCluster := clusters[idx]
@@ -995,7 +992,7 @@ func verifyWorkPropagationAndMarkAsAvailable(memberClusterName, crpName string, 
 				Type:               placementv1beta1.WorkConditionTypeAvailable,
 				Status:             metav1.ConditionTrue,
 				LastTransitionTime: metav1.Now(),
-				Reason:             work.WorkAvailableReason,
+				Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeAvailable),
 				Message:            "Set to be available",
 				ObservedGeneration: w.Generation,
 			})
@@ -1242,6 +1239,25 @@ func checkIfStatusErrorWithMessage(err error, errorMsg string) error {
 	return fmt.Errorf("error message %s not found in error %w", errorMsg, err)
 }
 
+// buildOwnerReference builds an owner reference given a cluster and a CRP name.
+//
+// This function assumes that the CRP has only one associated Work object (no resource snapshot
+// sub-index, no envelope object used).
+func buildOwnerReference(cluster *framework.Cluster, crpName string) *metav1.OwnerReference {
+	workName := fmt.Sprintf("%s-work", crpName)
+
+	appliedWork := placementv1beta1.AppliedWork{}
+	Expect(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName}, &appliedWork)).Should(Succeed(), "Failed to get applied work object")
+
+	return &metav1.OwnerReference{
+		APIVersion:         placementv1beta1.GroupVersion.String(),
+		Kind:               "AppliedWork",
+		Name:               workName,
+		UID:                appliedWork.UID,
+		BlockOwnerDeletion: ptr.To(false),
+	}
+}
+
 // createCRPWithApplyStrategy creates a ClusterResourcePlacement with the given name and apply strategy.
 func createCRPWithApplyStrategy(crpName string, applyStrategy *placementv1beta1.ApplyStrategy) {
 	crp := &placementv1beta1.ClusterResourcePlacement{
@@ -1253,6 +1269,12 @@ func createCRPWithApplyStrategy(crpName string, applyStrategy *placementv1beta1.
 		},
 		Spec: placementv1beta1.ClusterResourcePlacementSpec{
 			ResourceSelectors: workResourceSelector(),
+			Strategy: placementv1beta1.RolloutStrategy{
+				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+					UnavailablePeriodSeconds: ptr.To(2),
+				},
+			},
 		},
 	}
 	if applyStrategy != nil {

@@ -93,7 +93,7 @@ var _ = BeforeSuite(func() {
 	err = (&mcv1alpha1.Reconciler{
 		Client:                  mgr.GetClient(),
 		NetworkingAgentsEnabled: false,
-	}).SetupWithManager(mgr)
+	}).SetupWithManager(mgr, "test-memberclusterv1alpha1-controller")
 	Expect(err).Should(Succeed())
 
 	By("Create/Get all the test manifest resources")

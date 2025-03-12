@@ -253,10 +253,10 @@ func (r *Reconciler) cleanupClusterProfile(ctx context.Context, clusterName stri
 
 // SetupWithManager sets up the controller with the controller manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	return ctrl.NewControllerManagedBy(mgr).Named("clusterprofile-controller").
 		For(&clusterv1beta1.MemberCluster{}).
 		Watches(&clusterinventory.ClusterProfile{}, handler.Funcs{
-			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+			DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 				klog.V(2).InfoS("Handling a clusterProfile delete event", "clusterProfile", klog.KObj(e.Object))
 				q.Add(reconcile.Request{
 					NamespacedName: types.NamespacedName{Name: e.Object.GetName()},

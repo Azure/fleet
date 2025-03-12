@@ -42,7 +42,7 @@ export this variable which specifies the number of member clusters that will be 
 export MEMBER_CLUSTER_COUNT=1
 ```
 
-from the root directory of the repo run the following command, by default a hub cluster gets created which is the control plane for fleet (**The makefile uses kindest/node:v1.30.0**)
+from the root directory of the repo run the following command, by default a hub cluster gets created which is the control plane for fleet (**The makefile uses kindest/node:v1.31.0**)
 
 ```shell
 make setup-clusters

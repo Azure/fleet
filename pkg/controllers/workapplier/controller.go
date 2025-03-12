@@ -44,6 +44,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/defaulter"
 	"go.goms.io/fleet/pkg/utils/parallelizer"
@@ -113,7 +114,18 @@ func NewReconciler(
 
 var (
 	// Some exported reasons for Work object conditions. Currently only the untrackable reason is being actively used.
-	WorkNotAllManifestsTrackableReason    = "SomeManifestsAreNotAvailabilityTrackable"
+
+	// This is a new reason for the Availability condition when the manifests are not
+	// trackable for availability. This value is currently unused.
+	//
+	// TO-DO (chenyu1): switch to the new reason after proper rollout.
+	WorkNotAllManifestsTrackableReasonNew = "SomeManifestsAreNotAvailabilityTrackable"
+	// This reason uses the exact same value as the one kept in the old work applier for
+	// compatibility reasons. It helps guard the case where the member agent is upgraded
+	// before the hub agent.
+	//
+	// TO-DO (chenyu1): switch off the old reason after proper rollout.
+	WorkNotAllManifestsTrackableReason    = work.WorkNotTrackableReason
 	WorkAllManifestsAppliedReason         = "AllManifestsApplied"
 	WorkAllManifestsAvailableReason       = "AllManifestsAvailable"
 	WorkAllManifestsDiffReportedReason    = "AllManifestsDiffReported"
@@ -143,7 +155,8 @@ const (
 	ManifestProcessingApplyResultTypeNotTakenOver                   manifestProcessingAppliedResultType = "NotTakenOver"
 	ManifestProcessingApplyResultTypeFailedToRunDriftDetection      manifestProcessingAppliedResultType = "FailedToRunDriftDetection"
 	ManifestProcessingApplyResultTypeFoundDrifts                    manifestProcessingAppliedResultType = "FoundDrifts"
-	ManifestProcessingApplyResultTypeFailedToApply                  manifestProcessingAppliedResultType = "FailedToApply"
+	// Note that the reason string below uses the same value as kept in the old work applier.
+	ManifestProcessingApplyResultTypeFailedToApply manifestProcessingAppliedResultType = "ManifestApplyFailed"
 
 	// The result type and description for partially successfully processing attempts.
 	ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetection manifestProcessingAppliedResultType = "AppliedWithFailedDriftDetection"
@@ -168,13 +181,17 @@ const (
 	// The result type for availability check failures.
 	ManifestProcessingAvailabilityResultTypeFailed ManifestProcessingAvailabilityResultType = "Failed"
 
+	// The description for availability check failures.
 	ManifestProcessingAvailabilityResultTypeFailedDescription = "Failed to track the availability of the applied manifest (error = %s)"
 
 	// The result types for completed availability checks.
-	ManifestProcessingAvailabilityResultTypeAvailable       ManifestProcessingAvailabilityResultType = "Available"
-	ManifestProcessingAvailabilityResultTypeNotYetAvailable ManifestProcessingAvailabilityResultType = "NotYetAvailable"
-	ManifestProcessingAvailabilityResultTypeNotTrackable    ManifestProcessingAvailabilityResultType = "NotTrackable"
+	ManifestProcessingAvailabilityResultTypeAvailable ManifestProcessingAvailabilityResultType = "Available"
+	// Note that the reason string below uses the same value as kept in the old work applier.
+	ManifestProcessingAvailabilityResultTypeNotYetAvailable ManifestProcessingAvailabilityResultType = "ManifestNotAvailableYet"
 
+	ManifestProcessingAvailabilityResultTypeNotTrackable ManifestProcessingAvailabilityResultType = "NotTrackable"
+
+	// The descriptions for completed availability checks.
 	ManifestProcessingAvailabilityResultTypeAvailableDescription       = "Manifest is available"
 	ManifestProcessingAvailabilityResultTypeNotYetAvailableDescription = "Manifest is not yet available; Fleet will check again later"
 	ManifestProcessingAvailabilityResultTypeNotTrackableDescription    = "Manifest's availability is not trackable; Fleet assumes that the applied manifest is available"
@@ -455,7 +472,7 @@ func (r *Reconciler) Leave(ctx context.Context) error {
 
 // SetupWithManager wires up the controller.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	return ctrl.NewControllerManagedBy(mgr).Named("work-applier-controller").
 		WithOptions(ctrloption.Options{
 			MaxConcurrentReconciles: r.concurrentReconciles,
 		}).

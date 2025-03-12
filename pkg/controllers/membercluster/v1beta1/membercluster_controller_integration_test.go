@@ -61,7 +61,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				Client:              k8sClient,
 				ForceDeleteWaitTime: 15 * time.Minute,
 			}
-			err := r.SetupWithManager(mgr)
+			err := r.SetupWithManager(mgr, memberClusterName+"-controller")
 			Expect(err).Should(Succeed())
 
 			memberClusterNamespacedName := types.NamespacedName{
@@ -276,7 +276,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				NetworkingAgentsEnabled: true,
 				ForceDeleteWaitTime:     15 * time.Minute,
 			}
-			err := r.SetupWithManager(mgr)
+			err := r.SetupWithManager(mgr, memberClusterName+"-controller")
 			Expect(err).Should(Succeed())
 
 			memberClusterNamespacedName := types.NamespacedName{
@@ -561,7 +561,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				NetworkingAgentsEnabled: true,
 				ForceDeleteWaitTime:     1 * time.Minute,
 			}
-			err := r.SetupWithManager(mgr)
+			err := r.SetupWithManager(mgr, memberClusterName+"-controller")
 			Expect(err).Should(Succeed())
 
 			By("create member cluster for join")
