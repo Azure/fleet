@@ -21,6 +21,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils"
 	evictionutils "go.goms.io/fleet/pkg/utils/eviction"
 	toolsutils "go.goms.io/fleet/tools/utils"
 )
@@ -154,20 +155,12 @@ func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 				return false, fmt.Errorf("placement is not present in cluster %s for CRP %s, "+
 					"please retry drain once resources are propagated to the cluster", d.ClusterName, crp.Name)
 			}
-			isCRPStatusUpdated := false
-			crpStatus := crp.Status
-			for j := range crpStatus.PlacementStatuses {
-				placementStatus := crpStatus.PlacementStatuses[j]
-				if placementStatus.ClusterName == d.ClusterName {
-					isCRPStatusUpdated = true
-					d.ClusterResourcePlacementResourcesMap[crpList.Items[i].Name] = resourcePropagatedByCRP(crpStatus.SelectedResources, placementStatus.FailedPlacements)
-					break
-				}
+			// get all successfully applied resources for the CRP.
+			resourcesPropagated, err := resourcesPropagatedByCRP(ctx, d.hubClient, crp.Name, d.ClusterName)
+			if err != nil {
+				return false, fmt.Errorf("failed to get resources propagated by CRP %s: %w", crp.Name, err)
 			}
-			if !isCRPStatusUpdated {
-				return false, fmt.Errorf("failed to determine all resources propagated to cluster %s for CRP %s,"+
-					" please retry drain once ClusterResourcePlacement status is updated", d.ClusterName, crp.Name)
-			}
+			d.ClusterResourcePlacementResourcesMap[crp.Name] = resourcesPropagated
 		}
 	}
 
@@ -245,27 +238,33 @@ func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 	return isDrainSuccessful, nil
 }
 
-func resourcePropagatedByCRP(selectedResources []placementv1beta1.ResourceIdentifier, failedPlacements []placementv1beta1.FailedResourcePlacement) []placementv1beta1.ResourceIdentifier {
-	selectedResourcesMap := make(map[string]placementv1beta1.ResourceIdentifier, len(selectedResources))
-	for i := range selectedResources {
-		selectedResourcesMap[generateResourceIdentifierKey(selectedResources[i])] = selectedResources[i]
+func resourcesPropagatedByCRP(ctx context.Context, hubClient client.Client, crpName, clusterName string) ([]placementv1beta1.ResourceIdentifier, error) {
+	var work placementv1beta1.Work
+	workName := fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, crpName)
+	clusterNamespace := fmt.Sprintf(utils.NamespaceNameFormat, clusterName)
+	if err := hubClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: clusterNamespace}, &work); err != nil {
+		return nil, fmt.Errorf("failed to get work %s: %w", crpName, err)
 	}
-	for i := range failedPlacements {
-		if failedPlacements[i].Condition.Type == placementv1beta1.WorkConditionTypeApplied {
-			delete(selectedResourcesMap, generateResourceIdentifierKey(failedPlacements[i].ResourceIdentifier))
+
+	var resourcesPropagated []placementv1beta1.ResourceIdentifier
+	manifestConditions := work.Status.ManifestConditions
+	for i := range manifestConditions {
+		manifestCondition := manifestConditions[i]
+		for j := range manifestCondition.Conditions {
+			condition := manifestCondition.Conditions[j]
+			if condition.Type == placementv1beta1.WorkConditionTypeApplied && condition.Status == metav1.ConditionTrue {
+				propagatedResource := placementv1beta1.ResourceIdentifier{
+					Group:     manifestCondition.Identifier.Group,
+					Version:   manifestCondition.Identifier.Version,
+					Kind:      manifestCondition.Identifier.Kind,
+					Name:      manifestCondition.Identifier.Name,
+					Namespace: manifestCondition.Identifier.Namespace,
+				}
+				resourcesPropagated = append(resourcesPropagated, propagatedResource)
+			}
 		}
 	}
-	resourcesPropagated := make([]placementv1beta1.ResourceIdentifier, len(selectedResourcesMap))
-	i := 0
-	for key := range selectedResourcesMap {
-		resourcesPropagated[i] = selectedResourcesMap[key]
-		i++
-	}
-	return resourcesPropagated
-}
-
-func generateResourceIdentifierKey(resourceIdentifier placementv1beta1.ResourceIdentifier) string {
-	return fmt.Sprintf(resourceIdentifierKeyFormat, resourceIdentifier.Group, resourceIdentifier.Version, resourceIdentifier.Kind, resourceIdentifier.Name, resourceIdentifier.Namespace)
+	return resourcesPropagated, nil
 }
 
 func removeExistingEviction(ctx context.Context, client client.Client, evictionName string) error {
