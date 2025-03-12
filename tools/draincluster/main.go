@@ -21,7 +21,6 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
 	evictionutils "go.goms.io/fleet/pkg/utils/eviction"
 	toolsutils "go.goms.io/fleet/tools/utils"
 )
@@ -82,27 +81,29 @@ func main() {
 	if isDrainSuccessful {
 		log.Printf("drain was successful for cluster %s", *clusterName)
 	} else {
-		log.Printf("drain was not successful for cluster %s, some evictions were not successfully executed, "+
-			"retrying drain to evict the resources that were not successfully removed", *clusterName)
-		// reset ClusterResourcePlacementResourcesMap for retry.
-		drainCluster.ClusterResourcePlacementResourcesMap = map[string][]placementv1beta1.ResourceIdentifier{}
-		isDrainRetrySuccessful, err := drainCluster.drain(ctx)
-		if err != nil {
-			log.Fatalf("failed to drain cluster on retry %s: %v", drainCluster.ClusterName, err)
-		}
-		if isDrainRetrySuccessful {
-			log.Printf("drain retry was successful for cluster %s", *clusterName)
-		} else {
-			uncordonCluster := toolsutils.UncordonCluster{
-				HubClient:   hubClient,
-				ClusterName: *clusterName,
-			}
+		log.Printf("drain was not successful for cluster %s", *clusterName)
+	}
 
-			if err = uncordonCluster.Uncordon(ctx); err != nil {
-				log.Fatalf("failed to uncordon cluster %s: %v", *clusterName, err)
-			}
-			log.Printf("drain retry was not successful for cluster %s, some evictions were not successfully executed", *clusterName)
+	log.Printf("retrying drain to ensure all resources propagated from hub cluster are evicted")
+
+	// reset ClusterResourcePlacementResourcesMap for retry.
+	drainCluster.ClusterResourcePlacementResourcesMap = map[string][]placementv1beta1.ResourceIdentifier{}
+	isDrainRetrySuccessful, err := drainCluster.drain(ctx)
+	if err != nil {
+		log.Fatalf("failed to drain cluster on retry %s: %v", drainCluster.ClusterName, err)
+	}
+	if isDrainRetrySuccessful {
+		log.Printf("drain retry was successful for cluster %s", *clusterName)
+	} else {
+		uncordonCluster := toolsutils.UncordonCluster{
+			HubClient:   hubClient,
+			ClusterName: *clusterName,
 		}
+
+		if err = uncordonCluster.Uncordon(ctx); err != nil {
+			log.Fatalf("failed to uncordon cluster %s: %v", *clusterName, err)
+		}
+		log.Printf("drain retry was not successful for cluster %s", *clusterName)
 	}
 }
 
@@ -156,7 +157,7 @@ func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 					"please retry drain once resources are propagated to the cluster", d.ClusterName, crp.Name)
 			}
 			// get all successfully applied resources for the CRP.
-			resourcesPropagated, err := resourcesPropagatedByCRP(ctx, d.hubClient, crp.Name, d.ClusterName)
+			resourcesPropagated, err := resourcesPropagatedByCRP(ctx, d.hubClient, crp.Name)
 			if err != nil {
 				return false, fmt.Errorf("failed to get resources propagated by CRP %s: %w", crp.Name, err)
 			}
@@ -165,7 +166,7 @@ func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 	}
 
 	if len(d.ClusterResourcePlacementResourcesMap) == 0 {
-		log.Printf("There are no resources propagated to %s from fleet using ClusterResourcePlacement resources", d.ClusterName)
+		log.Printf("There are currently no resources propagated to %s from fleet using ClusterResourcePlacement resources", d.ClusterName)
 		return true, nil
 	}
 
@@ -238,29 +239,30 @@ func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 	return isDrainSuccessful, nil
 }
 
-func resourcesPropagatedByCRP(ctx context.Context, hubClient client.Client, crpName, clusterName string) ([]placementv1beta1.ResourceIdentifier, error) {
-	var work placementv1beta1.Work
-	workName := fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, crpName)
-	clusterNamespace := fmt.Sprintf(utils.NamespaceNameFormat, clusterName)
-	if err := hubClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: clusterNamespace}, &work); err != nil {
+func resourcesPropagatedByCRP(ctx context.Context, hubClient client.Client, crpName string) ([]placementv1beta1.ResourceIdentifier, error) {
+	var workList placementv1beta1.WorkList
+	if err := hubClient.List(ctx, &workList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName}); err != nil {
 		return nil, fmt.Errorf("failed to get work %s: %w", crpName, err)
 	}
 
 	var resourcesPropagated []placementv1beta1.ResourceIdentifier
-	manifestConditions := work.Status.ManifestConditions
-	for i := range manifestConditions {
-		manifestCondition := manifestConditions[i]
-		for j := range manifestCondition.Conditions {
-			condition := manifestCondition.Conditions[j]
-			if condition.Type == placementv1beta1.WorkConditionTypeApplied && condition.Status == metav1.ConditionTrue {
-				propagatedResource := placementv1beta1.ResourceIdentifier{
-					Group:     manifestCondition.Identifier.Group,
-					Version:   manifestCondition.Identifier.Version,
-					Kind:      manifestCondition.Identifier.Kind,
-					Name:      manifestCondition.Identifier.Name,
-					Namespace: manifestCondition.Identifier.Namespace,
+	for i := range workList.Items {
+		work := workList.Items[i]
+		manifestConditions := work.Status.ManifestConditions
+		for j := range manifestConditions {
+			manifestCondition := manifestConditions[j]
+			for k := range manifestCondition.Conditions {
+				condition := manifestCondition.Conditions[k]
+				if condition.Type == placementv1beta1.WorkConditionTypeApplied && condition.Status == metav1.ConditionTrue {
+					propagatedResource := placementv1beta1.ResourceIdentifier{
+						Group:     manifestCondition.Identifier.Group,
+						Version:   manifestCondition.Identifier.Version,
+						Kind:      manifestCondition.Identifier.Kind,
+						Name:      manifestCondition.Identifier.Name,
+						Namespace: manifestCondition.Identifier.Namespace,
+					}
+					resourcesPropagated = append(resourcesPropagated, propagatedResource)
 				}
-				resourcesPropagated = append(resourcesPropagated, propagatedResource)
 			}
 		}
 	}
