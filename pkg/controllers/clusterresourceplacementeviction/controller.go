@@ -386,7 +386,9 @@ func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 				klog.V(2).InfoS("ClusterResourcePlacementEviction is being deleted", "clusterResourcePlacementEviction", e.Object.GetName(), "metricCount", count)
 				return false
 			},
-		}).Complete(r)
+		}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		Complete(r)
 }
 
 type evictionValidationResult struct {
