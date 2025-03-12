@@ -372,10 +372,11 @@ unavailable as Fleet dispatches updated resources. Clusters that are no longer s
 resulting in lost traffic. If too many new clusters are selected and Fleet places resources on them simultaneously, 
 your backend may become overloaded. The exact interruption pattern may vary depending on the resources you place using Fleet.
 
-To minimize interruption, Fleet allows users to configure the rollout strategy, similar to native Kubernetes deployment,
-to transition between changes as smoothly as possible. Currently, Fleet supports only one rollout strategy: rolling update.
+### Default rollout strategy: Rolling Update
+To minimize interruption, Fleet allows users to configure the rollout strategy. 
+The default strategy is rolling update, and it applies to all changes you initiate.
 This strategy ensures changes, including the addition or removal of selected clusters and resource refreshes, 
-are applied incrementally in a phased manner at a pace suitable for you. This is the default option and applies to all changes you initiate.
+are applied incrementally in a phased manner at a pace suitable for you, similar to native Kubernetes deployments.
 
 This rollout strategy can be configured with the following parameters:
 
@@ -470,6 +471,23 @@ longer to complete the rollout, in accordance with the rolling update strategy y
 > In very extreme circumstances, rollout may get stuck, if Fleet just cannot apply resources
 > to some clusters. You can identify this behavior if CRP status; for more information, see
 > [Understanding the Status of a `ClusterResourcePlacement`](crp-status.md) How-To Guide.
+
+### External rollout strategy and staged update run
+
+Fleet supports flexible rollout patterns through an `External` rollout strategy, which allows you to implement custom rollout controllers. 
+When configured, Fleet delegates the responsibility of resource placement to your external controller instead of using Fleet's built-in rolling update mechanism.
+
+One implementation of an external rollout strategy is the **Staged Update Run**. 
+This approach enables a controlled, stage-by-stage placement of workload resources defined in a `ClusterResourcePlacement`.
+
+To utilize this strategy: 
+1. Set `spec.strategy.type` as `External` in the `ClusterResourcePlacement` object.
+2. Define your rollout process using two custom resources:
+    - `ClusterStagedUpdateStrategy`: A reusable template defining the rollout pattern
+    - `ClusterStagedUpdateRun`: The resource that triggers and manages the actual rollout process.
+
+For comprehensive guidance on implementing staged updates, please refer to the [Staged Update Run Concepts](../concepts/StagedUpdateRun/README.md) 
+and [Staged Update Run How-To Guide](updaterun.md).
 
 ## Snapshots and revisions
 
