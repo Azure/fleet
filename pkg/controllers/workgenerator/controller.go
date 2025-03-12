@@ -1267,7 +1267,7 @@ func extractResFromConfigMap(uConfigMap *unstructured.Unstructured) ([]fleetv1be
 		var uManifest unstructured.Unstructured
 		if unMarshallErr := uManifest.UnmarshalJSON(content); unMarshallErr != nil {
 			klog.ErrorS(unMarshallErr, "manifest has invalid content", "manifestKey", key, "envelopResource", klog.KObj(uConfigMap))
-			return nil, fmt.Errorf("the object with manifest key `%s` in evenlop config `%s` is malformatted, err: %w", key, klog.KObj(uConfigMap), unMarshallErr)
+			return nil, fmt.Errorf("the object with manifest key `%s` in envelope config `%s` is malformatted, err: %w", key, klog.KObj(uConfigMap), unMarshallErr)
 		}
 		if len(uManifest.GetNamespace()) != 0 && uManifest.GetNamespace() != configMap.Namespace {
 			return nil, fmt.Errorf("the namespaced object `%s` in envelope config `%s` is placed in a different namespace `%s` ", uManifest.GetName(), klog.KObj(uConfigMap), uManifest.GetNamespace())
