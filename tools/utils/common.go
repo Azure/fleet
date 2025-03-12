@@ -33,6 +33,7 @@ type UncordonCluster struct {
 	ClusterName string
 }
 
+// Uncordon removes the taint from the member cluster.
 func (u *UncordonCluster) Uncordon(ctx context.Context) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var mc clusterv1beta1.MemberCluster
@@ -51,6 +52,7 @@ func (u *UncordonCluster) Uncordon(ctx context.Context) error {
 	})
 }
 
+// GetClusterClientFromClusterContext creates a new client.Client for the given cluster context and scheme.
 func GetClusterClientFromClusterContext(clusterContext string, scheme *runtime.Scheme) (client.Client, error) {
 	clusterConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeConfigPath},
