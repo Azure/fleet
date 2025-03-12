@@ -9,10 +9,14 @@ import (
 	"strconv"
 	"time"
 
+	"go.goms.io/fleet/pkg/utils/controller/metrics"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
+	prometheusclientmodel "github.com/prometheus/client_model/go"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -65,7 +69,7 @@ var (
 	crpOwnerReference = metav1.OwnerReference{
 		APIVersion:         fleetAPIVersion,
 		Kind:               "ClusterResourcePlacement",
-		Name:               testCRPName,
+		Name:               fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess()),
 		Controller:         ptr.To(true),
 		BlockOwnerDeletion: ptr.To(true),
 	}
@@ -153,11 +157,10 @@ func retrieveAndValidateCRPDeletion(crp *placementv1beta1.ClusterResourcePlaceme
 		return errors.IsNotFound(err)
 	}, eventuallyTimeout, interval).Should(BeTrue(), "Get() clusterResourcePlacement, want not found")
 }
-
 func createOverriddenClusterResourceBinding(cluster string, policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot, resourceSnapshot *placementv1beta1.ClusterResourceSnapshot) *placementv1beta1.ClusterResourceBinding {
 	binding := &placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "binding-" + cluster,
+			Name: fmt.Sprintf("binding-%s-%d", cluster, GinkgoParallelProcess()),
 			Labels: map[string]string{
 				placementv1beta1.CRPTrackingLabel: resourceSnapshot.Labels[placementv1beta1.CRPTrackingLabel],
 			},
@@ -188,7 +191,7 @@ func createOverriddenClusterResourceBinding(cluster string, policySnapshot *plac
 	return binding
 }
 
-func createSynchronizedClusterResourceBinding(cluster string, policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot, resourceSnapshot *placementv1beta1.ClusterResourceSnapshot) {
+func createSynchronizedClusterResourceBinding(cluster string, policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot, resourceSnapshot *placementv1beta1.ClusterResourceSnapshot) *placementv1beta1.ClusterResourceBinding {
 	binding := createOverriddenClusterResourceBinding(cluster, policySnapshot, resourceSnapshot)
 	cond := metav1.Condition{
 		Status:             metav1.ConditionTrue,
@@ -198,23 +201,54 @@ func createSynchronizedClusterResourceBinding(cluster string, policySnapshot *pl
 	}
 	meta.SetStatusCondition(&binding.Status.Conditions, cond)
 	Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "Failed to update the binding status")
+	return binding
+}
+
+func createAvailableClusterResourceBinding(cluster string, policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot, resourceSnapshot *placementv1beta1.ClusterResourceSnapshot) {
+	binding := createSynchronizedClusterResourceBinding(cluster, policySnapshot, resourceSnapshot)
+	cond := metav1.Condition{
+		Status:             metav1.ConditionTrue,
+		Type:               string(placementv1beta1.ResourceBindingApplied),
+		Reason:             condition.ApplySucceededReason,
+		ObservedGeneration: binding.Generation,
+	}
+	meta.SetStatusCondition(&binding.Status.Conditions, cond)
+	cond = metav1.Condition{
+		Status:             metav1.ConditionTrue,
+		Type:               string(placementv1beta1.ResourceBindingAvailable),
+		Reason:             condition.AvailableReason,
+		ObservedGeneration: binding.Generation,
+	}
+	meta.SetStatusCondition(&binding.Status.Conditions, cond)
+	Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "Failed to update the binding status")
 }
 
 var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 	Context("When creating new pickAll ClusterResourcePlacement", func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		var customRegistry *prometheus.Registry
 
 		var (
 			crp                 *placementv1beta1.ClusterResourcePlacement
 			gotCRP              *placementv1beta1.ClusterResourcePlacement
 			gotPolicySnapshot   *placementv1beta1.ClusterSchedulingPolicySnapshot
 			gotResourceSnapshot *placementv1beta1.ClusterResourceSnapshot
+			member1Binding      *placementv1beta1.ClusterResourceBinding
+			member2Binding      *placementv1beta1.ClusterResourceBinding
 		)
 
 		BeforeEach(func() {
+			// Create a test registry
+			customRegistry = prometheus.NewRegistry()
+			Expect(customRegistry.Register(metrics.FleetPlacementComplete)).Should(Succeed())
+			Expect(customRegistry.Register(metrics.FleetPlacementStatus)).Should(Succeed())
+			metrics.FleetPlacementComplete.Reset()
+			metrics.FleetPlacementStatus.Reset()
+
 			By("Create a new crp")
 			crp = &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: testCRPName,
+					Name: crpName,
 				},
 				Spec: placementv1beta1.ClusterResourcePlacementSpec{
 					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
@@ -289,7 +323,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("By checking CRP status")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       testCRPName,
+					Name:       crpName,
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
@@ -304,13 +338,22 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			gotCRP = retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
+			gotCRP = retrieveAndValidateClusterResourcePlacement(crp.Name, wantCRP)
 		})
 
 		AfterEach(func() {
 			By("Deleting crp")
 			Expect(k8sClient.Delete(ctx, gotCRP)).Should(Succeed())
 			retrieveAndValidateCRPDeletion(gotCRP)
+			By("Deleting clusterResourceBindings")
+			if member1Binding != nil {
+				Expect(k8sClient.Delete(ctx, member1Binding)).Should(Succeed())
+			}
+			if member2Binding != nil {
+				Expect(k8sClient.Delete(ctx, member2Binding)).Should(Succeed())
+			}
+			Expect(customRegistry.Unregister(metrics.FleetPlacementComplete)).Should(BeTrue())
+			Expect(customRegistry.Unregister(metrics.FleetPlacementStatus)).Should(BeTrue())
 		})
 
 		It("None of the clusters are selected", func() {
@@ -328,7 +371,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("By validating the CRP status has only scheduling condition")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       testCRPName,
+					Name:       crpName,
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
@@ -343,7 +386,64 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
+			retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
+
+			By("Ensure placement complete metric was emitted with isCompleted False")
+			checkPlacementCompleteMetric(customRegistry, crpName, false)
+
+			By("Ensure placement status metric was emitted with Scheduled True")
+			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementScheduledConditionType), string(corev1.ConditionTrue))
+		})
+
+		It("Clusters are not selected", func() {
+			By("By updating clusterSchedulingPolicySnapshot status to scheduling failed ")
+			scheduledCondition := metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(placementv1beta1.PolicySnapshotScheduled),
+				Reason:             ResourceScheduleFailedReason,
+				ObservedGeneration: gotCRP.Generation,
+			}
+			meta.SetStatusCondition(&gotPolicySnapshot.Status.Conditions, scheduledCondition)
+			gotPolicySnapshot.Status.ObservedCRPGeneration = gotCRP.Generation
+			gotPolicySnapshot.Status.ClusterDecisions = []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: member1Name,
+					Selected:    false,
+					Reason:      "invalid",
+				},
+				{
+					ClusterName: member2Name,
+					Selected:    false,
+					Reason:      "invalid",
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, gotPolicySnapshot)).Should(Succeed(), "Failed to update the policy snapshot status")
+
+			By("By validating the CRP status has only scheduling condition")
+			wantCRP := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       crpName,
+					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+				},
+				Spec: crp.Spec,
+				Status: placementv1beta1.ClusterResourcePlacementStatus{
+					ObservedResourceIndex: "0",
+					Conditions: []metav1.Condition{
+						{
+							Status: metav1.ConditionFalse,
+							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+							Reason: ResourceScheduleFailedReason,
+						},
+					},
+				},
+			}
+			retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
+
+			By("Ensure placement complete metric was emitted with isCompleted False")
+			checkPlacementCompleteMetric(customRegistry, crpName, false)
+
+			By("Ensure placement status metric was emitted with Scheduled False")
+			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementScheduledConditionType), string(corev1.ConditionFalse))
 		})
 
 		It("Clusters are selected and resources are applied successfully", func() {
@@ -371,12 +471,12 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			Expect(k8sClient.Status().Update(ctx, gotPolicySnapshot)).Should(Succeed(), "Failed to update the policy snapshot status")
 
 			By("By creating clusterResourceBinding on member-1")
-			createOverriddenClusterResourceBinding(member1Name, gotPolicySnapshot, gotResourceSnapshot)
+			member1Binding = createOverriddenClusterResourceBinding(member1Name, gotPolicySnapshot, gotResourceSnapshot)
 
 			By("By validating the CRP status")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       testCRPName,
+					Name:       crpName,
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
@@ -438,14 +538,20 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
+			retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
+
+			By("Ensure placement complete metric was emitted with isCompleted False")
+			checkPlacementCompleteMetric(customRegistry, crpName, false)
+
+			By("Ensure placement status metric was emitted with Rollout Unknown")
+			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType), string(corev1.ConditionUnknown))
 
 			By("By creating a synchronized clusterResourceBinding on member-2")
-			createSynchronizedClusterResourceBinding(member2Name, gotPolicySnapshot, gotResourceSnapshot)
+			member2Binding = createSynchronizedClusterResourceBinding(member2Name, gotPolicySnapshot, gotResourceSnapshot)
 
 			wantCRP = &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       testCRPName,
+					Name:       crpName,
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
@@ -533,7 +639,241 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
+			retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
+
+			By("Ensure placement complete metric was emitted with isCompleted False")
+			checkPlacementCompleteMetric(customRegistry, crpName, false)
+
+			By("Ensure placement status metric was emitted with WorkSynchronized Unknown")
+			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType), string(corev1.ConditionUnknown))
+		})
+
+		It("emit metrics for complete CRP", func() {
+			By("By checking CRP status")
+			wantCRP := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       crpName,
+					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+				},
+				Spec: crp.Spec,
+				Status: placementv1beta1.ClusterResourcePlacementStatus{
+					ObservedResourceIndex: "0",
+					Conditions: []metav1.Condition{
+						{
+							Status: metav1.ConditionUnknown,
+							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+							Reason: SchedulingUnknownReason,
+						},
+					},
+				},
+			}
+			gotCRP = retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
+
+			By("By updating clusterSchedulingPolicySnapshot status to schedule success")
+			scheduledCondition := metav1.Condition{
+				Status:             metav1.ConditionTrue,
+				Type:               string(placementv1beta1.PolicySnapshotScheduled),
+				Reason:             ResourceScheduleSucceededReason,
+				ObservedGeneration: gotCRP.Generation,
+			}
+			meta.SetStatusCondition(&gotPolicySnapshot.Status.Conditions, scheduledCondition)
+			gotPolicySnapshot.Status.ObservedCRPGeneration = gotCRP.Generation
+			gotPolicySnapshot.Status.ClusterDecisions = []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: member1Name,
+					Selected:    true,
+					Reason:      "valid",
+				},
+				{
+					ClusterName: member2Name,
+					Selected:    true,
+					Reason:      "valid",
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, gotPolicySnapshot)).Should(Succeed(), "Failed to update the policy snapshot status")
+
+			By("By creating clusterResourceBinding on member-1")
+			createAvailableClusterResourceBinding(member1Name, gotPolicySnapshot, gotResourceSnapshot)
+
+			By("By creating a synchronized clusterResourceBinding on member-2")
+			createAvailableClusterResourceBinding(member2Name, gotPolicySnapshot, gotResourceSnapshot)
+
+			wantCRP = &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       crpName,
+					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+				},
+				Spec: crp.Spec,
+				Status: placementv1beta1.ClusterResourcePlacementStatus{
+					ObservedResourceIndex: "0",
+					Conditions: []metav1.Condition{
+						{
+							Status: metav1.ConditionTrue,
+							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+							Reason: ResourceScheduleSucceededReason,
+						},
+						{
+							Status: metav1.ConditionTrue,
+							Type:   string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+							Reason: condition.RolloutStartedReason,
+						},
+						{
+							Status: metav1.ConditionTrue,
+							Type:   string(placementv1beta1.ClusterResourcePlacementOverriddenConditionType),
+							Reason: condition.OverrideNotSpecifiedReason,
+						},
+						{
+							Status: metav1.ConditionTrue,
+							Type:   string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
+							Reason: condition.WorkSynchronizedReason,
+						},
+						{
+							Status: metav1.ConditionTrue,
+							Type:   string(placementv1beta1.ClusterResourcePlacementAppliedConditionType),
+							Reason: condition.ApplySucceededReason,
+						},
+						{
+							Status: metav1.ConditionTrue,
+							Type:   string(placementv1beta1.ClusterResourcePlacementAvailableConditionType),
+							Reason: condition.AvailableReason,
+						},
+					},
+					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+						{
+
+							ClusterName: member1Name,
+							Conditions: []metav1.Condition{
+								{
+									Status: metav1.ConditionTrue,
+									Type:   string(placementv1beta1.ResourceScheduledConditionType),
+									Reason: condition.ScheduleSucceededReason,
+								},
+								{
+									Status: metav1.ConditionTrue,
+									Type:   string(placementv1beta1.ResourceRolloutStartedConditionType),
+									Reason: condition.RolloutStartedReason,
+								},
+								{
+									Status: metav1.ConditionTrue,
+									Type:   string(placementv1beta1.ResourceOverriddenConditionType),
+									Reason: condition.OverriddenSucceededReason,
+								},
+								{
+									Status: metav1.ConditionTrue,
+									Type:   string(placementv1beta1.ResourceWorkSynchronizedConditionType),
+									Reason: condition.WorkSynchronizedReason,
+								},
+								{
+									Status: metav1.ConditionTrue,
+									Type:   string(placementv1beta1.ResourcesAppliedConditionType),
+									Reason: condition.ApplySucceededReason,
+								},
+								{
+									Status: metav1.ConditionTrue,
+									Type:   string(placementv1beta1.ResourcesAvailableConditionType),
+									Reason: condition.AvailableReason,
+								},
+							},
+						},
+						{
+							ClusterName: member2Name,
+							Conditions: []metav1.Condition{
+								{
+									Status: metav1.ConditionTrue,
+									Type:   string(placementv1beta1.ResourceScheduledConditionType),
+									Reason: condition.ScheduleSucceededReason,
+								},
+								{
+									Status: metav1.ConditionTrue,
+									Type:   string(placementv1beta1.ResourceRolloutStartedConditionType),
+									Reason: condition.RolloutStartedReason,
+								},
+								{
+									Status: metav1.ConditionTrue,
+									Type:   string(placementv1beta1.ResourceOverriddenConditionType),
+									Reason: condition.OverriddenSucceededReason,
+								},
+								{
+									Status: metav1.ConditionTrue,
+									Type:   string(placementv1beta1.ResourceWorkSynchronizedConditionType),
+									Reason: condition.WorkSynchronizedReason,
+								},
+								{
+									Status: metav1.ConditionTrue,
+									Type:   string(placementv1beta1.ResourcesAppliedConditionType),
+									Reason: condition.ApplySucceededReason,
+								},
+								{
+									Status: metav1.ConditionTrue,
+									Type:   string(placementv1beta1.ResourcesAvailableConditionType),
+									Reason: condition.AvailableReason,
+								},
+							},
+						},
+					},
+				},
+			}
+			gotCRP = retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
+
+			By("Ensure placement complete metric was emitted with isCompleted True")
+			checkPlacementCompleteMetric(customRegistry, crpName, true)
+
+			By("Ensure placement status metric was emitted with Available True")
+			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementAvailableConditionType), string(corev1.ConditionTrue))
 		})
 	})
 })
+
+func checkPlacementCompleteMetric(registry *prometheus.Registry, crpName string, complete bool) {
+	metricFamilies, err := registry.Gather()
+	Expect(err).Should(Succeed())
+	var placementCompleteMetrics []*prometheusclientmodel.Metric
+	for _, mf := range metricFamilies {
+		if mf.GetName() == "fleet_workload_placement_complete" {
+			placementCompleteMetrics = mf.GetMetric()
+		}
+	}
+	// we only expect one metric with 2 label
+	Expect(len(placementCompleteMetrics)).Should(Equal(1))
+	metricLabels := placementCompleteMetrics[0].GetLabel()
+	Expect(len(metricLabels)).Should(Equal(2))
+
+	for _, label := range metricLabels {
+		if label.GetName() == "isComplete" {
+			Expect(label.GetValue()).Should(Equal(complete))
+		}
+		if label.GetName() == "name" {
+			Expect(label.GetValue()).Should(Equal(crpName))
+		}
+		Expect(placementCompleteMetrics[0].GetGauge().GetValue()).ShouldNot(Equal(float64(0)))
+	}
+}
+
+func checkPlacementStatusMetric(registry *prometheus.Registry, crp *placementv1beta1.ClusterResourcePlacement, condType string, status string) {
+	metricFamilies, err := registry.Gather()
+	Expect(err).Should(Succeed())
+	var placementStatusMetrics []*prometheusclientmodel.Metric
+	for _, mf := range metricFamilies {
+		if mf.GetName() == "fleet_workload_placement_status" {
+			placementStatusMetrics = mf.GetMetric()
+		}
+	}
+	// we only expect one metric with 4 labels
+	By(fmt.Sprintf("placementStatusMetrics %v", placementStatusMetrics))
+	Expect(len(placementStatusMetrics)).Should(Equal(1))
+	metricLabels := placementStatusMetrics[0].GetLabel()
+	Expect(len(metricLabels)).Should(Equal(4))
+
+	for _, label := range metricLabels {
+		switch label.GetName() {
+		case "generation":
+			Expect(label.GetValue()).Should(Equal(strconv.FormatInt(crp.Generation, 10)))
+		case "name":
+			Expect(label.GetValue()).Should(Equal(crp.Name))
+		case "conditionType":
+			Expect(label.GetValue()).Should(Equal(condType))
+		case "status":
+			Expect(label.GetValue()).Should(Equal(status))
+		}
+	}
+}
