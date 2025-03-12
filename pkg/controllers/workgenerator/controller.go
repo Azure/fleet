@@ -1270,7 +1270,7 @@ func extractResFromConfigMap(uConfigMap *unstructured.Unstructured) ([]fleetv1be
 			return nil, fmt.Errorf("the object with manifest key `%s` in evenlop config `%s` is malformatted, err: %w", key, klog.KObj(uConfigMap), unMarshallErr)
 		}
 		if len(uManifest.GetNamespace()) != 0 && uManifest.GetNamespace() != configMap.Namespace {
-			return nil, fmt.Errorf("the namespaced object `%s` in evenlop config `%s` is placed in a different namespace `%s` ", uManifest.GetName(), klog.KObj(uConfigMap), uManifest.GetNamespace())
+			return nil, fmt.Errorf("the namespaced object `%s` in envelope config `%s` is placed in a different namespace `%s` ", uManifest.GetName(), klog.KObj(uConfigMap), uManifest.GetNamespace())
 		}
 		manifests = append(manifests, fleetv1beta1.Manifest{
 			RawExtension: runtime.RawExtension{Raw: content},
