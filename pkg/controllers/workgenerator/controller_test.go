@@ -153,7 +153,7 @@ func TestExtractResFromConfigMap(t *testing.T) {
 		want       []fleetv1beta1.Manifest
 		wantErr    bool
 	}{
-		"valid config map with no entries": {
+		"valid config map with no entries is fine": {
 			uConfigMap: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "v1",
@@ -163,7 +163,7 @@ func TestExtractResFromConfigMap(t *testing.T) {
 			want:    []fleetv1beta1.Manifest{},
 			wantErr: false,
 		},
-		"config map with invalid JSON content": {
+		"config map with invalid JSON content should fail": {
 			uConfigMap: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "v1",
@@ -180,7 +180,7 @@ func TestExtractResFromConfigMap(t *testing.T) {
 			want:    nil,
 			wantErr: true,
 		},
-		"config map with namespaced resource in different namespace": {
+		"config map with namespaced resource in different namespace should fail": {
 			uConfigMap: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "v1",
@@ -197,7 +197,7 @@ func TestExtractResFromConfigMap(t *testing.T) {
 			want:    nil,
 			wantErr: true,
 		},
-		"config map with valid and invalid entries": {
+		"config map with valid and invalid entries should fail": {
 			uConfigMap: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "v1",
@@ -215,7 +215,7 @@ func TestExtractResFromConfigMap(t *testing.T) {
 			want:    nil,
 			wantErr: true,
 		},
-		"config map with cluster and namespace scoped data": {
+		"config map with cluster and namespace scoped data in the correct namespace should pass": {
 			uConfigMap: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "v1",
@@ -236,7 +236,7 @@ func TestExtractResFromConfigMap(t *testing.T) {
 			},
 			wantErr: false,
 		},
-		"config map with cluster scoped and cross namespaced resources data": {
+		"config map with cluster scoped and cross namespaced resources data in a different namespace should fail": {
 			uConfigMap: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "v1",
@@ -254,7 +254,7 @@ func TestExtractResFromConfigMap(t *testing.T) {
 			want:    nil,
 			wantErr: true,
 		},
-		"config map with valid entries in different order": {
+		"config map with valid entries in different order should be sorted to order": {
 			uConfigMap: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "v1",
@@ -281,8 +281,7 @@ func TestExtractResFromConfigMap(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			got, err := extractResFromConfigMap(tt.uConfigMap)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("extractResFromConfigMap() error = %v, wantErr %v", err, tt.wantErr)
-				return
+				t.Fatalf("extractResFromConfigMap() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("extractResFromConfigMap() mismatch (-want +got):\n%s", diff)
