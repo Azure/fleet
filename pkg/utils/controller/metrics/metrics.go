@@ -50,10 +50,17 @@ var (
 		Help: "Number of currently used workers per controller",
 	}, []string{"controller"})
 
-	FleetPlacementStatus = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	//FleetPlacementComplete is a prometheus metric which keeps track if the placement is complete
+	FleetPlacementComplete = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "fleet_workload_placement_complete",
 		Help: "Placement complete status ",
-	}, []string{"name"})
+	}, []string{"name", "isCompleted"})
+
+	// FleetPlacementStatus is a prometheus metric which keeps track of the placement status
+	FleetPlacementStatus = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "fleet_workload_placement_status",
+		Help: "Placement status",
+	}, []string{"name", "generation", "conditionType", "status"})
 
 	// FleetEvictionStatus is prometheus metrics which holds the
 	// status of eviction completion.
@@ -70,6 +77,7 @@ func init() {
 		FleetReconcileTime,
 		FleetWorkerCount,
 		FleetActiveWorkers,
+		FleetPlacementComplete,
 		FleetPlacementStatus,
 		FleetEvictionStatus,
 	)
