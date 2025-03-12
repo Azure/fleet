@@ -270,11 +270,12 @@ func trackServiceExportAvailability(curObj *unstructured.Unstructured) (Manifest
 		klog.V(2).InfoS("Still need to wait for ServiceExport to be valid", "serviceExport", svcExportObj, "validCondition", validCond)
 		return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
 	}
-
+	// Validate annotation weight. Updating the annotation won't change the object generation,
+	// so the current status is not reliable and need to validate the annotation again here
 	weight, err := objectmeta.ExtractWeightFromServiceExport(&svcExport)
 	if err != nil {
-		klog.V(2).InfoS("ServiceExport has invalid weight", "serviceExport", svcExportObj, "error", err)
-		return ManifestProcessingAvailabilityResultTypeFailed, err
+		klog.Errorf(err.Error(), "ServiceExport has invalid weight", "serviceExport", svcExportObj)
+		return ManifestProcessingAvailabilityResultTypeNotYetAvailable, err
 	}
 	if weight != 0 {
 		// Check conflict condition for non-zero weight
@@ -283,8 +284,10 @@ func trackServiceExportAvailability(curObj *unstructured.Unstructured) (Manifest
 			klog.V(2).InfoS("Still need to wait for ServiceExport to not have conflicts", "serviceExport", svcExportObj, "conflictCondition", conflictCond)
 			return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
 		}
+	} else {
+		klog.V(2).InfoS("Skipping checking the conflict condition for the weight 0", "serviceExport", svcExportObj)
 	}
-	klog.V(2).InfoS("Skipping checking the conflict condition for the weight 0", "serviceExport", svcExportObj)
+
 	klog.V(2).InfoS("ServiceExport is available", "serviceExport", svcExportObj)
 	return ManifestProcessingAvailabilityResultTypeAvailable, nil
 }
