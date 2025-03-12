@@ -32,3 +32,9 @@ CURRENT   NAME               CLUSTER            AUTHINFO                        
 The command adds a `Taint` the `MemberCluster` resource of the member cluster to prevent any new resources from being 
 propagated to the member cluster. Then it creates `ClusterResourcePlacementEviction` objects for all the 
 `ClusterResourcePlacement` objects that have propagated resources to the member cluster that needs to be cordoned.
+
+>> **Note**: The `drain` tool is a best effort mechanism at the moment, and it may not remove all the resources that 
+> have been propagated to the member cluster. To ensure that all resources are removed correctly the users can ensure
+> that no new changes are being propagated to the member cluster when running the `drain` tool by any 
+> `ClusterResourcePlacement` resource because at the time of draining the member cluster, a `ClusterResourcePlacement` 
+> could be propagating resources to the member cluster which may not be removed by the `drain` tool.
