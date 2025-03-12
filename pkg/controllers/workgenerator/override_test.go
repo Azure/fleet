@@ -2050,6 +2050,11 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 					},
 				},
 			},
+			cluster: clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+				},
+			},
 			roMap: map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot{
 				{
 					Group:     utils.DeploymentGVK.Group,

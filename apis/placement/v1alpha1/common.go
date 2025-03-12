@@ -18,10 +18,12 @@ const (
 	// OverrideClusterNameVariable is the reserved variable in the override value that will be replaced by the actual cluster name.
 	OverrideClusterNameVariable = "${MEMBER-CLUSTER-NAME}"
 
-	// OverrideClusterLabelKeyVariablePrefix is the reserved variable prefix in the override expression.
-	// The string will be replaced by the actual label value associated with the key following the prefix.
+	// OverrideClusterLabelKeyVariablePrefix is a reserved variable in the override expression.
+	// We use this variable to find the associated the key following the prefix.
 	// The key name ends with a "}" character (but not include it).
-	// The key name must be a valid label name and case-sensitive.
-	// For example, if the key name is "kube-fleet.io/region", the variable will be "${MEMBER-CLUSTER-LABEL-KEY-kube-fleet.io/region}"
+	// The key name must be a valid Kubernetes label name and case-sensitive.
+	// The content of the string containing this variable will be replaced by the actual label value on the member cluster.
+	// For example, if the string is "${MEMBER-CLUSTER-LABEL-KEY-kube-fleet.io/region}" then the key name is "kube-fleet.io/region".
+	// If there is a label "kube-fleet.io/region": "us-west-1" on the member cluster, this string will be replaced by "us-west-1".
 	OverrideClusterLabelKeyVariablePrefix = "${MEMBER-CLUSTER-LABEL-KEY-"
 )
