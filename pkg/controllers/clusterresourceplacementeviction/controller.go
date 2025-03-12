@@ -60,13 +60,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	}
 
 	if isEvictionInTerminalState(&eviction) {
-		metrics.FleetEvictionStatus.Delete(prometheus.Labels{"name": evictionName, "isCompleted": "false"})
-		// check to see if eviction is valid.
-		if condition.IsConditionStatusTrue(eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeValid)), eviction.GetGeneration()) {
-			metrics.FleetEvictionStatus.WithLabelValues(evictionName, "true", "true").SetToCurrentTime()
-		} else {
-			metrics.FleetEvictionStatus.WithLabelValues(evictionName, "true", "false").SetToCurrentTime()
-		}
 		return runtime.Result{}, nil
 	}
 
@@ -76,11 +69,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{}, err
 	}
 	if !validationResult.isValid {
-		err = r.updateEvictionStatus(ctx, &eviction)
-		if err != nil {
+		if err = r.updateEvictionStatus(ctx, &eviction); err != nil {
 			internalError = true
+			return runtime.Result{}, err
 		}
-		return runtime.Result{}, err
+		emitEvictionCompleteMetric(&eviction)
+		return runtime.Result{}, nil
 	}
 
 	markEvictionValid(&eviction)
@@ -90,11 +84,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{}, err
 	}
 
-	err = r.updateEvictionStatus(ctx, &eviction)
-	if err != nil {
+	if err = r.updateEvictionStatus(ctx, &eviction); err != nil {
 		internalError = true
+		return runtime.Result{}, err
 	}
-	return runtime.Result{}, err
+	emitEvictionCompleteMetric(&eviction)
+	return runtime.Result{}, nil
 }
 
 // validateEviction performs validation for eviction object's spec and returns a wrapped validation result.
@@ -367,6 +362,16 @@ func markEvictionNotExecuted(eviction *placementv1beta1.ClusterResourcePlacement
 	}
 	eviction.SetConditions(cond)
 	klog.V(2).InfoS("Marked eviction as not executed", "clusterResourcePlacementEviction", klog.KObj(eviction))
+}
+
+func emitEvictionCompleteMetric(eviction *placementv1beta1.ClusterResourcePlacementEviction) {
+	metrics.FleetEvictionStatus.Delete(prometheus.Labels{"name": eviction.Name, "isCompleted": "false"})
+	// check to see if eviction is valid.
+	if condition.IsConditionStatusTrue(eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeValid)), eviction.GetGeneration()) {
+		metrics.FleetEvictionStatus.WithLabelValues(eviction.Name, "true", "true").SetToCurrentTime()
+	} else {
+		metrics.FleetEvictionStatus.WithLabelValues(eviction.Name, "true", "false").SetToCurrentTime()
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.
