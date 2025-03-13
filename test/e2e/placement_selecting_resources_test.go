@@ -1189,23 +1189,15 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 // This test verifies that resources are selected and ordered correctly according to the sortResources logic
 var _ = Describe("creating CRP and checking selected resources order", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-	nsName := fmt.Sprintf("test-ns-order-%d", GinkgoParallelProcess())
+	ns := appNamespace()
+	nsName := ns.Name
 	var configMap *corev1.ConfigMap
 	var secret *corev1.Secret
 	var pvc *corev1.PersistentVolumeClaim
 	var role *rbacv1.Role
 	BeforeAll(func() {
 		By("creating test resources in specific order for ordering verification")
-		// Create a namespace for our test resources
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: nsName,
-				Labels: map[string]string{
-					"test-label": "selected",
-				},
-			},
-		}
-		Expect(hubClient.Create(ctx, ns)).To(Succeed(), "Failed to create test namespace")
+		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create test namespace")
 
 		// Create ConfigMap
 		configMap = &corev1.ConfigMap{
@@ -1293,12 +1285,7 @@ var _ = Describe("creating CRP and checking selected resources order", Ordered, 
 		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 
 		// Delete the namespace which will cascade delete all resources
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: nsName,
-			},
-		}
-		Expect(client.IgnoreNotFound(hubClient.Delete(ctx, ns))).To(Succeed(), "Failed to delete test namespace")
+		Expect(client.IgnoreNotFound(hubClient.Delete(ctx, &ns))).To(Succeed(), "Failed to delete test namespace")
 	})
 
 	It("should update CRP status with the correct order of the selected resources", func() {
