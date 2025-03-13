@@ -1,6 +1,6 @@
 run:
   deadline: 10m
-  go: '1.22.12'
+  go: '1.23.1'
 
 linters:
   disable-all: true
