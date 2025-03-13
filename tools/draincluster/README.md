@@ -1,11 +1,11 @@
 # Drain Member Cluster connected to a fleet
 
-To drain a member cluster connected to a fleet, you can use the `drain` tool. This tool allows you remove all
-resource propagated to the member cluster from the hub cluster by any `ClusterResourcePlacement` resource.
+To drain a member cluster connected to a fleet, you can use the `draincluster` tool. This tool allows you to remove all
+resources propagated to the member cluster from the hub cluster by any `ClusterResourcePlacement` resource.
 This is useful when you want to temporarily move all workloads off a member cluster in preparation for an 
 event like upgrade or reconfiguration.
 
-The `drain` tool can be used to drain a member cluster by running the following command:
+The `draincluster` tool can be used to drain a member cluster by running the following command:
 
 ```
 go run tools/draincluster/main.go --hubClusterContext <hub-cluster-context> --clusterName <memberClusterName>
@@ -31,10 +31,10 @@ CURRENT   NAME               CLUSTER            AUTHINFO                        
 
 The command adds a `Taint` the `MemberCluster` resource of the member cluster to prevent any new resources from being 
 propagated to the member cluster. Then it creates `ClusterResourcePlacementEviction` objects for all the 
-`ClusterResourcePlacement` objects that have propagated resources to the member cluster that needs to be cordoned.
+`ClusterResourcePlacement` objects that have propagated resources to the member cluster.
 
->> **Note**: The `drain` tool is a best effort mechanism at the moment, and it may not remove all the resources that 
-> have been propagated to the member cluster. To ensure that all resources are removed correctly the users can ensure
-> that no new changes are being propagated to the member cluster when running the `drain` tool by any 
-> `ClusterResourcePlacement` resource because at the time of draining the member cluster, a `ClusterResourcePlacement` 
-> could be propagating resources to the member cluster which may not be removed by the `drain` tool.
+>> **Note**: The `draincluster` tool is a best-effort mechanism at the moment, and it may not remove all the resources that 
+> have been propagated to the member cluster. To ensure that drain is successful the users can ensure that no new 
+> changes are being propagated to the member cluster when running the tool by any `ClusterResourcePlacement` resource 
+> because at the time of draining the member cluster, a `ClusterResourcePlacement` could be propagating resources to the 
+> member cluster these resources may not be removed by the tool.
