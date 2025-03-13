@@ -25,13 +25,18 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	apiextensionshelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/component-helpers/apps/poddisruptionbudget"
 	"k8s.io/klog/v2"
 
+	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
+	"go.goms.io/fleet-networking/pkg/common/objectmeta"
+
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -104,6 +109,8 @@ func trackInMemberClusterObjAvailabilityByGVR(
 		return trackCRDAvailability(inMemberClusterObj)
 	case utils.PodDisruptionBudgetGVR:
 		return trackPDBAvailability(inMemberClusterObj)
+	case utils.ServiceExportGVR:
+		return trackServiceExportAvailability(inMemberClusterObj)
 	default:
 		if isDataResource(*gvr) {
 			klog.V(2).InfoS("The object from the member cluster is a data object, consider it to be immediately available",
@@ -266,6 +273,44 @@ func trackPDBAvailability(curObj *unstructured.Unstructured) (ManifestProcessing
 	}
 	klog.V(2).InfoS("Still need to wait for PodDisruptionBudget to be available", "pdb", klog.KObj(curObj))
 	return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
+}
+
+// trackServiceExportAvailability tracks the availability of a service export in the member cluster.
+// It is available if the ServiceExportValid condition is true (will be false if annotation value is invalid).
+// If the weight is not 0, ServiceExportValid condition must be true and the ServiceExportConflict condition must be false.
+func trackServiceExportAvailability(curObj *unstructured.Unstructured) (ManifestProcessingAvailabilityResultType, error) {
+	var svcExport fleetnetworkingv1alpha1.ServiceExport
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &svcExport); err != nil {
+		return ManifestProcessingAvailabilityResultTypeFailed, controller.NewUnexpectedBehaviorError(err)
+	}
+
+	// Check if ServiceExport is valid and up to date
+	svcExportObj := klog.KObj(curObj)
+	validCond := meta.FindStatusCondition(svcExport.Status.Conditions, string(fleetnetworkingv1alpha1.ServiceExportValid))
+	if !condition.IsConditionStatusTrue(validCond, svcExport.Generation) {
+		klog.V(2).InfoS("Still need to wait for ServiceExport to be valid", "serviceExport", svcExportObj, "validCondition", validCond)
+		return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
+	}
+	// Validate annotation weight. Updating the annotation won't change the object generation,
+	// so the current status is not reliable and need to validate the annotation again here
+	weight, err := objectmeta.ExtractWeightFromServiceExport(&svcExport)
+	if err != nil {
+		klog.Errorf(err.Error(), "ServiceExport has invalid weight", "serviceExport", svcExportObj)
+		return ManifestProcessingAvailabilityResultTypeNotYetAvailable, err
+	}
+	if weight != 0 {
+		// Check conflict condition for non-zero weight
+		conflictCond := meta.FindStatusCondition(svcExport.Status.Conditions, string(fleetnetworkingv1alpha1.ServiceExportConflict))
+		if !condition.IsConditionStatusFalse(conflictCond, svcExport.Generation) {
+			klog.V(2).InfoS("Still need to wait for ServiceExport to not have conflicts", "serviceExport", svcExportObj, "conflictCondition", conflictCond)
+			return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
+		}
+	} else {
+		klog.V(2).InfoS("Skipping checking the conflict condition for the weight 0", "serviceExport", svcExportObj)
+	}
+
+	klog.V(2).InfoS("ServiceExport is available", "serviceExport", svcExportObj)
+	return ManifestProcessingAvailabilityResultTypeAvailable, nil
 }
 
 // isDataResource checks if the resource is a data resource; such resources are
