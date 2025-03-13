@@ -1,6 +1,10 @@
 # How can I debug when my CRP status is ClusterResourcePlacementRolloutStarted condition status is set to false?
 
 When using the `ClusterResourcePlacement` API object in Azure Kubernetes Fleet Manager to propagate resources, the selected resources aren't rolled out in all scheduled clusters and the `ClusterResourcePlacementRolloutStarted` condition status shows as `False`.
+
+*This TSG only applies to the `RollingUpdate` rollout strategy, which is the default strategy if you don't specify in the `ClusterResourcePlacement`.*
+*To troubleshoot the update run strategy as you specify `External` in the `ClusterResourcePlacement`, please refer to the [Staged Update Run Troubleshooting Guide](updaterun.md).*
+
 > Note: To get more information about why the rollout doesn't start, you can check the [rollout controller](https://github.com/Azure/fleet/blob/main/pkg/controllers/rollout/controller.go) to get more information on why the rollout did not start.
 
 ## Common scenarios:
