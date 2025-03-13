@@ -26,6 +26,7 @@ The complete progression of `ClusterResourcePlacement` is as follows:
     - If this condition is false, refer to [How can I debug when my CRP status is ClusterResourcePlacementScheduled condition status is set to false?](./clusterResourcePlacementScheduled.md). 
 2. `ClusterResourcePlacementRolloutStarted`: Indicates the rollout process has begun.
    - If this condition is false refer to [How can I debug when my CRP status is ClusterResourcePlacementRolloutStarted condition status is set to false?](./clusterResourcePlacementRolloutStarted.md)
+   - If you are triggering a rollout with a staged update run, refer to [Staged Update Run Troubleshooting Guide](./updaterun.md).
 3. `ClusterResourcePlacementOverridden`: Indicates the resource has been overridden.
    - If this condition is false, refer to [How can I debug when my CRP status is ClusterResourcePlacementOverridden condition status is set to false?](./clusterResourcePlacementOverridden.md)
 4. `ClusterResourcePlacementWorkSynchronized`: Indicates the work objects have been synchronized.
