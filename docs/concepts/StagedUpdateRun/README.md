@@ -119,3 +119,7 @@ This cluster-scoped resource requires three key parameters: the `placementName` 
 An updateRun executes in two phases. During the initialization phase, the controller performs a one-time setup where it captures a snapshot of the updateRun strategy, collects scheduled and to-be-deleted `ClusterResourceBindings`, generates the cluster update sequence, and records all this information in the updateRun status.
 
 In the execution phase, the controller processes each stage sequentially, updates clusters within each stage one at a time, and enforces completion of after-stage tasks. It then executes a final delete stage to clean up resources from unscheduled clusters. The updateRun succeeds when all stages complete successfully. However, it will fail if any execution-affecting events occur, for example, the target ClusterResourcePlacement being deleted, and member cluster changes triggering new scheduling. In such cases, error details are recorded in the updateRun status. Remember that once initialized, an updateRun operates on its strategy snapshot, making it immune to subsequent strategy modifications.
+
+## Next Steps
+* Learn how to [rollout CRP resources with Staged Update Run](../../howtos/updaterun.md)
+* Learn how to [troubleshoot a Staged Update Run](../../troubleshooting/updaterun.md)
