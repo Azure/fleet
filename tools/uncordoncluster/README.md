@@ -1,7 +1,7 @@
 # Uncordon Member Cluster connected to a fleet
 
-To uncordon a member cluster connected to a fleet, you can use the `uncordon-cluster` tool. This tool allows you to 
-uncordon a member cluster that has been cordoned using the `cordon-cluster` tool. 
+To uncordon a member cluster connected to a fleet, you can use the `uncordoncluster` tool. This tool allows you to 
+uncordon a member cluster that has been cordoned using the `draincluster` tool. 
 
 ```
 go run tools/uncordoncluster/main.go --hubClusterContext <hub-cluster-context> --clusterName <memberClusterName>
