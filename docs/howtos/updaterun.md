@@ -208,7 +208,6 @@ status:
       name: staging
     - afterStageTasks:
       - type: Approval
-        waitTime: 1h0m0s
       labelSelector:
         matchLabels:
           environment: canary
@@ -407,7 +406,6 @@ status:
       name: staging
     - afterStageTasks:
       - type: Approval
-        waitTime: 1h0m0s
       labelSelector:
         matchLabels:
           environment: canary
