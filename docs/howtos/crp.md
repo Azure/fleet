@@ -371,9 +371,10 @@ Most outcomes can lead to service interruptions. Apps running on member clusters
 unavailable as Fleet dispatches updated resources. Clusters that are no longer selected will lose all placed resources,
 resulting in lost traffic. If too many new clusters are selected and Fleet places resources on them simultaneously, 
 your backend may become overloaded. The exact interruption pattern may vary depending on the resources you place using Fleet.
+To minimize interruption, Fleet allows users to configure the rollout strategy. There are two types of rollout strategies we currently support.
 
 ### Default rollout strategy: Rolling Update
-To minimize interruption, Fleet allows users to configure the rollout strategy. 
+
 The default strategy is rolling update, and it applies to all changes you initiate.
 This strategy ensures changes, including the addition or removal of selected clusters and resource refreshes, 
 are applied incrementally in a phased manner at a pace suitable for you, similar to native Kubernetes deployments.
