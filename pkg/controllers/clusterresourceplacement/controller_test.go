@@ -11,10 +11,13 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,6 +31,7 @@ import (
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/controller/metrics"
 	"go.goms.io/fleet/pkg/utils/defaulter"
 	"go.goms.io/fleet/test/utils/resource"
 )
@@ -3073,7 +3077,9 @@ func TestHandleDelete(t *testing.T) {
 }
 
 func TestIsRolloutComplete(t *testing.T) {
+	metricMetadata := "\n# HELP fleet_workload_placement_status Placement status\n# TYPE fleet_workload_placement_status gauge"
 	crpGeneration := int64(25)
+	currentTime := metav1.Now()
 	tests := []struct {
 		name       string
 		conditions []metav1.Condition
@@ -3086,31 +3092,37 @@ func TestIsRolloutComplete(t *testing.T) {
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second * 5)),
 				},
 				{
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementAvailableConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second * 4)),
 				},
 				{
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second * 2)),
 				},
 				{
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second)),
 				},
 				{
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: currentTime,
 				},
 				{
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second * 3)),
 				},
 			},
 			want: true,
@@ -3122,6 +3134,7 @@ func TestIsRolloutComplete(t *testing.T) {
 					Status:             metav1.ConditionUnknown,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: currentTime,
 				},
 			},
 			want: false,
@@ -3133,6 +3146,7 @@ func TestIsRolloutComplete(t *testing.T) {
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: currentTime,
 				},
 			},
 			want: false,
@@ -3144,16 +3158,19 @@ func TestIsRolloutComplete(t *testing.T) {
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
 					ObservedGeneration: 1,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second * 2)),
 				},
 				{
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second)),
 				},
 				{
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: currentTime,
 				},
 			},
 			want: false,
@@ -3165,21 +3182,25 @@ func TestIsRolloutComplete(t *testing.T) {
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second * 2)),
 				},
 				{
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second)),
 				},
 				{
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: currentTime,
 				},
 				{
 					Status:             metav1.ConditionFalse,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second * 3)),
 				},
 			},
 			want: false,
@@ -3191,21 +3212,25 @@ func TestIsRolloutComplete(t *testing.T) {
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second * 2)),
 				},
 				{
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second)),
 				},
 				{
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: currentTime,
 				},
 				{
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second * 3)),
 				},
 			},
 			want: false,
@@ -3217,41 +3242,47 @@ func TestIsRolloutComplete(t *testing.T) {
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second * 5)),
 				},
 				{
 					Status:             metav1.ConditionFalse,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementAvailableConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second * 4)),
 				},
 				{
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second * 2)),
 				},
 				{
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second)),
 				},
 				{
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: currentTime,
 				},
 				{
 					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
 					ObservedGeneration: crpGeneration,
+					LastTransitionTime: metav1.NewTime(currentTime.Add(time.Second * 3)),
 				},
 			},
 			want: false,
 		},
 	}
-	for _, tc := range tests {
+	for i, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			crp := &fleetv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       testCRPName,
+					Name:       testCRPName + strconv.Itoa(i),
 					Generation: crpGeneration,
 				},
 				Status: fleetv1beta1.ClusterResourcePlacementStatus{
@@ -3262,6 +3293,18 @@ func TestIsRolloutComplete(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("isRolloutCompleted() got %v, want %v", got, tc.want)
 			}
+
+			var wantMetrics string
+			for _, cond := range tc.conditions {
+				lastTransitionTime := float64(cond.LastTransitionTime.UnixNano() / 1e9)
+				wantMetrics += fmt.Sprintf("\nfleet_workload_placement_status{conditionType=\"%[1]s\",generation=\"%[2]d\",name=\"%[3]s\",observedGeneration=\"%[4]d\",reason=\"%[5]s\",status=\"%[6]s\"} %f",
+					cond.Type, crp.Generation, crp.Name, cond.ObservedGeneration, cond.Reason, cond.Status, lastTransitionTime)
+			}
+
+			if err := testutil.CollectAndCompare(metrics.FleetPlacementStatus, strings.NewReader(metricMetadata+wantMetrics+"\n")); err != nil {
+				t.Errorf("%s", err)
+			}
+			metrics.FleetPlacementStatus.Reset()
 		})
 	}
 }
