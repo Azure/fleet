@@ -139,7 +139,7 @@ func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, 
 		if err := applyOverrideRules(resource, cluster, snapshot.Spec.OverrideSpec.Policy.OverrideRules); err != nil {
 			overrideErr := fmt.Errorf("failed to apply the cluster override rule `%s` on resource `%s/%s/%s`: err = %s", snapshot.Name, uResource.GroupVersionKind(), uResource.GetNamespace(), uResource.GetName(), err.Error())
 			klog.ErrorS(err, "Failed to apply the override rules", "resource", klog.KObj(&uResource), "clusterResourceOverrideSnapshot", klog.KObj(snapshot))
-			return false, controller.NewUserError(overrideErr)
+			return false, overrideErr
 		}
 	}
 	klog.V(2).InfoS("Applied clusterResourceOverrideSnapshots", "resource", klog.KObj(&uResource), "numberOfOverrides", len(croMap[key]))
@@ -163,7 +163,7 @@ func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, 
 			if err := applyOverrideRules(resource, cluster, snapshot.Spec.OverrideSpec.Policy.OverrideRules); err != nil {
 				overrideErr := fmt.Errorf("failed to apply the resource override rule %s/%s on resource `%s/%s/%s`: err = %s", snapshot.Namespace, snapshot.Name, uResource.GroupVersionKind(), uResource.GetNamespace(), uResource.GetName(), err.Error())
 				klog.ErrorS(err, "Failed to apply the override rules", "resource", klog.KObj(&uResource), "resourceOverrideSnapshot", klog.KObj(snapshot))
-				return false, controller.NewUserError(overrideErr)
+				return false, overrideErr
 			}
 		}
 		klog.V(2).InfoS("Applied resourceOverrideSnapshots", "resource", klog.KObj(&uResource), "numberOfOverrides", len(roMap[key]))

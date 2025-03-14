@@ -844,7 +844,7 @@ var _ = FContext("creating resourceOverride with a templated rules  with cluster
 								{
 									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
 									Path:     "/data/region",
-									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s%s}"`, placementv1alpha1.OverrideClusterLabelKeyVariablePrefix, regionLabelName))},
+									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s%s}"`, placementv1alpha1.OverrideClusterLabelKeyVariablePrefix, envLabelName))},
 								},
 								{
 									Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
