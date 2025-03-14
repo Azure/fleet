@@ -7,7 +7,6 @@ package workapplier
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -1002,7 +1001,6 @@ func TestServiceExportAvailability(t *testing.T) {
 		weight                                       string
 		status                                       fleetnetworkingv1alpha1.ServiceExportStatus
 		wantManifestProcessingAvailabilityResultType ManifestProcessingAvailabilityResultType
-		err                                          error
 	}{
 		{
 			name:   "available svcExport (annotation weight is 0)",
@@ -1018,7 +1016,6 @@ func TestServiceExportAvailability(t *testing.T) {
 				},
 			},
 			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
-			err: nil,
 		},
 		{
 			name:   "unavailable svcExport (ServiceExportValid is false)",
@@ -1034,7 +1031,6 @@ func TestServiceExportAvailability(t *testing.T) {
 				},
 			},
 			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
-			err: nil,
 		},
 		{
 			name:   "unavailable svcExport (different generation, annotation weight is 0)",
@@ -1050,7 +1046,6 @@ func TestServiceExportAvailability(t *testing.T) {
 				},
 			},
 			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
-			err: nil,
 		},
 		{
 			name:   "available svcExport with no conflict (annotation weight is 1)",
@@ -1072,7 +1067,6 @@ func TestServiceExportAvailability(t *testing.T) {
 				},
 			},
 			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
-			err: nil,
 		},
 		{
 			name:   "unavailable svcExport with conflict (annotation weight is 1)",
@@ -1094,7 +1088,6 @@ func TestServiceExportAvailability(t *testing.T) {
 				},
 			},
 			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
-			err: nil,
 		},
 		{
 			name:   "unavailable invalid svcExport (annotation weight is 1)",
@@ -1110,7 +1103,6 @@ func TestServiceExportAvailability(t *testing.T) {
 				},
 			},
 			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
-			err: nil,
 		},
 		{
 			name:   "unavailable svcExport (different generation, annotation weight is 1)",
@@ -1132,7 +1124,6 @@ func TestServiceExportAvailability(t *testing.T) {
 				},
 			},
 			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
-			err: nil,
 		},
 		{
 			name:   "unavailable svcExport (no annotation weight, no conflict condition)",
@@ -1148,7 +1139,6 @@ func TestServiceExportAvailability(t *testing.T) {
 				},
 			},
 			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
-			err: nil,
 		},
 		{
 			name:   "available svcExport (no annotation weight)",
@@ -1170,7 +1160,6 @@ func TestServiceExportAvailability(t *testing.T) {
 				},
 			},
 			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
-			err: nil,
 		},
 		{
 			name:   "unavailable svcExport (no annotation weight with conflict)",
@@ -1192,7 +1181,6 @@ func TestServiceExportAvailability(t *testing.T) {
 				},
 			},
 			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
-			err: nil,
 		},
 		{
 			name:   "unavailable svcExport (no annotation weight, different generation)",
@@ -1214,7 +1202,6 @@ func TestServiceExportAvailability(t *testing.T) {
 				},
 			},
 			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
-			err: nil,
 		},
 		{
 			name:   "unavailable svcExport (no annotation weight, invalid service export)",
@@ -1230,7 +1217,6 @@ func TestServiceExportAvailability(t *testing.T) {
 				},
 			},
 			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
-			err: nil,
 		},
 		{
 			name:   "unavailable svcExport (invalid weight)",
@@ -1246,7 +1232,6 @@ func TestServiceExportAvailability(t *testing.T) {
 				},
 			},
 			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
-			err: fmt.Errorf("the weight annotation is not a valid integer: a"),
 		},
 		{
 			name:   "unavailable svcExport (out of range weight)",
@@ -1262,7 +1247,6 @@ func TestServiceExportAvailability(t *testing.T) {
 				},
 			},
 			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
-			err: fmt.Errorf("the weight annotation is not in the range [0, 1000]: 1002"),
 		},
 	}
 
@@ -1274,14 +1258,8 @@ func TestServiceExportAvailability(t *testing.T) {
 			}
 			svcExport.Status = tc.status
 			gotResTyp, err := trackServiceExportAvailability(toUnstructured(t, svcExport))
-
-			// Check for errors
 			if err != nil {
-				if tc.err == nil || err.Error() != tc.err.Error() {
-					t.Fatalf("trackServiceExportAvailability() = %v, want %v", err, tc.err)
-				}
-			} else if tc.err != nil {
-				t.Fatalf("trackServiceExportAvailability() = nil, want error: %v", tc.err)
+				t.Fatalf("trackServiceExportAvailability() = %v, want no error", err)
 			}
 
 			// Check the result type

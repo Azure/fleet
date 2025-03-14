@@ -271,11 +271,11 @@ func trackServiceExportAvailability(curObj *unstructured.Unstructured) (Manifest
 		return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
 	}
 	// Validate annotation weight. Updating the annotation won't change the object generation,
-	// so the current status is not reliable and need to validate the annotation again here
+	// so the current status is not reliable and need to validate the annotation again here.
 	weight, err := objectmeta.ExtractWeightFromServiceExport(&svcExport)
 	if err != nil {
-		klog.Errorf(err.Error(), "ServiceExport has invalid weight", "serviceExport", svcExportObj)
-		return ManifestProcessingAvailabilityResultTypeNotYetAvailable, err
+		klog.Error(err, "ServiceExport has invalid weight", "serviceExport", svcExportObj)
+		return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
 	}
 	if weight != 0 {
 		// Check conflict condition for non-zero weight
