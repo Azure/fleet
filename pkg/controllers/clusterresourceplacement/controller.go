@@ -16,6 +16,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -198,11 +199,13 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		return ctrl.Result{}, err
 	}
 
-	if err := r.Client.Status().Update(ctx, crp); err != nil {
-		klog.ErrorS(err, "Failed to update the status", "clusterResourcePlacement", crpKObj)
-		return ctrl.Result{}, err
+	if !apiequality.Semantic.DeepEqual(oldCRP.Status, crp.Status) {
+		if err := r.Client.Status().Update(ctx, crp); err != nil {
+			klog.ErrorS(err, "Failed to update the status", "clusterResourcePlacement", crpKObj)
+			return ctrl.Result{}, err
+		}
+		klog.V(2).InfoS("Updated the clusterResourcePlacement status", "clusterResourcePlacement", crpKObj)
 	}
-	klog.V(2).InfoS("Updated the clusterResourcePlacement status", "clusterResourcePlacement", crpKObj)
 
 	// We skip checking the last resource condition (available) because it will be covered by checking isRolloutCompleted func.
 	for i := condition.RolloutStartedCondition; i < condition.TotalCondition-1; i++ {
