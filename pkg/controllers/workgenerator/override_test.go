@@ -1123,7 +1123,7 @@ func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 			}
 
 			var clusterRole rbacv1.ClusterRole
-			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &clusterRole); err != nil {
+			if err = runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &clusterRole); err != nil {
 				t.Fatalf("Failed to convert the result to clusterole: %v, want nil", err)
 			}
 

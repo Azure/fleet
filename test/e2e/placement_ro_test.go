@@ -161,6 +161,9 @@ var _ = Context("creating resourceOverride with multiple jsonPatchOverrides to o
 				Namespace: roNamespace,
 			},
 			Spec: placementv1alpha1.ResourceOverrideSpec{
+				Placement: &placementv1alpha1.PlacementRef{
+					Name: crpName, // assigned CRP name
+				},
 				ResourceSelectors: configMapSelector(),
 				Policy: &placementv1alpha1.OverridePolicy{
 					OverrideRules: []placementv1alpha1.OverrideRule{
@@ -599,6 +602,9 @@ var _ = Context("creating resourceOverride with a templated rules with cluster n
 				Namespace: roNamespace,
 			},
 			Spec: placementv1alpha1.ResourceOverrideSpec{
+				Placement: &placementv1alpha1.PlacementRef{
+					Name: crpName, // assigned CRP name
+				},
 				ResourceSelectors: configMapSelector(),
 				Policy: &placementv1alpha1.OverridePolicy{
 					OverrideRules: []placementv1alpha1.OverrideRule{
@@ -693,6 +699,9 @@ var _ = Context("creating resourceOverride with delete configMap", Ordered, func
 				Namespace: roNamespace,
 			},
 			Spec: placementv1alpha1.ResourceOverrideSpec{
+				Placement: &placementv1alpha1.PlacementRef{
+					Name: crpName, // assigned CRP name
+				},
 				ResourceSelectors: configMapSelector(),
 				Policy: &placementv1alpha1.OverridePolicy{
 					OverrideRules: []placementv1alpha1.OverrideRule{
@@ -787,5 +796,140 @@ var _ = Context("creating resourceOverride with delete configMap", Ordered, func
 			err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: namespaceName}, &configMap)
 			return errors.IsNotFound(err)
 		}, consistentlyDuration, consistentlyInterval).Should(BeTrue(), "Failed to delete work resources on member cluster %s", memberCluster.ClusterName)
+	})
+})
+
+var _ = FContext("creating resourceOverride with a templated rules  with cluster label key replacement", Ordered, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
+	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+
+	BeforeAll(func() {
+		By("creating work resources")
+		createWorkResources()
+
+		// Create the ro before crp so that the observed resource index is predictable.
+		ro := &placementv1alpha1.ResourceOverride{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      roName,
+				Namespace: roNamespace,
+			},
+			Spec: placementv1alpha1.ResourceOverrideSpec{
+				Placement: &placementv1alpha1.PlacementRef{
+					Name: crpName, // assigned CRP name
+				},
+				ResourceSelectors: configMapSelector(),
+				Policy: &placementv1alpha1.OverridePolicy{
+					OverrideRules: []placementv1alpha1.OverrideRule{
+						{
+							ClusterSelector: &placementv1beta1.ClusterSelector{
+								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+									{
+										LabelSelector: &metav1.LabelSelector{
+											MatchExpressions: []metav1.LabelSelectorRequirement{
+												{
+													Key:      regionLabelName,
+													Operator: metav1.LabelSelectorOpExists,
+												},
+												{
+													Key:      envLabelName,
+													Operator: metav1.LabelSelectorOpExists,
+												},
+											},
+										},
+									},
+								},
+							},
+							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+								{
+									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Path:     "/data/region",
+									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s%s}"`, placementv1alpha1.OverrideClusterLabelKeyVariablePrefix, regionLabelName))},
+								},
+								{
+									Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+									Path:     "/data/data",
+									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"newdata-%s%s}"`, placementv1alpha1.OverrideClusterLabelKeyVariablePrefix, regionLabelName))},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		By(fmt.Sprintf("creating resourceOverride %s", roName))
+		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
+
+		// Create the CRP.
+		createCRP(crpName)
+	})
+
+	AfterAll(func() {
+		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+
+		By(fmt.Sprintf("deleting resourceOverride %s", roName))
+		cleanupResourceOverride(roName, roNamespace)
+	})
+
+	It("should update CRP status as expected", func() {
+		wantRONames := []placementv1beta1.NamespacedName{
+			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)},
+		}
+		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, wantRONames)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	It("should replace the cluster label key in the configMap", func() {
+		cmName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
+		cmNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+		for _, cluster := range allMemberClusters {
+
+			wantConfigMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      cmName,
+					Namespace: cmNamespace,
+				},
+				Data: map[string]string{
+					"data":   fmt.Sprintf("newdata-%s", labelsByClusterName[cluster.ClusterName][envLabelName]),
+					"region": labelsByClusterName[cluster.ClusterName][regionLabelName],
+				},
+			}
+			configMapActual := configMapPlacedOnClusterActual(cluster, wantConfigMap)
+			Eventually(configMapActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update configmap %s data as expected", cmName)
+		}
+	})
+
+	It("should handle non-existent cluster label key gracefully", func() {
+		By("Update the ResourceOverride to use a non-existent label key")
+		Eventually(func() error {
+			ro := &placementv1alpha1.ResourceOverride{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: roName, Namespace: roNamespace}, ro); err != nil {
+				return err
+			}
+			ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides[0].Value = apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%snon-existent-label}"`, placementv1alpha1.OverrideClusterLabelKeyVariablePrefix))}
+			return hubClient.Update(ctx, ro)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update resourceOverride %s with non-existent label key", roName)
+
+		// Verify CRP status reflects the error
+		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedFailedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, nil)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "CRP %s status should reflect the error due to non-existent label key", crpName)
+
+		// Verify the configMap remains unchanged
+		cmName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
+		cmNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+		for _, cluster := range allMemberClusters {
+			wantConfigMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      cmName,
+					Namespace: cmNamespace,
+				},
+				Data: map[string]string{
+					"region": labelsByClusterName[cluster.ClusterName][regionLabelName],
+				},
+			}
+			configMapActual := configMapPlacedOnClusterActual(cluster, wantConfigMap)
+			Consistently(configMapActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "ConfigMap %s should remain unchanged", cmName)
+		}
 	})
 })

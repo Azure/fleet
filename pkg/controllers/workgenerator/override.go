@@ -137,8 +137,9 @@ func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, 
 			continue // should not happen
 		}
 		if err := applyOverrideRules(resource, cluster, snapshot.Spec.OverrideSpec.Policy.OverrideRules); err != nil {
-			klog.ErrorS(err, "Failed to apply the override rules", "clusterResourceOverrideSnapshot", klog.KObj(snapshot))
-			return false, err
+			overrideErr := fmt.Errorf("failed to apply the cluster override rule `%s` on resource `%s/%s/%s`: err = %s", snapshot.Name, uResource.GroupVersionKind(), uResource.GetNamespace(), uResource.GetName(), err.Error())
+			klog.ErrorS(err, "Failed to apply the override rules", "resource", klog.KObj(&uResource), "clusterResourceOverrideSnapshot", klog.KObj(snapshot))
+			return false, controller.NewUserError(overrideErr)
 		}
 	}
 	klog.V(2).InfoS("Applied clusterResourceOverrideSnapshots", "resource", klog.KObj(&uResource), "numberOfOverrides", len(croMap[key]))
@@ -160,8 +161,9 @@ func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, 
 				continue // should not happen
 			}
 			if err := applyOverrideRules(resource, cluster, snapshot.Spec.OverrideSpec.Policy.OverrideRules); err != nil {
-				klog.ErrorS(err, "Failed to apply the override rules", "resourceOverrideSnapshot", klog.KObj(snapshot))
-				return false, err
+				overrideErr := fmt.Errorf("failed to apply the resource override rule %s/%s on resource `%s/%s/%s`: err = %s", snapshot.Namespace, snapshot.Name, uResource.GroupVersionKind(), uResource.GetNamespace(), uResource.GetName(), err.Error())
+				klog.ErrorS(err, "Failed to apply the override rules", "resource", klog.KObj(&uResource), "resourceOverrideSnapshot", klog.KObj(snapshot))
+				return false, controller.NewUserError(overrideErr)
 			}
 		}
 		klog.V(2).InfoS("Applied resourceOverrideSnapshots", "resource", klog.KObj(&uResource), "numberOfOverrides", len(roMap[key]))
@@ -174,7 +176,7 @@ func applyOverrideRules(resource *placementv1beta1.ResourceContent, cluster *clu
 		matched, err := overrider.IsClusterMatched(cluster, rule)
 		if err != nil {
 			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Found an invalid override rule")
-			return controller.NewUserError(err) // should not happen though and should be rejected by the webhook
+			return err // should not happen though and should be rejected by the webhook
 		}
 		if !matched {
 			continue
@@ -265,7 +267,7 @@ func replaceClusterLabelKeyVariables(input string, cluster *clusterv1beta1.Membe
 			return "", fmt.Errorf("label key %s not found on cluster %s", keyName, cluster.Name)
 		}
 		// replace this instance of the variable with the actual label value
-		fullVariable := result[startIdx : endIdx+1]
+		fullVariable := fmt.Sprintf("%s%s}", placementv1alpha1.OverrideClusterLabelKeyVariablePrefix, keyName)
 		result = strings.Replace(result, fullVariable, labelValue, 1)
 	}
 	return result, nil
