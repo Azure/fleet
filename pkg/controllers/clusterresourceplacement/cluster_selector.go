@@ -37,7 +37,7 @@ func (r *Reconciler) selectClusters(placement *fleetv1alpha1.ClusterResourcePlac
 		}
 		klog.V(2).InfoS("we select all the available clusters in the fleet without a policy",
 			"placement", placement.Name, "clusters", clusterNames)
-		return
+		return clusterNames, nil
 	}
 	// a fix list of clusters set
 	if len(placement.Spec.Policy.ClusterNames) != 0 {
@@ -47,7 +47,7 @@ func (r *Reconciler) selectClusters(placement *fleetv1alpha1.ClusterResourcePlac
 		if err != nil {
 			return nil, err
 		}
-		return
+		return clusterNames, nil
 	}
 
 	// no Affinity or ClusterAffinity set
@@ -58,7 +58,7 @@ func (r *Reconciler) selectClusters(placement *fleetv1alpha1.ClusterResourcePlac
 		}
 		klog.V(2).InfoS("we select all the available clusters in the fleet without a cluster affinity",
 			"placement", placement.Name, "clusters", clusterNames)
-		return
+		return clusterNames, nil
 	}
 
 	selectedClusters := make(map[string]bool)

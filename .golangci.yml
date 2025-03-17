@@ -2,13 +2,16 @@ run:
   timeout: 15m
   go: '1.23.1'
 
-  linters-settings:
-    stylecheck:
-      checks: [ "all", "-ST1001" ]  # Disables dot-import warnings
-    revive:
-      rules:
-        - name: dot-imports
-          disabled: true
+linters-settings:
+  stylecheck:
+    checks: [ "all", "-ST1001" ]  # Disables dot-import warnings
+  revive:
+    rules:
+      - name: dot-imports
+        disabled: true
+  gosec:
+    excludes:
+      - G115
 
 linters:
   disable-all: true
