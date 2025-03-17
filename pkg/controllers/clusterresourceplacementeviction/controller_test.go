@@ -1592,7 +1592,7 @@ func TestReconcileForIncompleteEvictionMetric(t *testing.T) {
 		isComplete string
 	}{
 		{
-			name:       "",
+			name:       "failed reconcile - emit incomplete eviction metric",
 			request:    controllerruntime.Request{NamespacedName: types.NamespacedName{Name: "test-eviction"}},
 			isValid:    "false",
 			isComplete: "false",
