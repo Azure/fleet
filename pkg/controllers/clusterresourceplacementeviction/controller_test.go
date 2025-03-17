@@ -1529,18 +1529,18 @@ func TestEmitEvictionCompleteMetric(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for _, tc := range tests {
 		// Create a test registry
 		customRegistry := prometheus.NewRegistry()
 		if err := customRegistry.Register(metrics.FleetEvictionStatus); err != nil {
 			t.Errorf("Failed to register metric: %v", err)
 		}
 
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			// Reset metrics before each test
 			metrics.FleetEvictionStatus.Reset()
 
-			emitEvictionCompleteMetric(tt.eviction)
+			emitEvictionCompleteMetric(tc.eviction)
 			metricFamilies, err := customRegistry.Gather()
 			if err != nil {
 				t.Fatalf("error gathering metrics: %v", err)
@@ -1570,13 +1570,13 @@ func TestEmitEvictionCompleteMetric(t *testing.T) {
 
 			for _, label := range labels {
 				if label.GetName() == "isValid" {
-					if label.GetValue() != tt.isValid {
-						t.Errorf("isValid label value doesn't match got: %v, want %v", label.GetValue(), tt.isValid)
+					if label.GetValue() != tc.isValid {
+						t.Errorf("isValid label value doesn't match got: %v, want %v", label.GetValue(), tc.isValid)
 					}
 				}
 				if label.GetName() == "isComplete" {
-					if label.GetValue() != tt.isComplete {
-						t.Errorf("isComplete label value doesn't match got: %v, want %v", label.GetValue(), tt.isComplete)
+					if label.GetValue() != tc.isComplete {
+						t.Errorf("isComplete label value doesn't match got: %v, want %v", label.GetValue(), tc.isComplete)
 					}
 				}
 			}
