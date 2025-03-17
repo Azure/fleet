@@ -229,8 +229,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			}
 			klog.Info("Setting up cluster resource placement eviction controller")
 			if err := (&clusterresourceplacementeviction.Reconciler{
-				Client:         mgr.GetClient(),
-				UncachedReader: mgr.GetAPIReader(),
+				Client: mgr.GetClient(),
 			}).SetupWithManager(mgr); err != nil {
 				klog.ErrorS(err, "Unable to set up cluster resource placement eviction controller")
 				return err
