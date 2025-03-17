@@ -1661,7 +1661,6 @@ func TestReconcileForIncompleteEvictionMetric(t *testing.T) {
 					}
 				}
 			}
-
 		})
 	}
 }
