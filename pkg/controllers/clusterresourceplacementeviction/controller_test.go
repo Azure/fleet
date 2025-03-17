@@ -1693,6 +1693,6 @@ type mockClient struct {
 	client.Client
 }
 
-func (m mockClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+func (m mockClient) Get(_ context.Context, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
 	return fmt.Errorf("internal error")
 }
