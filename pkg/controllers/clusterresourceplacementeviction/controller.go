@@ -46,7 +46,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	var internalError bool
 	defer func() {
 		if internalError {
-			metrics.FleetEvictionStatus.WithLabelValues(evictionName, "false").SetToCurrentTime()
+			metrics.FleetEvictionStatus.WithLabelValues(evictionName, "false", "false").SetToCurrentTime()
 		}
 		latency := time.Since(startTime).Milliseconds()
 		klog.V(2).InfoS("ClusterResourcePlacementEviction reconciliation ends", "clusterResourcePlacementEviction", evictionName, "latency", latency)

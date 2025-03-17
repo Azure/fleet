@@ -6,7 +6,9 @@ Licensed under the MIT license.
 package clusterresourceplacementeviction
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -17,8 +19,10 @@ import (
 	prometheusclientmodel "github.com/prometheus/client_model/go"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -1560,6 +1564,10 @@ func TestEmitEvictionCompleteMetric(t *testing.T) {
 
 			// Check if the metric matches the expected label values
 			labels := evictionCompleteMetrics[0].GetLabel()
+			if len(labels) != 3 {
+				t.Errorf("expected three labels, got %d", len(labels))
+			}
+
 			for _, label := range labels {
 				if label.GetName() == "isValid" {
 					if label.GetValue() != tt.isValid {
@@ -1572,6 +1580,88 @@ func TestEmitEvictionCompleteMetric(t *testing.T) {
 					}
 				}
 			}
+		})
+	}
+}
+
+func TestReconcileForIncompleteEvictionMetric(t *testing.T) {
+	tests := []struct {
+		name       string
+		request    controllerruntime.Request
+		isValid    string
+		isComplete string
+	}{
+		{
+			name:       "",
+			request:    controllerruntime.Request{NamespacedName: types.NamespacedName{Name: "test-eviction"}},
+			isValid:    "false",
+			isComplete: "false",
+		},
+	}
+
+	for _, tc := range tests {
+		// Create a test registry
+		customRegistry := prometheus.NewRegistry()
+		if err := customRegistry.Register(metrics.FleetEvictionStatus); err != nil {
+			t.Errorf("Failed to register metric: %v", err)
+		}
+
+		t.Run(tc.name, func(t *testing.T) {
+			// Reset metrics before each test
+			metrics.FleetEvictionStatus.Reset()
+
+			scheme := serviceScheme(t)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				Build()
+			r := Reconciler{
+				Client: mockClient{fakeClient},
+			}
+			_, err := r.Reconcile(ctx, tc.request)
+			if err == nil {
+				t.Errorf("reconcile should have failed")
+			}
+
+			metricFamilies, err := customRegistry.Gather()
+			if err != nil {
+				t.Fatalf("error gathering metrics: %v", err)
+			}
+
+			var evictionCompleteMetrics []*prometheusclientmodel.Metric
+			for _, mf := range metricFamilies {
+				if mf.GetName() == "fleet_workload_eviction_complete" {
+					evictionCompleteMetrics = mf.GetMetric()
+				}
+			}
+
+			if len(evictionCompleteMetrics) == 0 {
+				t.Errorf("no eviction complete metrics found")
+			}
+
+			// we only expect one metric.
+			if len(evictionCompleteMetrics) > 1 {
+				t.Errorf("expected one eviction complete metric, got %d", len(evictionCompleteMetrics))
+			}
+
+			// Check if the metric matches the expected label values
+			labels := evictionCompleteMetrics[0].GetLabel()
+			if len(labels) != 3 {
+				t.Errorf("expected three labels, got %d", len(labels))
+			}
+
+			for _, label := range labels {
+				if label.GetName() == "isValid" {
+					if label.GetValue() != tc.isValid {
+						t.Errorf("isValid label value doesn't match got: %v, want %v", label.GetValue(), tc.isValid)
+					}
+				}
+				if label.GetName() == "isComplete" {
+					if label.GetValue() != tc.isComplete {
+						t.Errorf("isComplete label value doesn't match got: %v, want %v", label.GetValue(), tc.isComplete)
+					}
+				}
+			}
+
 		})
 	}
 }
@@ -1598,4 +1688,12 @@ func serviceScheme(t *testing.T) *runtime.Scheme {
 		t.Fatalf("Failed to add v1alpha1 scheme: %v", err)
 	}
 	return scheme
+}
+
+type mockClient struct {
+	client.Client
+}
+
+func (m mockClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	return fmt.Errorf("internal error")
 }
