@@ -195,6 +195,25 @@ For `Service` based on the service type the availability is determined as follow
 - For `ExternalName` service, checking availability is not supported, so it will be marked as available with a "not trackable" reason.
 
 
+#### Custom Resource Definition
+For `CustomResourceDefinition` availability is determined as follows:
+- Condition `Established` is set to true.
+- Condition `NamesAccepted` is set to true.
+
+
+### Pod Disruption Budget
+For `PodDisruptionBudget` based on the `DisruptionsAllowed` field the availability is determined as follows:
+- For `DisruptionsAllowed` > 0 , we mark it as available when condition `DisruptionAllowed` is set to true and the reason
+  is `SufficientPods`.
+- Otherwise, we mark it as available when condition `DisruptionAllowed` is set to false and the reason
+  is `InsufficientPodsReason`.
+
+
+#### Service Export
+The availability of a `ServiceExport` is determined based on the `networking.fleet.azure.com/weight` annotation as follows:
+- For annotation weight == 0, we mark as available if the `ServiceExportValid` condition is true (will be false if annotation value is invalid).
+- For annotation weight > 0, we mark as available if the `ServiceExportValid` condition is true and the `ServiceExportConflict` condition is false.
+
 #### Data only objects
 
 For the objects described below since they are a data resource we mark them as available immediately after creation,
@@ -206,3 +225,13 @@ For the objects described below since they are a data resource we mark them as a
 - ClusterRole
 - RoleBinding
 - ClusterRoleBinding
+- NetworkPolicy
+- CSIDriver
+- CSINode
+- StorageClass
+- CSIStorageCapacity
+- ControllerRevision
+- IngressClass
+- LimitRange
+- ResourceQuota
+- PriorityClass
