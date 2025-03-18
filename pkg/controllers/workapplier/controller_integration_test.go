@@ -348,7 +348,8 @@ func workStatusUpdated(
 					return fmt.Errorf("first drifted observation time is later than expected (observed: %v, no later than: %v)", manifestCond.DriftDetails.FirstDriftedObservedTime, noLaterThanFirstObservedTime)
 				}
 
-				if !manifestCond.DriftDetails.ObservationTime.After(manifestCond.DriftDetails.FirstDriftedObservedTime.Time) {
+				// The drift observation time can be equal or later than the first drifted observation time.
+				if manifestCond.DriftDetails.ObservationTime.Before(&manifestCond.DriftDetails.FirstDriftedObservedTime) {
 					return fmt.Errorf("drift observation time is later than first drifted observation time (observed: %v, first observed: %v)", manifestCond.DriftDetails.ObservationTime, manifestCond.DriftDetails.FirstDriftedObservedTime)
 				}
 			}
@@ -362,8 +363,9 @@ func workStatusUpdated(
 					return fmt.Errorf("first diffed observation time is later than expected (observed: %v, no later than: %v)", manifestCond.DiffDetails.FirstDiffedObservedTime, noLaterThanFirstObservedTime)
 				}
 
-				if !manifestCond.DiffDetails.ObservationTime.After(manifestCond.DiffDetails.FirstDiffedObservedTime.Time) {
-					return fmt.Errorf("diff observation time is later than first diffed observation time (observed: %v, first observed: %v)", manifestCond.DiffDetails.ObservationTime, manifestCond.DiffDetails.FirstDiffedObservedTime)
+				// The diff observation time can be equal or later than the first diffed observation time.
+				if manifestCond.DiffDetails.ObservationTime.Before(&manifestCond.DiffDetails.FirstDiffedObservedTime) {
+					return fmt.Errorf("diff observation time is before the first diffed observation time (observed: %v, first observed: %v)", manifestCond.DiffDetails.ObservationTime, manifestCond.DiffDetails.FirstDiffedObservedTime)
 				}
 			}
 		}
