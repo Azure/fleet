@@ -675,7 +675,7 @@ func TestWillViolate(t *testing.T) {
 		dn             domainName
 		maxSkew        int
 		wantViolated   bool
-		wantSkewChange int
+		wantSkewChange int32
 		expectedToFail bool
 	}{
 		{

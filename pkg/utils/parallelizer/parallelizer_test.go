@@ -14,12 +14,12 @@ import (
 // TestParallelizer tests the basic ops of a Parallelizer.
 func TestParallelizer(t *testing.T) {
 	p := NewParallelizer(DefaultNumOfWorkers)
-	nums := []int{1, 2, 3, 4, 5, 6, 7, 8}
+	nums := []int32{1, 2, 3, 4, 5, 6, 7, 8}
 
 	var sum int32
 	doWork := func(pieces int) {
 		num := nums[pieces]
-		atomic.AddInt32(&sum, int32(num))
+		atomic.AddInt32(&sum, num)
 	}
 
 	ctx := context.Background()

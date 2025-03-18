@@ -94,7 +94,7 @@ func countByDomain(clusters []clusterv1beta1.MemberCluster, state framework.Cycl
 // willViolate returns whether producing one more binding in a domain would lead
 // to violations; it will also return the skew change (the delta between the max skew after setting
 // up a placement and the one before) caused by the provisional placement.
-func willViolate(counter *bindingCounterByDomain, name domainName, maxSkew int) (violated bool, skewChange int, err error) {
+func willViolate(counter *bindingCounterByDomain, name domainName, maxSkew int) (violated bool, skewChange int32, err error) {
 	count, ok := counter.Count(name)
 	if !ok {
 		// The domain is not registered in the counter; normally this would never
@@ -232,7 +232,7 @@ func evaluateAllConstraints(
 
 				continue
 			}
-			scores[clusterName(cluster.Name)] += skewChange * skewChangeScoreFactor
+			scores[clusterName(cluster.Name)] += skewChange * int32(skewChangeScoreFactor)
 		}
 	}
 
@@ -278,7 +278,7 @@ func evaluateAllConstraints(
 				scores[clusterName(cluster.Name)] -= maxSkewViolationPenality
 				continue
 			}
-			scores[clusterName(cluster.Name)] += skewChange * skewChangeScoreFactor
+			scores[clusterName(cluster.Name)] += skewChange * int32(skewChangeScoreFactor)
 		}
 	}
 

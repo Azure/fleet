@@ -13,10 +13,10 @@ import (
 type ClusterScore struct {
 	// TopologySpreadScore determines how much a binding would satisfy the topology spread
 	// constraints specified by the user.
-	TopologySpreadScore int
+	TopologySpreadScore int32
 	// AffinityScore determines how much a binding would satisfy the affinity terms
 	// specified by the user.
-	AffinityScore int
+	AffinityScore int32
 	// ObsoletePlacementAffinityScore reflects if there has already been an obsolete binding from
 	// the same cluster resource placement associated with the cluster; it value range should
 	// be [0, 1], where 1 signals that an obsolete binding is present.
