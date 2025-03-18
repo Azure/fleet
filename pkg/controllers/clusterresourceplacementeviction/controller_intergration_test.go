@@ -642,6 +642,7 @@ func checkEvictionCompleteMetric(registry *prometheus.Registry, isValid, isCompl
 			evictionCompleteMetrics = mf.GetMetric()
 		}
 	}
+	// we only expect one metric, incomplete eviction metric should be removed.
 	Expect(len(evictionCompleteMetrics)).Should(Equal(1))
 	metricLabels := evictionCompleteMetrics[0].GetLabel()
 	Expect(len(metricLabels)).Should(Equal(3))
