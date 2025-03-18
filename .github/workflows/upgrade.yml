@@ -52,7 +52,7 @@ jobs:
           # Fetch the history of all branches and tags.
           # This is needed for the test suite to switch between releases.
           fetch-depth: 0
-              
+
       - name: Set up Ginkgo CLI
         run: |
           go install github.com/onsi/ginkgo/v2/ginkgo@v2.19.1
@@ -94,7 +94,7 @@ jobs:
           # Fetch the history of all branches and tags.
           # This is needed for the test suite to switch between releases.
           fetch-depth: 0
-              
+
       - name: Set up Ginkgo CLI
         run: |
           go install github.com/onsi/ginkgo/v2/ginkgo@v2.19.1
@@ -136,7 +136,7 @@ jobs:
           # Fetch the history of all branches and tags.
           # This is needed for the test suite to switch between releases.
           fetch-depth: 0
-              
+
       - name: Set up Ginkgo CLI
         run: |
           go install github.com/onsi/ginkgo/v2/ginkgo@v2.19.1
