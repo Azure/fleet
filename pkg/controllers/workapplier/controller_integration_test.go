@@ -984,12 +984,12 @@ var _ = Describe("applying manifests", func() {
 				// List all Deployments.
 				gotDeployList := &appsv1.DeploymentList{}
 				if err := memberClient.List(ctx, gotDeployList, client.InNamespace(nsName)); err != nil {
-					return fmt.Errorf("failed to list the Deployment object: %w", err)
+					return fmt.Errorf("failed to list Deployment objects: %w", err)
 				}
 
 				for _, gotDeploy := range gotDeployList.Items {
 					if gotDeploy.GenerateName == deployGenerateName {
-						return fmt.Errorf("deployment object that should not be applied exists: %s", gotDeploy.Name)
+						return fmt.Errorf("found a Deployment object with generate name that should not be applied")
 					}
 				}
 				return nil
