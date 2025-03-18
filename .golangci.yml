@@ -1,6 +1,6 @@
 run:
   timeout: 15m
-  go: '1.23.1'
+  go: '1.23.0'
 
 linters-settings:
   stylecheck:
@@ -9,9 +9,6 @@ linters-settings:
     rules:
       - name: dot-imports
         disabled: true
-  gosec:
-    excludes:
-      - G115
 
 linters:
   disable-all: true

@@ -6,6 +6,7 @@ Licensed under the MIT license.
 package clusterresourceplacement
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -163,7 +164,7 @@ func TestGenerateManifest(t *testing.T) {
 					Spec: corev1.ServiceSpec{
 						ClusterIP:           utilrand.String(10),
 						ClusterIPs:          []string{},
-						HealthCheckNodePort: int32(utilrand.Int()),
+						HealthCheckNodePort: int32(utilrand.IntnRange(0, math.MaxUint32)),
 						Selector:            map[string]string{"svc-spec-selector-key": "svc-spec-selector-value"},
 						Ports: []corev1.ServicePort{
 							{
@@ -171,7 +172,7 @@ func TestGenerateManifest(t *testing.T) {
 								Protocol:    corev1.ProtocolTCP,
 								AppProtocol: ptr.To("svc.com/my-custom-protocol"),
 								Port:        9001,
-								NodePort:    int32(utilrand.Int()),
+								NodePort:    int32(utilrand.IntnRange(0, math.MaxUint32)),
 							},
 						},
 						Type:                     corev1.ServiceType("svc-spec-type"),
@@ -667,7 +668,7 @@ func TestGenerateResourceContent(t *testing.T) {
 				Spec: corev1.ServiceSpec{
 					ClusterIP:           utilrand.String(10),
 					ClusterIPs:          []string{},
-					HealthCheckNodePort: int32(utilrand.Int()),
+					HealthCheckNodePort: int32(utilrand.IntnRange(0, math.MaxUint32)),
 					Selector:            map[string]string{"svc-spec-selector-key": "svc-spec-selector-value"},
 					Ports: []corev1.ServicePort{
 						{
