@@ -52,6 +52,8 @@ var _ = Describe("Test ClusterResourcePlacementEviction complete metric", Ordere
 		Expect(customRegistry.Register(metrics.FleetEvictionStatus)).Should(Succeed())
 		// Reset metrics before each test
 		metrics.FleetEvictionStatus.Reset()
+		// emit incomplete eviction metric to simulate eviction failed once.
+		metrics.FleetEvictionStatus.WithLabelValues(evictionName, "false", "unknown").SetToCurrentTime()
 	})
 
 	AfterEach(func() {

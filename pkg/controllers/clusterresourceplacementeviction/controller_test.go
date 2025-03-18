@@ -1504,7 +1504,7 @@ func TestReconcileForIncompleteEvictionMetric(t *testing.T) {
 
 	metricFamilies, err := customRegistry.Gather()
 	if err != nil {
-		t.Fatalf("error gathering metrics: %v", err)
+		t.Errorf("error gathering metrics: %v", err)
 	}
 
 	var evictionCompleteMetrics []*prometheusclientmodel.Metric
