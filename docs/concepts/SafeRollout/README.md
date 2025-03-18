@@ -174,7 +174,7 @@ mandates at least one cluster to be available.
 
 `UnavailablePeriodSeconds` is used to configure the waiting time between rollout phases when we cannot determine if the 
 resources have rolled out successfully or not. This field is used only if the availability of resources we propagate 
-are not trackable. Refer to the [Data only object](#data-only-objects) section for more details.
+are not trackable. Refer to the [How It Works](#how-it-works) section for more details on a list of resources we can track.
 
 ## Availability based Rollout
 We have built-in mechanisms to determine the availability of some common Kubernetes native resources. We only mark them 
@@ -197,8 +197,7 @@ For `Service` based on the service type the availability is determined as follow
 
 #### Custom Resource Definition
 For `CustomResourceDefinition` availability is determined as follows:
-- Condition `Established` is set to true.
-- Condition `NamesAccepted` is set to true.
+- We mark as available when `Established` condition is set to true and `NamesAccepted` condition is set to true.
 
 
 ### Pod Disruption Budget
@@ -216,7 +215,7 @@ The availability of a `ServiceExport` is determined based on the `networking.fle
 
 #### Data only objects
 
-For the objects described below since they are a data resource we mark them as available immediately after creation,
+For the objects described below since they are a data resource we mark them as available immediately after creation:
 
 - Namespace
 - Secret
