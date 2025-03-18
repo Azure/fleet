@@ -61,11 +61,12 @@ func (r *Reconciler) preProcessManifests(
 			return
 		}
 
-		// Reject objects with generate names.
-		if len(manifestObj.GetGenerateName()) > 0 {
-			klog.V(2).InfoS("Reject objects with generate names", "manifestObj", klog.KObj(manifestObj), "work", klog.KObj(work))
-			bundle.applyErr = fmt.Errorf("objects with generate names are not supported")
-			bundle.applyResTyp = ManifestProcessingApplyResultTypeFoundGenerateNames
+		// Reject objects with a generate name but no name.
+		if len(manifestObj.GetGenerateName()) > 0 && len(manifestObj.GetName()) == 0 {
+			// The manifest object has a generate name but no name.
+			klog.V(2).InfoS("Reject objects with only generate name", "manifestObj", klog.KObj(manifestObj), "work", klog.KObj(work))
+			bundle.applyErr = fmt.Errorf("objects with only generate name are not supported")
+			bundle.applyResTyp = ManifestProcessingApplyResultTypeFoundGenerateName
 			return
 		}
 
