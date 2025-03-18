@@ -9,6 +9,9 @@ linters-settings:
     rules:
       - name: dot-imports
         disabled: true
+  gosec:
+    excludes:
+      - G404 #Use of weak random number generator (math/rand or math/rand/v2). It is only used in tests.
 
 linters:
   disable-all: true
