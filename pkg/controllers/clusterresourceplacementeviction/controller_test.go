@@ -1476,117 +1476,9 @@ func TestIsEvictionAllowed(t *testing.T) {
 	}
 }
 
-func TestEmitEvictionCompleteMetric(t *testing.T) {
-	tests := []struct {
-		name       string
-		eviction   *placementv1beta1.ClusterResourcePlacementEviction
-		isValid    string
-		isComplete string
-	}{
-		{
-			name: "valid, executed eviction - emit complete metric with isValid label set to true",
-			eviction: &placementv1beta1.ClusterResourcePlacementEviction{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-eviction",
-				},
-				Status: placementv1beta1.PlacementEvictionStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:   string(placementv1beta1.PlacementEvictionConditionTypeValid),
-							Status: metav1.ConditionTrue,
-						},
-						{
-							Type:   string(placementv1beta1.PlacementEvictionConditionTypeExecuted),
-							Status: metav1.ConditionTrue,
-						},
-					},
-				},
-			},
-			isValid:    "true",
-			isComplete: "true",
-		},
-		{
-			name: "invalid, executed eviction - emit complete metric with isValid label set to false",
-			eviction: &placementv1beta1.ClusterResourcePlacementEviction{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-eviction",
-				},
-				Status: placementv1beta1.PlacementEvictionStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:   string(placementv1beta1.PlacementEvictionConditionTypeValid),
-							Status: metav1.ConditionFalse,
-						},
-						{
-							Type:   string(placementv1beta1.PlacementEvictionConditionTypeExecuted),
-							Status: metav1.ConditionTrue,
-						},
-					},
-				},
-			},
-			isValid:    "false",
-			isComplete: "true",
-		},
-	}
-
-	for _, tc := range tests {
-		// Create a test registry
-		customRegistry := prometheus.NewRegistry()
-		if err := customRegistry.Register(metrics.FleetEvictionStatus); err != nil {
-			t.Errorf("Failed to register metric: %v", err)
-		}
-
-		t.Run(tc.name, func(t *testing.T) {
-			// Reset metrics before each test
-			metrics.FleetEvictionStatus.Reset()
-
-			emitEvictionCompleteMetric(tc.eviction)
-			metricFamilies, err := customRegistry.Gather()
-			if err != nil {
-				t.Fatalf("error gathering metrics: %v", err)
-			}
-
-			var evictionCompleteMetrics []*prometheusclientmodel.Metric
-			for _, mf := range metricFamilies {
-				if mf.GetName() == "fleet_workload_eviction_complete" {
-					evictionCompleteMetrics = mf.GetMetric()
-				}
-			}
-
-			if len(evictionCompleteMetrics) == 0 {
-				t.Errorf("no eviction complete metrics found")
-			}
-
-			// we only expect one metric.
-			if len(evictionCompleteMetrics) > 1 {
-				t.Errorf("expected one eviction complete metric, got %d", len(evictionCompleteMetrics))
-			}
-
-			// Check if the metric matches the expected label values
-			labels := evictionCompleteMetrics[0].GetLabel()
-			if len(labels) != 3 {
-				t.Errorf("expected three labels, got %d", len(labels))
-			}
-
-			for _, label := range labels {
-				if label.GetName() == "isValid" {
-					if label.GetValue() != tc.isValid {
-						t.Errorf("isValid label value doesn't match got: %v, want %v", label.GetValue(), tc.isValid)
-					}
-				}
-				if label.GetName() == "isComplete" {
-					if label.GetValue() != tc.isComplete {
-						t.Errorf("isComplete label value doesn't match got: %v, want %v", label.GetValue(), tc.isComplete)
-					}
-				}
-			}
-		})
-	}
-}
-
 func TestReconcileForIncompleteEvictionMetric(t *testing.T) {
 	request := controllerruntime.Request{NamespacedName: types.NamespacedName{Name: "test-eviction"}}
-	isValid := "false"
+	isValid := "unknown"
 	isComplete := "false"
 
 	// Create a test registry
@@ -1622,12 +1514,8 @@ func TestReconcileForIncompleteEvictionMetric(t *testing.T) {
 		}
 	}
 
-	if len(evictionCompleteMetrics) == 0 {
-		t.Errorf("no eviction complete metrics found")
-	}
-
 	// we only expect one metric.
-	if len(evictionCompleteMetrics) > 1 {
+	if len(evictionCompleteMetrics) != 1 {
 		t.Errorf("expected one eviction complete metric, got %d", len(evictionCompleteMetrics))
 	}
 

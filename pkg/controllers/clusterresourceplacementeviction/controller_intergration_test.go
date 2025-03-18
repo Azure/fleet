@@ -11,6 +11,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
+	prometheusclientmodel "github.com/prometheus/client_model/go"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -21,6 +23,7 @@ import (
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/pkg/utils/controller/metrics"
 	testutilseviction "go.goms.io/fleet/test/utils/eviction"
 )
 
@@ -37,6 +40,97 @@ const (
 	consistentlyDuration = time.Second * 10
 	consistentlyInterval = time.Millisecond * 500
 )
+
+var _ = Describe("Test ClusterResourcePlacementEviction complete metric", Ordered, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	evictionName := fmt.Sprintf(evictionNameTemplate, GinkgoParallelProcess())
+	var customRegistry *prometheus.Registry
+
+	BeforeEach(func() {
+		// Create a test registry
+		customRegistry = prometheus.NewRegistry()
+		Expect(customRegistry.Register(metrics.FleetEvictionStatus)).Should(Succeed())
+		// Reset metrics before each test
+		metrics.FleetEvictionStatus.Reset()
+	})
+
+	AfterEach(func() {
+		ensureAllBindingsAreRemoved(crpName)
+		ensureEvictionRemoved(evictionName)
+		ensureCRPRemoved(crpName)
+	})
+
+	It("Invalid Eviction - emit complete binding with isValid=false, isComplete=true", func() {
+		By("Create ClusterResourcePlacementEviction", func() {
+			eviction := buildTestEviction(evictionName, "random-crp", "test-cluster")
+			Expect(k8sClient.Create(ctx, eviction)).Should(Succeed())
+		})
+
+		By("Check eviction status", func() {
+			evictionStatusUpdatedActual := testutilseviction.StatusUpdatedActual(
+				ctx, k8sClient, evictionName,
+				&testutilseviction.IsValidEviction{IsValid: false, Msg: condition.EvictionInvalidMissingCRPMessage},
+				nil)
+			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		By("Ensure eviction complete metric was emitted", func() {
+			checkEvictionCompleteMetric(customRegistry, "false", "true")
+		})
+	})
+
+	It("Valid Eviction - emit complete binding with isValid=true, isComplete=true", func() {
+		crbName := fmt.Sprintf(crbNameTemplate, GinkgoParallelProcess())
+
+		By("Create ClusterResourcePlacement", func() {
+			// Create ClusterResourcePlacement.
+			crp := buildTestPickNCRP(crpName, 1)
+			Expect(k8sClient.Create(ctx, &crp)).Should(Succeed())
+			// ensure CRP exists.
+			Eventually(func() error {
+				return k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, &crp)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		By("Create ClusterResourceBinding", func() {
+			// Create CRB.
+			crb := placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   crbName,
+					Labels: map[string]string{placementv1beta1.CRPTrackingLabel: crpName},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                        placementv1beta1.BindingStateBound,
+					ResourceSnapshotName:         "test-resource-snapshot",
+					SchedulingPolicySnapshotName: "test-scheduling-policy-snapshot",
+					TargetCluster:                "test-cluster",
+				},
+			}
+			Expect(k8sClient.Create(ctx, &crb)).Should(Succeed())
+			// ensure CRB exists.
+			Eventually(func() error {
+				return k8sClient.Get(ctx, types.NamespacedName{Name: crb.Name}, &crb)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		By("Create ClusterResourcePlacementEviction", func() {
+			eviction := buildTestEviction(evictionName, crpName, "test-cluster")
+			Expect(k8sClient.Create(ctx, eviction)).Should(Succeed())
+		})
+
+		By("Check eviction status", func() {
+			evictionStatusUpdatedActual := testutilseviction.StatusUpdatedActual(
+				ctx, k8sClient, evictionName,
+				&testutilseviction.IsValidEviction{IsValid: true, Msg: condition.EvictionValidMessage},
+				&testutilseviction.IsExecutedEviction{IsExecuted: true, Msg: condition.EvictionAllowedNoPDBMessage})
+			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		By("Ensure eviction complete metric was emitted", func() {
+			checkEvictionCompleteMetric(customRegistry, "true", "true")
+		})
+	})
+})
 
 var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
@@ -534,5 +628,27 @@ func ensureAllBindingsAreRemoved(crpName string) {
 
 	for i := range bindingList.Items {
 		ensureCRBRemoved(bindingList.Items[i].Name)
+	}
+}
+
+func checkEvictionCompleteMetric(registry *prometheus.Registry, isValid, isComplete string) {
+	metricFamilies, err := registry.Gather()
+	Expect(err).Should(Succeed())
+	var evictionCompleteMetrics []*prometheusclientmodel.Metric
+	for _, mf := range metricFamilies {
+		if mf.GetName() == "fleet_workload_eviction_complete" {
+			evictionCompleteMetrics = mf.GetMetric()
+		}
+	}
+	Expect(len(evictionCompleteMetrics)).Should(Equal(1))
+	metricLabels := evictionCompleteMetrics[0].GetLabel()
+	Expect(len(metricLabels)).Should(Equal(3))
+	for _, label := range metricLabels {
+		if label.GetName() == "isValid" {
+			Expect(label.GetValue()).Should(Equal(isValid))
+		}
+		if label.GetName() == "isComplete" {
+			Expect(label.GetValue()).Should(Equal(isComplete))
+		}
 	}
 }
