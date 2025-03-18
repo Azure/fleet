@@ -299,9 +299,29 @@ example-run-canary   example-run   canary                                 2m2s
 ```
 We can approve the `ClusterApprovalRequest` by patching its status:
 ```bash
-kubectl patch clusterapprovalrequests example-run-canary --type=merge -p {"status":{"conditions":[{"type":"Approved","status":"True","reason":"lgtm","message":"lgtm","lastTransitionTime":"'$(date --utc +%Y-%m-%dT%H:%M:%SZ)'","observedGeneration":1}]}} --subresource=status
+kubectl patch clusterapprovalrequests example-run-canary --type=merge -p {"status":{"conditions":[{"type":"Approved","status":"True","reason":"lgtm","message":"lgtm","lastTransitionTime":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","observedGeneration":1}]}} --subresource=status
 clusterapprovalrequest.placement.kubernetes-fleet.io/example-run-canary patched
 ```
+This can be done equivalently by creating a json patch file and applying it:
+```bash
+cat << EOF > approval.json
+{
+    "status": {
+        "conditions": [
+            {
+            "lastTransitionTime": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "message": "lgtm",
+            "observedGeneration": 1,
+            "reason": "lgtm",
+            "status": "True",
+            "type": "Approved"
+        }
+    ]
+}
+EOF
+kubectl patch clusterapprovalrequests example-run-canary --type='merge' --subresource=status --patch-file approval.json
+```
+
 Then verify it's approved:
 ```bash
 kubectl get clusterapprovalrequest

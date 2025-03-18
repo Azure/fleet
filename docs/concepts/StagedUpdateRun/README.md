@@ -97,7 +97,7 @@ spec:
 
 The user then need to manually approve the task by patching its status:
 ```bash
-kubectl patch clusterapprovalrequests example-run-canary --type='merge' -p '{"status":{"conditions":[{"type":"Approved","status":"True","reason":"lgtm","message":"lgtm","lastTransitionTime":"'$(date --utc +%Y-%m-%dT%H:%M:%SZ)'","observedGeneration":1}]}}' --subresource=status
+kubectl patch clusterapprovalrequests example-run-canary --type='merge' -p '{"status":{"conditions":[{"type":"Approved","status":"True","reason":"lgtm","message":"lgtm","lastTransitionTime":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","observedGeneration":1}]}}' --subresource=status
 ```
 The updateRun will only continue to next stage after the `ClusterApprovalRequest` is approved.
 
