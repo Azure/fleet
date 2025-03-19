@@ -92,10 +92,10 @@ of two member clusters, `member-1` and `member-2`:
     ```
 
 * The CRP should remain available, as currently there is no configuration difference at all.
-Check the `Applied` condition in the status; it should report no error:
+Check the `ClusterResourcePlacementDiffReported` condition in the status; it should report no error:
 
     ```sh
-    kubectl get clusterresourceplacement.v1beta1.placement.kubernetes-fleet.io work-3 -o jsonpath='{.status.placementStatuses[?(@.clusterName=="member-2")].conditions[?(@.type=="Applied")]}' | jq
+    kubectl get clusterresourceplacement.v1beta1.placement.kubernetes-fleet.io work-3 -o jsonpath='{.status.conditions[?(@.type=="ClusterResourcePlacementDiffReported")]}' | jq
     # The command above uses JSON paths to query the drift details directly and
     # uses the jq utility to pretty print the output JSON.
     #
@@ -109,12 +109,12 @@ Check the `Applied` condition in the status; it should report no error:
 
     ```json
     {
-      "lastTransitionTime": "2024-11-19T12:23:47Z",
-      "message": "...",
-      "observedGeneration": ...,
-      "reason": "AllWorkHaveBeenApplied",
+      "lastTransitionTime": "2025-03-19T06:45:58Z",
+      "message": "Diff reporting in 2 cluster(s) has been completed",
+      "observedGeneration": 2,
+      "reason": "DiffReportingCompleted",
       "status": "True",
-      "type": "Applied"
+      "type": "ClusterResourcePlacementDiffReported"
     }
     ```
 
@@ -147,20 +147,19 @@ Verify that the diff details have been added to the CRP status:
     ```json
     [
       {
-          "firstDiffedObservedTime": "2024-11-19T14:55:39Z",
-          "group": "",
-          "version": "v1",
-          "kind": "Namespace",    
-          "name": "work-3",
-          "observationTime": "2024-11-19T14:55:39Z",
-          "observedDiffs": [
-            {
-                "path": "/metadata/labels/owner",
-                "valueInHub": "leon",
-                "valueInMember": "krauser"
-            }
-          ],
-          "targetClusterObservedGeneration": 0    
+        "firstDiffedObservedTime": "2025-03-19T06:49:54Z",
+        "kind": "Namespace",
+        "name": "work-3",
+        "observationTime": "2025-03-19T06:50:25Z",
+        "observedDiffs": [
+          {
+            "path": "/metadata/labels/owner",
+            "valueInHub": "leon",
+            "valueInMember": "krauser"
+          }
+        ],
+        "targetClusterObservedGeneration": 0,
+        "version": "v1"
       }
     ]
     ```
@@ -169,7 +168,11 @@ Verify that the diff details have been added to the CRP status:
 
 * As mentioned earlier, with this mode no apply op will be run at all; it is up to the user to
 decide the best way to handle found configuration differences (if any).
-* Fleet will report an apply error (with diff details) in this mode if configuration
-differences are found on any resource. If a resource has not been applied yet, an apply error
-would also be returned with a message that configuration differences cannot be reported; in
-this case there would be no diff details.
+* Diff reporting becomes successful and complete as soon as Fleet finishes checking all the resources;
+whether configuration differences are found or not has no effect on the diff reporting success status.
+  *  When a resource change has been applied on the hub cluster side, for CRPs of the ReportDiff mode, 
+  the change will be immediately rolled out to all member clusters (when the rollout strategy is set to 
+  RollingUpdate, the default type), as soon as they have completed diff reporting earlier.
+* It is worth noting that Fleet will only report differences on resources that have corresponding manifests 
+on the hub cluster. If, for example, a namespace-scoped object has been created on the member cluster but 
+not on the hub cluster, Fleet will ignore the object, even if its owner namespace has been selected for placement.
