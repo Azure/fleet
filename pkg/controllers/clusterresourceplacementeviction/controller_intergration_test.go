@@ -11,6 +11,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
+	prometheusclientmodel "github.com/prometheus/client_model/go"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -21,6 +23,7 @@ import (
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/pkg/utils/controller/metrics"
 	testutilseviction "go.goms.io/fleet/test/utils/eviction"
 )
 
@@ -41,15 +44,46 @@ const (
 var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	evictionName := fmt.Sprintf(evictionNameTemplate, GinkgoParallelProcess())
+	var customRegistry *prometheus.Registry
+
+	BeforeEach(func() {
+		// Create a test registry
+		customRegistry = prometheus.NewRegistry()
+		Expect(customRegistry.Register(metrics.FleetEvictionStatus)).Should(Succeed())
+		// Reset metrics before each test
+		metrics.FleetEvictionStatus.Reset()
+		// emit incomplete eviction metric to simulate eviction failed once.
+		metrics.FleetEvictionStatus.WithLabelValues(evictionName, "false", "unknown").SetToCurrentTime()
+	})
 
 	AfterEach(func() {
 		ensureCRPDBRemoved(crpName)
 		ensureAllBindingsAreRemoved(crpName)
 		ensureEvictionRemoved(evictionName)
 		ensureCRPRemoved(crpName)
+		Expect(customRegistry.Unregister(metrics.FleetEvictionStatus)).Should(BeTrue())
 	})
 
-	It("Eviction Blocked - ClusterResourcePlacementDisruptionBudget's maxUnavailable blocks eviction", func() {
+	It("Invalid Eviction Blocked - emit complete metric with isValid=false, isComplete=true", func() {
+		By("Create ClusterResourcePlacementEviction", func() {
+			eviction := buildTestEviction(evictionName, "random-crp", "test-cluster")
+			Expect(k8sClient.Create(ctx, eviction)).Should(Succeed())
+		})
+
+		By("Check eviction status", func() {
+			evictionStatusUpdatedActual := testutilseviction.StatusUpdatedActual(
+				ctx, k8sClient, evictionName,
+				&testutilseviction.IsValidEviction{IsValid: false, Msg: condition.EvictionInvalidMissingCRPMessage},
+				nil)
+			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		By("Ensure eviction complete metric was emitted", func() {
+			checkEvictionCompleteMetric(customRegistry, "false", "true")
+		})
+	})
+
+	It("Eviction Blocked - ClusterResourcePlacementDisruptionBudget's maxUnavailable blocks eviction, emit complete isValid=true, isComplete=true", func() {
 		crbName := fmt.Sprintf(crbNameTemplate, GinkgoParallelProcess())
 
 		By("Create ClusterResourcePlacement", func() {
@@ -122,9 +156,13 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 				return !k8serrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: crbName}, &crb))
 			}, consistentlyDuration, consistentlyInterval).Should(BeTrue())
 		})
+
+		By("Ensure eviction complete metric was emitted", func() {
+			checkEvictionCompleteMetric(customRegistry, "true", "true")
+		})
 	})
 
-	It("Eviction Allowed - ClusterResourcePlacementDisruptionBudget's maxUnavailable allows eviction", func() {
+	It("Eviction Allowed - ClusterResourcePlacementDisruptionBudget's maxUnavailable allows eviction, emit complete isValid=true, isComplete=true", func() {
 		crbName := fmt.Sprintf(crbNameTemplate, GinkgoParallelProcess())
 
 		By("Create ClusterResourcePlacement", func() {
@@ -218,9 +256,13 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 				return k8serrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: crbName}, &crb))
 			}, consistentlyDuration, consistentlyInterval).Should(BeTrue())
 		})
+
+		By("Ensure eviction complete metric was emitted", func() {
+			checkEvictionCompleteMetric(customRegistry, "true", "true")
+		})
 	})
 
-	It("Eviction Blocked - ClusterResourcePlacementDisruptionBudget's minAvailable blocks eviction", func() {
+	It("Eviction Blocked - ClusterResourcePlacementDisruptionBudget's minAvailable blocks eviction, emit complete isValid=true, isComplete=true", func() {
 		crbName := fmt.Sprintf(crbNameTemplate, GinkgoParallelProcess())
 
 		By("Create ClusterResourcePlacement", func() {
@@ -293,9 +335,13 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 				return !k8serrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: crbName}, &crb))
 			}, consistentlyDuration, consistentlyInterval).Should(BeTrue())
 		})
+
+		By("Ensure eviction complete metric was emitted", func() {
+			checkEvictionCompleteMetric(customRegistry, "true", "true")
+		})
 	})
 
-	It("Eviction Allowed - ClusterResourcePlacementDisruptionBudget's minUnavailable allows eviction", func() {
+	It("Eviction Allowed - ClusterResourcePlacementDisruptionBudget's minUnavailable allows eviction, emit complete isValid=true, isComplete=true", func() {
 		crbName := fmt.Sprintf(crbNameTemplate, GinkgoParallelProcess())
 		anotherCRBName := fmt.Sprintf(anotherCRBNameTemplate, GinkgoParallelProcess())
 
@@ -419,6 +465,10 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 				return !k8serrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: anotherCRBName}, &anotherCRB))
 			}, consistentlyDuration, consistentlyInterval).Should(BeTrue())
 		})
+
+		By("Ensure eviction complete metric was emitted", func() {
+			checkEvictionCompleteMetric(customRegistry, "true", "true")
+		})
 	})
 })
 
@@ -464,7 +514,7 @@ func ensureEvictionRemoved(name string) {
 			Name: name,
 		},
 	}
-	Expect(k8sClient.Delete(ctx, &eviction)).Should(Succeed())
+	Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &eviction))).Should(Succeed())
 	// Ensure eviction doesn't exist.
 	Eventually(func() error {
 		if err := k8sClient.Get(ctx, types.NamespacedName{Name: name}, &eviction); !k8serrors.IsNotFound(err) {
@@ -534,5 +584,28 @@ func ensureAllBindingsAreRemoved(crpName string) {
 
 	for i := range bindingList.Items {
 		ensureCRBRemoved(bindingList.Items[i].Name)
+	}
+}
+
+func checkEvictionCompleteMetric(registry *prometheus.Registry, isValid, isComplete string) {
+	metricFamilies, err := registry.Gather()
+	Expect(err).Should(Succeed())
+	var evictionCompleteMetrics []*prometheusclientmodel.Metric
+	for _, mf := range metricFamilies {
+		if mf.GetName() == "fleet_workload_eviction_complete" {
+			evictionCompleteMetrics = mf.GetMetric()
+		}
+	}
+	// we only expect one metric, incomplete eviction metric should be removed.
+	Expect(len(evictionCompleteMetrics)).Should(Equal(1))
+	metricLabels := evictionCompleteMetrics[0].GetLabel()
+	Expect(len(metricLabels)).Should(Equal(3))
+	for _, label := range metricLabels {
+		if label.GetName() == "isValid" {
+			Expect(label.GetValue()).Should(Equal(isValid))
+		}
+		if label.GetName() == "isComplete" {
+			Expect(label.GetValue()).Should(Equal(isComplete))
+		}
 	}
 }

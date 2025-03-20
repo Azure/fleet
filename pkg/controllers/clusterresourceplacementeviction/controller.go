@@ -46,7 +46,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	var internalError bool
 	defer func() {
 		if internalError {
-			metrics.FleetEvictionStatus.WithLabelValues(evictionName, "false").SetToCurrentTime()
+			metrics.FleetEvictionStatus.WithLabelValues(evictionName, "false", "unknown").SetToCurrentTime()
 		}
 		latency := time.Since(startTime).Milliseconds()
 		klog.V(2).InfoS("ClusterResourcePlacementEviction reconciliation ends", "clusterResourcePlacementEviction", evictionName, "latency", latency)
@@ -365,7 +365,7 @@ func markEvictionNotExecuted(eviction *placementv1beta1.ClusterResourcePlacement
 }
 
 func emitEvictionCompleteMetric(eviction *placementv1beta1.ClusterResourcePlacementEviction) {
-	metrics.FleetEvictionStatus.Delete(prometheus.Labels{"name": eviction.Name, "isCompleted": "false"})
+	metrics.FleetEvictionStatus.DeletePartialMatch(prometheus.Labels{"name": eviction.GetName(), "isCompleted": "false"})
 	// check to see if eviction is valid.
 	if condition.IsConditionStatusTrue(eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeValid)), eviction.GetGeneration()) {
 		metrics.FleetEvictionStatus.WithLabelValues(eviction.Name, "true", "true").SetToCurrentTime()
