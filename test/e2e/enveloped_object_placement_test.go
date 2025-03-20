@@ -20,6 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/workapplier"
@@ -326,6 +327,165 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 			By(fmt.Sprintf("deleting placement %s and related resources", crpName))
 			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
+	})
+})
+
+var _ = Describe("Process objects with generate name", Ordered, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+
+	nsGenerateName := "application-"
+	wrapperCMName := "wrapper"
+	wrappedCMGenerateName := "wrapped-foo-"
+
+	BeforeAll(func() {
+		// Create the namespace with both name and generate name set.
+		ns := appNamespace()
+		ns.GenerateName = nsGenerateName
+		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
+
+		// Create an envelope config map.
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      wrapperCMName,
+				Namespace: ns.Name,
+				Annotations: map[string]string{
+					placementv1beta1.EnvelopeConfigMapAnnotation: "true",
+				},
+			},
+			Data: map[string]string{},
+		}
+
+		wrappedCM := &corev1.ConfigMap{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: corev1.SchemeGroupVersion.String(),
+				Kind:       "ConfigMap",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: wrappedCMGenerateName,
+				Namespace:    ns.Name,
+			},
+			Data: map[string]string{
+				"foo": "bar",
+			},
+		}
+		wrappedCMByte, err := json.Marshal(wrappedCM)
+		Expect(err).Should(BeNil())
+		cm.Data["wrapped.yaml"] = string(wrappedCMByte)
+		Expect(hubClient.Create(ctx, cm)).To(Succeed(), "Failed to create config map %s", cm.Name)
+
+		// Create a CRP that selects the namespace.
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+				// Add a custom finalizer; this would allow us to better observe
+				// the behavior of the controllers.
+				Finalizers: []string{customDeletionBlockerFinalizer},
+			},
+			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				ResourceSelectors: workResourceSelector(),
+				Policy: &placementv1beta1.PlacementPolicy{
+					PlacementType: placementv1beta1.PickFixedPlacementType,
+					ClusterNames: []string{
+						memberCluster1EastProdName,
+					},
+				},
+				Strategy: placementv1beta1.RolloutStrategy{
+					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+						UnavailablePeriodSeconds: ptr.To(2),
+					},
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+	})
+
+	It("should update CRP status as expected", func() {
+		Eventually(func() error {
+			crp := &placementv1beta1.ClusterResourcePlacement{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+				return err
+			}
+
+			wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+				Conditions: crpAppliedFailedConditions(crp.Generation),
+				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+					{
+						ClusterName: memberCluster1EastProdName,
+						FailedPlacements: []placementv1beta1.FailedResourcePlacement{
+							{
+								ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+									Kind:      "ConfigMap",
+									Namespace: workNamespaceName,
+									Version:   "v1",
+									Envelope: &placementv1beta1.EnvelopeIdentifier{
+										Name:      wrapperCMName,
+										Namespace: workNamespaceName,
+										Type:      placementv1beta1.ConfigMapEnvelopeType,
+									},
+								},
+								Condition: metav1.Condition{
+									Type:               placementv1beta1.WorkConditionTypeApplied,
+									Status:             metav1.ConditionFalse,
+									Reason:             string(workapplier.ManifestProcessingApplyResultTypeFoundGenerateName),
+									ObservedGeneration: 0,
+								},
+							},
+						},
+						Conditions: resourcePlacementApplyFailedConditions(crp.Generation),
+					},
+				},
+				SelectedResources: []placementv1beta1.ResourceIdentifier{
+					{
+						Kind:    "Namespace",
+						Name:    workNamespaceName,
+						Version: "v1",
+					},
+					{
+						Kind:      "ConfigMap",
+						Name:      wrapperCMName,
+						Version:   "v1",
+						Namespace: workNamespaceName,
+					},
+				},
+				ObservedResourceIndex: "0",
+			}
+			if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
+				return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
+			}
+			return nil
+		}, eventuallyDuration*3, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+	})
+
+	It("should place some manifests on member clusters", func() {
+		Eventually(func() error {
+			return validateWorkNamespaceOnCluster(memberCluster1EastProd, types.NamespacedName{Name: workNamespaceName})
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
+	})
+
+	It("should not place some manifests on member clusters", func() {
+		Consistently(func() error {
+			cmList := &corev1.ConfigMapList{}
+			if err := memberCluster1EastProdClient.List(ctx, cmList, client.InNamespace(workNamespaceName)); err != nil {
+				return fmt.Errorf("failed to list ConfigMap objects: %w", err)
+			}
+
+			for _, cm := range cmList.Items {
+				if cm.GenerateName == wrappedCMGenerateName {
+					return fmt.Errorf("found a ConfigMap object with generate name that should not be applied")
+				}
+			}
+			return nil
+		}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Applied the wrapped config map on member cluster")
+	})
+
+	AfterAll(func() {
+		// Remove the CRP.
+		cleanupCRP(crpName)
+
+		// Clean the placed resources.
+		cleanWorkResourcesOnCluster(allMemberClusters[0])
 	})
 })
 
