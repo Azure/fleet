@@ -174,7 +174,7 @@ mandates at least one cluster to be available.
 
 `UnavailablePeriodSeconds` is used to configure the waiting time between rollout phases when we cannot determine if the 
 resources have rolled out successfully or not. This field is used only if the availability of resources we propagate 
-are not trackable. Refer to the [Data only object](#data-only-objects) section for more details.
+are not trackable. Refer to the [Availability based Rollout](#availability-based-rollout) section for more details on a list of resources we can track.
 
 ## Availability based Rollout
 We have built-in mechanisms to determine the availability of some common Kubernetes native resources. We only mark them 
@@ -195,9 +195,22 @@ For `Service` based on the service type the availability is determined as follow
 - For `ExternalName` service, checking availability is not supported, so it will be marked as available with a "not trackable" reason.
 
 
+#### Custom Resource Definition
+For `CustomResourceDefinition` availability is determined as follows:
+- We mark as available when `Established` condition is set to true and `NamesAccepted` condition is set to true.
+
+
+### Pod Disruption Budget
+For `PodDisruptionBudget` based on the `DisruptionsAllowed` field the availability is determined as follows:
+- For `DisruptionsAllowed` > 0 , we mark it as available when condition `DisruptionAllowed` is set to true and the reason
+  is `SufficientPods`.
+- Otherwise, we mark it as available when condition `DisruptionAllowed` is set to false and the reason
+  is `InsufficientPodsReason`.
+
+
 #### Data only objects
 
-For the objects described below since they are a data resource we mark them as available immediately after creation,
+For the objects described below since they are a data resource we mark them as available immediately after creation:
 
 - Namespace
 - Secret
@@ -206,3 +219,13 @@ For the objects described below since they are a data resource we mark them as a
 - ClusterRole
 - RoleBinding
 - ClusterRoleBinding
+- NetworkPolicy
+- CSIDriver
+- CSINode
+- StorageClass
+- CSIStorageCapacity
+- ControllerRevision
+- IngressClass
+- LimitRange
+- ResourceQuota
+- PriorityClass
