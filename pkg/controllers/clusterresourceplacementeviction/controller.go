@@ -365,7 +365,7 @@ func markEvictionNotExecuted(eviction *placementv1beta1.ClusterResourcePlacement
 }
 
 func emitEvictionCompleteMetric(eviction *placementv1beta1.ClusterResourcePlacementEviction) {
-	metrics.FleetEvictionStatus.Delete(prometheus.Labels{"name": eviction.Name, "isCompleted": "false", "isValid": "unknown"})
+	metrics.FleetEvictionStatus.DeletePartialMatch(prometheus.Labels{"name": eviction.GetName()})
 	// check to see if eviction is valid.
 	if condition.IsConditionStatusTrue(eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeValid)), eviction.GetGeneration()) {
 		metrics.FleetEvictionStatus.WithLabelValues(eviction.Name, "true", "true").SetToCurrentTime()
