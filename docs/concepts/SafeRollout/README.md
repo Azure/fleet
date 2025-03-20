@@ -174,7 +174,7 @@ mandates at least one cluster to be available.
 
 `UnavailablePeriodSeconds` is used to configure the waiting time between rollout phases when we cannot determine if the 
 resources have rolled out successfully or not. This field is used only if the availability of resources we propagate 
-are not trackable. Refer to the [How It Works](#how-it-works) section for more details on a list of resources we can track.
+are not trackable. Refer to the [Availability based Rollout](#availability-based-rollout) section for more details on a list of resources we can track.
 
 ## Availability based Rollout
 We have built-in mechanisms to determine the availability of some common Kubernetes native resources. We only mark them 
@@ -207,11 +207,6 @@ For `PodDisruptionBudget` based on the `DisruptionsAllowed` field the availabili
 - Otherwise, we mark it as available when condition `DisruptionAllowed` is set to false and the reason
   is `InsufficientPodsReason`.
 
-
-#### Service Export
-The availability of a `ServiceExport` is determined based on the `networking.fleet.azure.com/weight` annotation as follows:
-- For annotation weight == 0, we mark as available if the `ServiceExportValid` condition is true (will be false if annotation value is invalid).
-- For annotation weight > 0, we mark as available if the `ServiceExportValid` condition is true and the `ServiceExportConflict` condition is false.
 
 #### Data only objects
 
