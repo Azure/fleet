@@ -305,10 +305,9 @@ clusterapprovalrequest.placement.kubernetes-fleet.io/example-run-canary patched
 This can be done equivalently by creating a json patch file and applying it:
 ```bash
 cat << EOF > approval.json
-{
-    "status": {
-        "conditions": [
-            {
+"status": {
+    "conditions": [
+        {
             "lastTransitionTime": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "message": "lgtm",
             "observedGeneration": 1,

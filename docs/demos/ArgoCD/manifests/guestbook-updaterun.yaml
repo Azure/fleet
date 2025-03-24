@@ -1,0 +1,8 @@
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterStagedUpdateRun
+metadata:
+  name: guestbook-updaterun
+spec:
+  placementName: guestbook-crp
+  resourceSnapshotIndex: "0"
+  stagedRolloutStrategyName: team-a-strategy
