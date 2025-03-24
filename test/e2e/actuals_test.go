@@ -7,6 +7,7 @@ package e2e
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
@@ -975,8 +976,11 @@ func workNamespaceRemovedFromClusterActual(cluster *framework.Cluster) func() er
 
 	ns := appNamespace()
 	return func() error {
-		if err := client.Get(ctx, types.NamespacedName{Name: ns.Name}, &corev1.Namespace{}); !errors.IsNotFound(err) {
-			return fmt.Errorf("work namespace %s still exists or an unexpected error occurred: %w", ns.Name, err)
+		if err := client.Get(ctx, types.NamespacedName{Name: ns.Name}, &ns); !errors.IsNotFound(err) {
+			if err == nil {
+				return fmt.Errorf("work namespace %s still exist, deletion timestamp: %v, current timestamp: %v", ns.Name, ns.DeletionTimestamp, time.Now())
+			}
+			return fmt.Errorf("getting work namespace %s failed: %w", ns.Name, err)
 		}
 		return nil
 	}
