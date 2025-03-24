@@ -1,0 +1,23 @@
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterStagedUpdateStrategy
+metadata:
+  name: team-a-strategy
+spec:
+  stages: # 3 stages: staging, canary, production
+  - afterStageTasks:
+    - type: TimedWait
+      waitTime: 1m # wait 1 minute before moving to canary stage
+    labelSelector:
+      matchLabels:
+        environment: staging
+    name: staging
+  - afterStageTasks:
+    - type: Approval # wait for manual approval before moving to production stage
+    labelSelector:
+      matchLabels:
+        environment: canary
+    name: canary
+  - labelSelector:
+      matchLabels:
+        environment: production
+    name: production

@@ -1,0 +1,22 @@
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourcePlacement
+metadata:
+  name: guestbook-crp
+spec:
+  policy:
+    placementType: PickAll # select all member clusters with label team=A
+    affinity:
+      clusterAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          clusterSelectorTerms:
+            - labelSelector:
+                matchLabels:
+                  team: A # label selectors
+  resourceSelectors:
+  - group: ""
+    kind: Namespace
+    name: guestbook # select guestbook namespace with all resources in it
+    version: v1
+  revisionHistoryLimit: 10
+  strategy:
+    type: External # will use an updateRun to trigger the rollout
