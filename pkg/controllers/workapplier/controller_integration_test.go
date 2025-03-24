@@ -359,7 +359,8 @@ func workStatusUpdated(
 					return fmt.Errorf("first drifted observation time is later than expected (observed: %v, no later than: %v)", manifestCond.DriftDetails.FirstDriftedObservedTime, noLaterThanFirstObservedTime)
 				}
 
-				if !manifestCond.DriftDetails.ObservationTime.After(manifestCond.DriftDetails.FirstDriftedObservedTime.Time) {
+				// The drift observation time can be equal or later than the first drifted observation time.
+				if manifestCond.DriftDetails.ObservationTime.Before(&manifestCond.DriftDetails.FirstDriftedObservedTime) {
 					return fmt.Errorf("drift observation time is later than first drifted observation time (observed: %v, first observed: %v)", manifestCond.DriftDetails.ObservationTime, manifestCond.DriftDetails.FirstDriftedObservedTime)
 				}
 			}
@@ -373,8 +374,9 @@ func workStatusUpdated(
 					return fmt.Errorf("first diffed observation time is later than expected (observed: %v, no later than: %v)", manifestCond.DiffDetails.FirstDiffedObservedTime, noLaterThanFirstObservedTime)
 				}
 
-				if !manifestCond.DiffDetails.ObservationTime.After(manifestCond.DiffDetails.FirstDiffedObservedTime.Time) {
-					return fmt.Errorf("diff observation time is later than first diffed observation time (observed: %v, first observed: %v)", manifestCond.DiffDetails.ObservationTime, manifestCond.DiffDetails.FirstDiffedObservedTime)
+				// The diff observation time can be equal or later than the first diffed observation time.
+				if manifestCond.DiffDetails.ObservationTime.Before(&manifestCond.DiffDetails.FirstDiffedObservedTime) {
+					return fmt.Errorf("diff observation time is before the first diffed observation time (observed: %v, first observed: %v)", manifestCond.DiffDetails.ObservationTime, manifestCond.DiffDetails.FirstDiffedObservedTime)
 				}
 			}
 		}
@@ -864,6 +866,197 @@ var _ = Describe("applying manifests", func() {
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
 							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should update the AppliedWork object status", func() {
+			// Prepare the status information.
+			appliedResourceMeta := []fleetv1beta1.AppliedResourceMeta{
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					UID: regularNS.UID,
+				},
+			}
+
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		AfterAll(func() {
+			// Delete the Work object and related resources.
+			cleanupWorkObject(workName)
+
+			// Ensure that all applied manifests have been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt so verify its deletion.
+		})
+	})
+
+	Context("should handle objects with generate names properly", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+
+		nsGenerateName := "work-"
+		deployGenerateName := "deploy-foo-"
+
+		var appliedWorkOwnerRef *metav1.OwnerReference
+		var regularNS *corev1.Namespace
+		var regularDeploy *appsv1.Deployment
+
+		BeforeAll(func() {
+			// Prepare a NS object with both generate name and name.
+			// This should be handled by the work applier properly.
+			regularNS = ns.DeepCopy()
+			regularNS.Name = nsName
+			regularNS.GenerateName = nsGenerateName
+			regularNSJSON := marshalK8sObjJSON(regularNS)
+
+			// Prepare a Deployment object with only generate name.
+			// This should be rejected by the work applier.
+			regularDeploy = deploy.DeepCopy()
+			regularDeploy.Namespace = nsName
+			regularDeploy.Name = ""
+			regularDeploy.GenerateName = deployGenerateName
+			regularDeployJSON := marshalK8sObjJSON(regularDeploy)
+
+			// Create a new Work object with all the manifest JSONs.
+			createWorkObject(workName, nil, regularNSJSON, regularDeployJSON)
+		})
+
+		It("should add cleanup finalizer to the Work object", func() {
+			finalizerAddedActual := workFinalizerAddedActual(workName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+		})
+
+		It("should prepare an AppliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
+
+			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
+		})
+
+		It("should apply some of the manifests", func() {
+			// Ensure that the NS object has been applied as expected.
+			Eventually(func() error {
+				// Retrieve the NS object.
+				gotNS := &corev1.Namespace{}
+				if err := memberClient.Get(ctx, client.ObjectKey{Name: nsName}, gotNS); err != nil {
+					return fmt.Errorf("failed to retrieve the NS object: %w", err)
+				}
+
+				// Check that the NS object has been created as expected.
+
+				// To ignore default values automatically, here the test suite rebuilds the objects.
+				wantNS := ns.DeepCopy()
+				wantNS.TypeMeta = metav1.TypeMeta{}
+				wantNS.Name = nsName
+				wantNS.GenerateName = nsGenerateName
+				wantNS.OwnerReferences = []metav1.OwnerReference{
+					*appliedWorkOwnerRef,
+				}
+
+				rebuiltGotNS := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            gotNS.Name,
+						GenerateName:    gotNS.GenerateName,
+						OwnerReferences: gotNS.OwnerReferences,
+					},
+				}
+
+				if diff := cmp.Diff(rebuiltGotNS, wantNS); diff != "" {
+					return fmt.Errorf("namespace diff (-got +want):\n%s", diff)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
+		})
+
+		It("should not apply the Deployment object", func() {
+			Consistently(func() error {
+				// List all Deployments.
+				gotDeployList := &appsv1.DeploymentList{}
+				if err := memberClient.List(ctx, gotDeployList, client.InNamespace(nsName)); err != nil {
+					return fmt.Errorf("failed to list Deployment objects: %w", err)
+				}
+
+				for _, gotDeploy := range gotDeployList.Items {
+					if gotDeploy.GenerateName == deployGenerateName {
+						return fmt.Errorf("found a Deployment object with generate name that should not be applied")
+					}
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Applied the deployment object; expected an error")
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionFalse,
+					Reason: WorkNotAllManifestsAppliedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionFalse,
+							Reason:             string(ManifestProcessingApplyResultTypeFoundGenerateName),
 							ObservedGeneration: 0,
 						},
 					},

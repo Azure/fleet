@@ -97,7 +97,7 @@ type violationReasons []string
 type doNotScheduleViolations map[clusterName]violationReasons
 
 // topologySpreadScores is a map between cluster names and their topology spread scores.
-type topologySpreadScores map[clusterName]int
+type topologySpreadScores map[clusterName]int32
 
 type pluginState struct {
 	// doNotScheduleConstraints is a list of topology spread constraints with a DoNotSchedule

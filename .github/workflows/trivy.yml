@@ -18,7 +18,7 @@ env:
   MEMBER_AGENT_IMAGE_NAME: member-agent
   REFRESH_TOKEN_IMAGE_NAME: refresh-token
 
-  GO_VERSION: '1.22.12'
+  GO_VERSION: '1.23.1'
 
 jobs:
   export-registry:
@@ -47,7 +47,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Login to ${{ env.REGISTRY }}
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}

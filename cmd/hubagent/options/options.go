@@ -113,8 +113,8 @@ func NewOptions() *Options {
 		ConcurrentResourceChangeSyncs: 1,
 		MaxFleetSizeSupported:         100,
 		EnableV1Alpha1APIs:            false,
-		EnableClusterInventoryAPIs:    false,
-		EnableStagedUpdateRunAPIs:     false,
+		EnableClusterInventoryAPIs:    true,
+		EnableStagedUpdateRunAPIs:     true,
 	}
 }
 
@@ -154,7 +154,7 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.IntVar(&o.MaxFleetSizeSupported, "max-fleet-size", 100, "The max number of member clusters supported in this fleet")
 	flags.BoolVar(&o.EnableV1Alpha1APIs, "enable-v1alpha1-apis", false, "If set, the agents will watch for the v1alpha1 APIs.")
 	flags.BoolVar(&o.EnableV1Beta1APIs, "enable-v1beta1-apis", true, "If set, the agents will watch for the v1beta1 APIs.")
-	flags.BoolVar(&o.EnableClusterInventoryAPIs, "enable-cluster-inventory-apis", false, "If set, the agents will watch for the ClusterInventory APIs.")
+	flags.BoolVar(&o.EnableClusterInventoryAPIs, "enable-cluster-inventory-apis", true, "If set, the agents will watch for the ClusterInventory APIs.")
 	flags.DurationVar(&o.ForceDeleteWaitTime.Duration, "force-delete-wait-time", 15*time.Minute, "The duration the hub agent waits before force deleting a member cluster.")
 	flags.BoolVar(&o.EnableStagedUpdateRunAPIs, "enable-staged-update-run-apis", true, "If set, the agents will watch for the ClusterStagedUpdateRun APIs.")
 	flags.BoolVar(&o.EnableEvictionAPIs, "enable-eviction-apis", true, "If set, the agents will watch for the Eviction and PlacementDisruptionBudget APIs.")

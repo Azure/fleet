@@ -544,7 +544,7 @@ func TestPreScore(t *testing.T) {
 
 // TestScore tests how this plugin connects to the score extension point.
 func TestScore(t *testing.T) {
-	clusterScore := 1
+	clusterScore := int32(1)
 
 	policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 		ObjectMeta: metav1.ObjectMeta{

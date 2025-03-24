@@ -159,7 +159,7 @@ type manifestProcessingAppliedResultType string
 const (
 	// The result types and descriptions for processing failures.
 	ManifestProcessingApplyResultTypeDecodingErred                  manifestProcessingAppliedResultType = "DecodingErred"
-	ManifestProcessingApplyResultTypeFoundGenerateNames             manifestProcessingAppliedResultType = "FoundGenerateNames"
+	ManifestProcessingApplyResultTypeFoundGenerateName              manifestProcessingAppliedResultType = "FoundGenerateName"
 	ManifestProcessingApplyResultTypeDuplicated                     manifestProcessingAppliedResultType = "Duplicated"
 	ManifestProcessingApplyResultTypeFailedToFindObjInMemberCluster manifestProcessingAppliedResultType = "FailedToFindObjInMemberCluster"
 	ManifestProcessingApplyResultTypeFailedToTakeOver               manifestProcessingAppliedResultType = "FailedToTakeOver"

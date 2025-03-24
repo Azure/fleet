@@ -1269,10 +1269,20 @@ func extractResFromConfigMap(uConfigMap *unstructured.Unstructured) ([]fleetv1be
 		return nil, err
 	}
 	// the list order is not stable as the map traverse is random
-	for _, value := range configMap.Data {
+	for key, value := range configMap.Data {
+		// so we need to check the GVK and annotation of the selected resource
 		content, jsonErr := yaml.ToJSON([]byte(value))
 		if jsonErr != nil {
 			return nil, jsonErr
+		}
+		var uManifest unstructured.Unstructured
+		if unMarshallErr := uManifest.UnmarshalJSON(content); unMarshallErr != nil {
+			klog.ErrorS(unMarshallErr, "manifest has invalid content", "manifestKey", key, "envelopeResource", klog.KObj(uConfigMap))
+			return nil, fmt.Errorf("the object with manifest key `%s` in envelope config `%s` is malformatted, err: %w", key, klog.KObj(uConfigMap), unMarshallErr)
+		}
+		if len(uManifest.GetNamespace()) != 0 && uManifest.GetNamespace() != configMap.Namespace {
+			// if the manifest is a namespaced object but no namespace is specified, it will fail at the apply time instead of here.
+			return nil, fmt.Errorf("the namespaced object `%s` in envelope config `%s` is placed in a different namespace `%s` ", uManifest.GetName(), klog.KObj(uConfigMap), uManifest.GetNamespace())
 		}
 		manifests = append(manifests, fleetv1beta1.Manifest{
 			RawExtension: runtime.RawExtension{Raw: content},

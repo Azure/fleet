@@ -156,7 +156,7 @@ type Config struct {
 	enableGuardRail bool
 }
 
-func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int, clientConnectionType *options.WebhookClientConnectionType, certDir string, enableGuardRail bool) (*Config, error) {
+func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int32, clientConnectionType *options.WebhookClientConnectionType, certDir string, enableGuardRail bool) (*Config, error) {
 	// We assume the Pod namespace should be passed to env through downward API in the Pod spec.
 	namespace := os.Getenv("POD_NAMESPACE")
 	if namespace == "" {
@@ -164,7 +164,7 @@ func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int, 
 	}
 	w := Config{
 		mgr:                  mgr,
-		servicePort:          int32(port),
+		servicePort:          port,
 		serviceNamespace:     namespace,
 		serviceName:          webhookServiceName,
 		serviceURL:           fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", webhookServiceName, namespace, port),

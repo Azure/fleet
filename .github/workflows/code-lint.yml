@@ -14,7 +14,7 @@ on:
 
 env:
   # Common versions
-  GO_VERSION: '1.22.12'
+  GO_VERSION: '1.23.1'
 
 jobs:
 

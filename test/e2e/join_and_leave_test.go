@@ -171,14 +171,14 @@ var _ = Describe("Test member cluster force delete flow", Ordered, Serial, func(
 	})
 })
 
-func updateMemberAgentDeploymentReplicas(clusterClient client.Client, replicas int) {
+func updateMemberAgentDeploymentReplicas(clusterClient client.Client, replicas int32) {
 	Eventually(func() error {
 		var d appsv1.Deployment
 		err := clusterClient.Get(ctx, types.NamespacedName{Name: memberAgentName, Namespace: fleetSystemNS}, &d)
 		if err != nil {
 			return err
 		}
-		d.Spec.Replicas = ptr.To(int32(replicas))
+		d.Spec.Replicas = ptr.To(replicas)
 		return clusterClient.Update(ctx, &d)
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 
@@ -192,7 +192,7 @@ func updateMemberAgentDeploymentReplicas(clusterClient client.Client, replicas i
 		if err != nil {
 			return err
 		}
-		if len(podList.Items) != replicas {
+		if len(podList.Items) != int(replicas) {
 			return fmt.Errorf("member agent pods %d doesn't match replicas specified %d", len(podList.Items), replicas)
 		}
 		return nil

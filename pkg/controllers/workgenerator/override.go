@@ -196,7 +196,7 @@ func applyOverrideRules(resource *placementv1beta1.ResourceContent, cluster *clu
 			return nil
 		}
 		// Apply JSONPatchOverrides by default
-		if err := applyJSONPatchOverride(resource, cluster, rule.JSONPatchOverrides); err != nil {
+		if err = applyJSONPatchOverride(resource, cluster, rule.JSONPatchOverrides); err != nil {
 			klog.ErrorS(err, "Failed to apply JSON patch override")
 			return controller.NewUserError(err)
 		}
@@ -206,16 +206,24 @@ func applyOverrideRules(resource *placementv1beta1.ResourceContent, cluster *clu
 
 // applyJSONPatchOverride applies a JSON patch on the selected resources following [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
 func applyJSONPatchOverride(resourceContent *placementv1beta1.ResourceContent, cluster *clusterv1beta1.MemberCluster, overrides []placementv1alpha1.JSONPatchOverride) error {
+	var err error
 	if len(overrides) == 0 { // do nothing
 		return nil
 	}
 	// go through the JSON patch overrides to replace the built-in variables before json Marshal
 	// as it may contain the built-in variables that cannot be marshaled directly
 	for i := range overrides {
-		// find and replace a few special built-in variables
-		// replace the built-in variable with the actual cluster name
-		processedJSONStr := []byte(strings.ReplaceAll(string(overrides[i].Value.Raw), placementv1alpha1.OverrideClusterNameVariable, cluster.Name))
-		overrides[i].Value.Raw = processedJSONStr
+		// Process the JSON string to replace variables
+		jsonStr := string(overrides[i].Value.Raw)
+		// Replace the built-in ${MEMBER-CLUSTER-NAME} variable with the actual cluster name
+		jsonStr = strings.ReplaceAll(jsonStr, placementv1alpha1.OverrideClusterNameVariable, cluster.Name)
+		// Replace label key variables with actual label values
+		jsonStr, err = replaceClusterLabelKeyVariables(jsonStr, cluster)
+		if err != nil {
+			klog.ErrorS(err, "Failed to replace cluster label key variables in JSON patch override")
+			return err
+		}
+		overrides[i].Value.Raw = []byte(jsonStr)
 	}
 
 	jsonPatchBytes, err := json.Marshal(overrides)
@@ -237,4 +245,39 @@ func applyJSONPatchOverride(resourceContent *placementv1beta1.ResourceContent, c
 	}
 	resourceContent.Raw = patchedObjectJSONBytes
 	return nil
+}
+
+// replaceClusterLabelKeyVariables finds all occurrences of the OverrideClusterLabelKeyVariablePrefix pattern
+// (e.g. ${MEMBER-CLUSTER-LABEL-KEY-region}) in the input string and replaces them with
+// the corresponding label values from the cluster.
+// If a label with the specified key doesn't exist, it returns an error.
+func replaceClusterLabelKeyVariables(input string, cluster *clusterv1beta1.MemberCluster) (string, error) {
+	prefixLen := len(placementv1alpha1.OverrideClusterLabelKeyVariablePrefix)
+	result := input
+
+	for {
+		startIdx := strings.Index(result, placementv1alpha1.OverrideClusterLabelKeyVariablePrefix)
+		if startIdx == -1 {
+			break
+		}
+		// extract the key value user wants to replace
+		endIdx := strings.Index(result[startIdx+prefixLen:], "}")
+		if endIdx == -1 {
+			klog.V(2).InfoS("malformed key ${MEMBER-CLUSTER-LABEL-KEY without the closing `}`", "input", input)
+			return "", fmt.Errorf("input %s is missing the closing bracket `}`", input)
+		}
+		endIdx += startIdx + prefixLen
+		// extract the key name
+		keyName := result[startIdx+prefixLen : endIdx]
+		// check if the key exists in the cluster labels
+		labelValue, exists := cluster.ObjectMeta.Labels[keyName]
+		if !exists {
+			klog.V(2).InfoS("Label key not found on cluster", "key", keyName, "cluster", cluster.Name)
+			return "", fmt.Errorf("label key %s not found on cluster %s", keyName, cluster.Name)
+		}
+		// replace this instance of the variable with the actual label value
+		fullVariable := result[startIdx : endIdx+1]
+		result = strings.Replace(result, fullVariable, labelValue, 1)
+	}
+	return result, nil
 }

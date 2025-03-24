@@ -223,9 +223,10 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding, no taint s
 		Eventually(crpEvictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement eviction status as expected")
 	})
 
+	// specifying a longer timeout, the namespace is being evicted while a new namespace is propagated with the same name leading to a failed takeover.
 	It("should ensure evicted cluster is picked again by scheduler & update cluster resource placement status as expected", func() {
 		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
-		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
+		Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
 	})
 
 	It("should still place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)

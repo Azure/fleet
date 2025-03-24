@@ -17,6 +17,7 @@ limitations under the License.
 package clusterresourceplacement
 
 import (
+	"math/rand"
 	"testing"
 	"time"
 
@@ -174,7 +175,7 @@ func TestGenerateManifest(t *testing.T) {
 					Spec: corev1.ServiceSpec{
 						ClusterIP:           utilrand.String(10),
 						ClusterIPs:          []string{},
-						HealthCheckNodePort: int32(utilrand.Int()),
+						HealthCheckNodePort: rand.Int31(),
 						Selector:            map[string]string{"svc-spec-selector-key": "svc-spec-selector-value"},
 						Ports: []corev1.ServicePort{
 							{
@@ -182,7 +183,7 @@ func TestGenerateManifest(t *testing.T) {
 								Protocol:    corev1.ProtocolTCP,
 								AppProtocol: ptr.To("svc.com/my-custom-protocol"),
 								Port:        9001,
-								NodePort:    int32(utilrand.Int()),
+								NodePort:    rand.Int31(),
 							},
 						},
 						Type:                     corev1.ServiceType("svc-spec-type"),
@@ -678,7 +679,7 @@ func TestGenerateResourceContent(t *testing.T) {
 				Spec: corev1.ServiceSpec{
 					ClusterIP:           utilrand.String(10),
 					ClusterIPs:          []string{},
-					HealthCheckNodePort: int32(utilrand.Int()),
+					HealthCheckNodePort: rand.Int31(),
 					Selector:            map[string]string{"svc-spec-selector-key": "svc-spec-selector-value"},
 					Ports: []corev1.ServicePort{
 						{
@@ -686,7 +687,7 @@ func TestGenerateResourceContent(t *testing.T) {
 							Protocol:    corev1.ProtocolTCP,
 							AppProtocol: ptr.To("svc.com/my-custom-protocol"),
 							Port:        9001,
-							NodePort:    int32(utilrand.Int()),
+							NodePort:    rand.Int31(),
 						},
 					},
 					Type:                     corev1.ServiceType("svc-spec-type"),
@@ -874,10 +875,81 @@ func TestSortResource(t *testing.T) {
 		},
 	}
 
+	// Create the Secret object
+	secret := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Secret",
+			"metadata": map[string]interface{}{
+				"name":      "test-secret",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the Secret object
+	secret2 := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Secret",
+			"metadata": map[string]interface{}{
+				"name":      "test-secret-2",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the ConfigMap object
+	configMap := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "ConfigMap",
+			"metadata": map[string]interface{}{
+				"name":      "test-configmap",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the PersistentVolumeClaim object
+	pvc := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "PersistentVolumeClaim",
+			"metadata": map[string]interface{}{
+				"name":      "test-pvc",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the ClusterRole object
+	role := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "rbac.authorization.k8s.io/v1",
+			"kind":       "Role",
+			"metadata": map[string]interface{}{
+				"name": "test-clusterrole",
+			},
+		},
+	}
+
 	tests := map[string]struct {
 		resources []runtime.Object
 		want      []runtime.Object
 	}{
+		"should handle empty resources list": {
+			resources: []runtime.Object{},
+			want:      []runtime.Object{},
+		},
+		"should handle single resource": {
+			resources: []runtime.Object{deployment},
+			want:      []runtime.Object{deployment},
+		},
+		"should handle multiple namespaces": {
+			resources: []runtime.Object{namespace1, namespace2},
+			want:      []runtime.Object{namespace2, namespace1},
+		},
 		"should gather selected resources with Namespace in front with order": {
 			resources: []runtime.Object{deployment, namespace1, namespace2},
 			want:      []runtime.Object{namespace2, namespace1, deployment},
@@ -892,18 +964,36 @@ func TestSortResource(t *testing.T) {
 		},
 		"should gather selected resources with CRD or Namespace in front  with order, second case": {
 			resources: []runtime.Object{crd1, crd2, deployment, namespace2, clusterRole},
-			want:      []runtime.Object{namespace2, crd2, crd1, clusterRole, deployment},
+			want:      []runtime.Object{namespace2, crd2, crd1, deployment, clusterRole},
+		},
+		"should gather selected resources with PersistentVolumeClaim in front with order": {
+			resources: []runtime.Object{deployment, pvc, namespace1, role},
+			want:      []runtime.Object{namespace1, pvc, deployment, role},
+		},
+		"should gather selected resources with Secret in front with order": {
+			resources: []runtime.Object{deployment, secret, namespace1, crd1, namespace2, role},
+			want:      []runtime.Object{namespace2, namespace1, crd1, secret, deployment, role},
+		},
+		"should gather selected resources with ConfigMap and Secret in front with order": {
+			resources: []runtime.Object{deployment, secret, namespace1, role, configMap, secret2},
+			want:      []runtime.Object{namespace1, configMap, secret2, secret, deployment, role},
+		},
+		"should gather selected all the resources with the right order": {
+			resources: []runtime.Object{configMap, deployment, role, crd1, pvc, secret2, clusterRole, secret, namespace1, namespace2, crd2},
+			want:      []runtime.Object{namespace2, namespace1, crd2, crd1, configMap, secret2, secret, pvc, deployment, clusterRole, role},
 		},
 	}
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			sortResources(tt.resources)
-
-			// Check that the returned resources match the expected resources
-			diff := cmp.Diff(tt.want, tt.resources)
-			if diff != "" {
-				t.Errorf("sortResources() mismatch (-want +got):\n%s", diff)
+			// run many times to make sure it's stable
+			for i := 10; i < 1; i++ {
+				sortResources(tt.resources)
+				// Check that the returned resources match the expected resources
+				diff := cmp.Diff(tt.want, tt.resources)
+				if diff != "" {
+					t.Errorf("sortResources() mismatch (-want +got):\n%s", diff)
+				}
 			}
 		})
 	}

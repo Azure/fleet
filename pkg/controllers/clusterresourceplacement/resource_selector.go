@@ -112,30 +112,38 @@ func (r *Reconciler) gatherSelectedResource(placement string, selectors []fleetv
 
 	return resources, nil
 }
+
 func sortResources(resources []runtime.Object) {
 	sort.Slice(resources, func(i, j int) bool {
 		obj1 := resources[i].DeepCopyObject().(*unstructured.Unstructured)
 		obj2 := resources[j].DeepCopyObject().(*unstructured.Unstructured)
-		if obj1.GetObjectKind().GroupVersionKind().String() == utils.NamespaceMetaGVK.String() || obj2.GetObjectKind().GroupVersionKind().String() == utils.NamespaceMetaGVK.String() {
-			if obj1.GetObjectKind().GroupVersionKind().String() != obj2.GetObjectKind().GroupVersionKind().String() {
-				// only return if they are not both namespace objects
-				return obj1.GetObjectKind().GroupVersionKind().String() == utils.NamespaceMetaGVK.String()
-			}
-		}
-		if obj1.GetObjectKind().GroupVersionKind().String() == utils.CRDMetaGVK.String() || obj2.GetObjectKind().GroupVersionKind().String() == utils.CRDMetaGVK.String() {
-			if obj1.GetObjectKind().GroupVersionKind().String() != obj2.GetObjectKind().GroupVersionKind().String() {
-				// only return if they are not both CRD objects
-				return obj1.GetObjectKind().GroupVersionKind().String() == utils.CRDMetaGVK.String()
-			}
-		}
-		// compare group/version;kind
-		gvkComp := strings.Compare(obj1.GroupVersionKind().String(), obj2.GroupVersionKind().String())
+		gvk1 := obj1.GetObjectKind().GroupVersionKind().String()
+		gvk2 := obj2.GetObjectKind().GroupVersionKind().String()
+		// compare group/version;kind for the rest of type of resources
+		gvkComp := strings.Compare(gvk1, gvk2)
 		if gvkComp == 0 {
 			// same gvk, compare namespace/name
 			return strings.Compare(fmt.Sprintf("%s/%s", obj1.GetNamespace(), obj1.GetName()),
 				fmt.Sprintf("%s/%s", obj2.GetNamespace(), obj2.GetName())) > 0
 		}
-		return gvkComp > 0
+		// sort by the cluster scoped priority resource types first
+		if gvk1 == utils.NamespaceMetaGVK.String() || gvk2 == utils.NamespaceMetaGVK.String() {
+			return gvk1 == utils.NamespaceMetaGVK.String()
+		}
+		if gvk1 == utils.CRDMetaGVK.String() || gvk2 == utils.CRDMetaGVK.String() {
+			return gvk1 == utils.CRDMetaGVK.String()
+		}
+		// followed by namespaced priority resource types
+		if gvk1 == utils.ConfigMapGVK.String() || gvk2 == utils.ConfigMapGVK.String() {
+			return gvk1 == utils.ConfigMapGVK.String()
+		}
+		if gvk1 == utils.SecretGVK.String() || gvk2 == utils.SecretGVK.String() {
+			return gvk1 == utils.SecretGVK.String()
+		}
+		if gvk1 == utils.PersistentVolumeClaimGVK.String() || gvk2 == utils.PersistentVolumeClaimGVK.String() {
+			return gvk1 == utils.PersistentVolumeClaimGVK.String()
+		}
+		return gvkComp < 0
 	})
 }
 

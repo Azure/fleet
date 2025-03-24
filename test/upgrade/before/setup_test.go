@@ -44,7 +44,9 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
@@ -124,12 +126,27 @@ var (
 	ignoreServicePortNodePortProtocolField = cmpopts.IgnoreFields(corev1.ServicePort{}, "NodePort", "Protocol")
 	ignoreRPSClusterNameField              = cmpopts.IgnoreFields(placementv1beta1.ResourcePlacementStatus{}, "ClusterName")
 
+	// Since Fleet agents v0.14.0 a minor reason string change was applied on the hub side that
+	// affects CRP availability status reportings in the resource placement section when untrackable
+	// resources are involved. This transformer is added to ensure that the compatibility test specs
+	// can handle this string change smoothly.
+	//
+	// Note that the aforementioned change is hub side exclusive and is for informational purposes only.
+	availableDueToUntrackableResCondAcyclicTransformer = cmpopts.AcyclicTransformer("AvailableDueToUntrackableResCond", func(cond metav1.Condition) metav1.Condition {
+		transformedCond := cond.DeepCopy()
+		if cond.Type == string(placementv1beta1.ResourcesAvailableConditionType) && cond.Reason == work.WorkNotTrackableReason {
+			transformedCond.Reason = condition.WorkNotAvailabilityTrackableReason
+		}
+		return *transformedCond
+	})
+
 	crpStatusCmpOptions = cmp.Options{
 		cmpopts.SortSlices(lessFuncConditionByType),
 		cmpopts.SortSlices(lessFuncPlacementStatusByClusterName),
 		cmpopts.SortSlices(utils.LessFuncResourceIdentifier),
 		cmpopts.SortSlices(utils.LessFuncFailedResourcePlacements),
 		utils.IgnoreConditionLTTAndMessageFields,
+		availableDueToUntrackableResCondAcyclicTransformer,
 		cmpopts.EquateEmpty(),
 	}
 	crpWithStuckRolloutStatusCmpOptions = cmp.Options{
@@ -139,6 +156,7 @@ var (
 		cmpopts.SortSlices(utils.LessFuncFailedResourcePlacements),
 		utils.IgnoreConditionLTTAndMessageFields,
 		ignoreRPSClusterNameField,
+		availableDueToUntrackableResCondAcyclicTransformer,
 		cmpopts.EquateEmpty(),
 	}
 )

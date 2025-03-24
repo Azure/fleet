@@ -188,8 +188,8 @@ func crossReferencePickedClustersAndDeDupBindings(
 				// Cannot get a unique name for the binding; normally this should never happen.
 				return nil, nil, nil, controller.NewUnexpectedBehaviorError(fmt.Errorf("failed to cross reference picked clusters and existing bindings: %w", err))
 			}
-			affinityScore := int32(scored.Score.AffinityScore)
-			topologySpreadScore := int32(scored.Score.TopologySpreadScore)
+			affinityScore := scored.Score.AffinityScore
+			topologySpreadScore := scored.Score.TopologySpreadScore
 			binding := &placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: name,
@@ -227,8 +227,8 @@ func patchBindingFromScoredCluster(binding *placementv1beta1.ClusterResourceBind
 	scored *ScoredCluster, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) *bindingWithPatch {
 	// Update the binding so that it is associated with the latest score.
 	updated := binding.DeepCopy()
-	affinityScore := int32(scored.Score.AffinityScore)
-	topologySpreadScore := int32(scored.Score.TopologySpreadScore)
+	affinityScore := scored.Score.AffinityScore
+	topologySpreadScore := scored.Score.TopologySpreadScore
 	// Update the binding so that it is associated with the latest scheduling policy.
 	updated.Spec.State = desiredState
 	updated.Spec.SchedulingPolicySnapshotName = policy.Name
@@ -328,8 +328,8 @@ func newSchedulingDecisionsFromBindings(
 			ClusterName: sc.Cluster.Name,
 			Selected:    false,
 			ClusterScore: &placementv1beta1.ClusterScore{
-				AffinityScore:       ptr.To(int32(sc.Score.AffinityScore)),
-				TopologySpreadScore: ptr.To(int32(sc.Score.TopologySpreadScore)),
+				AffinityScore:       ptr.To(sc.Score.AffinityScore),
+				TopologySpreadScore: ptr.To(sc.Score.TopologySpreadScore),
 			},
 			Reason: fmt.Sprintf(notPickedByScoreReasonTemplate, sc.Cluster.Name, sc.Score.AffinityScore, sc.Score.TopologySpreadScore),
 		})
@@ -496,12 +496,12 @@ func sortByClusterScoreAndName(bindings []*placementv1beta1.ClusterResourceBindi
 		default:
 			// Both clusters have assigned cluster scores; compare their scores first.
 			clusterScoreA := ClusterScore{
-				AffinityScore:       int(*scoreA.AffinityScore),
-				TopologySpreadScore: int(*scoreA.TopologySpreadScore),
+				AffinityScore:       *scoreA.AffinityScore,
+				TopologySpreadScore: *scoreA.TopologySpreadScore,
 			}
 			clusterScoreB := ClusterScore{
-				AffinityScore:       int(*scoreB.AffinityScore),
-				TopologySpreadScore: int(*scoreB.TopologySpreadScore),
+				AffinityScore:       *scoreB.AffinityScore,
+				TopologySpreadScore: *scoreB.TopologySpreadScore,
 			}
 
 			if clusterScoreA.Equal(&clusterScoreB) {

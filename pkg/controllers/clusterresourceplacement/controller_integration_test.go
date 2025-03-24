@@ -76,7 +76,7 @@ var (
 	crpOwnerReference = metav1.OwnerReference{
 		APIVersion:         fleetAPIVersion,
 		Kind:               "ClusterResourcePlacement",
-		Name:               testName,
+		Name:               testCRPName,
 		Controller:         ptr.To(true),
 		BlockOwnerDeletion: ptr.To(true),
 	}
@@ -225,7 +225,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("Create a new crp")
 			crp = &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: testName,
+					Name: testCRPName,
 				},
 				Spec: placementv1beta1.ClusterResourcePlacementSpec{
 					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
@@ -300,7 +300,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("By checking CRP status")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       testName,
+					Name:       testCRPName,
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
@@ -315,7 +315,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			gotCRP = retrieveAndValidateClusterResourcePlacement(testName, wantCRP)
+			gotCRP = retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 		})
 
 		AfterEach(func() {
@@ -339,7 +339,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("By validating the CRP status has only scheduling condition")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       testName,
+					Name:       testCRPName,
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
@@ -354,7 +354,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			retrieveAndValidateClusterResourcePlacement(testName, wantCRP)
+			retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 		})
 
 		It("Clusters are selected and resources are applied successfully", func() {
@@ -387,7 +387,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("By validating the CRP status")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       testName,
+					Name:       testCRPName,
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
@@ -449,14 +449,14 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			retrieveAndValidateClusterResourcePlacement(testName, wantCRP)
+			retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("By creating a synchronized clusterResourceBinding on member-2")
 			createSynchronizedClusterResourceBinding(member2Name, gotPolicySnapshot, gotResourceSnapshot)
 
 			wantCRP = &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       testName,
+					Name:       testCRPName,
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
@@ -544,7 +544,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			retrieveAndValidateClusterResourcePlacement(testName, wantCRP)
+			retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 		})
 	})
 })

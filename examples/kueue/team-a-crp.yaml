@@ -1,0 +1,30 @@
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourcePlacement
+metadata:
+  name: team-a-crp
+spec:
+  resourceSelectors:
+    - group: kueue.x-k8s.io
+      version: v1beta1
+      kind: ResourceFlavor
+      name: default-flavor
+    - group: kueue.x-k8s.io
+      version: v1beta1
+      kind: ClusterQueue
+      name: cluster-queue
+    - group: ""
+      kind: Namespace
+      version: v1
+      name: team-a
+  policy:
+    placementType: PickFixed
+    clusterNames:
+      - ryanzhang-aks-member-2
+  strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxUnavailable: 100%
+        maxSurge: 25%
+        unavailablePeriodSeconds: 60
+  revisionHistoryLimit: 15
+

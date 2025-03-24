@@ -459,6 +459,12 @@ var (
 		Resource: string(corev1.ResourceSecrets),
 	}
 
+	SecretGVK = schema.GroupVersionKind{
+		Group:   corev1.GroupName,
+		Version: corev1.SchemeGroupVersion.Version,
+		Kind:    "Secret",
+	}
+
 	RoleGVR = schema.GroupVersionResource{
 		Group:    rbacv1.GroupName,
 		Version:  rbacv1.SchemeGroupVersion.Version,
@@ -487,6 +493,12 @@ var (
 		Group:    rbacv1.GroupName,
 		Version:  rbacv1.SchemeGroupVersion.Version,
 		Resource: "clusterrolebindings",
+	}
+
+	PersistentVolumeClaimGVK = schema.GroupVersionKind{
+		Group:   corev1.GroupName,
+		Version: corev1.SchemeGroupVersion.Version,
+		Kind:    "PersistentVolumeClaim",
 	}
 )
 

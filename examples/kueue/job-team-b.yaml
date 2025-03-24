@@ -1,0 +1,32 @@
+# [START gke_batch_kueue_intro_team_b_job]
+apiVersion: batch/v1
+kind: Job
+metadata:
+  namespace: team-b # Job under team-b namespace
+  generateName: sample-job-team-b-
+  annotations:
+    kueue.x-k8s.io/queue-name: lq-team-b # Point to the LocalQueue
+spec:
+  ttlSecondsAfterFinished: 60 # Job will be deleted after 60 seconds
+  parallelism: 3 # This Job will have 3 replicas running at the same time
+  completions: 3 # This Job requires 3 completions
+  suspend: true # Set to true to allow Kueue to control the Job when it starts
+  template:
+    spec:
+      containers:
+      - name: dummy-job
+        image: gcr.io/k8s-staging-perf-tests/sleep:latest
+        args: ["10s"] # Sleep for 10 seconds
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+            ephemeral-storage: "512Mi"
+            nvidia.com/gpu: "1"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+            ephemeral-storage: "512Mi"
+            nvidia.com/gpu: "1"
+      restartPolicy: Never
+# [END gke_batch_kueue_intro_team_b_job]

@@ -82,7 +82,7 @@ func (p *Plugin) Score(
 				return nil, framework.FromError(fmt.Errorf("failed to calculate score for cluster %s: %w", cluster.Name, err), p.Name())
 			}
 			// Multiple preferred affinity terms are OR'd.
-			score.AffinityScore += int(ts)
+			score.AffinityScore += ts
 		}
 	}
 

@@ -22,16 +22,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	appsv1 "k8s.io/api/apps/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -154,6 +153,149 @@ func TestGetWorkNamePrefixFromSnapshotName(t *testing.T) {
 			}
 			if workName != tt.wantedName {
 				t.Errorf("getWorkNamePrefixFromSnapshotName test `%s` workName = `%v`, wantedName `%v`", name, workName, tt.wantedName)
+			}
+		})
+	}
+}
+
+func TestExtractResFromConfigMap(t *testing.T) {
+	tests := map[string]struct {
+		uConfigMap *unstructured.Unstructured
+		want       []fleetv1beta1.Manifest
+		wantErr    bool
+	}{
+		"valid config map with no entries is fine": {
+			uConfigMap: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+				},
+			},
+			want:    []fleetv1beta1.Manifest{},
+			wantErr: false,
+		},
+		"config map with invalid JSON content should fail": {
+			uConfigMap: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+					"metadata": map[string]interface{}{
+						"name":      "test-config",
+						"namespace": "default",
+					},
+					"data": map[string]interface{}{
+						"invalid": "{invalid-json}",
+					},
+				},
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		"config map with namespaced resource in different namespace should fail": {
+			uConfigMap: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+					"metadata": map[string]interface{}{
+						"name":      "test-config",
+						"namespace": "default",
+					},
+					"data": map[string]interface{}{
+						"resource": `{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "test-pod", "namespace": "other-namespace"}}`,
+					},
+				},
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		"config map with valid and invalid entries should fail": {
+			uConfigMap: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+					"metadata": map[string]interface{}{
+						"name":      "test-config",
+						"namespace": "default",
+					},
+					"data": map[string]interface{}{
+						"valid":   `{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "test-pod", "namespace": "default"}}`,
+						"invalid": "{invalid-json}",
+					},
+				},
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		"config map with cluster and namespace scoped data in the correct namespace should pass": {
+			uConfigMap: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+					"metadata": map[string]interface{}{
+						"name":      "test-config",
+						"namespace": "default",
+					},
+					"data": map[string]interface{}{
+						"resource":  `{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "test-pod", "namespace": "default"}}`,
+						"resource2": `{"apiVersion": "v1", "kind": "ClusterRole", "metadata": {"name": "test-role"}}`,
+					},
+				},
+			},
+			want: []fleetv1beta1.Manifest{
+				{RawExtension: runtime.RawExtension{Raw: []byte(`{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "test-pod", "namespace": "default"}}`)}},
+				{RawExtension: runtime.RawExtension{Raw: []byte(`{"apiVersion": "v1", "kind": "ClusterRole", "metadata": {"name": "test-role"}}`)}},
+			},
+			wantErr: false,
+		},
+		"config map with cluster scoped and cross namespaced resources data in a different namespace should fail": {
+			uConfigMap: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+					"metadata": map[string]interface{}{
+						"name":      "test-config",
+						"namespace": "default",
+					},
+					"data": map[string]interface{}{
+						"resource":  `{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "test-pod", "namespace": "not-default"}}`,
+						"resource2": `{"apiVersion": "v1", "kind": "ClusterRole", "metadata": {"name": "test-role"}}`,
+					},
+				},
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		"config map with valid entries in different order should be sorted to order": {
+			uConfigMap: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+					"metadata": map[string]interface{}{
+						"name":      "test-config",
+						"namespace": "default",
+					},
+					"data": map[string]interface{}{
+						"resource2": `{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "test-pod1", "namespace": "default"}}`,
+						"resource1": `{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "test-pod2", "namespace": "default"}}`,
+					},
+				},
+			},
+			want: []fleetv1beta1.Manifest{
+				{RawExtension: runtime.RawExtension{Raw: []byte(`{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "test-pod2", "namespace": "default"}}`)}},
+				{RawExtension: runtime.RawExtension{Raw: []byte(`{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "test-pod1", "namespace": "default"}}`)}},
+			},
+			wantErr: false,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			got, err := extractResFromConfigMap(tt.uConfigMap)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("extractResFromConfigMap() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("extractResFromConfigMap() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
