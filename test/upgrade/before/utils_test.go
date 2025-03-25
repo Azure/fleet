@@ -104,7 +104,7 @@ func checkIfAllMemberClustersHaveJoined() {
 // createWorkResources creates some resources on the hub cluster for testing purposes.
 func createWorkResources(workNamespaceName, appConfigMapName, crpName string) {
 	ns := appNamespace(workNamespaceName, crpName)
-	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
+	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
 
 	configMap := appConfigMap(workNamespaceName, appConfigMapName)
 	Expect(hubClient.Create(ctx, &configMap)).To(Succeed(), "Failed to create config map %s", configMap.Name)

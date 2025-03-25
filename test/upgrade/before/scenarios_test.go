@@ -72,7 +72,7 @@ var _ = Describe("CRP with non-trackable resources, all available (before upgrad
 	BeforeAll(func() {
 		// Create the resources.
 		ns := appNamespace(workNamespaceName, crpName)
-		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
+		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		// Job is currently untrackable in Fleet.
 		job := batchv1.Job{
@@ -159,7 +159,7 @@ var _ = Describe("CRP with availability failure (before upgrade)", Ordered, func
 	BeforeAll(func() {
 		// Create the resources.
 		ns := appNamespace(workNamespaceName, crpName)
-		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
+		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		// Use a Service of the LoadBalancer type as by default KinD environment does not support
 		// this service type and such services will always be unavailable.
@@ -266,7 +266,7 @@ var _ = Describe("CRP with apply op failure (before upgrade)", Ordered, func() {
 
 		// Create the resources on the member cluster with a custom manager
 		ns := appNamespace(workNamespaceName, crpName)
-		Expect(memberCluster1EastProdClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
+		Expect(memberCluster1EastProdClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		configMap := appConfigMap(workNamespaceName, appConfigMapName)
 		configMap.Data = map[string]string{
@@ -368,7 +368,7 @@ var _ = Describe("CRP stuck in the rollout process (blocked by availability fail
 	BeforeAll(func() {
 		// Create the resources.
 		ns := appNamespace(workNamespaceName, crpName)
-		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
+		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		// Use a Service of the ClusterIP type. KinD supports it and it will become available
 		// once an IP has been assigned.
@@ -697,7 +697,7 @@ var _ = Describe("CRP stuck in the rollout process (long wait time)", Ordered, f
 	BeforeAll(func() {
 		// Create the resources.
 		ns := appNamespace(workNamespaceName, crpName)
-		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
+		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		// Job is currently untrackable in Fleet.
 		originalJob = &batchv1.Job{
