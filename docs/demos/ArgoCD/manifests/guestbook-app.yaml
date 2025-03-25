@@ -11,7 +11,7 @@ spec:
   source:
     path: docs/demos/ArgoCD/manifests/guestbook # manifest path
     repoURL: https://github.com/Azure/fleet.git # source repo
-    targetRevision: argocd-demo # source branch
+    targetRevision: main # source branch
   syncPolicy:
     automated:
       prune: true

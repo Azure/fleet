@@ -3,5 +3,5 @@ kind: ConfigMap
 metadata:
   name: test-config
 data:
-  branch: master
+  branch: main
   cluster: member3

@@ -129,7 +129,7 @@ spec:
   source:
     path: docs/demos/ArgoCD/manifests/guestbook
     repoURL: https://github.com/Azure/fleet.git
-    targetRevision: master
+    targetRevision: main
   syncPolicy:
     automated:
       prune: true
@@ -548,7 +548,7 @@ guestbook   guestbook-app   Synced        Healthy
 kubectl get cm -n guestbook test-config -o yaml
 apiVersion: v1
 data:
-  branch: master
+  branch: main
   cluster: member1 # <- member1 exclusive
 kind: ConfigMap
 metadata:
@@ -565,7 +565,7 @@ guestbook   guestbook-app   Synced        Healthy
 kubectl get cm -n guestbook test-config -o yaml
 apiVersion: v1
 data:
-  branch: master
+  branch: main
   cluster: member2 # <- member2 exclusive
 kind: ConfigMap
 metadata:
@@ -582,7 +582,7 @@ guestbook   guestbook-app   Synced        Healthy
 kubectl get cm -n guestbook test-config -o yaml
 apiVersion: v1
 data:
-  branch: master
+  branch: main
   cluster: member3 # <- member3 exclusive
 kind: ConfigMap
 metadata:
