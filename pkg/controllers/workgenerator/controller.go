@@ -1530,16 +1530,30 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 					newResourceSnapshot := newWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel]
 					if oldResourceSnapshot == "" || newResourceSnapshot == "" {
 						klog.ErrorS(controller.NewUnexpectedBehaviorError(errors.New("found an invalid work without parent-resource-snapshot-index")),
-							"Could not find the parent resource snapshot index label", "oldWork", klog.KObj(oldWork), "oldResourceSnapshotLabelValue", oldResourceSnapshot,
-							"newWork", klog.KObj(newWork), "newResourceSnapshotLabelValue", newResourceSnapshot)
+							"Could not find the parent resource snapshot index label", "oldWork", klog.KObj(oldWork), "oldWorkLabels", oldWork.Labels,
+							"newWork", klog.KObj(newWork), "newWorkLabels", newWork.Labels)
 						return
 					}
-					// There is an edge case that, the work spec is the same but from different resourceSnapshots.
-					// WorkGenerator will update the work because of the label changes, but the generation is the same.
+					oldClusterResourceOverrideSnapshotHash := oldWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation]
+					newClusterResourceOverrideSnapshotHash := newWork.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation]
+					oldResourceOverrideSnapshotHash := oldWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation]
+					newResourceOverrideSnapshotHash := newWork.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation]
+					if oldClusterResourceOverrideSnapshotHash == "" || newClusterResourceOverrideSnapshotHash == "" ||
+						oldResourceOverrideSnapshotHash == "" || newResourceOverrideSnapshotHash == "" {
+						klog.ErrorS(controller.NewUnexpectedBehaviorError(errors.New("found an invalid work without override-snapshot-hash")),
+							"Could not find the override-snapshot-hash annotation", "oldWork", klog.KObj(oldWork), "oldWorkAnnotations", oldWork.Annotations,
+							"newWork", klog.KObj(newWork), "newWorkAnnotations", newWork.Annotations)
+						return
+					}
+
+					// There is an edge case that, the work spec is the same but from different resourceSnapshots or resourceOverrideSnapshots.
+					// WorkGenerator will update the work because of the label/annotation changes, but the generation is the same.
 					// When the normal update happens, the controller will set the applied condition as false and wait
 					// until the work condition has been changed.
 					// In this edge case, we need to requeue the binding to update the binding status.
-					if oldResourceSnapshot == newResourceSnapshot {
+					if oldResourceSnapshot == newResourceSnapshot &&
+						oldClusterResourceOverrideSnapshotHash == newClusterResourceOverrideSnapshotHash &&
+						oldResourceOverrideSnapshotHash == newResourceOverrideSnapshotHash {
 						klog.V(2).InfoS("The work applied or available condition stayed as true, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
 						return
 					}
