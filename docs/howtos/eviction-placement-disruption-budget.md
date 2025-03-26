@@ -26,10 +26,11 @@ spec:
   resourceSelectors:
     - group: ""
       kind: Namespace
-      version: v1          
+      version: v1
       name: test-ns
   policy:
-    placementType: PickAll
+    placementType: PickN
+    numberOfClusters: 1
 ```
 
 The `CRP` status after applying should look something like this:
