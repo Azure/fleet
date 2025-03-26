@@ -130,7 +130,7 @@ var _ = Context("creating clusterResourceOverride (selecting all clusters) to ov
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cro as expected", crpName)
 	})
 
-	It("should update CRP status on demand as expected", func() {
+	It("should refresh the CRP status even as there is no change on the resources", func() {
 		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 1)}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)

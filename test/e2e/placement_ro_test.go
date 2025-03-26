@@ -168,7 +168,7 @@ var _ = Context("creating resourceOverride (selecting all clusters) to override 
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 	})
 
-	It("should update CRP status as expected", func() {
+	It("should refresh the CRP status even as there is no change on the resources", func() {
 		wantRONames := []placementv1beta1.NamespacedName{
 			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 2)},
 		}

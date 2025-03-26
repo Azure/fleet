@@ -1548,8 +1548,9 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 
 					// There is an edge case that, the work spec is the same but from different resourceSnapshots or resourceOverrideSnapshots.
 					// WorkGenerator will update the work because of the label/annotation changes, but the generation is the same.
-					// When the normal update happens, the controller will set the applied condition as false and wait
-					// until the work condition has been changed.
+					// When the override update happens, the rollout controller will set the applied condition as false
+					// and wait for the workGenerator to update it. The workGenerator will wait for the work status change,
+					// but here the status didn't change as the work's spec didn't change
 					// In this edge case, we need to requeue the binding to update the binding status.
 					if oldResourceSnapshot == newResourceSnapshot &&
 						oldClusterResourceOverrideSnapshotHash == newClusterResourceOverrideSnapshotHash &&
