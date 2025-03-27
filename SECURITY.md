@@ -1,7 +1,7 @@
 # Security
 
 The KubeFleet maintainers takes the security of the project very seriously; we greatly welcomes
-and appreciates any responsible disclosures of security vulerabilities.
+and appreciates any responsible disclosures of security vulnerabilities.
 
 If you believe you have found a security vulnerability in the repository, please follow the steps
 below to report it to the KubeFleet team.
