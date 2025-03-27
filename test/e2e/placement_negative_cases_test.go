@@ -18,6 +18,7 @@ import (
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/workapplier"
+	"go.goms.io/fleet/test/e2e/framework"
 )
 
 var _ = Describe("handling errors and failures gracefully", func() {
@@ -172,7 +173,7 @@ var _ = Describe("handling errors and failures gracefully", func() {
 					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 				}
 				return nil
-			}, eventuallyDuration*3, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place some manifests on member clusters", func() {
@@ -213,11 +214,7 @@ var _ = Describe("handling errors and failures gracefully", func() {
 
 		AfterAll(func() {
 			// Remove the CRP and the namespace from the hub cluster.
-			cleanupCRP(crpName)
-			cleanupWorkResources()
-
-			// Clean the placed resources.
-			cleanWorkResourcesOnCluster(allMemberClusters[0])
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd})
 		})
 	})
 })
