@@ -32,7 +32,7 @@ func (r *Reconciler) processManifests(
 	for _, bundle := range bundles {
 		if bundle.applyErr != nil {
 			// Skip a manifest if it has failed pre-processing.
-			return
+			continue
 		}
 		r.processOneManifest(ctx, bundle, work, expectedAppliedWorkOwnerRef)
 		klog.V(2).InfoS("Processed a manifest", "manifestObj", klog.KObj(bundle.manifestObj), "work", klog.KObj(work))
