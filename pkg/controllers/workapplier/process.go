@@ -286,6 +286,9 @@ func (r *Reconciler) reportDiffOnlyIfApplicable(
 				ValueInHub: "(the whole object)",
 			},
 		}
+		klog.V(2).InfoS("Diff report completed; the object has not been created in the member cluster yet",
+			"GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
+			"work", klog.KObj(work))
 		return true
 	}
 
@@ -308,9 +311,15 @@ func (r *Reconciler) reportDiffOnlyIfApplicable(
 		// Configuration diffs are found.
 		bundle.diffs = configDiffs
 		bundle.reportDiffResTyp = ManifestProcessingReportDiffResultTypeFoundDiff
+		klog.V(2).InfoS("Diff report completed; configuration diffs are found",
+			"GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
+			"work", klog.KObj(work))
 	default:
 		// No configuration diffs are found.
 		bundle.reportDiffResTyp = ManifestProcessingReportDiffResultTypeNoDiffFound
+		klog.V(2).InfoS("Diff report completed; no configuration diffs are found",
+			"GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
+			"work", klog.KObj(work))
 	}
 
 	klog.V(2).InfoS("ReportDiff process completed",
