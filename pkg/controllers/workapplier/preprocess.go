@@ -64,7 +64,7 @@ func (r *Reconciler) preProcessManifests(
 		// Reject objects with a generate name but no name.
 		if len(manifestObj.GetGenerateName()) > 0 && len(manifestObj.GetName()) == 0 {
 			// The manifest object has a generate name but no name.
-			klog.V(2).InfoS("Reject objects with only generate name", "manifestObj", klog.KObj(manifestObj), "work", klog.KObj(work))
+			klog.V(2).InfoS("Rejected an object with only generate name", "manifestObj", klog.KObj(manifestObj), "work", klog.KObj(work))
 			bundle.applyErr = fmt.Errorf("objects with only generate name are not supported")
 			bundle.applyResTyp = ManifestProcessingApplyResultTypeFoundGenerateName
 			return
@@ -148,6 +148,8 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 			// Such manifests would still be reported in the status (see the later parts of the
 			// reconciliation loop), it is just that they are not relevant in the write-ahead
 			// process.
+			klog.V(2).InfoS("Skipped a manifest in the write-ahead process as it has failed pre-processing", "work", workRef,
+				"ordinal", idx, "applyErr", bundle.applyErr, "applyResTyp", bundle.applyResTyp)
 			continue
 		}
 
@@ -172,7 +174,7 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 		}
 		if _, found := checked[wriStr]; found {
 			klog.V(2).InfoS("A duplicate manifest has been found",
-				"ordinal", idx, "work", workRef, "WRI", wriStr)
+				"ordinal", idx, "work", workRef, "workResourceID", wriStr)
 			bundle.applyErr = fmt.Errorf("a duplicate manifest has been found")
 			bundle.applyResTyp = ManifestProcessingApplyResultTypeDuplicated
 			continue
@@ -184,7 +186,7 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 		manifestCondsForWA = append(manifestCondsForWA, manifestCondForWA)
 
 		klog.V(2).InfoS("Prepared write-ahead information for a manifest",
-			"manifestObj", klog.KObj(bundle.manifestObj), "WRI", wriStr, "work", workRef)
+			"manifestObj", klog.KObj(bundle.manifestObj), "workResourceID", wriStr, "work", workRef)
 	}
 
 	// Identify any manifests from previous runs that might have been applied and are now left
@@ -209,6 +211,7 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 	}
 	work.Status.ManifestConditions = manifestCondsForWA
 	if err := r.hubClient.Status().Update(ctx, work); err != nil {
+		klog.ErrorS(err, "Failed to write ahead manifest processing attempts", "work", workRef)
 		return controller.NewAPIServerError(false, fmt.Errorf("failed to write ahead manifest processing attempts: %w", err))
 	}
 	klog.V(2).InfoS("Write-ahead process completed", "work", workRef)

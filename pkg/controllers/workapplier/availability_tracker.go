@@ -41,6 +41,16 @@ func (r *Reconciler) trackInMemberClusterObjAvailability(ctx context.Context, bu
 			// The manifest object in the bundle has not been applied yet. No availability check
 			// is needed.
 			bundle.availabilityResTyp = ManifestProcessingAvailabilityResultTypeSkipped
+
+			// Note that some of the objects might have failed the pre-processing stage and do not
+			// even have a GVR or a manifest object.
+			if bundle.gvr != nil && bundle.manifestObj != nil {
+				klog.V(2).InfoS("The manifest object is not applied yet, skipping the availability check",
+					"GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj), "inMemberClusterObj", klog.KObj(bundle.inMemberClusterObj), "work", workRef)
+			} else {
+				klog.V(2).InfoS("The manifest object is not applied yet, skipping the availability check",
+					"ordinal", pieces, "work", workRef)
+			}
 			return
 		}
 

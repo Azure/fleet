@@ -210,6 +210,8 @@ func (r *Reconciler) refreshAppliedWorkStatus(
 	// Update the AppliedWork object status.
 	appliedWork.Status.AppliedResources = appliedResources
 	if err := r.spokeClient.Status().Update(ctx, appliedWork); err != nil {
+		klog.ErrorS(err, "Failed to update AppliedWork status",
+			"appliedWork", klog.KObj(appliedWork))
 		return controller.NewAPIServerError(false, err)
 	}
 	klog.V(2).InfoS("Refreshed AppliedWork object status",
@@ -275,10 +277,18 @@ func setManifestAppliedCondition(
 
 	if appliedCond != nil {
 		meta.SetStatusCondition(&manifestCond.Conditions, *appliedCond)
+		klog.V(2).InfoS("Applied condition set in ManifestCondition",
+			"workResourceID", manifestCond.Identifier,
+			"applyResTyp", appliedResTyp, "applyError", applyError,
+			"inMemberClusterObjGeneration", inMemberClusterObjGeneration)
 	} else {
 		// As the conditions are ported back; removal must be performed if the Applied
 		// condition is not set.
 		meta.RemoveStatusCondition(&manifestCond.Conditions, fleetv1beta1.WorkConditionTypeApplied)
+		klog.V(2).InfoS("Applied condition removed from ManifestCondition",
+			"workResourceID", manifestCond.Identifier,
+			"applyResTyp", appliedResTyp, "applyError", applyError,
+			"inMemberClusterObjGeneration", inMemberClusterObjGeneration)
 	}
 }
 
@@ -335,10 +345,18 @@ func setManifestAvailableCondition(
 
 	if availableCond != nil {
 		meta.SetStatusCondition(&manifestCond.Conditions, *availableCond)
+		klog.V(2).InfoS("Available condition set in ManifestCondition",
+			"workResourceID", manifestCond.Identifier,
+			"availabilityResTyp", availabilityResTyp, "availabilityError", availabilityError,
+			"inMemberClusterObjGeneration", inMemberClusterObjGeneration)
 	} else {
 		// As the conditions are ported back; removal must be performed if the Available
 		// condition is not set.
 		meta.RemoveStatusCondition(&manifestCond.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+		klog.V(2).InfoS("Available condition removed from ManifestCondition",
+			"workResourceID", manifestCond.Identifier,
+			"availabilityResTyp", availabilityResTyp, "availabilityError", availabilityError,
+			"inMemberClusterObjGeneration", inMemberClusterObjGeneration)
 	}
 }
 
@@ -388,10 +406,18 @@ func setManifestDiffReportedCondition(
 
 	if diffReportedCond != nil {
 		meta.SetStatusCondition(&manifestCond.Conditions, *diffReportedCond)
+		klog.V(2).InfoS("DiffReported condition set in ManifestCondition",
+			"workResourceID", manifestCond.Identifier,
+			"reportDiffResTyp", reportDiffResTyp, "reportDiffError", reportDiffError,
+			"inMemberClusterObjGeneration", inMemberClusterObjGeneration)
 	} else {
 		// As the conditions are ported back; removal must be performed if the DiffReported
 		// condition is not set.
 		meta.RemoveStatusCondition(&manifestCond.Conditions, fleetv1beta1.WorkConditionTypeDiffReported)
+		klog.V(2).InfoS("DiffReported condition removed from ManifestCondition",
+			"workResourceID", manifestCond.Identifier,
+			"reportDiffResTyp", reportDiffResTyp, "reportDiffError", reportDiffError,
+			"inMemberClusterObjGeneration", inMemberClusterObjGeneration)
 	}
 }
 
@@ -430,10 +456,16 @@ func setWorkAppliedCondition(
 
 	if appliedCond != nil {
 		meta.SetStatusCondition(&work.Status.Conditions, *appliedCond)
+		klog.V(2).InfoS("Applied condition set on Work object",
+			"appliedManifestCount", appliedManifestCount, "manifestCount", manifestCount,
+			"work", klog.KObj(work))
 	} else {
 		// For consistency reasons, Fleet will remove the Applied condition if the
 		// it is not set in the current run (i.e., ReportDiff mode is on).
 		meta.RemoveStatusCondition(&work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
+		klog.V(2).InfoS("Applied condition removed on Work object",
+			"appliedManifestCount", appliedManifestCount, "manifestCount", manifestCount,
+			"work", klog.KObj(work))
 	}
 }
 
@@ -483,10 +515,18 @@ func setWorkAvailableCondition(
 
 	if availableCond != nil {
 		meta.SetStatusCondition(&work.Status.Conditions, *availableCond)
+		klog.V(2).InfoS("Available condition set on Work object",
+			"availableManifestCount", availableManifestCount, "untrackableAppliedObjectsCount", untrackableAppliedObjectsCount,
+			"manifestCount", manifestCount,
+			"work", klog.KObj(work))
 	} else {
 		// Fleet will remove the Available condition if it is not set in the current run
 		// as it can change without Work object generation bumps.
 		meta.RemoveStatusCondition(&work.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+		klog.V(2).InfoS("Available condition removed on Work object",
+			"availableManifestCount", availableManifestCount, "untrackableAppliedObjectsCount", untrackableAppliedObjectsCount,
+			"manifestCount", manifestCount,
+			"work", klog.KObj(work))
 	}
 }
 
@@ -521,10 +561,16 @@ func setWorkDiffReportedCondition(
 
 	if diffReportedCond != nil {
 		meta.SetStatusCondition(&work.Status.Conditions, *diffReportedCond)
+		klog.V(2).InfoS("DiffReported condition set on Work object",
+			"diffReportedObjectsCount", diffReportedObjectsCount, "manifestCount", manifestCount,
+			"work", klog.KObj(work))
 	} else {
 		// For consistency reasons, Fleet will remove the DiffReported condition if the
 		// ReportDiff mode is not being used.
 		meta.RemoveStatusCondition(&work.Status.Conditions, fleetv1beta1.WorkConditionTypeDiffReported)
+		klog.V(2).InfoS("DiffReported condition removed on Work object",
+			"diffReportedObjectsCount", diffReportedObjectsCount, "manifestCount", manifestCount,
+			"work", klog.KObj(work))
 	}
 }
 

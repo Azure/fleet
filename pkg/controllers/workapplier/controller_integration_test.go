@@ -266,6 +266,40 @@ func regularDeploymentObjectAppliedActual(nsName, deployName string, appliedWork
 	}
 }
 
+func regularConfigMapObjectAppliedActual(nsName, configMapName string, appliedWorkOwnerRef *metav1.OwnerReference) func() error {
+	return func() error {
+		// Retrieve the ConfigMap object.
+		gotConfigMap := &corev1.ConfigMap{}
+		if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, gotConfigMap); err != nil {
+			return fmt.Errorf("failed to retrieve the ConfigMap object: %w", err)
+		}
+
+		// Check that the ConfigMap object has been created as expected.
+
+		// To ignore default values automatically, here the test suite rebuilds the objects.
+		wantConfigMap := configMap.DeepCopy()
+		wantConfigMap.TypeMeta = metav1.TypeMeta{}
+		wantConfigMap.Namespace = nsName
+		wantConfigMap.Name = configMapName
+		wantConfigMap.OwnerReferences = []metav1.OwnerReference{
+			*appliedWorkOwnerRef,
+		}
+
+		rebuiltGotConfigMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            gotConfigMap.Name,
+				Namespace:       gotConfigMap.Namespace,
+				OwnerReferences: gotConfigMap.OwnerReferences,
+			},
+			Data: gotConfigMap.Data,
+		}
+		if diff := cmp.Diff(rebuiltGotConfigMap, wantConfigMap); diff != "" {
+			return fmt.Errorf("configmap diff (-got +want):\n%s", diff)
+		}
+		return nil
+	}
+}
+
 func markDeploymentAsAvailable(nsName, deployName string) {
 	// Retrieve the Deployment object.
 	gotDeploy := &appsv1.Deployment{}
@@ -439,6 +473,27 @@ func regularDeployRemovedActual(nsName, deployName string) func() error {
 
 		if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, deploy); !errors.IsNotFound(err) {
 			return fmt.Errorf("deployment object still exists or an unexpected error occurred: %w", err)
+		}
+		return nil
+	}
+}
+
+func regularConfigMapRemovedActual(nsName, configMapName string) func() error {
+	return func() error {
+		// Retrieve the ConfigMap object.
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: nsName,
+				Name:      configMapName,
+			},
+		}
+		if err := memberClient.Delete(ctx, configMap); err != nil && !errors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete the ConfigMap object: %w", err)
+		}
+
+		// Check that the ConfigMap object has been deleted.
+		if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, configMap); !errors.IsNotFound(err) {
+			return fmt.Errorf("configMap object still exists or an unexpected error occurred: %w", err)
 		}
 		return nil
 	}
@@ -1083,6 +1138,194 @@ var _ = Describe("applying manifests", func() {
 			// Ensure that all applied manifests have been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
 			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt so verify its deletion.
+		})
+	})
+
+	Context("can handle partial failures (pre-processing, decoding error)", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+
+		var appliedWorkOwnerRef *metav1.OwnerReference
+		var regularNS *corev1.Namespace
+		var decodingErredDeploy *appsv1.Deployment
+		var regularConfigMap *corev1.ConfigMap
+
+		BeforeAll(func() {
+			// Prepare a NS object.
+			regularNS = ns.DeepCopy()
+			regularNS.Name = nsName
+			regularNSJSON := marshalK8sObjJSON(regularNS)
+
+			// Prepare a mal-formed Deployment object.
+			decodingErredDeploy = deploy.DeepCopy()
+			decodingErredDeploy.TypeMeta = metav1.TypeMeta{
+				APIVersion: "dummy/v10",
+				Kind:       "Fake",
+			}
+			decodingErredDeploy.Namespace = nsName
+			decodingErredDeploy.Name = deployName
+			decodingErredDeployJSON := marshalK8sObjJSON(decodingErredDeploy)
+
+			// Prepare a ConfigMap object.
+			regularConfigMap = configMap.DeepCopy()
+			regularConfigMap.Namespace = nsName
+			regularConfigMapJSON := marshalK8sObjJSON(regularConfigMap)
+
+			// Create a new Work object with all the manifest JSONs.
+			createWorkObject(workName, nil, regularNSJSON, decodingErredDeployJSON, regularConfigMapJSON)
+		})
+
+		It("should add cleanup finalizer to the Work object", func() {
+			finalizerAddedActual := workFinalizerAddedActual(workName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+		})
+
+		It("should prepare an AppliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
+
+			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
+		})
+
+		It("should apply the manifests", func() {
+			// Ensure that the NS object has been applied as expected.
+			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
+
+			// Ensure that the ConfigMap object has been applied as expected.
+			regularConfigMapObjectAppliedActual := regularConfigMapObjectAppliedActual(nsName, configMapName, appliedWorkOwnerRef)
+			Eventually(regularConfigMapObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the ConfigMap object")
+			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, regularConfigMap)).To(Succeed(), "Failed to retrieve the ConfigMap object")
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionFalse,
+					Reason: WorkNotAllManifestsAppliedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "dummy",
+						Version:   "v10",
+						Kind:      "Fake",
+						Name:      deployName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionFalse,
+							Reason: string(ManifestProcessingApplyResultTypeDecodingErred),
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   2,
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Resource:  "configmaps",
+						Name:      configMapName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionTrue,
+							Reason: string(ManifestProcessingApplyResultTypeApplied),
+						},
+						{
+							Type:   fleetv1beta1.WorkConditionTypeAvailable,
+							Status: metav1.ConditionTrue,
+							Reason: string(ManifestProcessingAvailabilityResultTypeAvailable),
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should update the AppliedWork object status", func() {
+			// Prepare the status information.
+			appliedResourceMeta := []fleetv1beta1.AppliedResourceMeta{
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					UID: regularNS.UID,
+				},
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   2,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Resource:  "configmaps",
+						Name:      configMapName,
+						Namespace: nsName,
+					},
+					UID: regularConfigMap.UID,
+				},
+			}
+
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		AfterAll(func() {
+			// Delete the Work object and related resources.
+			cleanupWorkObject(workName)
+
+			// Ensure that all applied manifests have been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			regularConfigMapRemovedActual := regularConfigMapRemovedActual(nsName, configMapName)
+			Eventually(regularConfigMapRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the ConfigMap object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
