@@ -26,7 +26,7 @@ var _ = Describe("handling errors and failures gracefully", func() {
 	//
 	// TO-DO (chenyu1): reserve an API group exclusively on the hub cluster so that
 	// envelopes do not need to used for this test spec.
-	FContext("pre-processing failure (decoding errors)", Ordered, func() {
+	Context("pre-processing failure (decoding errors)", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 
