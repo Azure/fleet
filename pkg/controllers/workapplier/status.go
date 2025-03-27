@@ -214,8 +214,7 @@ func (r *Reconciler) refreshAppliedWorkStatus(
 			"appliedWork", klog.KObj(appliedWork))
 		return controller.NewAPIServerError(false, err)
 	}
-	klog.V(2).InfoS("Refreshed AppliedWork object status",
-		klog.KObj(appliedWork))
+	klog.V(2).InfoS("Refreshed AppliedWork object status", "appliedWork", klog.KObj(appliedWork))
 	return nil
 }
 
