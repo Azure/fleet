@@ -278,7 +278,7 @@ func setManifestAppliedCondition(
 	if appliedCond != nil {
 		meta.SetStatusCondition(&manifestCond.Conditions, *appliedCond)
 		klog.V(2).InfoS("Applied condition set in ManifestCondition",
-			"WRI", manifestCond.Identifier,
+			"workResourceID", manifestCond.Identifier,
 			"applyResTyp", appliedResTyp, "applyError", applyError,
 			"inMemberClusterObjGeneration", inMemberClusterObjGeneration)
 	} else {
@@ -286,7 +286,7 @@ func setManifestAppliedCondition(
 		// condition is not set.
 		meta.RemoveStatusCondition(&manifestCond.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 		klog.V(2).InfoS("Applied condition removed from ManifestCondition",
-			"WRI", manifestCond.Identifier,
+			"workResourceID", manifestCond.Identifier,
 			"applyResTyp", appliedResTyp, "applyError", applyError,
 			"inMemberClusterObjGeneration", inMemberClusterObjGeneration)
 	}
@@ -346,7 +346,7 @@ func setManifestAvailableCondition(
 	if availableCond != nil {
 		meta.SetStatusCondition(&manifestCond.Conditions, *availableCond)
 		klog.V(2).InfoS("Available condition set in ManifestCondition",
-			"WRI", manifestCond.Identifier,
+			"workResourceID", manifestCond.Identifier,
 			"availabilityResTyp", availabilityResTyp, "availabilityError", availabilityError,
 			"inMemberClusterObjGeneration", inMemberClusterObjGeneration)
 	} else {
@@ -354,7 +354,7 @@ func setManifestAvailableCondition(
 		// condition is not set.
 		meta.RemoveStatusCondition(&manifestCond.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 		klog.V(2).InfoS("Available condition removed from ManifestCondition",
-			"WRI", manifestCond.Identifier,
+			"workResourceID", manifestCond.Identifier,
 			"availabilityResTyp", availabilityResTyp, "availabilityError", availabilityError,
 			"inMemberClusterObjGeneration", inMemberClusterObjGeneration)
 	}
@@ -407,7 +407,7 @@ func setManifestDiffReportedCondition(
 	if diffReportedCond != nil {
 		meta.SetStatusCondition(&manifestCond.Conditions, *diffReportedCond)
 		klog.V(2).InfoS("DiffReported condition set in ManifestCondition",
-			"WRI", manifestCond.Identifier,
+			"workResourceID", manifestCond.Identifier,
 			"reportDiffResTyp", reportDiffResTyp, "reportDiffError", reportDiffError,
 			"inMemberClusterObjGeneration", inMemberClusterObjGeneration)
 	} else {
@@ -415,7 +415,7 @@ func setManifestDiffReportedCondition(
 		// condition is not set.
 		meta.RemoveStatusCondition(&manifestCond.Conditions, fleetv1beta1.WorkConditionTypeDiffReported)
 		klog.V(2).InfoS("DiffReported condition removed from ManifestCondition",
-			"WRI", manifestCond.Identifier,
+			"workResourceID", manifestCond.Identifier,
 			"reportDiffResTyp", reportDiffResTyp, "reportDiffError", reportDiffError,
 			"inMemberClusterObjGeneration", inMemberClusterObjGeneration)
 	}

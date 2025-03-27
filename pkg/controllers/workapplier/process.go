@@ -312,6 +312,7 @@ func (r *Reconciler) reportDiffOnlyIfApplicable(
 		bundle.diffs = configDiffs
 		bundle.reportDiffResTyp = ManifestProcessingReportDiffResultTypeFoundDiff
 		klog.V(2).InfoS("Diff report completed; configuration diffs are found",
+			"diffCount", len(configDiffs),
 			"GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
 			"work", klog.KObj(work))
 	default:

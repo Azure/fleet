@@ -174,7 +174,7 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 		}
 		if _, found := checked[wriStr]; found {
 			klog.V(2).InfoS("A duplicate manifest has been found",
-				"ordinal", idx, "work", workRef, "WRI", wriStr)
+				"ordinal", idx, "work", workRef, "workResourceID", wriStr)
 			bundle.applyErr = fmt.Errorf("a duplicate manifest has been found")
 			bundle.applyResTyp = ManifestProcessingApplyResultTypeDuplicated
 			continue
@@ -186,7 +186,7 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 		manifestCondsForWA = append(manifestCondsForWA, manifestCondForWA)
 
 		klog.V(2).InfoS("Prepared write-ahead information for a manifest",
-			"manifestObj", klog.KObj(bundle.manifestObj), "WRI", wriStr, "work", workRef)
+			"manifestObj", klog.KObj(bundle.manifestObj), "workResourceID", wriStr, "work", workRef)
 	}
 
 	// Identify any manifests from previous runs that might have been applied and are now left

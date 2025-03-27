@@ -1202,7 +1202,7 @@ var _ = Describe("applying manifests", func() {
 			// Ensure that the ConfigMap object has been applied as expected.
 			regularConfigMapObjectAppliedActual := regularConfigMapObjectAppliedActual(nsName, configMapName, appliedWorkOwnerRef)
 			Eventually(regularConfigMapObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the ConfigMap object")
-			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, regularConfigMap)).To(Succeed(), "Failed to retrieve the Deployment object")
+			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, regularConfigMap)).To(Succeed(), "Failed to retrieve the ConfigMap object")
 		})
 
 		It("should update the Work object status", func() {
