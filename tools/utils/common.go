@@ -41,7 +41,7 @@ func (u *UncordonCluster) Uncordon(ctx context.Context) error {
 			return err
 		}
 
-		if mc.Spec.Taints == nil || len(mc.Spec.Taints) == 0 {
+		if len(mc.Spec.Taints) == 0 {
 			return nil
 		}
 
