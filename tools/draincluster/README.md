@@ -1,7 +1,7 @@
 # Drain Member Cluster connected to a fleet
 
 To drain a member cluster connected to a fleet, you can use the `draincluster` tool. This tool allows you to remove all
-resources propagated to the member cluster from the hub cluster by any `ClusterResourcePlacement` resource.
+resources propagated to the member cluster from the hub cluster by any `Placement` resource.
 This is useful when you want to temporarily move all workloads off a member cluster in preparation for an 
 event like upgrade or reconfiguration.
 
@@ -14,7 +14,7 @@ go run tools/draincluster/main.go --hubClusterContext <hub-cluster-context> --cl
 the tool currently is a go program that takes the hub cluster context and the member cluster name as arguments.
 
 - The `--hubClusterContext` flag specifies the context of the hub cluster
-- The `--clusterName` flag specifies the name of the member cluster to cordon.
+- The `--clusterName` flag specifies the name of the member cluster to drain.
 
 the user can run the following command to identify the context of the hub cluster:
 
@@ -29,7 +29,9 @@ CURRENT   NAME               CLUSTER            AUTHINFO                        
 *         hub                hub                clusterUser_clusterResourceGroup_hub   
 ```
 
-The command adds a `Taint` the `MemberCluster` resource of the member cluster to prevent any new resources from being 
+Here you can see that the context of the hub cluster is called `hub` under the `NAME` column.
+
+The command adds a `Taint` to the `MemberCluster` resource of the member cluster to prevent any new resources from being 
 propagated to the member cluster. Then it creates `ClusterResourcePlacementEviction` objects for all the 
 `ClusterResourcePlacement` objects that have propagated resources to the member cluster.
 
