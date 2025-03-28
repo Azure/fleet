@@ -551,7 +551,7 @@ var _ = Context("creating resourceOverride with incorrect path", Ordered, func()
 		cleanupResourceOverride(roName, roNamespace)
 	})
 
-	It("should update CRP status as as failed to override", func() {
+	It("should update CRP status as failed to override", func() {
 		wantRONames := []placementv1beta1.NamespacedName{
 			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)},
 		}
