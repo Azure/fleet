@@ -251,6 +251,10 @@ func collectResourcesPropagatedByCRP(ctx context.Context, hubClient client.Clien
 		manifestConditions := work.Status.ManifestConditions
 		for j := range manifestConditions {
 			manifestCondition := manifestConditions[j]
+			// skip namespace scoped resources.
+			if len(manifestCondition.Identifier.Namespace) != 0 {
+				continue
+			}
 			for k := range manifestCondition.Conditions {
 				condition := manifestCondition.Conditions[k]
 				if condition.Type == placementv1beta1.WorkConditionTypeApplied && condition.Status == metav1.ConditionTrue {
