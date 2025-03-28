@@ -177,7 +177,8 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 			klog.ErrorS(updateErr, "Failed to update the status", "clusterResourcePlacement", crpKObj)
 			return ctrl.Result{}, controller.NewUpdateIgnoreConflictError(updateErr)
 		}
-		return ctrl.Result{}, err
+		// no need to retry faster, the user needs to fix the resource selectors
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 
 	latestSchedulingPolicySnapshot, err := r.getOrCreateClusterSchedulingPolicySnapshot(ctx, crp, int(revisionLimit))

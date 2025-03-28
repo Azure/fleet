@@ -976,7 +976,7 @@ func workNamespaceRemovedFromClusterActual(cluster *framework.Cluster) func() er
 	ns := appNamespace()
 	return func() error {
 		if err := client.Get(ctx, types.NamespacedName{Name: ns.Name}, &corev1.Namespace{}); !errors.IsNotFound(err) {
-			return fmt.Errorf("work namespace %s still exists or an unexpected error occurred: %w", ns.Name, err)
+			return fmt.Errorf("work namespace %s still exists on cluster %s or an unexpected error occurred: %w", ns.Name, cluster.ClusterName, err)
 		}
 		return nil
 	}
