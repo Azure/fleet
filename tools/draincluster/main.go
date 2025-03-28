@@ -157,7 +157,7 @@ func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 					"please retry drain once resources are propagated to the cluster", d.ClusterName, crp.Name)
 			}
 			// get all successfully applied resources for the CRP.
-			resourcesPropagated, err := resourcesPropagatedByCRP(ctx, d.hubClient, crp.Name)
+			resourcesPropagated, err := collectResourcesPropagatedByCRP(ctx, d.hubClient, crp.Name)
 			if err != nil {
 				return false, fmt.Errorf("failed to get resources propagated by CRP %s: %w", crp.Name, err)
 			}
@@ -239,7 +239,7 @@ func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 	return isDrainSuccessful, nil
 }
 
-func resourcesPropagatedByCRP(ctx context.Context, hubClient client.Client, crpName string) ([]placementv1beta1.ResourceIdentifier, error) {
+func collectResourcesPropagatedByCRP(ctx context.Context, hubClient client.Client, crpName string) ([]placementv1beta1.ResourceIdentifier, error) {
 	var workList placementv1beta1.WorkList
 	if err := hubClient.List(ctx, &workList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName}); err != nil {
 		return nil, fmt.Errorf("failed to get work %s: %w", crpName, err)
