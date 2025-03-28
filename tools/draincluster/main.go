@@ -95,14 +95,6 @@ func main() {
 	if isDrainRetrySuccessful {
 		log.Printf("drain retry was successful for cluster %s", *clusterName)
 	} else {
-		uncordonCluster := toolsutils.UncordonCluster{
-			HubClient:   hubClient,
-			ClusterName: *clusterName,
-		}
-
-		if err = uncordonCluster.Uncordon(ctx); err != nil {
-			log.Fatalf("failed to uncordon cluster %s: %v", *clusterName, err)
-		}
 		log.Printf("drain retry was not successful for cluster %s", *clusterName)
 	}
 }
