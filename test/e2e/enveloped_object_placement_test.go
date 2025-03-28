@@ -353,7 +353,7 @@ var _ = Describe("Process objects with generate name", Ordered, func() {
 		// Create the namespace with both name and generate name set.
 		ns := appNamespace()
 		ns.GenerateName = nsGenerateName
-		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
+		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		// Create an envelope config map.
 		cm := &corev1.ConfigMap{
@@ -492,11 +492,8 @@ var _ = Describe("Process objects with generate name", Ordered, func() {
 	})
 
 	AfterAll(func() {
-		// Remove the CRP.
-		cleanupCRP(crpName)
-
-		// Clean the placed resources.
-		cleanWorkResourcesOnCluster(allMemberClusters[0])
+		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 })
 
@@ -649,7 +646,7 @@ func readEnvelopTestManifests() {
 // createWrappedResourcesForEnvelopTest creates some enveloped resources on the hub cluster for testing purposes.
 func createWrappedResourcesForEnvelopTest() {
 	ns := appNamespace()
-	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
+	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
 	// modify the configMap according to the namespace
 	testConfigMap.Namespace = ns.Name
 	Expect(hubClient.Create(ctx, &testConfigMap)).To(Succeed(), "Failed to create config map %s", testConfigMap.Name)

@@ -141,8 +141,46 @@ var _ = Context("creating clusterResourceOverride (selecting all clusters) to ov
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cro as expected", crpName)
 	})
 
-	It("should update CRP status on demand as expected", func() {
+	It("should refresh the CRP status even as there is no change on the resources", func() {
 		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 1)}
+		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	// This check will ignore the annotation of resources.
+	It("should place the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
+	It("should have new override annotation value on the placed resources", func() {
+		want := map[string]string{croTestAnnotationKey: croTestAnnotationValue1}
+		checkIfOverrideAnnotationsOnAllMemberClusters(true, want)
+	})
+
+	It("update cro attached to this CRP only and no updates on the namespace", func() {
+		Eventually(func() error {
+			cro := &placementv1alpha1.ClusterResourceOverride{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: croName}, cro); err != nil {
+				return err
+			}
+			cro.Spec.Policy.OverrideRules = append(cro.Spec.Policy.OverrideRules, placementv1alpha1.OverrideRule{
+				ClusterSelector: &placementv1beta1.ClusterSelector{
+					ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+						{
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"invalid-key": "invalid-value",
+								},
+							},
+						},
+					},
+				},
+				OverrideType: placementv1alpha1.DeleteOverrideType,
+			})
+			return hubClient.Update(ctx, cro)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cro as expected", crpName)
+	})
+
+	It("should update CRP status on demand as expected", func() {
+		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 2)}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})

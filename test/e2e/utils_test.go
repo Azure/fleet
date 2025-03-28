@@ -679,7 +679,7 @@ func createWorkResource(name, namespace string) {
 // createWorkResources creates some resources on the hub cluster for testing purposes.
 func createWorkResources() {
 	ns := appNamespace()
-	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
+	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
 
 	configMap := appConfigMap()
 	Expect(hubClient.Create(ctx, &configMap)).To(Succeed(), "Failed to create config map %s", configMap.Name)
@@ -692,7 +692,7 @@ func cleanupWorkResources() {
 
 func cleanWorkResourcesOnCluster(cluster *framework.Cluster) {
 	ns := appNamespace()
-	Expect(client.IgnoreNotFound(cluster.KubeClient.Delete(ctx, &ns))).To(Succeed(), "Failed to delete namespace %s", ns.Namespace)
+	Expect(client.IgnoreNotFound(cluster.KubeClient.Delete(ctx, &ns))).To(Succeed(), "Failed to delete namespace %s", ns.Name)
 
 	workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
 	Eventually(workResourcesRemovedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from %s cluster", cluster.ClusterName)
