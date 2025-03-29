@@ -101,7 +101,8 @@ func (r *Reconciler) handleDelete(ctx context.Context, crp *fleetv1beta1.Cluster
 	}
 	klog.V(2).InfoS("Removed crp-cleanup finalizer", "clusterResourcePlacement", crpKObj)
 	r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementCleanupFinalizerRemoved", "Deleted the snapshots and removed the placement cleanup finalizer")
-	metrics.FleetPlacementStatus.Delete(prometheus.Labels{"name": crp.Name})
+	metrics.FleetPlacementComplete.DeletePartialMatch(prometheus.Labels{"name": crp.Name})
+	metrics.FleetPlacementStatus.DeletePartialMatch(prometheus.Labels{"name": crp.Name})
 	return ctrl.Result{}, nil
 }
 
@@ -177,6 +178,8 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 			klog.ErrorS(updateErr, "Failed to update the status", "clusterResourcePlacement", crpKObj)
 			return ctrl.Result{}, controller.NewUpdateIgnoreConflictError(updateErr)
 		}
+		metrics.FleetPlacementStatus.DeletePartialMatch(prometheus.Labels{"name": crp.Name})
+		metrics.FleetPlacementStatus.WithLabelValues(crp.Name, strconv.FormatInt(crp.Generation, 10), scheduleCondition.Type, string(scheduleCondition.Status)).SetToCurrentTime()
 		return ctrl.Result{}, err
 	}
 
@@ -214,6 +217,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 			r.Recorder.Event(crp, corev1.EventTypeNormal, i.EventReasonForTrue(), i.EventMessageForTrue())
 		}
 	}
+	emitPlacementStatusMetric(crp)
 
 	// Rollout is considered to be completed when all the expected condition types are set to the
 	// True status.
@@ -222,12 +226,15 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 			klog.V(2).InfoS("Placement has finished the rollout process and reached the desired status", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
 			r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementRolloutCompleted", "Placement has finished the rollout process and reached the desired status")
 		}
-		metrics.FleetPlacementStatus.WithLabelValues(crp.Name).Set(1)
+		metrics.FleetPlacementComplete.DeletePartialMatch(prometheus.Labels{"name": crp.Name})
+		metrics.FleetPlacementComplete.WithLabelValues(crp.Name, "true").SetToCurrentTime()
 		// We don't need to requeue any request now by watching the binding changes
 		return ctrl.Result{}, nil
 	}
 
-	metrics.FleetPlacementStatus.WithLabelValues(crp.Name).Set(0)
+	metrics.FleetPlacementComplete.DeletePartialMatch(prometheus.Labels{"name": crp.Name})
+	metrics.FleetPlacementComplete.WithLabelValues(crp.Name, "false").SetToCurrentTime()
+
 	if !isClusterScheduled {
 		// Note:
 		// If the scheduledCondition is failed, it means the placement requirement cannot be satisfied fully. For example,
@@ -1034,4 +1041,24 @@ func isRolloutCompleted(crp *fleetv1beta1.ClusterResourcePlacement) bool {
 
 func isCRPScheduled(crp *fleetv1beta1.ClusterResourcePlacement) bool {
 	return condition.IsConditionStatusTrue(crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType)), crp.Generation)
+}
+
+func emitPlacementStatusMetric(crp *fleetv1beta1.ClusterResourcePlacement) {
+	// Check CRP Scheduled condition
+	cond := crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType))
+	if cond != nil {
+		metrics.FleetPlacementStatus.DeletePartialMatch(prometheus.Labels{"name": crp.Name})
+		metrics.FleetPlacementStatus.WithLabelValues(crp.Name, strconv.FormatInt(crp.Generation, 10), cond.Type, string(cond.Status)).SetToCurrentTime()
+	}
+	// Check CRP expected conditions
+	expectedCondTypes := determineExpectedCRPAndResourcePlacementStatusCondType(crp)
+	for _, i := range expectedCondTypes {
+		cond := crp.GetCondition(string(i.ClusterResourcePlacementConditionType()))
+		if cond != nil { // emit if found
+			metrics.FleetPlacementStatus.DeletePartialMatch(prometheus.Labels{"name": crp.Name})
+			metrics.FleetPlacementStatus.WithLabelValues(crp.Name, strconv.FormatInt(crp.Generation, 10), cond.Type, string(cond.Status)).SetToCurrentTime()
+		} else {
+			return // return if not found
+		}
+	}
 }
