@@ -188,7 +188,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingOverridden),
 				Reason:             condition.OverriddenFailedReason,
-				Message:            fmt.Sprintf("Failed to apply the override rules on the resources: %s", errorMessage),
+				Message:            errorMessage,
 				ObservedGeneration: resourceBinding.Generation,
 			})
 		} else {
@@ -624,13 +624,13 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePrefix string, resourceBinding *fleetv1beta1.ClusterResourceBinding,
 	resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, envelopeObj *unstructured.Unstructured, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash string) (*fleetv1beta1.Work, error) {
 	// we group all the resources in one configMap to one work
-	manifest, err := extractResFromConfigMap(envelopeObj)
+	manifests, err := extractResFromConfigMap(envelopeObj)
 	if err != nil {
 		klog.ErrorS(err, "configMap has invalid content", "snapshot", klog.KObj(resourceSnapshot),
 			"resourceBinding", klog.KObj(resourceBinding), "configMapWrapper", klog.KObj(envelopeObj))
 		return nil, controller.NewUserError(err)
 	}
-	klog.V(2).InfoS("Successfully extract the enveloped resources from the configMap", "numOfResources", len(manifest),
+	klog.V(2).InfoS("Successfully extract the enveloped resources from the configMap", "numOfResources", len(manifests),
 		"snapshot", klog.KObj(resourceSnapshot), "resourceBinding", klog.KObj(resourceBinding), "configMapWrapper", klog.KObj(envelopeObj))
 
 	// Try to see if we already have a work represent the same enveloped object for this CRP in the same cluster
@@ -643,7 +643,7 @@ func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePre
 		fleetv1beta1.EnvelopeNamespaceLabel: envelopeObj.GetNamespace(),
 	}
 	workList := &fleetv1beta1.WorkList{}
-	if err := r.Client.List(ctx, workList, envelopWorkLabelMatcher); err != nil {
+	if err = r.Client.List(ctx, workList, envelopWorkLabelMatcher); err != nil {
 		return nil, controller.NewAPIServerError(true, err)
 	}
 	// we need to create a new work object
@@ -680,7 +680,7 @@ func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePre
 			},
 			Spec: fleetv1beta1.WorkSpec{
 				Workload: fleetv1beta1.WorkloadTemplate{
-					Manifests: manifest,
+					Manifests: manifests,
 				},
 				ApplyStrategy: resourceBinding.Spec.ApplyStrategy,
 			},
@@ -699,7 +699,7 @@ func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePre
 	work.Annotations[fleetv1beta1.ParentResourceSnapshotNameAnnotation] = resourceBinding.Spec.ResourceSnapshotName
 	work.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] = resourceOverrideSnapshotHash
 	work.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] = clusterResourceOverrideSnapshotHash
-	work.Spec.Workload.Manifests = manifest
+	work.Spec.Workload.Manifests = manifests
 	work.Spec.ApplyStrategy = resourceBinding.Spec.ApplyStrategy
 	return &work, nil
 }
