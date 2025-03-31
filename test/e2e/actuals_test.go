@@ -989,7 +989,7 @@ func workNamespaceRemovedFromClusterActual(cluster *framework.Cluster) func() er
 						},
 					},
 				}); listErr != nil {
-					return fmt.Errorf("work namespace %s still exists and failed to list resources: %v, deletion timestamp: %v, current timestamp: %v",
+					return fmt.Errorf("work namespace %s still exists and failed to list resources: %w, deletion timestamp: %v, current timestamp: %v",
 						ns.Name, listErr, ns.DeletionTimestamp, time.Now())
 				}
 
