@@ -7,6 +7,7 @@ package e2e
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -14,6 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -972,13 +974,41 @@ func safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResourceIdentifiers [
 }
 
 func workNamespaceRemovedFromClusterActual(cluster *framework.Cluster) func() error {
-	client := cluster.KubeClient
-
 	ns := appNamespace()
 	return func() error {
-		if err := client.Get(ctx, types.NamespacedName{Name: ns.Name}, &ns); !errors.IsNotFound(err) {
+		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: ns.Name}, &ns); !errors.IsNotFound(err) {
 			if err == nil {
-				return fmt.Errorf("work namespace %s still exist, deletion timestamp: %v, current timestamp: %v", ns.Name, ns.DeletionTimestamp, time.Now())
+				// List all resources in the namespace
+				resourceList := &corev1.List{}
+				if listErr := cluster.KubeClient.List(ctx, resourceList, &client.ListOptions{
+					Namespace: ns.Name,
+					Raw: &metav1.ListOptions{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "List",
+							APIVersion: "v1",
+						},
+					},
+				}); listErr != nil {
+					return fmt.Errorf("work namespace %s still exists and failed to list resources: %v, deletion timestamp: %v, current timestamp: %v",
+						ns.Name, listErr, ns.DeletionTimestamp, time.Now())
+				}
+
+				// Build resource status summary
+				var resourceStatus strings.Builder
+				resourceStatus.WriteString(fmt.Sprintf("\nResources still present in namespace %s:\n", ns.Name))
+				for _, item := range resourceList.Items {
+					obj := item.Object.DeepCopyObject().(*unstructured.Unstructured)
+					resourceStatus.WriteString(fmt.Sprintf("- Kind: %s, Name: %s\n", obj.GetObjectKind().GroupVersionKind().String(), obj.GetName()))
+
+					// Add deletion timestamp
+					resourceStatus.WriteString(fmt.Sprintf("  DeletionTimestamp: %v\n", obj.GetDeletionTimestamp()))
+
+					// Add finalizers
+					resourceStatus.WriteString(fmt.Sprintf("  Finalizers: %v\n", obj.GetFinalizers()))
+				}
+
+				return fmt.Errorf("work namespace %s still exists: deletion timestamp: %v, current timestamp: %v, resources: %s",
+					ns.Name, ns.DeletionTimestamp, time.Now(), resourceStatus.String())
 			}
 			return fmt.Errorf("getting work namespace %s failed: %w", ns.Name, err)
 		}
