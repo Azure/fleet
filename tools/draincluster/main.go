@@ -21,6 +21,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/condition"
 	evictionutils "go.goms.io/fleet/pkg/utils/eviction"
 	toolsutils "go.goms.io/fleet/tools/utils"
 )
@@ -142,18 +143,39 @@ func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 				targetBinding = &crb
 			}
 		}
-		if targetBinding != nil && targetBinding.DeletionTimestamp == nil {
-			// check if placement is present.
-			if !evictionutils.IsPlacementPresent(targetBinding) {
-				return false, fmt.Errorf("placement is not present in cluster %s for CRP %s, "+
-					"please retry drain once resources are propagated to the cluster", d.ClusterName, crp.Name)
-			}
-			// get all successfully applied resources for the CRP.
-			resourcesPropagated, err := collectResourcesPropagatedByCRP(ctx, d.hubClient, crp.Name)
+
+		if targetBinding != nil {
+			err := wait.ExponentialBackoffWithContext(ctx, retry.DefaultBackoff, func(ctx context.Context) (bool, error) {
+				if getErr := d.hubClient.Get(ctx, types.NamespacedName{Name: targetBinding.Name}, targetBinding); getErr != nil {
+					// binding may have been deleted.
+					if k8errors.IsNotFound(getErr) {
+						return true, nil
+					}
+					return false, getErr
+				}
+				if targetBinding.DeletionTimestamp != nil {
+					// binding is already being deleted.
+					return true, nil
+				}
+				if !evictionutils.IsPlacementPresent(targetBinding) {
+					// need to wait until placement is present on member cluster.
+					return false, nil
+				}
+				return true, nil
+			})
+
 			if err != nil {
-				return false, fmt.Errorf("failed to get resources propagated by CRP %s: %w", crp.Name, err)
+				return false, fmt.Errorf("failed to wait for placement to be present on member cluster: %w", err)
+			} else {
+				// At this point, the binding could be deleting or deleted we will still try to collect resources
+				// propagated by the CRP and issue eviction.
+				// get all successfully applied resources for the CRP.
+				resourcesPropagated, err := collectResourcesPropagatedByCRP(ctx, d.hubClient, crp.Name)
+				if err != nil {
+					return false, fmt.Errorf("failed to get resources propagated by CRP %s: %w", crp.Name, err)
+				}
+				d.ClusterResourcePlacementResourcesMap[crp.Name] = resourcesPropagated
 			}
-			d.ClusterResourcePlacementResourcesMap[crp.Name] = resourcesPropagated
 		}
 	}
 
@@ -207,12 +229,20 @@ func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 	}
 
 	isDrainSuccessful := true
-	// check if all evictions have been executed.
 	for crpName := range d.ClusterResourcePlacementResourcesMap {
 		evictionName := fmt.Sprintf(drainEvictionNameFormat, crpName, d.ClusterName)
 		eviction := placementv1beta1.ClusterResourcePlacementEviction{}
 		if err := d.hubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
 			return false, fmt.Errorf("failed to get eviction %s: %w", evictionName, err)
+		}
+		validCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeValid))
+		if validCondition != nil && validCondition.Status == metav1.ConditionFalse {
+			// check to see if CRP is missing or CRP is being deleted or CRB is missing.
+			if validCondition.Reason == condition.EvictionInvalidMissingCRPMessage ||
+				validCondition.Reason == condition.EvictionInvalidDeletingCRPMessage ||
+				validCondition.Reason == condition.EvictionInvalidMissingCRBMessage {
+				continue
+			}
 		}
 		executedCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeExecuted))
 		if executedCondition == nil || executedCondition.Status == metav1.ConditionFalse {
