@@ -15,7 +15,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -978,35 +977,43 @@ func workNamespaceRemovedFromClusterActual(cluster *framework.Cluster) func() er
 	return func() error {
 		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: ns.Name}, &ns); !errors.IsNotFound(err) {
 			if err == nil {
-				// List all resources in the namespace
-				resourceList := &corev1.List{}
-				if listErr := cluster.KubeClient.List(ctx, resourceList, &client.ListOptions{
-					Namespace: ns.Name,
-					Raw: &metav1.ListOptions{
-						TypeMeta: metav1.TypeMeta{
-							Kind:       "List",
-							APIVersion: "v1",
-						},
-					},
-				}); listErr != nil {
-					return fmt.Errorf("work namespace %s still exists and failed to list resources: %w, deletion timestamp: %v, current timestamp: %v",
+				// List all pods and configmaps in the namespace
+				podList := &corev1.PodList{}
+				if listErr := cluster.KubeClient.List(ctx, podList, client.InNamespace(ns.Name)); listErr != nil {
+					return fmt.Errorf("work namespace %s still exists and failed to list pods: %w, ns deletion timestamp: %v, current timestamp: %v",
+						ns.Name, listErr, ns.DeletionTimestamp, time.Now())
+				}
+				configMapList := &corev1.ConfigMapList{}
+				if listErr := cluster.KubeClient.List(ctx, configMapList, client.InNamespace(ns.Name)); listErr != nil {
+					return fmt.Errorf("work namespace %s still exists and failed to list configmaps: %w, ns deletion timestamp: %v, current timestamp: %v",
+						ns.Name, listErr, ns.DeletionTimestamp, time.Now())
+				}
+
+				// List all applied works
+				appliedWorkList := &placementv1beta1.AppliedWorkList{}
+				if listErr := cluster.KubeClient.List(ctx, appliedWorkList); listErr != nil {
+					return fmt.Errorf("work namespace %s still exists and failed to list applied works: %w, ns deletion timestamp: %v, current timestamp: %v",
 						ns.Name, listErr, ns.DeletionTimestamp, time.Now())
 				}
 
 				// Build resource status summary
 				var resourceStatus strings.Builder
-				resourceStatus.WriteString(fmt.Sprintf("\nResources still present in namespace %s:\n", ns.Name))
-				for _, item := range resourceList.Items {
-					obj := item.Object.DeepCopyObject().(*unstructured.Unstructured)
-					resourceStatus.WriteString(fmt.Sprintf("- Kind: %s, Name: %s\n", obj.GetObjectKind().GroupVersionKind().String(), obj.GetName()))
-
-					// Add deletion timestamp
-					resourceStatus.WriteString(fmt.Sprintf("  DeletionTimestamp: %v\n", obj.GetDeletionTimestamp()))
-
-					// Add finalizers
-					resourceStatus.WriteString(fmt.Sprintf("  Finalizers: %v\n", obj.GetFinalizers()))
+				resourceStatus.WriteString(fmt.Sprintf("\nList appliedWorks and pods and configmaps in namespace %s:\n", ns.Name))
+				for _, item := range appliedWorkList.Items {
+					resourceStatus.WriteString(fmt.Sprintf("- AppliedWork: %s\n", item.GetName()))
+					resourceStatus.WriteString(fmt.Sprintf("  DeletionTimestamp: %v\n", item.GetDeletionTimestamp()))
+					resourceStatus.WriteString(fmt.Sprintf("  Finalizers: %v\n", item.GetFinalizers()))
 				}
-
+				for _, item := range podList.Items {
+					resourceStatus.WriteString(fmt.Sprintf("- Pod: %s/%s\n", item.GetNamespace(), item.GetName()))
+					resourceStatus.WriteString(fmt.Sprintf("  DeletionTimestamp: %v\n", item.GetDeletionTimestamp()))
+					resourceStatus.WriteString(fmt.Sprintf("  Finalizers: %v\n", item.GetFinalizers()))
+				}
+				for _, item := range configMapList.Items {
+					resourceStatus.WriteString(fmt.Sprintf("- ConfigMap: %s/%s\n", item.GetNamespace(), item.GetName()))
+					resourceStatus.WriteString(fmt.Sprintf("  DeletionTimestamp: %v\n", item.GetDeletionTimestamp()))
+					resourceStatus.WriteString(fmt.Sprintf("  Finalizers: %v\n", item.GetFinalizers()))
+				}
 				return fmt.Errorf("work namespace %s still exists: deletion timestamp: %v, current timestamp: %v, resources: %s",
 					ns.Name, ns.DeletionTimestamp, time.Now(), resourceStatus.String())
 			}
