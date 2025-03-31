@@ -839,7 +839,7 @@ var _ = Context("creating resourceOverride with delete configMap", Ordered, func
 	})
 })
 
-var _ = Context("creating resourceOverride with a templated rules  with cluster label key replacement", Ordered, func() {
+var _ = Context("creating resourceOverride with a templated rules with cluster label key replacement", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
@@ -951,7 +951,7 @@ var _ = Context("creating resourceOverride with a templated rules  with cluster 
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update resourceOverride %s with non-existent label key", roName)
 
 		By("Verify the CRP status should have one cluster failed to override while the rest stuck in rollout")
-		// need to construct the expected status
+		// TODO: need to construct the expected status
 
 		By("Verify the configMap remains unchanged")
 		cmName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
@@ -973,7 +973,7 @@ var _ = Context("creating resourceOverride with a templated rules  with cluster 
 	})
 })
 
-var _ = Context("creating resourceOverride with none exist label", Ordered, func() {
+var _ = Context("creating resourceOverride with non-exist label", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())

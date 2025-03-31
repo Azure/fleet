@@ -94,7 +94,7 @@ func (r *Reconciler) gatherSelectedResource(placement string, selectors []fleetv
 			return nil, err
 		}
 		for _, obj := range objs {
-			uObj := obj.DeepCopyObject().(*unstructured.Unstructured)
+			uObj := obj.(*unstructured.Unstructured)
 			ri := fleetv1beta1.ResourceIdentifier{
 				Group:     obj.GetObjectKind().GroupVersionKind().Group,
 				Version:   obj.GetObjectKind().GroupVersionKind().Version,
@@ -104,7 +104,7 @@ func (r *Reconciler) gatherSelectedResource(placement string, selectors []fleetv
 			}
 			if _, exist := resourceMap[ri]; exist {
 				err = fmt.Errorf("found duplicate resource %+v", ri)
-				klog.Error(err, "user selected one resource more than once", "placement", placement)
+				klog.ErrorS(err, "user selected one resource more than once", "resource", ri, "placement", placement)
 				return nil, controller.NewUserError(err)
 			}
 			resourceMap[ri] = true
