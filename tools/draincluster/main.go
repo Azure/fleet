@@ -153,10 +153,6 @@ func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 					}
 					return false, getErr
 				}
-				if targetBinding.DeletionTimestamp != nil {
-					// binding is already being deleted.
-					return true, nil
-				}
 				if !evictionutils.IsPlacementPresent(targetBinding) {
 					// need to wait until placement is present on member cluster.
 					return false, nil
@@ -218,7 +214,7 @@ func (d *DrainCluster) drain(ctx context.Context) (bool, error) {
 			evictionName := fmt.Sprintf(drainEvictionNameFormat, crpName, d.ClusterName)
 			eviction := placementv1beta1.ClusterResourcePlacementEviction{}
 			if err := d.hubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
-				return false, err
+				return false, fmt.Errorf("failed to get eviction %s: %w", evictionName, err)
 			}
 			return evictionutils.IsEvictionInTerminalState(&eviction), nil
 		})
@@ -278,8 +274,8 @@ func collectResourcesPropagatedByCRP(ctx context.Context, hubClient client.Clien
 				continue
 			}
 			for k := range manifestCondition.Conditions {
-				condition := manifestCondition.Conditions[k]
-				if condition.Type == placementv1beta1.WorkConditionTypeApplied && condition.Status == metav1.ConditionTrue {
+				c := manifestCondition.Conditions[k]
+				if c.Type == placementv1beta1.WorkConditionTypeApplied && c.Status == metav1.ConditionTrue {
 					propagatedResource := placementv1beta1.ResourceIdentifier{
 						Group:     manifestCondition.Identifier.Group,
 						Version:   manifestCondition.Identifier.Version,
