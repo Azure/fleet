@@ -51,7 +51,7 @@ const (
 	fleetPrefix                = "fleet-"
 	fleetMemberNamespacePrefix = fleetPrefix + "member-"
 	FleetSystemNamespace       = fleetPrefix + "system"
-	NamespaceNameFormat        = fleetMemberNamespacePrefix + "-%s"
+	NamespaceNameFormat        = fleetMemberNamespacePrefix + "%s"
 	RoleNameFormat             = fleetPrefix + "role-%s"
 	RoleBindingNameFormat      = fleetPrefix + "rolebinding-%s"
 	ValidationPathFmt          = "/validate-%s-%s-%s"
