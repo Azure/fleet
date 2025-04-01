@@ -35,8 +35,6 @@ The command adds a `Taint` to the `MemberCluster` resource of the member cluster
 propagated to the member cluster. Then it creates `ClusterResourcePlacementEviction` objects for all the 
 `ClusterResourcePlacement` objects that have propagated resources to the member cluster.
 
->> **Note**: The `draincluster` tool is a best-effort mechanism at the moment, and it may not remove all the resources that 
-> have been propagated to the member cluster. To ensure that drain is successful the users can ensure that no new 
-> changes are being propagated to the member cluster when running the tool by any `ClusterResourcePlacement` resource 
-> because at the time of draining the member cluster, a `ClusterResourcePlacement` could be propagating resources to the 
-> member cluster these resources may not be removed by the tool.
+>> **Note**: The `draincluster` tool is a best-effort mechanism at the moment, so once the command is run successfully
+> the user must verify if all resources propagated by `Placement` resources are removed from the member cluster.
+> Re-running the command is safe and is recommended if the user notices any resources still present on the member cluster.
