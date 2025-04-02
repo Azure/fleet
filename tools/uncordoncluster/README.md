@@ -1,10 +1,49 @@
-# Uncordon Member Cluster connected to a fleet
+# Steps to build draincluster as a kubectl plugin
 
-To uncordon a member cluster connected to a fleet, you can use the `uncordoncluster` tool. This tool allows you to 
-uncordon a member cluster that has been cordoned using the `draincluster` tool. 
+1. Build the binary for the `uncordoncluster` tool by running the following command in the root directory of the fleet repo:
+
+```bash
+go build -o ./hack/tools/bin/kubectl-uncordoncluster ./tools/uncordoncluster/main.go
+```
+
+2. Move the binary to a directory in your `PATH` so that it can be run as a kubectl plugin. For example, you can move it to
+   `/usr/local/bin`:
+
+```bash
+sudo cp ./hack/tools/bin/kubectl-uncordoncluster /usr/local/bin/
+```
+
+3. Make the binary executable by running the following command:
+
+```bash
+chmod +x /usr/local/bin/kubectl-uncordoncluster
+```
+
+4. Verify that the plugin is recognized by kubectl by running the following command:
+
+```bash
+kubectl plugin list
+```
+
+you should see the `uncordoncluster` plugin listed in the output:
 
 ```
-go run tools/uncordoncluster/main.go --hubClusterContext <hub-cluster-context> --clusterName <memberClusterName>
+The following compatible plugins are available:
+
+/usr/local/bin/kubectl-uncordoncluster
+```
+
+please refer to the [kubectl plugin documentation](https://kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/) for
+more information.
+
+
+# Uncordon Member Cluster connected to a fleet
+
+After following the steps above to build the `uncordoncluster` tool as a kubectl plugin, you can use it to uncordon a 
+member cluster that has been cordoned using the `draincluster` tool. 
+
+```
+kubectl uncordoncluster --hubClusterContext <hub-cluster-context> --clusterName <memberClusterName>
 ```
 
 the tool currently is a go program that also takes the hub cluster context and the member cluster name as arguments.
@@ -25,5 +64,9 @@ CURRENT   NAME               CLUSTER            AUTHINFO                        
 *         hub                hub                clusterUser_clusterResourceGroup_hub   
 ```
 
-The command removes all taints added to a `MemberCluster` resource and hence if any `ClusterResourcePlacementEviction` 
-object present which can propagate resources to the member cluster, it can continue to do so.
+Here you can see that the context of the hub cluster is called `hub` under the `NAME` column.
+
+The command removes the `cordon` taint added to a `MemberCluster` resource by the `draincluster` tool. If the `cordon` 
+taint is not present, the command will not have any effect. Once the taint is removed if there are no other taints on the 
+`MemberCluster` resource, the member cluster will be uncordoned and resource can be propagated to it from the hub cluster
+using `Placement` resources.
