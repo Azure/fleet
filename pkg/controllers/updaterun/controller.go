@@ -214,7 +214,7 @@ func (r *Reconciler) recordUpdateRunFailed(ctx context.Context, updateRun *place
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: updateRun.Generation,
 		Reason:             condition.UpdateRunFailedReason,
-		Message:            "ClusterStagedUpdateRun aborted due to a non-recoverable error",
+		Message:            "The stages are aborted due to a non-recoverable error",
 	})
 	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.StagedUpdateRunConditionSucceeded),

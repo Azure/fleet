@@ -380,7 +380,7 @@ func (r *Reconciler) updateApprovalRequestAccepted(ctx context.Context, appReq *
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: appReq.Generation,
 		Reason:             condition.ApprovalRequestApprovalAcceptedReason,
-		Message:            "ClusterApprovalRequest approval accepted, approval cannot be reverted",
+		Message:            "The approval request has been approved and cannot be reverted",
 	}
 	meta.SetStatusCondition(&appReq.Status.Conditions, cond)
 	if err := r.Client.Status().Update(ctx, appReq); err != nil {
@@ -444,7 +444,7 @@ func markUpdateRunStarted(updateRun *placementv1beta1.ClusterStagedUpdateRun) {
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: updateRun.Generation,
 		Reason:             condition.UpdateRunStartedReason,
-		Message:            "ClusterStagedUpdateRun started",
+		Message:            "The stages started updating",
 	})
 }
 
