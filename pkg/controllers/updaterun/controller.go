@@ -197,7 +197,7 @@ func (r *Reconciler) recordUpdateRunSucceeded(ctx context.Context, updateRun *pl
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: updateRun.Generation,
 		Reason:             condition.UpdateRunSucceededReason,
-		Message:            "ClusterStagedUpdateRun completed successfully",
+		Message:            "All stages are completed successfully",
 	})
 	if updateErr := r.Client.Status().Update(ctx, updateRun); updateErr != nil {
 		klog.ErrorS(updateErr, "Failed to update the ClusterStagedUpdateRun status as succeeded", "clusterStagedUpdateRun", klog.KObj(updateRun))
