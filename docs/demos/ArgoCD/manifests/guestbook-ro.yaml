@@ -10,11 +10,14 @@ spec:
     overrideRules:
     - clusterSelector:
         clusterSelectorTerms:
-        - labelSelector: {} # empty labelSelector selected all member clusters
+        - labelSelector: 
+             matchExpressions:
+               - key: environment
+                 operator: Exists
       jsonPatchOverrides:
       - op: replace
         path: /spec/source/path # spec.source.path is overridden
-        value: "docs/demos/ArgoCD/manifests/guestbook/${MEMBER-CLUSTER-NAME}" # ${MEMBER-CLUSTER-NAME} is replaced with the member cluster name
+        value: "docs/demos/ArgoCD/manifests/guestbook/${MEMBER-CLUSTER-LABEL-KEY-environment}"# ${MEMBER-CLUSTER-LABEL-KEY-environment} is replaced with the key of the environment label
       overrideType: JSONPatch
   resourceSelectors:
   - group: argoproj.io

@@ -4,5 +4,5 @@ metadata:
   name: guestbook-updaterun
 spec:
   placementName: guestbook-crp
-  resourceSnapshotIndex: "0"
+  resourceSnapshotIndex: "3"
   stagedRolloutStrategyName: team-a-strategy

@@ -10,7 +10,7 @@ spec:
   project: guestbook-project
   source:
     path: docs/demos/ArgoCD/manifests/guestbook # manifest path
-    repoURL: https://github.com/Azure/fleet.git # source repo
+    repoURL: https://github.com/ryanzhang-oss/fleet.git # source repo
     targetRevision: argocd-demo # source branch
   syncPolicy:
     automated:
