@@ -816,13 +816,11 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			}
 			gotCRP = retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
 
-			time.Sleep(5 * time.Second) // wait for metrics to be updated (helps with flakiness)
+			By("Ensure placement status metric was emitted with Available True")
+			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementAppliedConditionType), string(corev1.ConditionUnknown))
 
 			By("Ensure placement complete metric was emitted with isCompleted True")
 			checkPlacementCompleteMetric(customRegistry, crpName, true, 2)
-
-			By("Ensure placement status metric was emitted with Available True")
-			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementAppliedConditionType), string(corev1.ConditionUnknown))
 		})
 	})
 })
@@ -864,7 +862,6 @@ func checkPlacementStatusMetric(registry *prometheus.Registry, crp *placementv1b
 		}
 	}
 	// we only expect one metric with 4 labels
-	By(fmt.Sprintf("placementStatusMetrics %v", placementStatusMetrics))
 	Expect(len(placementStatusMetrics)).Should(Equal(1))
 	metricLabels := placementStatusMetrics[0].GetLabel()
 	Expect(len(metricLabels)).Should(Equal(4))
