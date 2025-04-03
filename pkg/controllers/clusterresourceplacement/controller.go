@@ -226,13 +226,11 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 			klog.V(2).InfoS("Placement has finished the rollout process and reached the desired status", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
 			r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementRolloutCompleted", "Placement has finished the rollout process and reached the desired status")
 		}
-		metrics.FleetPlacementComplete.DeletePartialMatch(prometheus.Labels{"name": crp.Name})
 		metrics.FleetPlacementComplete.WithLabelValues(crp.Name, "true").SetToCurrentTime()
 		// We don't need to requeue any request now by watching the binding changes
 		return ctrl.Result{}, nil
 	}
 
-	metrics.FleetPlacementComplete.DeletePartialMatch(prometheus.Labels{"name": crp.Name})
 	metrics.FleetPlacementComplete.WithLabelValues(crp.Name, "false").SetToCurrentTime()
 
 	if !isClusterScheduled {
@@ -1046,19 +1044,19 @@ func isCRPScheduled(crp *fleetv1beta1.ClusterResourcePlacement) bool {
 func emitPlacementStatusMetric(crp *fleetv1beta1.ClusterResourcePlacement) {
 	// Check CRP Scheduled condition
 	cond := crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType))
-	if cond != nil {
+	if !condition.IsConditionStatusTrue(cond, crp.Generation) && cond != nil {
 		metrics.FleetPlacementStatus.DeletePartialMatch(prometheus.Labels{"name": crp.Name})
 		metrics.FleetPlacementStatus.WithLabelValues(crp.Name, strconv.FormatInt(crp.Generation, 10), cond.Type, string(cond.Status)).SetToCurrentTime()
+		return
 	}
 	// Check CRP expected conditions
 	expectedCondTypes := determineExpectedCRPAndResourcePlacementStatusCondType(crp)
 	for _, i := range expectedCondTypes {
 		cond := crp.GetCondition(string(i.ClusterResourcePlacementConditionType()))
-		if cond != nil { // emit if found
+		if !condition.IsConditionStatusTrue(cond, crp.Generation) && cond != nil { // emit the first not true condition
 			metrics.FleetPlacementStatus.DeletePartialMatch(prometheus.Labels{"name": crp.Name})
 			metrics.FleetPlacementStatus.WithLabelValues(crp.Name, strconv.FormatInt(crp.Generation, 10), cond.Type, string(cond.Status)).SetToCurrentTime()
-		} else {
-			return // return if not found
+			return
 		}
 	}
 }

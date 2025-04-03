@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	"go.goms.io/fleet/pkg/utils/controller/metrics"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
@@ -28,6 +26,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/pkg/utils/controller/metrics"
 	"go.goms.io/fleet/pkg/utils/resource"
 )
 
@@ -37,6 +36,8 @@ const (
 
 	eventuallyTimeout = time.Second * 10
 	interval          = time.Millisecond * 250
+
+	crpNameTemplate = "crp-%d"
 )
 
 var (
@@ -389,10 +390,10 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted False")
-			checkPlacementCompleteMetric(customRegistry, crpName, false)
+			checkPlacementCompleteMetric(customRegistry, crpName, false, 1)
 
 			By("Ensure placement status metric was emitted with Scheduled True")
-			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementScheduledConditionType), string(corev1.ConditionTrue))
+			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementScheduledConditionType), string(corev1.ConditionUnknown))
 		})
 
 		It("Clusters are not selected", func() {
@@ -440,7 +441,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted False")
-			checkPlacementCompleteMetric(customRegistry, crpName, false)
+			checkPlacementCompleteMetric(customRegistry, crpName, false, 1)
 
 			By("Ensure placement status metric was emitted with Scheduled False")
 			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementScheduledConditionType), string(corev1.ConditionFalse))
@@ -541,7 +542,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted False")
-			checkPlacementCompleteMetric(customRegistry, crpName, false)
+			checkPlacementCompleteMetric(customRegistry, crpName, false, 1)
 
 			By("Ensure placement status metric was emitted with Rollout Unknown")
 			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType), string(corev1.ConditionUnknown))
@@ -642,7 +643,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted False")
-			checkPlacementCompleteMetric(customRegistry, crpName, false)
+			checkPlacementCompleteMetric(customRegistry, crpName, false, 1)
 
 			By("Ensure placement status metric was emitted with WorkSynchronized Unknown")
 			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType), string(corev1.ConditionUnknown))
@@ -815,37 +816,41 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			}
 			gotCRP = retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
 
+			time.Sleep(5 * time.Second) // wait for metrics to be updated (helps with flakiness)
+
 			By("Ensure placement complete metric was emitted with isCompleted True")
-			checkPlacementCompleteMetric(customRegistry, crpName, true)
+			checkPlacementCompleteMetric(customRegistry, crpName, true, 2)
 
 			By("Ensure placement status metric was emitted with Available True")
-			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementAvailableConditionType), string(corev1.ConditionTrue))
+			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementAppliedConditionType), string(corev1.ConditionUnknown))
 		})
 	})
 })
 
-func checkPlacementCompleteMetric(registry *prometheus.Registry, crpName string, complete bool) {
+func checkPlacementCompleteMetric(registry *prometheus.Registry, crpName string, complete bool, numOfMetrics int) {
 	metricFamilies, err := registry.Gather()
 	Expect(err).Should(Succeed())
 	var placementCompleteMetrics []*prometheusclientmodel.Metric
 	for _, mf := range metricFamilies {
-		if mf.GetName() == "fleet_workload_placement_complete" {
+		if mf.GetName() == "fleet_workload_placement_complete_timestamp_second" {
 			placementCompleteMetrics = mf.GetMetric()
 		}
 	}
 	// we only expect one metric with 2 label
-	Expect(len(placementCompleteMetrics)).Should(Equal(1))
-	metricLabels := placementCompleteMetrics[0].GetLabel()
-	Expect(len(metricLabels)).Should(Equal(2))
+	Expect(len(placementCompleteMetrics)).Should(Equal(numOfMetrics))
 
-	for _, label := range metricLabels {
-		if label.GetName() == "isComplete" {
-			Expect(label.GetValue()).Should(Equal(complete))
+	for _, emittedMetric := range placementCompleteMetrics {
+		metricLabels := emittedMetric.GetLabel()
+		Expect(len(metricLabels)).Should(Equal(2))
+		for _, label := range metricLabels {
+			if label.GetName() == "isComplete" {
+				Expect(label.GetValue()).Should(Equal(complete))
+			}
+			if label.GetName() == "name" {
+				Expect(label.GetValue()).Should(Equal(crpName))
+			}
 		}
-		if label.GetName() == "name" {
-			Expect(label.GetValue()).Should(Equal(crpName))
-		}
-		Expect(placementCompleteMetrics[0].GetGauge().GetValue()).ShouldNot(Equal(float64(0)))
+		Expect(emittedMetric.GetGauge().GetValue()).ShouldNot(Equal(float64(0)))
 	}
 }
 
@@ -854,7 +859,7 @@ func checkPlacementStatusMetric(registry *prometheus.Registry, crp *placementv1b
 	Expect(err).Should(Succeed())
 	var placementStatusMetrics []*prometheusclientmodel.Metric
 	for _, mf := range metricFamilies {
-		if mf.GetName() == "fleet_workload_placement_status" {
+		if mf.GetName() == "fleet_workload_last_placement_status_timestamp_second" {
 			placementStatusMetrics = mf.GetMetric()
 		}
 	}
