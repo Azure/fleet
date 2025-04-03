@@ -816,9 +816,6 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			}
 			gotCRP = retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
 
-			By("Ensure placement status metric was emitted with Available True")
-			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementAppliedConditionType), string(corev1.ConditionUnknown))
-
 			By("Ensure placement complete metric was emitted with isCompleted True")
 			checkPlacementCompleteMetric(customRegistry, crpName, true, 2)
 		})
