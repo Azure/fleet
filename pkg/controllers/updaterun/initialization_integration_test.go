@@ -17,6 +17,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,6 +52,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 	var unscheduledCluster []*clusterv1beta1.MemberCluster
 	var resourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 	var clusterResourceOverride *placementv1alpha1.ClusterResourceOverrideSnapshot
+	var customRegistry *prometheus.Registry
 
 	BeforeEach(func() {
 		testUpdateRunName = "updaterun-" + utils.RandStr()
@@ -105,6 +107,8 @@ var _ = Describe("Updaterun initialization tests", func() {
 		// Set smaller wait time for testing
 		stageUpdatingWaitTime = time.Second * 3
 		clusterUpdatingWaitTime = time.Second * 2
+
+		customRegistry = initializeUpdateRunMetricsRegistry()
 	})
 
 	AfterEach(func() {
@@ -146,9 +150,19 @@ var _ = Describe("Updaterun initialization tests", func() {
 		By("Deleting the clusterResourceOverride")
 		Expect(k8sClient.Delete(ctx, clusterResourceOverride)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 		clusterResourceOverride = nil
+
+		By("Checking the update run status metrics are removed")
+		validateUpdateRunMetricsRemoved(customRegistry)
+		unregisterUpdateRunMetrics(customRegistry)
 	})
 
 	Context("Test validateCRP", func() {
+		AfterEach(func() {
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
+		})
+
 		It("Should fail to initialize if CRP is not found", func() {
 			By("Creating a new clusterStagedUpdateRun")
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
@@ -194,6 +208,12 @@ var _ = Describe("Updaterun initialization tests", func() {
 		BeforeEach(func() {
 			By("Creating a new clusterResourcePlacement")
 			Expect(k8sClient.Create(ctx, crp)).To(Succeed())
+		})
+
+		AfterEach(func() {
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to initialize if the latest policy snapshot is not found", func() {
@@ -370,6 +390,12 @@ var _ = Describe("Updaterun initialization tests", func() {
 			Expect(k8sClient.Status().Update(ctx, policySnapshot)).Should(Succeed(), "failed to update the policy snapshot condition")
 		})
 
+		AfterEach(func() {
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
+		})
+
 		It("Should fail to initialize if there is no selected or to-be-deleted cluster", func() {
 			By("Creating a new clusterStagedUpdateRun")
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
@@ -499,6 +525,12 @@ var _ = Describe("Updaterun initialization tests", func() {
 			for _, binding := range resourceBindings {
 				Expect(k8sClient.Create(ctx, binding)).To(Succeed())
 			}
+		})
+
+		AfterEach(func() {
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
 		})
 
 		It("fail the initialization if the clusterStagedUpdateStrategy is not found", func() {
@@ -653,6 +685,10 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Validating the initialization failed")
 			validateFailedInitCondition(ctx, updateRun, "invalid resource snapshot index `invalid-index` provided")
+
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to initialize if the specified resource snapshot index is invalid - negative integer", func() {
@@ -662,6 +698,10 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Validating the initialization failed")
 			validateFailedInitCondition(ctx, updateRun, "invalid resource snapshot index `-1` provided")
+
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to initialize if the specified resource snapshot is not found - no resourceSnapshots at all", func() {
@@ -670,6 +710,10 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Validating the initialization failed")
 			validateFailedInitCondition(ctx, updateRun, "no clusterResourceSnapshots with index `0` found")
+
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to initialize if the specified resource snapshot is not found - no CRP label found", func() {
@@ -682,6 +726,10 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Validating the initialization failed")
 			validateFailedInitCondition(ctx, updateRun, "no clusterResourceSnapshots with index `0` found")
+
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to initialize if the specified resource snapshot is not found - no resource index label found", func() {
@@ -694,6 +742,10 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Validating the initialization failed")
 			validateFailedInitCondition(ctx, updateRun, "no clusterResourceSnapshots with index `0` found")
+
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to initialize if the specified resource snapshot is not master snapshot", func() {
@@ -706,6 +758,10 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Validating the initialization failed")
 			validateFailedInitCondition(ctx, updateRun, "no master clusterResourceSnapshot found for clusterResourcePlacement")
+
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
 		})
 
 		It("Should put related ClusterResourceOverrides in the status", func() {
@@ -725,6 +781,10 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Validating the clusterStagedUpdateRun initialized consistently")
 			validateClusterStagedUpdateRunStatusConsistently(ctx, updateRun, want, "")
+
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 	})
 })

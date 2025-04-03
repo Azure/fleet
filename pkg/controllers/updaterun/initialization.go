@@ -500,5 +500,6 @@ func (r *Reconciler) recordInitializationFailed(ctx context.Context, updateRun *
 		// updateErr can be retried.
 		return controller.NewUpdateIgnoreConflictError(updateErr)
 	}
+	emitUpdateRunStatusMetric(updateRun, updateRunMetricsStatusFailed)
 	return nil
 }

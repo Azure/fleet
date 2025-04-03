@@ -33,6 +33,9 @@ var (
 	// stageUpdatingWaitTime is the time to wait before rechecking the stage update status.
 	// Put it as a variable for convenient testing.
 	stageUpdatingWaitTime = 60 * time.Second
+
+	// updateRunStuckThreshold is the time to wait on a single cluster update before marking update run as stuck.
+	updateRunStuckThreshold = 60 * time.Second
 )
 
 // execute executes the update run by updating the clusters in the updating stage specified by updatingStageIndex.
@@ -161,10 +164,17 @@ func (r *Reconciler) executeUpdatingStage(
 			markClusterUpdatingFailed(clusterStatus, updateRun.Generation, unexpectedErr.Error())
 			return 0, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 		}
+
 		finished, updateErr := checkClusterUpdateResult(binding, clusterStatus, updatingStageStatus, updateRun)
 		if finished {
 			finishedClusterCount++
 			continue
+		} else {
+			// If cluster update has been running for more than 1 minute, mark the update run as stuck.
+			if time.Since(clusterStartedCond.LastTransitionTime.Time) > updateRunStuckThreshold {
+				emitUpdateRunStatusMetric(updateRun, updateRunMetricsStatusStuck)
+				fmt.Println("!!!threshold:", updateRunStuckThreshold)
+			}
 		}
 		// No need to continue as we only support one cluster updating at a time for now.
 		return clusterUpdatingWaitTime, updateErr

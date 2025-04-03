@@ -14,6 +14,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/prometheus/client_golang/prometheus"
+	prometheusclientmodel "github.com/prometheus/client_model/go"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -29,6 +31,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/pkg/utils/controller/metrics"
 )
 
 const (
@@ -58,6 +61,7 @@ var (
 	testCROName              string
 	updateRunNamespacedName  types.NamespacedName
 	testNamespace            []byte
+	customRegistry           *prometheus.Registry
 )
 
 var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
@@ -69,6 +73,14 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 		testUpdateStrategyName = "updatestrategy-" + utils.RandStr()
 		testCROName = "cro-" + utils.RandStr()
 		updateRunNamespacedName = types.NamespacedName{Name: testUpdateRunName}
+
+		customRegistry = initializeUpdateRunMetricsRegistry()
+	})
+
+	AfterEach(func() {
+		By("Checking the update run status metrics are removed")
+		validateUpdateRunMetricsRemoved(customRegistry)
+		unregisterUpdateRunMetrics(customRegistry)
 	})
 
 	Context("Test reconciling a clusterStagedUpdateRun", func() {
@@ -211,6 +223,84 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 
 	})
 })
+
+func initializeUpdateRunMetricsRegistry() *prometheus.Registry {
+	// Create a test registry
+	customRegistry := prometheus.NewRegistry()
+	Expect(customRegistry.Register(metrics.FleetUpdateRunStatusLastTimestampSeconds)).Should(Succeed())
+	// Reset metrics before each test
+	metrics.FleetUpdateRunStatusLastTimestampSeconds.Reset()
+	return customRegistry
+}
+
+func unregisterUpdateRunMetrics(registry *prometheus.Registry) {
+	Expect(registry.Unregister(metrics.FleetUpdateRunStatusLastTimestampSeconds)).Should(BeTrue())
+}
+
+func validateUpdateRunMetricsEmitted(registry *prometheus.Registry, updateRunName string, statuses []updateRunMetricsStatus) {
+	Eventually(func() error {
+		metricFamilies, err := registry.Gather()
+		if err != nil {
+			return fmt.Errorf("failed to gather metrics: %w", err)
+		}
+		var updateRunStatusMetrics []*prometheusclientmodel.Metric
+		for _, mf := range metricFamilies {
+			if mf.GetName() == "fleet_workload_update_run_status_last_timestamp_seconds" {
+				updateRunStatusMetrics = mf.GetMetric()
+			}
+		}
+
+		timeMap := make(map[string]float64)
+		if len(updateRunStatusMetrics) != len(statuses) {
+			return fmt.Errorf("want %d metrics emitted, got %d", len(statuses), len(updateRunStatusMetrics))
+		}
+		for _, metric := range updateRunStatusMetrics {
+			metricLabels := metric.GetLabel()
+			if len(metricLabels) != 2 {
+				return fmt.Errorf("want 2 labels on each metric, got %d", len(metricLabels))
+			}
+			for _, label := range metricLabels {
+				if label.GetName() == "name" {
+					if label.GetValue() != updateRunName {
+						return fmt.Errorf("want name label with value %s, got %s", updateRunName, label.GetValue())
+					}
+				} else if label.GetName() == "status" {
+					_, ok := timeMap[label.GetValue()]
+					if ok {
+						return fmt.Errorf("found duplicate status label with value %s", label.GetValue())
+					}
+					timeMap[label.GetValue()] = metric.GetGauge().GetValue()
+				}
+			}
+		}
+
+		prevTime := float64(0)
+		for _, status := range statuses {
+			timeValue, ok := timeMap[string(status)]
+			if !ok {
+				return fmt.Errorf("status %s not found in the metrics", status)
+			}
+			if timeValue <= prevTime {
+				return fmt.Errorf("status %s has a timestamp not greater than the previous status", status)
+			}
+			prevTime = timeValue
+		}
+		return nil
+	}, timeout, interval).Should(Succeed(), "failed to validate the update run status metrics")
+}
+
+func validateUpdateRunMetricsRemoved(registry *prometheus.Registry) {
+	metricFamilies, err := registry.Gather()
+	Expect(err).Should(Succeed())
+	var updateRunStatusMetrics []*prometheusclientmodel.Metric
+	for _, mf := range metricFamilies {
+		if mf.GetName() == "fleet_workload_update_run_status_last_timestamp_seconds" {
+			updateRunStatusMetrics = mf.GetMetric()
+		}
+	}
+	// Verify that the update run status metrics are removed.
+	Expect(len(updateRunStatusMetrics)).Should(Equal(0))
+}
 
 func generateTestClusterStagedUpdateRun() *placementv1beta1.ClusterStagedUpdateRun {
 	return &placementv1beta1.ClusterStagedUpdateRun{
