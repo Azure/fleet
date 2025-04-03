@@ -6,7 +6,9 @@ Licensed under the MIT license.
 package e2e
 
 import (
+	"errors"
 	"fmt"
+	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -17,6 +19,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -31,6 +35,7 @@ const (
 var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	internalServiceExportName := fmt.Sprintf("internal-service-export-%d", GinkgoParallelProcess())
 	var wantSelectedResources []placementv1beta1.ResourceIdentifier
 	BeforeAll(func() {
 		// Create the test resources.
@@ -95,9 +100,86 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 			}
 		})
 
-		It("Should be able to unjoin a cluster with crp still running", func() {
-			By("remove all the clusters without deleting the CRP")
+		It("create a dummy internalServiceExport in the reserved member namespace", func() {
+			for idx := range allMemberClusterNames {
+				memberCluster := allMemberClusters[idx]
+				namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.ClusterName)
+				internalServiceExport := &fleetnetworkingv1alpha1.InternalServiceExport{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: namespaceName,
+						Name:      internalServiceExportName,
+						// Add a custom finalizer; this would allow us to better observe
+						// the behavior of the controllers.
+						Finalizers: []string{customDeletionBlockerFinalizer},
+					},
+					Spec: fleetnetworkingv1alpha1.InternalServiceExportSpec{
+						ServiceReference: fleetnetworkingv1alpha1.ExportedObjectReference{
+							NamespacedName:  "test-namespace/test-svc",
+							ClusterID:       memberCluster.ClusterName,
+							Kind:            "Service",
+							Namespace:       "test-namespace",
+							Name:            "test-svc",
+							ResourceVersion: "0",
+							UID:             "00000000-0000-0000-0000-000000000000",
+						},
+						Ports: []fleetnetworkingv1alpha1.ServicePort{
+							{
+								Protocol: corev1.ProtocolTCP,
+								Port:     4848,
+							},
+						},
+					},
+				}
+				Expect(hubClient.Create(ctx, internalServiceExport)).To(Succeed(), "Failed to create internalServiceExport")
+			}
+		})
+
+		It("Should fail the unjoin requests", func() {
+			for idx := range allMemberClusters {
+				memberCluster := allMemberClusters[idx]
+				mcObj := &clusterv1beta1.MemberCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: memberCluster.ClusterName,
+					},
+				}
+				err := hubClient.Delete(ctx, mcObj)
+				Expect(err).ShouldNot(Succeed(), "Want the deletion to be denied")
+				var statusErr *apierrors.StatusError
+				Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete memberCluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&apierrors.StatusError{})))
+				Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("Please delete serviceExport test-namespace/test-svc in the member cluster before leaving, request is denied"))
+			}
+		})
+
+		It("Deleting the internalServiceExports", func() {
+			for idx := range allMemberClusterNames {
+				memberCluster := allMemberClusters[idx]
+				namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.ClusterName)
+
+				internalSvcExportKey := types.NamespacedName{Namespace: namespaceName, Name: internalServiceExportName}
+				var export fleetnetworkingv1alpha1.InternalServiceExport
+				Expect(hubClient.Get(ctx, internalSvcExportKey, &export)).Should(Succeed(), "Failed to get internalServiceExport")
+				Expect(hubClient.Delete(ctx, &export)).To(Succeed(), "Failed to delete internalServiceExport")
+			}
+		})
+
+		It("Should be able to trigger the member cluster DELETE", func() {
 			setAllMemberClustersToLeave()
+		})
+
+		It("Removing the finalizer from the internalServiceExport", func() {
+			for idx := range allMemberClusterNames {
+				memberCluster := allMemberClusters[idx]
+				namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.ClusterName)
+
+				internalSvcExportKey := types.NamespacedName{Namespace: namespaceName, Name: internalServiceExportName}
+				var export fleetnetworkingv1alpha1.InternalServiceExport
+				Expect(hubClient.Get(ctx, internalSvcExportKey, &export)).Should(Succeed(), "Failed to get internalServiceExport")
+				export.Finalizers = nil
+				Expect(hubClient.Update(ctx, &export)).To(Succeed(), "Failed to update internalServiceExport")
+			}
+		})
+
+		It("Should be able to unjoin a cluster with crp still running", func() {
 			checkIfAllMemberClustersHaveLeft()
 		})
 
