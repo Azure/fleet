@@ -186,10 +186,18 @@ func (r *Reconciler) ensureFinalizer(ctx context.Context, updateRun *placementv1
 // recordUpdateRunSucceeded records the succeeded condition in the ClusterStagedUpdateRun status.
 func (r *Reconciler) recordUpdateRunSucceeded(ctx context.Context, updateRun *placementv1beta1.ClusterStagedUpdateRun) error {
 	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
+		Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: updateRun.Generation,
+		Reason:             condition.UpdateRunSucceededReason,
+		Message:            "All stages are completed",
+	})
+	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.StagedUpdateRunConditionSucceeded),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: updateRun.Generation,
 		Reason:             condition.UpdateRunSucceededReason,
+		Message:            "All stages are completed successfully",
 	})
 	if updateErr := r.Client.Status().Update(ctx, updateRun); updateErr != nil {
 		klog.ErrorS(updateErr, "Failed to update the ClusterStagedUpdateRun status as succeeded", "clusterStagedUpdateRun", klog.KObj(updateRun))
@@ -201,6 +209,13 @@ func (r *Reconciler) recordUpdateRunSucceeded(ctx context.Context, updateRun *pl
 
 // recordUpdateRunFailed records the failed condition in the ClusterStagedUpdateRun status.
 func (r *Reconciler) recordUpdateRunFailed(ctx context.Context, updateRun *placementv1beta1.ClusterStagedUpdateRun, message string) error {
+	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
+		Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: updateRun.Generation,
+		Reason:             condition.UpdateRunFailedReason,
+		Message:            "The stages are aborted due to a non-recoverable error",
+	})
 	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.StagedUpdateRunConditionSucceeded),
 		Status:             metav1.ConditionFalse,

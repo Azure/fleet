@@ -559,6 +559,8 @@ func generateFalseCondition(obj client.Object, condType any) metav1.Condition {
 		switch cond {
 		case placementv1beta1.StageUpdatingConditionSucceeded:
 			reason = condition.StageUpdatingFailedReason
+		case placementv1beta1.StageUpdatingConditionProgressing:
+			reason = condition.StageUpdatingWaitingReason
 		}
 		typeStr = string(cond)
 	case placementv1beta1.ClusterUpdatingStatusConditionType:
@@ -580,4 +582,25 @@ func generateFalseCondition(obj client.Object, condType any) metav1.Condition {
 		ObservedGeneration: obj.GetGeneration(),
 		Reason:             reason,
 	}
+}
+
+func generateFalseProgressingCondition(obj client.Object, condType any, succeeded bool) metav1.Condition {
+	falseCond := generateFalseCondition(obj, condType)
+	reason := ""
+	switch condType {
+	case placementv1beta1.StagedUpdateRunConditionProgressing:
+		if succeeded {
+			reason = condition.UpdateRunSucceededReason
+		} else {
+			reason = condition.UpdateRunFailedReason
+		}
+	case placementv1beta1.StageUpdatingConditionProgressing:
+		if succeeded {
+			reason = condition.StageUpdatingSucceededReason
+		} else {
+			reason = condition.StageUpdatingFailedReason
+		}
+	}
+	falseCond.Reason = reason
+	return falseCond
 }

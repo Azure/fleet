@@ -380,6 +380,7 @@ func (r *Reconciler) updateApprovalRequestAccepted(ctx context.Context, appReq *
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: appReq.Generation,
 		Reason:             condition.ApprovalRequestApprovalAcceptedReason,
+		Message:            "The approval request has been approved and cannot be reverted",
 	}
 	meta.SetStatusCondition(&appReq.Status.Conditions, cond)
 	if err := r.Client.Status().Update(ctx, appReq); err != nil {
@@ -443,6 +444,7 @@ func markUpdateRunStarted(updateRun *placementv1beta1.ClusterStagedUpdateRun) {
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: updateRun.Generation,
 		Reason:             condition.UpdateRunStartedReason,
+		Message:            "The stages started updating",
 	})
 }
 
@@ -456,6 +458,7 @@ func markStageUpdatingStarted(stageUpdatingStatus *placementv1beta1.StageUpdatin
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.StageUpdatingStartedReason,
+		Message:            "Clusters in the stage started updating",
 	})
 }
 
@@ -466,6 +469,7 @@ func markStageUpdatingWaiting(stageUpdatingStatus *placementv1beta1.StageUpdatin
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: generation,
 		Reason:             condition.StageUpdatingWaitingReason,
+		Message:            "All clusters in the stage are updated, waiting for after-stage tasks to complete",
 	})
 }
 
@@ -475,10 +479,18 @@ func markStageUpdatingSucceeded(stageUpdatingStatus *placementv1beta1.StageUpdat
 		stageUpdatingStatus.EndTime = &metav1.Time{Time: time.Now()}
 	}
 	meta.SetStatusCondition(&stageUpdatingStatus.Conditions, metav1.Condition{
+		Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: generation,
+		Reason:             condition.StageUpdatingSucceededReason,
+		Message:            "All clusters in the stage are updated and after-stage tasks are completed",
+	})
+	meta.SetStatusCondition(&stageUpdatingStatus.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.StageUpdatingConditionSucceeded),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.StageUpdatingSucceededReason,
+		Message:            "Stage update completed successfully",
 	})
 }
 
@@ -487,6 +499,13 @@ func markStageUpdatingFailed(stageUpdatingStatus *placementv1beta1.StageUpdating
 	if stageUpdatingStatus.EndTime == nil {
 		stageUpdatingStatus.EndTime = &metav1.Time{Time: time.Now()}
 	}
+	meta.SetStatusCondition(&stageUpdatingStatus.Conditions, metav1.Condition{
+		Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: generation,
+		Reason:             condition.StageUpdatingFailedReason,
+		Message:            "Stage update aborted due to a non-recoverable error",
+	})
 	meta.SetStatusCondition(&stageUpdatingStatus.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.StageUpdatingConditionSucceeded),
 		Status:             metav1.ConditionFalse,
@@ -503,6 +522,7 @@ func markClusterUpdatingStarted(clusterUpdatingStatus *placementv1beta1.ClusterU
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.ClusterUpdatingStartedReason,
+		Message:            "Cluster update started",
 	})
 }
 
@@ -513,6 +533,7 @@ func markClusterUpdatingSucceeded(clusterUpdatingStatus *placementv1beta1.Cluste
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.ClusterUpdatingSucceededReason,
+		Message:            "Cluster update completed successfully",
 	})
 }
 
@@ -534,6 +555,7 @@ func markAfterStageRequestCreated(afterStageTaskStatus *placementv1beta1.AfterSt
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.AfterStageTaskApprovalRequestCreatedReason,
+		Message:            "ClusterApprovalRequest is created",
 	})
 }
 
@@ -544,6 +566,7 @@ func markAfterStageRequestApproved(afterStageTaskStatus *placementv1beta1.AfterS
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.AfterStageTaskApprovalRequestApprovedReason,
+		Message:            "ClusterApprovalRequest is approved",
 	})
 }
 
@@ -554,5 +577,6 @@ func markAfterStageWaitTimeElapsed(afterStageTaskStatus *placementv1beta1.AfterS
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: generation,
 		Reason:             condition.AfterStageTaskWaitTimeElapsedReason,
+		Message:            "Wait time elapsed",
 	})
 }
