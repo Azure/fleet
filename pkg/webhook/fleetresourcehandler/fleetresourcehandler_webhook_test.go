@@ -987,7 +987,7 @@ func TestHandleNamespace(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(allowedMessageNonReservedNamespace),
 		},
-		"allow any user to modify non-reserved namespace with fleet prefix": {
+		"allow any user to modify non-reserved namespace without fleet- prefix": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "fleettest",
@@ -1001,7 +1001,7 @@ func TestHandleNamespace(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(allowedMessageNonReservedNamespace),
 		},
-		"allow any user to modify non-reserved namespace with kube prefix": {
+		"allow any user to modify non-reserved namespace without kube- prefix": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "kubetest",

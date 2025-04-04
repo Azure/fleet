@@ -23,8 +23,12 @@ import (
 
 const (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating custom resource definition resources.
-	ValidationPath                                = "/validate-fleetresourcehandler"
-	groupMatch                                    = `^[^.]*\.(.*)`
+	ValidationPath = "/validate-fleetresourcehandler"
+	groupMatch     = `^[^.]*\.(.*)`
+)
+
+const (
+	// allowed messages.
 	allowedMessageMemberCluster                   = "upstream member cluster resource is allowed to be created/deleted by any user"
 	allowedMessageNonReservedNamespace            = "namespace name doesn't begin with fleet-/kube- prefix so we allow all operations on this namespace"
 	allowedMessageFleetReservedNamespacedResource = "namespace name of resource object doesn't begin with fleet-/kube- prefix so we allow all operations on request objects in these namespace"
