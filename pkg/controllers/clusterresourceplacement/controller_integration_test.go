@@ -227,9 +227,9 @@ func createAvailableClusterResourceBinding(cluster string, policySnapshot *place
 var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 	Context("When creating new pickAll ClusterResourcePlacement", func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-		var customRegistry *prometheus.Registry
 
 		var (
+			customRegistry      *prometheus.Registry
 			crp                 *placementv1beta1.ClusterResourcePlacement
 			gotCRP              *placementv1beta1.ClusterResourcePlacement
 			gotPolicySnapshot   *placementv1beta1.ClusterSchedulingPolicySnapshot
@@ -859,6 +859,7 @@ func checkPlacementStatusMetric(registry *prometheus.Registry, crp *placementv1b
 		}
 	}
 	// we only expect one metric with 4 labels
+	By(fmt.Sprint("placementStatusMetrics: %w ", placementStatusMetrics))
 	Expect(len(placementStatusMetrics)).Should(Equal(1))
 	metricLabels := placementStatusMetrics[0].GetLabel()
 	Expect(len(metricLabels)).Should(Equal(4))
