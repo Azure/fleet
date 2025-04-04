@@ -46,12 +46,12 @@ func main() {
 		log.Fatalf("failed to create hub cluster client: %v", err)
 	}
 
-	uncordonCluster := uncordon.UncordonCluster{
+	uncordonClusterHelper := uncordon.Helper{
 		HubClient:   hubClient,
 		ClusterName: *clusterName,
 	}
 
-	if err = uncordonCluster.Uncordon(ctx); err != nil {
+	if err = uncordonClusterHelper.Uncordon(ctx); err != nil {
 		log.Fatalf("failed to uncordon cluster %s: %v", *clusterName, err)
 	}
 

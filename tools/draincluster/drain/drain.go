@@ -30,31 +30,31 @@ const (
 	resourceIdentifierKeyFormat = "%s/%s/%s/%s/%s"
 )
 
-type DrainCluster struct {
+type Helper struct {
 	HubClient                            client.Client
 	ClusterName                          string
 	ClusterResourcePlacementResourcesMap map[string][]placementv1beta1.ResourceIdentifier
 }
 
-func (d *DrainCluster) Drain(ctx context.Context) (bool, error) {
-	if err := d.cordon(ctx); err != nil {
-		return false, fmt.Errorf("failed to cordon member cluster %s: %w", d.ClusterName, err)
+func (h *Helper) Drain(ctx context.Context) (bool, error) {
+	if err := h.cordon(ctx); err != nil {
+		return false, fmt.Errorf("failed to cordon member cluster %s: %w", h.ClusterName, err)
 	}
 
-	if err := d.fetchClusterResourcePlacementToEvict(ctx); err != nil {
+	if err := h.fetchClusterResourcePlacementToEvict(ctx); err != nil {
 		return false, err
 	}
 
-	if len(d.ClusterResourcePlacementResourcesMap) == 0 {
-		log.Printf("There are currently no resources propagated to %s from fleet using ClusterResourcePlacement resources", d.ClusterName)
+	if len(h.ClusterResourcePlacementResourcesMap) == 0 {
+		log.Printf("There are currently no resources propagated to %s from fleet using ClusterResourcePlacement resources", h.ClusterName)
 		return true, nil
 	}
 
 	// create eviction objects for all <crpName, targetCluster>.
-	for crpName := range d.ClusterResourcePlacementResourcesMap {
-		evictionName := fmt.Sprintf(drainEvictionNameFormat, crpName, d.ClusterName)
+	for crpName := range h.ClusterResourcePlacementResourcesMap {
+		evictionName := fmt.Sprintf(drainEvictionNameFormat, crpName, h.ClusterName)
 
-		if err := removeExistingEviction(ctx, d.HubClient, evictionName); err != nil {
+		if err := removeExistingEviction(ctx, h.HubClient, evictionName); err != nil {
 			return false, fmt.Errorf("failed to remove existing eviction for CRP %s", crpName)
 		}
 
@@ -67,10 +67,10 @@ func (d *DrainCluster) Drain(ctx context.Context) (bool, error) {
 				},
 				Spec: placementv1beta1.PlacementEvictionSpec{
 					PlacementName: crpName,
-					ClusterName:   d.ClusterName,
+					ClusterName:   h.ClusterName,
 				},
 			}
-			return d.HubClient.Create(ctx, &eviction)
+			return h.HubClient.Create(ctx, &eviction)
 		})
 
 		if err != nil {
@@ -79,11 +79,11 @@ func (d *DrainCluster) Drain(ctx context.Context) (bool, error) {
 	}
 
 	// wait until all evictions reach a terminal state.
-	for crpName := range d.ClusterResourcePlacementResourcesMap {
+	for crpName := range h.ClusterResourcePlacementResourcesMap {
 		err := wait.ExponentialBackoffWithContext(ctx, retry.DefaultBackoff, func(ctx context.Context) (bool, error) {
-			evictionName := fmt.Sprintf(drainEvictionNameFormat, crpName, d.ClusterName)
+			evictionName := fmt.Sprintf(drainEvictionNameFormat, crpName, h.ClusterName)
 			eviction := placementv1beta1.ClusterResourcePlacementEviction{}
-			if err := d.HubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
+			if err := h.HubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
 				return false, fmt.Errorf("failed to get eviction %s: %w", evictionName, err)
 			}
 			return evictionutils.IsEvictionInTerminalState(&eviction), nil
@@ -95,10 +95,10 @@ func (d *DrainCluster) Drain(ctx context.Context) (bool, error) {
 	}
 
 	isDrainSuccessful := true
-	for crpName := range d.ClusterResourcePlacementResourcesMap {
-		evictionName := fmt.Sprintf(drainEvictionNameFormat, crpName, d.ClusterName)
+	for crpName := range h.ClusterResourcePlacementResourcesMap {
+		evictionName := fmt.Sprintf(drainEvictionNameFormat, crpName, h.ClusterName)
 		eviction := placementv1beta1.ClusterResourcePlacementEviction{}
-		if err := d.HubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
+		if err := h.HubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
 			return false, fmt.Errorf("failed to get eviction %s: %w", evictionName, err)
 		}
 		validCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeValid))
@@ -118,8 +118,8 @@ func (d *DrainCluster) Drain(ctx context.Context) (bool, error) {
 		}
 		log.Printf("eviction %s was executed successfully for CRP %s", evictionName, crpName)
 		// log each resource evicted by CRP.
-		for i := range d.ClusterResourcePlacementResourcesMap[crpName] {
-			resourceIdentifier := d.ClusterResourcePlacementResourcesMap[crpName][i]
+		for i := range h.ClusterResourcePlacementResourcesMap[crpName] {
+			resourceIdentifier := h.ClusterResourcePlacementResourcesMap[crpName][i]
 			log.Printf("evicted resource %s propagated by CRP %s", fmt.Sprintf(resourceIdentifierKeyFormat, resourceIdentifier.Group, resourceIdentifier.Version, resourceIdentifier.Kind, resourceIdentifier.Name, resourceIdentifier.Namespace), crpName)
 		}
 	}
@@ -127,11 +127,11 @@ func (d *DrainCluster) Drain(ctx context.Context) (bool, error) {
 	return isDrainSuccessful, nil
 }
 
-func (d *DrainCluster) cordon(ctx context.Context) error {
+func (h *Helper) cordon(ctx context.Context) error {
 	// add taint to member cluster to ensure resources aren't scheduled on it.
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var mc clusterv1beta1.MemberCluster
-		if err := d.HubClient.Get(ctx, types.NamespacedName{Name: d.ClusterName}, &mc); err != nil {
+		if err := h.HubClient.Get(ctx, types.NamespacedName{Name: h.ClusterName}, &mc); err != nil {
 			return err
 		}
 
@@ -145,13 +145,13 @@ func (d *DrainCluster) cordon(ctx context.Context) error {
 		// add taint to member cluster to cordon.
 		mc.Spec.Taints = append(mc.Spec.Taints, toolsutils.CordonTaint)
 
-		return d.HubClient.Update(ctx, &mc)
+		return h.HubClient.Update(ctx, &mc)
 	})
 }
 
-func (d *DrainCluster) fetchClusterResourcePlacementToEvict(ctx context.Context) error {
+func (h *Helper) fetchClusterResourcePlacementToEvict(ctx context.Context) error {
 	var crbList placementv1beta1.ClusterResourceBindingList
-	if err := d.HubClient.List(ctx, &crbList); err != nil {
+	if err := h.HubClient.List(ctx, &crbList); err != nil {
 		return fmt.Errorf("failed to list cluster resource bindings: %w", err)
 	}
 
@@ -159,13 +159,13 @@ func (d *DrainCluster) fetchClusterResourcePlacementToEvict(ctx context.Context)
 	for i := range crbList.Items {
 		crb := crbList.Items[i]
 		var targetBinding *placementv1beta1.ClusterResourceBinding
-		if crb.Spec.TargetCluster == d.ClusterName {
+		if crb.Spec.TargetCluster == h.ClusterName {
 			targetBinding = &crb
 		}
 
 		if targetBinding != nil {
 			err := wait.ExponentialBackoffWithContext(ctx, retry.DefaultBackoff, func(ctx context.Context) (bool, error) {
-				if getErr := d.HubClient.Get(ctx, types.NamespacedName{Name: targetBinding.Name}, targetBinding); getErr != nil {
+				if getErr := h.HubClient.Get(ctx, types.NamespacedName{Name: targetBinding.Name}, targetBinding); getErr != nil {
 					// binding may have been deleted.
 					if k8errors.IsNotFound(getErr) {
 						return true, nil
@@ -186,20 +186,20 @@ func (d *DrainCluster) fetchClusterResourcePlacementToEvict(ctx context.Context)
 				// propagated by the CRP and issue eviction.
 				// get all successfully applied resources for the CRP.
 				crpName := crb.GetLabels()[placementv1beta1.CRPTrackingLabel]
-				resourcesPropagated, err := d.collectResourcesPropagatedByCRP(ctx, crpName)
+				resourcesPropagated, err := h.collectResourcesPropagatedByCRP(ctx, crpName)
 				if err != nil {
 					return fmt.Errorf("failed to get resources propagated by CRP %s: %w", crpName, err)
 				}
-				d.ClusterResourcePlacementResourcesMap[crpName] = resourcesPropagated
+				h.ClusterResourcePlacementResourcesMap[crpName] = resourcesPropagated
 			}
 		}
 	}
 	return nil
 }
 
-func (d *DrainCluster) collectResourcesPropagatedByCRP(ctx context.Context, crpName string) ([]placementv1beta1.ResourceIdentifier, error) {
+func (h *Helper) collectResourcesPropagatedByCRP(ctx context.Context, crpName string) ([]placementv1beta1.ResourceIdentifier, error) {
 	var workList placementv1beta1.WorkList
-	if err := d.HubClient.List(ctx, &workList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName}, client.InNamespace(fmt.Sprintf(utils.NamespaceNameFormat, d.ClusterName))); err != nil {
+	if err := h.HubClient.List(ctx, &workList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName}, client.InNamespace(fmt.Sprintf(utils.NamespaceNameFormat, h.ClusterName))); err != nil {
 		return nil, fmt.Errorf("failed to get work %s: %w", crpName, err)
 	}
 

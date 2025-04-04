@@ -16,16 +16,16 @@ import (
 	toolsutils "go.goms.io/fleet/tools/utils"
 )
 
-type UncordonCluster struct {
+type Helper struct {
 	HubClient   client.Client
 	ClusterName string
 }
 
 // Uncordon removes the taint from the member cluster.
-func (u *UncordonCluster) Uncordon(ctx context.Context) error {
+func (h *Helper) Uncordon(ctx context.Context) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var mc clusterv1beta1.MemberCluster
-		if err := u.HubClient.Get(ctx, types.NamespacedName{Name: u.ClusterName}, &mc); err != nil {
+		if err := h.HubClient.Get(ctx, types.NamespacedName{Name: h.ClusterName}, &mc); err != nil {
 			return err
 		}
 
@@ -49,6 +49,6 @@ func (u *UncordonCluster) Uncordon(ctx context.Context) error {
 			return nil
 		}
 
-		return u.HubClient.Update(ctx, &mc)
+		return h.HubClient.Update(ctx, &mc)
 	})
 }

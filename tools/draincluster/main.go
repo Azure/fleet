@@ -46,15 +46,15 @@ func main() {
 		log.Fatalf("failed to create hub cluster client: %v", err)
 	}
 
-	drainCluster := drain.DrainCluster{
+	drainClusterHelper := drain.Helper{
 		HubClient:                            hubClient,
 		ClusterName:                          *clusterName,
 		ClusterResourcePlacementResourcesMap: make(map[string][]placementv1beta1.ResourceIdentifier),
 	}
 
-	isDrainSuccessful, err := drainCluster.Drain(ctx)
+	isDrainSuccessful, err := drainClusterHelper.Drain(ctx)
 	if err != nil {
-		log.Fatalf("failed to drain member cluster %s: %v", drainCluster.ClusterName, err)
+		log.Fatalf("failed to drain member cluster %s: %v", drainClusterHelper.ClusterName, err)
 	}
 
 	if isDrainSuccessful {
@@ -66,10 +66,10 @@ func main() {
 	log.Printf("retrying drain to ensure all resources propagated from hub cluster are evicted")
 
 	// reset ClusterResourcePlacementResourcesMap for retry.
-	drainCluster.ClusterResourcePlacementResourcesMap = map[string][]placementv1beta1.ResourceIdentifier{}
-	isDrainRetrySuccessful, err := drainCluster.Drain(ctx)
+	drainClusterHelper.ClusterResourcePlacementResourcesMap = map[string][]placementv1beta1.ResourceIdentifier{}
+	isDrainRetrySuccessful, err := drainClusterHelper.Drain(ctx)
 	if err != nil {
-		log.Fatalf("failed to drain cluster on retry %s: %v", drainCluster.ClusterName, err)
+		log.Fatalf("failed to drain cluster on retry %s: %v", drainClusterHelper.ClusterName, err)
 	}
 	if isDrainRetrySuccessful {
 		log.Printf("drain retry was successful for cluster %s", *clusterName)
