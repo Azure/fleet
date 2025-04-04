@@ -40,6 +40,7 @@ func (h *Helper) Drain(ctx context.Context) (bool, error) {
 	if err := h.cordon(ctx); err != nil {
 		return false, fmt.Errorf("failed to cordon member cluster %s: %w", h.ClusterName, err)
 	}
+	log.Printf("Successfully cordoned member cluster %s by addding cordon taint", h.ClusterName)
 
 	if err := h.fetchClusterResourcePlacementToEvict(ctx); err != nil {
 		return false, err
@@ -50,6 +51,7 @@ func (h *Helper) Drain(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 
+	isDrainSuccessful := true
 	// create eviction objects for all <crpName, targetCluster>.
 	for crpName := range h.ClusterResourcePlacementResourcesMap {
 		evictionName := fmt.Sprintf(drainEvictionNameFormat, crpName, h.ClusterName)
@@ -76,13 +78,10 @@ func (h *Helper) Drain(ctx context.Context) (bool, error) {
 		if err != nil {
 			return false, fmt.Errorf("failed to create eviction for CRP %s: %w", crpName, err)
 		}
-	}
 
-	// wait until all evictions reach a terminal state.
-	for crpName := range h.ClusterResourcePlacementResourcesMap {
-		err := wait.ExponentialBackoffWithContext(ctx, retry.DefaultBackoff, func(ctx context.Context) (bool, error) {
-			evictionName := fmt.Sprintf(drainEvictionNameFormat, crpName, h.ClusterName)
-			eviction := placementv1beta1.ClusterResourcePlacementEviction{}
+		// wait until evictions reach a terminal state.
+		var eviction placementv1beta1.ClusterResourcePlacementEviction
+		err = wait.ExponentialBackoffWithContext(ctx, retry.DefaultBackoff, func(ctx context.Context) (bool, error) {
 			if err := h.HubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
 				return false, fmt.Errorf("failed to get eviction %s: %w", evictionName, err)
 			}
@@ -92,15 +91,7 @@ func (h *Helper) Drain(ctx context.Context) (bool, error) {
 		if err != nil {
 			return false, fmt.Errorf("failed to wait for evictions to reach terminal state: %w", err)
 		}
-	}
 
-	isDrainSuccessful := true
-	for crpName := range h.ClusterResourcePlacementResourcesMap {
-		evictionName := fmt.Sprintf(drainEvictionNameFormat, crpName, h.ClusterName)
-		eviction := placementv1beta1.ClusterResourcePlacementEviction{}
-		if err := h.HubClient.Get(ctx, types.NamespacedName{Name: evictionName}, &eviction); err != nil {
-			return false, fmt.Errorf("failed to get eviction %s: %w", evictionName, err)
-		}
 		validCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeValid))
 		if validCondition != nil && validCondition.Status == metav1.ConditionFalse {
 			// check to see if CRP is missing or CRP is being deleted or CRB is missing.
@@ -120,7 +111,7 @@ func (h *Helper) Drain(ctx context.Context) (bool, error) {
 		// log each resource evicted by CRP.
 		for i := range h.ClusterResourcePlacementResourcesMap[crpName] {
 			resourceIdentifier := h.ClusterResourcePlacementResourcesMap[crpName][i]
-			log.Printf("evicted resource %s propagated by CRP %s", fmt.Sprintf(resourceIdentifierKeyFormat, resourceIdentifier.Group, resourceIdentifier.Version, resourceIdentifier.Kind, resourceIdentifier.Name, resourceIdentifier.Namespace), crpName)
+			log.Printf("evicted resource %s propagated by CRP %s", fmt.Sprintf(resourceIdentifierKeyFormat, resourceIdentifier.Group, resourceIdentifier.Version, resourceIdentifier.Kind, resourceIdentifier.Namespace, resourceIdentifier.Name), crpName)
 		}
 	}
 
