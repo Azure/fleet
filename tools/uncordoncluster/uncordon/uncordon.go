@@ -34,20 +34,15 @@ func (h *Helper) Uncordon(ctx context.Context) error {
 		}
 
 		// remove cordon taint from member cluster.
-		cordonTaintIndex := -1
+		var newTaints []clusterv1beta1.Taint
 		for i := range mc.Spec.Taints {
 			taint := mc.Spec.Taints[i]
 			if taint == toolsutils.CordonTaint {
-				cordonTaintIndex = i
-				break
+				continue
 			}
+			newTaints = append(newTaints, taint)
 		}
-
-		if cordonTaintIndex >= 0 {
-			mc.Spec.Taints = append(mc.Spec.Taints[:cordonTaintIndex], mc.Spec.Taints[cordonTaintIndex+1:]...)
-		} else {
-			return nil
-		}
+		mc.Spec.Taints = newTaints
 
 		return h.HubClient.Update(ctx, &mc)
 	})
