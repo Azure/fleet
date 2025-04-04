@@ -674,6 +674,71 @@ var _ = Describe("validating CRP when selecting a reserved resource", Ordered, f
 	})
 })
 
+var _ = Describe("When creating a pickN ClusterResourcePlacement with duplicated resources", Ordered, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	var existingNS corev1.Namespace
+	BeforeAll(func() {
+		By("creating work resources on hub cluster")
+		createWorkResources()
+		existingNS = appNamespace()
+		By("Create a crp that selects the same resource twice")
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+				// Add a custom finalizer; this would allow us to better observe
+				// the behavior of the controllers.
+				Finalizers: []string{customDeletionBlockerFinalizer},
+			},
+			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					{
+						Group:   corev1.GroupName,
+						Version: "v1",
+						Kind:    "Namespace",
+						Name:    existingNS.Name,
+					},
+					{
+						Group:   corev1.GroupName,
+						Version: "v1",
+						Kind:    "Namespace",
+						Name:    existingNS.Name,
+					},
+				},
+			},
+		}
+		By(fmt.Sprintf("creating placement %s", crpName))
+		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+	})
+
+	AfterAll(func() {
+		By(fmt.Sprintf("garbage all things related to placement %s", crpName))
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+	})
+
+	It("should update CRP status as expected", func() {
+		Eventually(func() error {
+			crp := &placementv1beta1.ClusterResourcePlacement{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+				return err
+			}
+			wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+				Conditions: []metav1.Condition{
+					{
+						Status:             metav1.ConditionFalse,
+						Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+						Reason:             clusterresourceplacement.InvalidResourceSelectorsReason,
+						ObservedGeneration: 1,
+					},
+				},
+			}
+			if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
+				return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
+			}
+			return nil
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+})
+
 var _ = Describe("validating CRP when failed to apply resources", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	var existingNS corev1.Namespace
