@@ -1,4 +1,4 @@
-# Steps to build draincluster as a kubectl plugin
+# Steps to build uncordoncluster as a kubectl plugin
 
 1. Build the binary for the `uncordoncluster` tool by running the following command in the root directory of the fleet repo:
 
@@ -67,6 +67,4 @@ CURRENT   NAME               CLUSTER            AUTHINFO                        
 Here you can see that the context of the hub cluster is called `hub` under the `NAME` column.
 
 The command removes the `cordon` taint added to a `MemberCluster` resource by the `draincluster` tool. If the `cordon` 
-taint is not present, the command will not have any effect. Once the taint is removed if there are no other taints on the 
-`MemberCluster` resource, the member cluster will be uncordoned and resource can be propagated to it from the hub cluster
-using `Placement` resources.
+taint is not present, the command will not have any effect.

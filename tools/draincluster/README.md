@@ -69,8 +69,8 @@ CURRENT   NAME               CLUSTER            AUTHINFO                        
 Here you can see that the context of the hub cluster is called `hub` under the `NAME` column.
 
 The command adds a `Taint` to the `MemberCluster` resource of the member cluster to prevent any new resources from being 
-propagated to the member cluster. Then it creates `ClusterResourcePlacementEviction` objects for all the 
-`ClusterResourcePlacement` objects that have propagated resources to the member cluster.
+propagated to the member cluster. Then it creates `Eviction` objects for all the `Placement` objects that have propagated 
+resources to the member cluster.
 
 >> **Note**: The `draincluster` tool is a best-effort mechanism at the moment, so once the command is run successfully
 > the user must verify if all resources propagated by `Placement` resources are removed from the member cluster.
