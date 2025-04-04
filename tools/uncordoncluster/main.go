@@ -19,6 +19,7 @@ import (
 )
 
 func main() {
+	//TODO (arvindth): add flags for timeout, help for program.
 	scheme := runtime.NewScheme()
 	ctx := context.Background()
 

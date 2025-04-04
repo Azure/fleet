@@ -6,7 +6,7 @@
 go build -o ./hack/tools/bin/kubectl-uncordoncluster ./tools/uncordoncluster/main.go
 ```
 
-2. Move the binary to a directory in your `PATH` so that it can be run as a kubectl plugin. For example, you can move it to
+2. Copy the binary to a directory in your `PATH` so that it can be run as a kubectl plugin. For example, you can move it to
    `/usr/local/bin`:
 
 ```bash
