@@ -20,7 +20,7 @@ on:
     paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
 
 env:
-  GO_VERSION: '1.23.1'
+  GO_VERSION: '1.23.6'
 
 jobs:
   detect-noop:
