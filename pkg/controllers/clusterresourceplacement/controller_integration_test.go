@@ -36,8 +36,6 @@ const (
 
 	eventuallyTimeout = time.Second * 10
 	interval          = time.Millisecond * 250
-
-	crpNameTemplate = "crp-%d"
 )
 
 var (
@@ -70,7 +68,7 @@ var (
 	crpOwnerReference = metav1.OwnerReference{
 		APIVersion:         fleetAPIVersion,
 		Kind:               "ClusterResourcePlacement",
-		Name:               fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess()),
+		Name:               testCRPName,
 		Controller:         ptr.To(true),
 		BlockOwnerDeletion: ptr.To(true),
 	}
@@ -161,7 +159,7 @@ func retrieveAndValidateCRPDeletion(crp *placementv1beta1.ClusterResourcePlaceme
 func createOverriddenClusterResourceBinding(cluster string, policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot, resourceSnapshot *placementv1beta1.ClusterResourceSnapshot) *placementv1beta1.ClusterResourceBinding {
 	binding := &placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("binding-%s-%d", cluster, GinkgoParallelProcess()),
+			Name: "binding-" + cluster,
 			Labels: map[string]string{
 				placementv1beta1.CRPTrackingLabel: resourceSnapshot.Labels[placementv1beta1.CRPTrackingLabel],
 			},
@@ -226,8 +224,6 @@ func createAvailableClusterResourceBinding(cluster string, policySnapshot *place
 
 var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 	Context("When creating new pickAll ClusterResourcePlacement", func() {
-		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-
 		var (
 			customRegistry      *prometheus.Registry
 			crp                 *placementv1beta1.ClusterResourcePlacement
@@ -249,7 +245,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("Create a new crp")
 			crp = &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName,
+					Name: testCRPName,
 				},
 				Spec: placementv1beta1.ClusterResourcePlacementSpec{
 					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
@@ -324,7 +320,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("By checking CRP status")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       crpName,
+					Name:       testCRPName,
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
@@ -372,7 +368,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("By validating the CRP status has only scheduling condition")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       crpName,
+					Name:       testCRPName,
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
@@ -387,10 +383,10 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
+			retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted False")
-			checkPlacementCompleteMetric(customRegistry, crpName, false, 1)
+			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
 
 			By("Ensure placement status metric was emitted with Scheduled True")
 			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType), "nil")
@@ -423,7 +419,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("By validating the CRP status has only scheduling condition")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       crpName,
+					Name:       testCRPName,
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
@@ -438,10 +434,10 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
+			retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted False")
-			checkPlacementCompleteMetric(customRegistry, crpName, false, 1)
+			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
 
 			By("Ensure placement status metric was emitted with Scheduled False")
 			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementScheduledConditionType), string(corev1.ConditionFalse))
@@ -477,7 +473,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("By validating the CRP status")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       crpName,
+					Name:       testCRPName,
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
@@ -539,10 +535,10 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
+			retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted False")
-			checkPlacementCompleteMetric(customRegistry, crpName, false, 1)
+			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
 
 			By("Ensure placement status metric was emitted with Rollout Unknown")
 			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType), string(corev1.ConditionUnknown))
@@ -552,7 +548,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 
 			wantCRP = &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       crpName,
+					Name:       testCRPName,
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
@@ -640,10 +636,10 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
+			retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted False")
-			checkPlacementCompleteMetric(customRegistry, crpName, false, 1)
+			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
 
 			By("Ensure placement status metric was emitted with WorkSynchronized Unknown")
 			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType), string(corev1.ConditionUnknown))
@@ -653,7 +649,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("By checking CRP status")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       crpName,
+					Name:       testCRPName,
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
@@ -668,7 +664,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			gotCRP = retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
+			gotCRP = retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("By updating clusterSchedulingPolicySnapshot status to schedule success")
 			scheduledCondition := metav1.Condition{
@@ -701,7 +697,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 
 			wantCRP = &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       crpName,
+					Name:       testCRPName,
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
@@ -814,10 +810,10 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			gotCRP = retrieveAndValidateClusterResourcePlacement(crpName, wantCRP)
+			gotCRP = retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted True")
-			checkPlacementCompleteMetric(customRegistry, crpName, true, 2)
+			checkPlacementCompleteMetric(customRegistry, testCRPName, true, 2)
 		})
 	})
 })
