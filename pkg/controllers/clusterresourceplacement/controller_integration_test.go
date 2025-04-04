@@ -689,7 +689,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			}
 			Expect(k8sClient.Status().Update(ctx, gotPolicySnapshot)).Should(Succeed(), "Failed to update the policy snapshot status")
 
-			By("By creating clusterResourceBinding on member-1")
+			By("By creating a synchronized clusterResourceBinding on member-1")
 			createAvailableClusterResourceBinding(member1Name, gotPolicySnapshot, gotResourceSnapshot)
 
 			By("By creating a synchronized clusterResourceBinding on member-2")
