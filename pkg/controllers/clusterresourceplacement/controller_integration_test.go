@@ -393,7 +393,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			checkPlacementCompleteMetric(customRegistry, crpName, false, 1)
 
 			By("Ensure placement status metric was emitted with Scheduled True")
-			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementScheduledConditionType), string(corev1.ConditionUnknown))
+			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType), "nil")
 		})
 
 		It("Clusters are not selected", func() {
