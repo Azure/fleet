@@ -115,7 +115,7 @@ func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberClus
 		klog.V(2).InfoS(deniedModifyFleetLabels, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		return admission.Denied(deniedModifyFleetLabels)
 	}
-
+	// any user is allowed to modify annotations, taints on fleet MC except fleet pre-fixed annotations.
 	isAnnotationUpdated := isFleetAnnotationUpdated(currentMC.Annotations, oldMC.Annotations)
 	if isObjUpdated || isAnnotationUpdated {
 		return ValidateUserForResource(req, whiteListedUsers)
