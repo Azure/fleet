@@ -824,7 +824,7 @@ func checkPlacementCompleteMetric(registry *prometheus.Registry, crpName string,
 	Expect(err).Should(Succeed())
 	var placementCompleteMetrics []*prometheusclientmodel.Metric
 	for _, mf := range metricFamilies {
-		if mf.GetName() == "fleet_workload_placement_complete_timestamp_second" {
+		if mf.GetName() == "fleet_workload_placement_complete_last_timestamp_seconds" {
 			placementCompleteMetrics = mf.GetMetric()
 		}
 	}
@@ -851,7 +851,7 @@ func checkPlacementStatusMetric(registry *prometheus.Registry, crp *placementv1b
 	Expect(err).Should(Succeed())
 	var placementStatusMetrics []*prometheusclientmodel.Metric
 	for _, mf := range metricFamilies {
-		if mf.GetName() == "fleet_workload_last_placement_status_timestamp_second" {
+		if mf.GetName() == "fleet_workload_placement_status_last_timestamp_seconds" {
 			placementStatusMetrics = mf.GetMetric()
 		}
 	}
