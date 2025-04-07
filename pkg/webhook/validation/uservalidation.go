@@ -106,7 +106,6 @@ func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberClus
 	oldMC.Spec.Taints = nil
 	isObjUpdated, err := isMemberClusterUpdated(currentMC.DeepCopy(), oldMC.DeepCopy())
 	if err != nil {
-		klog.V(2).InfoS(deniedRemoveFleetAnnotation, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		return admission.Denied(err.Error())
 	}
 
@@ -121,7 +120,6 @@ func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberClus
 	if isObjUpdated || isAnnotationUpdated {
 		return ValidateUserForResource(req, whiteListedUsers)
 	}
-
 	klog.V(3).InfoS(allowedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 	return admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
 }
