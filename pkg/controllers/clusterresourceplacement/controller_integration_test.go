@@ -156,6 +156,7 @@ func retrieveAndValidateCRPDeletion(crp *placementv1beta1.ClusterResourcePlaceme
 		return errors.IsNotFound(err)
 	}, eventuallyTimeout, interval).Should(BeTrue(), "Get() clusterResourcePlacement, want not found")
 }
+
 func createOverriddenClusterResourceBinding(cluster string, policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot, resourceSnapshot *placementv1beta1.ClusterResourceSnapshot) *placementv1beta1.ClusterResourceBinding {
 	binding := &placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -388,7 +389,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("Ensure placement complete metric was emitted with isCompleted False")
 			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
 
-			By("Ensure placement status metric was emitted with Scheduled True")
+			By("Ensure placement status metric was emitted with RolloutStarted nil")
 			checkPlacementStatusMetric(customRegistry, crp, string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType), "nil")
 		})
 
