@@ -518,6 +518,26 @@ func TestHandleMemberCluster(t *testing.T) {
 		resourceValidator fleetResourceValidator
 		wantResponse      admission.Response
 	}{
+		"allow create upstream fleet MC by any user": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw: mcObjectBytes,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"test-group"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Create,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Allowed(allowedMessageMemberCluster),
+		},
 		"deny update of fleet MC spec by non whitelisted user": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
@@ -681,7 +701,7 @@ func TestHandleFleetReservedNamespacedResource(t *testing.T) {
 					Operation: admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Allowed("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces for the request object"),
+			wantResponse: admission.Allowed(allowedMessageFleetReservedNamespacedResource),
 		},
 		"allow hub-agent-sa in MC identity with create with v1alpha1 IMC": {
 			req: admission.Request{
@@ -953,14 +973,47 @@ func TestHandleNamespace(t *testing.T) {
 		resourceValidator fleetResourceValidator
 		wantResponse      admission.Response
 	}{
-		"allow user to modify non-reserved namespace": {
+		"allow any user to modify non-reserved namespace": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name:      "test-namespace",
-					Operation: admissionv1.Create,
+					Name: "test-namespace",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "testUser",
+						Groups:   []string{"testGroup"},
+					},
+					RequestKind: &utils.NamespaceMetaGVK,
+					Operation:   admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Allowed("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces"),
+			wantResponse: admission.Allowed(allowedMessageNonReservedNamespace),
+		},
+		"allow any user to modify non-reserved namespace without fleet- prefix": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "fleettest",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "testUser",
+						Groups:   []string{"testGroup"},
+					},
+					RequestKind: &utils.NamespaceMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			wantResponse: admission.Allowed(allowedMessageNonReservedNamespace),
+		},
+		"allow any user to modify non-reserved namespace without kube- prefix": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "kubetest",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "testUser",
+						Groups:   []string{"testGroup"},
+					},
+					RequestKind: &utils.NamespaceMetaGVK,
+					Operation:   admissionv1.Delete,
+				},
+			},
+			wantResponse: admission.Allowed(allowedMessageNonReservedNamespace),
 		},
 		"deny user not in system:masters group to modify fleet namespace": {
 			req: admission.Request{

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
-	"strings"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -24,11 +23,15 @@ import (
 
 const (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating custom resource definition resources.
-	ValidationPath             = "/validate-fleetresourcehandler"
-	groupMatch                 = `^[^.]*\.(.*)`
-	fleetMemberNamespacePrefix = "fleet-member"
-	fleetNamespacePrefix       = "fleet"
-	kubeNamespacePrefix        = "kube"
+	ValidationPath = "/validate-fleetresourcehandler"
+	groupMatch     = `^[^.]*\.(.*)`
+)
+
+const (
+	// allowed messages.
+	allowedMessageMemberCluster                   = "upstream member cluster resource is allowed to be created/deleted by any user"
+	allowedMessageNonReservedNamespace            = "namespace name doesn't begin with fleet-/kube- prefix so we allow all operations on this namespace"
+	allowedMessageFleetReservedNamespacedResource = "namespace name of resource object doesn't begin with fleet-/kube- prefix so we allow all operations on request objects in these namespace"
 )
 
 // Add registers the webhook for K8s built-in object types.
@@ -138,15 +141,15 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 	if isFleetMC {
 		return validation.ValidateUserForResource(req, v.whiteListedUsers)
 	}
-	klog.V(3).InfoS("upstream member cluster resource is allowed to be created/deleted by any user",
+	klog.V(3).InfoS(allowedMessageMemberCluster,
 		"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "kind", req.RequestKind.Kind, "subResource", req.SubResource, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
-	return admission.Allowed("upstream member cluster resource is allowed to be created/deleted by any user")
+	return admission.Allowed(allowedMessageMemberCluster)
 }
 
 // handleFleetReservedNamespacedResource allows/denies the request to modify object after validation.
 func (v *fleetResourceValidator) handleFleetReservedNamespacedResource(ctx context.Context, req admission.Request) admission.Response {
 	var response admission.Response
-	if strings.HasPrefix(req.Namespace, fleetMemberNamespacePrefix) {
+	if utils.IsFleetMemberNamespace(req.Namespace) {
 		// check to see if valid users other than member agent is making the request.
 		response = validation.ValidateUserForResource(req, v.whiteListedUsers)
 		// check to see if member agent is making the request only on Update.
@@ -156,12 +159,12 @@ func (v *fleetResourceValidator) handleFleetReservedNamespacedResource(ctx conte
 			return validation.ValidateMCIdentity(ctx, v.client, req, mcName, v.isFleetV1Beta1API)
 		}
 		return response
-	} else if strings.HasPrefix(req.Namespace, fleetNamespacePrefix) || strings.HasPrefix(req.Namespace, kubeNamespacePrefix) {
+	} else if utils.IsReservedNamespace(req.Namespace) {
 		return validation.ValidateUserForResource(req, v.whiteListedUsers)
 	}
-	klog.V(3).InfoS("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces",
+	klog.V(3).InfoS(allowedMessageFleetReservedNamespacedResource,
 		"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "kind", req.RequestKind.Kind, "subResource", req.SubResource, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
-	return admission.Allowed("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces for the request object")
+	return admission.Allowed(allowedMessageFleetReservedNamespacedResource)
 }
 
 // handleEvent allows/denies request to modify event after validation.
@@ -172,13 +175,12 @@ func (v *fleetResourceValidator) handleEvent(_ context.Context, _ admission.Requ
 
 // handlerNamespace allows/denies request to modify namespace after validation.
 func (v *fleetResourceValidator) handleNamespace(req admission.Request) admission.Response {
-	fleetMatchResult := strings.HasPrefix(req.Name, fleetNamespacePrefix)
-	kubeMatchResult := strings.HasPrefix(req.Name, kubeNamespacePrefix)
-	if fleetMatchResult || kubeMatchResult {
+	if utils.IsReservedNamespace(req.Name) {
 		return validation.ValidateUserForResource(req, v.whiteListedUsers)
 	}
-	// only handling reserved namespaces with prefix fleet/kube.
-	return admission.Allowed("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces")
+	klog.V(3).InfoS(allowedMessageNonReservedNamespace,
+		"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "kind", req.RequestKind.Kind, "subResource", req.SubResource, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
+	return admission.Allowed(allowedMessageNonReservedNamespace)
 }
 
 // decodeRequestObject decodes the request object into the passed runtime object.
