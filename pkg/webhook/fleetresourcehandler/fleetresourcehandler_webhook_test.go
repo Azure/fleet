@@ -634,6 +634,88 @@ func TestHandleMemberCluster(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "aks-support", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Delete, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
+		"allow label modification by RP client": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw: func() []byte {
+							updatedMC := &clusterv1beta1.MemberCluster{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:   "test-mc",
+									Labels: map[string]string{"testKey": "testValue"},
+									Annotations: map[string]string{
+										"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+									},
+								},
+							}
+							raw, _ := json.Marshal(updatedMC)
+							return raw
+						}(),
+					},
+					OldObject: runtime.RawExtension{
+						Raw: fleetMCObjectBytes,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "aksService",
+						Groups:   []string{"system:masters"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "aksService", utils.GenerateGroupString([]string{"system:masters"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"deny label modification by non-RP client": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw: func() []byte {
+							updatedMC := &clusterv1beta1.MemberCluster{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:   "test-mc",
+									Labels: map[string]string{"testKey": "testValue"},
+									Annotations: map[string]string{
+										"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+									},
+								},
+							}
+							raw, _ := json.Marshal(updatedMC)
+							return raw
+						}(),
+					},
+					OldObject: runtime.RawExtension{
+						Raw: func() []byte {
+							oldMC := &clusterv1beta1.MemberCluster{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:   "test-mc",
+									Labels: map[string]string{"key1": "value2"},
+									Annotations: map[string]string{
+										"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+									},
+								},
+							}
+							raw, _ := json.Marshal(oldMC)
+							return raw
+						}(),
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "nonRPUser",
+						Groups:   []string{"system:authenticated"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(validation.DeniedModifyFleetLabels)),
+		},
 	}
 
 	for testName, testCase := range testCases {

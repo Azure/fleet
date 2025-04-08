@@ -36,7 +36,7 @@ const (
 	deniedModifyResource        = "user in groups is not allowed to modify resource"
 	deniedAddFleetAnnotation    = "no user is allowed to add a fleet pre-fixed annotation to an upstream member cluster"
 	deniedRemoveFleetAnnotation = "no user is allowed to remove all fleet pre-fixed annotations from a fleet member cluster"
-	deniedModifyFleetLabels     = "users are not allowed to modify labels through hub cluster directly"
+	DeniedModifyFleetLabels     = "users are not allowed to modify labels through hub cluster directly"
 
 	ResourceAllowedFormat      = "user: '%s' in '%s' is allowed to %s resource %+v/%s: %+v"
 	ResourceDeniedFormat       = "user: '%s' in '%s' is not allowed to %s resource %+v/%s: %+v"
@@ -111,11 +111,12 @@ func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberClus
 
 	// users are no longer allowed to modify labels of fleet member cluster through webhook.
 	isLabelUpdated := isMapFieldUpdated(currentMC.GetLabels(), oldMC.GetLabels())
-	if isLabelUpdated {
-		klog.V(2).InfoS(deniedModifyFleetLabels, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
-		return admission.Denied(deniedModifyFleetLabels)
+	if isLabelUpdated && !isRPClient(userInfo) {
+		klog.V(2).InfoS(DeniedModifyFleetLabels, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
+		return admission.Denied(DeniedModifyFleetLabels)
 	}
-	// any user is allowed to modify annotations, taints on fleet MC except fleet pre-fixed annotations.
+	// any user is allowed to modify labels, annotations, taints on fleet MC except fleet pre-fixed annotations.
+
 	isAnnotationUpdated := isFleetAnnotationUpdated(currentMC.Annotations, oldMC.Annotations)
 	if isObjUpdated || isAnnotationUpdated {
 		return ValidateUserForResource(req, whiteListedUsers)
@@ -173,6 +174,11 @@ func isAKSSupportUser(userInfo authenticationv1.UserInfo) bool {
 // isNodeGroupUser returns true if user belongs to system:nodes group.
 func isNodeGroupUser(userInfo authenticationv1.UserInfo) bool {
 	return slices.Contains(userInfo.Groups, nodeGroup)
+}
+
+// isRPClient returns true if user is aksService and belongs to system:masters group.
+func isRPClient(userInfo authenticationv1.UserInfo) bool {
+	return userInfo.Username == "aksService" && slices.Contains(userInfo.Groups, mastersGroup)
 }
 
 // isMemberClusterMapFieldUpdated return true if member cluster label is updated.
