@@ -643,7 +643,7 @@ func TestHandleMemberCluster(t *testing.T) {
 							updatedMC := &clusterv1beta1.MemberCluster{
 								ObjectMeta: metav1.ObjectMeta{
 									Name:   "test-mc",
-									Labels: map[string]string{"testKey": "testValue"},
+									Labels: map[string]string{"key1": "value1"},
 									Annotations: map[string]string{
 										"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
 									},
@@ -678,7 +678,7 @@ func TestHandleMemberCluster(t *testing.T) {
 							updatedMC := &clusterv1beta1.MemberCluster{
 								ObjectMeta: metav1.ObjectMeta{
 									Name:   "test-mc",
-									Labels: map[string]string{"testKey": "testValue"},
+									Labels: map[string]string{"key1": "value1"},
 									Annotations: map[string]string{
 										"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
 									},
