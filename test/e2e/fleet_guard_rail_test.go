@@ -845,25 +845,26 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 			Expect(impersonateHubClient.Create(ctx, &ise)).Should(Succeed())
 
 			By("deleting Internal Service Export")
+			// Cleanup the internalServiceExport so that it won't block the member deletion.
 			Expect(impersonateHubClient.Delete(ctx, &ise)).Should(Succeed(), "failed to delete Internal Service Export")
 		})
 
 		It("should allow CREATE operation on Internal service import resource in fleet-member namespace for user in member cluster identity", func() {
-			ise := internalServiceImport(isiName, imcNamespace)
+			isi := internalServiceImport(isiName, imcNamespace)
 			By("expecting successful CREATE of Internal Service Import")
-			Expect(impersonateHubClient.Create(ctx, &ise)).Should(Succeed())
+			Expect(impersonateHubClient.Create(ctx, &isi)).Should(Succeed())
 
 			By("deleting Internal Service Import")
-			Expect(impersonateHubClient.Delete(ctx, &ise)).Should(Succeed(), "failed to delete Internal Service Import")
+			Expect(impersonateHubClient.Delete(ctx, &isi)).Should(Succeed(), "failed to delete Internal Service Import")
 		})
 
 		It("should allow CREATE operation on Endpoint slice export resource in fleet-member namespace for user in member cluster identity", func() {
-			ise := endpointSliceExport(epName, imcNamespace)
+			esx := endpointSliceExport(epName, imcNamespace)
 			By("expecting successful CREATE of Endpoint slice export")
-			Expect(impersonateHubClient.Create(ctx, &ise)).Should(Succeed())
+			Expect(impersonateHubClient.Create(ctx, &esx)).Should(Succeed())
 
 			By("deleting Endpoint Slice Export")
-			Expect(impersonateHubClient.Delete(ctx, &ise)).Should(Succeed(), "failed to delete EndpointSlice Export")
+			Expect(impersonateHubClient.Delete(ctx, &esx)).Should(Succeed(), "failed to delete EndpointSlice Export")
 		})
 	})
 
