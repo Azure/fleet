@@ -151,46 +151,28 @@ func (h *Helper) fetchClusterResourcePlacementNamesToEvict(ctx context.Context) 
 		return []string{}, fmt.Errorf("failed to list cluster resource bindings: %w", err)
 	}
 
-	var crpNames []string
+	crpNameMap := make(map[string]bool)
 	// find all unique CRP names for which eviction needs to occur.
 	for i := range crbList.Items {
 		crb := crbList.Items[i]
-		var targetBinding *placementv1beta1.ClusterResourceBinding
 		if crb.Spec.TargetCluster == h.ClusterName {
-			targetBinding = &crb
-		}
-
-		ignoreBinding := false
-		if targetBinding != nil {
-			err := wait.ExponentialBackoffWithContext(ctx, retry.DefaultBackoff, func(ctx context.Context) (bool, error) {
-				var binding placementv1beta1.ClusterResourceBinding
-				if getErr := h.HubClient.Get(ctx, types.NamespacedName{Name: targetBinding.Name}, &binding); getErr != nil {
-					// binding may have been deleted.
-					if k8errors.IsNotFound(getErr) {
-						ignoreBinding = true
-						return true, nil
-					}
-					return false, getErr
-				}
-				// binding is being deleted.
-				if binding.DeletionTimestamp != nil {
-					ignoreBinding = true
-					return true, nil
-				}
-				return true, nil
-			})
-
-			if err != nil {
-				return []string{}, fmt.Errorf("failed to wait for placement to be present on member cluster: %w", err)
-			} else if !ignoreBinding {
-				crpName, ok := crb.GetLabels()[placementv1beta1.CRPTrackingLabel]
-				if !ok {
-					return []string{}, fmt.Errorf("failed to get CRP name from binding %s", crb.Name)
-				}
-				crpNames = append(crpNames, crpName)
+			crpName, ok := crb.GetLabels()[placementv1beta1.CRPTrackingLabel]
+			if !ok {
+				return []string{}, fmt.Errorf("failed to get CRP name from binding %s", crb.Name)
+			}
+			if !crpNameMap[crpName] {
+				crpNameMap[crpName] = true
 			}
 		}
 	}
+
+	crpNames := make([]string, len(crpNameMap))
+	i := 0
+	for crpName := range crpNameMap {
+		crpNames[i] = crpName
+		i++
+	}
+
 	return crpNames, nil
 }
 
@@ -200,13 +182,12 @@ func (h *Helper) collectClusterScopedResourcesSelectedByCRP(ctx context.Context,
 		return nil, fmt.Errorf("failed to get ClusterResourcePlacement %s: %w", crpName, err)
 	}
 
-	resourcesPropagated := make([]placementv1beta1.ResourceIdentifier, len(crp.Status.SelectedResources))
+	var resourcesPropagated []placementv1beta1.ResourceIdentifier
 	for _, selectedResource := range crp.Status.SelectedResources {
-		// skip namespaced resources.
-		if len(selectedResource.Namespace) != 0 {
-			continue
+		// only collect cluster scoped resources.
+		if len(selectedResource.Namespace) == 0 {
+			resourcesPropagated = append(resourcesPropagated, selectedResource)
 		}
-		resourcesPropagated = append(resourcesPropagated, selectedResource)
 	}
 	return resourcesPropagated, nil
 }
