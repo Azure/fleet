@@ -200,7 +200,7 @@ func (h *Helper) collectClusterScopedResourcesSelectedByCRP(ctx context.Context,
 		return nil, fmt.Errorf("failed to get ClusterResourcePlacement %s: %w", crpName, err)
 	}
 
-	var resourcesPropagated []placementv1beta1.ResourceIdentifier
+	resourcesPropagated := make([]placementv1beta1.ResourceIdentifier, len(crp.Status.SelectedResources))
 	for _, selectedResource := range crp.Status.SelectedResources {
 		// skip namespaced resources.
 		if len(selectedResource.Namespace) != 0 {
