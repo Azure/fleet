@@ -50,14 +50,14 @@ var (
 		Help: "Number of currently used workers per controller",
 	}, []string{"controller"})
 
-	//FleetPlacementComplete is a prometheus metric which keeps track if the placement is complete
-	FleetPlacementComplete = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	// FleetPlacementCompleteLastTimeStampSeconds is a prometheus metric which keeps track if the placement is complete.
+	FleetPlacementCompleteLastTimeStampSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "fleet_workload_placement_complete_last_timestamp_seconds",
 		Help: "Timestamp in seconds of the current completion status of crp. The 'isCompleted' label indicates whether CRP completion is true or false.",
 	}, []string{"name", "isCompleted"})
 
-	// FleetPlacementStatus is a prometheus metric which keeps track of the last placement status
-	FleetPlacementStatus = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	// FleetPlacementStatusLastTimeStampSeconds is a prometheus metric which keeps track of the last placement status.
+	FleetPlacementStatusLastTimeStampSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "fleet_workload_placement_status_last_timestamp_seconds",
 		Help: "Timestamp in seconds of the last current placement status condition of crp.",
 	}, []string{"name", "generation", "conditionType", "status"})
@@ -77,8 +77,8 @@ func init() {
 		FleetReconcileTime,
 		FleetWorkerCount,
 		FleetActiveWorkers,
-		FleetPlacementComplete,
-		FleetPlacementStatus,
+		FleetPlacementCompleteLastTimeStampSeconds,
+		FleetPlacementStatusLastTimeStampSeconds,
 		FleetEvictionStatus,
 	)
 }
