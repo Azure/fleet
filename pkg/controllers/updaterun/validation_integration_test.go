@@ -191,7 +191,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 	Context("Test validateCRP", func() {
 		AfterEach(func() {
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing, updateRunMetricsStatusFailed})
 		})
 
@@ -236,7 +236,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "no latest policy snapshot associated")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing, updateRunMetricsStatusFailed})
 		})
 
@@ -266,7 +266,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 			Expect(k8sClient.Delete(ctx, newPolicySnapshot)).Should(Succeed())
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing, updateRunMetricsStatusFailed})
 		})
 
@@ -281,7 +281,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 				"the cluster count initialized in the clusterStagedUpdateRun is outdated")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing, updateRunMetricsStatusFailed})
 		})
 
@@ -303,7 +303,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 			validateClusterStagedUpdateRunStatusConsistently(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 	})
@@ -311,7 +311,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 	Context("Test validateStagesStatus", func() {
 		AfterEach(func() {
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing, updateRunMetricsStatusFailed})
 		})
 

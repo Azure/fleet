@@ -107,6 +107,7 @@ func (r *Reconciler) executeUpdatingStage(
 		// The cluster is either updating or not started yet.
 		binding := toBeUpdatedBindingsMap[clusterStatus.ClusterName]
 		if !condition.IsConditionStatusTrue(clusterStartedCond, updateRun.Generation) {
+			emitUpdateRunStatusMetric(updateRun, updateRunMetricsStatusProgressing)
 			// The cluster has not started updating yet.
 			if !isBindingSyncedWithClusterStatus(resourceSnapshotName, updateRun, binding, clusterStatus) {
 				klog.V(2).InfoS("Found the first cluster that needs to be updated", "cluster", clusterStatus.ClusterName, "stage", updatingStageStatus.StageName, "clusterStagedUpdateRun", updateRunRef)
@@ -173,7 +174,6 @@ func (r *Reconciler) executeUpdatingStage(
 			// If cluster update has been running for more than 1 minute, mark the update run as stuck.
 			if time.Since(clusterStartedCond.LastTransitionTime.Time) > updateRunStuckThreshold {
 				emitUpdateRunStatusMetric(updateRun, updateRunMetricsStatusStuck)
-				fmt.Println("!!!threshold:", updateRunStuckThreshold)
 			}
 		}
 		// No need to continue as we only support one cluster updating at a time for now.

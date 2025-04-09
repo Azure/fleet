@@ -237,7 +237,8 @@ func unregisterUpdateRunMetrics(registry *prometheus.Registry) {
 	Expect(registry.Unregister(metrics.FleetUpdateRunStatusLastTimestampSeconds)).Should(BeTrue())
 }
 
-func validateUpdateRunMetricsEmitted(registry *prometheus.Registry, updateRunName string, statuses []updateRunMetricsStatus) {
+// validateUpdateRunMetricsEmitted validates the update run status metrics are emitted and are emitted in the correct order.
+func validateUpdateRunMetricsEmitted(registry *prometheus.Registry, updateRunName string, generation int64, statuses []updateRunMetricsStatus) {
 	Eventually(func() error {
 		metricFamilies, err := registry.Gather()
 		if err != nil {
@@ -250,19 +251,24 @@ func validateUpdateRunMetricsEmitted(registry *prometheus.Registry, updateRunNam
 			}
 		}
 
+		// Key: status, Value: timestamp (gauge value).
 		timeMap := make(map[string]float64)
 		if len(updateRunStatusMetrics) != len(statuses) {
 			return fmt.Errorf("want %d metrics emitted, got %d", len(statuses), len(updateRunStatusMetrics))
 		}
 		for _, metric := range updateRunStatusMetrics {
 			metricLabels := metric.GetLabel()
-			if len(metricLabels) != 2 {
-				return fmt.Errorf("want 2 labels on each metric, got %d", len(metricLabels))
+			if len(metricLabels) != 3 {
+				return fmt.Errorf("want 3 labels on each metric, got %d", len(metricLabels))
 			}
 			for _, label := range metricLabels {
 				if label.GetName() == "name" {
 					if label.GetValue() != updateRunName {
 						return fmt.Errorf("want name label with value %s, got %s", updateRunName, label.GetValue())
+					}
+				} else if label.GetName() == "generation" {
+					if label.GetValue() != strconv.FormatInt(generation, 10) {
+						return fmt.Errorf("want generation label with value %d, got %s", generation, label.GetValue())
 					}
 				} else if label.GetName() == "status" {
 					_, ok := timeMap[label.GetValue()]
@@ -274,6 +280,7 @@ func validateUpdateRunMetricsEmitted(registry *prometheus.Registry, updateRunNam
 			}
 		}
 
+		// We compare the timestamp (value of the gauge) of each status and make sure they are in the correct order.
 		prevTime := float64(0)
 		for _, status := range statuses {
 			timeValue, ok := timeMap[string(status)]

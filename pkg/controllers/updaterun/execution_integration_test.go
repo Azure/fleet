@@ -191,7 +191,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -213,7 +213,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(updateRun.Status.StagesStatus[0].StartTime).ShouldNot(BeNil())
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -232,7 +232,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -251,7 +251,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -270,7 +270,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -291,7 +291,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -359,7 +359,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(approvalCreateTime.Before(waitEndTime)).Should(BeTrue())
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -381,7 +381,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(updateRun.Status.StagesStatus[0].StartTime).ShouldNot(BeNil())
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -400,7 +400,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -419,7 +419,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -438,7 +438,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -459,7 +459,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -533,7 +533,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			}, timeout, interval).Should(BeTrue(), "failed to validate the approvalRequest approval accepted")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -566,7 +566,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing, updateRunMetricsStatusCompleted})
 		})
 	})
@@ -587,7 +587,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -609,7 +609,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(updateRun.Status.StagesStatus[0].StartTime).ShouldNot(BeNil())
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -628,7 +628,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -647,7 +647,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -666,7 +666,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -685,7 +685,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -713,7 +713,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 				fmt.Sprintf("waitEndTime %v did not pass waitStartTime %v long enough, want at least %v", waitEndTime, waitStartTime, updateStrategy.Spec.Stages[0].AfterStageTasks[0].WaitTime.Duration))
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -735,7 +735,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(updateRun.Status.StagesStatus[0].StartTime).ShouldNot(BeNil())
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -754,7 +754,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -773,7 +773,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -792,7 +792,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -813,7 +813,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -875,7 +875,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			}, timeout, interval).Should(BeTrue(), "failed to validate the approvalRequest approval accepted")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -906,7 +906,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing, updateRunMetricsStatusCompleted})
 		})
 	})
@@ -927,7 +927,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
 				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
 		})
 
@@ -952,8 +952,8 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 		It("Should emit stuck status metrics after time waiting for the 1st cluster reaches threshold", func() {
 			By("Checking update run stuck metrics is emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing, updateRunMetricsStatusStuck})
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
+				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusStuck})
 		})
 
 		It("Should abort the execution if the binding has unexpected state", func() {
@@ -974,10 +974,8 @@ var _ = Describe("UpdateRun execution tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			// The last trial of reconcile would emit a progressing metric and then fail.
-			// The metrics order is: initializing->progressing->stuck->progressing->stuck->...->progressing->failed.
-			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusStuck, updateRunMetricsStatusProgressing, updateRunMetricsStatusFailed})
+			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
+				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusStuck, updateRunMetricsStatusFailed})
 		})
 	})
 })

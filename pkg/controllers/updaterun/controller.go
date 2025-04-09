@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -39,16 +40,21 @@ import (
 // updateRunMetricsStatus is the status string for update run metrics.
 type updateRunMetricsStatus string
 
+// Metrics emitting sequence examples:
+// 1. succeed: initializing->progressing->completed
+// 2. initialization failed: initializing->failed
+// 3. execution failed: initializing->progressing->failed
+// 4. stuck: initializing->stuck
 const (
-	// updateRunMetricsStatusInitializing represents the update run is initializing in the metrics.
+	// updateRunMetricsStatusInitializing is emitted when the update run starts initially.
 	updateRunMetricsStatusInitializing updateRunMetricsStatus = "initializing"
-	// updateRunMetricsStatusProgressing represents the update run is in progress in the metrics.
+	// updateRunMetricsStatusProgressing is emitted when the update run starts to make progress, e.g. updating a cluster.
 	updateRunMetricsStatusProgressing updateRunMetricsStatus = "progressing"
-	// updateRunMetricsStatusStuck represents the update run is stuck waiting for a cluster to be updated in the metrics.
+	// updateRunMetricsStatusStuck is emitted when the update run is stuck waiting for a cluster to be updated passing a threshold (updateRunStuckThreshold).
 	updateRunMetricsStatusStuck updateRunMetricsStatus = "stuck"
-	// updateRunMetricsStatusCompleted represents the update run is completed in the metrics.
+	// updateRunMetricsStatusCompleted is emitted when the update run is completed.
 	updateRunMetricsStatusCompleted updateRunMetricsStatus = "completed"
-	// updateRunMetricsStatusFailed represents the update run is failed in the metrics.
+	// updateRunMetricsStatusFailed is emitted when the update run is failed.
 	updateRunMetricsStatusFailed updateRunMetricsStatus = "failed"
 )
 
@@ -149,7 +155,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	}
 
 	// Execute the updateRun.
-	emitUpdateRunStatusMetric(&updateRun, updateRunMetricsStatusProgressing)
 	klog.V(2).InfoS("Continue to execute the clusterStagedUpdateRun", "updatingStageIndex", updatingStageIndex, "clusterStagedUpdateRun", runObjRef)
 	finished, waitTime, execErr := r.execute(ctx, &updateRun, updatingStageIndex, toBeUpdatedBindings, toBeDeletedBindings)
 	if errors.Is(execErr, errStagedUpdatedAborted) {
@@ -319,5 +324,13 @@ func handleClusterApprovalRequest(oldObj, newObj client.Object, q workqueue.Type
 
 // emitUpdateRunStatusMetric emits the update run status metric.
 func emitUpdateRunStatusMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun, status updateRunMetricsStatus) {
-	metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, string(status)).SetToCurrentTime()
+	// Progressing and stuck are mutually exclusive, we try to keep only one to reduce the number of metrics emitted.
+	// Emitting a progressing metric deletes the stuck metric and vice versa.
+	generation := strconv.FormatInt(updateRun.Generation, 10)
+	if status == updateRunMetricsStatusProgressing {
+		metrics.FleetUpdateRunStatusLastTimestampSeconds.Delete(prometheus.Labels{"name": updateRun.Name, "generation": generation, "status": string(updateRunMetricsStatusStuck)})
+	} else if status == updateRunMetricsStatusStuck {
+		metrics.FleetUpdateRunStatusLastTimestampSeconds.Delete(prometheus.Labels{"name": updateRun.Name, "generation": generation, "status": string(updateRunMetricsStatusProgressing)})
+	}
+	metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, generation, string(status)).SetToCurrentTime()
 }
