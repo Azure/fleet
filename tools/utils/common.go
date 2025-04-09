@@ -8,11 +8,11 @@ package utils
 import (
 	"os"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 )
 
 var (
