@@ -1200,7 +1200,7 @@ func checkPlacementStatusMetric(registry *prometheus.Registry, crp *placementv1b
 	// Check the number of emitted metrics
 	Expect(len(placementStatusMetrics)).Should(Equal(len(statuses)))
 
-	var expectedPlacementStatusMetrics []*prometheusclientmodel.Metric
+	expectedPlacementStatusMetrics := make([]*prometheusclientmodel.Metric, 0, len(statuses))
 	for condType, status := range statuses {
 		metric := &prometheusclientmodel.Metric{
 			Label: []*prometheusclientmodel.LabelPair{
@@ -1229,7 +1229,7 @@ func checkPlacementStatusMetric(registry *prometheus.Registry, crp *placementv1b
 	// Use cmp.Diff to compare the slices of metrics
 	var previousTime float64
 	previousTime = 0
-	for i, _ := range placementStatusMetrics {
+	for i := range placementStatusMetrics {
 		diff := cmp.Diff(placementStatusMetrics[i].Label, expectedPlacementStatusMetrics[i].Label, cmpopts.IgnoreUnexported(prometheusclientmodel.LabelPair{}))
 		Expect(diff).Should(BeEmpty(), fmt.Sprintf("Metric mismatch: %s", diff))
 		Expect(placementStatusMetrics[i].GetGauge().GetValue()).ShouldNot(Equal(previousTime))
