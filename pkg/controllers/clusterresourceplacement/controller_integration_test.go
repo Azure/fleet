@@ -6,6 +6,7 @@ package clusterresourceplacement
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"time"
 
@@ -402,13 +403,9 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
 
 			By("Ensure placement status metric was emitted")
-			status := map[string][]string{
-				string(placementv1beta1.ClusterResourcePlacementScheduledConditionType): {
-					string(corev1.ConditionUnknown),
-				},
-				string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType): {
-					"nil",
-				},
+			status := map[string]string{
+				string(placementv1beta1.ClusterResourcePlacementScheduledConditionType):      string(corev1.ConditionUnknown),
+				string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType): "nil",
 			}
 			checkPlacementStatusMetric(customRegistry, crp, status)
 		})
@@ -461,11 +458,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
 
 			By("Ensure placement status metric was emitted")
-			status := map[string][]string{
-				string(placementv1beta1.ClusterResourcePlacementScheduledConditionType): {
-					string(corev1.ConditionUnknown),
-					string(corev1.ConditionFalse),
-				},
+			status := map[string]string{
+				string(placementv1beta1.ClusterResourcePlacementScheduledConditionType): string(corev1.ConditionFalse),
 			}
 			checkPlacementStatusMetric(customRegistry, crp, status)
 		})
@@ -568,13 +562,9 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
 
 			By("Ensure placement status metric was emitted")
-			status := map[string][]string{
-				string(placementv1beta1.ClusterResourcePlacementScheduledConditionType): {
-					string(corev1.ConditionUnknown),
-				},
-				string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType): {
-					string(corev1.ConditionUnknown),
-				},
+			status := map[string]string{
+				string(placementv1beta1.ClusterResourcePlacementScheduledConditionType):      string(corev1.ConditionUnknown),
+				string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType): string(corev1.ConditionUnknown),
 			}
 			checkPlacementStatusMetric(customRegistry, crp, status)
 
@@ -677,19 +667,10 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
 
 			By("Ensure placement status metric was emitted")
-			status = map[string][]string{
-				string(placementv1beta1.ClusterResourcePlacementScheduledConditionType): {
-					string(corev1.ConditionUnknown),
-				},
-				string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType): {
-					string(corev1.ConditionUnknown),
-				},
-				string(placementv1beta1.ClusterResourcePlacementOverriddenConditionType): {
-					string(corev1.ConditionUnknown),
-				},
-				string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType): {
-					string(corev1.ConditionUnknown),
-				},
+			status = map[string]string{
+				string(placementv1beta1.ClusterResourcePlacementScheduledConditionType):        string(corev1.ConditionUnknown),
+				string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType):   string(corev1.ConditionUnknown),
+				string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType): string(corev1.ConditionUnknown),
 			}
 			checkPlacementStatusMetric(customRegistry, crp, status)
 		})
@@ -865,25 +846,11 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			checkPlacementCompleteMetric(customRegistry, testCRPName, true, 2)
 
 			By("Ensure placement status metric was emitted")
-			status := map[string][]string{
-				string(placementv1beta1.ClusterResourcePlacementScheduledConditionType): {
-					string(corev1.ConditionUnknown),
-				},
-				string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType): {
-					string(corev1.ConditionUnknown),
-				},
-				string(placementv1beta1.ClusterResourcePlacementOverriddenConditionType): {
-					string(corev1.ConditionUnknown),
-				},
-				string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType): {
-					string(corev1.ConditionUnknown),
-				},
-				string(placementv1beta1.ClusterResourcePlacementAppliedConditionType): {
-					string(corev1.ConditionUnknown),
-				},
-				string(placementv1beta1.ClusterResourcePlacementAvailableConditionType): {
-					string(corev1.ConditionUnknown),
-				},
+			status := map[string]string{
+				string(placementv1beta1.ClusterResourcePlacementScheduledConditionType):        string(corev1.ConditionUnknown),
+				string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType):   string(corev1.ConditionUnknown),
+				string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType): string(corev1.ConditionUnknown),
+				string(placementv1beta1.ClusterResourcePlacementAppliedConditionType):          string(corev1.ConditionUnknown),
 			}
 			checkPlacementStatusMetric(customRegistry, crp, status)
 		})
@@ -1180,22 +1147,10 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			checkPlacementCompleteMetric(customRegistry, testCRPName, true, 2)
 
 			By("Ensure placement status metric was emitted")
-			status := map[string][]string{
-				string(placementv1beta1.ClusterResourcePlacementScheduledConditionType): {
-					string(corev1.ConditionUnknown),
-				},
-				string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType): {
-					string(corev1.ConditionUnknown),
-				},
-				string(placementv1beta1.ClusterResourcePlacementOverriddenConditionType): {
-					string(corev1.ConditionUnknown),
-				},
-				string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType): {
-					string(corev1.ConditionUnknown),
-				},
-				string(placementv1beta1.ClusterResourcePlacementDiffReportedConditionType): {
-					string(corev1.ConditionUnknown),
-				},
+			status := map[string]string{
+				string(placementv1beta1.ClusterResourcePlacementScheduledConditionType):      string(corev1.ConditionUnknown),
+				string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType): string(corev1.ConditionUnknown),
+				string(placementv1beta1.ClusterResourcePlacementDiffReportedConditionType):   string(corev1.ConditionUnknown),
 			}
 			checkPlacementStatusMetric(customRegistry, crp, status)
 		})
@@ -1229,7 +1184,7 @@ func checkPlacementCompleteMetric(registry *prometheus.Registry, crpName string,
 	}
 }
 
-func checkPlacementStatusMetric(registry *prometheus.Registry, crp *placementv1beta1.ClusterResourcePlacement, statuses map[string][]string) {
+func checkPlacementStatusMetric(registry *prometheus.Registry, crp *placementv1beta1.ClusterResourcePlacement, statuses map[string]string) {
 	metricFamilies, err := registry.Gather()
 	Expect(err).Should(Succeed())
 	var placementStatusMetrics []*prometheusclientmodel.Metric
@@ -1238,41 +1193,65 @@ func checkPlacementStatusMetric(registry *prometheus.Registry, crp *placementv1b
 			placementStatusMetrics = mf.GetMetric()
 		}
 	}
+
+	// Sorting metrics based on the "condition_type" label
+	sortMetricsByConditionType(placementStatusMetrics)
 	By(fmt.Sprint("placementStatusMetrics: %w ", placementStatusMetrics))
-	// Iterate over the labels and compare with expected values from statuses map
-	for _, emittedMetric := range placementStatusMetrics {
-		metricLabels := emittedMetric.GetLabel()
+	// Check the number of emitted metrics
+	Expect(len(placementStatusMetrics)).Should(Equal(len(statuses)))
 
-		// Initialize variables for each metric iteration
-		var condType string
-		var expectedStatuses []string
-		var statusExists bool
-
-		// Iterate over the labels and compare with expected values from conditionType
-		for _, label := range metricLabels {
-			switch label.GetName() {
-			case "generation":
-				Expect(label.GetValue()).Should(Equal(strconv.FormatInt(crp.Generation, 10)))
-			case "name":
-				Expect(label.GetValue()).Should(Equal(crp.Name))
-			case "conditionType":
-				condType = label.GetValue()
-				// Retrieve possible statuses from the map directly
-				expectedStatuses, statusExists = statuses[condType]
-				// Ensure that the conditionType exists in the map
-				Expect(statusExists).Should(BeTrue(), fmt.Sprintf("status for conditionType '%s' is missing in the conditionTypeStatuses map", condType))
-			case "status":
-				// Compare the status label with the expected statuses for this conditionType
-				statusFound := false
-				for _, expectedStatus := range expectedStatuses {
-					if label.GetValue() == expectedStatus {
-						statusFound = true
-						break
-					}
-				}
-				// Ensure the status is one of the expected values
-				Expect(statusFound).Should(BeTrue(), fmt.Sprintf("status '%s' for conditionType '%s' does not match any expected value", label.GetValue(), condType))
-			}
+	var expectedPlacementStatusMetrics []*prometheusclientmodel.Metric
+	for condType, status := range statuses {
+		metric := &prometheusclientmodel.Metric{
+			Label: []*prometheusclientmodel.LabelPair{
+				{
+					Name:  ptr.To("conditionType"),
+					Value: ptr.To(condType),
+				},
+				{
+					Name:  ptr.To("generation"),
+					Value: ptr.To(strconv.FormatInt(crp.Generation, 10)),
+				},
+				{
+					Name:  ptr.To("name"),
+					Value: ptr.To(crp.Name),
+				},
+				{
+					Name:  ptr.To("status"),
+					Value: ptr.To(status),
+				},
+			},
 		}
+		expectedPlacementStatusMetrics = append(expectedPlacementStatusMetrics, metric)
 	}
+	sortMetricsByConditionType(expectedPlacementStatusMetrics)
+	fmt.Println("\nExpectedMetrics:", expectedPlacementStatusMetrics)
+	// Use cmp.Diff to compare the slices of metrics
+	var previousTime float64
+	previousTime = 0
+	for i, _ := range placementStatusMetrics {
+		diff := cmp.Diff(placementStatusMetrics[i].Label, expectedPlacementStatusMetrics[i].Label, cmpopts.IgnoreUnexported(prometheusclientmodel.LabelPair{}))
+		Expect(diff).Should(BeEmpty(), fmt.Sprintf("Metric mismatch: %s", diff))
+		Expect(placementStatusMetrics[i].GetGauge().GetValue()).ShouldNot(Equal(previousTime))
+		Expect(placementStatusMetrics[i].GetGauge().GetValue() > previousTime).Should(BeTrue())
+		previousTime = placementStatusMetrics[i].GetGauge().GetValue()
+	}
+}
+
+func sortMetricsByConditionType(metrics []*prometheusclientmodel.Metric) {
+	var conditionTypeOrder = map[string]int{
+		string(placementv1beta1.ClusterResourcePlacementScheduledConditionType):        0,
+		string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType):   1,
+		string(placementv1beta1.ClusterResourcePlacementOverriddenConditionType):       2,
+		string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType): 3,
+		string(placementv1beta1.ClusterResourcePlacementAppliedConditionType):          4,
+		string(placementv1beta1.ClusterResourcePlacementAvailableConditionType):        5,
+		string(placementv1beta1.ClusterResourcePlacementDiffReportedConditionType):     6,
+	}
+	sort.Slice(metrics, func(i, j int) bool {
+		// Get condition type values using the condition label
+		conditionTypeI := conditionTypeOrder[metrics[i].GetLabel()[0].GetValue()]
+		conditionTypeJ := conditionTypeOrder[metrics[j].GetLabel()[0].GetValue()]
+		return conditionTypeI < conditionTypeJ
+	})
 }
