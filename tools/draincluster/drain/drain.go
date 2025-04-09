@@ -21,7 +21,6 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	evictionutils "go.goms.io/fleet/pkg/utils/eviction"
 	toolsutils "go.goms.io/fleet/tools/utils"
@@ -34,9 +33,8 @@ const (
 )
 
 type Helper struct {
-	HubClient                            client.Client
-	ClusterName                          string
-	ClusterResourcePlacementResourcesMap map[string][]placementv1beta1.ResourceIdentifier
+	HubClient   client.Client
+	ClusterName string
 }
 
 func (h *Helper) Drain(ctx context.Context) (bool, error) {
@@ -45,18 +43,19 @@ func (h *Helper) Drain(ctx context.Context) (bool, error) {
 	}
 	log.Printf("Successfully cordoned member cluster %s by adding cordon taint", h.ClusterName)
 
-	if err := h.fetchClusterResourcePlacementToEvict(ctx); err != nil {
+	crpNames, err := h.fetchClusterResourcePlacementNamesToEvict(ctx)
+	if err != nil {
 		return false, err
 	}
 
-	if len(h.ClusterResourcePlacementResourcesMap) == 0 {
+	if len(crpNames) == 0 {
 		log.Printf("There are currently no resources propagated to %s from fleet using ClusterResourcePlacement resources", h.ClusterName)
 		return true, nil
 	}
 
 	isDrainSuccessful := true
 	// create eviction objects for all <crpName, targetCluster>.
-	for crpName := range h.ClusterResourcePlacementResourcesMap {
+	for _, crpName := range crpNames {
 		evictionName, err := generateDrainEvictionName(crpName, h.ClusterName)
 		if err != nil {
 			return false, err
@@ -110,9 +109,13 @@ func (h *Helper) Drain(ctx context.Context) (bool, error) {
 			continue
 		}
 		log.Printf("eviction %s was executed successfully for CRP %s", evictionName, crpName)
-		// log each resource evicted by CRP.
-		for i := range h.ClusterResourcePlacementResourcesMap[crpName] {
-			resourceIdentifier := h.ClusterResourcePlacementResourcesMap[crpName][i]
+		// log each cluster scoped resource evicted for CRP.
+		clusterScopedResourceIdentifiers, err := h.collectClusterScopedResourcesSelectedByCRP(ctx, crpName)
+		if err != nil {
+			log.Printf("failed to collect cluster scoped resources selected by CRP %s: %v", crpName, err)
+			continue
+		}
+		for _, resourceIdentifier := range clusterScopedResourceIdentifiers {
 			log.Printf("evicted resource %s propagated by CRP %s", generateResourceIdentifierKey(resourceIdentifier), crpName)
 		}
 	}
@@ -142,12 +145,13 @@ func (h *Helper) cordon(ctx context.Context) error {
 	})
 }
 
-func (h *Helper) fetchClusterResourcePlacementToEvict(ctx context.Context) error {
+func (h *Helper) fetchClusterResourcePlacementNamesToEvict(ctx context.Context) ([]string, error) {
 	var crbList placementv1beta1.ClusterResourceBindingList
 	if err := h.HubClient.List(ctx, &crbList); err != nil {
-		return fmt.Errorf("failed to list cluster resource bindings: %w", err)
+		return []string{}, fmt.Errorf("failed to list cluster resource bindings: %w", err)
 	}
 
+	var crpNames []string
 	// find all unique CRP names for which eviction needs to occur.
 	for i := range crbList.Items {
 		crb := crbList.Items[i]
@@ -173,59 +177,36 @@ func (h *Helper) fetchClusterResourcePlacementToEvict(ctx context.Context) error
 					ignoreBinding = true
 					return true, nil
 				}
-				if !evictionutils.IsPlacementPresent(&binding) {
-					// need to wait until placement is present on member cluster.
-					return false, nil
-				}
 				return true, nil
 			})
 
 			if err != nil {
-				return fmt.Errorf("failed to wait for placement to be present on member cluster: %w", err)
+				return []string{}, fmt.Errorf("failed to wait for placement to be present on member cluster: %w", err)
 			} else if !ignoreBinding {
-				// get all successfully applied resources for the CRP.
-				crpName := crb.GetLabels()[placementv1beta1.CRPTrackingLabel]
-				resourcesPropagated, err := h.collectResourcesPropagatedByCRP(ctx, crpName)
-				if err != nil {
-					return fmt.Errorf("failed to get resources propagated by CRP %s: %w", crpName, err)
+				crpName, ok := crb.GetLabels()[placementv1beta1.CRPTrackingLabel]
+				if !ok {
+					return []string{}, fmt.Errorf("failed to get CRP name from binding %s", crb.Name)
 				}
-				h.ClusterResourcePlacementResourcesMap[crpName] = resourcesPropagated
+				crpNames = append(crpNames, crpName)
 			}
 		}
 	}
-	return nil
+	return crpNames, nil
 }
 
-func (h *Helper) collectResourcesPropagatedByCRP(ctx context.Context, crpName string) ([]placementv1beta1.ResourceIdentifier, error) {
-	var workList placementv1beta1.WorkList
-	if err := h.HubClient.List(ctx, &workList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName}, client.InNamespace(fmt.Sprintf(utils.NamespaceNameFormat, h.ClusterName))); err != nil {
-		return nil, fmt.Errorf("failed to get work %s: %w", crpName, err)
+func (h *Helper) collectClusterScopedResourcesSelectedByCRP(ctx context.Context, crpName string) ([]placementv1beta1.ResourceIdentifier, error) {
+	var crp placementv1beta1.ClusterResourcePlacement
+	if err := h.HubClient.Get(ctx, types.NamespacedName{Name: crpName}, &crp); err != nil {
+		return nil, fmt.Errorf("failed to get ClusterResourcePlacement %s: %w", crpName, err)
 	}
 
 	var resourcesPropagated []placementv1beta1.ResourceIdentifier
-	for i := range workList.Items {
-		work := workList.Items[i]
-		manifestConditions := work.Status.ManifestConditions
-		for j := range manifestConditions {
-			manifestCondition := manifestConditions[j]
-			// skip namespace scoped resources.
-			if len(manifestCondition.Identifier.Namespace) != 0 {
-				continue
-			}
-			for k := range manifestCondition.Conditions {
-				c := manifestCondition.Conditions[k]
-				if c.Type == placementv1beta1.WorkConditionTypeApplied && c.Status == metav1.ConditionTrue {
-					propagatedResource := placementv1beta1.ResourceIdentifier{
-						Group:     manifestCondition.Identifier.Group,
-						Version:   manifestCondition.Identifier.Version,
-						Kind:      manifestCondition.Identifier.Kind,
-						Name:      manifestCondition.Identifier.Name,
-						Namespace: manifestCondition.Identifier.Namespace,
-					}
-					resourcesPropagated = append(resourcesPropagated, propagatedResource)
-				}
-			}
+	for _, selectedResource := range crp.Status.SelectedResources {
+		// skip namespaced resources.
+		if len(selectedResource.Namespace) != 0 {
+			continue
 		}
+		resourcesPropagated = append(resourcesPropagated, selectedResource)
 	}
 	return resourcesPropagated, nil
 }

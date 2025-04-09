@@ -47,9 +47,8 @@ func main() {
 	}
 
 	drainClusterHelper := drain.Helper{
-		HubClient:                            hubClient,
-		ClusterName:                          *clusterName,
-		ClusterResourcePlacementResourcesMap: make(map[string][]placementv1beta1.ResourceIdentifier),
+		HubClient:   hubClient,
+		ClusterName: *clusterName,
 	}
 
 	isDrainSuccessful, err := drainClusterHelper.Drain(ctx)
@@ -64,9 +63,6 @@ func main() {
 	}
 
 	log.Printf("retrying drain to ensure all resources propagated from hub cluster are evicted")
-
-	// reset ClusterResourcePlacementResourcesMap for retry.
-	drainClusterHelper.ClusterResourcePlacementResourcesMap = map[string][]placementv1beta1.ResourceIdentifier{}
 	isDrainRetrySuccessful, err := drainClusterHelper.Drain(ctx)
 	if err != nil {
 		log.Fatalf("failed to drain cluster on retry %s: %v", drainClusterHelper.ClusterName, err)
