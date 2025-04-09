@@ -155,7 +155,7 @@ func (h *Helper) fetchClusterResourcePlacementNamesToEvict(ctx context.Context) 
 	// find all unique CRP names for which eviction needs to occur.
 	for i := range crbList.Items {
 		crb := crbList.Items[i]
-		if crb.Spec.TargetCluster == h.ClusterName {
+		if crb.Spec.TargetCluster == h.ClusterName && crb.DeletionTimestamp == nil {
 			crpName, ok := crb.GetLabels()[placementv1beta1.CRPTrackingLabel]
 			if !ok {
 				return []string{}, fmt.Errorf("failed to get CRP name from binding %s", crb.Name)
