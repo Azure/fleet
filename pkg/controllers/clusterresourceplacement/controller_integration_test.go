@@ -1634,7 +1634,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Label: []*prometheusclientmodel.LabelPair{
 						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(crp.Generation, 10))},
-						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType))},
+						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementDiffReportedConditionType))},
 						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
 					},
 					Gauge: &prometheusclientmodel.Gauge{
