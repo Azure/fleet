@@ -270,11 +270,6 @@ func IsConditionStatusFalse(cond *metav1.Condition, latestGeneration int64) bool
 	return cond != nil && cond.Status == metav1.ConditionFalse && cond.ObservedGeneration == latestGeneration
 }
 
-// IsConditionStatusUnknown returns true if the condition is unknown and the observed generation matches the latest generation.
-func IsConditionStatusUnknown(cond *metav1.Condition, latestGeneration int64) bool {
-	return cond != nil && cond.Status == metav1.ConditionUnknown && cond.ObservedGeneration == latestGeneration
-}
-
 // ResourceCondition is all the resource related condition, for example, scheduled condition is not included.
 type ResourceCondition int
 

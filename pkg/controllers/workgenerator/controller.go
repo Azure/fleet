@@ -1002,6 +1002,7 @@ func setAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *fl
 	// an apply strategy change) will not leak into the current apply operations.
 	areAllWorksApplyOpsCompleted := true
 	areAllWorksApplyOpsSuccessful := true
+	areAllWorksApplyOpsFailed := true
 
 	var firstWorkWithIncompleteApplyOp *fleetv1beta1.Work
 	var firstWorkWithFailedApplyOp *fleetv1beta1.Work
@@ -1011,6 +1012,7 @@ func setAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *fl
 		switch {
 		case condition.IsConditionStatusTrue(applyCond, w.GetGeneration()):
 			// The Work object has completed the apply op successfully.
+			areAllWorksApplyOpsFailed = false
 		case condition.IsConditionStatusFalse(applyCond, w.GetGeneration()):
 			// An error has occurred during the apply op.
 			areAllWorksApplyOpsSuccessful = false
@@ -1039,13 +1041,28 @@ func setAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *fl
 		})
 		return workConditionSummarizedStatusIncomplete
 	case !areAllWorksApplyOpsSuccessful:
+		var applyFailedMessage string
+		if firstWorkWithFailedApplyOp != nil {
+			applyFailedMessage = fmt.Sprintf("Work object %s has failed to apply", firstWorkWithFailedApplyOp.Name)
+			// check to see if no manifest were applied for work object.
+			// This is a special case where all the work objects have failed to apply
+			// because no resources were selected by CRP.
+			if areAllWorksApplyOpsFailed {
+				applyCond := meta.FindStatusCondition(firstWorkWithFailedApplyOp.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
+				if condition.IsConditionStatusFalse(applyCond, firstWorkWithFailedApplyOp.GetGeneration()) {
+					if applyCond.Reason == workapplier.WorkNoManifestAppliedReason {
+						applyFailedMessage = "All works have failed to apply because no resources were selected"
+					}
+				}
+			}
+		}
 		// All Work objects have completed the apply op, but at least one of them has failed.
 		klog.V(2).InfoS("Some works have failed to apply", "binding", klog.KObj(binding), "firstWorkWithFailedApplyOp", klog.KObj(firstWorkWithFailedApplyOp))
 		binding.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ResourceBindingApplied),
 			Reason:             condition.WorkNotAppliedReason,
-			Message:            fmt.Sprintf("Work object %s has failed to apply", firstWorkWithFailedApplyOp.Name),
+			Message:            applyFailedMessage,
 			ObservedGeneration: binding.GetGeneration(),
 		})
 		return workConditionSummarizedStatusFalse
