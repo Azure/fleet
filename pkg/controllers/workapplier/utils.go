@@ -42,6 +42,11 @@ func isManifestObjectApplied(appliedResTyp manifestProcessingAppliedResultType) 
 
 // isWorkObjectAvailable checks if a Work object is available.
 func isWorkObjectAvailable(work *fleetv1beta1.Work) bool {
+	appliedCondition := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
+	if condition.IsConditionStatusFalse(appliedCondition, work.Generation) {
+		// If no manifests have been applied, the Work object is considered available.
+		return appliedCondition.Reason == WorkNoManifestAppliedReason
+	}
 	availableCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 	return condition.IsConditionStatusTrue(availableCond, work.Generation)
 }

@@ -433,14 +433,25 @@ func setWorkAppliedCondition(
 		// ReportDiff mode is on; no apply op has been performed, and consequently
 		// Fleet will not update the Applied condition.
 	case appliedManifestCount == manifestCount:
-		// All manifests have been successfully applied.
-		appliedCond = &metav1.Condition{
-			Type:   fleetv1beta1.WorkConditionTypeApplied,
-			Status: metav1.ConditionTrue,
-			// Here Fleet reuses the same reason for individual manifests.
-			Reason:             WorkAllManifestsAppliedReason,
-			Message:            allManifestsAppliedMessage,
-			ObservedGeneration: work.Generation,
+		if manifestCount > 0 {
+			// All manifests have been successfully applied.
+			appliedCond = &metav1.Condition{
+				Type:   fleetv1beta1.WorkConditionTypeApplied,
+				Status: metav1.ConditionTrue,
+				// Here Fleet reuses the same reason for individual manifests.
+				Reason:             WorkAllManifestsAppliedReason,
+				Message:            allManifestsAppliedMessage,
+				ObservedGeneration: work.Generation,
+			}
+		} else if manifestCount == 0 {
+			// No manifests have been applied.
+			appliedCond = &metav1.Condition{
+				Type:               fleetv1beta1.WorkConditionTypeApplied,
+				Status:             metav1.ConditionUnknown,
+				Reason:             WorkNoManifestAppliedReason,
+				Message:            noManifestAppliedMessage,
+				ObservedGeneration: work.Generation,
+			}
 		}
 	default:
 		// Not all manifests have been successfully applied.
