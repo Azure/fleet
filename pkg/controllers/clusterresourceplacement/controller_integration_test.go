@@ -1641,17 +1641,6 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
 					},
 				},
-				{
-					Label: []*prometheusclientmodel.LabelPair{
-						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
-						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(crp.Generation, 10))},
-						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementDiffReportedConditionType))},
-						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-					},
-					Gauge: &prometheusclientmodel.Gauge{
-						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
-					},
-				},
 			}
 			checkPlacementStatusMetric(customRegistry, wantMetrics)
 		})
