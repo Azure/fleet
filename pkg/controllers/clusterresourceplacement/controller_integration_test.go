@@ -6,7 +6,6 @@ package clusterresourceplacement
 
 import (
 	"fmt"
-	"sort"
 	"strconv"
 	"time"
 
@@ -403,11 +402,31 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
 
 			By("Ensure placement status metric was emitted")
-			status := map[string]string{
-				string(placementv1beta1.ClusterResourcePlacementScheduledConditionType):      string(corev1.ConditionUnknown),
-				string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType): "nil",
+			wantMetrics := []*prometheusclientmodel.Metric{
+				{
+					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
+						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(crp.Generation, 10))},
+						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
+						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
+					},
+					Gauge: &prometheusclientmodel.Gauge{
+						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+					},
+				},
+				{
+					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
+						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(crp.Generation, 10))},
+						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType))},
+						{Name: ptr.To("status"), Value: ptr.To("nil")},
+					},
+					Gauge: &prometheusclientmodel.Gauge{
+						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+					},
+				},
 			}
-			checkPlacementStatusMetric(customRegistry, crp, status)
+			checkPlacementStatusMetric(customRegistry, crp, wantMetrics)
 		})
 
 		It("Clusters are not selected", func() {
@@ -1184,7 +1203,7 @@ func checkPlacementCompleteMetric(registry *prometheus.Registry, crpName string,
 	}
 }
 
-func checkPlacementStatusMetric(registry *prometheus.Registry, crp *placementv1beta1.ClusterResourcePlacement, statuses map[string]string) {
+func checkPlacementStatusMetric(registry *prometheus.Registry, crp *placementv1beta1.ClusterResourcePlacement, want []*prometheusclientmodel.Metric) {
 	metricFamilies, err := registry.Gather()
 	Expect(err).Should(Succeed())
 	var placementStatusMetrics []*prometheusclientmodel.Metric
@@ -1193,65 +1212,17 @@ func checkPlacementStatusMetric(registry *prometheus.Registry, crp *placementv1b
 			placementStatusMetrics = mf.GetMetric()
 		}
 	}
-
-	// Sorting metrics based on the "condition_type" label
-	sortMetricsByConditionType(placementStatusMetrics)
-	By(fmt.Sprint("placementStatusMetrics: %w ", placementStatusMetrics))
-	// Check the number of emitted metrics
-	Expect(len(placementStatusMetrics)).Should(Equal(len(statuses)))
-
-	expectedPlacementStatusMetrics := make([]*prometheusclientmodel.Metric, 0, len(statuses))
-	for condType, status := range statuses {
-		metric := &prometheusclientmodel.Metric{
-			Label: []*prometheusclientmodel.LabelPair{
-				{
-					Name:  ptr.To("conditionType"),
-					Value: ptr.To(condType),
-				},
-				{
-					Name:  ptr.To("generation"),
-					Value: ptr.To(strconv.FormatInt(crp.Generation, 10)),
-				},
-				{
-					Name:  ptr.To("name"),
-					Value: ptr.To(crp.Name),
-				},
-				{
-					Name:  ptr.To("status"),
-					Value: ptr.To(status),
-				},
-			},
-		}
-		expectedPlacementStatusMetrics = append(expectedPlacementStatusMetrics, metric)
+	metricsCmpOptions := []cmp.Option{
+		cmpopts.SortSlices(func(a, b *prometheusclientmodel.Metric) bool {
+			return a.GetGauge().GetValue() < b.GetGauge().GetValue() // sort by time
+		}),
+		cmpopts.SortSlices(func(a, b *prometheusclientmodel.LabelPair) bool {
+			return *a.Name < *b.Name // Sort by label name
+		}),
+		cmp.Comparer(func(a, b *prometheusclientmodel.Gauge) bool {
+			return (a.GetValue() > 0) == (b.GetValue() > 0)
+		}),
 	}
-	sortMetricsByConditionType(expectedPlacementStatusMetrics)
-	fmt.Println("\nExpectedMetrics:", expectedPlacementStatusMetrics)
-	// Use cmp.Diff to compare the slices of metrics
-	var previousTime float64
-	previousTime = 0
-	for i := range placementStatusMetrics {
-		diff := cmp.Diff(placementStatusMetrics[i].Label, expectedPlacementStatusMetrics[i].Label, cmpopts.IgnoreUnexported(prometheusclientmodel.LabelPair{}))
-		Expect(diff).Should(BeEmpty(), fmt.Sprintf("Metric mismatch: %s", diff))
-		Expect(placementStatusMetrics[i].GetGauge().GetValue()).ShouldNot(Equal(previousTime))
-		Expect(placementStatusMetrics[i].GetGauge().GetValue() > previousTime).Should(BeTrue())
-		previousTime = placementStatusMetrics[i].GetGauge().GetValue()
-	}
-}
 
-func sortMetricsByConditionType(metrics []*prometheusclientmodel.Metric) {
-	var conditionTypeOrder = map[string]int{
-		string(placementv1beta1.ClusterResourcePlacementScheduledConditionType):        0,
-		string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType):   1,
-		string(placementv1beta1.ClusterResourcePlacementOverriddenConditionType):       2,
-		string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType): 3,
-		string(placementv1beta1.ClusterResourcePlacementAppliedConditionType):          4,
-		string(placementv1beta1.ClusterResourcePlacementAvailableConditionType):        5,
-		string(placementv1beta1.ClusterResourcePlacementDiffReportedConditionType):     6,
-	}
-	sort.Slice(metrics, func(i, j int) bool {
-		// Get condition type values using the condition label
-		conditionTypeI := conditionTypeOrder[metrics[i].GetLabel()[0].GetValue()]
-		conditionTypeJ := conditionTypeOrder[metrics[j].GetLabel()[0].GetValue()]
-		return conditionTypeI < conditionTypeJ
-	})
+	Expect(cmp.Diff(placementStatusMetrics, want, metricsCmpOptions...)).Should(BeEmpty(), "Placement status metrics do not match diff (-got, +want):")
 }
