@@ -62,6 +62,7 @@ func main() {
 		log.Printf("drain was not successful for cluster %s", *clusterName)
 	}
 
+	// TODO (arvindth): add a flag to specify timeout for retry to keep retrying.
 	log.Printf("retrying drain to ensure all resources propagated from hub cluster are evicted")
 	isDrainRetrySuccessful, err := drainClusterHelper.Drain(ctx)
 	if err != nil {
@@ -72,4 +73,6 @@ func main() {
 	} else {
 		log.Printf("drain retry was not successful for cluster %s", *clusterName)
 	}
+
+	log.Printf("reminder: uncordon the cluster %s to remove cordon taint if needed", *clusterName)
 }

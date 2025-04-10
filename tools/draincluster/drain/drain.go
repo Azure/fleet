@@ -43,19 +43,19 @@ func (h *Helper) Drain(ctx context.Context) (bool, error) {
 	}
 	log.Printf("Successfully cordoned member cluster %s by adding cordon taint", h.ClusterName)
 
-	crpNames, err := h.fetchClusterResourcePlacementNamesToEvict(ctx)
+	crpNameMap, err := h.fetchClusterResourcePlacementNamesToEvict(ctx)
 	if err != nil {
 		return false, err
 	}
 
-	if len(crpNames) == 0 {
+	if len(crpNameMap) == 0 {
 		log.Printf("There are currently no resources propagated to %s from fleet using ClusterResourcePlacement resources", h.ClusterName)
 		return true, nil
 	}
 
 	isDrainSuccessful := true
 	// create eviction objects for all <crpName, targetCluster>.
-	for _, crpName := range crpNames {
+	for crpName := range crpNameMap {
 		evictionName, err := generateDrainEvictionName(crpName, h.ClusterName)
 		if err != nil {
 			return false, err
@@ -93,12 +93,14 @@ func (h *Helper) Drain(ctx context.Context) (bool, error) {
 			return false, fmt.Errorf("failed to wait for evictions to reach terminal state: %w", err)
 		}
 
+		// TODO: add safeguards to check if eviction conditions are set to unknown.
 		validCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeValid))
 		if validCondition != nil && validCondition.Status == metav1.ConditionFalse {
 			// check to see if CRP is missing or CRP is being deleted or CRB is missing.
 			if validCondition.Reason == condition.EvictionInvalidMissingCRPMessage ||
 				validCondition.Reason == condition.EvictionInvalidDeletingCRPMessage ||
 				validCondition.Reason == condition.EvictionInvalidMissingCRBMessage {
+				log.Printf("eviction %s is invalid with reason %s for CRP %s, but drain will succeed", evictionName, validCondition.Reason, crpName)
 				continue
 			}
 		}
@@ -145,10 +147,10 @@ func (h *Helper) cordon(ctx context.Context) error {
 	})
 }
 
-func (h *Helper) fetchClusterResourcePlacementNamesToEvict(ctx context.Context) ([]string, error) {
+func (h *Helper) fetchClusterResourcePlacementNamesToEvict(ctx context.Context) (map[string]bool, error) {
 	var crbList placementv1beta1.ClusterResourceBindingList
 	if err := h.HubClient.List(ctx, &crbList); err != nil {
-		return []string{}, fmt.Errorf("failed to list cluster resource bindings: %w", err)
+		return map[string]bool{}, fmt.Errorf("failed to list cluster resource bindings: %w", err)
 	}
 
 	crpNameMap := make(map[string]bool)
@@ -158,22 +160,13 @@ func (h *Helper) fetchClusterResourcePlacementNamesToEvict(ctx context.Context) 
 		if crb.Spec.TargetCluster == h.ClusterName && crb.DeletionTimestamp == nil {
 			crpName, ok := crb.GetLabels()[placementv1beta1.CRPTrackingLabel]
 			if !ok {
-				return []string{}, fmt.Errorf("failed to get CRP name from binding %s", crb.Name)
+				return map[string]bool{}, fmt.Errorf("failed to get CRP name from binding %s", crb.Name)
 			}
-			if !crpNameMap[crpName] {
-				crpNameMap[crpName] = true
-			}
+			crpNameMap[crpName] = true
 		}
 	}
 
-	crpNames := make([]string, len(crpNameMap))
-	i := 0
-	for crpName := range crpNameMap {
-		crpNames[i] = crpName
-		i++
-	}
-
-	return crpNames, nil
+	return crpNameMap, nil
 }
 
 func (h *Helper) collectClusterScopedResourcesSelectedByCRP(ctx context.Context, crpName string) ([]placementv1beta1.ResourceIdentifier, error) {
