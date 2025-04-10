@@ -198,6 +198,9 @@ func generateResourceIdentifierKey(r placementv1beta1.ResourceIdentifier) string
 	if len(r.Group) == 0 && len(r.Namespace) == 0 {
 		return fmt.Sprintf(resourceIdentifierKeyFormat, "''", r.Version, r.Kind, "''", r.Name)
 	}
+	if len(r.Group) == 0 {
+		return fmt.Sprintf(resourceIdentifierKeyFormat, "''", r.Version, r.Kind, r.Namespace, r.Name)
+	}
 	if len(r.Namespace) == 0 {
 		return fmt.Sprintf(resourceIdentifierKeyFormat, r.Group, r.Version, r.Kind, "''", r.Name)
 	}

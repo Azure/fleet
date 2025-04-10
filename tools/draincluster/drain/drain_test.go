@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,20 +18,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
 )
 
-func TestFetchClusterResourcePlacementToEvict(t *testing.T) {
+func TestFetchClusterResourcePlacementNamesToEvict(t *testing.T) {
 	tests := []struct {
 		name          string
 		targetCluster string
 		bindings      []placementv1beta1.ClusterResourceBinding
-		works         []placementv1beta1.Work
 		wantErr       error
-		wantMap       map[string][]placementv1beta1.ResourceIdentifier
+		wantMap       map[string]bool
 	}{
 		{
-			name:          "successfully collected resources for CRP",
+			name:          "successfully collected CRPs to evict",
 			targetCluster: "test-cluster1",
 			bindings: []placementv1beta1.ClusterResourceBinding{
 				{
@@ -42,7 +41,6 @@ func TestFetchClusterResourcePlacementToEvict(t *testing.T) {
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: "test-cluster1",
-						State:         placementv1beta1.BindingStateBound,
 					},
 				},
 				{
@@ -54,113 +52,28 @@ func TestFetchClusterResourcePlacementToEvict(t *testing.T) {
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: "test-cluster2",
-						State:         placementv1beta1.BindingStateBound,
-					},
-				},
-			},
-			works: []placementv1beta1.Work{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-work1",
-						Namespace: fmt.Sprintf(utils.NamespaceNameFormat, "test-cluster1"),
-						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-crp1",
-						},
-					},
-					Status: placementv1beta1.WorkStatus{
-						ManifestConditions: []placementv1beta1.ManifestCondition{
-							{
-								Identifier: placementv1beta1.WorkResourceIdentifier{
-									Group:   "test-group1",
-									Version: "test-version1",
-									Kind:    "test-kind1",
-									Name:    "test-name1",
-								},
-								Conditions: []metav1.Condition{
-									{
-										Type:   placementv1beta1.WorkConditionTypeApplied,
-										Status: metav1.ConditionTrue,
-									},
-								},
-							},
-						},
 					},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-work2",
-						Namespace: fmt.Sprintf(utils.NamespaceNameFormat, "test-cluster1"),
+						Name: "test-crb3",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-crp1",
+							placementv1beta1.CRPTrackingLabel: "test-crp2",
 						},
 					},
-					Status: placementv1beta1.WorkStatus{
-						ManifestConditions: []placementv1beta1.ManifestCondition{
-							{
-								Identifier: placementv1beta1.WorkResourceIdentifier{
-									Group:   "test-group2",
-									Version: "test-version2",
-									Kind:    "test-kind2",
-									Name:    "test-name2",
-								},
-								Conditions: []metav1.Condition{
-									{
-										Type:   placementv1beta1.WorkConditionTypeApplied,
-										Status: metav1.ConditionTrue,
-									},
-								},
-							},
-						},
-					},
-				},
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-work3",
-						Namespace: fmt.Sprintf(utils.NamespaceNameFormat, "test-cluster2"),
-						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-crp1",
-						},
-					},
-					Status: placementv1beta1.WorkStatus{
-						ManifestConditions: []placementv1beta1.ManifestCondition{
-							{
-								Identifier: placementv1beta1.WorkResourceIdentifier{
-									Group:   "test-group3",
-									Version: "test-version3",
-									Kind:    "test-kind3",
-									Name:    "test-name3",
-								},
-								Conditions: []metav1.Condition{
-									{
-										Type:   placementv1beta1.WorkConditionTypeApplied,
-										Status: metav1.ConditionTrue,
-									},
-								},
-							},
-						},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "test-cluster1",
 					},
 				},
 			},
 			wantErr: nil,
-			wantMap: map[string][]placementv1beta1.ResourceIdentifier{
-				"test-crp1": {
-					{
-						Group:   "test-group1",
-						Version: "test-version1",
-						Kind:    "test-kind1",
-						Name:    "test-name1",
-					},
-					{
-						Group:   "test-group2",
-						Version: "test-version2",
-						Kind:    "test-kind2",
-						Name:    "test-name2",
-					},
-				},
+			wantMap: map[string]bool{
+				"test-crp1": true,
+				"test-crp2": true,
 			},
 		},
 		{
-			name:          "failed to wait for placement to be present",
+			name:          "no CRPs to evict",
 			targetCluster: "test-cluster1",
 			bindings: []placementv1beta1.ClusterResourceBinding{
 				{
@@ -171,13 +84,49 @@ func TestFetchClusterResourcePlacementToEvict(t *testing.T) {
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
-						TargetCluster: "test-cluster1",
-						State:         placementv1beta1.BindingStateScheduled,
+						TargetCluster: "test-cluster2",
 					},
 				},
 			},
-			wantMap: map[string][]placementv1beta1.ResourceIdentifier{},
-			wantErr: fmt.Errorf("failed to wait for placement to be present on member cluster: timed out waiting for the condition"),
+			wantErr: nil,
+			wantMap: map[string]bool{},
+		},
+		{
+			name:          "binding missing CRP label",
+			targetCluster: "test-cluster1",
+			bindings: []placementv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-crb1",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "test-cluster1",
+					},
+				},
+			},
+			wantErr: fmt.Errorf("failed to get CRP name from binding test-crb1"),
+			wantMap: map[string]bool{},
+		},
+		{
+			name:          "skip CRB with deletionTimestamp",
+			targetCluster: "test-cluster1",
+			bindings: []placementv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-crb1",
+						Labels: map[string]string{
+							placementv1beta1.CRPTrackingLabel: "test-crp1",
+						},
+						DeletionTimestamp: &metav1.Time{Time: time.Now()},
+						Finalizers:        []string{"test-finalizer"},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "test-cluster1",
+					},
+				},
+			},
+			wantErr: nil,
+			wantMap: map[string]bool{},
 		},
 	}
 
@@ -188,28 +137,205 @@ func TestFetchClusterResourcePlacementToEvict(t *testing.T) {
 			for i := range tc.bindings {
 				objects = append(objects, &tc.bindings[i])
 			}
-			for i := range tc.works {
-				objects = append(objects, &tc.works[i])
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(objects...).
+				Build()
+			h := &Helper{
+				HubClient:   fakeClient,
+				ClusterName: tc.targetCluster,
+			}
+			gotMap, gotErr := h.fetchClusterResourcePlacementNamesToEvict(context.Background())
+			if tc.wantErr == nil {
+				if gotErr != nil {
+					t.Errorf("fetchClusterResourcePlacementNamesToEvict() test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
+				}
+			} else if gotErr == nil || gotErr.Error() != tc.wantErr.Error() {
+				t.Errorf("fetchClusterResourcePlacementNamesToEvict() test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
+			}
+			if diff := cmp.Diff(gotMap, tc.wantMap); diff != "" {
+				t.Errorf("fetchClusterResourcePlacementNamesToEvict() test %s failed (-got +want):\n%s", tc.name, diff)
+			}
+		})
+	}
+}
+
+func TestCollectClusterScopedResourcesSelectedByCRP(t *testing.T) {
+	tests := []struct {
+		name          string
+		crpName       string
+		crp           *placementv1beta1.ClusterResourcePlacement
+		wantResources []placementv1beta1.ResourceIdentifier
+		wantErr       bool
+	}{
+		{
+			name:    "successfully collect cluster scoped resources",
+			crpName: "test-crp",
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+				Status: placementv1beta1.ClusterResourcePlacementStatus{
+					SelectedResources: []placementv1beta1.ResourceIdentifier{
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "ClusterRole",
+							Name:    "test-cluster-role",
+						},
+						{
+							Group:     "",
+							Version:   "v1",
+							Kind:      "ConfigMap",
+							Name:      "test-cm",
+							Namespace: "test-ns",
+						},
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "ClusterRoleBinding",
+							Name:    "test-cluster-role-binding",
+						},
+					},
+				},
+			},
+			wantResources: []placementv1beta1.ResourceIdentifier{
+				{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "test-cluster-role",
+				},
+				{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRoleBinding",
+					Name:    "test-cluster-role-binding",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "no cluster scoped resources",
+			crpName: "test-crp",
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+				Status: placementv1beta1.ClusterResourcePlacementStatus{
+					SelectedResources: []placementv1beta1.ResourceIdentifier{
+						{
+							Group:     "",
+							Version:   "v1",
+							Kind:      "ConfigMap",
+							Name:      "test-cm",
+							Namespace: "test-ns",
+						},
+					},
+				},
+			},
+			wantResources: nil,
+			wantErr:       false,
+		},
+		{
+			name:          "crp not found",
+			crpName:       "test-crp",
+			crp:           nil,
+			wantResources: nil,
+			wantErr:       true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			scheme := serviceScheme(t)
+			var objects []client.Object
+			if tc.crp != nil {
+				objects = append(objects, tc.crp)
 			}
 			fakeClient := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithObjects(objects...).
 				Build()
-			d := &Helper{
-				HubClient:                            fakeClient,
-				ClusterName:                          tc.targetCluster,
-				ClusterResourcePlacementResourcesMap: make(map[string][]placementv1beta1.ResourceIdentifier),
+
+			h := &Helper{
+				HubClient: fakeClient,
 			}
-			gotErr := d.fetchClusterResourcePlacementToEvict(context.Background())
-			if tc.wantErr == nil {
-				if gotErr != nil {
-					t.Errorf("fetchClusterResourcePlacementToEvict() test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
+
+			gotResources, err := h.collectClusterScopedResourcesSelectedByCRP(context.Background(), tc.crpName)
+			if tc.wantErr {
+				if err == nil {
+					t.Error("collectClusterScopedResourcesSelectedByCRP() error = nil, want error")
 				}
-			} else if gotErr == nil || gotErr.Error() != tc.wantErr.Error() {
-				t.Errorf("fetchClusterResourcePlacementToEvict() test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
+				return
 			}
-			if diff := cmp.Diff(d.ClusterResourcePlacementResourcesMap, tc.wantMap); diff != "" {
-				t.Errorf("fetchClusterResourcePlacementToEvict() test %s failed, got %v, want %v", tc.name, d.ClusterResourcePlacementResourcesMap, tc.wantMap)
+			if err != nil {
+				t.Errorf("collectClusterScopedResourcesSelectedByCRP() error = %v, want nil", err)
+				return
+			}
+
+			if diff := cmp.Diff(gotResources, tc.wantResources); diff != "" {
+				t.Errorf("collectClusterScopedResourcesSelectedByCRP() (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestGenerateResourceIdentifierKey(t *testing.T) {
+	tests := []struct {
+		name     string
+		resource placementv1beta1.ResourceIdentifier
+		want     string
+	}{
+		{
+			name: "cluster scoped resource with empty group",
+			resource: placementv1beta1.ResourceIdentifier{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Namespace",
+				Name:    "test-ns",
+			},
+			want: "''/v1/Namespace/''/test-ns",
+		},
+		{
+			name: "cluster scoped resource with non-empty group",
+			resource: placementv1beta1.ResourceIdentifier{
+				Group:   "rbac.authorization.k8s.io",
+				Version: "v1",
+				Kind:    "ClusterRole",
+				Name:    "test-role",
+			},
+			want: "rbac.authorization.k8s.io/v1/ClusterRole/''/test-role",
+		},
+		{
+			name: "namespaced resource with empty group",
+			resource: placementv1beta1.ResourceIdentifier{
+				Group:     "",
+				Version:   "v1",
+				Kind:      "ConfigMap",
+				Name:      "test-cm",
+				Namespace: "test-ns",
+			},
+			want: "''/v1/ConfigMap/test-ns/test-cm",
+		},
+		{
+			name: "namespaced resource with non-empty group",
+			resource: placementv1beta1.ResourceIdentifier{
+				Group:     "apps",
+				Version:   "v1",
+				Kind:      "Deployment",
+				Name:      "test-deploy",
+				Namespace: "test-ns",
+			},
+			want: "apps/v1/Deployment/test-ns/test-deploy",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := generateResourceIdentifierKey(tc.resource)
+			if got != tc.want {
+				t.Errorf("generateResourceIdentifierKey() = %v, want %v", got, tc.want)
 			}
 		})
 	}
