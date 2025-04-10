@@ -1049,7 +1049,6 @@ func emitPlacementStatusMetric(crp *fleetv1beta1.ClusterResourcePlacement) {
 		if cond != nil {
 			status = string(cond.Status)
 		}
-		metrics.FleetPlacementStatusLastTimeStampSeconds.DeletePartialMatch(prometheus.Labels{"name": crp.Name, "generation": strconv.FormatInt(crp.Generation, 10), "conditionType": string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType)})
 		metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(crp.Name, strconv.FormatInt(crp.Generation, 10), string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType), status).SetToCurrentTime()
 		return
 	}
@@ -1062,7 +1061,6 @@ func emitPlacementStatusMetric(crp *fleetv1beta1.ClusterResourcePlacement) {
 			if cond != nil {
 				status = string(cond.Status)
 			}
-			metrics.FleetPlacementStatusLastTimeStampSeconds.DeletePartialMatch(prometheus.Labels{"name": crp.Name, "generation": strconv.FormatInt(crp.Generation, 10), "conditionType": string(condType.ClusterResourcePlacementConditionType())})
 			metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(crp.Name, strconv.FormatInt(crp.Generation, 10), string(condType.ClusterResourcePlacementConditionType()), status).SetToCurrentTime()
 			return
 		}
