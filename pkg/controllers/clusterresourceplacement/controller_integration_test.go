@@ -1857,17 +1857,5 @@ func checkPlacementStatusMetric(registry *prometheus.Registry, wantMetrics []*pr
 	Expect(len(placementStatusMetrics)).Should(Equal(len(wantMetrics)))
 
 	// Sort the emitted metrics for comparison
-	metricsCmpOptions := []cmp.Option{
-		cmpopts.SortSlices(func(a, b *prometheusclientmodel.Metric) bool {
-			return a.GetGauge().GetValue() < b.GetGauge().GetValue() // sort by time
-		}),
-		cmpopts.SortSlices(func(a, b *prometheusclientmodel.LabelPair) bool {
-			return *a.Name < *b.Name // Sort by label name
-		}),
-		cmp.Comparer(func(a, b *prometheusclientmodel.Gauge) bool {
-			return (a.GetValue() > 0) == (b.GetValue() > 0)
-		}),
-		cmpopts.IgnoreUnexported(prometheusclientmodel.Metric{}, prometheusclientmodel.LabelPair{}, prometheusclientmodel.Gauge{}),
-	}
-	Expect(cmp.Diff(placementStatusMetrics, wantMetrics, metricsCmpOptions...)).Should(BeEmpty(), "Placement status metrics do not match diff (-got, +want):")
+	Expect(cmp.Diff(placementStatusMetrics, wantMetrics, utils.MetricsCmpOptions...)).Should(BeEmpty(), "Placement status metrics do not match diff (-got, +want):")
 }
