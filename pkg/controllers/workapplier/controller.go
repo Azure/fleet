@@ -127,6 +127,7 @@ var (
 	// TO-DO (chenyu1): switch off the old reason after proper rollout.
 	WorkNotAllManifestsTrackableReason    = work.WorkNotTrackableReason
 	WorkAllManifestsAppliedReason         = "AllManifestsApplied"
+	WorkNoManifestAppliedReason           = "NoManifestApplied"
 	WorkAllManifestsAvailableReason       = "AllManifestsAvailable"
 	WorkAllManifestsDiffReportedReason    = "AllManifestsDiffReported"
 	WorkNotAllManifestsAppliedReason      = "SomeManifestsAreNotApplied"
@@ -135,6 +136,7 @@ var (
 
 	// Some condition messages for Work object conditions.
 	allManifestsAppliedMessage           = "All the specified manifests have been applied"
+	noManifestAppliedMessage             = "No manifest has been applied"
 	allManifestsHaveReportedDiffMessage  = "All the specified manifests have reported diff"
 	allAppliedObjectAvailableMessage     = "All of the applied manifests are available"
 	someAppliedObjectUntrackableMessage  = "Some of the applied manifests cannot be tracked for availability"
