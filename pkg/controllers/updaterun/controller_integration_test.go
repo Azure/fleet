@@ -650,6 +650,8 @@ func generateFalseCondition(obj client.Object, condType any) metav1.Condition {
 			reason = condition.UpdateRunInitializeFailedReason
 		case placementv1beta1.StagedUpdateRunConditionSucceeded:
 			reason = condition.UpdateRunFailedReason
+		case placementv1beta1.StagedUpdateRunConditionProgressing:
+			reason = condition.UpdateRunWaitingReason
 		}
 		typeStr = string(cond)
 	case placementv1beta1.StageUpdatingConditionType:

@@ -139,6 +139,12 @@ const (
 	// UpdateRunFailedReason is the reason string of condition if the staged update run failed.
 	UpdateRunFailedReason = "UpdateRunFailed"
 
+	// UpdateRunStuckReason is the reason string of condition if the staged update run is stuck waiting for a cluster to be updated.
+	UpdateRunStuckReason = "UpdateRunStuck"
+
+	// UpdateRunWaitingReason is the reason string of condition if the staged update run is waiting for an after-stage task to complete.
+	UpdateRunWaitingReason = "UpdateRunWaiting"
+
 	// UpdateRunSucceededReason is the reason string of condition if the staged update run succeeded.
 	UpdateRunSucceededReason = "UpdateRunSucceeded"
 

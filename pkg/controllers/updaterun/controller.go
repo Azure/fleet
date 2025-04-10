@@ -41,19 +41,18 @@ import (
 type updateRunMetricsStatus string
 
 // Metrics emitting sequence examples:
-// 1. succeed: initializing->progressing->completed
-// 2. initialization failed: initializing->failed
-// 3. execution failed: initializing->progressing->failed
-// 4. stuck: initializing->stuck
+// 1. succeed: progressing->waiting->succeeded
+// 2. execution failed: progressing->failed
+// 3. stuck: progressing->stuck
 const (
-	// updateRunMetricsStatusInitializing is emitted when the update run starts initially.
-	updateRunMetricsStatusInitializing updateRunMetricsStatus = "initializing"
 	// updateRunMetricsStatusProgressing is emitted when the update run starts to make progress, e.g. updating a cluster.
 	updateRunMetricsStatusProgressing updateRunMetricsStatus = "progressing"
+	// updateRunMetricsStatusWaiting is emitted when the update run is waiting for after-stage tasks in a stage to complete.
+	updateRunMetricsStatusWaiting updateRunMetricsStatus = "waiting"
 	// updateRunMetricsStatusStuck is emitted when the update run is stuck waiting for a cluster to be updated passing a threshold (updateRunStuckThreshold).
 	updateRunMetricsStatusStuck updateRunMetricsStatus = "stuck"
-	// updateRunMetricsStatusCompleted is emitted when the update run is completed.
-	updateRunMetricsStatusCompleted updateRunMetricsStatus = "completed"
+	// updateRunMetricsStatusSucceeded is emitted when the update run is completed successfully.
+	updateRunMetricsStatusSucceeded updateRunMetricsStatus = "succeeded"
 	// updateRunMetricsStatusFailed is emitted when the update run is failed.
 	updateRunMetricsStatusFailed updateRunMetricsStatus = "failed"
 )
@@ -108,6 +107,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{}, err
 	}
 
+	// Emit the update run status metric based on status conditions in the updateRun.
+	defer emitUpdateRunStatusMetric(&updateRun)
+
 	var updatingStageIndex int
 	var toBeUpdatedBindings, toBeDeletedBindings []*placementv1beta1.ClusterResourceBinding
 	var err error
@@ -117,7 +119,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 			klog.V(2).InfoS("The clusterStagedUpdateRun has failed to initialize", "errorMsg", initCond.Message, "clusterStagedUpdateRun", runObjRef)
 			return runtime.Result{}, nil
 		}
-		emitUpdateRunStatusMetric(&updateRun, updateRunMetricsStatusInitializing)
 		if toBeUpdatedBindings, toBeDeletedBindings, err = r.initialize(ctx, &updateRun); err != nil {
 			klog.ErrorS(err, "Failed to initialize the clusterStagedUpdateRun", "clusterStagedUpdateRun", runObjRef)
 			// errInitializedFailed cannot be retried.
@@ -233,7 +234,6 @@ func (r *Reconciler) recordUpdateRunSucceeded(ctx context.Context, updateRun *pl
 		// updateErr can be retried.
 		return controller.NewUpdateIgnoreConflictError(updateErr)
 	}
-	emitUpdateRunStatusMetric(updateRun, updateRunMetricsStatusCompleted)
 	return nil
 }
 
@@ -258,7 +258,6 @@ func (r *Reconciler) recordUpdateRunFailed(ctx context.Context, updateRun *place
 		// updateErr can be retried.
 		return controller.NewUpdateIgnoreConflictError(updateErr)
 	}
-	emitUpdateRunStatusMetric(updateRun, updateRunMetricsStatusFailed)
 	return nil
 }
 
@@ -322,15 +321,51 @@ func handleClusterApprovalRequest(oldObj, newObj client.Object, q workqueue.Type
 	})
 }
 
-// emitUpdateRunStatusMetric emits the update run status metric.
-func emitUpdateRunStatusMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun, status updateRunMetricsStatus) {
-	// Progressing and stuck are mutually exclusive, we try to keep only one to reduce the number of metrics emitted.
-	// Emitting a progressing metric deletes the stuck metric and vice versa.
-	generation := strconv.FormatInt(updateRun.Generation, 10)
-	if status == updateRunMetricsStatusProgressing {
-		metrics.FleetUpdateRunStatusLastTimestampSeconds.Delete(prometheus.Labels{"name": updateRun.Name, "generation": generation, "status": string(updateRunMetricsStatusStuck)})
-	} else if status == updateRunMetricsStatusStuck {
-		metrics.FleetUpdateRunStatusLastTimestampSeconds.Delete(prometheus.Labels{"name": updateRun.Name, "generation": generation, "status": string(updateRunMetricsStatusProgressing)})
+// emitUpdateRunStatusMetric emits the update run status metric based on status conditions in the updateRun.
+func emitUpdateRunStatusMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) {
+	generation := updateRun.Generation
+	genStr := strconv.FormatInt(generation, 10)
+	succeedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionSucceeded))
+	if succeedCond != nil {
+		if condition.IsConditionStatusTrue(succeedCond, generation) {
+			// Completed successfully - emit succeeded metric.
+			metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr, string(updateRunMetricsStatusSucceeded)).SetToCurrentTime()
+			return
+		}
+		if condition.IsConditionStatusFalse(succeedCond, generation) {
+			// Completed with failure - emit failed metric.
+			metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr, string(updateRunMetricsStatusFailed)).SetToCurrentTime()
+			return
+		}
 	}
-	metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, generation, string(status)).SetToCurrentTime()
+
+	progressingCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionProgressing))
+	if progressingCond != nil {
+		if condition.IsConditionStatusTrue(progressingCond, generation) {
+			// Progressing - emit progressing metric.
+			metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr, string(updateRunMetricsStatusProgressing)).SetToCurrentTime()
+			return
+		}
+		if condition.IsConditionStatusFalse(progressingCond, generation) && progressingCond.Reason == condition.UpdateRunStuckReason {
+			// Stuck in waiting for a cluster to be updated - emit stuck metric.
+			metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr, string(updateRunMetricsStatusStuck)).SetToCurrentTime()
+			return
+		}
+		if condition.IsConditionStatusFalse(progressingCond, generation) && progressingCond.Reason == condition.UpdateRunWaitingReason {
+			// Waiting for an after-stage task to complete - emit waiting metric.
+			metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr, string(updateRunMetricsStatusWaiting)).SetToCurrentTime()
+			return
+		}
+	}
+
+	initializedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
+	if condition.IsConditionStatusFalse(initializedCond, generation) {
+		// Initialization failure - emit failed metric.
+		metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr, string(updateRunMetricsStatusFailed)).SetToCurrentTime()
+		return
+	}
+
+	// We should not reach here, as reconcile should NOT return when the updateRun is still initializing or initialized but not progressing.
+	klog.V(2).ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("updateRun does not have valid conditions when emitting updateRun status metric")),
+		"Invalid updateRun status", "updateRun", klog.KObj(updateRun))
 }

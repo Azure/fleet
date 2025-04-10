@@ -192,7 +192,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 		AfterEach(func() {
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing, updateRunMetricsStatusFailed})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing, updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to validate if the CRP is not found", func() {
@@ -237,7 +237,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing, updateRunMetricsStatusFailed})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing, updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to validate if the latest policySnapshot has changed", func() {
@@ -267,7 +267,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing, updateRunMetricsStatusFailed})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing, updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to validate if the cluster count has changed", func() {
@@ -282,7 +282,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing, updateRunMetricsStatusFailed})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing, updateRunMetricsStatusFailed})
 		})
 
 		It("Should not fail due to different cluster count if it's pickAll policy", func() {
@@ -304,7 +304,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing})
 		})
 	})
 
@@ -312,7 +312,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 		AfterEach(func() {
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing, updateRunMetricsStatusFailed})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing, updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to validate if the StagedUpdateStrategySnapshot is nil", func() {

@@ -107,7 +107,6 @@ func (r *Reconciler) executeUpdatingStage(
 		// The cluster is either updating or not started yet.
 		binding := toBeUpdatedBindingsMap[clusterStatus.ClusterName]
 		if !condition.IsConditionStatusTrue(clusterStartedCond, updateRun.Generation) {
-			emitUpdateRunStatusMetric(updateRun, updateRunMetricsStatusProgressing)
 			// The cluster has not started updating yet.
 			if !isBindingSyncedWithClusterStatus(resourceSnapshotName, updateRun, binding, clusterStatus) {
 				klog.V(2).InfoS("Found the first cluster that needs to be updated", "cluster", clusterStatus.ClusterName, "stage", updatingStageStatus.StageName, "clusterStagedUpdateRun", updateRunRef)
@@ -173,7 +172,7 @@ func (r *Reconciler) executeUpdatingStage(
 		} else {
 			// If cluster update has been running for more than 1 minute, mark the update run as stuck.
 			if time.Since(clusterStartedCond.LastTransitionTime.Time) > updateRunStuckThreshold {
-				emitUpdateRunStatusMetric(updateRun, updateRunMetricsStatusStuck)
+				markUpdateRunStuck(updateRun, updatingStageStatus.StageName, clusterStatus.ClusterName)
 			}
 		}
 		// No need to continue as we only support one cluster updating at a time for now.
@@ -182,6 +181,7 @@ func (r *Reconciler) executeUpdatingStage(
 
 	if finishedClusterCount == len(updatingStageStatus.Clusters) {
 		// All the clusters in the stage have been updated.
+		markUpdateRunWaiting(updateRun, updatingStageStatus.StageName)
 		markStageUpdatingWaiting(updatingStageStatus, updateRun.Generation)
 		klog.V(2).InfoS("The stage has finished all cluster updating", "stage", updatingStageStatus.StageName, "clusterStagedUpdateRun", updateRunRef)
 		// Check if the after stage tasks are ready.
@@ -190,6 +190,8 @@ func (r *Reconciler) executeUpdatingStage(
 			return 0, err
 		}
 		if approved {
+			// Mark updateRun as progressing again.
+			markUpdateRunStarted(updateRun)
 			markStageUpdatingSucceeded(updatingStageStatus, updateRun.Generation)
 			// No need to wait to get to the next stage.
 			return 0, nil
@@ -455,6 +457,28 @@ func markUpdateRunStarted(updateRun *placementv1beta1.ClusterStagedUpdateRun) {
 		ObservedGeneration: updateRun.Generation,
 		Reason:             condition.UpdateRunStartedReason,
 		Message:            "The stages started updating",
+	})
+}
+
+// markUpdateRunStuck marks the updateRun as stuck in memory.
+func markUpdateRunStuck(updateRun *placementv1beta1.ClusterStagedUpdateRun, stageName, clusterName string) {
+	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
+		Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: updateRun.Generation,
+		Reason:             condition.UpdateRunStuckReason,
+		Message:            fmt.Sprintf("The updateRun is stuck waiting for cluster %s in stage %s to finish updating", clusterName, stageName),
+	})
+}
+
+// markUpdateRunWaiting marks the updateRun as waiting in memory.
+func markUpdateRunWaiting(updateRun *placementv1beta1.ClusterStagedUpdateRun, stageName string) {
+	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
+		Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: updateRun.Generation,
+		Reason:             condition.UpdateRunWaitingReason,
+		Message:            fmt.Sprintf("The updateRun is waiting for after-stage tasks instage %s to complete", stageName),
 	})
 }
 

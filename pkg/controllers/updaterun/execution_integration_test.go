@@ -192,7 +192,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 1st cluster in the 1st stage as succeeded after marking the binding available", func() {
@@ -214,7 +214,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 2nd cluster in the 1st stage as succeeded after marking the binding available", func() {
@@ -233,7 +233,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 3rd cluster in the 1st stage as succeeded after marking the binding available", func() {
@@ -252,7 +252,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 4th cluster in the 1st stage as succeeded after marking the binding available", func() {
@@ -271,7 +271,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 5th cluster in the 1st stage as succeeded after marking the binding available", func() {
@@ -288,11 +288,12 @@ var _ = Describe("UpdateRun execution tests", func() {
 			wantStatus.StagesStatus[0].Conditions[0] = generateFalseCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing) // The progressing condition now becomes false with waiting reason.
 			wantStatus.StagesStatus[0].AfterStageTaskStatus[1].Conditions = append(wantStatus.StagesStatus[0].AfterStageTaskStatus[1].Conditions,
 				generateTrueCondition(updateRun, placementv1beta1.AfterStageTaskConditionApprovalRequestCreated))
+			wantStatus.Conditions[1] = generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing, updateRunMetricsStatusWaiting})
 		})
 
 		It("Should complete the 1st stage after wait time passed and approval request approved and move on to the 2nd stage", func() {
@@ -343,6 +344,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			wantStatus.StagesStatus[1].Conditions = append(wantStatus.StagesStatus[1].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing))
 			// 1st cluster in 2nd stage started.
 			wantStatus.StagesStatus[1].Clusters[0].Conditions = append(wantStatus.StagesStatus[1].Clusters[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
+			wantStatus.Conditions[1] = generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Validating the 1st stage has endTime set")
@@ -360,7 +362,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusWaiting, updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 1st cluster in the 2nd stage as succeeded after marking the binding available", func() {
@@ -382,7 +384,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusWaiting, updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 2nd cluster in the 2nd stage as succeeded after marking the binding available", func() {
@@ -401,7 +403,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusWaiting, updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 3rd cluster in the 2nd stage as succeeded after marking the binding available", func() {
@@ -420,7 +422,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusWaiting, updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 4th cluster in the 2nd stage as succeeded after marking the binding available", func() {
@@ -439,7 +441,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusWaiting, updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 5th cluster in the 2nd stage as succeeded after marking the binding available", func() {
@@ -456,11 +458,12 @@ var _ = Describe("UpdateRun execution tests", func() {
 			wantStatus.StagesStatus[1].Conditions[0] = generateFalseCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing) // The progressing condition now becomes false with waiting reason.
 			wantStatus.StagesStatus[1].AfterStageTaskStatus[0].Conditions = append(wantStatus.StagesStatus[1].AfterStageTaskStatus[0].Conditions,
 				generateTrueCondition(updateRun, placementv1beta1.AfterStageTaskConditionApprovalRequestCreated))
+			wantStatus.Conditions[1] = generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing, updateRunMetricsStatusWaiting})
 		})
 
 		It("Should complete the 2nd stage after both after stage tasks are completed and move on to the delete stage", func() {
@@ -504,6 +507,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 				generateTrueCondition(updateRun, placementv1beta1.AfterStageTaskConditionWaitTimeElapsed))
 			wantStatus.StagesStatus[1].Conditions[0] = generateFalseProgressingCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing, true)
 			wantStatus.StagesStatus[1].Conditions = append(wantStatus.StagesStatus[1].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionSucceeded))
+			wantStatus.Conditions[1] = generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing)
 
 			wantStatus.DeletionStageStatus.Conditions = append(wantStatus.DeletionStageStatus.Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing))
 			for i := range wantStatus.DeletionStageStatus.Clusters {
@@ -534,7 +538,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusWaiting, updateRunMetricsStatusProgressing})
 		})
 
 		It("Should delete all the clusterResourceBindings in the delete stage and complete the update run", func() {
@@ -567,7 +571,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing, updateRunMetricsStatusCompleted})
+				[]updateRunMetricsStatus{updateRunMetricsStatusWaiting, updateRunMetricsStatusProgressing, updateRunMetricsStatusSucceeded})
 		})
 	})
 
@@ -588,7 +592,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 1st cluster in the 1st stage as succeeded after marking the binding available", func() {
@@ -610,7 +614,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 2nd cluster in the 1st stage as succeeded after marking the binding available", func() {
@@ -629,7 +633,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 3rd cluster in the 1st stage as succeeded after marking the binding available", func() {
@@ -648,7 +652,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 4th cluster in the 1st stage as succeeded after marking the binding available", func() {
@@ -667,7 +671,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 5th cluster in the 1st stage as succeeded after marking the binding available", func() {
@@ -682,11 +686,12 @@ var _ = Describe("UpdateRun execution tests", func() {
 			By("Validating the 5th cluster has succeeded and stage waiting for AfterStageTasks")
 			wantStatus.StagesStatus[0].Clusters[4].Conditions = append(wantStatus.StagesStatus[0].Clusters[4].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionSucceeded))
 			wantStatus.StagesStatus[0].Conditions[0] = generateFalseCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing) // The progressing condition now becomes false with waiting reason.
+			wantStatus.Conditions[1] = generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing, updateRunMetricsStatusWaiting})
 		})
 
 		It("Should complete the 1st stage after wait time passed and move on to the 2nd stage", func() {
@@ -701,6 +706,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			wantStatus.StagesStatus[1].Conditions = append(wantStatus.StagesStatus[1].Conditions, generateTrueCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing))
 			// 1st cluster in 2nd stage started.
 			wantStatus.StagesStatus[1].Clusters[0].Conditions = append(wantStatus.StagesStatus[1].Clusters[0].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
+			wantStatus.Conditions[1] = generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Validating the 1st stage has endTime set")
@@ -714,7 +720,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusWaiting, updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 1st cluster in the 2nd stage as succeeded after marking the binding available", func() {
@@ -736,7 +742,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusWaiting, updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 2nd cluster in the 2nd stage as succeeded after marking the binding available", func() {
@@ -755,7 +761,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusWaiting, updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 3rd cluster in the 2nd stage as succeeded after marking the binding available", func() {
@@ -774,7 +780,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusWaiting, updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 4th cluster in the 2nd stage as succeeded after marking the binding available", func() {
@@ -793,7 +799,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusWaiting, updateRunMetricsStatusProgressing})
 		})
 
 		It("Should mark the 5th cluster in the 2nd stage as succeeded after marking the binding available", func() {
@@ -810,11 +816,12 @@ var _ = Describe("UpdateRun execution tests", func() {
 			wantStatus.StagesStatus[1].Conditions[0] = generateFalseCondition(updateRun, placementv1beta1.StageUpdatingConditionProgressing) // The progressing condition now becomes false with waiting reason.
 			wantStatus.StagesStatus[1].AfterStageTaskStatus[0].Conditions = append(wantStatus.StagesStatus[1].AfterStageTaskStatus[0].Conditions,
 				generateTrueCondition(updateRun, placementv1beta1.AfterStageTaskConditionApprovalRequestCreated))
+			wantStatus.Conditions[1] = generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing, updateRunMetricsStatusWaiting})
 		})
 
 		It("Should complete the 2nd stage after the after stage task is completed and move on to the delete stage", func() {
@@ -861,6 +868,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 			for i := range wantStatus.DeletionStageStatus.Clusters {
 				wantStatus.DeletionStageStatus.Clusters[i].Conditions = append(wantStatus.DeletionStageStatus.Clusters[i].Conditions, generateTrueCondition(updateRun, placementv1beta1.ClusterUpdatingConditionStarted))
 			}
+			wantStatus.Conditions[1] = generateTrueCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 
 			By("Validating the 2nd stage has endTime set")
@@ -876,7 +884,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusWaiting, updateRunMetricsStatusProgressing})
 		})
 
 		It("Should delete all the clusterResourceBindings in the delete stage and complete the update run", func() {
@@ -907,16 +915,16 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing, updateRunMetricsStatusCompleted})
+				[]updateRunMetricsStatus{updateRunMetricsStatusWaiting, updateRunMetricsStatusProgressing, updateRunMetricsStatusSucceeded})
 		})
 	})
 
 	Context("Cluster staged update run should abort the execution within a failed updating stage", Ordered, func() {
 		var oldUpdateRunStuckThreshold time.Duration
 		BeforeAll(func() {
-			// Set the updateRunStuckThreshold to 8 seconds for this test.
+			// Set the updateRunStuckThreshold to 1 second for this test.
 			oldUpdateRunStuckThreshold = updateRunStuckThreshold
-			updateRunStuckThreshold = 8 * time.Second
+			updateRunStuckThreshold = 1 * time.Second
 
 			By("Creating a new clusterStagedUpdateRun")
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
@@ -928,7 +936,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing})
 		})
 
 		AfterAll(func() {
@@ -946,6 +954,8 @@ var _ = Describe("UpdateRun execution tests", func() {
 			Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "failed to update the binding status")
 
 			By("Validating the updateRun is stuck in the 1st cluster of the 1st stage")
+			wantStatus.Conditions[1] = generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing)
+			wantStatus.Conditions[1].Reason = condition.UpdateRunStuckReason
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "")
 			validateClusterStagedUpdateRunStatusConsistently(ctx, updateRun, wantStatus, "")
 		})
@@ -953,7 +963,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 		It("Should emit stuck status metrics after time waiting for the 1st cluster reaches threshold", func() {
 			By("Checking update run stuck metrics is emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusStuck})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing, updateRunMetricsStatusStuck})
 		})
 
 		It("Should abort the execution if the binding has unexpected state", func() {
@@ -975,7 +985,7 @@ var _ = Describe("UpdateRun execution tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusStuck, updateRunMetricsStatusFailed})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing, updateRunMetricsStatusStuck, updateRunMetricsStatusFailed})
 		})
 	})
 })

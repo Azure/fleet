@@ -160,7 +160,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 		AfterEach(func() {
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
+				[]updateRunMetricsStatus{updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to initialize if CRP is not found", func() {
@@ -213,7 +213,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 		AfterEach(func() {
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
+				[]updateRunMetricsStatus{updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to initialize if the latest policy snapshot is not found", func() {
@@ -393,7 +393,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 		AfterEach(func() {
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
+				[]updateRunMetricsStatus{updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to initialize if there is no selected or to-be-deleted cluster", func() {
@@ -530,7 +530,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 		AfterEach(func() {
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
+				[]updateRunMetricsStatus{updateRunMetricsStatusFailed})
 		})
 
 		It("fail the initialization if the clusterStagedUpdateStrategy is not found", func() {
@@ -688,7 +688,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
+				[]updateRunMetricsStatus{updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to initialize if the specified resource snapshot index is invalid - negative integer", func() {
@@ -701,7 +701,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
+				[]updateRunMetricsStatus{updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to initialize if the specified resource snapshot is not found - no resourceSnapshots at all", func() {
@@ -713,7 +713,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
+				[]updateRunMetricsStatus{updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to initialize if the specified resource snapshot is not found - no CRP label found", func() {
@@ -729,7 +729,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
+				[]updateRunMetricsStatus{updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to initialize if the specified resource snapshot is not found - no resource index label found", func() {
@@ -745,7 +745,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
+				[]updateRunMetricsStatus{updateRunMetricsStatusFailed})
 		})
 
 		It("Should fail to initialize if the specified resource snapshot is not master snapshot", func() {
@@ -761,7 +761,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusFailed})
+				[]updateRunMetricsStatus{updateRunMetricsStatusFailed})
 		})
 
 		It("Should put related ClusterResourceOverrides in the status", func() {
@@ -784,7 +784,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(customRegistry, testUpdateRunName, updateRun.Generation,
-				[]updateRunMetricsStatus{updateRunMetricsStatusInitializing, updateRunMetricsStatusProgressing})
+				[]updateRunMetricsStatus{updateRunMetricsStatusProgressing})
 		})
 	})
 })
