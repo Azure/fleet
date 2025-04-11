@@ -37,26 +37,6 @@ import (
 	"go.goms.io/fleet/pkg/utils/informer"
 )
 
-// updateRunMetricsStatus is the status string for update run metrics.
-type updateRunMetricsStatus string
-
-// Metrics emitting sequence examples:
-// 1. succeed: progressing->waiting->succeeded
-// 2. execution failed: progressing->failed
-// 3. stuck: progressing->stuck
-const (
-	// updateRunMetricsStatusProgressing is emitted when the update run starts to make progress, e.g. updating a cluster.
-	updateRunMetricsStatusProgressing updateRunMetricsStatus = "progressing"
-	// updateRunMetricsStatusWaiting is emitted when the update run is waiting for after-stage tasks in a stage to complete.
-	updateRunMetricsStatusWaiting updateRunMetricsStatus = "waiting"
-	// updateRunMetricsStatusStuck is emitted when the update run is stuck waiting for a cluster to be updated passing a threshold (updateRunStuckThreshold).
-	updateRunMetricsStatusStuck updateRunMetricsStatus = "stuck"
-	// updateRunMetricsStatusSucceeded is emitted when the update run is completed successfully.
-	updateRunMetricsStatusSucceeded updateRunMetricsStatus = "succeeded"
-	// updateRunMetricsStatusFailed is emitted when the update run is failed.
-	updateRunMetricsStatusFailed updateRunMetricsStatus = "failed"
-)
-
 var (
 	// errStagedUpdatedAborted is the error when the ClusterStagedUpdateRun is aborted.
 	errStagedUpdatedAborted = fmt.Errorf("cannot continue the ClusterStagedUpdateRun")
@@ -325,43 +305,25 @@ func handleClusterApprovalRequest(oldObj, newObj client.Object, q workqueue.Type
 func emitUpdateRunStatusMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) {
 	generation := updateRun.Generation
 	genStr := strconv.FormatInt(generation, 10)
+
 	succeedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionSucceeded))
-	if succeedCond != nil {
-		if condition.IsConditionStatusTrue(succeedCond, generation) {
-			// Completed successfully - emit succeeded metric.
-			metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr, string(updateRunMetricsStatusSucceeded)).SetToCurrentTime()
-			return
-		}
-		if condition.IsConditionStatusFalse(succeedCond, generation) {
-			// Completed with failure - emit failed metric.
-			metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr, string(updateRunMetricsStatusFailed)).SetToCurrentTime()
-			return
-		}
+	if condition.IsConditionStatusTrue(succeedCond, generation) || condition.IsConditionStatusFalse(succeedCond, generation) {
+		metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr,
+			string(placementv1beta1.StagedUpdateRunConditionSucceeded), string(succeedCond.Status), succeedCond.Reason).SetToCurrentTime()
+		return
 	}
 
 	progressingCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionProgressing))
-	if progressingCond != nil {
-		if condition.IsConditionStatusTrue(progressingCond, generation) {
-			// Progressing - emit progressing metric.
-			metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr, string(updateRunMetricsStatusProgressing)).SetToCurrentTime()
-			return
-		}
-		if condition.IsConditionStatusFalse(progressingCond, generation) && progressingCond.Reason == condition.UpdateRunStuckReason {
-			// Stuck in waiting for a cluster to be updated - emit stuck metric.
-			metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr, string(updateRunMetricsStatusStuck)).SetToCurrentTime()
-			return
-		}
-		if condition.IsConditionStatusFalse(progressingCond, generation) && progressingCond.Reason == condition.UpdateRunWaitingReason {
-			// Waiting for an after-stage task to complete - emit waiting metric.
-			metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr, string(updateRunMetricsStatusWaiting)).SetToCurrentTime()
-			return
-		}
+	if condition.IsConditionStatusTrue(progressingCond, generation) || condition.IsConditionStatusFalse(progressingCond, generation) {
+		metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr,
+			string(placementv1beta1.StagedUpdateRunConditionProgressing), string(progressingCond.Status), progressingCond.Reason).SetToCurrentTime()
+		return
 	}
 
 	initializedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
-	if condition.IsConditionStatusFalse(initializedCond, generation) {
-		// Initialization failure - emit failed metric.
-		metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr, string(updateRunMetricsStatusFailed)).SetToCurrentTime()
+	if condition.IsConditionStatusTrue(initializedCond, generation) || condition.IsConditionStatusFalse(initializedCond, generation) {
+		metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr,
+			string(placementv1beta1.StagedUpdateRunConditionInitialized), string(initializedCond.Status), initializedCond.Reason).SetToCurrentTime()
 		return
 	}
 
