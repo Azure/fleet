@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package uncordon
+package main
 
 import (
 	"context"
@@ -75,9 +75,9 @@ func TestUncordon(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithObjects(mc).Build()
 
 			// Initialize UncordonCluster
-			uncordonCluster := &Helper{
-				HubClient:   fakeClient,
-				ClusterName: "test-cluster",
+			uncordonCluster := helper{
+				hubClient:   fakeClient,
+				clusterName: "test-cluster",
 			}
 
 			// Call the Uncordon function

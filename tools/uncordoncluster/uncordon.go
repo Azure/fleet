@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package uncordon
+package main
 
 import (
 	"context"
@@ -16,16 +16,16 @@ import (
 	toolsutils "go.goms.io/fleet/tools/utils"
 )
 
-type Helper struct {
-	HubClient   client.Client
-	ClusterName string
+type helper struct {
+	hubClient   client.Client
+	clusterName string
 }
 
 // Uncordon removes the taint from the member cluster.
-func (h *Helper) Uncordon(ctx context.Context) error {
+func (h *helper) Uncordon(ctx context.Context) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var mc clusterv1beta1.MemberCluster
-		if err := h.HubClient.Get(ctx, types.NamespacedName{Name: h.ClusterName}, &mc); err != nil {
+		if err := h.hubClient.Get(ctx, types.NamespacedName{Name: h.clusterName}, &mc); err != nil {
 			return err
 		}
 
@@ -44,6 +44,6 @@ func (h *Helper) Uncordon(ctx context.Context) error {
 		}
 		mc.Spec.Taints = newTaints
 
-		return h.HubClient.Update(ctx, &mc)
+		return h.hubClient.Update(ctx, &mc)
 	})
 }

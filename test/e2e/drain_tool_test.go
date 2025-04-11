@@ -217,7 +217,7 @@ var _ = Describe("Drain is allowed on one cluster, blocked on others - ClusterRe
 
 	It("should place resources on all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
-	It("create cluster resource placement disruption budget to block draining on 2/3 clusters", func() {
+	It("create cluster resource placement disruption budget to block draining on all but one cluster", func() {
 		crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,

@@ -338,13 +338,13 @@ func beforeSuiteForAllProcesses() {
 		}
 
 		// Build drain binary
-		buildCmd := exec.Command("go", "build", "-o", drainBinaryPath, filepath.Join("../../", "tools", "draincluster", "main.go"))
+		buildCmd := exec.Command("go", "build", "-o", drainBinaryPath, filepath.Join("../../", "tools", "draincluster"))
 		output, err := buildCmd.CombinedOutput()
 		Expect(err).ToNot(HaveOccurred(), "Failed to drain cluster: %v\nOutput: %s", err, string(output))
 
 		// Build uncordon binary
-		buildCmd = exec.Command("go", "build", "-o", uncordonBinaryPath, filepath.Join("../../", "tools", "uncordoncluster", "main.go"))
-		_, err = buildCmd.CombinedOutput()
+		buildCmd = exec.Command("go", "build", "-o", uncordonBinaryPath, filepath.Join("../../", "tools", "uncordoncluster"))
+		output, err = buildCmd.CombinedOutput()
 		Expect(err).ToNot(HaveOccurred(), "Failed to uncordon cluster: %v\nOutput: %s", err, string(output))
 	})
 }

@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package drain
+package main
 
 import (
 	"context"
@@ -142,9 +142,9 @@ func TestFetchClusterResourcePlacementNamesToEvict(t *testing.T) {
 				WithScheme(scheme).
 				WithObjects(objects...).
 				Build()
-			h := &Helper{
-				HubClient:   fakeClient,
-				ClusterName: tc.targetCluster,
+			h := helper{
+				hubClient:   fakeClient,
+				clusterName: tc.targetCluster,
 			}
 			gotMap, gotErr := h.fetchClusterResourcePlacementNamesToEvict(context.Background())
 			if tc.wantErr == nil {
@@ -259,8 +259,8 @@ func TestCollectClusterScopedResourcesSelectedByCRP(t *testing.T) {
 				WithObjects(objects...).
 				Build()
 
-			h := &Helper{
-				HubClient: fakeClient,
+			h := helper{
+				hubClient: fakeClient,
 			}
 
 			gotResources, err := h.collectClusterScopedResourcesSelectedByCRP(context.Background(), tc.crpName)

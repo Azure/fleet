@@ -3,7 +3,7 @@
 1. Build the binary for the `draincluster` tool by running the following command in the root directory of the fleet repo:
 
 ```bash
-go build -o ./hack/tools/bin/kubectl-draincluster ./tools/draincluster/main.go
+go build -o ./hack/tools/bin/kubectl-draincluster ./tools/draincluster/
 ```
 
 2. Copy the binary to a directory in your `PATH` so that it can be run as a kubectl plugin. For example, you can move it to
