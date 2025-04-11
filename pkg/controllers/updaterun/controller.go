@@ -327,7 +327,6 @@ func emitUpdateRunStatusMetric(updateRun *placementv1beta1.ClusterStagedUpdateRu
 		return
 	}
 
-	// We should not reach here, as reconcile should NOT return when the updateRun is still initializing or initialized but not progressing.
-	klog.V(2).ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("updateRun does not have valid conditions when emitting updateRun status metric")),
-		"Invalid updateRun status", "updateRun", klog.KObj(updateRun))
+	// We should rarely reach here, it can only happen when updating updateRun status fails.
+	klog.V(2).InfoS("There's no valid status condition on updateRun, status updating failed possibly", "updateRun", klog.KObj(updateRun))
 }

@@ -81,7 +81,8 @@ var _ = Describe("Test the clusterStagedUpdateRun controller", func() {
 
 	AfterEach(func() {
 		By("Checking the update run status metrics are removed")
-		validateUpdateRunMetricsRemoved(customRegistry)
+		// No metrics are emitted as all are removed after updateRun is deleted.
+		validateUpdateRunMetricsEmitted(customRegistry)
 		unregisterUpdateRunMetrics(customRegistry)
 	})
 
@@ -277,7 +278,7 @@ func generateMetricsLabels(
 func generateInitializationFailedMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
 		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionInitialized),
-			string(metav1.ConditionFalse), string(condition.UpdateRunInitializeFailedReason)),
+			string(metav1.ConditionFalse), condition.UpdateRunInitializeFailedReason),
 		Gauge: &prometheusclientmodel.Gauge{
 			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
 		},
@@ -287,7 +288,7 @@ func generateInitializationFailedMetric(updateRun *placementv1beta1.ClusterStage
 func generateProgressingMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
 		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionProgressing),
-			string(metav1.ConditionTrue), string(condition.UpdateRunStartedReason)),
+			string(metav1.ConditionTrue), condition.UpdateRunStartedReason),
 		Gauge: &prometheusclientmodel.Gauge{
 			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
 		},
@@ -297,7 +298,7 @@ func generateProgressingMetric(updateRun *placementv1beta1.ClusterStagedUpdateRu
 func generateWaitingMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
 		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionProgressing),
-			string(metav1.ConditionFalse), string(condition.UpdateRunWaitingReason)),
+			string(metav1.ConditionFalse), condition.UpdateRunWaitingReason),
 		Gauge: &prometheusclientmodel.Gauge{
 			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
 		},
@@ -307,7 +308,7 @@ func generateWaitingMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *
 func generateStuckMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
 		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionProgressing),
-			string(metav1.ConditionFalse), string(condition.UpdateRunStuckReason)),
+			string(metav1.ConditionFalse), condition.UpdateRunStuckReason),
 		Gauge: &prometheusclientmodel.Gauge{
 			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
 		},
@@ -317,7 +318,7 @@ func generateStuckMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *pr
 func generateFailedMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
 		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionSucceeded),
-			string(metav1.ConditionFalse), string(condition.UpdateRunFailedReason)),
+			string(metav1.ConditionFalse), condition.UpdateRunFailedReason),
 		Gauge: &prometheusclientmodel.Gauge{
 			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
 		},
@@ -327,24 +328,11 @@ func generateFailedMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *p
 func generateSucceededMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) *prometheusclientmodel.Metric {
 	return &prometheusclientmodel.Metric{
 		Label: generateMetricsLabels(updateRun, string(placementv1beta1.StagedUpdateRunConditionSucceeded),
-			string(metav1.ConditionTrue), string(condition.UpdateRunSucceededReason)),
+			string(metav1.ConditionTrue), condition.UpdateRunSucceededReason),
 		Gauge: &prometheusclientmodel.Gauge{
 			Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
 		},
 	}
-}
-
-func validateUpdateRunMetricsRemoved(registry *prometheus.Registry) {
-	metricFamilies, err := registry.Gather()
-	Expect(err).Should(Succeed())
-	var updateRunStatusMetrics []*prometheusclientmodel.Metric
-	for _, mf := range metricFamilies {
-		if mf.GetName() == "fleet_workload_update_run_status_last_timestamp_seconds" {
-			updateRunStatusMetrics = mf.GetMetric()
-		}
-	}
-	// Verify that the update run status metrics are removed.
-	Expect(len(updateRunStatusMetrics)).Should(Equal(0))
 }
 
 func generateTestClusterStagedUpdateRun() *placementv1beta1.ClusterStagedUpdateRun {

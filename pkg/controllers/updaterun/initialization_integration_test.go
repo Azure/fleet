@@ -152,7 +152,8 @@ var _ = Describe("Updaterun initialization tests", func() {
 		clusterResourceOverride = nil
 
 		By("Checking the update run status metrics are removed")
-		validateUpdateRunMetricsRemoved(customRegistry)
+		// No metrics are emitted as all are removed after updateRun is deleted.
+		validateUpdateRunMetricsEmitted(customRegistry)
 		unregisterUpdateRunMetrics(customRegistry)
 	})
 

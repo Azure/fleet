@@ -40,7 +40,7 @@ var (
 			return a.GetGauge().GetValue() < b.GetGauge().GetValue() // sort by time
 		}),
 		cmpopts.SortSlices(func(a, b *prometheusclientmodel.LabelPair) bool {
-			return *a.Name < *b.Name // Sort by label name
+			return a.GetName() < b.GetName() // Sort by label name
 		}),
 		cmp.Comparer(func(a, b *prometheusclientmodel.Gauge) bool {
 			return (a.GetValue() > 0) == (b.GetValue() > 0)
