@@ -269,7 +269,7 @@ func setManifestAppliedCondition(
 			Type:               fleetv1beta1.WorkConditionTypeApplied,
 			Status:             metav1.ConditionFalse,
 			Reason:             string(appliedResTyp),
-			Message:            fmt.Sprintf("Failed to applied the manifest (error: %s)", applyError),
+			Message:            fmt.Sprintf("Failed to apply the manifest (error: %s)", applyError),
 			ObservedGeneration: inMemberClusterObjGeneration,
 		}
 	}
