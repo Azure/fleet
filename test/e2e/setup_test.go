@@ -10,6 +10,8 @@ import (
 	"flag"
 	"log"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -150,6 +152,11 @@ var (
 			regionLabelName: regionSouth,
 		},
 	}
+)
+
+var (
+	drainBinaryPath    = filepath.Join("../../", "hack", "tools", "bin", "kubectl-draincluster")
+	uncordonBinaryPath = filepath.Join("../../", "hack", "tools", "bin", "kubectl-uncordoncluster")
 )
 
 var (
@@ -329,6 +336,16 @@ func beforeSuiteForAllProcesses() {
 		for i := range allMemberClusters {
 			allMemberClusterNames = append(allMemberClusterNames, allMemberClusters[i].ClusterName)
 		}
+
+		// Build drain binary
+		buildCmd := exec.Command("go", "build", "-o", drainBinaryPath, filepath.Join("../../", "tools", "draincluster", "main.go"))
+		output, err := buildCmd.CombinedOutput()
+		Expect(err).ToNot(HaveOccurred(), "Failed to drain cluster: %v\nOutput: %s", err, string(output))
+
+		// Build uncordon binary
+		buildCmd = exec.Command("go", "build", "-o", uncordonBinaryPath, filepath.Join("../../", "tools", "uncordoncluster", "main.go"))
+		_, err = buildCmd.CombinedOutput()
+		Expect(err).ToNot(HaveOccurred(), "Failed to uncordon cluster: %v\nOutput: %s", err, string(output))
 	})
 }
 
@@ -355,4 +372,7 @@ var _ = SynchronizedAfterSuite(func() {}, func() {
 	setAllMemberClustersToLeave()
 	checkIfAllMemberClustersHaveLeft()
 	cleanupInvalidClusters()
+	// Cleanup tool binaries.
+	Expect(os.Remove(drainBinaryPath)).Should(Succeed(), "Failed to remove drain binary")
+	Expect(os.Remove(uncordonBinaryPath)).Should(Succeed(), "Failed to remove uncordon binary")
 })
