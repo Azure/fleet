@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -254,20 +253,7 @@ func validateUpdateRunMetricsEmitted(registry *prometheus.Registry, wantMetrics 
 			}
 		}
 
-		// TODO: This should be extracted
-		metricsCmpOptions := []cmp.Option{
-			cmpopts.SortSlices(func(a, b *prometheusclientmodel.Metric) bool {
-				return a.GetGauge().GetValue() < b.GetGauge().GetValue() // sort by time
-			}),
-			cmpopts.SortSlices(func(a, b *prometheusclientmodel.LabelPair) bool {
-				return *a.Name < *b.Name // Sort by label name
-			}),
-			cmp.Comparer(func(a, b *prometheusclientmodel.Gauge) bool {
-				return (a.GetValue() > 0) == (b.GetValue() > 0)
-			}),
-			cmpopts.IgnoreUnexported(prometheusclientmodel.Metric{}, prometheusclientmodel.LabelPair{}, prometheusclientmodel.Gauge{}),
-		}
-		if diff := cmp.Diff(gotMetrics, wantMetrics, metricsCmpOptions...); diff != "" {
+		if diff := cmp.Diff(gotMetrics, wantMetrics, utils.MetricsCmpOptions...); diff != "" {
 			return fmt.Errorf("update run status metrics mismatch (-got, +want):\n%s", diff)
 		}
 
