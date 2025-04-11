@@ -14,7 +14,6 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/tools/uncordoncluster/uncordon"
 	toolsutils "go.goms.io/fleet/tools/utils"
 )
 
@@ -46,9 +45,9 @@ func main() {
 		log.Fatalf("failed to create hub cluster client: %v", err)
 	}
 
-	uncordonClusterHelper := uncordon.Helper{
-		HubClient:   hubClient,
-		ClusterName: *clusterName,
+	uncordonClusterHelper := helper{
+		hubClient:   hubClient,
+		clusterName: *clusterName,
 	}
 
 	if err = uncordonClusterHelper.Uncordon(ctx); err != nil {
