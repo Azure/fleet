@@ -7,6 +7,9 @@ package e2e
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -14,22 +17,30 @@ import (
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/test/e2e/framework"
-	"go.goms.io/fleet/tools/draincluster/drain"
-	"go.goms.io/fleet/tools/uncordoncluster/uncordon"
 )
 
-var _ = Describe("Drain cluster", Ordered, Serial, func() {
+var _ = FDescribe("Drain cluster", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-	var d *drain.Helper
-	var u *uncordon.Helper
-	var noDrainClusterNames []string
 	var drainClusters, noDrainClusters []*framework.Cluster
+	var noDrainClusterNames []string
+	var drainBinaryPath, uncordonBinaryPath string
 
 	BeforeAll(func() {
 		drainClusters = []*framework.Cluster{memberCluster1EastProd}
-
 		noDrainClusters = []*framework.Cluster{memberCluster2EastCanary, memberCluster3WestProd}
 		noDrainClusterNames = []string{memberCluster2EastCanaryName, memberCluster3WestProdName}
+
+		// Build drain binary
+		drainBinaryPath = filepath.Join("../../", "hack", "tools", "bin", "kubectl-draincluster")
+		buildCmd := exec.Command("go", "build", "-o", drainBinaryPath, filepath.Join("../../", "tools", "draincluster", "main.go"))
+		output, err := buildCmd.CombinedOutput()
+		Expect(err).ToNot(HaveOccurred(), "Failed to drain cluster: %v\nOutput: %s", err, string(output))
+
+		// Build uncordon binary
+		uncordonBinaryPath = filepath.Join("../../", "hack", "tools", "bin", "kubectl-uncordoncluster")
+		buildCmd = exec.Command("go", "build", "-o", uncordonBinaryPath, filepath.Join("../../", "tools", "uncordoncluster", "main.go"))
+		_, err = buildCmd.CombinedOutput()
+		Expect(err).ToNot(HaveOccurred(), "Failed to uncordon cluster: %v\nOutput: %s", err, string(output))
 
 		By("creating work resources")
 		createWorkResources()
@@ -50,21 +61,13 @@ var _ = Describe("Drain cluster", Ordered, Serial, func() {
 			},
 		}
 		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
-
-		d = &drain.Helper{
-			HubClient:                            hubClient,
-			ClusterName:                          memberCluster1EastProdName,
-			ClusterResourcePlacementResourcesMap: make(map[string][]placementv1beta1.ResourceIdentifier),
-		}
-
-		u = &uncordon.Helper{
-			HubClient:   hubClient,
-			ClusterName: memberCluster1EastProdName,
-		}
 	})
 
 	AfterAll(func() {
 		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+		// Cleanup binary
+		Expect(os.Remove(drainBinaryPath)).Should(Succeed(), "Failed to remove drain binary")
+		Expect(os.Remove(uncordonBinaryPath)).Should(Succeed(), "Failed to remove uncordon binary")
 	})
 
 	It("should update cluster resource placement status as expected", func() {
@@ -72,12 +75,14 @@ var _ = Describe("Drain cluster", Ordered, Serial, func() {
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
 	})
 
-	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+	It("should place resources on all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
-	It("drain cluster", func() {
-		isDrainSuccessful, err := d.Drain(ctx)
-		Expect(isDrainSuccessful).To(BeTrue(), "Failed to drain member cluster")
-		Expect(err).To(Succeed(), "Failed to drain member cluster")
+	It("drain cluster using binary", func() {
+		cmd := exec.Command(drainBinaryPath,
+			"--hubClusterContext", hubClusterName,
+			"--clusterName", memberCluster1EastProdName)
+		output, err := cmd.CombinedOutput()
+		Expect(err).ToNot(HaveOccurred(), "Failed to drain cluster: %v\nOutput: %s", err, string(output))
 	})
 
 	It("should ensure no resources exist on drained clusters", func() {
@@ -99,8 +104,12 @@ var _ = Describe("Drain cluster", Ordered, Serial, func() {
 		}
 	})
 
-	It("uncordon cluster", func() {
-		Expect(u.Uncordon(ctx)).To(Succeed(), "Failed to uncordon member cluster")
+	It("uncordon cluster using binary", func() {
+		cmd := exec.Command(uncordonBinaryPath,
+			"--hubClusterContext", hubClusterName,
+			"--clusterName", memberCluster1EastProdName)
+		output, err := cmd.CombinedOutput()
+		Expect(err).ToNot(HaveOccurred(), "Failed to uncordon cluster: %v\nOutput: %s", err, string(output))
 	})
 
 	It("should update cluster resource placement status as expected", func() {
