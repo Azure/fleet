@@ -28,7 +28,7 @@ import (
 
 const (
 	uuidLength                  = 8
-	drainEvictionNameFormat     = "drain-eviction-%s-%s-%s"
+	drainEvictionNameFormat     = "drain-eviction-%s"
 	resourceIdentifierKeyFormat = "%s/%s/%s/%s/%s"
 )
 
@@ -56,7 +56,7 @@ func (h *Helper) Drain(ctx context.Context) (bool, error) {
 	isDrainSuccessful := true
 	// create eviction objects for all <crpName, targetCluster>.
 	for crpName := range crpNameMap {
-		evictionName, err := generateDrainEvictionName(crpName, h.ClusterName)
+		evictionName, err := generateDrainEvictionName()
 		if err != nil {
 			return false, err
 		}
@@ -185,11 +185,11 @@ func (h *Helper) collectClusterScopedResourcesSelectedByCRP(ctx context.Context,
 	return resourcesPropagated, nil
 }
 
-func generateDrainEvictionName(crpName, targetCluster string) (string, error) {
-	evictionName := fmt.Sprintf(drainEvictionNameFormat, crpName, targetCluster, uuid.NewUUID()[:uuidLength])
+func generateDrainEvictionName() (string, error) {
+	evictionName := fmt.Sprintf(drainEvictionNameFormat, uuid.NewUUID()[:uuidLength])
 
 	if errs := validation.IsQualifiedName(evictionName); len(errs) != 0 {
-		return "", fmt.Errorf("failed to format a qualified name for drain eviction object with CRP name %s, cluster name %s: %v", crpName, targetCluster, errs)
+		return "", fmt.Errorf("failed to format a qualified name for drain eviction object %v", errs)
 	}
 	return evictionName, nil
 }

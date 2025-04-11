@@ -8,6 +8,7 @@ package drain
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -336,6 +337,40 @@ func TestGenerateResourceIdentifierKey(t *testing.T) {
 			got := generateResourceIdentifierKey(tc.resource)
 			if got != tc.want {
 				t.Errorf("generateResourceIdentifierKey() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestGenerateDrainEvictionName(t *testing.T) {
+	tests := []struct {
+		name       string
+		wantPrefix string
+		wantErr    error
+	}{
+		{
+			name:       "valid name generation",
+			wantPrefix: "drain-eviction-",
+			wantErr:    nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotName, gotErr := generateDrainEvictionName()
+			if tc.wantErr == nil {
+				if gotErr != nil {
+					t.Errorf("generateDrainEvictionName() test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
+				}
+				if !strings.HasPrefix(gotName, tc.wantPrefix) {
+					t.Errorf("generateDrainEvictionName() = %v, want prefix %v", gotName, tc.wantPrefix)
+				}
+				// Check that the generated name ends with an 8-character UUID
+				if len(gotName) != len(tc.wantPrefix)+uuidLength {
+					t.Errorf("generateDrainEvictionName() generated name length = %v, want length = %v", len(gotName), len(tc.wantPrefix)+uuidLength)
+				}
+			} else if gotErr == nil || gotErr.Error() != tc.wantErr.Error() {
+				t.Errorf("generateDrainEvictionName() test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
 			}
 		})
 	}
