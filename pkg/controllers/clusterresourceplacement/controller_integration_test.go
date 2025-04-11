@@ -28,6 +28,7 @@ import (
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller/metrics"
 	"go.goms.io/fleet/pkg/utils/resource"
+	metricsUtils "go.goms.io/fleet/test/utils/metrics"
 )
 
 const (
@@ -155,14 +156,6 @@ func retrieveAndValidateCRPDeletion(crp *placementv1beta1.ClusterResourcePlaceme
 		err := k8sClient.Get(ctx, key, createdCRP)
 		return errors.IsNotFound(err)
 	}, eventuallyTimeout, interval).Should(BeTrue(), "Get() clusterResourcePlacement, want not found")
-}
-
-func deleteAndValidateClusterResourceBindingDeletion(binding *placementv1beta1.ClusterResourceBinding) {
-	Expect(k8sClient.Delete(ctx, binding)).Should(Succeed())
-	Eventually(func() bool {
-		err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, &placementv1beta1.ClusterResourceBinding{})
-		return errors.IsNotFound(err)
-	}, eventuallyTimeout, interval).Should(BeTrue(), "Get() clusterResourceBinding, want not found")
 }
 
 func createOverriddenClusterResourceBinding(cluster string, policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot, resourceSnapshot *placementv1beta1.ClusterResourceSnapshot) *placementv1beta1.ClusterResourceBinding {
@@ -367,10 +360,10 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 
 			By("Deleting clusterResourceBindings")
 			if member1Binding != nil {
-				deleteAndValidateClusterResourceBindingDeletion(member1Binding)
+				Expect(k8sClient.Delete(ctx, member1Binding)).Should(Succeed())
 			}
 			if member2Binding != nil {
-				deleteAndValidateClusterResourceBindingDeletion(member2Binding)
+				Expect(k8sClient.Delete(ctx, member2Binding)).Should(Succeed())
 			}
 
 			Expect(customRegistry.Unregister(metrics.FleetPlacementCompleteLastTimeStampSeconds)).Should(BeTrue())
@@ -410,10 +403,24 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted False")
-			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
+			wantCompleteMetrics := []*prometheusclientmodel.Metric{
+				{
+					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
+						{Name: ptr.To("isCompleted"), Value: ptr.To("false")},
+					},
+					Gauge: &prometheusclientmodel.Gauge{
+						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+					},
+				},
+			}
+			checkPlacementCompleteMetric(customRegistry, wantCompleteMetrics)
 
 			By("Ensure placement status metric was emitted")
-			wantMetrics := []*prometheusclientmodel.Metric{
+			// A metric for every !true (nil, unknown, false) status as the CRP reconciles.
+			// In this case, no clusters are selected therefore with pickAll policy therefore there is nothing to rollout
+			// so the RolloutStarted condition is nil.
+			wantStatusMetrics := []*prometheusclientmodel.Metric{
 				{
 					Label: []*prometheusclientmodel.LabelPair{
 						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
@@ -437,7 +444,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			checkPlacementStatusMetric(customRegistry, wantMetrics)
+			checkPlacementStatusMetric(customRegistry, wantStatusMetrics)
 		})
 
 		It("Clusters are not selected", func() {
@@ -485,12 +492,23 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted False")
-			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
+			wantCompleteMetrics := []*prometheusclientmodel.Metric{
+				{
+					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
+						{Name: ptr.To("isCompleted"), Value: ptr.To("false")},
+					},
+					Gauge: &prometheusclientmodel.Gauge{
+						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+					},
+				},
+			}
+			checkPlacementCompleteMetric(customRegistry, wantCompleteMetrics)
 
 			By("Ensure placement status metric was emitted")
 			// A metric for the different reconcilations for all the !true statuses as the CRP reconciles.
 			// In this case we have 2 metrics for 1 condition type as Scheduled goes from `Unknown` to `False`.
-			wantMetrics := []*prometheusclientmodel.Metric{
+			wantStatusMetrics := []*prometheusclientmodel.Metric{
 				{
 					Label: []*prometheusclientmodel.LabelPair{
 						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
@@ -514,7 +532,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			checkPlacementStatusMetric(customRegistry, wantMetrics)
+			checkPlacementStatusMetric(customRegistry, wantStatusMetrics)
 		})
 
 		It("Clusters are selected and resources are applied successfully", func() {
@@ -612,10 +630,23 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted False")
-			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
+			wantCompleteMetrics := []*prometheusclientmodel.Metric{
+				{
+					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
+						{Name: ptr.To("isCompleted"), Value: ptr.To("false")},
+					},
+					Gauge: &prometheusclientmodel.Gauge{
+						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+					},
+				},
+			}
+			checkPlacementCompleteMetric(customRegistry, wantCompleteMetrics)
 
 			By("Ensure placement status metric was emitted")
-			wantMetrics := []*prometheusclientmodel.Metric{
+			// There are two metrics because 1 member cluster has an unknown RolloutStarted status.
+			// We emit the !true status for CRP as it reconciles. In this case, CRP is still rolling out.
+			wantStatusMetrics := []*prometheusclientmodel.Metric{
 				{
 					Label: []*prometheusclientmodel.LabelPair{
 						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
@@ -639,7 +670,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			checkPlacementStatusMetric(customRegistry, wantMetrics)
+			checkPlacementStatusMetric(customRegistry, wantStatusMetrics)
 
 			By("By creating a synchronized clusterResourceBinding on member-2")
 			member2Binding = createSynchronizedClusterResourceBinding(member2Name, gotPolicySnapshot, gotResourceSnapshot)
@@ -737,45 +768,21 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			crp = retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted False")
-			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
+			checkPlacementCompleteMetric(customRegistry, wantCompleteMetrics)
 
 			By("Ensure placement status metric was emitted")
-			wantMetrics = []*prometheusclientmodel.Metric{
-				{
-					Label: []*prometheusclientmodel.LabelPair{
-						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
-						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(crp.Generation, 10))},
-						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
-						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-					},
-					Gauge: &prometheusclientmodel.Gauge{
-						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
-					},
+			wantStatusMetrics = append(wantStatusMetrics, &prometheusclientmodel.Metric{
+				Label: []*prometheusclientmodel.LabelPair{
+					{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
+					{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(crp.Generation, 10))},
+					{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType))},
+					{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
 				},
-				{
-					Label: []*prometheusclientmodel.LabelPair{
-						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
-						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(crp.Generation, 10))},
-						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType))},
-						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-					},
-					Gauge: &prometheusclientmodel.Gauge{
-						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
-					},
+				Gauge: &prometheusclientmodel.Gauge{
+					Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
 				},
-				{
-					Label: []*prometheusclientmodel.LabelPair{
-						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
-						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(crp.Generation, 10))},
-						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType))},
-						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-					},
-					Gauge: &prometheusclientmodel.Gauge{
-						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
-					},
-				},
-			}
-			checkPlacementStatusMetric(customRegistry, wantMetrics)
+			})
+			checkPlacementStatusMetric(customRegistry, wantStatusMetrics)
 		})
 
 		It("Emit metrics when CRP spec updates with different generations", func() {
@@ -873,10 +880,21 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted False")
-			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
+			wantCompleteMetrics := []*prometheusclientmodel.Metric{
+				{
+					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
+						{Name: ptr.To("isCompleted"), Value: ptr.To("false")},
+					},
+					Gauge: &prometheusclientmodel.Gauge{
+						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+					},
+				},
+			}
+			checkPlacementCompleteMetric(customRegistry, wantCompleteMetrics)
 
 			By("Ensure placement status metric was emitted")
-			wantMetrics := []*prometheusclientmodel.Metric{
+			wantStatusMetrics := []*prometheusclientmodel.Metric{
 				{
 					Label: []*prometheusclientmodel.LabelPair{
 						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
@@ -900,7 +918,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			checkPlacementStatusMetric(customRegistry, wantMetrics)
+			checkPlacementStatusMetric(customRegistry, wantStatusMetrics)
 
 			By("By creating a synchronized clusterResourceBinding on member-2")
 			member2Binding = createSynchronizedClusterResourceBinding(member2Name, gotPolicySnapshot, gotResourceSnapshot)
@@ -998,45 +1016,21 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			crp = retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted False")
-			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
+			checkPlacementCompleteMetric(customRegistry, wantCompleteMetrics)
 
 			By("Ensure placement status metric was emitted")
-			wantMetrics = []*prometheusclientmodel.Metric{
-				{
-					Label: []*prometheusclientmodel.LabelPair{
-						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
-						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(crp.Generation, 10))},
-						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
-						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-					},
-					Gauge: &prometheusclientmodel.Gauge{
-						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
-					},
+			wantStatusMetrics = append(wantStatusMetrics, &prometheusclientmodel.Metric{
+				Label: []*prometheusclientmodel.LabelPair{
+					{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
+					{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(crp.Generation, 10))},
+					{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType))},
+					{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
 				},
-				{
-					Label: []*prometheusclientmodel.LabelPair{
-						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
-						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(crp.Generation, 10))},
-						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType))},
-						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-					},
-					Gauge: &prometheusclientmodel.Gauge{
-						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
-					},
+				Gauge: &prometheusclientmodel.Gauge{
+					Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
 				},
-				{
-					Label: []*prometheusclientmodel.LabelPair{
-						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
-						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(crp.Generation, 10))},
-						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType))},
-						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-					},
-					Gauge: &prometheusclientmodel.Gauge{
-						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
-					},
-				},
-			}
-			checkPlacementStatusMetric(customRegistry, wantMetrics)
+			})
+			checkPlacementStatusMetric(customRegistry, wantStatusMetrics)
 
 			By("Update CRP spec to add another resource selector")
 			crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors,
@@ -1091,59 +1085,24 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			gotCRP = retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted False")
-			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
+			checkPlacementCompleteMetric(customRegistry, wantCompleteMetrics)
 
 			By("Ensure placement status metric was emitted with different generations")
 			// When a CRP spec is updated, the generation of the CRP changes. Therefore, the observed generation for the conditions will also change.
 			// Should have multiples of same condition type with different generations.
 			// In this case we have 2 metrics for Scheduled condition type as crp generation goes from 1 to 2.
-			wantMetrics = []*prometheusclientmodel.Metric{
-				{
-					Label: []*prometheusclientmodel.LabelPair{
-						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
-						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(crp.Generation-1, 10))},
-						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
-						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-					},
-					Gauge: &prometheusclientmodel.Gauge{
-						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
-					},
+			wantStatusMetrics = append(wantStatusMetrics, &prometheusclientmodel.Metric{
+				Label: []*prometheusclientmodel.LabelPair{
+					{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
+					{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(crp.Generation, 10))},
+					{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
+					{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
 				},
-				{
-					Label: []*prometheusclientmodel.LabelPair{
-						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
-						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(crp.Generation-1, 10))},
-						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType))},
-						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-					},
-					Gauge: &prometheusclientmodel.Gauge{
-						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
-					},
+				Gauge: &prometheusclientmodel.Gauge{
+					Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
 				},
-				{
-					Label: []*prometheusclientmodel.LabelPair{
-						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
-						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(crp.Generation-1, 10))},
-						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType))},
-						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-					},
-					Gauge: &prometheusclientmodel.Gauge{
-						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
-					},
-				},
-				{
-					Label: []*prometheusclientmodel.LabelPair{
-						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
-						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(crp.Generation, 10))},
-						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
-						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-					},
-					Gauge: &prometheusclientmodel.Gauge{
-						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
-					},
-				},
-			}
-			checkPlacementStatusMetric(customRegistry, wantMetrics)
+			})
+			checkPlacementStatusMetric(customRegistry, wantStatusMetrics)
 		})
 
 		It("Emit metrics for complete CRP", func() {
@@ -1314,7 +1273,27 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			gotCRP = retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted True")
-			checkPlacementCompleteMetric(customRegistry, testCRPName, true, 2)
+			wantCompleteMetrics := []*prometheusclientmodel.Metric{
+				{
+					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
+						{Name: ptr.To("isCompleted"), Value: ptr.To("false")},
+					},
+					Gauge: &prometheusclientmodel.Gauge{
+						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+					},
+				},
+				{
+					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
+						{Name: ptr.To("isCompleted"), Value: ptr.To("true")},
+					},
+					Gauge: &prometheusclientmodel.Gauge{
+						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+					},
+				},
+			}
+			checkPlacementCompleteMetric(customRegistry, wantCompleteMetrics)
 		})
 	})
 
@@ -1444,8 +1423,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			retrieveAndValidateCRPDeletion(gotCRP)
 
 			By("Deleting clusterResourceBindings")
-			deleteAndValidateClusterResourceBindingDeletion(member1Binding)
-			deleteAndValidateClusterResourceBindingDeletion(member2Binding)
+			Expect(k8sClient.Delete(ctx, member1Binding)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, member2Binding)).Should(Succeed())
 
 			Expect(customRegistry.Unregister(metrics.FleetPlacementCompleteLastTimeStampSeconds)).Should(BeTrue())
 			Expect(customRegistry.Unregister(metrics.FleetPlacementStatusLastTimeStampSeconds)).Should(BeTrue())
@@ -1604,10 +1583,21 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			gotCRP = retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted True")
-			checkPlacementCompleteMetric(customRegistry, testCRPName, false, 1)
+			wantCompleteMetrics := []*prometheusclientmodel.Metric{
+				{
+					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
+						{Name: ptr.To("isCompleted"), Value: ptr.To("false")},
+					},
+					Gauge: &prometheusclientmodel.Gauge{
+						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+					},
+				},
+			}
+			checkPlacementCompleteMetric(customRegistry, wantCompleteMetrics)
 
 			By("Ensure placement status metric was emitted")
-			wantMetrics := []*prometheusclientmodel.Metric{
+			wantStatusMetrics := []*prometheusclientmodel.Metric{
 				{
 					Label: []*prometheusclientmodel.LabelPair{
 						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
@@ -1642,7 +1632,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			checkPlacementStatusMetric(customRegistry, wantMetrics)
+			checkPlacementStatusMetric(customRegistry, wantStatusMetrics)
 		})
 
 		It("Emit metrics for ReportDiff Complete CRP", func() {
@@ -1800,12 +1790,32 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			gotCRP = retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement complete metric was emitted with isCompleted True")
-			checkPlacementCompleteMetric(customRegistry, testCRPName, true, 2)
+			wantCompleteMetrics := []*prometheusclientmodel.Metric{
+				{
+					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
+						{Name: ptr.To("isCompleted"), Value: ptr.To("false")},
+					},
+					Gauge: &prometheusclientmodel.Gauge{
+						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+					},
+				},
+				{
+					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
+						{Name: ptr.To("isCompleted"), Value: ptr.To("true")},
+					},
+					Gauge: &prometheusclientmodel.Gauge{
+						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
+					},
+				},
+			}
+			checkPlacementCompleteMetric(customRegistry, wantCompleteMetrics)
 		})
 	})
 })
 
-func checkPlacementCompleteMetric(registry *prometheus.Registry, crpName string, complete bool, numOfMetrics int) {
+func checkPlacementCompleteMetric(registry *prometheus.Registry, wantMetrics []*prometheusclientmodel.Metric) {
 	metricFamilies, err := registry.Gather()
 	Expect(err).Should(Succeed())
 	var placementCompleteMetrics []*prometheusclientmodel.Metric
@@ -1814,22 +1824,7 @@ func checkPlacementCompleteMetric(registry *prometheus.Registry, crpName string,
 			placementCompleteMetrics = mf.GetMetric()
 		}
 	}
-	// we only expect one metric with 2 label
-	Expect(len(placementCompleteMetrics)).Should(Equal(numOfMetrics))
-
-	for _, emittedMetric := range placementCompleteMetrics {
-		metricLabels := emittedMetric.GetLabel()
-		Expect(len(metricLabels)).Should(Equal(2))
-		for _, label := range metricLabels {
-			if label.GetName() == "isComplete" {
-				Expect(label.GetValue()).Should(Equal(complete))
-			}
-			if label.GetName() == "name" {
-				Expect(label.GetValue()).Should(Equal(crpName))
-			}
-		}
-		Expect(emittedMetric.GetGauge().GetValue()).ShouldNot(Equal(float64(0)))
-	}
+	Expect(cmp.Diff(placementCompleteMetrics, wantMetrics, metricsUtils.MetricsCmpOptions...)).Should(BeEmpty(), "Placement complete metrics do not match diff (-got, +want):")
 }
 
 func checkPlacementStatusMetric(registry *prometheus.Registry, wantMetrics []*prometheusclientmodel.Metric) {
@@ -1841,10 +1836,6 @@ func checkPlacementStatusMetric(registry *prometheus.Registry, wantMetrics []*pr
 			placementStatusMetrics = mf.GetMetric()
 		}
 	}
-
-	// Check the number of emitted metrics
-	Expect(len(placementStatusMetrics)).Should(Equal(len(wantMetrics)))
-
 	// Sort the emitted metrics for comparison
-	Expect(cmp.Diff(placementStatusMetrics, wantMetrics, utils.MetricsCmpOptions...)).Should(BeEmpty(), "Placement status metrics do not match diff (-got, +want):")
+	Expect(cmp.Diff(placementStatusMetrics, wantMetrics, metricsUtils.MetricsCmpOptions...)).Should(BeEmpty(), "Placement status metrics do not match diff (-got, +want):")
 }
