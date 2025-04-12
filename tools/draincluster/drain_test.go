@@ -18,7 +18,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	toolsutils "go.goms.io/fleet/tools/utils"
 )
 
 func TestFetchClusterResourcePlacementNamesToEvict(t *testing.T) {
@@ -149,13 +151,13 @@ func TestFetchClusterResourcePlacementNamesToEvict(t *testing.T) {
 			gotMap, gotErr := h.fetchClusterResourcePlacementNamesToEvict(context.Background())
 			if tc.wantErr == nil {
 				if gotErr != nil {
-					t.Errorf("fetchClusterResourcePlacementNamesToEvict() test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
+					t.Errorf("fetchClusterResourcePlacementNamesToEvict test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
 				}
 			} else if gotErr == nil || gotErr.Error() != tc.wantErr.Error() {
-				t.Errorf("fetchClusterResourcePlacementNamesToEvict() test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
+				t.Errorf("fetchClusterResourcePlacementNamesToEvict test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
 			}
 			if diff := cmp.Diff(gotMap, tc.wantMap); diff != "" {
-				t.Errorf("fetchClusterResourcePlacementNamesToEvict() test %s failed (-got +want):\n%s", tc.name, diff)
+				t.Errorf("fetchClusterResourcePlacementNamesToEvict test %s failed (-got +want):\n%s", tc.name, diff)
 			}
 		})
 	}
@@ -167,7 +169,7 @@ func TestCollectClusterScopedResourcesSelectedByCRP(t *testing.T) {
 		crpName       string
 		crp           *placementv1beta1.ClusterResourcePlacement
 		wantResources []placementv1beta1.ResourceIdentifier
-		wantErr       bool
+		wantErr       error
 	}{
 		{
 			name:    "successfully collect cluster scoped resources",
@@ -214,7 +216,7 @@ func TestCollectClusterScopedResourcesSelectedByCRP(t *testing.T) {
 					Name:    "test-cluster-role-binding",
 				},
 			},
-			wantErr: false,
+			wantErr: nil,
 		},
 		{
 			name:    "no cluster scoped resources",
@@ -236,14 +238,14 @@ func TestCollectClusterScopedResourcesSelectedByCRP(t *testing.T) {
 				},
 			},
 			wantResources: nil,
-			wantErr:       false,
+			wantErr:       nil,
 		},
 		{
 			name:          "crp not found",
 			crpName:       "test-crp",
 			crp:           nil,
 			wantResources: nil,
-			wantErr:       true,
+			wantErr:       fmt.Errorf("failed to get ClusterResourcePlacement test-crp: clusterresourceplacements.placement.kubernetes-fleet.io \"test-crp\" not found"),
 		},
 	}
 
@@ -263,20 +265,16 @@ func TestCollectClusterScopedResourcesSelectedByCRP(t *testing.T) {
 				hubClient: fakeClient,
 			}
 
-			gotResources, err := h.collectClusterScopedResourcesSelectedByCRP(context.Background(), tc.crpName)
-			if tc.wantErr {
-				if err == nil {
-					t.Error("collectClusterScopedResourcesSelectedByCRP() error = nil, want error")
+			gotResources, gotErr := h.collectClusterScopedResourcesSelectedByCRP(context.Background(), tc.crpName)
+			if tc.wantErr == nil {
+				if gotErr != nil {
+					t.Errorf("collectClusterScopedResourcesSelectedByCRP test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
 				}
-				return
-			}
-			if err != nil {
-				t.Errorf("collectClusterScopedResourcesSelectedByCRP() error = %v, want nil", err)
-				return
-			}
-
-			if diff := cmp.Diff(gotResources, tc.wantResources); diff != "" {
-				t.Errorf("collectClusterScopedResourcesSelectedByCRP() (-got +want):\n%s", diff)
+				if diff := cmp.Diff(gotResources, tc.wantResources); diff != "" {
+					t.Errorf("collectClusterScopedResourcesSelectedByCRP (-got +want):\n%s", diff)
+				}
+			} else if gotErr == nil || gotErr.Error() != tc.wantErr.Error() {
+				t.Errorf("collectClusterScopedResourcesSelectedByCRP test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
 			}
 		})
 	}
@@ -336,7 +334,7 @@ func TestGenerateResourceIdentifierKey(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got := generateResourceIdentifierKey(tc.resource)
 			if got != tc.want {
-				t.Errorf("generateResourceIdentifierKey() = %v, want %v", got, tc.want)
+				t.Errorf("generateResourceIdentifierKey = %v, want %v", got, tc.want)
 			}
 		})
 	}
@@ -360,17 +358,126 @@ func TestGenerateDrainEvictionName(t *testing.T) {
 			gotName, gotErr := generateDrainEvictionName()
 			if tc.wantErr == nil {
 				if gotErr != nil {
-					t.Errorf("generateDrainEvictionName() test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
+					t.Errorf("generateDrainEvictionName test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
 				}
 				if !strings.HasPrefix(gotName, tc.wantPrefix) {
-					t.Errorf("generateDrainEvictionName() = %v, want prefix %v", gotName, tc.wantPrefix)
+					t.Errorf("generateDrainEvictionName = %v, want prefix %v", gotName, tc.wantPrefix)
 				}
 				// Check that the generated name ends with an 8-character UUID
 				if len(gotName) != len(tc.wantPrefix)+uuidLength {
-					t.Errorf("generateDrainEvictionName() generated name length = %v, want length = %v", len(gotName), len(tc.wantPrefix)+uuidLength)
+					t.Errorf("generateDrainEvictionName generated name length = %v, want length = %v", len(gotName), len(tc.wantPrefix)+uuidLength)
 				}
 			} else if gotErr == nil || gotErr.Error() != tc.wantErr.Error() {
-				t.Errorf("generateDrainEvictionName() test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
+				t.Errorf("generateDrainEvictionName test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestCordon(t *testing.T) {
+	tests := []struct {
+		name          string
+		memberCluster *clusterv1beta1.MemberCluster
+		wantTaints    []clusterv1beta1.Taint
+		wantErr       error
+	}{
+		{
+			name: "successfully add cordon taint, no other taints present",
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Taints: []clusterv1beta1.Taint{},
+				},
+			},
+			wantTaints: []clusterv1beta1.Taint{toolsutils.CordonTaint},
+			wantErr:    nil,
+		},
+		{
+			name: "cordon taint already exists",
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Taints: []clusterv1beta1.Taint{toolsutils.CordonTaint},
+				},
+			},
+			wantTaints: []clusterv1beta1.Taint{toolsutils.CordonTaint},
+			wantErr:    nil,
+		},
+		{
+			name: "successfully add cordon taint, cluster has other taints",
+			memberCluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Taints: []clusterv1beta1.Taint{
+						{
+							Key:    "other-key",
+							Value:  "other-value",
+							Effect: "NoSchedule",
+						},
+					},
+				},
+			},
+			wantTaints: []clusterv1beta1.Taint{
+				{
+					Key:    "other-key",
+					Value:  "other-value",
+					Effect: "NoSchedule",
+				},
+				toolsutils.CordonTaint,
+			},
+			wantErr: nil,
+		},
+		{
+			name:          "member cluster not found",
+			memberCluster: nil,
+			wantTaints:    nil,
+			wantErr:       fmt.Errorf("memberclusters.cluster.kubernetes-fleet.io \"test-cluster\" not found"),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			scheme := serviceScheme(t)
+			if err := clusterv1beta1.AddToScheme(scheme); err != nil {
+				t.Fatalf("failed to add cluster v1beta1 scheme: %v", err)
+			}
+
+			var objects []client.Object
+			if tc.memberCluster != nil {
+				objects = append(objects, tc.memberCluster)
+			}
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(objects...).
+				Build()
+
+			h := helper{
+				hubClient:   fakeClient,
+				clusterName: "test-cluster",
+			}
+
+			gotErr := h.cordon(context.Background())
+			if tc.wantErr == nil {
+				if gotErr != nil {
+					t.Errorf("cordon test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
+				}
+				var updatedCluster clusterv1beta1.MemberCluster
+				if err := fakeClient.Get(context.Background(), client.ObjectKey{Name: "test-cluster"}, &updatedCluster); err != nil {
+					t.Fatalf("failed to get updated cluster: %v", err)
+				}
+
+				if diff := cmp.Diff(updatedCluster.Spec.Taints, tc.wantTaints); diff != "" {
+					t.Errorf("cordon taints mismatch (-got +want):\n%s", diff)
+				}
+			} else if gotErr == nil || gotErr.Error() != tc.wantErr.Error() {
+				t.Errorf("cordon test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
 			}
 		})
 	}

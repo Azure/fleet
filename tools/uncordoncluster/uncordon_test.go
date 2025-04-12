@@ -84,10 +84,10 @@ func TestUncordon(t *testing.T) {
 			gotErr := uncordonCluster.Uncordon(context.Background())
 			if tc.wantErr == nil {
 				if gotErr != nil {
-					t.Errorf("Uncordon() test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
+					t.Errorf("Uncordon test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
 				}
 			} else if gotErr == nil || gotErr.Error() != tc.wantErr.Error() {
-				t.Errorf("Uncordon() test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
+				t.Errorf("Uncordon test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)
 			}
 
 			// Verify the taints
@@ -96,7 +96,7 @@ func TestUncordon(t *testing.T) {
 				t.Errorf("failed to get member cluster: %v", err)
 			}
 			if diff := cmp.Diff(tc.wantTaints, gotMC.Spec.Taints, cmpopts.EquateEmpty()); diff != "" {
-				t.Errorf("Uncordon() test %s failed, got taints %v, want taints %v", tc.name, gotMC.Spec.Taints, tc.wantTaints)
+				t.Errorf("Uncordon test %s failed, got taints %v, want taints %v", tc.name, gotMC.Spec.Taints, tc.wantTaints)
 			}
 		})
 	}
