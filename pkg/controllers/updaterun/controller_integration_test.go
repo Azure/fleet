@@ -34,6 +34,7 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller/metrics"
+	metricsutils "go.goms.io/fleet/pkg/utils/metrics"
 )
 
 const (
@@ -254,7 +255,7 @@ func validateUpdateRunMetricsEmitted(registry *prometheus.Registry, wantMetrics 
 			}
 		}
 
-		if diff := cmp.Diff(gotMetrics, wantMetrics, utils.MetricsCmpOptions...); diff != "" {
+		if diff := cmp.Diff(gotMetrics, wantMetrics, metricsutils.MetricsCmpOptions...); diff != "" {
 			return fmt.Errorf("update run status metrics mismatch (-got, +want):\n%s", diff)
 		}
 
