@@ -77,7 +77,7 @@ var _ = Describe("Drain cluster successfully", Ordered, Serial, func() {
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
 	})
 
-	It("should still place resources on the selected clusters with no taint", func() {
+	It("should still place resources on the selected clusters which were not drained", func() {
 		for _, cluster := range noDrainClusters {
 			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the selected clusters")
@@ -122,7 +122,6 @@ var _ = Describe("Drain cluster blocked - ClusterResourcePlacementDisruptionBudg
 	AfterAll(func() {
 		// Uncordon member cluster 1 again to guarantee clean up of cordon taint on test failure.
 		runUncordonClusterBinary(hubClusterName, memberCluster1EastProdName)
-
 		ensureCRPDisruptionBudgetDeleted(crpName)
 		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
@@ -245,7 +244,7 @@ var _ = Describe("Drain is allowed on one cluster, blocked on others - ClusterRe
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
 	})
 
-	It("should still place resources on the selected clusters with no taint", func() {
+	It("should still place resources on the selected clusters which were not drained", func() {
 		for _, cluster := range noDrainClusters {
 			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the selected clusters")
