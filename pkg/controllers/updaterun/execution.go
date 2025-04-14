@@ -35,7 +35,7 @@ var (
 	stageUpdatingWaitTime = 60 * time.Second
 
 	// updateRunStuckThreshold is the time to wait on a single cluster update before marking update run as stuck.
-	updateRunStuckThreshold = 60 * time.Second
+	updateRunStuckThreshold = 5 * time.Minute
 )
 
 // execute executes the update run by updating the clusters in the updating stage specified by updatingStageIndex.
@@ -172,7 +172,7 @@ func (r *Reconciler) executeUpdatingStage(
 			unmarkUpdateRunStuck(updateRun)
 			continue
 		} else {
-			// If cluster update has been running for more than 1 minute, mark the update run as stuck.
+			// If cluster update has been running for more than "updateRunStuckThreshold", mark the update run as stuck.
 			timeElapsed := time.Since(clusterStartedCond.LastTransitionTime.Time)
 			if timeElapsed > updateRunStuckThreshold {
 				klog.V(2).InfoS("Time waiting for cluster update to finish passes threshold, mark the update run as stuck", "time elapsed", timeElapsed, "threshold", updateRunStuckThreshold, "cluster", clusterStatus.ClusterName, "stage", updatingStageStatus.StageName, "clusterStagedUpdateRun", updateRunRef)
