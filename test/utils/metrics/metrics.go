@@ -3,6 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
+// Package metrics provides utilities for testing emitted Prometheus metrics.
 package metrics
 
 import (

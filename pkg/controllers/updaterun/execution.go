@@ -480,7 +480,7 @@ func markUpdateRunWaiting(updateRun *placementv1beta1.ClusterStagedUpdateRun, st
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: updateRun.Generation,
 		Reason:             condition.UpdateRunWaitingReason,
-		Message:            fmt.Sprintf("The updateRun is waiting for after-stage tasks instage %s to complete", stageName),
+		Message:            fmt.Sprintf("The updateRun is waiting for after-stage tasks in stage %s to complete", stageName),
 	})
 }
 

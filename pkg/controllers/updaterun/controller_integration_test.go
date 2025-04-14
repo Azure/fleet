@@ -34,7 +34,7 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller/metrics"
-	metricsutils "go.goms.io/fleet/pkg/utils/metrics"
+	metricsutils "go.goms.io/fleet/test/utils/metrics"
 )
 
 const (
