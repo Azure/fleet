@@ -19,7 +19,7 @@ import (
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
-var _ = FDescribe("Drain cluster successfully", Ordered, Serial, func() {
+var _ = Describe("Drain cluster successfully", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	var drainClusters, noDrainClusters []*framework.Cluster
 	var noDrainClusterNames []string
@@ -94,7 +94,7 @@ var _ = FDescribe("Drain cluster successfully", Ordered, Serial, func() {
 	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = FDescribe("Drain cluster blocked - ClusterResourcePlacementDisruptionBudget blocks evictions on all clusters", Ordered, Serial, func() {
+var _ = Describe("Drain cluster blocked - ClusterResourcePlacementDisruptionBudget blocks evictions on all clusters", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
@@ -168,7 +168,7 @@ var _ = FDescribe("Drain cluster blocked - ClusterResourcePlacementDisruptionBud
 	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
-var _ = FDescribe("Drain is allowed on one cluster, blocked on others - ClusterResourcePlacementDisruptionBudget blocks evictions on some clusters", Ordered, Serial, func() {
+var _ = Describe("Drain is allowed on one cluster, blocked on others - ClusterResourcePlacementDisruptionBudget blocks evictions on some clusters", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	var drainClusters, noDrainClusters []*framework.Cluster
 	var noDrainClusterNames []string
