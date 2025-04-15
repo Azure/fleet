@@ -90,6 +90,10 @@ jobs:
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
+        with:
+          # Fetch the history of all branches and tags.
+          # This is needed for the test suite to switch between releases.
+          fetch-depth: 0
               
       - name: Set up Ginkgo CLI
         run: |
@@ -128,6 +132,10 @@ jobs:
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
+        with:
+          # Fetch the history of all branches and tags.
+          # This is needed for the test suite to switch between releases.
+          fetch-depth: 0
               
       - name: Set up Ginkgo CLI
         run: |
