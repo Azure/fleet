@@ -148,7 +148,7 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 		"Comma-separated namespaces that should be skipped from propagating in addition to the default skipped namespaces(fleet-system, namespaces prefixed by kube- and fleet-work-).")
 	flags.Float64Var(&o.HubQPS, "hub-api-qps", 250, "QPS to use while talking with fleet-apiserver. Doesn't cover events and node heartbeat apis which rate limiting is controlled by a different set of flags.")
 	flags.IntVar(&o.HubBurst, "hub-api-burst", 1000, "Burst to use while talking with fleet-apiserver. Doesn't cover events and node heartbeat apis which rate limiting is controlled by a different set of flags.")
-	flags.DurationVar(&o.ResyncPeriod.Duration, "resync-period", 300*time.Second, "Base frequency the informers are resynced.")
+	flags.DurationVar(&o.ResyncPeriod.Duration, "resync-period", 6*time.Hour, "Base frequency the informers are resynced.")
 	flags.IntVar(&o.MaxConcurrentClusterPlacement, "max-concurrent-cluster-placement", 100, "The max number of concurrent cluster placement to run concurrently.")
 	flags.IntVar(&o.ConcurrentResourceChangeSyncs, "concurrent-resource-change-syncs", 20, "The number of resourceChange reconcilers that are allowed to run concurrently.")
 	flags.IntVar(&o.MaxFleetSizeSupported, "max-fleet-size", 100, "The max number of member clusters supported in this fleet")
