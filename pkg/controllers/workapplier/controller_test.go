@@ -105,6 +105,20 @@ var (
 	nsUnstructured *unstructured.Unstructured
 	nsJSON         []byte
 
+	configMap = &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "ConfigMap",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: nsName,
+			Name:      configMapName,
+		},
+		Data: map[string]string{
+			dummyLabelKey: dummyLabelValue1,
+		},
+	}
+
 	dummyOwnerRef = metav1.OwnerReference{
 		APIVersion: "dummy.owner/v1",
 		Kind:       "DummyOwner",

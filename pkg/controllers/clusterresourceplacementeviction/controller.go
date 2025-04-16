@@ -40,6 +40,7 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/controller/metrics"
 	"go.goms.io/fleet/pkg/utils/defaulter"
+	evictionutils "go.goms.io/fleet/pkg/utils/eviction"
 )
 
 // Reconciler reconciles a ClusterResourcePlacementEviction object.
@@ -70,7 +71,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if isEvictionInTerminalState(&eviction) {
+	if evictionutils.IsEvictionInTerminalState(&eviction) {
 		return runtime.Result{}, nil
 	}
 
@@ -200,7 +201,7 @@ func (r *Reconciler) executeEviction(ctx context.Context, validationResult *evic
 		return nil
 	}
 
-	if !isPlacementPresent(evictionTargetBinding) {
+	if !evictionutils.IsPlacementPresent(evictionTargetBinding) {
 		klog.V(2).InfoS("No resources have been placed for ClusterResourceBinding in target cluster",
 			"clusterResourcePlacementEviction", eviction.Name, "clusterResourceBinding", evictionTargetBinding.Name, "targetCluster", eviction.Spec.ClusterName)
 		markEvictionNotExecuted(eviction, condition.EvictionBlockedMissingPlacementMessage)
@@ -249,37 +250,6 @@ func (r *Reconciler) executeEviction(ctx context.Context, validationResult *evic
 		markEvictionNotExecuted(eviction, fmt.Sprintf(condition.EvictionBlockedPDBSpecifiedMessageFmt, availableBindings, totalBindings))
 	}
 	return nil
-}
-
-// isEvictionInTerminalState checks to see if eviction is in a terminal state.
-func isEvictionInTerminalState(eviction *placementv1beta1.ClusterResourcePlacementEviction) bool {
-	validCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeValid))
-	if condition.IsConditionStatusFalse(validCondition, eviction.GetGeneration()) {
-		klog.V(2).InfoS("Invalid eviction, no need to reconcile", "clusterResourcePlacementEviction", eviction.Name)
-		return true
-	}
-
-	executedCondition := eviction.GetCondition(string(placementv1beta1.PlacementEvictionConditionTypeExecuted))
-	if executedCondition != nil {
-		klog.V(2).InfoS("Eviction has executed condition specified, no need to reconcile", "clusterResourcePlacementEviction", eviction.Name)
-		return true
-	}
-	return false
-}
-
-// isPlacementPresent checks to see if placement on target cluster could be present.
-func isPlacementPresent(binding *placementv1beta1.ClusterResourceBinding) bool {
-	if binding.Spec.State == placementv1beta1.BindingStateBound {
-		return true
-	}
-	if binding.Spec.State == placementv1beta1.BindingStateUnscheduled {
-		currentAnnotation := binding.GetAnnotations()
-		previousState, exist := currentAnnotation[placementv1beta1.PreviousBindingStateAnnotation]
-		if exist && placementv1beta1.BindingState(previousState) == placementv1beta1.BindingStateBound {
-			return true
-		}
-	}
-	return false
 }
 
 // isEvictionAllowed calculates if eviction allowed based on available bindings and spec specified in placement disruption budget.

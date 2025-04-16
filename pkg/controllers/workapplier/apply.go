@@ -123,6 +123,8 @@ func (r *Reconciler) apply(
 
 		// Note that Fleet might choose to skip the last applied annotation due to size limits
 		// even if no error has occurred.
+		klog.V(2).InfoS("Completed the last applied annotation setting process", "isSet", isLastAppliedAnnotationSet,
+			"GVR", *gvr, "manifestObj", klog.KObj(manifestObjCopy))
 	}
 
 	// Create the object if it does not exist in the member cluster.
@@ -155,11 +157,15 @@ func (r *Reconciler) apply(
 		// The apply strategy dictates that three-way merge patch
 		// (client-side apply) should be used, and the last applied annotation
 		// has been set.
+		klog.V(2).InfoS("Using three-way merge patch to apply the manifest object",
+			"GVR", *gvr, "manifestObj", klog.KObj(manifestObjCopy))
 		return r.threeWayMergePatch(ctx, gvr, manifestObjCopy, inMemberClusterObj, isOptimisticLockEnabled, false)
 	case applyStrategy.Type == fleetv1beta1.ApplyStrategyTypeClientSideApply:
 		// The apply strategy dictates that three-way merge patch
 		// (client-side apply) should be used, but the last applied annotation
 		// cannot be set. Fleet will fall back to server-side apply.
+		klog.V(2).InfoS("Falling back to server-side apply as the last applied annotation cannot be set",
+			"GVR", *gvr, "manifestObj", klog.KObj(manifestObjCopy))
 		return r.serverSideApply(
 			ctx,
 			gvr, manifestObjCopy, inMemberClusterObj,
@@ -167,6 +173,8 @@ func (r *Reconciler) apply(
 		)
 	case applyStrategy.Type == fleetv1beta1.ApplyStrategyTypeServerSideApply:
 		// The apply strategy dictates that server-side apply should be used.
+		klog.V(2).InfoS("Using server-side apply to apply the manifest object",
+			"GVR", *gvr, "manifestObj", klog.KObj(manifestObjCopy))
 		return r.serverSideApply(
 			ctx,
 			gvr, manifestObjCopy, inMemberClusterObj,
@@ -195,6 +203,7 @@ func (r *Reconciler) createManifestObject(
 		wrappedErr := controller.NewAPIServerError(false, err)
 		return nil, fmt.Errorf("failed to create manifest object: %w", wrappedErr)
 	}
+	klog.V(2).InfoS("Created the manifest object", "GVR", *gvr, "manifestObj", klog.KObj(createdObj))
 	return createdObj, nil
 }
 

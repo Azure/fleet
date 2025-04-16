@@ -317,6 +317,7 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 					Operations: []admv1.OperationType{
 						admv1.Create,
 						admv1.Update,
+						admv1.Delete,
 					},
 					Rule: createRule([]string{clusterv1beta1.GroupVersion.Group}, []string{clusterv1beta1.GroupVersion.Version}, []string{memberClusterResourceName}, &clusterScope),
 				},

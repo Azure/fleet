@@ -58,15 +58,16 @@ import (
 )
 
 const (
-	kubePrefix             = "kube-"
-	fleetPrefix            = "fleet-"
-	FleetSystemNamespace   = fleetPrefix + "system"
-	NamespaceNameFormat    = fleetPrefix + "member-%s"
-	RoleNameFormat         = fleetPrefix + "role-%s"
-	RoleBindingNameFormat  = fleetPrefix + "rolebinding-%s"
-	ValidationPathFmt      = "/validate-%s-%s-%s"
-	lessGroupsStringFormat = "groups: %v"
-	moreGroupsStringFormat = "groups: [%s, %s, %s,......]"
+	kubePrefix                 = "kube-"
+	fleetPrefix                = "fleet-"
+	fleetMemberNamespacePrefix = fleetPrefix + "member-"
+	FleetSystemNamespace       = fleetPrefix + "system"
+	NamespaceNameFormat        = fleetMemberNamespacePrefix + "%s"
+	RoleNameFormat             = fleetPrefix + "role-%s"
+	RoleBindingNameFormat      = fleetPrefix + "rolebinding-%s"
+	ValidationPathFmt          = "/validate-%s-%s-%s"
+	lessGroupsStringFormat     = "groups: %v"
+	moreGroupsStringFormat     = "groups: [%s, %s, %s,......]"
 )
 
 const (
@@ -601,6 +602,11 @@ func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Uns
 // IsReservedNamespace indicates if an argued namespace is reserved.
 func IsReservedNamespace(namespace string) bool {
 	return strings.HasPrefix(namespace, fleetPrefix) || strings.HasPrefix(namespace, kubePrefix)
+}
+
+// IsFleetMemberNamespace indicates if an argued namespace is a fleet member namespace.
+func IsFleetMemberNamespace(namespace string) bool {
+	return strings.HasPrefix(namespace, fleetMemberNamespacePrefix)
 }
 
 // ShouldPropagateNamespace decides if we should propagate the resources in the namespace.

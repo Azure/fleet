@@ -1079,19 +1079,14 @@ func updateRunClusterRolloutSucceedConditions(generation int64) []metav1.Conditi
 	}
 }
 
-func updateRunStageRolloutSucceedConditions(generation int64, wait bool) []metav1.Condition {
-	startedCond := metav1.Condition{
-		Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
-		Status:             metav1.ConditionTrue,
-		Reason:             condition.StageUpdatingStartedReason,
-		ObservedGeneration: generation,
-	}
-	if wait {
-		startedCond.Status = metav1.ConditionFalse
-		startedCond.Reason = condition.StageUpdatingWaitingReason
-	}
+func updateRunStageRolloutSucceedConditions(generation int64) []metav1.Condition {
 	return []metav1.Condition{
-		startedCond,
+		{
+			Type:               string(placementv1beta1.StageUpdatingConditionProgressing),
+			Status:             metav1.ConditionFalse,
+			Reason:             condition.StageUpdatingSucceededReason,
+			ObservedGeneration: generation,
+		},
 		{
 			Type:               string(placementv1beta1.StageUpdatingConditionSucceeded),
 			Status:             metav1.ConditionTrue,
@@ -1138,8 +1133,8 @@ func updateRunSucceedConditions(generation int64) []metav1.Condition {
 		},
 		{
 			Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
-			Status:             metav1.ConditionTrue,
-			Reason:             condition.UpdateRunStartedReason,
+			Status:             metav1.ConditionFalse,
+			Reason:             condition.UpdateRunSucceededReason,
 			ObservedGeneration: generation,
 		},
 		{
@@ -1192,7 +1187,7 @@ func updateRunStatusSucceededActual(
 				}
 				stagesStatus[i].AfterStageTaskStatus[j].Conditions = updateRunAfterStageTaskSucceedConditions(updateRun.Generation, task.Type)
 			}
-			stagesStatus[i].Conditions = updateRunStageRolloutSucceedConditions(updateRun.Generation, true)
+			stagesStatus[i].Conditions = updateRunStageRolloutSucceedConditions(updateRun.Generation)
 		}
 
 		deleteStageStatus := &placementv1beta1.StageUpdatingStatus{
@@ -1203,7 +1198,7 @@ func updateRunStatusSucceededActual(
 			deleteStageStatus.Clusters[i].ClusterName = wantUnscheduledClusters[i]
 			deleteStageStatus.Clusters[i].Conditions = updateRunClusterRolloutSucceedConditions(updateRun.Generation)
 		}
-		deleteStageStatus.Conditions = updateRunStageRolloutSucceedConditions(updateRun.Generation, false)
+		deleteStageStatus.Conditions = updateRunStageRolloutSucceedConditions(updateRun.Generation)
 
 		wantStatus.StagesStatus = stagesStatus
 		wantStatus.DeletionStageStatus = deleteStageStatus

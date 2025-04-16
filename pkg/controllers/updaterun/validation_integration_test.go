@@ -436,8 +436,9 @@ func validateClusterStagedUpdateRunStatusConsistently(
 
 func generateFailedValidationStatus(
 	updateRun *placementv1beta1.ClusterStagedUpdateRun,
-	initialized *placementv1beta1.StagedUpdateRunStatus,
+	started *placementv1beta1.StagedUpdateRunStatus,
 ) *placementv1beta1.StagedUpdateRunStatus {
-	initialized.Conditions = append(initialized.Conditions, generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
-	return initialized
+	started.Conditions[1] = generateFalseProgressingCondition(updateRun, placementv1beta1.StagedUpdateRunConditionProgressing, false)
+	started.Conditions = append(started.Conditions, generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionSucceeded))
+	return started
 }
