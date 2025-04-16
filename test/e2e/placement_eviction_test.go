@@ -159,10 +159,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding, taint clus
 	})
 
 	It("should ensure no resources exist on evicted member cluster with taint", func() {
-		for _, cluster := range taintClusters {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
-			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
-		}
+		checkIfRemovedWorkResourcesFromMemberClusters(taintClusters)
 	})
 
 	It("should update cluster resource placement status as expected", func() {
@@ -583,10 +580,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickAll C
 	})
 
 	It("should ensure no resources exist on evicted member cluster with taint", func() {
-		for _, cluster := range taintClusters {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
-			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
-		}
+		checkIfRemovedWorkResourcesFromMemberClusters(taintClusters)
 	})
 
 	It("should update cluster resource placement status as expected", func() {
@@ -776,10 +770,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should ensure no resources exist on evicted member cluster with taint", func() {
-		for _, cluster := range taintClusters {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
-			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
-		}
+		checkIfRemovedWorkResourcesFromMemberClusters(taintClusters)
 	})
 
 	It("should update cluster resource placement status as expected", func() {
@@ -885,10 +876,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should ensure no resources exist on evicted member cluster with taint", func() {
-		for _, cluster := range taintClusters {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
-			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
-		}
+		checkIfRemovedWorkResourcesFromMemberClusters(taintClusters)
 	})
 
 	It("should update cluster resource placement status as expected", func() {
@@ -1170,10 +1158,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should ensure no resources exist on evicted member cluster with taint", func() {
-		for _, cluster := range taintClusters {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
-			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
-		}
+		checkIfRemovedWorkResourcesFromMemberClusters(taintClusters)
 	})
 
 	It("should update cluster resource placement status as expected", func() {
@@ -1279,10 +1264,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 	})
 
 	It("should ensure no resources exist on evicted member cluster with taint", func() {
-		for _, cluster := range taintClusters {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
-			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
-		}
+		checkIfRemovedWorkResourcesFromMemberClusters(taintClusters)
 	})
 
 	It("should update cluster resource placement status as expected", func() {

@@ -18,6 +18,8 @@ package e2e
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
@@ -982,12 +984,39 @@ func safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResourceIdentifiers [
 }
 
 func workNamespaceRemovedFromClusterActual(cluster *framework.Cluster) func() error {
-	client := cluster.KubeClient
-
 	ns := appNamespace()
 	return func() error {
-		if err := client.Get(ctx, types.NamespacedName{Name: ns.Name}, &corev1.Namespace{}); !errors.IsNotFound(err) {
-			return fmt.Errorf("work namespace %s still exists or an unexpected error occurred: %w", ns.Name, err)
+		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: ns.Name}, &ns); !errors.IsNotFound(err) {
+			if err == nil {
+				// List all pods and configmaps in the namespace
+				podList := &corev1.PodList{}
+				if listErr := cluster.KubeClient.List(ctx, podList, client.InNamespace(ns.Name)); listErr != nil {
+					return fmt.Errorf("work namespace %s still exists on cluster %s but failed to list pods: %w, ns deletion timestamp: %v, current timestamp: %v",
+						ns.Name, cluster.ClusterName, listErr, ns.GetDeletionTimestamp(), time.Now())
+				}
+				configMapList := &corev1.ConfigMapList{}
+				if listErr := cluster.KubeClient.List(ctx, configMapList, client.InNamespace(ns.Name)); listErr != nil {
+					return fmt.Errorf("work namespace %s still exists on cluster %s but failed to list configmaps: %w, ns deletion timestamp: %v, current timestamp: %v",
+						ns.Name, cluster.ClusterName, listErr, ns.GetDeletionTimestamp(), time.Now())
+				}
+
+				// Build resource status summary
+				var resourceStatus strings.Builder
+				resourceStatus.WriteString(fmt.Sprintf("\nList pods and configmaps in namespace %s:\n", ns.Name))
+				for _, item := range podList.Items {
+					resourceStatus.WriteString(fmt.Sprintf("- Pod: %s/%s\n", item.GetNamespace(), item.GetName()))
+					resourceStatus.WriteString(fmt.Sprintf("  DeletionTimestamp: %v\n", item.GetDeletionTimestamp()))
+					resourceStatus.WriteString(fmt.Sprintf("  Finalizers: %v\n", item.GetFinalizers()))
+				}
+				for _, item := range configMapList.Items {
+					resourceStatus.WriteString(fmt.Sprintf("- ConfigMap: %s/%s\n", item.GetNamespace(), item.GetName()))
+					resourceStatus.WriteString(fmt.Sprintf("  DeletionTimestamp: %v\n", item.GetDeletionTimestamp()))
+					resourceStatus.WriteString(fmt.Sprintf("  Finalizers: %v\n", item.GetFinalizers()))
+				}
+				return fmt.Errorf("work namespace %s still exists on cluster %s: deletion timestamp: %v, current timestamp: %v, resources: %s",
+					ns.Name, cluster.ClusterName, ns.GetDeletionTimestamp(), time.Now(), resourceStatus.String())
+			}
+			return fmt.Errorf("getting work namespace %s failed: %w", ns.Name, err)
 		}
 		return nil
 	}

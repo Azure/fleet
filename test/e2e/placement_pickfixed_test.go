@@ -137,8 +137,7 @@ var _ = Describe("placing resources using a CRP of PickFixed placement type", fu
 		})
 
 		It("should remove resources from previously specified clusters", func() {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster1EastProd)
-			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove resources from previously specified clusters")
+			checkIfRemovedWorkResourcesFromMemberClusters([]*framework.Cluster{memberCluster1EastProd})
 		})
 
 		AfterAll(func() {

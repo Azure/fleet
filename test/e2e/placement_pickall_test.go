@@ -293,8 +293,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		It("should remove resources on previously matched clusters", func() {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster1EastProd)
-			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove resources on previously matched clusters")
+			checkIfRemovedWorkResourcesFromMemberClusters([]*framework.Cluster{memberCluster1EastProd})
 		})
 
 		AfterAll(func() {
@@ -918,8 +917,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		It("should remove resources on previously matched clusters", func() {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster2EastCanary)
-			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove resources on previously matched clusters")
+			checkIfRemovedWorkResourcesFromMemberClusters([]*framework.Cluster{memberCluster2EastCanary})
 		})
 
 		AfterAll(func() {

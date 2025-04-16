@@ -114,10 +114,7 @@ var _ = Describe("placing resources using a cluster resource placement with no p
 	})
 
 	It("should ensure no resources exist on member clusters with taint", func() {
-		for _, cluster := range taintClusters {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
-			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
-		}
+		checkIfRemovedWorkResourcesFromMemberClusters(taintClusters)
 	})
 
 	It("should place resources on the selected cluster without taint", func() {
@@ -190,10 +187,7 @@ var _ = Describe("placing resources using a cluster resource placement with no p
 	})
 
 	It("should ensure no resources exist on member clusters with taint", func() {
-		for _, cluster := range taintClusters {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
-			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
-		}
+		checkIfRemovedWorkResourcesFromMemberClusters(taintClusters)
 	})
 
 	It("should place resources on the selected cluster without taint", func() {
@@ -307,10 +301,7 @@ var _ = Describe("picking N clusters with affinities and topology spread constra
 	})
 
 	It("should ensure no resources exist on member clusters with untolerated taint", func() {
-		for _, cluster := range unSelectedClusters {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
-			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if resources doesn't exist on member cluster")
-		}
+		checkIfRemovedWorkResourcesFromMemberClusters(unSelectedClusters)
 	})
 
 	AfterAll(func() {

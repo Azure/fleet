@@ -145,8 +145,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		It("should remove resources from the downscaled clusters", func() {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster2EastCanary)
-			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove resources from the downscaled clusters")
+			checkIfRemovedWorkResourcesFromMemberClusters([]*framework.Cluster{memberCluster2EastCanary})
 		})
 
 		AfterAll(func() {
@@ -411,8 +410,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		It("should remove resources from the unpicked clusters", func() {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster2EastCanary)
-			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove resources from the downscaled clusters")
+			checkIfRemovedWorkResourcesFromMemberClusters([]*framework.Cluster{memberCluster2EastCanary})
 		})
 
 		AfterAll(func() {
@@ -548,10 +546,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 
 		It("should remove resources from the downscaled clusters", func() {
 			downscaledClusters := []*framework.Cluster{memberCluster3WestProd, memberCluster2EastCanary}
-			for _, cluster := range downscaledClusters {
-				resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
-				Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove resources from the downscaled clusters")
-			}
+			checkIfRemovedWorkResourcesFromMemberClusters(downscaledClusters)
 		})
 
 		It("should update CRP status as expected", func() {

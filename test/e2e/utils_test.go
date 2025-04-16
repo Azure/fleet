@@ -754,7 +754,7 @@ func checkIfRemovedWorkResourcesFromMemberClusters(clusters []*framework.Cluster
 		memberCluster := clusters[idx]
 
 		workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
-		Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
+		Eventually(workResourcesRemovedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
 	}
 }
 
