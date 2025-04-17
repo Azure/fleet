@@ -87,7 +87,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 			return ctrl.Result{}, controller.NewUpdateIgnoreConflictError(err)
 		}
 	}
-
+	defer emitPlacementStatusMetric(&crp)
 	return r.handleUpdate(ctx, &crp)
 }
 
@@ -105,6 +105,7 @@ func (r *Reconciler) handleDelete(ctx context.Context, crp *fleetv1beta1.Cluster
 		return ctrl.Result{}, err
 	}
 
+	metrics.FleetPlacementStatusLastTimeStampSeconds.DeletePartialMatch(prometheus.Labels{"name": crp.Name})
 	controllerutil.RemoveFinalizer(crp, fleetv1beta1.ClusterResourcePlacementCleanupFinalizer)
 	if err := r.Client.Update(ctx, crp); err != nil {
 		klog.ErrorS(err, "Failed to remove crp finalizer", "clusterResourcePlacement", crpKObj)
@@ -112,7 +113,6 @@ func (r *Reconciler) handleDelete(ctx context.Context, crp *fleetv1beta1.Cluster
 	}
 	klog.V(2).InfoS("Removed crp-cleanup finalizer", "clusterResourcePlacement", crpKObj)
 	r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementCleanupFinalizerRemoved", "Deleted the snapshots and removed the placement cleanup finalizer")
-	metrics.FleetPlacementStatus.Delete(prometheus.Labels{"name": crp.Name})
 	return ctrl.Result{}, nil
 }
 
@@ -233,12 +233,10 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 			klog.V(2).InfoS("Placement has finished the rollout process and reached the desired status", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
 			r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementRolloutCompleted", "Placement has finished the rollout process and reached the desired status")
 		}
-		metrics.FleetPlacementStatus.WithLabelValues(crp.Name).Set(1)
 		// We don't need to requeue any request now by watching the binding changes
 		return ctrl.Result{}, nil
 	}
 
-	metrics.FleetPlacementStatus.WithLabelValues(crp.Name).Set(0)
 	if !isClusterScheduled {
 		// Note:
 		// If the scheduledCondition is failed, it means the placement requirement cannot be satisfied fully. For example,
@@ -1045,4 +1043,34 @@ func isRolloutCompleted(crp *fleetv1beta1.ClusterResourcePlacement) bool {
 
 func isCRPScheduled(crp *fleetv1beta1.ClusterResourcePlacement) bool {
 	return condition.IsConditionStatusTrue(crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType)), crp.Generation)
+}
+
+func emitPlacementStatusMetric(crp *fleetv1beta1.ClusterResourcePlacement) {
+	// Check CRP Scheduled condition.
+	status := "nil"
+	cond := crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType))
+	if !condition.IsConditionStatusTrue(cond, crp.Generation) {
+		if cond != nil && cond.ObservedGeneration == crp.Generation {
+			status = string(cond.Status)
+		}
+		metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(crp.Name, strconv.FormatInt(crp.Generation, 10), string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType), status).SetToCurrentTime()
+		return
+	}
+
+	// Check CRP expected conditions.
+	expectedCondTypes := determineExpectedCRPAndResourcePlacementStatusCondType(crp)
+	for _, condType := range expectedCondTypes {
+		cond = crp.GetCondition(string(condType.ClusterResourcePlacementConditionType()))
+		if !condition.IsConditionStatusTrue(cond, crp.Generation) {
+			if cond != nil && cond.ObservedGeneration == crp.Generation {
+				status = string(cond.Status)
+			}
+			metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(crp.Name, strconv.FormatInt(crp.Generation, 10), string(condType.ClusterResourcePlacementConditionType()), status).SetToCurrentTime()
+			return
+		}
+	}
+
+	// Emit the "Completed" condition metric to indicate that the CRP has completed.
+	// This condition is used solely for metric reporting purposes.
+	metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(crp.Name, strconv.FormatInt(crp.Generation, 10), "Completed", string(metav1.ConditionTrue)).SetToCurrentTime()
 }
