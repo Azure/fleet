@@ -51,6 +51,10 @@ import (
 // if object size is greater than 1MB https://github.com/kubernetes/kubernetes/blob/db1990f48b92d603f469c1c89e2ad36da1b74846/test/integration/master/synthetic_master_test.go#L337
 var resourceSnapshotResourceSizeLimit = 800 * (1 << 10) // 800KB
 
+// We use a safety resync period to requeue all the finished request just in case there is a bug in the system.
+// TODO: unify all the controllers with this pattern and make this configurable in place of the controller runtime resync period.
+const controllerResyncPeriod = 15 * time.Minute
+
 func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ctrl.Result, error) {
 	name, ok := key.(string)
 	if !ok {
@@ -188,7 +192,8 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 			klog.ErrorS(updateErr, "Failed to update the status", "clusterResourcePlacement", crpKObj)
 			return ctrl.Result{}, controller.NewUpdateIgnoreConflictError(updateErr)
 		}
-		return ctrl.Result{}, err
+		// no need to retry faster, the user needs to fix the resource selectors
+		return ctrl.Result{RequeueAfter: controllerResyncPeriod}, nil
 	}
 
 	latestSchedulingPolicySnapshot, err := r.getOrCreateClusterSchedulingPolicySnapshot(ctx, crp, int(revisionLimit))
@@ -250,11 +255,11 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		// Here we requeue the request to prevent a bug in the watcher.
 		klog.V(2).InfoS("Scheduler has not scheduled any cluster yet and requeue the request as a backup",
 			"clusterResourcePlacement", crpKObj, "scheduledCondition", crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType)), "generation", crp.Generation)
-		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+		return ctrl.Result{RequeueAfter: controllerResyncPeriod}, nil
 	}
 	klog.V(2).InfoS("Placement rollout has not finished yet and requeue the request", "clusterResourcePlacement", crpKObj, "status", crp.Status, "generation", crp.Generation)
 	// no need to requeue the request as the binding status will be changed but we add a long resync loop just in case.
-	return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+	return ctrl.Result{RequeueAfter: controllerResyncPeriod}, nil
 }
 
 func (r *Reconciler) getOrCreateClusterSchedulingPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, revisionHistoryLimit int) (*fleetv1beta1.ClusterSchedulingPolicySnapshot, error) {

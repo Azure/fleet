@@ -935,52 +935,52 @@ func TestSortResource(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		resources []runtime.Object
-		want      []runtime.Object
+		resources []*unstructured.Unstructured
+		want      []*unstructured.Unstructured
 	}{
 		"should handle empty resources list": {
-			resources: []runtime.Object{},
-			want:      []runtime.Object{},
+			resources: []*unstructured.Unstructured{},
+			want:      []*unstructured.Unstructured{},
 		},
 		"should handle single resource": {
-			resources: []runtime.Object{deployment},
-			want:      []runtime.Object{deployment},
+			resources: []*unstructured.Unstructured{deployment},
+			want:      []*unstructured.Unstructured{deployment},
 		},
 		"should handle multiple namespaces": {
-			resources: []runtime.Object{namespace1, namespace2},
-			want:      []runtime.Object{namespace2, namespace1},
+			resources: []*unstructured.Unstructured{namespace1, namespace2},
+			want:      []*unstructured.Unstructured{namespace2, namespace1},
 		},
 		"should gather selected resources with Namespace in front with order": {
-			resources: []runtime.Object{deployment, namespace1, namespace2},
-			want:      []runtime.Object{namespace2, namespace1, deployment},
+			resources: []*unstructured.Unstructured{deployment, namespace1, namespace2},
+			want:      []*unstructured.Unstructured{namespace2, namespace1, deployment},
 		},
 		"should gather selected resources with CRD in front with order": {
-			resources: []runtime.Object{clusterRole, crd1, crd2},
-			want:      []runtime.Object{crd2, crd1, clusterRole},
+			resources: []*unstructured.Unstructured{clusterRole, crd1, crd2},
+			want:      []*unstructured.Unstructured{crd2, crd1, clusterRole},
 		},
 		"should gather selected resources with CRD or Namespace in front  with order": {
-			resources: []runtime.Object{deployment, namespace1, namespace2, clusterRole, crd1, crd2},
-			want:      []runtime.Object{namespace2, namespace1, crd2, crd1, clusterRole, deployment},
+			resources: []*unstructured.Unstructured{deployment, namespace1, namespace2, clusterRole, crd1, crd2},
+			want:      []*unstructured.Unstructured{namespace2, namespace1, crd2, crd1, clusterRole, deployment},
 		},
 		"should gather selected resources with CRD or Namespace in front  with order, second case": {
-			resources: []runtime.Object{crd1, crd2, deployment, namespace2, clusterRole},
-			want:      []runtime.Object{namespace2, crd2, crd1, deployment, clusterRole},
+			resources: []*unstructured.Unstructured{crd1, crd2, deployment, namespace2, clusterRole},
+			want:      []*unstructured.Unstructured{namespace2, crd2, crd1, deployment, clusterRole},
 		},
 		"should gather selected resources with PersistentVolumeClaim in front with order": {
-			resources: []runtime.Object{deployment, pvc, namespace1, role},
-			want:      []runtime.Object{namespace1, pvc, deployment, role},
+			resources: []*unstructured.Unstructured{deployment, pvc, namespace1, role},
+			want:      []*unstructured.Unstructured{namespace1, pvc, deployment, role},
 		},
 		"should gather selected resources with Secret in front with order": {
-			resources: []runtime.Object{deployment, secret, namespace1, crd1, namespace2, role},
-			want:      []runtime.Object{namespace2, namespace1, crd1, secret, deployment, role},
+			resources: []*unstructured.Unstructured{deployment, secret, namespace1, crd1, namespace2, role},
+			want:      []*unstructured.Unstructured{namespace2, namespace1, crd1, secret, deployment, role},
 		},
 		"should gather selected resources with ConfigMap and Secret in front with order": {
-			resources: []runtime.Object{deployment, secret, namespace1, role, configMap, secret2},
-			want:      []runtime.Object{namespace1, configMap, secret2, secret, deployment, role},
+			resources: []*unstructured.Unstructured{deployment, secret, namespace1, role, configMap, secret2},
+			want:      []*unstructured.Unstructured{namespace1, configMap, secret2, secret, deployment, role},
 		},
 		"should gather selected all the resources with the right order": {
-			resources: []runtime.Object{configMap, deployment, role, crd1, pvc, secret2, clusterRole, secret, namespace1, namespace2, crd2},
-			want:      []runtime.Object{namespace2, namespace1, crd2, crd1, configMap, secret2, secret, pvc, deployment, clusterRole, role},
+			resources: []*unstructured.Unstructured{configMap, deployment, role, crd1, pvc, secret2, clusterRole, secret, namespace1, namespace2, crd2},
+			want:      []*unstructured.Unstructured{namespace2, namespace1, crd2, crd1, configMap, secret2, secret, pvc, deployment, clusterRole, role},
 		},
 	}
 
