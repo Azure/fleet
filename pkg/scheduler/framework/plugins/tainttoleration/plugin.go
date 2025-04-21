@@ -1,6 +1,6 @@
 package tainttoleration
 
-import "go.goms.io/fleet/pkg/scheduler/framework"
+import "github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
 
 // Plugin is the scheduler plugin that checks to see if taints on the MemberCluster
 // can be tolerated by tolerations on ClusterResourcePlacement

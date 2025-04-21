@@ -6,7 +6,7 @@ import (
 	apiErrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 )
 
 var (

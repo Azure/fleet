@@ -12,8 +12,8 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	toolsutils "go.goms.io/fleet/tools/utils"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	toolsutils "github.com/kubefleet-dev/kubefleet/tools/utils"
 )
 
 type Helper struct {

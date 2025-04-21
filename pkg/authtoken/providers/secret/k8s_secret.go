@@ -27,7 +27,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"go.goms.io/fleet/pkg/authtoken"
+	"github.com/kubefleet-dev/kubefleet/pkg/authtoken"
 )
 
 var (

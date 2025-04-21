@@ -29,7 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
 
 // Note (chenyu1): The fake client Fleet uses for unit tests has trouble processing certain requests

@@ -37,14 +37,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/cmd/hubagent/options"
-	"go.goms.io/fleet/pkg/controllers/clusterresourcebindingwatcher"
-	"go.goms.io/fleet/pkg/controllers/clusterresourceplacementwatcher"
-	"go.goms.io/fleet/pkg/controllers/clusterschedulingpolicysnapshot"
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/controller"
-	"go.goms.io/fleet/pkg/utils/informer"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/cmd/hubagent/options"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/clusterresourcebindingwatcher"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/clusterresourceplacementwatcher"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/clusterschedulingpolicysnapshot"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
 )
 
 var (

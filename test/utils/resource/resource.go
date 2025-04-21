@@ -28,7 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
 
 // ServiceResourceContentForTest creates a service for testing.

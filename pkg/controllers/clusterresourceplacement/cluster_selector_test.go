@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
 )
 
 func TestIsClusterEligible(t *testing.T) {

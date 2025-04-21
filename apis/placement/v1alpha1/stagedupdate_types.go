@@ -19,7 +19,7 @@ package v1alpha1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"go.goms.io/fleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
 
 // +genclient

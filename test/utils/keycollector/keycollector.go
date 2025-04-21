@@ -21,7 +21,7 @@ import (
 	"context"
 	"sync"
 
-	"go.goms.io/fleet/pkg/scheduler/queue"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/queue"
 )
 
 // SchedulerWorkqueueKeyCollector helps collect keys from a scheduler work queue for testing
