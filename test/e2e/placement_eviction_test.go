@@ -25,10 +25,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
-	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
-	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
-	testutilseviction "github.com/kubefleet-dev/kubefleet/test/utils/eviction"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/test/e2e/framework"
+	testutilseviction "go.goms.io/fleet/test/utils/eviction"
 )
 
 var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickFixed CRP, invalid eviction denied - No PDB specified", Ordered, func() {

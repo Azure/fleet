@@ -45,8 +45,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 
-	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	testv1alpha1 "github.com/kubefleet-dev/kubefleet/test/apis/v1alpha1"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
 )
 
 var _ = Describe("Work Status Reconciler", func() {

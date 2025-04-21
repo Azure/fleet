@@ -40,11 +40,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
-	"github.com/kubefleet-dev/kubefleet/pkg/webhook/validation"
-	testutils "github.com/kubefleet-dev/kubefleet/test/e2e/v1alpha1/utils"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/webhook/validation"
+	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 )

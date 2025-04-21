@@ -38,7 +38,7 @@ The KubeFleet and its leadership embrace the following values:
 
 ## Maintainers
 
-KubeFleet Maintainers have write access to the [project GitHub repository](https://github.com/kubefleet-dev/kubefleet).
+KubeFleet Maintainers have write access to the [project GitHub repository](https://go.goms.io/fleet).
 They can merge their own patches or patches from others. The current maintainers
 can be found in [MAINTAINERS.md](./MAINTAINERS.md).  Maintainers collectively manage the project's
 resources and contributors.

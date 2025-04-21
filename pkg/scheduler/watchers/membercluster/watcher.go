@@ -32,11 +32,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/clustereligibilitychecker"
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/queue"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
+	"go.goms.io/fleet/pkg/scheduler/queue"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 // Reconciler is the member cluster controller reconciler.

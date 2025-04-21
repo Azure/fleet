@@ -24,7 +24,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/util/errors"
 
-	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 )
 
 // ValidateResourceOverride validates resource override fields and returns error.

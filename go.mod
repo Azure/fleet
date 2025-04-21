@@ -1,4 +1,4 @@
-module github.com/kubefleet-dev/kubefleet
+module go.goms.io/fleet
 
 go 1.23.6
 

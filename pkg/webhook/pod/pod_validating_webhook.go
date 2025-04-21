@@ -29,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils"
 )
 
 const (

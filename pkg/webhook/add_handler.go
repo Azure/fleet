@@ -1,13 +1,13 @@
 package webhook
 
 import (
-	"github.com/kubefleet-dev/kubefleet/pkg/webhook/clusterresourceoverride"
-	"github.com/kubefleet-dev/kubefleet/pkg/webhook/clusterresourceplacement"
-	"github.com/kubefleet-dev/kubefleet/pkg/webhook/fleetresourcehandler"
-	"github.com/kubefleet-dev/kubefleet/pkg/webhook/membercluster"
-	"github.com/kubefleet-dev/kubefleet/pkg/webhook/pod"
-	"github.com/kubefleet-dev/kubefleet/pkg/webhook/replicaset"
-	"github.com/kubefleet-dev/kubefleet/pkg/webhook/resourceoverride"
+	"go.goms.io/fleet/pkg/webhook/clusterresourceoverride"
+	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
+	"go.goms.io/fleet/pkg/webhook/fleetresourcehandler"
+	"go.goms.io/fleet/pkg/webhook/membercluster"
+	"go.goms.io/fleet/pkg/webhook/pod"
+	"go.goms.io/fleet/pkg/webhook/replicaset"
+	"go.goms.io/fleet/pkg/webhook/resourceoverride"
 )
 
 func init() {

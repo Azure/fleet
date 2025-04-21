@@ -36,14 +36,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/annotations"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller/metrics"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/defaulter"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/labels"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/resource"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/annotations"
+	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/controller/metrics"
+	"go.goms.io/fleet/pkg/utils/defaulter"
+	"go.goms.io/fleet/pkg/utils/labels"
+	"go.goms.io/fleet/pkg/utils/resource"
 )
 
 // The max size of an object in k8s is 1.5MB because of ETCD limit https://etcd.io/docs/v3.3/dev-guide/limit/.

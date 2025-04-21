@@ -24,7 +24,7 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	componentbaseconfig "k8s.io/component-base/config"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils"
 )
 
 // Options contains everything necessary to create and run controller-manager.

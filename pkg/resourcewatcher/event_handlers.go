@@ -28,8 +28,8 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
 )
 
 // handleTombStoneObj handles the case that the delete object is a tombStone instead of the real object

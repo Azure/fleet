@@ -18,12 +18,12 @@ limitations under the License.
 package profile
 
 import (
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/clusteraffinity"
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/clustereligibility"
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/sameplacementaffinity"
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/tainttoleration"
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/topologyspreadconstraints"
+	"go.goms.io/fleet/pkg/scheduler/framework"
+	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clusteraffinity"
+	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clustereligibility"
+	"go.goms.io/fleet/pkg/scheduler/framework/plugins/sameplacementaffinity"
+	"go.goms.io/fleet/pkg/scheduler/framework/plugins/tainttoleration"
+	"go.goms.io/fleet/pkg/scheduler/framework/plugins/topologyspreadconstraints"
 )
 
 const (

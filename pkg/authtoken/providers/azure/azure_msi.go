@@ -25,7 +25,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/authtoken"
+	"go.goms.io/fleet/pkg/authtoken"
 )
 
 const (

@@ -28,7 +28,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider/azure/trackers"
+	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 )
 
 // NodeReconciler reconciles Node objects.
