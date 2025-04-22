@@ -1,6 +1,17 @@
 /*
-Copyright (c) Microsoft Corporation.
-Licensed under the MIT license.
+Copyright 2025 The KubeFleet Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 */
 package e2e
 
@@ -672,6 +683,93 @@ var _ = Describe("validating CRP when selecting a reserved resource", Ordered, f
 		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
+})
+
+var _ = Describe("When creating a pickN ClusterResourcePlacement with duplicated resources", Ordered, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	var crp *placementv1beta1.ClusterResourcePlacement
+	var existingNS corev1.Namespace
+	BeforeAll(func() {
+		By("creating work resources on hub cluster")
+		createWorkResources()
+		existingNS = appNamespace()
+		By("Create a crp that selects the same resource twice")
+		crp = &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+				// Add a custom finalizer; this would allow us to better observe
+				// the behavior of the controllers.
+				Finalizers: []string{customDeletionBlockerFinalizer},
+			},
+			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					{
+						Group:   corev1.GroupName,
+						Version: "v1",
+						Kind:    "Namespace",
+						Name:    existingNS.Name,
+					},
+					{
+						Group:   corev1.GroupName,
+						Version: "v1",
+						Kind:    "Namespace",
+						Name:    existingNS.Name,
+					},
+				},
+			},
+		}
+		By(fmt.Sprintf("creating placement %s", crpName))
+		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+	})
+
+	AfterAll(func() {
+		By(fmt.Sprintf("garbage all things related to placement %s", crpName))
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+	})
+
+	It("should update CRP status as expected", func() {
+		Eventually(func() error {
+			gotCRP := &placementv1beta1.ClusterResourcePlacement{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, gotCRP); err != nil {
+				return err
+			}
+			wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+				Conditions: []metav1.Condition{
+					{
+						Status:             metav1.ConditionFalse,
+						Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+						Reason:             clusterresourceplacement.InvalidResourceSelectorsReason,
+						ObservedGeneration: 1,
+					},
+				},
+			}
+			if diff := cmp.Diff(gotCRP.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
+				return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
+			}
+			return nil
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	It("updating the CRP to select one namespace", func() {
+		gotCRP := &placementv1beta1.ClusterResourcePlacement{}
+		Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, gotCRP)).Should(Succeed(), "Failed to get CRP %s", crpName)
+		gotCRP.Spec.ResourceSelectors = []placementv1beta1.ClusterResourceSelector{
+			{
+				Group:   corev1.GroupName,
+				Version: "v1",
+				Kind:    "Namespace",
+				Name:    existingNS.Name,
+			},
+		}
+		Expect(hubClient.Update(ctx, gotCRP)).To(Succeed(), "Failed to update CRP %s", crpName)
+	})
+
+	It("should update CRP status as expected", func() {
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	It("should place the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 })
 
 var _ = Describe("validating CRP when failed to apply resources", Ordered, func() {

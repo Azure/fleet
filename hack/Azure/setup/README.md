@@ -107,7 +107,7 @@ kubectl get membercluster $MEMBER_CLUSTER
 
 If you see that the cluster is still in an unknown state, it might be that the member cluster
 is still connecting to the hub cluster. Should this state persist for a prolonged
-period, refer to the [Troubleshooting Guide](../../../docs/troubleshooting/README.md) for
+period, refer to the troubleshooting guide in the [KubeFleet documentation](https://github.com/kubefleet-dev/website) for
 more information.
 
 ## Adding labels to a member cluster

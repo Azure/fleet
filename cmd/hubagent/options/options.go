@@ -1,6 +1,17 @@
 /*
-Copyright (c) Microsoft Corporation.
-Licensed under the MIT license.
+Copyright 2025 The KubeFleet Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 */
 
 package options
@@ -137,7 +148,7 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 		"Comma-separated namespaces that should be skipped from propagating in addition to the default skipped namespaces(fleet-system, namespaces prefixed by kube- and fleet-work-).")
 	flags.Float64Var(&o.HubQPS, "hub-api-qps", 250, "QPS to use while talking with fleet-apiserver. Doesn't cover events and node heartbeat apis which rate limiting is controlled by a different set of flags.")
 	flags.IntVar(&o.HubBurst, "hub-api-burst", 1000, "Burst to use while talking with fleet-apiserver. Doesn't cover events and node heartbeat apis which rate limiting is controlled by a different set of flags.")
-	flags.DurationVar(&o.ResyncPeriod.Duration, "resync-period", 300*time.Second, "Base frequency the informers are resynced.")
+	flags.DurationVar(&o.ResyncPeriod.Duration, "resync-period", 6*time.Hour, "Base frequency the informers are resynced.")
 	flags.IntVar(&o.MaxConcurrentClusterPlacement, "max-concurrent-cluster-placement", 100, "The max number of concurrent cluster placement to run concurrently.")
 	flags.IntVar(&o.ConcurrentResourceChangeSyncs, "concurrent-resource-change-syncs", 20, "The number of resourceChange reconcilers that are allowed to run concurrently.")
 	flags.IntVar(&o.MaxFleetSizeSupported, "max-fleet-size", 100, "The max number of member clusters supported in this fleet")

@@ -1,14 +1,35 @@
 # Contributing
 
-This project welcomes contributions and suggestions. Most contributions require you to
-agree to a Contributor License Agreement (CLA) declaring that you have the right to,
-and actually do, grant us the rights to use your contribution. For details, visit
-https://cla.microsoft.com.
+KubeFleet welcomes contributions and suggestions!
 
-When you submit a pull request, a CLA-bot will automatically determine whether you need
-to provide a CLA and decorate the PR appropriately (e.g., label, comment). Simply follow the
-instructions provided by the bot. You will only need to do this once across all repositories using our CLA.
+## Terms
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/)
-or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+All contributions to the repository must be submitted under the terms of the [Apache Public License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
+## Certificate of Origin
+
+By contributing to this project, you agree to the Developer Certificate of Origin (DCO). This document was created by the Linux Kernel community and is a simple statement that you, as a contributor, have the legal right to make the contribution. See the [DCO](DCO) file for details.
+
+## DCO Sign Off
+
+You must sign off your commit to state that you certify the [DCO](DCO). To certify your commit for DCO, add a line like the following at the end of your commit message:
+
+```
+Signed-off-by: John Smith <john@example.com>
+```
+
+This can be done with the `--signoff` option to `git commit`. See the [Git documentation](https://git-scm.com/docs/git-commit#Documentation/git-commit.txt--s) for details.
+
+## Code of Conduct
+
+The KubeFleet project has adopted the CNCF Code of Conduct. Refer to our [Community Code of Conduct](CODE_OF_CONDUCT.md) for details.
+
+## Contributing a patch
+
+1. Submit an issue describing your proposed change to the repository in question. The repository owners will respond to your issue promptly.
+2. Fork the desired repository, then develop and test your code changes.
+3. Submit a pull request.
+
+## Issue and pull request management
+
+Anyone can comment on issues and submit reviews for pull requests. In order to be assigned an issue or pull request, you can leave a `/assign <your Github ID>` comment on the issue or pull request.
