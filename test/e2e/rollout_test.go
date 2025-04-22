@@ -38,12 +38,12 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/workapplier"
-	"go.goms.io/fleet/pkg/utils"
-	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
-	"go.goms.io/fleet/test/e2e/framework"
-	"go.goms.io/fleet/test/utils/controller"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	testv1alpha1 "github.com/kubefleet-dev/kubefleet/test/apis/v1alpha1"
+	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
+	"github.com/kubefleet-dev/kubefleet/test/utils/controller"
 )
 
 const (

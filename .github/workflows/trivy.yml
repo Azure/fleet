@@ -22,7 +22,7 @@ env:
 
 jobs:
   export-registry:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest #Latest tag points to the latest LTS release of Ubuntu per docker hub
     outputs:
       registry: ${{ steps.export.outputs.registry }}
     steps:
@@ -36,7 +36,7 @@ jobs:
     needs: export-registry
     env:
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest #Latest tag points to the latest LTS release of Ubuntu per docker hub
     steps:
       - name: Set up Go ${{ env.GO_VERSION }}
         uses: actions/setup-go@v5

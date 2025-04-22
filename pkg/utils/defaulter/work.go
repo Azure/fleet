@@ -17,7 +17,7 @@ limitations under the License.
 // Package defaulter sets default values for the fleet resources.
 package defaulter
 
-import placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+import placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 
 // SetDefaultsWork sets the default values for the Work resource.
 func SetDefaultsWork(w *placementv1beta1.Work) {

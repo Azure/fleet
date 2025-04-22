@@ -28,8 +28,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	"go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/test/e2e/v1alpha1/utils"
+	"github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
+	"github.com/kubefleet-dev/kubefleet/test/e2e/v1alpha1/utils"
 )
 
 // Serial - Ginkgo will guarantee that these specs will never run in parallel with other specs.

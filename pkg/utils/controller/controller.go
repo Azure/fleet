@@ -32,10 +32,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils/controller/metrics"
-	"go.goms.io/fleet/pkg/utils/keys"
-	"go.goms.io/fleet/pkg/utils/labels"
+	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller/metrics"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/keys"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/labels"
 )
 
 const (

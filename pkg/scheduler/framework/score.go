@@ -17,7 +17,7 @@ limitations under the License.
 package framework
 
 import (
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 )
 
 // ClusterScore is the scores the scheduler assigns to a cluster.

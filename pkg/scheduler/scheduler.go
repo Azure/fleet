@@ -34,11 +34,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/metrics"
-	"go.goms.io/fleet/pkg/scheduler/framework"
-	"go.goms.io/fleet/pkg/scheduler/queue"
-	"go.goms.io/fleet/pkg/utils/controller"
+	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/queue"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
 // Scheduler is the scheduler for Fleet workloads.

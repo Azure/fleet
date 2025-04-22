@@ -24,9 +24,9 @@ import (
 	"github.com/spf13/pflag"
 	"k8s.io/klog/v2"
 
-	"go.goms.io/fleet/pkg/authtoken"
-	"go.goms.io/fleet/pkg/authtoken/providers/azure"
-	"go.goms.io/fleet/pkg/authtoken/providers/secret"
+	"github.com/kubefleet-dev/kubefleet/pkg/authtoken"
+	"github.com/kubefleet-dev/kubefleet/pkg/authtoken/providers/azure"
+	"github.com/kubefleet-dev/kubefleet/pkg/authtoken/providers/secret"
 )
 
 var (

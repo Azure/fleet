@@ -22,7 +22,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
 
-	"go.goms.io/fleet/pkg/utils/informer"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
 )
 
 // FakeManager is a fake informer manager.
