@@ -31,8 +31,8 @@ import (
 	"k8s.io/component-helpers/apps/poddisruptionbudget"
 	"k8s.io/klog/v2"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 // trackInMemberClusterObjAvailability tracks the availability of an applied objects in the member cluster.

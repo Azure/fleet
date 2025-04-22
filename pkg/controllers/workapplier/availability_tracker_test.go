@@ -37,9 +37,9 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
-	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/parallelizer"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/parallelizer"
 )
 
 var (

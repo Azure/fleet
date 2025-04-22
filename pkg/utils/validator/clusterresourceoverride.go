@@ -22,8 +22,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/errors"
 
-	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
-	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 // ValidateClusterResourceOverride validates cluster resource override fields and returns error.

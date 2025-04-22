@@ -19,11 +19,11 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
-	evictionutils "github.com/kubefleet-dev/kubefleet/pkg/utils/eviction"
-	toolsutils "github.com/kubefleet-dev/kubefleet/tools/utils"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/condition"
+	evictionutils "go.goms.io/fleet/pkg/utils/eviction"
+	toolsutils "go.goms.io/fleet/tools/utils"
 )
 
 const (

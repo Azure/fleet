@@ -32,8 +32,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
-	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider/azure/trackers"
+	"go.goms.io/fleet/pkg/propertyprovider"
+	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 )
 
 const (

@@ -30,9 +30,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/queue"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/scheduler/queue"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 // Reconciler reconciles the deletion of a CRP.

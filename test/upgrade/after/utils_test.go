@@ -19,7 +19,7 @@ package after
 import (
 	. "github.com/onsi/gomega"
 
-	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
+	"go.goms.io/fleet/test/e2e/framework"
 )
 
 // checkIfPlacedWorkResourcesOnAllMemberClustersConsistently verifies if the work resources have been placed on

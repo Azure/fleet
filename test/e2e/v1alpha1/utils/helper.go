@@ -41,9 +41,9 @@ import (
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 
-	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
-	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/test/e2e/framework"
 )
 
 const (

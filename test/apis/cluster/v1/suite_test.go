@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	clusterv1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1"
+	clusterv1 "go.goms.io/fleet/apis/cluster/v1"
 )
 
 var (
