@@ -1,6 +1,17 @@
 /*
-Copyright (c) Microsoft Corporation.
-Licensed under the MIT license.
+Copyright 2025 The KubeFleet Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 */
 
 package e2e
@@ -134,8 +145,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		It("should remove resources from the downscaled clusters", func() {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster2EastCanary)
-			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove resources from the downscaled clusters")
+			checkIfRemovedWorkResourcesFromMemberClusters([]*framework.Cluster{memberCluster2EastCanary})
 		})
 
 		AfterAll(func() {
@@ -400,8 +410,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		It("should remove resources from the unpicked clusters", func() {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster2EastCanary)
-			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove resources from the downscaled clusters")
+			checkIfRemovedWorkResourcesFromMemberClusters([]*framework.Cluster{memberCluster2EastCanary})
 		})
 
 		AfterAll(func() {
@@ -537,10 +546,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 
 		It("should remove resources from the downscaled clusters", func() {
 			downscaledClusters := []*framework.Cluster{memberCluster3WestProd, memberCluster2EastCanary}
-			for _, cluster := range downscaledClusters {
-				resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
-				Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove resources from the downscaled clusters")
-			}
+			checkIfRemovedWorkResourcesFromMemberClusters(downscaledClusters)
 		})
 
 		It("should update CRP status as expected", func() {

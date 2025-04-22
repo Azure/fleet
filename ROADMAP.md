@@ -13,12 +13,13 @@
 ## Support scheduling for namespaced resources (heterogeneous namespace)
 - Support independent scheduling policy for namespaced resources
   - e.g. The application admin can pick one workload in a namespace to cluster A while the other workload in the same namespace to cluster B.
+  
+## Support Job dispatching
+- Support the use case to use the fleet as a super computer to run hyper scale applications
 
 ## Dynamic scheduling
 - De-scheduler for the fleet
   - The de-scheduler would move the workload to the right cluster if the cluster is not the best fit for the workload anymore.
-- Cordon a cluster
-  - The fleet admin can cordon a cluster to move all the workloads off the cluster.
 - Rebalance the workload
   - The application admin can rebalance the workload to make sure the workload is spread evenly across the clusters.
 
@@ -34,3 +35,6 @@
 ## Support Spread mode for workload
 - The application admin can specify a spread mode for their workload.
     - The move between clusters would follow the max-unavailable/min-available pods rule.
+
+## Support identity federation
+- The member agent can assume the identity of the operator on the hub cluster and not using admin privilege when applying the resources.

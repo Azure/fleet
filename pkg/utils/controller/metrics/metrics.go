@@ -1,6 +1,17 @@
 /*
-Copyright (c) Microsoft Corporation.
-Licensed under the MIT license.
+Copyright 2025 The KubeFleet Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 */
 
 package metrics
@@ -50,10 +61,11 @@ var (
 		Help: "Number of currently used workers per controller",
 	}, []string{"controller"})
 
-	FleetPlacementStatus = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "fleet_workload_placement_complete",
-		Help: "Placement complete status ",
-	}, []string{"name"})
+	// FleetPlacementStatusLastTimeStampSeconds is a prometheus metric which keeps track of the last placement status.
+	FleetPlacementStatusLastTimeStampSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "fleet_workload_placement_status_last_timestamp_seconds",
+		Help: "Timestamp in seconds of the last current placement status condition of crp.",
+	}, []string{"name", "generation", "conditionType", "status"})
 
 	// FleetEvictionStatus is prometheus metrics which holds the
 	// status of eviction completion.
@@ -70,7 +82,7 @@ func init() {
 		FleetReconcileTime,
 		FleetWorkerCount,
 		FleetActiveWorkers,
-		FleetPlacementStatus,
+		FleetPlacementStatusLastTimeStampSeconds,
 		FleetEvictionStatus,
 	)
 }

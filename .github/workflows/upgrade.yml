@@ -8,10 +8,10 @@ on:
   workflow_dispatch:
     inputs:
       beforeTagOrCommit:
-        description: 'The baseline tag or commit to build Fleet agents from; if not specified, the latest tag will be used'     
+        description: 'The baseline tag or commit to build Fleet agents from; if not specified, the latest tag will be used'
         required: false
       afterTagOrCommit:
-        description: 'The new tag or commit to build Fleet agents from; if not specified, the last commit in the codebase (PR or branch) will be used'     
+        description: 'The new tag or commit to build Fleet agents from; if not specified, the last commit in the codebase (PR or branch) will be used'
         required: false
   pull_request:
     branches:
@@ -48,6 +48,10 @@ jobs:
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
+        with:
+          # Fetch the history of all branches and tags.
+          # This is needed for the test suite to switch between releases.
+          fetch-depth: 0
               
       - name: Set up Ginkgo CLI
         run: |
@@ -86,6 +90,10 @@ jobs:
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
+        with:
+          # Fetch the history of all branches and tags.
+          # This is needed for the test suite to switch between releases.
+          fetch-depth: 0
               
       - name: Set up Ginkgo CLI
         run: |
@@ -124,6 +132,10 @@ jobs:
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
+        with:
+          # Fetch the history of all branches and tags.
+          # This is needed for the test suite to switch between releases.
+          fetch-depth: 0
               
       - name: Set up Ginkgo CLI
         run: |
