@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	. "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
+	. "go.goms.io/fleet/apis/v1alpha1"
 )
 
 func TestMatchPlacement(t *testing.T) {

@@ -33,9 +33,9 @@ import (
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	testv1alpha1 "github.com/kubefleet-dev/kubefleet/test/apis/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/test/utils/controller"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
+	"go.goms.io/fleet/test/utils/controller"
 )
 
 var _ = Describe("Work Controller", func() {

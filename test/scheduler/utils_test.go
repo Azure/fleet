@@ -39,15 +39,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/clustereligibilitychecker"
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/clusteraffinity"
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/clustereligibility"
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/sameplacementaffinity"
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/tainttoleration"
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/topologyspreadconstraints"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
+	"go.goms.io/fleet/pkg/scheduler/framework"
+	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clusteraffinity"
+	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clustereligibility"
+	"go.goms.io/fleet/pkg/scheduler/framework/plugins/sameplacementaffinity"
+	"go.goms.io/fleet/pkg/scheduler/framework/plugins/tainttoleration"
+	"go.goms.io/fleet/pkg/scheduler/framework/plugins/topologyspreadconstraints"
 )
 
 // This file features some utilities used in the test suites.

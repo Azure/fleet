@@ -17,7 +17,7 @@ limitations under the License.
 package framework
 
 import (
-	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 // prepareScheduledOrBoundBindingsMap returns a map that allows quick lookup of whether a cluster

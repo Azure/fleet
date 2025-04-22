@@ -23,7 +23,7 @@ import (
 	"k8s.io/klog/v2"
 	metricsV1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
+	"go.goms.io/fleet/pkg/utils/informer"
 )
 
 // getWatchableResources returns all api resources from discoveryClient that we can watch.

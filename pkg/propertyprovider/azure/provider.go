@@ -33,10 +33,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
-	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider/azure/controllers"
-	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider/azure/trackers"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	"go.goms.io/fleet/pkg/propertyprovider"
+	"go.goms.io/fleet/pkg/propertyprovider/azure/controllers"
+	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 )
 
 const (

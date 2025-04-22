@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
+	"go.goms.io/fleet/test/e2e/framework"
 )
 
 // TODO (mng): move this test to join/leave tests after those tests finished.
