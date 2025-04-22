@@ -1,6 +1,17 @@
 /*
-Copyright (c) Microsoft Corporation.
-Licensed under the MIT license.
+Copyright 2025 The KubeFleet Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 */
 
 package clusterresourceplacement
@@ -37,8 +48,7 @@ func (r *Reconciler) selectResources(placement *fleetv1alpha1.ClusterResourcePla
 	}
 	placement.Status.SelectedResources = make([]fleetv1alpha1.ResourceIdentifier, 0)
 	manifests := make([]workv1alpha1.Manifest, len(selectedObjects))
-	for i, obj := range selectedObjects {
-		unstructuredObj := obj.DeepCopyObject().(*unstructured.Unstructured)
+	for i, unstructuredObj := range selectedObjects {
 		gvk := unstructuredObj.GroupVersionKind()
 		res := fleetv1alpha1.ResourceIdentifier{
 			Group:     gvk.Group,
@@ -70,8 +80,9 @@ func convertResourceSelector(old []fleetv1alpha1.ClusterResourceSelector) []flee
 }
 
 // gatherSelectedResource gets all the resources according to the resource selector.
-func (r *Reconciler) gatherSelectedResource(placement string, selectors []fleetv1beta1.ClusterResourceSelector) ([]runtime.Object, error) {
-	var resources []runtime.Object
+func (r *Reconciler) gatherSelectedResource(placement string, selectors []fleetv1beta1.ClusterResourceSelector) ([]*unstructured.Unstructured, error) {
+	var resources []*unstructured.Unstructured
+	var resourceMap = make(map[fleetv1beta1.ResourceIdentifier]bool)
 	for _, selector := range selectors {
 		gvk := schema.GroupVersionKind{
 			Group:   selector.Group,
@@ -93,7 +104,23 @@ func (r *Reconciler) gatherSelectedResource(placement string, selectors []fleetv
 		if err != nil {
 			return nil, err
 		}
-		resources = append(resources, objs...)
+		for _, obj := range objs {
+			uObj := obj.(*unstructured.Unstructured)
+			ri := fleetv1beta1.ResourceIdentifier{
+				Group:     obj.GetObjectKind().GroupVersionKind().Group,
+				Version:   obj.GetObjectKind().GroupVersionKind().Version,
+				Kind:      obj.GetObjectKind().GroupVersionKind().Kind,
+				Name:      uObj.GetName(),
+				Namespace: uObj.GetNamespace(),
+			}
+			if _, exist := resourceMap[ri]; exist {
+				err = fmt.Errorf("found duplicate resource %+v", ri)
+				klog.ErrorS(err, "user selected one resource more than once", "resource", ri, "placement", placement)
+				return nil, controller.NewUserError(err)
+			}
+			resourceMap[ri] = true
+			resources = append(resources, uObj)
+		}
 	}
 	// sort the resources in strict order so that we will get the stable list of manifest so that
 	// the generated work object doesn't change between reconcile loops
@@ -102,16 +129,16 @@ func (r *Reconciler) gatherSelectedResource(placement string, selectors []fleetv
 	return resources, nil
 }
 
-func sortResources(resources []runtime.Object) {
+func sortResources(resources []*unstructured.Unstructured) {
 	sort.Slice(resources, func(i, j int) bool {
-		obj1 := resources[i].DeepCopyObject().(*unstructured.Unstructured)
-		obj2 := resources[j].DeepCopyObject().(*unstructured.Unstructured)
+		obj1 := resources[i]
+		obj2 := resources[j]
 		gvk1 := obj1.GetObjectKind().GroupVersionKind().String()
 		gvk2 := obj2.GetObjectKind().GroupVersionKind().String()
 		// compare group/version;kind for the rest of type of resources
 		gvkComp := strings.Compare(gvk1, gvk2)
 		if gvkComp == 0 {
-			// same gvk, compare namespace/name
+			// same gvk, compare namespace/name, no duplication exists
 			return strings.Compare(fmt.Sprintf("%s/%s", obj1.GetNamespace(), obj1.GetName()),
 				fmt.Sprintf("%s/%s", obj2.GetNamespace(), obj2.GetName())) > 0
 		}
@@ -431,8 +458,7 @@ func (r *Reconciler) selectResourcesForPlacement(placement *fleetv1beta1.Cluster
 
 	resources := make([]fleetv1beta1.ResourceContent, len(selectedObjects))
 	resourcesIDs := make([]fleetv1beta1.ResourceIdentifier, len(selectedObjects))
-	for i, obj := range selectedObjects {
-		unstructuredObj := obj.DeepCopyObject().(*unstructured.Unstructured)
+	for i, unstructuredObj := range selectedObjects {
 		rc, err := generateResourceContent(unstructuredObj)
 		if err != nil {
 			return 0, nil, nil, err
