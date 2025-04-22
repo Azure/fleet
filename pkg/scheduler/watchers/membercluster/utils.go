@@ -19,8 +19,8 @@ package membercluster
 import (
 	"k8s.io/apimachinery/pkg/api/meta"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils/condition"
+	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 )
 
 // isCRPFullyScheduled returns whether a CRP is fully scheduled.

@@ -26,9 +26,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	metricsV1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
 )
 
 var (

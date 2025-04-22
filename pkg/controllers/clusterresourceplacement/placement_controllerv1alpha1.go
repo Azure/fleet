@@ -32,11 +32,11 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/metrics"
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/controller"
-	"go.goms.io/fleet/pkg/utils/informer"
+	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
+	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
 )
 
 var (

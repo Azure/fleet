@@ -8,7 +8,7 @@ feature request as a new Issue.
 
 For help and questions about using this project, please
 
-* start the conversation in the [GitHub Discussions](https://go.goms.io/fleet/discussions/).
+* start the conversation in the [GitHub Discussions](https://github.com/kubefleet-dev/kubefleet/discussions/).
 
 We are actively exploring other means for developers, system admins, and anyone who has an interest
 in the multi-cluster domain to engage with us. Please stay tuned.

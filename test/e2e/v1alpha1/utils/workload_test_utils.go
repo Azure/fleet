@@ -29,8 +29,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/test/e2e/framework"
+	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
+	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
 )
 
 // CmpClusterRole compares actual cluster role with expected cluster role.

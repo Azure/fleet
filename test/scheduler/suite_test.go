@@ -43,16 +43,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/propertyprovider"
-	"go.goms.io/fleet/pkg/scheduler"
-	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
-	"go.goms.io/fleet/pkg/scheduler/queue"
-	"go.goms.io/fleet/pkg/scheduler/watchers/clusterresourcebinding"
-	"go.goms.io/fleet/pkg/scheduler/watchers/clusterresourceplacement"
-	"go.goms.io/fleet/pkg/scheduler/watchers/clusterschedulingpolicysnapshot"
-	"go.goms.io/fleet/pkg/scheduler/watchers/membercluster"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/clustereligibilitychecker"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/queue"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/watchers/clusterresourcebinding"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/watchers/clusterresourceplacement"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/watchers/clusterschedulingpolicysnapshot"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/watchers/membercluster"
 )
 
 const (

@@ -30,8 +30,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/utils/controller"
+	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
 func TestHandleTombStoneObj(t *testing.T) {

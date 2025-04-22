@@ -17,11 +17,11 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/informer"
-	"go.goms.io/fleet/pkg/utils/validator"
-	testinformer "go.goms.io/fleet/test/utils/informer"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/validator"
+	testinformer "github.com/kubefleet-dev/kubefleet/test/utils/informer"
 )
 
 var (

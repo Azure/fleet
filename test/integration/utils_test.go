@@ -39,9 +39,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/utils"
-	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
+	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	testv1alpha1 "github.com/kubefleet-dev/kubefleet/test/apis/v1alpha1"
 )
 
 const (

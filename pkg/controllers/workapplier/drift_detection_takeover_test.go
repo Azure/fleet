@@ -35,7 +35,7 @@ import (
 	"k8s.io/utils/ptr"
 	ctrlfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
 
 var (

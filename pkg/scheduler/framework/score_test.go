@@ -23,7 +23,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 )
 
 // TestClusterScoreToAdd tests the Add() method of ClusterScore.

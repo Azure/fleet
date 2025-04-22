@@ -19,8 +19,8 @@ package binding
 import (
 	"k8s.io/klog/v2"
 
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils/condition"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 )
 
 // HasBindingFailed checks if ClusterResourceBinding has failed based on its conditions.

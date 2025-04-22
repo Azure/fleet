@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"go.goms.io/fleet/pkg/authtoken/providers/azure"
+	"github.com/kubefleet-dev/kubefleet/pkg/authtoken/providers/azure"
 )
 
 func TestParseArgs(t *testing.T) {

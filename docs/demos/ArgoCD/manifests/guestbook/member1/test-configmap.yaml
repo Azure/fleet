@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: test-config
-data:
-  branch: main
-  cluster: member1

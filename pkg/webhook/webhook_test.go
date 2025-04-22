@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"go.goms.io/fleet/cmd/hubagent/options"
-	"go.goms.io/fleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/cmd/hubagent/options"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 )
 
 func TestBuildFleetValidatingWebhooks(t *testing.T) {
