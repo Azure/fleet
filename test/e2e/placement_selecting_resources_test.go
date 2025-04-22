@@ -41,7 +41,7 @@ import (
 
 var (
 	// we are propagating large secrets from hub to member clusters the timeout needs to be large.
-	largeEventuallyDuration = time.Second * 30
+	largeEventuallyDuration = time.Second * 40
 )
 
 // Note that this container will run in parallel with other containers.
