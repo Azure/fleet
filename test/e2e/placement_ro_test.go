@@ -18,6 +18,7 @@ package e2e
 import (
 	"fmt"
 
+	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -28,6 +29,8 @@ import (
 
 	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	scheduler "github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 )
 
 // Note that this container will run in parallel with other containers.
@@ -200,12 +203,12 @@ var _ = Context("creating resourceOverride with multiple jsonPatchOverrides to o
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	roSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
 		createWorkResources()
 
-		// Create the ro before crp so that the observed resource index is predictable.
 		ro := &placementv1alpha1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      roName,
@@ -238,6 +241,11 @@ var _ = Context("creating resourceOverride with multiple jsonPatchOverrides to o
 		}
 		By(fmt.Sprintf("creating resourceOverride %s", roName))
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
+		// wait until the snapshot is created so that the observed resource index is predictable.
+		Eventually(func() error {
+			roSnap := &placementv1alpha1.ResourceOverrideSnapshot{}
+			return hubClient.Get(ctx, types.NamespacedName{Name: roSnapShotName, Namespace: roNamespace}, roSnap)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 
 		// Create the CRP.
 		createCRP(crpName)
@@ -253,7 +261,7 @@ var _ = Context("creating resourceOverride with multiple jsonPatchOverrides to o
 
 	It("should update CRP status as expected", func() {
 		wantRONames := []placementv1beta1.NamespacedName{
-			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)},
+			{Namespace: roNamespace, Name: roSnapShotName},
 		}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, wantRONames)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
@@ -407,6 +415,8 @@ var _ = Context("creating resourceOverride and clusterResourceOverride, resource
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	roSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)
+	croSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
@@ -437,7 +447,6 @@ var _ = Context("creating resourceOverride and clusterResourceOverride, resource
 		}
 		By(fmt.Sprintf("creating clusterResourceOverride %s", croName))
 		Expect(hubClient.Create(ctx, cro)).To(Succeed(), "Failed to create clusterResourceOverride %s", croName)
-		// Create the ro before crp so that the observed resource index is predictable.
 		ro := &placementv1alpha1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      roName,
@@ -465,6 +474,15 @@ var _ = Context("creating resourceOverride and clusterResourceOverride, resource
 		}
 		By(fmt.Sprintf("creating resourceOverride %s", roName))
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
+		// wait until the snapshot is created so that the observed resource index is predictable.
+		Eventually(func() error {
+			roSnap := &placementv1alpha1.ResourceOverrideSnapshot{}
+			return hubClient.Get(ctx, types.NamespacedName{Name: roSnapShotName, Namespace: roNamespace}, roSnap)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
+		Eventually(func() error {
+			croSnap := &placementv1alpha1.ClusterResourceOverrideSnapshot{}
+			return hubClient.Get(ctx, types.NamespacedName{Name: croSnapShotName}, croSnap)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 
 		// Create the CRP.
 		createCRP(crpName)
@@ -483,9 +501,9 @@ var _ = Context("creating resourceOverride and clusterResourceOverride, resource
 
 	It("should update CRP status as expected", func() {
 		wantRONames := []placementv1beta1.NamespacedName{
-			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)},
+			{Namespace: roNamespace, Name: roSnapShotName},
 		}
-		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)}
+		wantCRONames := []string{croSnapShotName}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, wantRONames)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
@@ -511,6 +529,7 @@ var _ = Context("creating resourceOverride with incorrect path", Ordered, func()
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	roSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
@@ -546,8 +565,13 @@ var _ = Context("creating resourceOverride with incorrect path", Ordered, func()
 		}
 		By(fmt.Sprintf("creating the bad resourceOverride %s", roName))
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
+		// wait until the snapshot is created so that failed override won't block the rollout
+		Eventually(func() error {
+			roSnap := &placementv1alpha1.ResourceOverrideSnapshot{}
+			return hubClient.Get(ctx, types.NamespacedName{Name: roSnapShotName, Namespace: roNamespace}, roSnap)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 
-		// Create the CRP later so that failed override won't block the rollout
+		// Create the CRP later
 		createCRP(crpName)
 	})
 
@@ -561,7 +585,7 @@ var _ = Context("creating resourceOverride with incorrect path", Ordered, func()
 
 	It("should update CRP status as failed to override", func() {
 		wantRONames := []placementv1beta1.NamespacedName{
-			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)},
+			{Namespace: roNamespace, Name: roSnapShotName},
 		}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedFailedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, wantRONames)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
@@ -638,6 +662,7 @@ var _ = Context("creating resourceOverride with a templated rules with cluster n
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	roSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
@@ -687,6 +712,10 @@ var _ = Context("creating resourceOverride with a templated rules with cluster n
 		}
 		By(fmt.Sprintf("creating resourceOverride %s", roName))
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
+		Eventually(func() error {
+			roSnap := &placementv1alpha1.ResourceOverrideSnapshot{}
+			return hubClient.Get(ctx, types.NamespacedName{Name: roSnapShotName, Namespace: roNamespace}, roSnap)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 
 		// Create the CRP.
 		createCRP(crpName)
@@ -702,7 +731,7 @@ var _ = Context("creating resourceOverride with a templated rules with cluster n
 
 	It("should update CRP status as expected", func() {
 		wantRONames := []placementv1beta1.NamespacedName{
-			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)},
+			{Namespace: roNamespace, Name: roSnapShotName},
 		}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, wantRONames)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
@@ -732,6 +761,7 @@ var _ = Context("creating resourceOverride with delete configMap", Ordered, func
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	roSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
@@ -783,6 +813,10 @@ var _ = Context("creating resourceOverride with delete configMap", Ordered, func
 		}
 		By(fmt.Sprintf("creating resourceOverride %s", roName))
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
+		Eventually(func() error {
+			roSnap := &placementv1alpha1.ResourceOverrideSnapshot{}
+			return hubClient.Get(ctx, types.NamespacedName{Name: roSnapShotName, Namespace: roNamespace}, roSnap)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 
 		// Create the CRP.
 		createCRP(crpName)
@@ -798,7 +832,7 @@ var _ = Context("creating resourceOverride with delete configMap", Ordered, func
 
 	It("should update CRP status as expected", func() {
 		wantRONames := []placementv1beta1.NamespacedName{
-			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)},
+			{Namespace: roNamespace, Name: roSnapShotName},
 		}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, wantRONames)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
@@ -953,7 +987,30 @@ var _ = Context("creating resourceOverride with a templated rules with cluster l
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update resourceOverride %s with non-existent label key", roName)
 
 		By("Verify the CRP status should have one cluster failed to override while the rest stuck in rollout")
-		// TODO: need to construct the expected status
+		Eventually(func() error {
+			crp := &placementv1beta1.ClusterResourcePlacement{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+				return err
+			}
+			wantCondition := []metav1.Condition{
+				{
+					Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             scheduler.FullyScheduledReason,
+					ObservedGeneration: crp.Generation,
+				},
+				{
+					Type:               string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+					Status:             metav1.ConditionFalse,
+					Reason:             condition.RolloutNotStartedYetReason,
+					ObservedGeneration: crp.Generation,
+				},
+			}
+			if diff := cmp.Diff(crp.Status.Conditions, wantCondition, crpStatusCmpOptions...); diff != "" {
+				return fmt.Errorf("CRP condition diff (-got, +want): %s", diff)
+			}
+			return nil
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "CRP %s failed to show the override failed and stuck in rollout", crpName)
 
 		By("Verify the configMap remains unchanged")
 		cmName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
@@ -979,6 +1036,7 @@ var _ = Context("creating resourceOverride with non-exist label", Ordered, func(
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	roSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
@@ -1034,6 +1092,10 @@ var _ = Context("creating resourceOverride with non-exist label", Ordered, func(
 		}
 		By(fmt.Sprintf("creating the bad resourceOverride %s", roName))
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
+		Eventually(func() error {
+			roSnap := &placementv1alpha1.ResourceOverrideSnapshot{}
+			return hubClient.Get(ctx, types.NamespacedName{Name: roSnapShotName, Namespace: roNamespace}, roSnap)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 
 		// Create the CRP later so that failed override won't block the rollout
 		createCRP(crpName)
@@ -1049,7 +1111,7 @@ var _ = Context("creating resourceOverride with non-exist label", Ordered, func(
 
 	It("should update CRP status as failed to override", func() {
 		wantRONames := []placementv1beta1.NamespacedName{
-			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)},
+			{Namespace: roNamespace, Name: roSnapShotName},
 		}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedFailedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, wantRONames)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
