@@ -31,9 +31,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils/controller"
-	"go.goms.io/fleet/pkg/utils/defaulter"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/defaulter"
 )
 
 func TestApplyUnstructured(t *testing.T) {

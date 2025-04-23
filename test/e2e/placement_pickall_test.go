@@ -25,10 +25,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/propertyprovider"
-	"go.goms.io/fleet/pkg/propertyprovider/azure"
-	"go.goms.io/fleet/test/e2e/framework"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
+	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider/azure"
+	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
 )
 
 var _ = Describe("placing resources using a CRP with no placement policy specified", Ordered, func() {

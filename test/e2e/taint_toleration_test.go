@@ -24,8 +24,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/test/e2e/framework"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
 )
 
 var _ = Describe("placing resource using a cluster resource placement with pickFixed placement policy specified, taint clusters, pick all specified clusters", Serial, Ordered, func() {

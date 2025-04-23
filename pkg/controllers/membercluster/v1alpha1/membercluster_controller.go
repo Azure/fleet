@@ -39,11 +39,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	"go.goms.io/fleet/apis"
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/metrics"
-	"go.goms.io/fleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/apis"
+	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
+	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 )
 
 const (

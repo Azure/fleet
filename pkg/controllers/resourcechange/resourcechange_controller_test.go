@@ -27,12 +27,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/utils/controller"
-	"go.goms.io/fleet/pkg/utils/keys"
-	"go.goms.io/fleet/pkg/utils/validator"
-	"go.goms.io/fleet/test/utils/informer"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/keys"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/validator"
+	"github.com/kubefleet-dev/kubefleet/test/utils/informer"
 )
 
 var _ controller.Controller = &fakeController{}

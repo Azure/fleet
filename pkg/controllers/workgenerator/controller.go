@@ -53,15 +53,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/workapplier"
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/condition"
-	"go.goms.io/fleet/pkg/utils/controller"
-	"go.goms.io/fleet/pkg/utils/informer"
-	"go.goms.io/fleet/pkg/utils/labels"
-	"go.goms.io/fleet/pkg/utils/resource"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/labels"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/resource"
 )
 
 var (

@@ -18,7 +18,7 @@ limitations under the License.
 // to the resource placement and prefers the same cluster which has an obsolete binding.
 package sameplacementaffinity
 
-import "go.goms.io/fleet/pkg/scheduler/framework"
+import "github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
 
 // Plugin is the scheduler plugin that enforces the same placement affinity and anti-affinity.
 // "Affinity" means a scheduler prefers the cluster which has an obsolete binding of the same placement in order to

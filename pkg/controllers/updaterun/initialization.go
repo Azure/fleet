@@ -29,12 +29,12 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils/annotations"
-	"go.goms.io/fleet/pkg/utils/condition"
-	"go.goms.io/fleet/pkg/utils/controller"
-	"go.goms.io/fleet/pkg/utils/overrider"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/annotations"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/overrider"
 )
 
 // initialize initializes the ClusterStagedUpdateRun object with all the stages computed during the initialization.

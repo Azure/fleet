@@ -37,9 +37,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
+	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
 
 var (

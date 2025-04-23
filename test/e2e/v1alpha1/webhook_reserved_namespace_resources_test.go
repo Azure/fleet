@@ -40,9 +40,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/webhook/validation"
-	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/webhook/validation"
+	testutils "github.com/kubefleet-dev/kubefleet/test/e2e/v1alpha1/utils"
 )
 
 const (

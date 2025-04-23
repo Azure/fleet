@@ -31,9 +31,9 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/workapplier"
-	"go.goms.io/fleet/test/e2e/framework"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
+	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
 )
 
 var (

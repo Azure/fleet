@@ -12,7 +12,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 )
 
 var (

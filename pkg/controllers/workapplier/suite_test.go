@@ -40,8 +40,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
+	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	testv1alpha1 "github.com/kubefleet-dev/kubefleet/test/apis/v1alpha1"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to

@@ -35,12 +35,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/workapplier"
-	"go.goms.io/fleet/pkg/utils/condition"
-	"go.goms.io/fleet/pkg/utils/controller"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
+	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
 var (

@@ -27,10 +27,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/test/e2e/framework"
+	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	imcv1beta1 "github.com/kubefleet-dev/kubefleet/pkg/controllers/internalmembercluster/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
 )
 
 // createMemberCluster creates a MemberCluster object.

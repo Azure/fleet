@@ -26,7 +26,7 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	clusterv1 "go.goms.io/fleet/apis/cluster/v1"
+	clusterv1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1"
 )
 
 var _ = Describe("Test cluster v1 API validation", func() {
