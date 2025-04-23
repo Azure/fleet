@@ -27,6 +27,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,6 +50,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 	var resourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 	var clusterResourceOverride *placementv1alpha1.ClusterResourceOverrideSnapshot
 	var wantStatus *placementv1beta1.StagedUpdateRunStatus
+	var customRegistry *prometheus.Registry
 
 	BeforeEach(func() {
 		testUpdateRunName = "updaterun-" + utils.RandStr()
@@ -103,6 +105,8 @@ var _ = Describe("UpdateRun validation tests", func() {
 		// Set smaller wait time for testing
 		stageUpdatingWaitTime = time.Second * 3
 		clusterUpdatingWaitTime = time.Second * 2
+
+		customRegistry = initializeUpdateRunMetricsRegistry()
 
 		By("Creating a new clusterResourcePlacement")
 		Expect(k8sClient.Create(ctx, crp)).To(Succeed())
@@ -189,9 +193,19 @@ var _ = Describe("UpdateRun validation tests", func() {
 		By("Deleting the clusterResourceOverride")
 		Expect(k8sClient.Delete(ctx, clusterResourceOverride)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 		clusterResourceOverride = nil
+
+		By("Checking the update run status metrics are removed")
+		// No metrics are emitted as all are removed after updateRun is deleted.
+		validateUpdateRunMetricsEmitted(customRegistry)
+		unregisterUpdateRunMetrics(customRegistry)
 	})
 
 	Context("Test validateCRP", func() {
+		AfterEach(func() {
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(customRegistry, generateProgressingMetric(updateRun), generateFailedMetric(updateRun))
+		})
+
 		It("Should fail to validate if the CRP is not found", func() {
 			By("Deleting the clusterResourcePlacement")
 			Expect(k8sClient.Delete(ctx, crp)).Should(Succeed())
@@ -231,6 +245,9 @@ var _ = Describe("UpdateRun validation tests", func() {
 			By("Validating the validation failed")
 			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "no latest policy snapshot associated")
+
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(customRegistry, generateProgressingMetric(updateRun), generateFailedMetric(updateRun))
 		})
 
 		It("Should fail to validate if the latest policySnapshot has changed", func() {
@@ -257,6 +274,9 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 			By("Deleting the new policySnapshot")
 			Expect(k8sClient.Delete(ctx, newPolicySnapshot)).Should(Succeed())
+
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(customRegistry, generateProgressingMetric(updateRun), generateFailedMetric(updateRun))
 		})
 
 		It("Should fail to validate if the cluster count has changed", func() {
@@ -268,6 +288,9 @@ var _ = Describe("UpdateRun validation tests", func() {
 			wantStatus = generateFailedValidationStatus(updateRun, wantStatus)
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus,
 				"the cluster count initialized in the clusterStagedUpdateRun is outdated")
+
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(customRegistry, generateProgressingMetric(updateRun), generateFailedMetric(updateRun))
 		})
 
 		It("Should not fail due to different cluster count if it's pickAll policy", func() {
@@ -286,10 +309,18 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 			By("Validating the validation does not fail")
 			validateClusterStagedUpdateRunStatusConsistently(ctx, updateRun, wantStatus, "")
+
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(customRegistry, generateProgressingMetric(updateRun))
 		})
 	})
 
 	Context("Test validateStagesStatus", func() {
+		AfterEach(func() {
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(customRegistry, generateProgressingMetric(updateRun), generateFailedMetric(updateRun))
+		})
+
 		It("Should fail to validate if the StagedUpdateStrategySnapshot is nil", func() {
 			By("Updating the status.StagedUpdateStrategySnapshot to nil")
 			updateRun.Status.StagedUpdateStrategySnapshot = nil

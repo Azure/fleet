@@ -21,8 +21,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -42,6 +44,7 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/controller/metrics"
 	"go.goms.io/fleet/pkg/utils/informer"
 )
 
@@ -94,6 +97,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		klog.ErrorS(err, "Failed to add the finalizer to the clusterStagedUpdateRun", "clusterStagedUpdateRun", runObjRef)
 		return runtime.Result{}, err
 	}
+
+	// Emit the update run status metric based on status conditions in the updateRun.
+	defer emitUpdateRunStatusMetric(&updateRun)
 
 	var updatingStageIndex int
 	var toBeUpdatedBindings, toBeDeletedBindings []*placementv1beta1.ClusterResourceBinding
@@ -169,13 +175,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 // We delete all the dependent resources, including approvalRequest objects, of the clusterStagedUpdateRun object.
 func (r *Reconciler) handleDelete(ctx context.Context, updateRun *placementv1beta1.ClusterStagedUpdateRun) (bool, time.Duration, error) {
 	runObjRef := klog.KObj(updateRun)
-	// delete all the associated approvalRequests.
+	// Delete all the associated approvalRequests.
 	approvalRequest := &placementv1beta1.ClusterApprovalRequest{}
 	if err := r.Client.DeleteAllOf(ctx, approvalRequest, client.MatchingLabels{placementv1beta1.TargetUpdateRunLabel: updateRun.GetName()}); err != nil {
 		klog.ErrorS(err, "Failed to delete all associated approvalRequests", "clusterStagedUpdateRun", runObjRef)
 		return false, 0, controller.NewAPIServerError(false, err)
 	}
 	klog.V(2).InfoS("Deleted all approvalRequests associated with the clusterStagedUpdateRun", "clusterStagedUpdateRun", runObjRef)
+
+	// Delete the update run status metric.
+	metrics.FleetUpdateRunStatusLastTimestampSeconds.DeletePartialMatch(prometheus.Labels{"name": updateRun.GetName()})
+
 	controllerutil.RemoveFinalizer(updateRun, placementv1beta1.ClusterStagedUpdateRunFinalizer)
 	if err := r.Client.Update(ctx, updateRun); err != nil {
 		klog.ErrorS(err, "Failed to remove updateRun finalizer", "clusterStagedUpdateRun", runObjRef)
@@ -300,4 +310,34 @@ func handleClusterApprovalRequest(oldObj, newObj client.Object, q workqueue.Type
 	q.Add(reconcile.Request{
 		NamespacedName: types.NamespacedName{Name: updateRun},
 	})
+}
+
+// emitUpdateRunStatusMetric emits the update run status metric based on status conditions in the updateRun.
+func emitUpdateRunStatusMetric(updateRun *placementv1beta1.ClusterStagedUpdateRun) {
+	generation := updateRun.Generation
+	genStr := strconv.FormatInt(generation, 10)
+
+	succeedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionSucceeded))
+	if succeedCond != nil && succeedCond.ObservedGeneration == generation {
+		metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr,
+			string(placementv1beta1.StagedUpdateRunConditionSucceeded), string(succeedCond.Status), succeedCond.Reason).SetToCurrentTime()
+		return
+	}
+
+	progressingCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionProgressing))
+	if progressingCond != nil && progressingCond.ObservedGeneration == generation {
+		metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr,
+			string(placementv1beta1.StagedUpdateRunConditionProgressing), string(progressingCond.Status), progressingCond.Reason).SetToCurrentTime()
+		return
+	}
+
+	initializedCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionInitialized))
+	if initializedCond != nil && initializedCond.ObservedGeneration == generation {
+		metrics.FleetUpdateRunStatusLastTimestampSeconds.WithLabelValues(updateRun.Name, genStr,
+			string(placementv1beta1.StagedUpdateRunConditionInitialized), string(initializedCond.Status), initializedCond.Reason).SetToCurrentTime()
+		return
+	}
+
+	// We should rarely reach here, it can only happen when updating updateRun status fails.
+	klog.V(2).InfoS("There's no valid status condition on updateRun, status updating failed possibly", "updateRun", klog.KObj(updateRun))
 }
