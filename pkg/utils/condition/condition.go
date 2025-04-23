@@ -144,11 +144,17 @@ const (
 	// UpdateRunInitializeFailedReason is the reason string of condition if the update run is failed to initialize.
 	UpdateRunInitializeFailedReason = "UpdateRunInitializedFailed"
 
-	// UpdateRunStartedReason is the reason string of condition if the staged update run has started.
-	UpdateRunStartedReason = "UpdateRunStarted"
+	// UpdateRunProgressingReason is the reason string of condition if the staged update run is progressing.
+	UpdateRunProgressingReason = "UpdateRunProgressing"
 
 	// UpdateRunFailedReason is the reason string of condition if the staged update run failed.
 	UpdateRunFailedReason = "UpdateRunFailed"
+
+	// UpdateRunStuckReason is the reason string of condition if the staged update run is stuck waiting for a cluster to be updated.
+	UpdateRunStuckReason = "UpdateRunStuck"
+
+	// UpdateRunWaitingReason is the reason string of condition if the staged update run is waiting for an after-stage task to complete.
+	UpdateRunWaitingReason = "UpdateRunWaiting"
 
 	// UpdateRunSucceededReason is the reason string of condition if the staged update run succeeded.
 	UpdateRunSucceededReason = "UpdateRunSucceeded"

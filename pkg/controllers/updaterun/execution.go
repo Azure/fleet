@@ -44,6 +44,10 @@ var (
 	// stageUpdatingWaitTime is the time to wait before rechecking the stage update status.
 	// Put it as a variable for convenient testing.
 	stageUpdatingWaitTime = 60 * time.Second
+
+	// updateRunStuckThreshold is the time to wait on a single cluster update before marking update run as stuck.
+	// TODO(wantjian): make this configurable
+	updateRunStuckThreshold = 5 * time.Minute
 )
 
 // execute executes the update run by updating the clusters in the updating stage specified by updatingStageIndex.
@@ -55,8 +59,10 @@ func (r *Reconciler) execute(
 	updatingStageIndex int,
 	toBeUpdatedBindings, toBeDeletedBindings []*placementv1beta1.ClusterResourceBinding,
 ) (bool, time.Duration, error) {
-	// Mark the update run as started regardless of whether it's already marked.
-	markUpdateRunStarted(updateRun)
+	// Mark updateRun as progressing if it's not already marked as waiting or stuck.
+	// This avoids triggering an unnecessary in-memory transition from stuck (waiting) -> progressing -> stuck (waiting),
+	// which would update the lastTransitionTime even though the status hasn't effectively changed.
+	markUpdateRunProgressingIfNotWaitingOrStuck(updateRun)
 
 	if updatingStageIndex < len(updateRun.Status.StagesStatus) {
 		updatingStage := &updateRun.Status.StagesStatus[updatingStageIndex]
@@ -172,10 +178,19 @@ func (r *Reconciler) executeUpdatingStage(
 			markClusterUpdatingFailed(clusterStatus, updateRun.Generation, unexpectedErr.Error())
 			return 0, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
 		}
+
 		finished, updateErr := checkClusterUpdateResult(binding, clusterStatus, updatingStageStatus, updateRun)
 		if finished {
 			finishedClusterCount++
+			markUpdateRunProgressing(updateRun)
 			continue
+		} else {
+			// If cluster update has been running for more than "updateRunStuckThreshold", mark the update run as stuck.
+			timeElapsed := time.Since(clusterStartedCond.LastTransitionTime.Time)
+			if timeElapsed > updateRunStuckThreshold {
+				klog.V(2).InfoS("Time waiting for cluster update to finish passes threshold, mark the update run as stuck", "time elapsed", timeElapsed, "threshold", updateRunStuckThreshold, "cluster", clusterStatus.ClusterName, "stage", updatingStageStatus.StageName, "clusterStagedUpdateRun", updateRunRef)
+				markUpdateRunStuck(updateRun, updatingStageStatus.StageName, clusterStatus.ClusterName)
+			}
 		}
 		// No need to continue as we only support one cluster updating at a time for now.
 		return clusterUpdatingWaitTime, updateErr
@@ -183,6 +198,7 @@ func (r *Reconciler) executeUpdatingStage(
 
 	if finishedClusterCount == len(updatingStageStatus.Clusters) {
 		// All the clusters in the stage have been updated.
+		markUpdateRunWaiting(updateRun, updatingStageStatus.StageName)
 		markStageUpdatingWaiting(updatingStageStatus, updateRun.Generation)
 		klog.V(2).InfoS("The stage has finished all cluster updating", "stage", updatingStageStatus.StageName, "clusterStagedUpdateRun", updateRunRef)
 		// Check if the after stage tasks are ready.
@@ -191,6 +207,7 @@ func (r *Reconciler) executeUpdatingStage(
 			return 0, err
 		}
 		if approved {
+			markUpdateRunProgressing(updateRun)
 			markStageUpdatingSucceeded(updatingStageStatus, updateRun.Generation)
 			// No need to wait to get to the next stage.
 			return 0, nil
@@ -448,14 +465,47 @@ func checkClusterUpdateResult(
 	return false, nil
 }
 
-// markUpdateRunStarted marks the update run as started in memory.
-func markUpdateRunStarted(updateRun *placementv1beta1.ClusterStagedUpdateRun) {
+// markUpdateRunProgressing marks the update run as progressing in memory.
+func markUpdateRunProgressing(updateRun *placementv1beta1.ClusterStagedUpdateRun) {
 	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: updateRun.Generation,
-		Reason:             condition.UpdateRunStartedReason,
-		Message:            "The stages started updating",
+		Reason:             condition.UpdateRunProgressingReason,
+		Message:            "The update run is making progress",
+	})
+}
+
+// markUpdateRunProgressingIfNotWaitingOrStuck marks the update run as proegressing in memory if it's not marked as waiting or stuck already.
+func markUpdateRunProgressingIfNotWaitingOrStuck(updateRun *placementv1beta1.ClusterStagedUpdateRun) {
+	progressingCond := meta.FindStatusCondition(updateRun.Status.Conditions, string(placementv1beta1.StagedUpdateRunConditionProgressing))
+	if condition.IsConditionStatusFalse(progressingCond, updateRun.Generation) &&
+		(progressingCond.Reason == condition.UpdateRunWaitingReason || progressingCond.Reason == condition.UpdateRunStuckReason) {
+		// The updateRun is waiting or stuck, no need to mark it as started.
+		return
+	}
+	markUpdateRunProgressing(updateRun)
+}
+
+// markUpdateRunStuck marks the updateRun as stuck in memory.
+func markUpdateRunStuck(updateRun *placementv1beta1.ClusterStagedUpdateRun, stageName, clusterName string) {
+	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
+		Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: updateRun.Generation,
+		Reason:             condition.UpdateRunStuckReason,
+		Message:            fmt.Sprintf("The updateRun is stuck waiting for cluster %s in stage %s to finish updating, please check crp status for potential errors", clusterName, stageName),
+	})
+}
+
+// markUpdateRunWaiting marks the updateRun as waiting in memory.
+func markUpdateRunWaiting(updateRun *placementv1beta1.ClusterStagedUpdateRun, stageName string) {
+	meta.SetStatusCondition(&updateRun.Status.Conditions, metav1.Condition{
+		Type:               string(placementv1beta1.StagedUpdateRunConditionProgressing),
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: updateRun.Generation,
+		Reason:             condition.UpdateRunWaitingReason,
+		Message:            fmt.Sprintf("The updateRun is waiting for after-stage tasks in stage %s to complete", stageName),
 	})
 }
 

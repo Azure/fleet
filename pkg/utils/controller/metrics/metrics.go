@@ -73,6 +73,12 @@ var (
 		Name: "fleet_workload_eviction_complete",
 		Help: "Eviction complete status ",
 	}, []string{"name", "isCompleted", "isValid"})
+	// FleetUpdateRunStatusLastTimestampSeconds is a prometheus metric which holds the
+	// last update timestamp of update run status in seconds.
+	FleetUpdateRunStatusLastTimestampSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "fleet_workload_update_run_status_last_timestamp_seconds",
+		Help: "Last update timestamp of update run status in seconds",
+	}, []string{"name", "generation", "condition", "status", "reason"})
 )
 
 func init() {
@@ -84,5 +90,6 @@ func init() {
 		FleetActiveWorkers,
 		FleetPlacementStatusLastTimeStampSeconds,
 		FleetEvictionStatus,
+		FleetUpdateRunStatusLastTimestampSeconds,
 	)
 }
