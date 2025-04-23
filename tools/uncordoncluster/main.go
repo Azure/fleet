@@ -12,10 +12,10 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 
-	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/tools/uncordoncluster/uncordon"
-	toolsutils "github.com/kubefleet-dev/kubefleet/tools/utils"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/tools/uncordoncluster/uncordon"
+	toolsutils "go.goms.io/fleet/tools/utils"
 )
 
 func main() {

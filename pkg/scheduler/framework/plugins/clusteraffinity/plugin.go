@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
+	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
 // Plugin is the scheduler plugin that enforces the cluster affinity (if any) defined on a CRP.

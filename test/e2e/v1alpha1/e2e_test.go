@@ -37,10 +37,10 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	"github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
-	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
-	testutils "github.com/kubefleet-dev/kubefleet/test/e2e/v1alpha1/utils"
+	"go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/test/e2e/framework"
+	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 )

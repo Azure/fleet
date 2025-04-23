@@ -33,9 +33,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workv1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
-	testutils "github.com/kubefleet-dev/kubefleet/test/e2e/v1alpha1/utils"
+	"go.goms.io/fleet/pkg/controllers/workv1alpha1"
+	"go.goms.io/fleet/pkg/utils"
+	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 )
 
 var _ = Describe("Work API Controller test", func() {

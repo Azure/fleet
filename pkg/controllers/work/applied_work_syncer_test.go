@@ -50,7 +50,7 @@ import (
 	"k8s.io/client-go/dynamic/fake"
 	testingclient "k8s.io/client-go/testing"
 
-	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 // TestCalculateNewAppliedWork validates the calculation logic between the Work & AppliedWork resources.

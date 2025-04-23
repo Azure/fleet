@@ -19,7 +19,7 @@ package options
 import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils"
 )
 
 // TODO: Clean up the validations we don't need and add the ones we need

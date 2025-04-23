@@ -1,0 +1,23 @@
+apiVersion: placement.kubernetes-fleet.io/v1
+kind: ClusterResourcePlacement
+metadata:
+  name: crp-availability
+spec:
+  policy:
+    affinity:
+      clusterAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          clusterSelectorTerms:
+            - labelSelector:
+                matchLabels:
+                  fleet.azure.com/location: westus
+    numberOfClusters: 2
+    placementType: PickN
+  resourceSelectors:
+    - group: ""
+      kind: Namespace
+      name: test-app
+      version: v1
+  revisionHistoryLimit: 10
+  strategy:
+    type: RollingUpdate

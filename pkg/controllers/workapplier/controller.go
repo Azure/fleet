@@ -54,11 +54,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/controllers/work"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/defaulter"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/parallelizer"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/defaulter"
+	"go.goms.io/fleet/pkg/utils/parallelizer"
 )
 
 const (

@@ -40,16 +40,16 @@ import (
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 
-	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
-	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/cmd/hubagent/options"
-	"github.com/kubefleet-dev/kubefleet/cmd/hubagent/workload"
-	mcv1alpha1 "github.com/kubefleet-dev/kubefleet/pkg/controllers/membercluster/v1alpha1"
-	mcv1beta1 "github.com/kubefleet-dev/kubefleet/pkg/controllers/membercluster/v1beta1"
-	fleetmetrics "github.com/kubefleet-dev/kubefleet/pkg/metrics"
-	"github.com/kubefleet-dev/kubefleet/pkg/webhook"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/cmd/hubagent/options"
+	"go.goms.io/fleet/cmd/hubagent/workload"
+	mcv1alpha1 "go.goms.io/fleet/pkg/controllers/membercluster/v1alpha1"
+	mcv1beta1 "go.goms.io/fleet/pkg/controllers/membercluster/v1beta1"
+	fleetmetrics "go.goms.io/fleet/pkg/metrics"
+	"go.goms.io/fleet/pkg/webhook"
 	// +kubebuilder:scaffold:imports
 )
 

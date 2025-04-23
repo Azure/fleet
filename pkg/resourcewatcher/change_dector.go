@@ -30,10 +30,10 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"github.com/kubefleet-dev/kubefleet/pkg/utils"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/keys"
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/informer"
+	"go.goms.io/fleet/pkg/utils/keys"
 )
 
 // make sure that our ChangeDetector implements controller runtime interfaces

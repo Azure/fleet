@@ -41,9 +41,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
-	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/workapplier"
+	"go.goms.io/fleet/pkg/propertyprovider"
 )
 
 const (
