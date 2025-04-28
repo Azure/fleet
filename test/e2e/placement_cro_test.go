@@ -37,6 +37,7 @@ import (
 var _ = Context("creating clusterResourceOverride (selecting all clusters) to override all resources under the namespace", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
+	croSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
@@ -69,21 +70,14 @@ var _ = Context("creating clusterResourceOverride (selecting all clusters) to ov
 		}
 		By(fmt.Sprintf("creating clusterResourceOverride %s", croName))
 		Expect(hubClient.Create(ctx, cro)).To(Succeed(), "Failed to create clusterResourceOverride %s", croName)
+		//this is to make sure the cro snapshot is created before the CRP
+		Eventually(func() error {
+			croSnap := &placementv1alpha1.ClusterResourceOverrideSnapshot{}
+			return hubClient.Get(ctx, types.NamespacedName{Name: croSnapShotName}, croSnap)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 
 		// Create the CRP.
-		crp := &placementv1beta1.ClusterResourcePlacement{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-				// Add a custom finalizer; this would allow us to better observe
-				// the behavior of the controllers.
-				Finalizers: []string{customDeletionBlockerFinalizer},
-			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
-				ResourceSelectors: workResourceSelector(),
-			},
-		}
-		By(fmt.Sprintf("creating placement %s", crpName))
-		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+		createCRP(crpName)
 	})
 
 	AfterAll(func() {
@@ -95,7 +89,7 @@ var _ = Context("creating clusterResourceOverride (selecting all clusters) to ov
 	})
 
 	It("should update CRP status as expected", func() {
-		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)}
+		wantCRONames := []string{croSnapShotName}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
@@ -213,6 +207,7 @@ var _ = Context("creating clusterResourceOverride (selecting all clusters) to ov
 var _ = Context("creating clusterResourceOverride with multiple jsonPatchOverrides", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
+	croSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
@@ -251,20 +246,14 @@ var _ = Context("creating clusterResourceOverride with multiple jsonPatchOverrid
 		By(fmt.Sprintf("creating clusterResourceOverride %s", croName))
 		Expect(hubClient.Create(ctx, cro)).To(Succeed(), "Failed to create clusterResourceOverride %s", croName)
 
+		//this is to make sure the cro snapshot is created before the CRP
+		Eventually(func() error {
+			croSnap := &placementv1alpha1.ClusterResourceOverrideSnapshot{}
+			return hubClient.Get(ctx, types.NamespacedName{Name: croSnapShotName}, croSnap)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
+
 		// Create the CRP.
-		crp := &placementv1beta1.ClusterResourcePlacement{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-				// Add a custom finalizer; this would allow us to better observe
-				// the behavior of the controllers.
-				Finalizers: []string{customDeletionBlockerFinalizer},
-			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
-				ResourceSelectors: workResourceSelector(),
-			},
-		}
-		By(fmt.Sprintf("creating placement %s", crpName))
-		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+		createCRP(crpName)
 	})
 
 	AfterAll(func() {
@@ -276,7 +265,7 @@ var _ = Context("creating clusterResourceOverride with multiple jsonPatchOverrid
 	})
 
 	It("should update CRP status as expected", func() {
-		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)}
+		wantCRONames := []string{croSnapShotName}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
@@ -312,6 +301,7 @@ var _ = Context("creating clusterResourceOverride with multiple jsonPatchOverrid
 var _ = Context("creating clusterResourceOverride with different rules for each cluster", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
+	croSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
@@ -387,20 +377,14 @@ var _ = Context("creating clusterResourceOverride with different rules for each 
 		By(fmt.Sprintf("creating clusterResourceOverride %s", croName))
 		Expect(hubClient.Create(ctx, cro)).To(Succeed(), "Failed to create clusterResourceOverride %s", croName)
 
+		//this is to make sure the cro snapshot is created before the CRP
+		Eventually(func() error {
+			croSnap := &placementv1alpha1.ClusterResourceOverrideSnapshot{}
+			return hubClient.Get(ctx, types.NamespacedName{Name: croSnapShotName}, croSnap)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
+
 		// Create the CRP.
-		crp := &placementv1beta1.ClusterResourcePlacement{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-				// Add a custom finalizer; this would allow us to better observe
-				// the behavior of the controllers.
-				Finalizers: []string{customDeletionBlockerFinalizer},
-			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
-				ResourceSelectors: workResourceSelector(),
-			},
-		}
-		By(fmt.Sprintf("creating placement %s", crpName))
-		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+		createCRP(crpName)
 	})
 
 	AfterAll(func() {
@@ -412,7 +396,7 @@ var _ = Context("creating clusterResourceOverride with different rules for each 
 	})
 
 	It("should update CRP status as expected", func() {
-		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)}
+		wantCRONames := []string{croSnapShotName}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
@@ -429,7 +413,7 @@ var _ = Context("creating clusterResourceOverride with different rules for each 
 	})
 })
 
-var _ = Context("creating clusterResourceOverride with different rules for each cluster", Ordered, func() {
+var _ = Context("creating clusterResourceOverride with different rules for each cluster that is attached to a CRP", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 
@@ -507,6 +491,7 @@ var _ = Context("creating clusterResourceOverride with different rules for each 
 var _ = Context("creating clusterResourceOverride with incorrect path", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
+	croSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
@@ -540,20 +525,14 @@ var _ = Context("creating clusterResourceOverride with incorrect path", Ordered,
 		By(fmt.Sprintf("creating clusterResourceOverride %s", croName))
 		Expect(hubClient.Create(ctx, cro)).To(Succeed(), "Failed to create clusterResourceOverride %s", croName)
 
+		//this is to make sure the cro snapshot is created before the CRP
+		Eventually(func() error {
+			croSnap := &placementv1alpha1.ClusterResourceOverrideSnapshot{}
+			return hubClient.Get(ctx, types.NamespacedName{Name: croSnapShotName}, croSnap)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
+
 		// Create the CRP.
-		crp := &placementv1beta1.ClusterResourcePlacement{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-				// Add a custom finalizer; this would allow us to better observe
-				// the behavior of the controllers.
-				Finalizers: []string{customDeletionBlockerFinalizer},
-			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
-				ResourceSelectors: workResourceSelector(),
-			},
-		}
-		By(fmt.Sprintf("creating placement %s", crpName))
-		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+		createCRP(crpName)
 	})
 
 	AfterAll(func() {
@@ -565,7 +544,7 @@ var _ = Context("creating clusterResourceOverride with incorrect path", Ordered,
 	})
 
 	It("should update CRP status as expected", func() {
-		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)}
+		wantCRONames := []string{croSnapShotName}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedFailedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
@@ -577,6 +556,7 @@ var _ = Context("creating clusterResourceOverride with incorrect path", Ordered,
 var _ = Context("creating clusterResourceOverride with and resource becomes invalid after override", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
+	croSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
@@ -610,20 +590,14 @@ var _ = Context("creating clusterResourceOverride with and resource becomes inva
 		By(fmt.Sprintf("creating clusterResourceOverride %s", croName))
 		Expect(hubClient.Create(ctx, cro)).To(Succeed(), "Failed to create clusterResourceOverride %s", croName)
 
+		//this is to make sure the cro snapshot is created before the CRP
+		Eventually(func() error {
+			croSnap := &placementv1alpha1.ClusterResourceOverrideSnapshot{}
+			return hubClient.Get(ctx, types.NamespacedName{Name: croSnapShotName}, croSnap)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
+
 		// Create the CRP.
-		crp := &placementv1beta1.ClusterResourcePlacement{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-				// Add a custom finalizer; this would allow us to better observe
-				// the behavior of the controllers.
-				Finalizers: []string{customDeletionBlockerFinalizer},
-			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
-				ResourceSelectors: workResourceSelector(),
-			},
-		}
-		By(fmt.Sprintf("creating placement %s", crpName))
-		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+		createCRP(crpName)
 	})
 
 	AfterAll(func() {
@@ -635,7 +609,7 @@ var _ = Context("creating clusterResourceOverride with and resource becomes inva
 	})
 
 	It("should update CRP status as expected", func() {
-		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)}
+		wantCRONames := []string{croSnapShotName}
 		crpStatusUpdatedActual := crpStatusWithWorkSynchronizedUpdatedFailedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
@@ -658,6 +632,9 @@ var _ = Context("creating clusterResourceOverride with delete rules for one clus
 				Name: croName,
 			},
 			Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+				Placement: &placementv1alpha1.PlacementRef{
+					Name: crpName, // assigned CRP name
+				},
 				ClusterResourceSelectors: workResourceSelector(),
 				Policy: &placementv1alpha1.OverridePolicy{
 					OverrideRules: []placementv1alpha1.OverrideRule{
@@ -700,19 +677,7 @@ var _ = Context("creating clusterResourceOverride with delete rules for one clus
 		Expect(hubClient.Create(ctx, cro)).To(Succeed(), "Failed to create clusterResourceOverride %s", croName)
 
 		// Create the CRP.
-		crp := &placementv1beta1.ClusterResourcePlacement{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-				// Add a custom finalizer; this would allow us to better observe
-				// the behavior of the controllers.
-				Finalizers: []string{customDeletionBlockerFinalizer},
-			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
-				ResourceSelectors: workResourceSelector(),
-			},
-		}
-		By(fmt.Sprintf("creating placement %s", crpName))
-		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+		createCRP(crpName)
 	})
 
 	AfterAll(func() {

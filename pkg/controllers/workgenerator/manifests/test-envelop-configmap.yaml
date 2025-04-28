@@ -18,34 +18,3 @@ data:
         requests.memory: 1Gi
         limits.cpu: "2"
         limits.memory: 2Gi
-  webhook.yaml: |
-    apiVersion: admissionregistration.k8s.io/v1
-    kind: MutatingWebhookConfiguration
-    metadata:
-      creationTimestamp: null
-      labels:
-        azure-workload-identity.io/system: "true"
-      name: azure-wi-webhook-mutating-webhook-configuration
-    webhooks:
-    - admissionReviewVersions:
-      - v1
-      - v1beta1
-      clientConfig:
-        service:
-          name: azure-wi-webhook-webhook-service
-          namespace: app
-          path: /mutate-v1-pod
-      failurePolicy: Fail
-      matchPolicy: Equivalent
-      name: mutation.azure-workload-identity.io
-      rules:
-      - apiGroups:
-        - ""
-        apiVersions:
-        - v1
-        operations:
-        - CREATE
-        - UPDATE
-        resources:
-        - pods
-      sideEffects: None

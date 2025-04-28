@@ -1095,6 +1095,15 @@ func handleCRP(newCRPObj, oldCRPObj client.Object, q workqueue.TypedRateLimiting
 		return
 	}
 
+	// Check if the rollout strategy type has been updated.
+	if newCRP.Spec.Strategy.Type != oldCRP.Spec.Strategy.Type {
+		klog.V(2).InfoS("Detected an update to the rollout strategy type on the CRP", "clusterResourcePlacement", klog.KObj(newCRP))
+		q.Add(reconcile.Request{
+			NamespacedName: types.NamespacedName{Name: newCRP.GetName()},
+		})
+		return
+	}
+
 	// Check if the apply strategy has been updated.
 	newApplyStrategy := newCRP.Spec.Strategy.ApplyStrategy
 	oldApplyStrategy := oldCRP.Spec.Strategy.ApplyStrategy
@@ -1103,6 +1112,7 @@ func handleCRP(newCRPObj, oldCRPObj client.Object, q workqueue.TypedRateLimiting
 		q.Add(reconcile.Request{
 			NamespacedName: types.NamespacedName{Name: newCRP.GetName()},
 		})
+		return
 	}
 
 	klog.V(2).InfoS("No update to apply strategy detected; ignore the CRP Update event", "clusterResourcePlacement", klog.KObj(newCRP))
