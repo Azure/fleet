@@ -22,12 +22,11 @@ import (
 	"strings"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	admv1 "k8s.io/api/admissionregistration/v1"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -43,8 +42,14 @@ import (
 var (
 	// pre loaded test manifests
 	testConfigMap, testEnvelopConfigMap corev1.ConfigMap
-	testEnvelopeWebhook                 admv1.MutatingWebhookConfiguration
 	testEnvelopeResourceQuota           corev1.ResourceQuota
+)
+
+const (
+	wrapperCMName = "wrapper"
+
+	cmDataKey = "foo"
+	cmDataVal = "bar"
 )
 
 // Note that this container will run in parallel with other containers.
@@ -103,14 +108,14 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 
 		It("should update CRP status as expected", func() {
 			// resourceQuota is enveloped so it's not trackable yet
-			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", true)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
 			for idx := range allMemberClusters {
 				memberCluster := allMemberClusters[idx]
-				workResourcesPlacedActual := checkEnvelopQuotaAndMutationWebhookPlacement(memberCluster)
+				workResourcesPlacedActual := checkEnvelopQuotaPlacement(memberCluster)
 				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
 			}
 		})
@@ -147,14 +152,14 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 		})
 
 		It("should update CRP status as success again", func() {
-			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "2", false)
+			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "2", true)
 			Eventually(crpStatusUpdatedActual, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters again", func() {
 			for idx := range allMemberClusters {
 				memberCluster := allMemberClusters[idx]
-				workResourcesPlacedActual := checkEnvelopQuotaAndMutationWebhookPlacement(memberCluster)
+				workResourcesPlacedActual := checkEnvelopQuotaPlacement(memberCluster)
 				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
 			}
 		})
@@ -339,6 +344,144 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
+
+	Context("Block envelopes that wrap cluster-scoped resources", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+
+		wrappedCMName := "app"
+		wrappedCBName := "standard"
+
+		BeforeAll(func() {
+			// Use an envelope to create duplicate resource entries.
+			ns := appNamespace()
+			Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
+
+			// Create an envelope config map.
+			wrapperCM := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      wrapperCMName,
+					Namespace: ns.Name,
+					Annotations: map[string]string{
+						placementv1beta1.EnvelopeConfigMapAnnotation: "true",
+					},
+				},
+				Data: map[string]string{},
+			}
+
+			// Create a configMap and a clusterRole as wrapped resources.
+			wrappedCM := &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: corev1.SchemeGroupVersion.String(),
+					Kind:       "ConfigMap",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: ns.Name,
+					Name:      wrappedCMName,
+				},
+				Data: map[string]string{
+					cmDataKey: cmDataVal,
+				},
+			}
+			wrappedCMBytes, err := json.Marshal(wrappedCM)
+			Expect(err).To(BeNil(), "Failed to marshal configMap %s", wrappedCM.Name)
+			wrapperCM.Data["cm.yaml"] = string(wrappedCMBytes)
+
+			wrappedCB := &rbacv1.ClusterRole{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: rbacv1.SchemeGroupVersion.String(),
+					Kind:       "ClusterRole",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: wrappedCBName,
+				},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups: []string{""},
+						Resources: []string{"pods"},
+						Verbs:     []string{"get", "list", "watch"},
+					},
+				},
+			}
+			wrappedCBBytes, err := json.Marshal(wrappedCB)
+			Expect(err).To(BeNil(), "Failed to marshal clusterRole %s", wrappedCB.Name)
+			wrapperCM.Data["cb.yaml"] = string(wrappedCBBytes)
+
+			Expect(hubClient.Create(ctx, wrapperCM)).To(Succeed(), "Failed to create configMap %s", wrapperCM.Name)
+
+			// Create a CRP.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+						ClusterNames: []string{
+							memberCluster1EastProdName,
+						},
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: ptr.To(2),
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
+
+		It("should update CRP status as expected", func() {
+			Eventually(func() error {
+				crp := &placementv1beta1.ClusterResourcePlacement{}
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+					return err
+				}
+
+				wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+					Conditions: crpWorkSynchronizedFailedConditions(crp.Generation, false),
+					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+						{
+							ClusterName: memberCluster1EastProdName,
+							Conditions:  resourcePlacementWorkSynchronizedFailedConditions(crp.Generation, false),
+						},
+					},
+					SelectedResources: []placementv1beta1.ResourceIdentifier{
+						{
+							Kind:    "Namespace",
+							Name:    workNamespaceName,
+							Version: "v1",
+						},
+						{
+							Kind:      "ConfigMap",
+							Name:      wrapperCMName,
+							Version:   "v1",
+							Namespace: workNamespaceName,
+						},
+					},
+					ObservedResourceIndex: "0",
+				}
+				if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
+					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		// Note that due to the order in which the work generator handles resources, the synchronization error is
+		// triggered before the primary work object is applied; that is, the namespace itself will not be created
+		// either.
+
+		AfterAll(func() {
+			// Remove the CRP and the namespace from the hub cluster.
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd})
+		})
+	})
 })
 
 var _ = Describe("Process objects with generate name", Ordered, func() {
@@ -346,7 +489,6 @@ var _ = Describe("Process objects with generate name", Ordered, func() {
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 
 	nsGenerateName := "application-"
-	wrapperCMName := "wrapper"
 	wrappedCMGenerateName := "wrapped-foo-"
 
 	BeforeAll(func() {
@@ -377,7 +519,7 @@ var _ = Describe("Process objects with generate name", Ordered, func() {
 				Namespace:    ns.Name,
 			},
 			Data: map[string]string{
-				"foo": "bar",
+				cmDataKey: cmDataVal,
 			},
 		}
 		wrappedCMByte, err := json.Marshal(wrappedCM)
@@ -497,7 +639,7 @@ var _ = Describe("Process objects with generate name", Ordered, func() {
 	})
 })
 
-func checkEnvelopQuotaAndMutationWebhookPlacement(memberCluster *framework.Cluster) func() error {
+func checkEnvelopQuotaPlacement(memberCluster *framework.Cluster) func() error {
 	workNamespaceName := appNamespace().Name
 	return func() error {
 		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: workNamespaceName}); err != nil {
@@ -522,29 +664,6 @@ func checkEnvelopQuotaAndMutationWebhookPlacement(memberCluster *framework.Clust
 		}
 		if diff := cmp.Diff(placedResourceQuota.Spec, testEnvelopeResourceQuota.Spec); diff != "" {
 			return fmt.Errorf("resource quota diff (-got, +want): %s", diff)
-		}
-		By("check the cluster scoped envelope objects")
-		placedEnvelopeWebhook := &admv1.MutatingWebhookConfiguration{}
-		if err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: testEnvelopeWebhook.Name}, placedEnvelopeWebhook); err != nil {
-			return err
-		}
-		// the two webhooks are very different since one is a client side yaml and the other is server side generated
-		if placedEnvelopeWebhook.Webhooks == nil || len(placedEnvelopeWebhook.Webhooks) != 1 {
-			return fmt.Errorf("webhook size does not match")
-		}
-		if placedEnvelopeWebhook.Webhooks[0].Name != testEnvelopeWebhook.Webhooks[0].Name ||
-			*placedEnvelopeWebhook.Webhooks[0].FailurePolicy != *testEnvelopeWebhook.Webhooks[0].FailurePolicy ||
-			*placedEnvelopeWebhook.Webhooks[0].SideEffects != *testEnvelopeWebhook.Webhooks[0].SideEffects ||
-			*placedEnvelopeWebhook.Webhooks[0].MatchPolicy != *testEnvelopeWebhook.Webhooks[0].MatchPolicy {
-			return fmt.Errorf("webhook config does not match")
-		}
-		if len(placedEnvelopeWebhook.Webhooks[0].Rules) != 1 {
-			return fmt.Errorf("webhook rule size does not match")
-		}
-		if diff := cmp.Diff(placedEnvelopeWebhook.Webhooks[0].Rules[0],
-			testEnvelopeWebhook.Webhooks[0].Rules[0],
-			cmpopts.IgnoreFields(admv1.Rule{}, "Scope")); diff != "" {
-			return fmt.Errorf("webhook rule diff (-got, +want): %s", diff)
 		}
 		return nil
 	}
@@ -630,11 +749,6 @@ func readEnvelopTestManifests() {
 	By("Read testEnvelopConfigMap resource")
 	testEnvelopConfigMap = corev1.ConfigMap{}
 	err = utils.GetObjectFromManifest("resources/test-envelop-configmap.yaml", &testEnvelopConfigMap)
-	Expect(err).Should(Succeed())
-
-	By("Read EnvelopeWebhook")
-	testEnvelopeWebhook = admv1.MutatingWebhookConfiguration{}
-	err = utils.GetObjectFromManifest("resources/webhook.yaml", &testEnvelopeWebhook)
 	Expect(err).Should(Succeed())
 
 	By("Read ResourceQuota")

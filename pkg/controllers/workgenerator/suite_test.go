@@ -65,7 +65,7 @@ var (
 	wantOverriddenTestResource []byte
 
 	// the content of the enveloped resources
-	testEnvelopeWebhook, testEnvelopeResourceQuota []byte
+	testEnvelopeResourceQuota, testEnvelopeResourceQuota2 []byte
 )
 
 func TestAPIs(t *testing.T) {
@@ -365,15 +365,15 @@ func readTestManifests() {
 	testPdb, err = yaml.ToJSON(rawByte)
 	Expect(err).Should(Succeed())
 
-	By("Read EnvelopeWebhook")
-	rawByte, err = os.ReadFile("manifests/webhook.yaml")
-	Expect(err).Should(Succeed())
-	testEnvelopeWebhook, err = yaml.ToJSON(rawByte)
-	Expect(err).Should(Succeed())
-
 	By("Read ResourceQuota")
 	rawByte, err = os.ReadFile("manifests/resourcequota.yaml")
 	Expect(err).Should(Succeed())
 	testEnvelopeResourceQuota, err = yaml.ToJSON(rawByte)
+	Expect(err).Should(Succeed())
+
+	By("Read ResourceQuota2")
+	rawByte, err = os.ReadFile("manifests/resourcequota2.yaml")
+	Expect(err).Should(Succeed())
+	testEnvelopeResourceQuota2, err = yaml.ToJSON(rawByte)
 	Expect(err).Should(Succeed())
 }

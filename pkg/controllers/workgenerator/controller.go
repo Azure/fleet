@@ -1280,8 +1280,11 @@ func extractResFromConfigMap(uConfigMap *unstructured.Unstructured) ([]fleetv1be
 			klog.ErrorS(unMarshallErr, "manifest has invalid content", "manifestKey", key, "envelopeResource", klog.KObj(uConfigMap))
 			return nil, fmt.Errorf("the object with manifest key `%s` in envelope config `%s` is malformatted, err: %w", key, klog.KObj(uConfigMap), unMarshallErr)
 		}
+		if len(uManifest.GetNamespace()) == 0 {
+			// Block cluster-scoped resources.
+			return nil, fmt.Errorf("cannot wrap cluster-scoped resource %s in the envelope %s", uManifest.GetName(), klog.KObj(uConfigMap))
+		}
 		if len(uManifest.GetNamespace()) != 0 && uManifest.GetNamespace() != configMap.Namespace {
-			// if the manifest is a namespaced object but no namespace is specified, it will fail at the apply time instead of here.
 			return nil, fmt.Errorf("the namespaced object `%s` in envelope config `%s` is placed in a different namespace `%s` ", uManifest.GetName(), klog.KObj(uConfigMap), uManifest.GetNamespace())
 		}
 		manifests = append(manifests, fleetv1beta1.Manifest{
