@@ -613,7 +613,11 @@ func resourcePlacementOverrideFailedConditions(generation int64) []metav1.Condit
 	}
 }
 
-func resourcePlacementWorkSynchronizedFailedConditions(generation int64) []metav1.Condition {
+func resourcePlacementWorkSynchronizedFailedConditions(generation int64, hasOverrides bool) []metav1.Condition {
+	overridenCondReason := condition.OverrideNotSpecifiedReason
+	if hasOverrides {
+		overridenCondReason = condition.OverriddenSucceededReason
+	}
 	return []metav1.Condition{
 		{
 			Type:               string(placementv1beta1.ResourceScheduledConditionType),
@@ -631,7 +635,7 @@ func resourcePlacementWorkSynchronizedFailedConditions(generation int64) []metav
 			Type:               string(placementv1beta1.ResourceOverriddenConditionType),
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: generation,
-			Reason:             condition.OverriddenSucceededReason,
+			Reason:             overridenCondReason,
 		},
 		{
 			Type:               string(placementv1beta1.ResourceWorkSynchronizedConditionType),
@@ -642,7 +646,11 @@ func resourcePlacementWorkSynchronizedFailedConditions(generation int64) []metav
 	}
 }
 
-func crpWorkSynchronizedFailedConditions(generation int64) []metav1.Condition {
+func crpWorkSynchronizedFailedConditions(generation int64, hasOverrides bool) []metav1.Condition {
+	overridenCondReason := condition.OverrideNotSpecifiedReason
+	if hasOverrides {
+		overridenCondReason = condition.OverriddenSucceededReason
+	}
 	return []metav1.Condition{
 		{
 			Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
@@ -659,7 +667,7 @@ func crpWorkSynchronizedFailedConditions(generation int64) []metav1.Condition {
 		{
 			Type:               string(placementv1beta1.ClusterResourcePlacementOverriddenConditionType),
 			Status:             metav1.ConditionTrue,
-			Reason:             condition.OverriddenSucceededReason,
+			Reason:             overridenCondReason,
 			ObservedGeneration: generation,
 		},
 		{
@@ -782,17 +790,18 @@ func crpStatusWithWorkSynchronizedUpdatedFailedActual(
 		}
 
 		var wantPlacementStatus []placementv1beta1.ResourcePlacementStatus
+		hasOverrides := len(wantResourceOverrides) > 0 || len(wantClusterResourceOverrides) > 0
 		for _, name := range wantSelectedClusters {
 			wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.ResourcePlacementStatus{
 				ClusterName:                        name,
-				Conditions:                         resourcePlacementWorkSynchronizedFailedConditions(crp.Generation),
+				Conditions:                         resourcePlacementWorkSynchronizedFailedConditions(crp.Generation, hasOverrides),
 				ApplicableResourceOverrides:        wantResourceOverrides,
 				ApplicableClusterResourceOverrides: wantClusterResourceOverrides,
 			})
 		}
 
 		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
-			Conditions:            crpWorkSynchronizedFailedConditions(crp.Generation),
+			Conditions:            crpWorkSynchronizedFailedConditions(crp.Generation, hasOverrides),
 			PlacementStatuses:     wantPlacementStatus,
 			SelectedResources:     wantSelectedResourceIdentifiers,
 			ObservedResourceIndex: wantObservedResourceIndex,

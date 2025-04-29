@@ -698,7 +698,6 @@ var _ = Describe("Test Work Generator Controller", func() {
 						Workload: placementv1beta1.WorkloadTemplate{
 							Manifests: []placementv1beta1.Manifest{
 								{RawExtension: runtime.RawExtension{Raw: testEnvelopeResourceQuota}},
-								{RawExtension: runtime.RawExtension{Raw: testEnvelopeWebhook}},
 							},
 						},
 					},
@@ -823,7 +822,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 					Spec: placementv1beta1.WorkSpec{
 						Workload: placementv1beta1.WorkloadTemplate{
 							Manifests: []placementv1beta1.Manifest{
-								{RawExtension: runtime.RawExtension{Raw: testEnvelopeWebhook}},
+								{RawExtension: runtime.RawExtension{Raw: testEnvelopeResourceQuota2}},
 							},
 						},
 					},
