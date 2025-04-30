@@ -24,7 +24,7 @@ import (
 // +genclient:Cluster
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=crsur
+// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=csur
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:storageversion
 // +kubebuilder:printcolumn:JSONPath=`.spec.placementName`,name="Placement",type=string
@@ -83,7 +83,7 @@ type StagedUpdateRunSpec struct {
 // +genclient:cluster
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=sus
+// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=csus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:storageversion
 

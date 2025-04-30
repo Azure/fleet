@@ -15,7 +15,7 @@ spec:
     listKind: ClusterSchedulingPolicySnapshotList
     plural: clusterschedulingpolicysnapshots
     shortNames:
-    - pss
+    - csps
     singular: clusterschedulingpolicysnapshot
   scope: Cluster
   versions:

@@ -15,7 +15,7 @@ spec:
     listKind: ClusterStagedUpdateRunList
     plural: clusterstagedupdateruns
     shortNames:
-    - crsur
+    - csur
     singular: clusterstagedupdaterun
   scope: Cluster
   versions:

@@ -15,7 +15,7 @@ spec:
     listKind: ClusterStagedUpdateStrategyList
     plural: clusterstagedupdatestrategies
     shortNames:
-    - sus
+    - csus
     singular: clusterstagedupdatestrategy
   scope: Cluster
   versions:
