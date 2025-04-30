@@ -813,6 +813,7 @@ type RollingUpdateConfig struct {
 // ClusterResourcePlacementStatus defines the observed state of the ClusterResourcePlacement object.
 type ClusterResourcePlacementStatus struct {
 	// SelectedResources contains a list of resources selected by ResourceSelectors.
+	// This field is only meaningful if the `ObservedResourceIndex` is not empty.
 	// +kubebuilder:validation:Optional
 	SelectedResources []ResourceIdentifier `json:"selectedResources,omitempty"`
 
@@ -821,15 +822,15 @@ type ClusterResourcePlacementStatus struct {
 	// Each snapshot has a different resource index.
 	// One resource snapshot can contain multiple clusterResourceSnapshots CRs in order to store large amount of resources.
 	// To get clusterResourceSnapshot of a given resource index, use the following command:
-	// `kubectl get ClusterResourceSnapshot --selector=kubernetes-fleet.io/resource-index=$ObservedResourceIndex `
-	// ObservedResourceIndex is the resource index that the conditions in the ClusterResourcePlacementStatus observe.
-	// For example, a condition of `ClusterResourcePlacementWorkSynchronized` type
-	// is observing the synchronization status of the resource snapshot with the resource index $ObservedResourceIndex.
+	// `kubectl get ClusterResourceSnapshot --selector=kubernetes-fleet.io/resource-index=$ObservedResourceIndex`
+	// If the rollout strategy type is `RollingUpdate`, `ObservedResourceIndex` is the default-latest resource snapshot index.
+	// If the rollout strategy type is `External`, rollout and version control are managed by an external controller,
+	// and this field is not empty only if all targeted clusters observe the same resource index in `PlacementStatuses`.
 	// +kubebuilder:validation:Optional
 	ObservedResourceIndex string `json:"observedResourceIndex,omitempty"`
 
 	// PlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
-	// Each selected cluster according to the latest resource placement is guaranteed to have a corresponding placementStatuses.
+	// Each selected cluster according to the observed resource placement is guaranteed to have a corresponding placementStatuses.
 	// In the pickN case, there are N placement statuses where N = NumberOfClusters; Or in the pickFixed case, there are
 	// N placement statuses where N = ClusterNames.
 	// In these cases, some of them may not have assigned clusters when we cannot fill the required number of clusters.
@@ -843,6 +844,11 @@ type ClusterResourcePlacementStatus struct {
 	// +listMapKey=type
 
 	// Conditions is an array of current observed conditions for ClusterResourcePlacement.
+	// All conditions except `ClusterResourcePlacementScheduled` correspond to the resource snapshot at the index specified by `ObservedResourceIndex`.
+	// For example, a condition of `ClusterResourcePlacementWorkSynchronized` type
+	// is observing the synchronization status of the resource snapshot with index `ObservedResourceIndex`.
+	// If the rollout strategy type is `External`, and `ObservedResourceIndex` is unset due to clusters reporting different resource indices,
+	// conditions except `ClusterResourcePlacementScheduled` will be empty or set to Unknown.
 	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
@@ -907,6 +913,11 @@ type ResourcePlacementStatus struct {
 	// +kubebuilder:validation:Optional
 	ClusterName string `json:"clusterName,omitempty"`
 
+	// ObservedResourceIndex is the index of the resource snapshot that is currently being rolled out to the given cluster.
+	// This field is only meaningful if the `ClusterName` is not empty.
+	// +kubebuilder:validation:Optional
+	ObservedResourceIndex string `json:"observedResourceIndex,omitempty"`
+
 	// ApplicableResourceOverrides contains a list of applicable ResourceOverride snapshots associated with the selected
 	// resources.
 	//
@@ -954,7 +965,9 @@ type ResourcePlacementStatus struct {
 	// +kubebuilder:validation:MaxItems=100
 	DiffedPlacements []DiffedResourcePlacement `json:"diffedPlacements,omitempty"`
 
-	// Conditions is an array of current observed conditions for ResourcePlacementStatus.
+	// Conditions is an array of current observed conditions on the cluster.
+	// Each condition corresponds to the resource snapshot at the index specified by `ObservedResourceIndex`.
+	// For example, the condition of type `RolloutStarted` is observing the rollout status of the resource snapshot with index `ObservedResourceIndex`.
 	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
