@@ -1,33 +1,30 @@
-apiVersion: placement.kubernetes-fleet.io/v1alpha1
+apiVersion: placement.kubernetes-fleet.io/v1beta1
 kind: ResourceEnvelope
 metadata:
   name: example
-spec:
-  manifests:
-    "cm.yaml":
-      data:
-        apiVersion: v1
-        kind: ConfigMap
+data:
+  "cm.yaml":
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: app
+    data:
+      foo: bar
+  "deploy.yaml":
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: app
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: nginx
+      template:
         metadata:
-          name: app
-        data:
-          foo: bar
-    "deploy.yaml":
-      data:
-        apiVersion: apps/v1
-        kind: Deployment
-        metadata:
-          name: app
+          labels:
+            app: nginx
         spec:
-          replicas: 1
-          selector:
-            matchLabels:
-              app: nginx
-          template:
-            metadata:
-              labels:
-                app: nginx
-            spec:
-              containers:
-              - name: web
-                image: nginx
+          containers:
+          - name: web
+            image: nginx

@@ -1,36 +1,33 @@
-apiVersion: placement.kubernetes-fleet.io/v1alpha1
+apiVersion: placement.kubernetes-fleet.io/v1beta1
 kind: ClusterResourceEnvelope
 metadata:
   name: example
-spec:
-  manifests:
-    "webhook.yaml":
-      data:
-        apiVersion: admissionregistration.k8s.io/v1
-        kind: ValidatingWebhookConfiguration
-        metadata:
+data:
+  "webhook.yaml":
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingWebhookConfiguration
+    metadata:
+      name: guard
+    webhooks:
+    - name: guard.example.com
+      rules:
+      - operations: ["CREATE"]
+        apiGroups: ["*"]
+        apiVersions: ["*"]
+        resources: ["*"]
+      clientConfig:
+        service:
           name: guard
-        webhooks:
-        - name: guard.example.com
-          rules:
-          - operations: ["CREATE"]
-            apiGroups: ["*"]
-            apiVersions: ["*"]
-            resources: ["*"]
-          clientConfig:
-            service:
-              name: guard
-              namespace: ops
-          admissionReviewVersions: ["v1"]
-          sideEffects: None
-          timeoutSeconds: 10
-    "clusterrole.yaml":
-      data:
-        apiVersion: rbac.authorization.k8s.io/v1
-        kind: ClusterRole
-        metadata:
-          name: pod-reader
-        rules:
-        - apiGroups: [""]
-          resources: ["pods"]
-          verbs: ["get", "list", "watch"]
+          namespace: ops
+      admissionReviewVersions: ["v1"]
+      sideEffects: None
+      timeoutSeconds: 10
+  "clusterrole.yaml":
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: pod-reader
+    rules:
+    - apiGroups: [""]
+      resources: ["pods"]
+      verbs: ["get", "list", "watch"]

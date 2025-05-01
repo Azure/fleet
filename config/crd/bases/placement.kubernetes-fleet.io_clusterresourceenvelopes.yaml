@@ -17,7 +17,7 @@ spec:
     singular: clusterresourceenvelope
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - name: v1beta1
     schema:
       openAPIV3Schema:
         description: ClusterResourceEnvelope wraps cluster-scoped resources for placement.
@@ -29,6 +29,18 @@ spec:
               may reject unrecognized values.
               More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
+          data:
+            additionalProperties:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+            description: |-
+              The manifests wrapped in this envelope.
+
+              Each manifest is uniquely identified by a string key, typically a filename that represents
+              the manifest. The value is the manifest object itself.
+            maxProperties: 50
+            minProperties: 1
+            type: object
           kind:
             description: |-
               Kind is a string value representing the REST resource this object represents.
@@ -39,34 +51,8 @@ spec:
             type: string
           metadata:
             type: object
-          spec:
-            description: The desired state of ClusterResourceEnvelope.
-            properties:
-              manifests:
-                additionalProperties:
-                  description: Manifest is a wrapped resource.
-                  properties:
-                    data:
-                      description: The resource data.
-                      type: object
-                      x-kubernetes-embedded-resource: true
-                      x-kubernetes-preserve-unknown-fields: true
-                  required:
-                  - data
-                  type: object
-                description: |-
-                  A map of wrapped manifests.
-
-                  Each manifest is uniquely identified by a string key, typically a filename that represents
-                  the manifest.
-                maxProperties: 50
-                minProperties: 1
-                type: object
-            required:
-            - manifests
-            type: object
         required:
-        - spec
+        - data
         type: object
     served: true
     storage: true
