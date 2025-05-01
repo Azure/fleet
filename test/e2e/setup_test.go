@@ -19,8 +19,10 @@ package e2e
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -161,6 +163,11 @@ var (
 			regionLabelName: regionSouth,
 		},
 	}
+)
+
+var (
+	drainBinaryPath    = filepath.Join("../../", "hack", "tools", "bin", "kubectl-draincluster")
+	uncordonBinaryPath = filepath.Join("../../", "hack", "tools", "bin", "kubectl-uncordoncluster")
 )
 
 var (
@@ -340,6 +347,12 @@ func beforeSuiteForAllProcesses() {
 		for i := range allMemberClusters {
 			allMemberClusterNames = append(allMemberClusterNames, allMemberClusters[i].ClusterName)
 		}
+
+		// Check if drain cluster and uncordon cluster binaries exist.
+		_, err := os.Stat(drainBinaryPath)
+		Expect(os.IsNotExist(err)).To(BeFalse(), fmt.Sprintf("drain binary not found at %s", drainBinaryPath))
+		_, err = os.Stat(uncordonBinaryPath)
+		Expect(os.IsNotExist(err)).To(BeFalse(), fmt.Sprintf("uncordon binary not found at %s", uncordonBinaryPath))
 	})
 }
 
