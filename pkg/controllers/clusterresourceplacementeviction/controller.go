@@ -168,7 +168,7 @@ func (r *Reconciler) updateEvictionStatus(ctx context.Context, eviction *placeme
 		klog.ErrorS(err, "Failed to update eviction status", "clusterResourcePlacementEviction", evictionRef)
 		return controller.NewUpdateIgnoreConflictError(err)
 	}
-	klog.V(2).InfoS("Updated the status of a eviction", "clusterResourcePlacementEviction", evictionRef)
+	klog.V(2).InfoS("Updated the status of a eviction", "clusterResourcePlacementEviction", evictionRef, "status", eviction.Status)
 	return nil
 }
 
