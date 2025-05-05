@@ -549,7 +549,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 			validateFailedInitCondition(ctx, updateRun, "referenced clusterStagedUpdateStrategy not found")
 		})
 
-		Context("Test computeStagedStatus", func() {
+		Context("Test computeRunStageStatus", func() {
 			Context("Test validateAfterStageTask", func() {
 				It("Should fail to initialize if any after stage task has 2 same tasks", func() {
 					By("Creating a clusterStagedUpdateStrategy with 2 same after stage tasks")
@@ -617,7 +617,50 @@ var _ = Describe("Updaterun initialization tests", func() {
 				Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 				By("Validating the initialization failed")
-				validateFailedInitCondition(ctx, updateRun, "some clusters are not placed in any stage")
+				validateFailedInitCondition(ctx, updateRun, "some clusters are not placed in any stage, total 5, showing up to 10: cluster-0, cluster-2, cluster-4, cluster-6, cluster-8")
+			})
+
+			It("Should select all scheduled clusters if labelSelector is empty and select no clusters if labelSelector is nil", func() {
+				By("Creating a clusterStagedUpdateStrategy with two stages, using empty labelSelector and nil labelSelector respectively")
+				updateStrategy.Spec.Stages[0].LabelSelector = nil                     // no clusters selected
+				updateStrategy.Spec.Stages[1].LabelSelector = &metav1.LabelSelector{} // all clusters selected
+				Expect(k8sClient.Create(ctx, updateStrategy)).To(Succeed())
+
+				By("Creating a new clusterStagedUpdateRun")
+				Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
+
+				By("Validating the clusterStagedUpdateRun status")
+				Eventually(func() error {
+					if err := k8sClient.Get(ctx, updateRunNamespacedName, updateRun); err != nil {
+						return err
+					}
+
+					want := generateSucceededInitializationStatus(crp, updateRun, policySnapshot, updateStrategy, clusterResourceOverride)
+					// No clusters should be selected in the first stage.
+					want.StagesStatus[0].Clusters = []placementv1beta1.ClusterUpdatingStatus{}
+					// All clusters should be selected in the second stage and sorted by name.
+					want.StagesStatus[1].Clusters = []placementv1beta1.ClusterUpdatingStatus{
+						{ClusterName: "cluster-0"},
+						{ClusterName: "cluster-1"},
+						{ClusterName: "cluster-2"},
+						{ClusterName: "cluster-3"},
+						{ClusterName: "cluster-4"},
+						{ClusterName: "cluster-5"},
+						{ClusterName: "cluster-6"},
+						{ClusterName: "cluster-7"},
+						{ClusterName: "cluster-8"},
+						{ClusterName: "cluster-9"},
+					}
+					// initialization should fail due to resourceSnapshot not found.
+					want.Conditions = []metav1.Condition{
+						generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionInitialized),
+					}
+
+					if diff := cmp.Diff(*want, updateRun.Status, cmpOptions...); diff != "" {
+						return fmt.Errorf("status mismatch: (-want +got):\n%s", diff)
+					}
+					return nil
+				}, timeout, interval).Should(Succeed(), "failed to validate the clusterStagedUpdateRun status")
 			})
 		})
 
@@ -639,7 +682,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 					// Remove the CROs, as they are not added in this test.
 					want.StagesStatus[0].Clusters[i].ClusterResourceOverrideSnapshots = nil
 				}
-				// initialization should fail.
+				// initialization should fail due to resourceSnapshot not found.
 				want.Conditions = []metav1.Condition{
 					generateFalseCondition(updateRun, placementv1beta1.StagedUpdateRunConditionInitialized),
 				}
@@ -648,7 +691,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 					return fmt.Errorf("status mismatch: (-want +got):\n%s", diff)
 				}
 				return nil
-			}, timeout, interval).Should(Succeed(), "failed to validate the clusterStagedUpdateRun in the status")
+			}, timeout, interval).Should(Succeed(), "failed to validate the clusterStagedUpdateRun status")
 		})
 	})
 

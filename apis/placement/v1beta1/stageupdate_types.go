@@ -127,7 +127,8 @@ type StageConfig struct {
 
 	// LabelSelector is a label query over all the joined member clusters. Clusters matching the query are selected
 	// for this stage. There cannot be overlapping clusters between stages when the stagedUpdateRun is created.
-	// If the label selector is absent, the stage includes all the selected clusters.
+	// If the label selector is empty, the stage includes all the selected clusters.
+	// If the label selector is nil, the stage does not include any selected clusters.
 	// +kubebuilder:validation:Optional
 	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
 
