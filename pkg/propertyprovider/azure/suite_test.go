@@ -46,7 +46,7 @@ const (
 
 	aksNodeSKU1 = "Standard_B4ms"
 	aksNodeSKU2 = "Standard_A4_v2"
-	aksNodeSKU3 = "Standard_DS2_v2"
+	aksNodeSKU3 = "Standard_F4s"
 )
 
 var (
