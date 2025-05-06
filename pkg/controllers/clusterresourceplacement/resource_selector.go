@@ -357,6 +357,8 @@ func (r *Reconciler) shouldSelectResource(gvr schema.GroupVersionResource) bool 
 
 // generateRawContent strips all the unnecessary fields to prepare the objects for dispatch.
 func generateRawContent(object *unstructured.Unstructured) ([]byte, error) {
+	// Make a deep copy of the object as we are modifying it.
+	object = object.DeepCopy()
 	// we keep the annotation/label/finalizer/owner references/delete grace period
 	object.SetResourceVersion("")
 	object.SetGeneration(0)
