@@ -114,11 +114,13 @@ func (h *PriorityQueueEventHandler) WorkPendingApply(ctx context.Context, obj cl
 	availCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 	appliedCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 
-	// check if the object has been recently modified
-	availCondLastUpdatedTime := availCond.LastTransitionTime.Time
-	appliedCondLastUpdatedTime := appliedCond.LastTransitionTime.Time
-	if time.Since(availCondLastUpdatedTime) < workAgeToReconcile || time.Since(appliedCondLastUpdatedTime) < workAgeToReconcile {
-		return true
+	if availCond != nil && appliedCond != nil {
+		// check if the object has been recently modified
+		availCondLastUpdatedTime := availCond.LastTransitionTime.Time
+		appliedCondLastUpdatedTime := appliedCond.LastTransitionTime.Time
+		if time.Since(availCondLastUpdatedTime) < workAgeToReconcile || time.Since(appliedCondLastUpdatedTime) < workAgeToReconcile {
+			return true
+		}
 	}
 
 	if condition.IsConditionStatusTrue(availCond, work.GetGeneration()) &&
