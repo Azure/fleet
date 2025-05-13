@@ -807,7 +807,42 @@ func createResourceContentForTest(t *testing.T, obj interface{}) *fleetv1beta1.R
 	}
 }
 
-func TestSortResource(t *testing.T) {
+func TestSortResources(t *testing.T) {
+	// Create the ingressClass object
+	ingressClass := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "networking/v1",
+			"kind":       "IngressClass",
+			"metadata": map[string]interface{}{
+				"name": "test",
+			},
+		},
+	}
+
+	// Create the Ingress object
+	ingress := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "networking/v1",
+			"kind":       "Ingress",
+			"metadata": map[string]interface{}{
+				"name":      "test-ingress",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the NetworkPolicy object
+	networkPolicy := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "networking/v1",
+			"kind":       "NetworkPolicy",
+			"metadata": map[string]interface{}{
+				"name":      "test-networkpolicy",
+				"namespace": "test",
+			},
+		},
+	}
+
 	// Create the first Namespace object
 	namespace1 := &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -830,7 +865,91 @@ func TestSortResource(t *testing.T) {
 		},
 	}
 
-	// Create the Deployment object
+	// Create the LimitRange object
+	limitRange := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "LimitRange",
+			"metadata": map[string]interface{}{
+				"name":      "test-limitrange",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the pod object.
+	pod := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Pod",
+			"metadata": map[string]interface{}{
+				"name":      "test-pod",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the ReplicationController object.
+	replicationController := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "ReplicationController",
+			"metadata": map[string]interface{}{
+				"name":      "test-replicationcontroller",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the ResourceQuota object.
+	resourceQuota := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "ResourceQuota",
+			"metadata": map[string]interface{}{
+				"name":      "test-resourcequota",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the Service object.
+	service := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Service",
+			"metadata": map[string]interface{}{
+				"name":      "test-service",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the ServiceAccount object.
+	serviceAccount := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "ServiceAccount",
+			"metadata": map[string]interface{}{
+				"name":      "test-serviceaccount",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the PodDisruptionBudget object.
+	pdb := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "policy/v1",
+			"kind":       "PodDisruptionBudget",
+			"metadata": map[string]interface{}{
+				"name":      "test-pdb",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the Deployment object.
 	deployment := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "apps/v1",
@@ -842,7 +961,122 @@ func TestSortResource(t *testing.T) {
 		},
 	}
 
-	// Create the first CustomResourceDefinition object
+	// Create the v1beta1 Deployment object.
+	v1beta1Deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1beta1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "test-nginx1",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the DaemonSet object.
+	daemonSet := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "DaemonSet",
+			"metadata": map[string]interface{}{
+				"name":      "test-daemonset",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the ReplicaSet object.
+	replicaSet := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "ReplicaSet",
+			"metadata": map[string]interface{}{
+				"name":      "test-replicaset",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the StatefulSet object.
+	statefulSet := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "StatefulSet",
+			"metadata": map[string]interface{}{
+				"name":      "test-statefulset",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the StorageClass object.
+	storageClass := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "storage.k8s.io/v1",
+			"kind":       "StorageClass",
+			"metadata": map[string]interface{}{
+				"name": "test-storageclass",
+			},
+		},
+	}
+
+	// Create the APIService object.
+	apiService := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apiregistration.k8s.io/v1",
+			"kind":       "APIService",
+			"metadata": map[string]interface{}{
+				"name": "test-apiservice",
+			},
+		},
+	}
+
+	// Create the HorizontalPodAutoscaler object.
+	hpa := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "autoscaling/v1",
+			"kind":       "HorizontalPodAutoscaler",
+			"metadata": map[string]interface{}{
+				"name":      "test-hpa",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the PriorityClass object.
+	priorityClass := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "scheduling.k8s.io/v1",
+			"kind":       "PriorityClass",
+			"metadata": map[string]interface{}{
+				"name": "test-priorityclass",
+			},
+		},
+	}
+
+	// Create the ValidatingWebhookConfiguration object.
+	validatingWebhookConfiguration := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "admissionregistration.k8s.io/v1",
+			"kind":       "ValidatingWebhookConfiguration",
+			"metadata": map[string]interface{}{
+				"name": "test-validatingwebhookconfiguration",
+			},
+		},
+	}
+
+	// Create the MutatingWebhookConfiguration object.
+	mutatingWebhookConfiguration := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "admissionregistration.k8s.io/v1",
+			"kind":       "MutatingWebhookConfiguration",
+			"metadata": map[string]interface{}{
+				"name": "test-mutatingwebhookconfiguration",
+			},
+		},
+	}
+
+	// Create the first CustomResourceDefinition object.
 	crd1 := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "apiextensions.k8s.io/v1",
@@ -853,7 +1087,7 @@ func TestSortResource(t *testing.T) {
 		},
 	}
 
-	// Create the second CustomResourceDefinition object
+	// Create the second CustomResourceDefinition object.
 	crd2 := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "apiextensions.k8s.io/v1",
@@ -864,7 +1098,7 @@ func TestSortResource(t *testing.T) {
 		},
 	}
 
-	// Create the ClusterRole object
+	// Create the ClusterRole object.
 	clusterRole := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "rbac.authorization.k8s.io/v1",
@@ -875,31 +1109,66 @@ func TestSortResource(t *testing.T) {
 		},
 	}
 
-	// Create the Secret object
-	secret := &unstructured.Unstructured{
+	// Create the ClusterRoleBinding object.
+	clusterRoleBinindg := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": "v1",
-			"kind":       "Secret",
+			"apiVersion": "rbac.authorization.k8s.io/v1",
+			"kind":       "ClusterRoleBinding",
 			"metadata": map[string]interface{}{
-				"name":      "test-secret",
+				"name": "test-clusterrolebinding",
+			},
+		},
+	}
+
+	// Create the Role object.
+	role := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "rbac.authorization.k8s.io/v1",
+			"kind":       "Role",
+			"metadata": map[string]interface{}{
+				"name":      "test-role",
 				"namespace": "test",
 			},
 		},
 	}
 
-	// Create the Secret object
+	// Create the RoleBinding object.
+	roleBinding := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "rbac.authorization.k8s.io/v1",
+			"kind":       "RoleBinding",
+			"metadata": map[string]interface{}{
+				"name":      "test-rolebinding",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the Secret object.
+	secret1 := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Secret",
+			"metadata": map[string]interface{}{
+				"name":      "test-secret1",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the Secret object.
 	secret2 := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "v1",
 			"kind":       "Secret",
 			"metadata": map[string]interface{}{
-				"name":      "test-secret-2",
+				"name":      "test-secret2",
 				"namespace": "test",
 			},
 		},
 	}
 
-	// Create the ConfigMap object
+	// Create the ConfigMap object.
 	configMap := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "v1",
@@ -911,7 +1180,42 @@ func TestSortResource(t *testing.T) {
 		},
 	}
 
-	// Create the PersistentVolumeClaim object
+	// Create the CronJob object.
+	cronJob := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "batch/v1",
+			"kind":       "CronJob",
+			"metadata": map[string]interface{}{
+				"name":      "test-cronjob",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the Job object.
+	job := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "batch/v1",
+			"kind":       "Job",
+			"metadata": map[string]interface{}{
+				"name":      "test-job",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the PersistentVolume object.
+	pv := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "PersistentVolume",
+			"metadata": map[string]interface{}{
+				"name": "test-pv",
+			},
+		},
+	}
+
+	// Create the PersistentVolumeClaim object.
 	pvc := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "v1",
@@ -923,13 +1227,50 @@ func TestSortResource(t *testing.T) {
 		},
 	}
 
-	// Create the ClusterRole object
-	role := &unstructured.Unstructured{
+	// Create the test resource.
+	testResource1 := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": "rbac.authorization.k8s.io/v1",
-			"kind":       "Role",
+			"apiVersion": "test.kubernetes-fleet.io/v1alpha1",
+			"kind":       "TestResource",
 			"metadata": map[string]interface{}{
-				"name": "test-clusterrole",
+				"name":      "test-resource1",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the test resource.
+	testResource2 := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "test.kubernetes-fleet.io/v1alpha1",
+			"kind":       "TestResource",
+			"metadata": map[string]interface{}{
+				"name":      "test-resource2",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create another test resource.
+	anotherTestResource := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "test.kubernetes-fleet.io/v1alpha1",
+			"kind":       "AnotherTestResource",
+			"metadata": map[string]interface{}{
+				"name":      "another-test-resource",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create v1beta1 another test resource.
+	v1beta1AnotherTestResource := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "test.kubernetes-fleet.io/v1beta1",
+			"kind":       "AnotherTestResource",
+			"metadata": map[string]interface{}{
+				"name":      "another-test-resource",
+				"namespace": "test",
 			},
 		},
 	}
@@ -946,48 +1287,36 @@ func TestSortResource(t *testing.T) {
 			resources: []*unstructured.Unstructured{deployment},
 			want:      []*unstructured.Unstructured{deployment},
 		},
-		"should handle multiple namespaces": {
-			resources: []*unstructured.Unstructured{namespace1, namespace2},
-			want:      []*unstructured.Unstructured{namespace2, namespace1},
+		"should handle multiple resources of all kinds": {
+			resources: []*unstructured.Unstructured{ingressClass, clusterRole, clusterRoleBinindg, configMap, cronJob, crd1, daemonSet, deployment, testResource1, ingress, job, limitRange, namespace1, networkPolicy, pv, pvc, pod, pdb, replicaSet, replicationController, resourceQuota, role, roleBinding, secret1, service, serviceAccount, statefulSet, storageClass, apiService, hpa, priorityClass, validatingWebhookConfiguration, mutatingWebhookConfiguration},
+			want:      []*unstructured.Unstructured{priorityClass, namespace1, networkPolicy, resourceQuota, limitRange, pdb, serviceAccount, secret1, configMap, storageClass, pv, pvc, crd1, clusterRole, clusterRoleBinindg, role, roleBinding, service, daemonSet, pod, replicationController, replicaSet, deployment, hpa, statefulSet, job, cronJob, ingressClass, ingress, apiService, mutatingWebhookConfiguration, validatingWebhookConfiguration, testResource1},
 		},
-		"should gather selected resources with Namespace in front with order": {
-			resources: []*unstructured.Unstructured{deployment, namespace1, namespace2},
-			want:      []*unstructured.Unstructured{namespace2, namespace1, deployment},
+		"should handle multiple known resources, different kinds": {
+			resources: []*unstructured.Unstructured{crd2, crd1, secret2, namespace2, namespace1, secret1},
+			want:      []*unstructured.Unstructured{namespace1, namespace2, secret1, secret2, crd1, crd2},
 		},
-		"should gather selected resources with CRD in front with order": {
-			resources: []*unstructured.Unstructured{clusterRole, crd1, crd2},
-			want:      []*unstructured.Unstructured{crd2, crd1, clusterRole},
+		"should handle multiple known resources, same kinds with different versions": {
+			resources: []*unstructured.Unstructured{v1beta1Deployment, deployment, limitRange},
+			want:      []*unstructured.Unstructured{limitRange, deployment, v1beta1Deployment},
 		},
-		"should gather selected resources with CRD or Namespace in front  with order": {
-			resources: []*unstructured.Unstructured{deployment, namespace1, namespace2, clusterRole, crd1, crd2},
-			want:      []*unstructured.Unstructured{namespace2, namespace1, crd2, crd1, clusterRole, deployment},
+		"should handle multiple unknown resources, same kinds": {
+			resources: []*unstructured.Unstructured{testResource2, testResource1},
+			want:      []*unstructured.Unstructured{testResource1, testResource2},
 		},
-		"should gather selected resources with CRD or Namespace in front  with order, second case": {
-			resources: []*unstructured.Unstructured{crd1, crd2, deployment, namespace2, clusterRole},
-			want:      []*unstructured.Unstructured{namespace2, crd2, crd1, deployment, clusterRole},
+		"should handle multiple unknown resources, different kinds": {
+			resources: []*unstructured.Unstructured{testResource1, anotherTestResource},
+			want:      []*unstructured.Unstructured{anotherTestResource, testResource1},
 		},
-		"should gather selected resources with PersistentVolumeClaim in front with order": {
-			resources: []*unstructured.Unstructured{deployment, pvc, namespace1, role},
-			want:      []*unstructured.Unstructured{namespace1, pvc, deployment, role},
-		},
-		"should gather selected resources with Secret in front with order": {
-			resources: []*unstructured.Unstructured{deployment, secret, namespace1, crd1, namespace2, role},
-			want:      []*unstructured.Unstructured{namespace2, namespace1, crd1, secret, deployment, role},
-		},
-		"should gather selected resources with ConfigMap and Secret in front with order": {
-			resources: []*unstructured.Unstructured{deployment, secret, namespace1, role, configMap, secret2},
-			want:      []*unstructured.Unstructured{namespace1, configMap, secret2, secret, deployment, role},
-		},
-		"should gather selected all the resources with the right order": {
-			resources: []*unstructured.Unstructured{configMap, deployment, role, crd1, pvc, secret2, clusterRole, secret, namespace1, namespace2, crd2},
-			want:      []*unstructured.Unstructured{namespace2, namespace1, crd2, crd1, configMap, secret2, secret, pvc, deployment, clusterRole, role},
+		"should handle multiple unknown resources, same kinds with different versions": {
+			resources: []*unstructured.Unstructured{v1beta1AnotherTestResource, anotherTestResource},
+			want:      []*unstructured.Unstructured{anotherTestResource, v1beta1AnotherTestResource},
 		},
 	}
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
 			// run many times to make sure it's stable
-			for i := 10; i < 1; i++ {
+			for i := 0; i < 10; i++ {
 				sortResources(tt.resources)
 				// Check that the returned resources match the expected resources
 				diff := cmp.Diff(tt.want, tt.resources)
