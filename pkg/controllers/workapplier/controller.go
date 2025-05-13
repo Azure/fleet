@@ -463,8 +463,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// Track the availability information.
 	r.trackInMemberClusterObjAvailability(ctx, bundles, workRef)
 
-	trackWorkApplyLatencyMetric(work)
-
 	// Refresh the status of the Work object.
 	if err := r.refreshWorkStatus(ctx, work, bundles); err != nil {
 		return ctrl.Result{}, err
@@ -474,6 +472,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if err := r.refreshAppliedWorkStatus(ctx, appliedWork, bundles); err != nil {
 		return ctrl.Result{}, err
 	}
+
+	trackWorkAndManifestProcessingRequestMetrics(work)
 
 	// If the Work object is not yet available, reconcile again.
 	if !isWorkObjectAvailable(work) {

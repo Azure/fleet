@@ -103,7 +103,12 @@ func init() {
 	utilruntime.Must(placementv1beta1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 
-	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics, fleetmetrics.WorkApplyTime)
+	metrics.Registry.MustRegister(
+		fleetmetrics.JoinResultMetrics,
+		fleetmetrics.LeaveResultMetrics,
+		fleetmetrics.FleetWorkProcessingRequestsTotal,
+		fleetmetrics.FleetManifestProcessingRequestsTotal,
+	)
 }
 
 func main() {

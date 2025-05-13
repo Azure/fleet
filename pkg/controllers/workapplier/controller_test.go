@@ -26,15 +26,16 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/utils/ptr"
-
-	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/ptr"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
+
+	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
 )
 
 const (
@@ -187,6 +188,12 @@ func TestMain(m *testing.M) {
 
 	// Initialize the variables.
 	initializeVariables()
+
+	// Register the metrics.
+	ctrlmetrics.Registry.MustRegister(
+		metrics.FleetWorkProcessingRequestsTotal,
+		metrics.FleetManifestProcessingRequestsTotal,
+	)
 
 	os.Exit(m.Run())
 }
