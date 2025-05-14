@@ -35,23 +35,25 @@ const (
 )
 
 // Add registers the webhook for K8s built-in object types.
-func Add(mgr manager.Manager, whiteListedUsers []string, isFleetV1Beta1API bool) error {
+func Add(mgr manager.Manager, whiteListedUsers []string, isFleetV1Beta1API bool, denyModifyMemberClusterLabels bool) error {
 	hookServer := mgr.GetWebhookServer()
 	handler := &fleetResourceValidator{
-		client:            mgr.GetClient(),
-		whiteListedUsers:  whiteListedUsers,
-		isFleetV1Beta1API: isFleetV1Beta1API,
-		decoder:           admission.NewDecoder(mgr.GetScheme()),
+		client:                        mgr.GetClient(),
+		whiteListedUsers:              whiteListedUsers,
+		isFleetV1Beta1API:             isFleetV1Beta1API,
+		decoder:                       admission.NewDecoder(mgr.GetScheme()),
+		denyModifyMemberClusterLabels: denyModifyMemberClusterLabels,
 	}
 	hookServer.Register(ValidationPath, &webhook.Admission{Handler: handler})
 	return nil
 }
 
 type fleetResourceValidator struct {
-	client            client.Client
-	whiteListedUsers  []string
-	isFleetV1Beta1API bool
-	decoder           webhook.AdmissionDecoder
+	client                        client.Client
+	whiteListedUsers              []string
+	isFleetV1Beta1API             bool
+	decoder                       webhook.AdmissionDecoder
+	denyModifyMemberClusterLabels bool
 }
 
 // Handle receives the request then allows/denies the request to modify fleet resources.
@@ -133,7 +135,7 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 		}
 		isFleetMC := utils.IsFleetAnnotationPresent(oldMC.Annotations)
 		if isFleetMC {
-			return validation.ValidateFleetMemberClusterUpdate(currentMC, oldMC, req, v.whiteListedUsers)
+			return validation.ValidateFleetMemberClusterUpdate(currentMC, oldMC, req, v.whiteListedUsers, v.denyModifyMemberClusterLabels)
 		}
 		return validation.ValidatedUpstreamMemberClusterUpdate(currentMC, oldMC, req, v.whiteListedUsers)
 	}

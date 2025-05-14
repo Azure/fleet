@@ -17,10 +17,12 @@ limitations under the License.
 package options
 
 import (
+	"flag"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
@@ -101,4 +103,14 @@ func TestValidateControllerManagerConfiguration(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAddFlags(t *testing.T) {
+	g := gomega.NewWithT(t)
+	opts := NewOptions()
+
+	flags := flag.NewFlagSet("deny-modify-member-cluster-labels", flag.ExitOnError)
+	opts.AddFlags(flags)
+
+	g.Expect(opts.DenyModifyMemberClusterLabels).To(gomega.BeFalse(), "deny-modify-member-cluster-labels should be false by default")
 }
