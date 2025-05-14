@@ -212,7 +212,7 @@ The `ClusterResourcePlacement` object above will pick all the clusters with the 
 
 Fleet is forward-looking with the `PickAll` placement type: any cluster that satisfies the
 affinity terms of a `ClusterResourcePlacement` object, even if it joins after the
- `ClsuterResourcePlacement` object is created, will be picked.
+ `ClusterResourcePlacement` object is created, will be picked.
 
 > Note
 >
