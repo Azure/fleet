@@ -620,6 +620,123 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 	})
 })
 
+var _ = Describe("SSA", Ordered, func() {
+	Context("use server-side apply to place resources (with changes)", func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		nsName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+		cmName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
+
+		// The key here should match the one used in the default config map.
+		cmDataKey := "data"
+		cmDataVal1 := "foobar"
+
+		BeforeAll(func() {
+			// Create the resources on the hub cluster.
+			createWorkResources()
+
+			// Create the CRP.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickAllPlacementType,
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							MaxUnavailable:           ptr.To(intstr.FromInt(1)),
+							MaxSurge:                 ptr.To(intstr.FromInt(1)),
+							UnavailablePeriodSeconds: ptr.To(2),
+						},
+						ApplyStrategy: &placementv1beta1.ApplyStrategy{
+							Type: placementv1beta1.ApplyStrategyTypeServerSideApply,
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+		})
+
+		It("should update CRP status as expected", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should place the resources on all member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
+		It("can update the manifests", func() {
+			Eventually(func() error {
+				cm := &corev1.ConfigMap{}
+				if err := hubClient.Get(ctx, client.ObjectKey{Name: cmName, Namespace: nsName}, cm); err != nil {
+					return fmt.Errorf("failed to get configmap: %w", err)
+				}
+
+				if cm.Data == nil {
+					cm.Data = make(map[string]string)
+				}
+				cm.Data[cmDataKey] = cmDataVal1
+
+				if err := hubClient.Update(ctx, cm); err != nil {
+					return fmt.Errorf("failed to update configmap: %w", err)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the manifests")
+		})
+
+		It("should update CRP status as expected", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1")
+			// Longer timeout is used to allow full rollouts.
+			Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should refresh the resources on all member clusters", func() {
+			for idx := range allMemberClusters {
+				memberClient := allMemberClusters[idx].KubeClient
+
+				Eventually(func() error {
+					cm := &corev1.ConfigMap{}
+					if err := memberClient.Get(ctx, client.ObjectKey{Name: cmName, Namespace: nsName}, cm); err != nil {
+						return fmt.Errorf("failed to get configmap: %w", err)
+					}
+
+					// To keep things simple, here the config map for comparison is
+					// rebuilt from the retrieved data.
+					rebuiltCM := &corev1.ConfigMap{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      cm.Name,
+							Namespace: cm.Namespace,
+						},
+						Data: cm.Data,
+					}
+					wantCM := &corev1.ConfigMap{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      cmName,
+							Namespace: nsName,
+						},
+						Data: map[string]string{
+							cmDataKey: cmDataVal1,
+						},
+					}
+					if diff := cmp.Diff(rebuiltCM, wantCM); diff != "" {
+						return fmt.Errorf("configMap diff (-got, +want):\n%s", diff)
+					}
+					return nil
+				}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to refresh the resources on %s", allMemberClusters[idx].ClusterName)
+			}
+		})
+
+		AfterAll(func() {
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+		})
+	})
+})
+
 var _ = Describe("switching apply strategies", func() {
 	Context("switch from client-side apply to report diff", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
