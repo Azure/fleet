@@ -3,7 +3,7 @@
 1. Build the binary for the `uncordoncluster` tool by running the following command in the root directory of the fleet repo:
 
 ```bash
-go build -o ./hack/tools/bin/kubectl-uncordoncluster ./tools/uncordoncluster/main.go
+go build -o ./hack/tools/bin/kubectl-uncordoncluster ./tools/uncordoncluster
 ```
 
 2. Copy the binary to a directory in your `PATH` so that it can be run as a kubectl plugin. For example, you can move it to
@@ -39,8 +39,8 @@ more information.
 
 # Uncordon Member Cluster connected to a fleet
 
-After following the steps above to build the `uncordoncluster` tool as a kubectl plugin, you can use it to uncordon a 
-member cluster that has been cordoned using the `draincluster` tool. 
+After following the steps above to build the `uncordoncluster` tool as a kubectl plugin, you can use it to uncordon a
+member cluster that has been cordoned using the `draincluster` tool.
 
 ```
 kubectl uncordoncluster --hubClusterContext <hub-cluster-context> --clusterName <memberClusterName>
@@ -66,5 +66,5 @@ CURRENT   NAME               CLUSTER            AUTHINFO                        
 
 Here you can see that the context of the hub cluster is called `hub` under the `NAME` column.
 
-The command removes the `cordon` taint added to a `MemberCluster` resource by the `draincluster` tool. If the `cordon` 
+The command removes the `cordon` taint added to a `MemberCluster` resource by the `draincluster` tool. If the `cordon`
 taint is not present, the command will not have any effect.

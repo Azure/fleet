@@ -1390,8 +1390,8 @@ var _ = Describe("creating CRP and checking selected resources order", Ordered, 
 		// Define the expected resources in order
 		expectedResources := []placementv1beta1.ResourceIdentifier{
 			{Kind: "Namespace", Name: nsName, Version: "v1"},
-			{Kind: "ConfigMap", Name: configMap.Name, Namespace: nsName, Version: "v1"},
 			{Kind: "Secret", Name: secret.Name, Namespace: nsName, Version: "v1"},
+			{Kind: "ConfigMap", Name: configMap.Name, Namespace: nsName, Version: "v1"},
 			{Kind: "PersistentVolumeClaim", Name: pvc.Name, Namespace: nsName, Version: "v1"},
 			{Group: "rbac.authorization.k8s.io", Kind: "Role", Name: role.Name, Namespace: nsName, Version: "v1"},
 		}

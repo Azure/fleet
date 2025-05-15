@@ -24,7 +24,7 @@ import (
 // +genclient:Cluster
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=crsur
+// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=csur
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:storageversion
 // +kubebuilder:printcolumn:JSONPath=`.spec.placementName`,name="Placement",type=string
@@ -83,7 +83,7 @@ type StagedUpdateRunSpec struct {
 // +genclient:cluster
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=sus
+// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=csus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:storageversion
 
@@ -127,7 +127,8 @@ type StageConfig struct {
 
 	// LabelSelector is a label query over all the joined member clusters. Clusters matching the query are selected
 	// for this stage. There cannot be overlapping clusters between stages when the stagedUpdateRun is created.
-	// If the label selector is absent, the stage includes all the selected clusters.
+	// If the label selector is empty, the stage includes all the selected clusters.
+	// If the label selector is nil, the stage does not include any selected clusters.
 	// +kubebuilder:validation:Optional
 	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
 

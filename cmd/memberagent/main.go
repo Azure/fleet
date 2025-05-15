@@ -44,6 +44,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -80,14 +81,16 @@ var (
 	metricsAddr          = flag.String("metrics-bind-address", ":8090", "The address the metric endpoint binds to.")
 	enableLeaderElection = flag.Bool("leader-elect", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
-	leaderElectionNamespace   = flag.String("leader-election-namespace", "kube-system", "The namespace in which the leader election resource will be created.")
-	enableV1Alpha1APIs        = flag.Bool("enable-v1alpha1-apis", true, "If set, the agents will watch for the v1alpha1 APIs.")
-	enableV1Beta1APIs         = flag.Bool("enable-v1beta1-apis", false, "If set, the agents will watch for the v1beta1 APIs.")
-	propertyProvider          = flag.String("property-provider", "none", "The property provider to use for the agent.")
-	region                    = flag.String("region", "", "The region where the member cluster resides.")
-	cloudConfigFile           = flag.String("cloud-config", "/etc/kubernetes/provider/config.json", "The path to the cloud cloudconfig file.")
-	availabilityCheckInterval = flag.Int("availability-check-interval", 5, "The interval in seconds between attempts to check for resource availability when resources are not yet available.")
-	driftDetectionInterval    = flag.Int("drift-detection-interval", 15, "The interval in seconds between attempts to detect configuration drifts in the cluster.")
+	leaderElectionNamespace      = flag.String("leader-election-namespace", "kube-system", "The namespace in which the leader election resource will be created.")
+	enableV1Alpha1APIs           = flag.Bool("enable-v1alpha1-apis", true, "If set, the agents will watch for the v1alpha1 APIs.")
+	enableV1Beta1APIs            = flag.Bool("enable-v1beta1-apis", false, "If set, the agents will watch for the v1beta1 APIs.")
+	propertyProvider             = flag.String("property-provider", "none", "The property provider to use for the agent.")
+	region                       = flag.String("region", "", "The region where the member cluster resides.")
+	cloudConfigFile              = flag.String("cloud-config", "/etc/kubernetes/provider/config.json", "The path to the cloud cloudconfig file.")
+	availabilityCheckInterval    = flag.Int("availability-check-interval", 5, "The interval in seconds between attempts to check for resource availability when resources are not yet available.")
+	driftDetectionInterval       = flag.Int("drift-detection-interval", 15, "The interval in seconds between attempts to detect configuration drifts in the cluster.")
+	watchWorkWithPriorityQueue   = flag.Bool("enable-watch-work-with-priority-queue", false, "If set, the apply_work controller will watch/reconcile work objects that are created new or have recent updates")
+	watchWorkReconcileAgeMinutes = flag.Int("watch-work-reconcile-age", 60, "maximum age (in minutes) of work objects for apply_work controller to watch/reconcile")
 )
 
 func init() {
@@ -100,7 +103,12 @@ func init() {
 	utilruntime.Must(placementv1beta1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 
-	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics, fleetmetrics.WorkApplyTime)
+	metrics.Registry.MustRegister(
+		fleetmetrics.JoinResultMetrics,
+		fleetmetrics.LeaveResultMetrics,
+		fleetmetrics.FleetWorkProcessingRequestsTotal,
+		fleetmetrics.FleetManifestProcessingRequestsTotal,
+	)
 }
 
 func main() {
@@ -111,6 +119,9 @@ func main() {
 	flag.VisitAll(func(f *flag.Flag) {
 		klog.InfoS("flag:", "name", f.Name, "value", f.Value)
 	})
+
+	// Set up controller-runtime logger
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	// Validate flags
 	if !*enableV1Alpha1APIs && !*enableV1Beta1APIs {
@@ -376,7 +387,10 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 			// Use the default worker count (4) for parallelized manifest processing.
 			parallelizer.DefaultNumOfWorkers,
 			time.Second*time.Duration(*availabilityCheckInterval),
-			time.Second*time.Duration(*driftDetectionInterval))
+			time.Second*time.Duration(*driftDetectionInterval),
+			*watchWorkWithPriorityQueue,
+			*watchWorkReconcileAgeMinutes,
+		)
 
 		if err = workController.SetupWithManager(hubMgr); err != nil {
 			klog.ErrorS(err, "Failed to create v1beta1 controller", "controller", "work")

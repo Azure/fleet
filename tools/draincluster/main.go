@@ -14,7 +14,6 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/tools/draincluster/drain"
 	toolsutils "go.goms.io/fleet/tools/utils"
 )
 
@@ -46,14 +45,14 @@ func main() {
 		log.Fatalf("failed to create hub cluster client: %v", err)
 	}
 
-	drainClusterHelper := drain.Helper{
-		HubClient:   hubClient,
-		ClusterName: *clusterName,
+	drainClusterHelper := helper{
+		hubClient:   hubClient,
+		clusterName: *clusterName,
 	}
 
 	isDrainSuccessful, err := drainClusterHelper.Drain(ctx)
 	if err != nil {
-		log.Fatalf("failed to drain member cluster %s: %v", drainClusterHelper.ClusterName, err)
+		log.Fatalf("failed to drain member cluster %s: %v", drainClusterHelper.clusterName, err)
 	}
 
 	if isDrainSuccessful {
@@ -66,7 +65,7 @@ func main() {
 	log.Printf("retrying drain to ensure all resources propagated from hub cluster are evicted")
 	isDrainRetrySuccessful, err := drainClusterHelper.Drain(ctx)
 	if err != nil {
-		log.Fatalf("failed to drain cluster on retry %s: %v", drainClusterHelper.ClusterName, err)
+		log.Fatalf("failed to drain cluster on retry %s: %v", drainClusterHelper.clusterName, err)
 	}
 	if isDrainRetrySuccessful {
 		log.Printf("drain retry was successful for cluster %s", *clusterName)

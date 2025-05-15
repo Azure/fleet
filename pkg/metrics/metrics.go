@@ -86,3 +86,42 @@ var (
 		Help: "Number of currently running scheduling loop",
 	}, []string{})
 )
+
+// The work applier related metrics.
+var (
+	// FleetWorkProcessingRequestsTotal is a prometheus metric which counts the
+	// total number of work object processing requests.
+	//
+	// The following labels are available:
+	// * apply_status: the apply status of the processing request; values can
+	//   be "applied", "failed", or "skipped".
+	// * availability_status: the availability check status of the processing request;
+	//   values can be "available", "unavailable", or "skipped".
+	// * diff_reporting_status: the diff reporting status of the processing request;
+	//   values can be "reported", "failed", or "skipped".
+	FleetWorkProcessingRequestsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "fleet_work_processing_requests_total",
+		Help: "Total number of processing requests of work objects, including retries and periodic checks",
+	}, []string{"apply_status", "availability_status", "diff_reporting_status"})
+
+	// FleetManifestProcessingRequestsTotal is a prometheus metric which counts the
+	// total number of manifest object processing requests.
+	//
+	// The following labels are available:
+	// * apply_status: the apply status of the processing request; see the list of
+	//   apply result types in the work applier source code for possible values.
+	// * availability_status: the availability check status of the processing request;
+	//   see the list of availability check result types in the work applier source code
+	//   for possible values.
+	// * diff_reporting_status: the diff reporting status of the processing request;
+	//   see the list of diff reporting result types in the work applier source code
+	//   for possible values.
+	// * drift_detection_status: the drift detection status of the processing request;
+	//   values can be "found" and "not_found".
+	// * diff_detection_status: the diff detection status of the processing request;
+	//   values can be "found" and "not_found".
+	FleetManifestProcessingRequestsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "fleet_manifest_processing_requests_total",
+		Help: "Total number of processing requests of manifest objects, including retries and periodic checks",
+	}, []string{"apply_status", "availability_status", "diff_reporting_status", "drift_detection_status", "diff_detection_status"})
+)

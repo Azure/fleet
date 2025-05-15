@@ -32,10 +32,11 @@ const (
 	aksSupportUser            = "aks-support"
 	serviceAccountFmt         = "system:serviceaccount:fleet-system:%s"
 
-	allowedModifyResource       = "user in groups is allowed to modify resource"
-	deniedModifyResource        = "user in groups is not allowed to modify resource"
-	deniedAddFleetAnnotation    = "no user is allowed to add a fleet pre-fixed annotation to an upstream member cluster"
-	deniedRemoveFleetAnnotation = "no user is allowed to remove all fleet pre-fixed annotations from a fleet member cluster"
+	allowedModifyResource           = "user in groups is allowed to modify resource"
+	deniedModifyResource            = "user in groups is not allowed to modify resource"
+	deniedAddFleetAnnotation        = "no user is allowed to add a fleet pre-fixed annotation to an upstream member cluster"
+	deniedRemoveFleetAnnotation     = "no user is allowed to remove all fleet pre-fixed annotations from a fleet member cluster"
+	DeniedModifyMemberClusterLabels = "users are not allowed to modify labels through hub cluster directly"
 
 	ResourceAllowedFormat      = "user: '%s' in '%s' is allowed to %s resource %+v/%s: %+v"
 	ResourceDeniedFormat       = "user: '%s' in '%s' is not allowed to %s resource %+v/%s: %+v"
@@ -62,7 +63,7 @@ func ValidateUserForFleetCRD(req admission.Request, whiteListedUsers []string, g
 func ValidateUserForResource(req admission.Request, whiteListedUsers []string) admission.Response {
 	namespacedName := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
 	userInfo := req.UserInfo
-	if isAdminGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) || isUserAuthenticatedServiceAccount(userInfo) || isUserKubeScheduler(userInfo) || isUserKubeControllerManager(userInfo) || isNodeGroupUser(userInfo) || isAKSSupportUser(userInfo) {
+	if isAdminGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) || isUserAuthenticatedServiceAccount(userInfo) || isUserKubeScheduler(userInfo) || isUserKubeControllerManager(userInfo) || isUserInGroup(userInfo, nodeGroup) || isAKSSupportUser(userInfo) {
 		klog.V(3).InfoS(allowedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		return admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
 	}
@@ -93,7 +94,7 @@ func ValidateV1Alpha1MemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCl
 }
 
 // ValidateFleetMemberClusterUpdate checks to see if user had updated the fleet member cluster resource and allows/denies the request.
-func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberCluster, req admission.Request, whiteListedUsers []string) admission.Response {
+func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberCluster, req admission.Request, whiteListedUsers []string, denyModifyMemberClusterLabels bool) admission.Response {
 	namespacedName := types.NamespacedName{Name: currentMC.GetName()}
 	userInfo := req.UserInfo
 	if areAllFleetAnnotationsRemoved(currentMC.Annotations, oldMC.Annotations) {
@@ -107,6 +108,17 @@ func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberClus
 	if err != nil {
 		return admission.Denied(err.Error())
 	}
+
+	// Users are no longer allowed to modify labels of fleet member cluster through webhook.
+	// This will be disabled until member labels are accessible through CLI
+	if denyModifyMemberClusterLabels {
+		isLabelUpdated := isMapFieldUpdated(currentMC.GetLabels(), oldMC.GetLabels())
+		if isLabelUpdated && !isUserInGroup(userInfo, mastersGroup) {
+			klog.V(2).InfoS(DeniedModifyMemberClusterLabels, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
+			return admission.Denied(DeniedModifyMemberClusterLabels)
+		}
+	}
+
 	isAnnotationUpdated := isFleetAnnotationUpdated(currentMC.Annotations, oldMC.Annotations)
 	if isObjUpdated || isAnnotationUpdated {
 		return ValidateUserForResource(req, whiteListedUsers)
@@ -162,9 +174,9 @@ func isAKSSupportUser(userInfo authenticationv1.UserInfo) bool {
 	return userInfo.Username == aksSupportUser
 }
 
-// isNodeGroupUser returns true if user belongs to system:nodes group.
-func isNodeGroupUser(userInfo authenticationv1.UserInfo) bool {
-	return slices.Contains(userInfo.Groups, nodeGroup)
+// isUserInGroup returns true if user belongs to the specified groupName.
+func isUserInGroup(userInfo authenticationv1.UserInfo, groupName string) bool {
+	return slices.Contains(userInfo.Groups, groupName)
 }
 
 // isMemberClusterMapFieldUpdated return true if member cluster label is updated.

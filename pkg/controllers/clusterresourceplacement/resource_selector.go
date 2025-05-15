@@ -39,6 +39,47 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
+var (
+	// ApplyOrder is the order in which resources should be applied.
+	// Those occurring earlier in the list get applied before those occurring later in the list.
+	// Source: https://github.com/helm/helm/blob/31e22b9866af91e1a0ea2ad381798f6c5eec7f4f/pkg/release/util/kind_sorter.go#L31.
+	applyOrder = []string{
+		"PriorityClass",
+		"Namespace",
+		"NetworkPolicy",
+		"ResourceQuota",
+		"LimitRange",
+		"PodDisruptionBudget",
+		"ServiceAccount",
+		"Secret",
+		"ConfigMap",
+		"StorageClass",
+		"PersistentVolume",
+		"PersistentVolumeClaim",
+		"CustomResourceDefinition",
+		"ClusterRole",
+		"ClusterRoleBinding",
+		"Role",
+		"RoleBinding",
+		"Service",
+		"DaemonSet",
+		"Pod",
+		"ReplicationController",
+		"ReplicaSet",
+		"Deployment",
+		"HorizontalPodAutoscaler",
+		"StatefulSet",
+		"Job",
+		"CronJob",
+		"IngressClass",
+		"Ingress",
+		"APIService",
+		"MutatingWebhookConfiguration",
+		"ValidatingWebhookConfiguration",
+	}
+	applyOrderMap = buildApplyOrderMap()
+)
+
 // selectResources selects the resources according to the placement resourceSelectors.
 // It also generates an array of manifests obj based on the selected resources.
 func (r *Reconciler) selectResources(placement *fleetv1alpha1.ClusterResourcePlacement) ([]workv1alpha1.Manifest, error) {
@@ -123,7 +164,7 @@ func (r *Reconciler) gatherSelectedResource(placement string, selectors []fleetv
 		}
 	}
 	// sort the resources in strict order so that we will get the stable list of manifest so that
-	// the generated work object doesn't change between reconcile loops
+	// the generated work object doesn't change between reconcile loops.
 	sortResources(resources)
 
 	return resources, nil
@@ -133,34 +174,52 @@ func sortResources(resources []*unstructured.Unstructured) {
 	sort.Slice(resources, func(i, j int) bool {
 		obj1 := resources[i]
 		obj2 := resources[j]
-		gvk1 := obj1.GetObjectKind().GroupVersionKind().String()
-		gvk2 := obj2.GetObjectKind().GroupVersionKind().String()
-		// compare group/version;kind for the rest of type of resources
-		gvkComp := strings.Compare(gvk1, gvk2)
-		if gvkComp == 0 {
-			// same gvk, compare namespace/name, no duplication exists
-			return strings.Compare(fmt.Sprintf("%s/%s", obj1.GetNamespace(), obj1.GetName()),
-				fmt.Sprintf("%s/%s", obj2.GetNamespace(), obj2.GetName())) > 0
+		k1 := obj1.GetObjectKind().GroupVersionKind().Kind
+		k2 := obj2.GetObjectKind().GroupVersionKind().Kind
+
+		first, aok := applyOrderMap[k1]
+		second, bok := applyOrderMap[k2]
+		switch {
+		// if both kinds are unknown.
+		case !aok && !bok:
+			return lessByGVK(obj1, obj2, false)
+		// unknown kind should be last.
+		case !aok:
+			return false
+		case !bok:
+			return true
+		// same kind.
+		case first == second:
+			return lessByGVK(obj1, obj2, true)
 		}
-		// sort by the cluster scoped priority resource types first
-		if gvk1 == utils.NamespaceMetaGVK.String() || gvk2 == utils.NamespaceMetaGVK.String() {
-			return gvk1 == utils.NamespaceMetaGVK.String()
-		}
-		if gvk1 == utils.CRDMetaGVK.String() || gvk2 == utils.CRDMetaGVK.String() {
-			return gvk1 == utils.CRDMetaGVK.String()
-		}
-		// followed by namespaced priority resource types
-		if gvk1 == utils.ConfigMapGVK.String() || gvk2 == utils.ConfigMapGVK.String() {
-			return gvk1 == utils.ConfigMapGVK.String()
-		}
-		if gvk1 == utils.SecretGVK.String() || gvk2 == utils.SecretGVK.String() {
-			return gvk1 == utils.SecretGVK.String()
-		}
-		if gvk1 == utils.PersistentVolumeClaimGVK.String() || gvk2 == utils.PersistentVolumeClaimGVK.String() {
-			return gvk1 == utils.PersistentVolumeClaimGVK.String()
-		}
-		return gvkComp < 0
+		// different known kinds, sort based on order index.
+		return first < second
 	})
+}
+
+func lessByGVK(obj1, obj2 *unstructured.Unstructured, ignoreKind bool) bool {
+	var gvk1, gvk2 string
+	if ignoreKind {
+		gvk1 = obj1.GetObjectKind().GroupVersionKind().GroupVersion().String()
+		gvk2 = obj2.GetObjectKind().GroupVersionKind().GroupVersion().String()
+	} else {
+		gvk1 = obj1.GetObjectKind().GroupVersionKind().String()
+		gvk2 = obj2.GetObjectKind().GroupVersionKind().String()
+	}
+	comp := strings.Compare(gvk1, gvk2)
+	if comp == 0 {
+		return strings.Compare(fmt.Sprintf("%s/%s", obj1.GetNamespace(), obj1.GetName()),
+			fmt.Sprintf("%s/%s", obj2.GetNamespace(), obj2.GetName())) < 0
+	}
+	return comp < 0
+}
+
+func buildApplyOrderMap() map[string]int {
+	ordering := make(map[string]int, len(applyOrder))
+	for v, k := range applyOrder {
+		ordering[k] = v
+	}
+	return ordering
 }
 
 // fetchClusterScopedResources retrieves the objects based on the selector.
@@ -357,6 +416,8 @@ func (r *Reconciler) shouldSelectResource(gvr schema.GroupVersionResource) bool 
 
 // generateRawContent strips all the unnecessary fields to prepare the objects for dispatch.
 func generateRawContent(object *unstructured.Unstructured) ([]byte, error) {
+	// Make a deep copy of the object as we are modifying it.
+	object = object.DeepCopy()
 	// we keep the annotation/label/finalizer/owner references/delete grace period
 	object.SetResourceVersion("")
 	object.SetGeneration(0)
@@ -463,8 +524,11 @@ func (r *Reconciler) selectResourcesForPlacement(placement *fleetv1beta1.Cluster
 		if err != nil {
 			return 0, nil, nil, err
 		}
-		if unstructuredObj.GetObjectKind().GroupVersionKind() == utils.ConfigMapGVK &&
-			len(unstructuredObj.GetAnnotations()[fleetv1beta1.EnvelopeConfigMapAnnotation]) != 0 {
+		uGVK := unstructuredObj.GetObjectKind().GroupVersionKind().GroupKind()
+		switch {
+		case uGVK == utils.ClusterResourceEnvelopeGK:
+			envelopeObjCount++
+		case uGVK == utils.ResourceEnvelopeGK:
 			envelopeObjCount++
 		}
 		resources[i] = *rc

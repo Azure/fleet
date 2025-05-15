@@ -49,7 +49,7 @@ const (
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:scope="Cluster",shortName=rss,categories={fleet,fleet-placement}
+// +kubebuilder:resource:scope="Cluster",shortName=crs,categories={fleet,fleet-placement}
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
 // +kubebuilder:printcolumn:JSONPath=`.metadata.generation`,name="Gen",type=string

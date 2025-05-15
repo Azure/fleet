@@ -1,12 +1,10 @@
-apiVersion: v1
-kind: ConfigMap
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ResourceEnvelope
 metadata:
-  name: envelop-configmap
+  name: namespaced-resource-envelope
   namespace: app
-  annotations:
-    kubernetes-fleet.io/envelope-configmap: "true"
 data:
-  resourceQuota.yaml: |
+  "resourceQuota.yaml":
     apiVersion: v1
     kind: ResourceQuota
     metadata:

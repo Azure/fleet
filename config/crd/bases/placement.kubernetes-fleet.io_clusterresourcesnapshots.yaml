@@ -15,7 +15,7 @@ spec:
     listKind: ClusterResourceSnapshotList
     plural: clusterresourcesnapshots
     shortNames:
-    - rss
+    - crs
     singular: clusterresourcesnapshot
   scope: Cluster
   versions:

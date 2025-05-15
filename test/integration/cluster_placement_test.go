@@ -683,7 +683,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				var uObj unstructured.Unstructured
 				err := utils.GetObjectFromRawExtension(manifest.Raw, &uObj)
 				Expect(err).Should(Succeed())
-				if uObj.GroupVersionKind().Kind == ClusterRoleKind && uObj.GroupVersionKind().Group == rbacv1.GroupName {
+				if uObj.GroupVersionKind().Kind == ClusterRoleKind && uObj.GroupVersionKind().Group == rbacv1.GroupName && uObj.GetName() == clusterRole.GetName() {
 					var selectedRole rbacv1.ClusterRole
 					err := utils.GetObjectFromRawExtension(manifest.Raw, &selectedRole)
 					Expect(err).Should(Succeed())
@@ -715,7 +715,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				var uObj unstructured.Unstructured
 				err := utils.GetObjectFromRawExtension(manifest.Raw, &uObj)
 				Expect(err).Should(Succeed())
-				if uObj.GroupVersionKind().Kind == ClusterRoleKind && uObj.GroupVersionKind().Group == rbacv1.GroupName {
+				if uObj.GroupVersionKind().Kind == ClusterRoleKind && uObj.GroupVersionKind().Group == rbacv1.GroupName && uObj.GetName() == clusterRole.GetName() {
 					var selectedRole rbacv1.ClusterRole
 					err := utils.GetObjectFromRawExtension(manifest.Raw, &selectedRole)
 					Expect(err).Should(Succeed())

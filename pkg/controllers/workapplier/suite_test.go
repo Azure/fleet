@@ -165,6 +165,8 @@ var _ = BeforeSuite(func() {
 		workerCount,
 		time.Second*5,
 		time.Second*5,
+		true,
+		60,
 	)
 	Expect(workApplier.SetupWithManager(hubMgr)).To(Succeed())
 

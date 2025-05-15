@@ -22,34 +22,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-const (
-	// ResourceIndexLabel is the label that indicate the resource snapshot index of a cluster resource snapshot.
-	ResourceIndexLabel = fleetPrefix + "resource-index"
-
-	// ResourceGroupHashAnnotation is the annotation that contains the value of the sha-256 hash
-	// value of all the snapshots belong to the same snapshot index.
-	ResourceGroupHashAnnotation = fleetPrefix + "resource-hash"
-
-	// NumberOfEnvelopedObjectsAnnotation is the annotation that contains the number of the enveloped objects in the resource snapshot group.
-	NumberOfEnvelopedObjectsAnnotation = fleetPrefix + "number-of-enveloped-object"
-
-	// NumberOfResourceSnapshotsAnnotation is the annotation that contains the total number of resource snapshots.
-	NumberOfResourceSnapshotsAnnotation = fleetPrefix + "number-of-resource-snapshots"
-
-	// SubindexOfResourceSnapshotAnnotation is the annotation to store the subindex of resource snapshot in the group.
-	SubindexOfResourceSnapshotAnnotation = fleetPrefix + "subindex-of-resource-snapshot"
-
-	// ResourceSnapshotNameFmt is resourcePolicySnapshot name format: {CRPName}-{resourceIndex}-snapshot.
-	ResourceSnapshotNameFmt = "%s-%d-snapshot"
-
-	// ResourceSnapshotNameWithSubindexFmt is resourcePolicySnapshot name with subindex format: {CRPName}-{resourceIndex}-{subindex}.
-	ResourceSnapshotNameWithSubindexFmt = "%s-%d-%d"
-)
-
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:scope="Cluster",shortName=rss,categories={fleet,fleet-placement}
+// +kubebuilder:resource:scope="Cluster",shortName=crs,categories={fleet,fleet-placement}
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=`.metadata.generation`,name="Gen",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date

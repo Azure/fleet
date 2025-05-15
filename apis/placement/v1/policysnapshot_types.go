@@ -21,21 +21,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	// PolicyIndexLabel is the label that indicate the policy snapshot index of a cluster policy.
-	PolicyIndexLabel = fleetPrefix + "policy-index"
-
-	// PolicySnapshotNameFmt is clusterPolicySnapshot name format: {CRPName}-{PolicySnapshotIndex}.
-	PolicySnapshotNameFmt = "%s-%d"
-
-	// NumberOfClustersAnnotation is the annotation that indicates how many clusters should be selected for selectN placement type.
-	NumberOfClustersAnnotation = fleetPrefix + "number-of-clusters"
-)
-
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:scope="Cluster",shortName=pss,categories={fleet,fleet-placement}
+// +kubebuilder:resource:scope="Cluster",shortName=csps,categories={fleet,fleet-placement}
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=`.metadata.generation`,name="Gen",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date

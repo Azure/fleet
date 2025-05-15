@@ -39,12 +39,12 @@ REGIONS=("" "" "eastasia")
 AKS_NODE_REGIONS=("westus" "northeurope" "eastasia")
 # The SKUs that should be set on each node of the respective clusters; if the AKS property
 # provider is used. See the AKS documentation for specifics.
-# 
+#
 # Note that this is for information only; kind nodes always use the same fixed setup
 # (total/allocatable capacity = host capacity).
 AKS_NODE_SKUS=("Standard_A4_v2" "Standard_B4ms" "Standard_D8s_v5" "Standard_E16_v5" "Standard_M16ms")
 AKS_SKU_COUNT=${#AKS_NODE_SKUS[@]}
-# The number of clusters that has pre-defined configuration for testing purposes. 
+# The number of clusters that has pre-defined configuration for testing purposes.
 RESERVED_CLUSTER_COUNT=${MEMBER_CLUSTER_COUNT}
 
 # Create the kind clusters
@@ -87,7 +87,7 @@ then
             k=$(( RANDOM % AKS_SKU_COUNT ))
             kubectl label node "${NODES[$j]}" beta.kubernetes.io/instance-type=${AKS_NODE_SKUS[$k]}
         done
-    done 
+    done
 fi
 
 # Build the Fleet agent images
@@ -207,3 +207,13 @@ do
     fi
 done
 
+# Create tools directory if it doesn't exist
+mkdir -p ../../hack/tools/bin
+
+# Build drain binary
+echo "Building drain binary..."
+go build -o ../../hack/tools/bin/kubectl-draincluster ../../tools/draincluster
+
+# Build uncordon binary
+echo "Building uncordon binary..."
+go build -o ../../hack/tools/bin/kubectl-uncordoncluster ../../tools/uncordoncluster

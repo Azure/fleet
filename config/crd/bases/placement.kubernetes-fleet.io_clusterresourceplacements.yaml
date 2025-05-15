@@ -1976,8 +1976,13 @@ spec:
             description: The observed status of ClusterResourcePlacement.
             properties:
               conditions:
-                description: Conditions is an array of current observed conditions
-                  for ClusterResourcePlacement.
+                description: |-
+                  Conditions is an array of current observed conditions for ClusterResourcePlacement.
+                  All conditions except `ClusterResourcePlacementScheduled` correspond to the resource snapshot at the index specified by `ObservedResourceIndex`.
+                  For example, a condition of `ClusterResourcePlacementWorkSynchronized` type
+                  is observing the synchronization status of the resource snapshot with index `ObservedResourceIndex`.
+                  If the rollout strategy type is `External`, and `ObservedResourceIndex` is unset due to clusters reporting different resource indices,
+                  conditions except `ClusterResourcePlacementScheduled` will be empty or set to Unknown.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -2043,15 +2048,15 @@ spec:
                   Each snapshot has a different resource index.
                   One resource snapshot can contain multiple clusterResourceSnapshots CRs in order to store large amount of resources.
                   To get clusterResourceSnapshot of a given resource index, use the following command:
-                  `kubectl get ClusterResourceSnapshot --selector=kubernetes-fleet.io/resource-index=$ObservedResourceIndex `
-                  ObservedResourceIndex is the resource index that the conditions in the ClusterResourcePlacementStatus observe.
-                  For example, a condition of `ClusterResourcePlacementWorkSynchronized` type
-                  is observing the synchronization status of the resource snapshot with the resource index $ObservedResourceIndex.
+                  `kubectl get ClusterResourceSnapshot --selector=kubernetes-fleet.io/resource-index=$ObservedResourceIndex`
+                  If the rollout strategy type is `RollingUpdate`, `ObservedResourceIndex` is the default-latest resource snapshot index.
+                  If the rollout strategy type is `External`, rollout and version control are managed by an external controller,
+                  and this field is not empty only if all targeted clusters observe the same resource index in `PlacementStatuses`.
                 type: string
               placementStatuses:
                 description: |-
                   PlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
-                  Each selected cluster according to the latest resource placement is guaranteed to have a corresponding placementStatuses.
+                  Each selected cluster according to the observed resource placement is guaranteed to have a corresponding placementStatuses.
                   In the pickN case, there are N placement statuses where N = NumberOfClusters; Or in the pickFixed case, there are
                   N placement statuses where N = ClusterNames.
                   In these cases, some of them may not have assigned clusters when we cannot fill the required number of clusters.
@@ -2097,8 +2102,10 @@ spec:
                         If it is not empty, its value should be unique cross all placement decisions for the Placement.
                       type: string
                     conditions:
-                      description: Conditions is an array of current observed conditions
-                        for ResourcePlacementStatus.
+                      description: |-
+                        Conditions is an array of current observed conditions on the cluster.
+                        Each condition corresponds to the resource snapshot at the index specified by `ObservedResourceIndex`.
+                        For example, the condition of type `RolloutStarted` is observing the rollout status of the resource snapshot with index `ObservedResourceIndex`.
                       items:
                         description: Condition contains details for one aspect of
                           the current state of this API Resource.
@@ -2189,6 +2196,8 @@ spec:
                                 description: Type of the envelope object.
                                 enum:
                                 - ConfigMap
+                                - ClusterResourceEnvelope
+                                - ResourceEnvelope
                                 type: string
                             required:
                             - name
@@ -2304,6 +2313,8 @@ spec:
                                 description: Type of the envelope object.
                                 enum:
                                 - ConfigMap
+                                - ClusterResourceEnvelope
+                                - ResourceEnvelope
                                 type: string
                             required:
                             - name
@@ -2471,6 +2482,8 @@ spec:
                                 description: Type of the envelope object.
                                 enum:
                                 - ConfigMap
+                                - ClusterResourceEnvelope
+                                - ResourceEnvelope
                                 type: string
                             required:
                             - name
@@ -2500,11 +2513,17 @@ spec:
                         type: object
                       maxItems: 100
                       type: array
+                    observedResourceIndex:
+                      description: |-
+                        ObservedResourceIndex is the index of the resource snapshot that is currently being rolled out to the given cluster.
+                        This field is only meaningful if the `ClusterName` is not empty.
+                      type: string
                   type: object
                 type: array
               selectedResources:
-                description: SelectedResources contains a list of resources selected
-                  by ResourceSelectors.
+                description: |-
+                  SelectedResources contains a list of resources selected by ResourceSelectors.
+                  This field is only meaningful if the `ObservedResourceIndex` is not empty.
                 items:
                   description: ResourceIdentifier identifies one Kubernetes resource.
                   properties:
@@ -2524,6 +2543,8 @@ spec:
                           description: Type of the envelope object.
                           enum:
                           - ConfigMap
+                          - ClusterResourceEnvelope
+                          - ResourceEnvelope
                           type: string
                       required:
                       - name

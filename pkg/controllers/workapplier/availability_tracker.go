@@ -133,7 +133,8 @@ func trackDeploymentAvailability(inMemberClusterObj *unstructured.Unstructured) 
 	}
 	if deploy.Status.ObservedGeneration == deploy.Generation &&
 		requiredReplicas == deploy.Status.AvailableReplicas &&
-		requiredReplicas == deploy.Status.UpdatedReplicas {
+		requiredReplicas == deploy.Status.UpdatedReplicas &&
+		deploy.Status.UnavailableReplicas == 0 {
 		klog.V(2).InfoS("Deployment is available", "deployment", klog.KObj(inMemberClusterObj))
 		return ManifestProcessingAvailabilityResultTypeAvailable, nil
 	}

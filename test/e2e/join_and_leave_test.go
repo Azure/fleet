@@ -64,10 +64,17 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 				Namespace: workNamespaceName,
 			},
 			{
-				Kind:      "ConfigMap",
-				Name:      testEnvelopConfigMap.Name,
-				Version:   "v1",
+				Group:     placementv1beta1.GroupVersion.Group,
+				Kind:      placementv1beta1.ResourceEnvelopeKind,
+				Version:   placementv1beta1.GroupVersion.Version,
+				Name:      testResourceEnvelope.Name,
 				Namespace: workNamespaceName,
+			},
+			{
+				Group:   placementv1beta1.GroupVersion.Group,
+				Kind:    "ClusterResourceEnvelope",
+				Version: placementv1beta1.GroupVersion.Version,
+				Name:    testClusterResourceEnvelope.Name,
 			},
 		}
 	})
@@ -84,13 +91,25 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 					Finalizers: []string{customDeletionBlockerFinalizer},
 				},
 				Spec: placementv1beta1.ClusterResourcePlacementSpec{
-					ResourceSelectors: workResourceSelector(),
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "",
+							Kind:    "Namespace",
+							Version: "v1",
+							Name:    workNamespaceName,
+						},
+						{
+							Group:   placementv1beta1.GroupVersion.Group,
+							Kind:    "ClusterResourceEnvelope",
+							Version: placementv1beta1.GroupVersion.Version,
+							Name:    testClusterResourceEnvelope.Name,
+						},
+					},
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
 							UnavailablePeriodSeconds: ptr.To(2),
 						},
-						ApplyStrategy: &placementv1beta1.ApplyStrategy{AllowCoOwnership: true},
 					},
 				},
 			}
@@ -98,15 +117,14 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 		})
 
 		It("should update CRP status as expected", func() {
-			// resourceQuota is not trackable yet
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", true)
-			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("should place the resources on all member clusters", func() {
 			for idx := range allMemberClusters {
 				memberCluster := allMemberClusters[idx]
-				workResourcesPlacedActual := checkEnvelopQuotaPlacement(memberCluster)
+				workResourcesPlacedActual := checkAllResourcesPlacement(memberCluster)
 				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
 			}
 		})

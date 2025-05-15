@@ -1214,14 +1214,14 @@ func readJobTestManifest(testManifest *batchv1.Job) {
 	Expect(err).Should(Succeed())
 }
 
-func readEnvelopeConfigMapTestManifest(testEnvelopeObj *corev1.ConfigMap) {
+func readEnvelopeResourceTestManifest(testEnvelopeObj *placementv1beta1.ResourceEnvelope) {
 	By("Read testEnvelopConfigMap resource")
 	err := utils.GetObjectFromManifest("resources/test-envelope-object.yaml", testEnvelopeObj)
 	Expect(err).Should(Succeed())
 }
 
 // constructWrappedResources fill the enveloped resource with the workload object
-func constructWrappedResources(testEnvelopeObj *corev1.ConfigMap, workloadObj metav1.Object, kind string, namespace corev1.Namespace) {
+func constructWrappedResources(testEnvelopeObj *placementv1beta1.ResourceEnvelope, workloadObj metav1.Object, kind string, namespace corev1.Namespace) {
 	// modify the enveloped configMap according to the namespace
 	testEnvelopeObj.Namespace = namespace.Name
 
@@ -1231,11 +1231,11 @@ func constructWrappedResources(testEnvelopeObj *corev1.ConfigMap, workloadObj me
 	Expect(err).Should(Succeed())
 	switch kind {
 	case utils.DeploymentKind:
-		testEnvelopeObj.Data["deployment.yaml"] = string(workloadObjectByte)
+		testEnvelopeObj.Data["deployment.yaml"] = runtime.RawExtension{Raw: workloadObjectByte}
 	case utils.DaemonSetKind:
-		testEnvelopeObj.Data["daemonset.yaml"] = string(workloadObjectByte)
+		testEnvelopeObj.Data["daemonset.yaml"] = runtime.RawExtension{Raw: workloadObjectByte}
 	case utils.StatefulSetKind:
-		testEnvelopeObj.Data["statefulset.yaml"] = string(workloadObjectByte)
+		testEnvelopeObj.Data["statefulset.yaml"] = runtime.RawExtension{Raw: workloadObjectByte}
 	}
 }
 

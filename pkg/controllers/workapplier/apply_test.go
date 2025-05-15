@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
@@ -455,6 +456,96 @@ func TestSetFleetLastAppliedAnnotation(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.manifestObj, tc.wantManifestObj); diff != "" {
 				t.Errorf("manifest obj mismatches (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestShouldUseForcedServerSideApply tests the shouldUseForcedServerSideApply function.
+func TestShouldUseForcedServerSideApply(t *testing.T) {
+	testCases := []struct {
+		name                               string
+		inMemberClusterObj                 client.Object
+		wantShouldUseForcedServerSideApply bool
+	}{
+		{
+			name: "object under Fleet's management",
+			inMemberClusterObj: &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: configMapName,
+					ManagedFields: []metav1.ManagedFieldsEntry{
+						{
+							Manager:   workFieldManagerName,
+							Operation: metav1.ManagedFieldsOperationUpdate,
+						},
+					},
+				},
+			},
+			wantShouldUseForcedServerSideApply: true,
+		},
+		{
+			name: "object under before-first-apply field manager's management",
+			inMemberClusterObj: &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: configMapName,
+					ManagedFields: []metav1.ManagedFieldsEntry{
+						{
+							Manager:   "before-first-apply",
+							Operation: metav1.ManagedFieldsOperationUpdate,
+						},
+					},
+				},
+			},
+			wantShouldUseForcedServerSideApply: true,
+		},
+		{
+			name: "object under both Fleet and before-first-apply field managers' management",
+			inMemberClusterObj: &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: configMapName,
+					ManagedFields: []metav1.ManagedFieldsEntry{
+						{
+							Manager:   "before-first-apply",
+							Operation: metav1.ManagedFieldsOperationUpdate,
+						},
+						{
+							Manager:   workFieldManagerName,
+							Operation: metav1.ManagedFieldsOperationUpdate,
+						},
+					},
+				},
+			},
+			wantShouldUseForcedServerSideApply: true,
+		},
+		{
+			name: "object under other field manager's management",
+			inMemberClusterObj: &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: configMapName,
+					ManagedFields: []metav1.ManagedFieldsEntry{
+						{
+							Manager:   "before-first-apply",
+							Operation: metav1.ManagedFieldsOperationUpdate,
+						},
+						{
+							Manager:   "3rd-party-manager",
+							Operation: metav1.ManagedFieldsOperationApply,
+						},
+						{
+							Manager:   workFieldManagerName,
+							Operation: metav1.ManagedFieldsOperationUpdate,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := shouldUseForcedServerSideApply(toUnstructured(t, tc.inMemberClusterObj))
+			if got != tc.wantShouldUseForcedServerSideApply {
+				t.Errorf("shouldUseForcedServerSideApply() = %t, want %t", got, tc.wantShouldUseForcedServerSideApply)
 			}
 		})
 	}
