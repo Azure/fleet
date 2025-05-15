@@ -28,7 +28,7 @@ const (
 )
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=rb
+// +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=crb
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="WorkSynchronized")].status`,name="WorkSynchronized",type=string

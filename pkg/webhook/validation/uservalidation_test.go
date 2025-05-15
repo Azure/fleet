@@ -8,9 +8,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -178,6 +180,159 @@ func TestValidateUserForResource(t *testing.T) {
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
 			gotResult := ValidateUserForResource(testCase.req, testCase.whiteListedUsers)
+			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
+		})
+	}
+}
+
+func TestValidateFleetMemberClusterUpdate(t *testing.T) {
+	testCases := map[string]struct {
+		denyModifyMemberClusterLabels bool
+		oldMC                         *clusterv1beta1.MemberCluster
+		newMC                         *clusterv1beta1.MemberCluster
+		req                           admission.Request
+		whiteListedUsers              []string
+		wantResponse                  admission.Response
+	}{
+		"allow label modification by system:masters resources when flag is set to true": {
+			denyModifyMemberClusterLabels: true,
+			oldMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"key1": "value1"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			newMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"key1": "value2"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "mastersUser",
+						Groups:   []string{"system:masters"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, "mastersUser", utils.GenerateGroupString([]string{"system:masters"}),
+				admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"deny label modification by non-system:masters resource when flag is set to true": {
+			denyModifyMemberClusterLabels: true,
+			oldMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"key1": "value1"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			newMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"key1": "value2"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "nonSystemMastersUser",
+						Groups:   []string{"system:authenticated"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			wantResponse: admission.Denied(DeniedModifyMemberClusterLabels),
+		},
+		"deny label modification by fleet agent when flag is set to true": {
+			denyModifyMemberClusterLabels: true,
+			oldMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"key1": "value1"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			newMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"key2": "value2"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "system:serviceaccount:fleet-system:hub-agent-sa",
+						Groups:   []string{"system:serviceaccounts"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			wantResponse: admission.Denied(DeniedModifyMemberClusterLabels),
+		},
+		"allow label modification by non system:masters resource when flag is set to false": {
+			denyModifyMemberClusterLabels: false,
+			oldMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"key1": "value1"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			newMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"key1": "value2"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "nonSystemMastersUser",
+						Groups:   []string{"system:authenticated"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, "nonSystemMastersUser", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+	}
+
+	for testName, testCase := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			gotResult := ValidateFleetMemberClusterUpdate(*testCase.newMC, *testCase.oldMC, testCase.req, testCase.whiteListedUsers, testCase.denyModifyMemberClusterLabels)
 			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
 		})
 	}

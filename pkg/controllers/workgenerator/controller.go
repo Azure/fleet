@@ -23,12 +23,10 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -36,8 +34,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/uuid"
-	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
@@ -480,16 +476,16 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 	// generate work objects for each resource snapshot
 	for i := range resourceSnapshots {
 		snapshot := resourceSnapshots[i]
-		var newWork []*fleetv1beta1.Work
 		workNamePrefix, err := getWorkNamePrefixFromSnapshotName(snapshot)
 		if err != nil {
 			klog.ErrorS(err, "Encountered a mal-formatted resource snapshot", "resourceSnapshot", klog.KObj(snapshot))
 			return false, false, err
 		}
 		var simpleManifests []fleetv1beta1.Manifest
+		var newWork []*fleetv1beta1.Work
 		for j := range snapshot.Spec.SelectedResources {
 			selectedResource := snapshot.Spec.SelectedResources[j].DeepCopy()
-			// TODO: override the content of the wrapped resource instead of the envelope itself
+			// TODO: apply the override rules on the envelope resources by applying them on the work instead of the selected resource
 			resourceDeleted, overrideErr := r.applyOverrides(selectedResource, cluster, croMap, roMap)
 			if overrideErr != nil {
 				return false, false, overrideErr
@@ -498,24 +494,23 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 				klog.V(2).InfoS("The resource is deleted by the override rules", "snapshot", klog.KObj(snapshot), "selectedResource", snapshot.Spec.SelectedResources[j])
 				continue
 			}
-			// we need to special treat configMap with envelopeConfigMapAnnotation annotation,
-			// so we need to check the GVK and annotation of the selected resource
-			var uResource unstructured.Unstructured
-			if unMarshallErr := uResource.UnmarshalJSON(selectedResource.Raw); unMarshallErr != nil {
-				klog.ErrorS(unMarshallErr, "work has invalid content", "snapshot", klog.KObj(snapshot), "selectedResource", selectedResource.Raw)
-				return true, false, controller.NewUnexpectedBehaviorError(unMarshallErr)
-			}
-			if uResource.GetObjectKind().GroupVersionKind() == utils.ConfigMapGVK &&
-				len(uResource.GetAnnotations()[fleetv1beta1.EnvelopeConfigMapAnnotation]) != 0 {
-				// get a work object for the enveloped configMap
-				work, err := r.getConfigMapEnvelopWorkObj(ctx, workNamePrefix, resourceBinding, snapshot, &uResource, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash)
-				if err != nil {
-					return true, false, err
-				}
-				activeWork[work.Name] = work
-				newWork = append(newWork, work)
-			} else {
-				simpleManifests = append(simpleManifests, fleetv1beta1.Manifest(*selectedResource))
+
+			// Process the selected resource.
+			//
+			// Specifically,
+			// a) if the selected resource is an envelope (configMap-based or envelope-based; the former will soon
+			//    become obsolete), we will create a work object dedicated for the envelope;
+			// b) otherwise (the selected resource is a regular resource), the resource will be appended to the list of
+			//    simple manifests.
+			//
+			// Note (chenyu1): this method is added to reduce the cyclomatic complexity of the syncAllWork method.
+			newWork, simpleManifests, err = r.processOneSelectedResource(
+				ctx, selectedResource, resourceBinding, snapshot,
+				workNamePrefix, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash,
+				activeWork, newWork, simpleManifests)
+			if err != nil {
+				klog.ErrorS(err, "Failed to process the selected resource", "snapshot", klog.KObj(snapshot), "selectedResourceIdx", j)
+				return true, false, err
 			}
 		}
 		if len(simpleManifests) == 0 {
@@ -569,6 +564,78 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 	}
 	klog.V(2).InfoS("Successfully synced all the work associated with the resourceBinding", "updateAny", updateAny.Load(), "resourceBinding", resourceBindingRef)
 	return true, updateAny.Load(), nil
+}
+
+// processOneSelectedResource processes a single selected resource from the resource snapshot.
+//
+// If the selected resource is an envelope (either configMap-based or envelope-based), create a new dedicated
+// work object for the envelope. Otherwise, append the selected resource to the list of simple manifests.
+func (r *Reconciler) processOneSelectedResource(
+	ctx context.Context,
+	selectedResource *fleetv1beta1.ResourceContent,
+	resourceBinding *fleetv1beta1.ClusterResourceBinding,
+	snapshot *fleetv1beta1.ClusterResourceSnapshot,
+	workNamePrefix, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash string,
+	activeWork map[string]*fleetv1beta1.Work,
+	newWork []*fleetv1beta1.Work,
+	simpleManifests []fleetv1beta1.Manifest,
+) ([]*fleetv1beta1.Work, []fleetv1beta1.Manifest, error) {
+	// Unmarshal the YAML content into an unstructured object.
+	var uResource unstructured.Unstructured
+	if unMarshallErr := uResource.UnmarshalJSON(selectedResource.Raw); unMarshallErr != nil {
+		klog.ErrorS(unMarshallErr, "work has invalid content", "snapshot", klog.KObj(snapshot), "selectedResource", selectedResource.Raw)
+		return nil, nil, controller.NewUnexpectedBehaviorError(unMarshallErr)
+	}
+
+	uGVK := uResource.GetObjectKind().GroupVersionKind().GroupKind()
+	switch {
+	case uGVK == utils.ClusterResourceEnvelopeGK:
+		// The resource is a ClusterResourceEnvelope; extract its contents.
+		var clusterResourceEnvelope fleetv1beta1.ClusterResourceEnvelope
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(uResource.Object, &clusterResourceEnvelope); err != nil {
+			klog.ErrorS(err, "Failed to convert the unstructured object to a ClusterResourceEnvelope",
+				"clusterResourceBinding", klog.KObj(resourceBinding),
+				"clusterResourceSnapshot", klog.KObj(snapshot),
+				"selectedResource", klog.KObj(&uResource))
+			return nil, nil, controller.NewUnexpectedBehaviorError(err)
+		}
+		work, err := r.createOrUpdateEnvelopeCRWorkObj(ctx, &clusterResourceEnvelope, workNamePrefix, resourceBinding, snapshot, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash)
+		if err != nil {
+			klog.ErrorS(err, "Failed to create or get the work object for the ClusterResourceEnvelope",
+				"clusterResourceEnvelope", klog.KObj(&clusterResourceEnvelope),
+				"clusterResourceBinding", klog.KObj(resourceBinding),
+				"clusterResourceSnapshot", klog.KObj(snapshot))
+			return nil, nil, err
+		}
+		activeWork[work.Name] = work
+		newWork = append(newWork, work)
+	case uGVK == utils.ResourceEnvelopeGK:
+		// The resource is a ResourceEnvelope; extract its contents.
+		var resourceEnvelope fleetv1beta1.ResourceEnvelope
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(uResource.Object, &resourceEnvelope); err != nil {
+			klog.ErrorS(err, "Failed to convert the unstructured object to a ResourceEnvelope",
+				"clusterResourceBinding", klog.KObj(resourceBinding),
+				"clusterResourceSnapshot", klog.KObj(snapshot),
+				"selectedResource", klog.KObj(&uResource))
+			return nil, nil, controller.NewUnexpectedBehaviorError(err)
+		}
+		work, err := r.createOrUpdateEnvelopeCRWorkObj(ctx, &resourceEnvelope, workNamePrefix, resourceBinding, snapshot, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash)
+		if err != nil {
+			klog.ErrorS(err, "Failed to create or get the work object for the ResourceEnvelope",
+				"resourceEnvelope", klog.KObj(&resourceEnvelope),
+				"clusterResourceBinding", klog.KObj(resourceBinding),
+				"clusterResourceSnapshot", klog.KObj(snapshot))
+			return nil, nil, err
+		}
+		activeWork[work.Name] = work
+		newWork = append(newWork, work)
+
+	default:
+		// The resource is not an envelope; add it to the list of simple manifests.
+		simpleManifests = append(simpleManifests, fleetv1beta1.Manifest(*selectedResource))
+	}
+
+	return newWork, simpleManifests, nil
 }
 
 // syncApplyStrategy syncs the apply strategy specified on a ClusterResourceBinding object
@@ -628,91 +695,6 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 		return nil, controller.NewAPIServerError(true, err)
 	}
 	return controller.FetchAllClusterResourceSnapshots(ctx, r.Client, resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel], &masterResourceSnapshot)
-}
-
-// getConfigMapEnvelopWorkObj first try to locate a work object for the corresponding envelopObj of type configMap.
-// we create a new one if the work object doesn't exist. We do this to avoid repeatedly delete and create the same work object.
-func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePrefix string, resourceBinding *fleetv1beta1.ClusterResourceBinding,
-	resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, envelopeObj *unstructured.Unstructured, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash string) (*fleetv1beta1.Work, error) {
-	// we group all the resources in one configMap to one work
-	manifest, err := extractResFromConfigMap(envelopeObj)
-	if err != nil {
-		klog.ErrorS(err, "configMap has invalid content", "snapshot", klog.KObj(resourceSnapshot),
-			"resourceBinding", klog.KObj(resourceBinding), "configMapWrapper", klog.KObj(envelopeObj))
-		return nil, controller.NewUserError(err)
-	}
-	klog.V(2).InfoS("Successfully extract the enveloped resources from the configMap", "numOfResources", len(manifest),
-		"snapshot", klog.KObj(resourceSnapshot), "resourceBinding", klog.KObj(resourceBinding), "configMapWrapper", klog.KObj(envelopeObj))
-
-	// Try to see if we already have a work represent the same enveloped object for this CRP in the same cluster
-	// The ParentResourceSnapshotIndexLabel can change between snapshots so we have to exclude that label in the match
-	envelopWorkLabelMatcher := client.MatchingLabels{
-		fleetv1beta1.ParentBindingLabel:     resourceBinding.Name,
-		fleetv1beta1.CRPTrackingLabel:       resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel],
-		fleetv1beta1.EnvelopeTypeLabel:      string(fleetv1beta1.ConfigMapEnvelopeType),
-		fleetv1beta1.EnvelopeNameLabel:      envelopeObj.GetName(),
-		fleetv1beta1.EnvelopeNamespaceLabel: envelopeObj.GetNamespace(),
-	}
-	workList := &fleetv1beta1.WorkList{}
-	if err := r.Client.List(ctx, workList, envelopWorkLabelMatcher); err != nil {
-		return nil, controller.NewAPIServerError(true, err)
-	}
-	// we need to create a new work object
-	if len(workList.Items) == 0 {
-		// we limit the CRP name length to be 63 (DNS1123LabelMaxLength) characters,
-		// so we have plenty of characters left to fit into 253 (DNS1123SubdomainMaxLength) characters for a CR
-		workName := fmt.Sprintf(fleetv1beta1.WorkNameWithConfigEnvelopeFmt, workNamePrefix, uuid.NewUUID())
-		return &fleetv1beta1.Work{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      workName,
-				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, resourceBinding.Spec.TargetCluster),
-				Labels: map[string]string{
-					fleetv1beta1.ParentBindingLabel:               resourceBinding.Name,
-					fleetv1beta1.CRPTrackingLabel:                 resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel],
-					fleetv1beta1.ParentResourceSnapshotIndexLabel: resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel],
-					fleetv1beta1.EnvelopeTypeLabel:                string(fleetv1beta1.ConfigMapEnvelopeType),
-					fleetv1beta1.EnvelopeNameLabel:                envelopeObj.GetName(),
-					fleetv1beta1.EnvelopeNamespaceLabel:           envelopeObj.GetNamespace(),
-				},
-				Annotations: map[string]string{
-					fleetv1beta1.ParentResourceSnapshotNameAnnotation:                resourceBinding.Spec.ResourceSnapshotName,
-					fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        resourceOverrideSnapshotHash,
-					fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: clusterResourceOverrideSnapshotHash,
-				},
-				OwnerReferences: []metav1.OwnerReference{
-					{
-						APIVersion:         fleetv1beta1.GroupVersion.String(),
-						Kind:               resourceBinding.Kind,
-						Name:               resourceBinding.Name,
-						UID:                resourceBinding.UID,
-						BlockOwnerDeletion: ptr.To(true), // make sure that the k8s will call work delete when the binding is deleted
-					},
-				},
-			},
-			Spec: fleetv1beta1.WorkSpec{
-				Workload: fleetv1beta1.WorkloadTemplate{
-					Manifests: manifest,
-				},
-				ApplyStrategy: resourceBinding.Spec.ApplyStrategy,
-			},
-		}, nil
-	}
-	if len(workList.Items) > 1 {
-		// return error here won't get us out of this
-		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("find %d work representing configMap", len(workList.Items))),
-			"snapshot", klog.KObj(resourceSnapshot), "resourceBinding", klog.KObj(resourceBinding), "configMapWrapper", klog.KObj(envelopeObj))
-	}
-	work := workList.Items[0]
-	work.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel] = resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel]
-	if work.Annotations == nil {
-		work.Annotations = make(map[string]string)
-	}
-	work.Annotations[fleetv1beta1.ParentResourceSnapshotNameAnnotation] = resourceBinding.Spec.ResourceSnapshotName
-	work.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] = resourceOverrideSnapshotHash
-	work.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] = clusterResourceOverrideSnapshotHash
-	work.Spec.Workload.Manifests = manifest
-	work.Spec.ApplyStrategy = resourceBinding.Spec.ApplyStrategy
-	return &work, nil
 }
 
 // generateSnapshotWorkObj generates the work object for the corresponding snapshot
@@ -1259,46 +1241,6 @@ func setAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding *
 		})
 		return workConditionSummarizedStatusTrue
 	}
-}
-
-func extractResFromConfigMap(uConfigMap *unstructured.Unstructured) ([]fleetv1beta1.Manifest, error) {
-	manifests := make([]fleetv1beta1.Manifest, 0)
-	var configMap corev1.ConfigMap
-	err := runtime.DefaultUnstructuredConverter.FromUnstructured(uConfigMap.Object, &configMap)
-	if err != nil {
-		return nil, err
-	}
-	// the list order is not stable as the map traverse is random
-	for key, value := range configMap.Data {
-		// so we need to check the GVK and annotation of the selected resource
-		content, jsonErr := yaml.ToJSON([]byte(value))
-		if jsonErr != nil {
-			return nil, jsonErr
-		}
-		var uManifest unstructured.Unstructured
-		if unMarshallErr := uManifest.UnmarshalJSON(content); unMarshallErr != nil {
-			klog.ErrorS(unMarshallErr, "manifest has invalid content", "manifestKey", key, "envelopeResource", klog.KObj(uConfigMap))
-			return nil, fmt.Errorf("the object with manifest key `%s` in envelope config `%s` is malformatted, err: %w", key, klog.KObj(uConfigMap), unMarshallErr)
-		}
-		if len(uManifest.GetNamespace()) == 0 {
-			// Block cluster-scoped resources.
-			return nil, fmt.Errorf("cannot wrap cluster-scoped resource %s in the envelope %s", uManifest.GetName(), klog.KObj(uConfigMap))
-		}
-		if len(uManifest.GetNamespace()) != 0 && uManifest.GetNamespace() != configMap.Namespace {
-			return nil, fmt.Errorf("the namespaced object `%s` in envelope config `%s` is placed in a different namespace `%s` ", uManifest.GetName(), klog.KObj(uConfigMap), uManifest.GetNamespace())
-		}
-		manifests = append(manifests, fleetv1beta1.Manifest{
-			RawExtension: runtime.RawExtension{Raw: content},
-		})
-	}
-	// stable sort the manifests so that we can have a deterministic order
-	sort.Slice(manifests, func(i, j int) bool {
-		obj1 := manifests[i].Raw
-		obj2 := manifests[j].Raw
-		// order by its json formatted string
-		return strings.Compare(string(obj1), string(obj2)) > 0
-	})
-	return manifests, nil
 }
 
 // extractFailedResourcePlacementsFromWork extracts the failed resource placements from the work.

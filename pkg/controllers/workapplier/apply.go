@@ -288,6 +288,20 @@ func (r *Reconciler) serverSideApply(
 		inMemberClusterObj.SetResourceVersion("")
 	}
 
+	// Check if forced server-side apply is needed even if it is not turned on by the user.
+	//
+	// Note (chenyu1): This is added to addresses cases where Kubernetes might register
+	// Fleet (the member agent) as an Update typed field manager for the object, which blocks
+	// the same agent itself from performing a server-side apply due to conflicts,
+	// as Kubernetes considers Update typed and Apply typed field managers to be different
+	// entities, despite having the same identifier. In these cases, users will see their
+	// first apply attempt being successful, yet any subsequent update would fail due to
+	// conflicts. There are also a few other similar cases that are solved by this check;
+	// see the inner comments for specifics.
+	if shouldUseForcedServerSideApply(inMemberClusterObj) {
+		force = true
+	}
+
 	// Use server-side apply to apply the manifest object.
 	//
 	// See the Kubernetes documentation on structured merged diff for the exact behaviors.
@@ -585,4 +599,40 @@ func sanitizeManifestObject(manifestObj *unstructured.Unstructured) *unstructure
 func shouldEnableOptimisticLock(applyStrategy *fleetv1beta1.ApplyStrategy) bool {
 	// Optimistic lock is enabled if the apply strategy is set to IfNotDrifted.
 	return applyStrategy.WhenToApply == fleetv1beta1.WhenToApplyTypeIfNotDrifted
+}
+
+// shouldUseForcedServerSideApply checks if forced server-side apply should be used even if
+// the force option is not turned on.
+func shouldUseForcedServerSideApply(inMemberClusterObj *unstructured.Unstructured) bool {
+	managedFields := inMemberClusterObj.GetManagedFields()
+	for idx := range managedFields {
+		mf := &managedFields[idx]
+		// workFieldManagerName is the field manager name used by Fleet; its presence
+		// suggests that some (not necessarily all) fields are managed by Fleet.
+		//
+		// `before-first-apply` is a field manager name used by Kubernetes to "properly"
+		// track field managers between non-apply and apply ops. Specifically, this
+		// manager is added when an object is being applied, but Kubernetes finds
+		// that the object does not have any managed field specified.
+		//
+		// Note (chenyu1): unfortunately this name is not exposed as a public variable. See
+		// the Kubernetes source code for more information.
+		if mf.Manager != workFieldManagerName && mf.Manager != "before-first-apply" {
+			// There exists a field manager this is neither Fleet nor the `before-first-apply`
+			// field manager, which suggests that the object (or at least some of its fields)
+			// is managed by another entity. Fleet will not enable forced server-side apply in
+			// this case and let user decide if forced apply is needed.
+			klog.V(2).InfoS("Found a field manager that is neither Fleet nor the `before-first-apply` field manager; Fleet will not enable forced server-side apply unless explicitly requested",
+				"fieldManager", mf.Manager,
+				"GVK", inMemberClusterObj.GroupVersionKind(), "inMemberClusterObj", klog.KObj(inMemberClusterObj))
+			return false
+		}
+	}
+
+	// All field managers are either Fleet or the `before-first-apply` field manager;
+	// use forced server-side apply to avoid confusing self-conflicts. This would
+	// allow Fleet to (correctly) assume ownership of managed fields.
+	klog.V(2).InfoS("All field managers are either Fleet or the `before-first-apply` field manager; Fleet will enable forced server-side apply",
+		"GVK", inMemberClusterObj.GroupVersionKind(), "inMemberClusterObj", klog.KObj(inMemberClusterObj))
+	return true
 }

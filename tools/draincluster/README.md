@@ -3,11 +3,11 @@
 1. Build the binary for the `draincluster` tool by running the following command in the root directory of the fleet repo:
 
 ```bash
-go build -o ./hack/tools/bin/kubectl-draincluster ./tools/draincluster/main.go
+go build -o ./hack/tools/bin/kubectl-draincluster ./tools/draincluster/
 ```
 
 2. Copy the binary to a directory in your `PATH` so that it can be run as a kubectl plugin. For example, you can move it to
-`/usr/local/bin`:
+   `/usr/local/bin`:
 
 ```bash
 sudo cp ./hack/tools/bin/kubectl-draincluster /usr/local/bin/
@@ -33,13 +33,13 @@ The following compatible plugins are available:
 /usr/local/bin/kubectl-draincluster
 ```
 
-please refer to the [kubectl plugin documentation](https://kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/) for 
+please refer to the [kubectl plugin documentation](https://kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/) for
 more information.
 
 # Drain Member Cluster connected to a fleet
 
-After following the steps above to build the `draincluster` tool as a kubectl plugin, you can use it to remove all 
-resources propagated to the member cluster from the hub cluster by any `Placement` resource. This is useful when you 
+After following the steps above to build the `draincluster` tool as a kubectl plugin, you can use it to remove all
+resources propagated to the member cluster from the hub cluster by any `Placement` resource. This is useful when you
 want to temporarily move all workloads off a member cluster in preparation for an event like upgrade or reconfiguration.
 
 The `draincluster` tool can be used to drain a member cluster by running the following command:
@@ -68,8 +68,8 @@ CURRENT   NAME               CLUSTER            AUTHINFO                        
 
 Here you can see that the context of the hub cluster is called `hub` under the `NAME` column.
 
-The command adds a `Taint` to the `MemberCluster` resource of the member cluster to prevent any new resources from being 
-propagated to the member cluster. Then it creates `Eviction` objects for all the `Placement` objects that have propagated 
+The command adds a `Taint` to the `MemberCluster` resource of the member cluster to prevent any new resources from being
+propagated to the member cluster. Then it creates `Eviction` objects for all the `Placement` objects that have propagated
 resources to the member cluster.
 
 >> **Note**: The `draincluster` tool is a best-effort mechanism at the moment, so once the command is run successfully

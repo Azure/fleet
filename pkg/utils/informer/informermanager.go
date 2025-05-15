@@ -173,7 +173,7 @@ func (s *informerManagerImpl) AddStaticResource(resource APIResourceMeta, handle
 	if exist {
 		klog.ErrorS(fmt.Errorf("a static resource is added already"), "existing res", staticRes)
 	}
-
+	klog.InfoS("Added an informer for a static resource", "res", resource)
 	resource.isStaticResource = true
 	s.apiResources[resource.GroupVersionKind] = &resource
 	_, _ = s.informerFactory.ForResource(resource.GroupVersionResource).Informer().AddEventHandler(handler)

@@ -1,0 +1,58 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.0
+  name: clusterresourceenvelopes.placement.kubernetes-fleet.io
+spec:
+  group: placement.kubernetes-fleet.io
+  names:
+    categories:
+    - fleet
+    - fleet-placement
+    kind: ClusterResourceEnvelope
+    listKind: ClusterResourceEnvelopeList
+    plural: clusterresourceenvelopes
+    singular: clusterresourceenvelope
+  scope: Cluster
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: ClusterResourceEnvelope wraps cluster-scoped resources for placement.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          data:
+            additionalProperties:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+            description: |-
+              The manifests wrapped in this envelope.
+
+              Each manifest is uniquely identified by a string key, typically a filename that represents
+              the manifest. The value is the manifest object itself.
+            maxProperties: 50
+            minProperties: 1
+            type: object
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+        required:
+        - data
+        type: object
+    served: true
+    storage: true

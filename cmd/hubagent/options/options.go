@@ -98,6 +98,8 @@ type Options struct {
 	EnableStagedUpdateRunAPIs bool
 	// EnableEvictionAPIs enables to agents to watch the eviction and placement disruption budget CRs.
 	EnableEvictionAPIs bool
+	// DenyModifyMemberClusterLabels indicates if the member cluster labels cannot be modified by groups (excluding system:masters)
+	DenyModifyMemberClusterLabels bool
 }
 
 // NewOptions builds an empty options.
@@ -158,6 +160,7 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.DurationVar(&o.ForceDeleteWaitTime.Duration, "force-delete-wait-time", 15*time.Minute, "The duration the hub agent waits before force deleting a member cluster.")
 	flags.BoolVar(&o.EnableStagedUpdateRunAPIs, "enable-staged-update-run-apis", true, "If set, the agents will watch for the ClusterStagedUpdateRun APIs.")
 	flags.BoolVar(&o.EnableEvictionAPIs, "enable-eviction-apis", true, "If set, the agents will watch for the Eviction and PlacementDisruptionBudget APIs.")
+	flags.BoolVar(&o.DenyModifyMemberClusterLabels, "deny-modify-member-cluster-labels", false, "If set, users not in the system:masters cannot modify member cluster labels.")
 
 	o.RateLimiterOpts.AddFlags(flags)
 }

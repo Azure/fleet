@@ -128,16 +128,16 @@ var (
 )
 
 var AddToManagerFuncs []func(manager.Manager) error
-var AddToManagerFleetResourceValidator func(manager.Manager, []string, bool) error
+var AddToManagerFleetResourceValidator func(manager.Manager, []string, bool, bool) error
 
 // AddToManager adds all Controllers to the Manager
-func AddToManager(m manager.Manager, whiteListedUsers []string, isFleetV1Beta1API bool) error {
+func AddToManager(m manager.Manager, whiteListedUsers []string, isFleetV1Beta1API bool, denyModifyMemberClusterLabels bool) error {
 	for _, f := range AddToManagerFuncs {
 		if err := f(m); err != nil {
 			return err
 		}
 	}
-	return AddToManagerFleetResourceValidator(m, whiteListedUsers, isFleetV1Beta1API)
+	return AddToManagerFleetResourceValidator(m, whiteListedUsers, isFleetV1Beta1API, denyModifyMemberClusterLabels)
 }
 
 type Config struct {
@@ -155,22 +155,25 @@ type Config struct {
 	clientConnectionType *options.WebhookClientConnectionType
 
 	enableGuardRail bool
+
+	denyModifyMemberClusterLabels bool
 }
 
-func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int32, clientConnectionType *options.WebhookClientConnectionType, certDir string, enableGuardRail bool) (*Config, error) {
+func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int32, clientConnectionType *options.WebhookClientConnectionType, certDir string, enableGuardRail bool, denyModifyMemberClusterLabels bool) (*Config, error) {
 	// We assume the Pod namespace should be passed to env through downward API in the Pod spec.
 	namespace := os.Getenv("POD_NAMESPACE")
 	if namespace == "" {
 		return nil, errors.New("fail to obtain Pod namespace from POD_NAMESPACE")
 	}
 	w := Config{
-		mgr:                  mgr,
-		servicePort:          port,
-		serviceNamespace:     namespace,
-		serviceName:          webhookServiceName,
-		serviceURL:           fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", webhookServiceName, namespace, port),
-		clientConnectionType: clientConnectionType,
-		enableGuardRail:      enableGuardRail,
+		mgr:                           mgr,
+		servicePort:                   port,
+		serviceNamespace:              namespace,
+		serviceName:                   webhookServiceName,
+		serviceURL:                    fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", webhookServiceName, namespace, port),
+		clientConnectionType:          clientConnectionType,
+		enableGuardRail:               enableGuardRail,
+		denyModifyMemberClusterLabels: denyModifyMemberClusterLabels,
 	}
 	caPEM, err := w.genCertificate(certDir)
 	if err != nil {
