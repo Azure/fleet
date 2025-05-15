@@ -13,6 +13,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
@@ -31,7 +32,7 @@ var _ = Describe("handling errors and failures gracefully", func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 
-		wrapperCMName := "wrapper"
+		envelopeName := "wrapper"
 		wrappedCMName1 := "app-1"
 		wrappedCMName2 := "app-2"
 
@@ -44,20 +45,17 @@ var _ = Describe("handling errors and failures gracefully", func() {
 			ns := appNamespace()
 			Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
 
-			// Create an envelope config map.
-			wrapperCM := &corev1.ConfigMap{
+			// Create an envelope resource to wrap the configMaps.
+			resourceEnvelope := &placementv1beta1.ResourceEnvelope{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      wrapperCMName,
+					Name:      envelopeName,
 					Namespace: ns.Name,
-					Annotations: map[string]string{
-						placementv1beta1.EnvelopeConfigMapAnnotation: "true",
-					},
 				},
-				Data: map[string]string{},
+				Data: map[string]runtime.RawExtension{},
 			}
 
 			// Create configMaps as wrapped resources.
-			wrappedCM := &corev1.ConfigMap{
+			configMap := &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: corev1.SchemeGroupVersion.String(),
 					Kind:       "ConfigMap",
@@ -72,23 +70,23 @@ var _ = Describe("handling errors and failures gracefully", func() {
 			}
 			// Given Fleet's current resource sorting logic, this configMap
 			// will be considered as the duplicated resource entry.
-			wrappedCM1 := wrappedCM.DeepCopy()
-			wrappedCM1.TypeMeta = metav1.TypeMeta{
+			badConfigMap := configMap.DeepCopy()
+			badConfigMap.TypeMeta = metav1.TypeMeta{
 				APIVersion: "dummy/v10",
 				Kind:       "Fake",
 			}
-			wrappedCM1Bytes, err := json.Marshal(wrappedCM1)
-			Expect(err).To(BeNil(), "Failed to marshal configMap %s", wrappedCM1.Name)
-			wrapperCM.Data["cm1.yaml"] = string(wrappedCM1Bytes)
+			badCMBytes, err := json.Marshal(badConfigMap)
+			Expect(err).To(BeNil(), "Failed to marshal configMap %s", badConfigMap.Name)
+			resourceEnvelope.Data["cm1.yaml"] = runtime.RawExtension{Raw: badCMBytes}
 
-			wrappedCM2 := wrappedCM.DeepCopy()
+			wrappedCM2 := configMap.DeepCopy()
 			wrappedCM2.Name = wrappedCMName2
 			wrappedCM2.Data[cmDataKey] = cmDataVal2
 			wrappedCM2Bytes, err := json.Marshal(wrappedCM2)
 			Expect(err).To(BeNil(), "Failed to marshal configMap %s", wrappedCM2.Name)
-			wrapperCM.Data["cm2.yaml"] = string(wrappedCM2Bytes)
+			resourceEnvelope.Data["cm2.yaml"] = runtime.RawExtension{Raw: wrappedCM2Bytes}
 
-			Expect(hubClient.Create(ctx, wrapperCM)).To(Succeed(), "Failed to create configMap %s", wrapperCM.Name)
+			Expect(hubClient.Create(ctx, resourceEnvelope)).To(Succeed(), "Failed to create configMap %s", resourceEnvelope.Name)
 
 			// Create a CRP.
 			crp := &placementv1beta1.ClusterResourcePlacement{
@@ -138,9 +136,9 @@ var _ = Describe("handling errors and failures gracefully", func() {
 										Namespace: workNamespaceName,
 										Name:      wrappedCMName1,
 										Envelope: &placementv1beta1.EnvelopeIdentifier{
-											Name:      wrapperCMName,
+											Name:      envelopeName,
 											Namespace: workNamespaceName,
-											Type:      placementv1beta1.ConfigMapEnvelopeType,
+											Type:      placementv1beta1.ResourceEnvelopeType,
 										},
 									},
 									Condition: metav1.Condition{
@@ -161,9 +159,10 @@ var _ = Describe("handling errors and failures gracefully", func() {
 							Version: "v1",
 						},
 						{
-							Kind:      "ConfigMap",
-							Name:      wrapperCMName,
-							Version:   "v1",
+							Group:     placementv1beta1.GroupVersion.Group,
+							Kind:      placementv1beta1.ResourceEnvelopeKind,
+							Version:   placementv1beta1.GroupVersion.Version,
+							Name:      envelopeName,
 							Namespace: workNamespaceName,
 						},
 					},

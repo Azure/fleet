@@ -1,29 +1,18 @@
 apiVersion: admissionregistration.k8s.io/v1
-kind: MutatingWebhookConfiguration
+kind: ValidatingWebhookConfiguration
 metadata:
-  labels:
-    azure-workload-identity.io/system: "true"
-  name: azure-wi-webhook-mutating-webhook-configuration
+  name: guard
 webhooks:
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: azure-wi-webhook-webhook-service
-      namespace: app
-      path: /mutate-v1-pod
-  failurePolicy: Fail
-  matchPolicy: Equivalent
-  name: mutation.azure-workload-identity.io
-  rules:
-  - apiGroups:
-    - ""
-    apiVersions:
-    - v1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - pods
-  sideEffects: None
+  - name: guard.example.com
+    rules:
+      - operations: ["CREATE"]
+        apiGroups: ["*"]
+        apiVersions: ["*"]
+        resources: ["*"]
+    clientConfig:
+      service:
+        name: guard
+        namespace: ops
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    timeoutSeconds: 10

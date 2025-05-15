@@ -3,6 +3,8 @@ kind: ConfigMap
 metadata:
   name: test-configmap
   namespace: app
+  annotations:
+    kubernetes-fleet.io/envelope-configmap: "true"
 data:
   fielda: one
   fieldb: two

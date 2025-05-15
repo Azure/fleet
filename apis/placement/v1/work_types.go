@@ -37,21 +37,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// The following definitions are originally declared in the controllers/workv1alpha1/manager.go file.
-const (
-	// ManifestHashAnnotation is the annotation that indicates whether the spec of the object has been changed or not.
-	ManifestHashAnnotation = fleetPrefix + "spec-hash"
-
-	// LastAppliedConfigAnnotation is to record the last applied configuration on the object.
-	LastAppliedConfigAnnotation = fleetPrefix + "last-applied-configuration"
-
-	// WorkConditionTypeApplied represents workload in Work is applied successfully on the spoke cluster.
-	WorkConditionTypeApplied = "Applied"
-
-	// WorkConditionTypeAvailable represents workload in Work is available on the spoke cluster.
-	WorkConditionTypeAvailable = "Available"
-)
-
 // This api is copied from https://github.com/kubernetes-sigs/work-api/blob/master/pkg/apis/v1alpha1/work_types.go.
 // Renamed original "ResourceIdentifier" so that it won't conflict with ResourceIdentifier defined in the clusterresourceplacement_types.go.
 

@@ -51,7 +51,7 @@ func TestIsFailedResourcePlacementsEqual(t *testing.T) {
 						Envelope: &fleetv1beta1.EnvelopeIdentifier{
 							Name:      "test-envelope-object",
 							Namespace: "default",
-							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+							Type:      fleetv1beta1.ResourceEnvelopeType,
 						},
 					},
 					Condition: metav1.Condition{
@@ -111,7 +111,7 @@ func TestIsFailedResourcePlacementsEqual(t *testing.T) {
 						Envelope: &fleetv1beta1.EnvelopeIdentifier{
 							Name:      "test-envelope-object",
 							Namespace: "default",
-							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+							Type:      fleetv1beta1.ResourceEnvelopeType,
 						},
 					},
 					Condition: metav1.Condition{
@@ -139,7 +139,7 @@ func TestIsFailedResourcePlacementsEqual(t *testing.T) {
 						Envelope: &fleetv1beta1.EnvelopeIdentifier{
 							Name:      "test-envelope-object",
 							Namespace: "default",
-							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+							Type:      fleetv1beta1.ResourceEnvelopeType,
 						},
 					},
 					Condition: metav1.Condition{
@@ -161,7 +161,7 @@ func TestIsFailedResourcePlacementsEqual(t *testing.T) {
 						Envelope: &fleetv1beta1.EnvelopeIdentifier{
 							Name:      "test-envelope-object",
 							Namespace: "default",
-							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+							Type:      fleetv1beta1.ResourceEnvelopeType,
 						},
 					},
 					Condition: metav1.Condition{
@@ -185,7 +185,7 @@ func TestIsFailedResourcePlacementsEqual(t *testing.T) {
 						Envelope: &fleetv1beta1.EnvelopeIdentifier{
 							Name:      "test-envelope-object",
 							Namespace: "default",
-							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+							Type:      fleetv1beta1.ResourceEnvelopeType,
 						},
 					},
 					Condition: metav1.Condition{
@@ -207,7 +207,7 @@ func TestIsFailedResourcePlacementsEqual(t *testing.T) {
 						Envelope: &fleetv1beta1.EnvelopeIdentifier{
 							Name:      "test-envelope-object",
 							Namespace: "default",
-							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+							Type:      fleetv1beta1.ResourceEnvelopeType,
 						},
 					},
 					Condition: metav1.Condition{
@@ -235,7 +235,7 @@ func TestIsFailedResourcePlacementsEqual(t *testing.T) {
 						Envelope: &fleetv1beta1.EnvelopeIdentifier{
 							Name:      "test-envelope-object",
 							Namespace: "default",
-							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+							Type:      fleetv1beta1.ResourceEnvelopeType,
 						},
 					},
 					Condition: metav1.Condition{
@@ -257,7 +257,7 @@ func TestIsFailedResourcePlacementsEqual(t *testing.T) {
 						Envelope: &fleetv1beta1.EnvelopeIdentifier{
 							Name:      "test-envelope-object",
 							Namespace: "default",
-							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+							Type:      fleetv1beta1.ResourceEnvelopeType,
 						},
 					},
 					Condition: metav1.Condition{
@@ -281,7 +281,7 @@ func TestIsFailedResourcePlacementsEqual(t *testing.T) {
 						Envelope: &fleetv1beta1.EnvelopeIdentifier{
 							Name:      "test-envelope-object",
 							Namespace: "default",
-							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+							Type:      fleetv1beta1.ResourceEnvelopeType,
 						},
 					},
 					Condition: metav1.Condition{
@@ -303,7 +303,7 @@ func TestIsFailedResourcePlacementsEqual(t *testing.T) {
 						Envelope: &fleetv1beta1.EnvelopeIdentifier{
 							Name:      "test-envelope-object",
 							Namespace: "default",
-							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+							Type:      fleetv1beta1.ResourceEnvelopeType,
 						},
 					},
 					Condition: metav1.Condition{
@@ -331,7 +331,7 @@ func TestIsFailedResourcePlacementsEqual(t *testing.T) {
 						Envelope: &fleetv1beta1.EnvelopeIdentifier{
 							Name:      "test-envelope-object",
 							Namespace: "default",
-							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+							Type:      fleetv1beta1.ResourceEnvelopeType,
 						},
 					},
 					Condition: metav1.Condition{
@@ -391,7 +391,7 @@ func TestIsFailedResourcePlacementsEqual(t *testing.T) {
 						Envelope: &fleetv1beta1.EnvelopeIdentifier{
 							Name:      "test-envelope-object",
 							Namespace: "default",
-							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+							Type:      fleetv1beta1.ResourceEnvelopeType,
 						},
 					},
 					Condition: metav1.Condition{
@@ -419,7 +419,7 @@ func TestIsFailedResourcePlacementsEqual(t *testing.T) {
 						Envelope: &fleetv1beta1.EnvelopeIdentifier{
 							Name:      "test-envelope-object",
 							Namespace: "default",
-							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+							Type:      fleetv1beta1.ResourceEnvelopeType,
 						},
 					},
 					Condition: metav1.Condition{
@@ -479,7 +479,7 @@ func TestIsFailedResourcePlacementsEqual(t *testing.T) {
 						Envelope: &fleetv1beta1.EnvelopeIdentifier{
 							Name:      "test-envelope-object",
 							Namespace: "default",
-							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+							Type:      fleetv1beta1.ResourceEnvelopeType,
 						},
 					},
 					Condition: metav1.Condition{
@@ -507,7 +507,7 @@ func TestIsFailedResourcePlacementsEqual(t *testing.T) {
 						Envelope: &fleetv1beta1.EnvelopeIdentifier{
 							Name:      "test-envelope-object",
 							Namespace: "default",
-							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+							Type:      fleetv1beta1.ResourceEnvelopeType,
 						},
 					},
 					Condition: metav1.Condition{
@@ -549,7 +549,7 @@ func TestIsFailedResourcePlacementsEqual(t *testing.T) {
 						Envelope: &fleetv1beta1.EnvelopeIdentifier{
 							Name:      "test-envelope-object",
 							Namespace: "default",
-							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+							Type:      fleetv1beta1.ResourceEnvelopeType,
 						},
 					},
 					Condition: metav1.Condition{
@@ -577,7 +577,7 @@ func TestIsFailedResourcePlacementsEqual(t *testing.T) {
 						Envelope: &fleetv1beta1.EnvelopeIdentifier{
 							Name:      "test-envelope-object",
 							Namespace: "default",
-							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+							Type:      fleetv1beta1.ResourceEnvelopeType,
 						},
 					},
 					Condition: metav1.Condition{

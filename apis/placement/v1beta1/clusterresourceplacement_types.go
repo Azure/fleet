@@ -890,8 +890,10 @@ type EnvelopeIdentifier struct {
 	// +kubebuilder:validation:Optional
 	Namespace string `json:"namespace,omitempty"`
 
+	// TO-DO (chenyu1): drop the enum value ConfigMap after the new envelope forms become fully available.
+
 	// Type of the envelope object.
-	// +kubebuilder:validation:Enum=ConfigMap
+	// +kubebuilder:validation:Enum=ConfigMap;ClusterResourceEnvelope;ResourceEnvelope
 	// +kubebuilder:default=ConfigMap
 	// +kubebuilder:validation:Optional
 	Type EnvelopeType `json:"type"`
@@ -903,7 +905,14 @@ type EnvelopeType string
 
 const (
 	// ConfigMapEnvelopeType means the envelope object is of type `ConfigMap`.
+	// TO-DO (chenyu1): drop this type after the configMap-based envelopes become obsolete.
 	ConfigMapEnvelopeType EnvelopeType = "ConfigMap"
+
+	// ClusterResourceEnvelopeType is the envelope type that represents the ClusterResourceEnvelope custom resource.
+	ClusterResourceEnvelopeType EnvelopeType = "ClusterResourceEnvelope"
+
+	// ResourceEnvelopeType is the envelope type that represents the ResourceEnvelope custom resource.
+	ResourceEnvelopeType EnvelopeType = "ResourceEnvelope"
 )
 
 // ResourcePlacementStatus represents the placement status of selected resources for one target cluster.

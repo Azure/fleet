@@ -2,19 +2,22 @@ apiVersion: placement.kubernetes-fleet.io/v1beta1
 kind: ResourceEnvelope
 metadata:
   name: example
+  namespace: app
 data:
   "cm.yaml":
     apiVersion: v1
     kind: ConfigMap
     metadata:
-      name: app
+      name: config
+      namespace: app
     data:
       foo: bar
   "deploy.yaml":
     apiVersion: apps/v1
     kind: Deployment
     metadata:
-      name: app
+      name: ingress
+      namespace: app
     spec:
       replicas: 1
       selector:

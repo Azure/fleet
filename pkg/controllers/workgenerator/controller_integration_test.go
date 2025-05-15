@@ -596,12 +596,13 @@ var _ = Describe("Test Work Generator Controller", func() {
 			})
 		})
 
-		Context("Test Bound ClusterResourceBinding with a single resource snapshot with envelop objects", func() {
+		Context("Test Bound ClusterResourceBinding with a single resource snapshot with namespaced envelope objects", func() {
 			var masterSnapshot *placementv1beta1.ClusterResourceSnapshot
-
+			envelopedResourceName := "namespaced-resource-envelope"
+			envelopedResourceNameSpace := "app"
 			BeforeEach(func() {
 				masterSnapshot = generateResourceSnapshot(1, 1, 0, [][]byte{
-					testConfigMap, testEnvelopConfigMap, testResourceCRD, testNameSpace,
+					testConfigMap, testResourceEnvelope, testResourceCRD, testNameSpace,
 				})
 				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 				By(fmt.Sprintf("master resource snapshot  %s created", masterSnapshot.Name))
@@ -664,7 +665,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
 				//inspect the envelope work
 				var workList placementv1beta1.WorkList
-				fetchEnvelopedWork(&workList, binding)
+				fetchEnvelopedWork(&workList, binding, string(placementv1beta1.ResourceEnvelopeType), envelopedResourceName, envelopedResourceNameSpace)
 				envWork := workList.Items[0]
 				By(fmt.Sprintf("enveloped work %s is created in %s", envWork.Name, envWork.Namespace))
 				wantWork = placementv1beta1.Work{
@@ -684,9 +685,9 @@ var _ = Describe("Test Work Generator Controller", func() {
 							placementv1beta1.CRPTrackingLabel:                 testCRPName,
 							placementv1beta1.ParentBindingLabel:               binding.Name,
 							placementv1beta1.ParentResourceSnapshotIndexLabel: "1",
-							placementv1beta1.EnvelopeTypeLabel:                string(placementv1beta1.ConfigMapEnvelopeType),
-							placementv1beta1.EnvelopeNameLabel:                "envelop-configmap",
-							placementv1beta1.EnvelopeNamespaceLabel:           "app",
+							placementv1beta1.EnvelopeTypeLabel:                string(placementv1beta1.ResourceEnvelopeType),
+							placementv1beta1.EnvelopeNameLabel:                envelopedResourceName,
+							placementv1beta1.EnvelopeNamespaceLabel:           envelopedResourceNameSpace,
 						},
 						Annotations: map[string]string{
 							placementv1beta1.ParentResourceSnapshotNameAnnotation:                binding.Spec.ResourceSnapshotName,
@@ -697,7 +698,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 					Spec: placementv1beta1.WorkSpec{
 						Workload: placementv1beta1.WorkloadTemplate{
 							Manifests: []placementv1beta1.Manifest{
-								{RawExtension: runtime.RawExtension{Raw: testEnvelopeResourceQuota}},
+								{RawExtension: runtime.RawExtension{Raw: testResourceQuotaContent}},
 							},
 						},
 					},
@@ -719,10 +720,10 @@ var _ = Describe("Test Work Generator Controller", func() {
 			It("Should modify the enveloped work object with the same name", func() {
 				// make sure the enveloped work is created
 				var workList placementv1beta1.WorkList
-				fetchEnvelopedWork(&workList, binding)
+				fetchEnvelopedWork(&workList, binding, string(placementv1beta1.ResourceEnvelopeType), envelopedResourceName, envelopedResourceNameSpace)
 				// create a second snapshot with a modified enveloped object
 				masterSnapshot = generateResourceSnapshot(2, 1, 0, [][]byte{
-					testEnvelopConfigMap2, testResourceCRD, testNameSpace,
+					testResourceEnvelope2, testResourceCRD, testNameSpace,
 				})
 				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 				By(fmt.Sprintf("another master resource snapshot  %s created", masterSnapshot.Name))
@@ -788,7 +789,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				diff := cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
 				// check the enveloped work is updated
-				fetchEnvelopedWork(&workList, binding)
+				fetchEnvelopedWork(&workList, binding, string(placementv1beta1.ResourceEnvelopeType), envelopedResourceName, envelopedResourceNameSpace)
 				work = workList.Items[0]
 				By(fmt.Sprintf("envelope work %s is updated in %s", work.Name, work.Namespace))
 				//inspect the envelope work
@@ -809,9 +810,9 @@ var _ = Describe("Test Work Generator Controller", func() {
 							placementv1beta1.CRPTrackingLabel:                 testCRPName,
 							placementv1beta1.ParentBindingLabel:               binding.Name,
 							placementv1beta1.ParentResourceSnapshotIndexLabel: "2",
-							placementv1beta1.EnvelopeTypeLabel:                string(placementv1beta1.ConfigMapEnvelopeType),
-							placementv1beta1.EnvelopeNameLabel:                "envelop-configmap",
-							placementv1beta1.EnvelopeNamespaceLabel:           "app",
+							placementv1beta1.EnvelopeTypeLabel:                string(placementv1beta1.ResourceEnvelopeType),
+							placementv1beta1.EnvelopeNameLabel:                envelopedResourceName,
+							placementv1beta1.EnvelopeNamespaceLabel:           envelopedResourceNameSpace,
 						},
 						Annotations: map[string]string{
 							placementv1beta1.ParentResourceSnapshotNameAnnotation:                binding.Spec.ResourceSnapshotName,
@@ -822,19 +823,19 @@ var _ = Describe("Test Work Generator Controller", func() {
 					Spec: placementv1beta1.WorkSpec{
 						Workload: placementv1beta1.WorkloadTemplate{
 							Manifests: []placementv1beta1.Manifest{
-								{RawExtension: runtime.RawExtension{Raw: testEnvelopeResourceQuota2}},
+								{RawExtension: runtime.RawExtension{Raw: testResourceQuota2Content}},
 							},
 						},
 					},
 				}
 				diff = cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
-				Expect(diff).Should(BeEmpty(), fmt.Sprintf("envelop work(%s) mismatch (-want +got):\n%s", work.Name, diff))
+				Expect(diff).Should(BeEmpty(), fmt.Sprintf("envelope work(%s) mismatch (-want +got):\n%s", work.Name, diff))
 			})
 
 			It("Should delete the enveloped work object in the target namespace after it's removed from snapshot", func() {
 				// make sure the enveloped work is created
 				var workList placementv1beta1.WorkList
-				fetchEnvelopedWork(&workList, binding)
+				fetchEnvelopedWork(&workList, binding, string(placementv1beta1.ResourceEnvelopeType), envelopedResourceName, envelopedResourceNameSpace)
 				By("create a second snapshot without an enveloped object")
 				// create a second snapshot without an enveloped object
 				masterSnapshot = generateResourceSnapshot(2, 1, 0, [][]byte{
@@ -866,9 +867,180 @@ var _ = Describe("Test Work Generator Controller", func() {
 					envelopWorkLabelMatcher := client.MatchingLabels{
 						placementv1beta1.ParentBindingLabel:     binding.Name,
 						placementv1beta1.CRPTrackingLabel:       testCRPName,
-						placementv1beta1.EnvelopeTypeLabel:      string(placementv1beta1.ConfigMapEnvelopeType),
-						placementv1beta1.EnvelopeNameLabel:      "envelop-configmap",
-						placementv1beta1.EnvelopeNamespaceLabel: "app",
+						placementv1beta1.EnvelopeTypeLabel:      string(placementv1beta1.ResourceEnvelopeType),
+						placementv1beta1.EnvelopeNameLabel:      envelopedResourceName,
+						placementv1beta1.EnvelopeNamespaceLabel: envelopedResourceNameSpace,
+					}
+					if err := k8sClient.List(ctx, &workList, envelopWorkLabelMatcher); err != nil {
+						return err
+					}
+					if len(workList.Items) != 0 {
+						return fmt.Errorf("expect to not get any enveloped work but got %d", len(workList.Items))
+					}
+					return nil
+				}, timeout, interval).Should(Succeed(), "Failed to delete the expected enveloped work in hub cluster")
+			})
+		})
+
+		Context("Test Bound ClusterResourceBinding with a single resource snapshot with cluster scoped envelope objects", func() {
+			var masterSnapshot *placementv1beta1.ClusterResourceSnapshot
+			envelopedResourceName := "clusterscoped-resource-envelope"
+			envelopedResourceNameSpace := ""
+			BeforeEach(func() {
+				masterSnapshot = generateResourceSnapshot(1, 1, 0, [][]byte{
+					testClusterScopedEnvelope, testResourceCRD, testNameSpace,
+				})
+				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
+				By(fmt.Sprintf("master resource snapshot  %s created", masterSnapshot.Name))
+				spec := placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					ResourceSnapshotName: masterSnapshot.Name,
+					TargetCluster:        memberClusterName,
+				}
+				createClusterResourceBinding(&binding, spec)
+			})
+
+			AfterEach(func() {
+				By("Deleting master clusterResourceSnapshot")
+				Expect(k8sClient.Delete(ctx, masterSnapshot)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
+			})
+
+			It("Should create enveloped work object in the target namespace with master resource snapshot only", func() {
+				// check the work that contains none enveloped object is created by now
+				work := placementv1beta1.Work{}
+				Eventually(func() error {
+					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName), Namespace: memberClusterNamespaceName}, &work)
+				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
+				By(fmt.Sprintf("normal work %s is created in %s", work.Name, work.Namespace))
+				//inspect the work
+				wantWork := placementv1beta1.Work{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf(placementv1beta1.FirstWorkNameFmt, testCRPName),
+						Namespace: memberClusterNamespaceName,
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion:         placementv1beta1.GroupVersion.String(),
+								Kind:               "ClusterResourceBinding",
+								Name:               binding.Name,
+								UID:                binding.UID,
+								BlockOwnerDeletion: ptr.To(true),
+							},
+						},
+						Labels: map[string]string{
+							placementv1beta1.CRPTrackingLabel:                 testCRPName,
+							placementv1beta1.ParentBindingLabel:               binding.Name,
+							placementv1beta1.ParentResourceSnapshotIndexLabel: "1",
+						},
+						Annotations: map[string]string{
+							placementv1beta1.ParentResourceSnapshotNameAnnotation:                binding.Spec.ResourceSnapshotName,
+							placementv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: emptyHash,
+							placementv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        emptyHash,
+						},
+					},
+					Spec: placementv1beta1.WorkSpec{
+						Workload: placementv1beta1.WorkloadTemplate{
+							Manifests: []placementv1beta1.Manifest{
+								{RawExtension: runtime.RawExtension{Raw: testResourceCRD}},
+								{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
+							},
+						},
+					},
+				}
+				diff := cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
+				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
+				//inspect the envelope work
+				var workList placementv1beta1.WorkList
+				fetchEnvelopedWork(&workList, binding, string(placementv1beta1.ClusterResourceEnvelopeType), envelopedResourceName, envelopedResourceNameSpace)
+				envWork := workList.Items[0]
+				By(fmt.Sprintf("enveloped work %s is created in %s", envWork.Name, envWork.Namespace))
+				wantWork = placementv1beta1.Work{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      envWork.Name,
+						Namespace: memberClusterNamespaceName,
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion:         placementv1beta1.GroupVersion.String(),
+								Kind:               "ClusterResourceBinding",
+								Name:               binding.Name,
+								UID:                binding.UID,
+								BlockOwnerDeletion: ptr.To(true),
+							},
+						},
+						Labels: map[string]string{
+							placementv1beta1.CRPTrackingLabel:                 testCRPName,
+							placementv1beta1.ParentBindingLabel:               binding.Name,
+							placementv1beta1.ParentResourceSnapshotIndexLabel: "1",
+							placementv1beta1.EnvelopeTypeLabel:                string(placementv1beta1.ClusterResourceEnvelopeType),
+							placementv1beta1.EnvelopeNameLabel:                envelopedResourceName,
+							placementv1beta1.EnvelopeNamespaceLabel:           envelopedResourceNameSpace,
+						},
+						Annotations: map[string]string{
+							placementv1beta1.ParentResourceSnapshotNameAnnotation:                binding.Spec.ResourceSnapshotName,
+							placementv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: emptyHash,
+							placementv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        emptyHash,
+						},
+					},
+					Spec: placementv1beta1.WorkSpec{
+						Workload: placementv1beta1.WorkloadTemplate{
+							Manifests: []placementv1beta1.Manifest{
+								{RawExtension: runtime.RawExtension{Raw: testClusterRoleContent}},
+								{RawExtension: runtime.RawExtension{Raw: testWebhookContent}},
+							},
+						},
+					},
+				}
+				diff = cmp.Diff(wantWork, envWork, ignoreWorkOption, ignoreTypeMeta)
+				Expect(diff).Should(BeEmpty(), fmt.Sprintf("enveloped work(%s) mismatch (-want +got):\n%s", envWork.Name, diff))
+				// mark the enveloped work applied
+				markWorkApplied(&work)
+				markWorkApplied(&envWork)
+				// check the binding status that it should be marked as applied true eventually
+				verifyBindStatusAppliedNotAvailable(binding, false)
+				// mark the enveloped work available
+				markWorkAvailable(&work)
+				markWorkAvailable(&envWork)
+				// check the binding status that it should be marked as available true eventually
+				verifyBindStatusAvail(binding, false, false)
+			})
+
+			It("Should delete the enveloped work object in the target namespace after it's removed from snapshot", func() {
+				// make sure the enveloped work is created
+				var workList placementv1beta1.WorkList
+				fetchEnvelopedWork(&workList, binding, string(placementv1beta1.ClusterResourceEnvelopeType), envelopedResourceName, envelopedResourceNameSpace)
+				By("create a second snapshot without an enveloped object")
+				// create a second snapshot without an enveloped object
+				masterSnapshot = generateResourceSnapshot(2, 1, 0, [][]byte{
+					testResourceCRD, testNameSpace,
+				})
+				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
+				By(fmt.Sprintf("another master resource snapshot  %s created", masterSnapshot.Name))
+				// update binding
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
+				binding.Spec.ResourceSnapshotName = masterSnapshot.Name
+				Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
+				By(fmt.Sprintf("resource binding  %s updated", binding.Name))
+				updateRolloutStartedGeneration(&binding)
+				// check the binding status till the bound condition is true for the second binding generation
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding); err != nil {
+						return false
+					}
+					if binding.GetGeneration() <= 1 {
+						return false
+					}
+					// only check the work created status as the applied status reason changes depends on where the reconcile logic is
+					return condition.IsConditionStatusTrue(
+						meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingWorkSynchronized)), binding.GetGeneration())
+				}, timeout, interval).Should(BeTrue(), fmt.Sprintf("binding(%s) condition should be true", binding.Name))
+				By(fmt.Sprintf("resource binding  %s is reconciled", binding.Name))
+				// check the enveloped work is deleted
+				Eventually(func() error {
+					envelopWorkLabelMatcher := client.MatchingLabels{
+						placementv1beta1.ParentBindingLabel:     binding.Name,
+						placementv1beta1.CRPTrackingLabel:       testCRPName,
+						placementv1beta1.EnvelopeTypeLabel:      string(placementv1beta1.ClusterResourceEnvelopeType),
+						placementv1beta1.EnvelopeNameLabel:      envelopedResourceName,
+						placementv1beta1.EnvelopeNamespaceLabel: envelopedResourceNameSpace,
 					}
 					if err := k8sClient.List(ctx, &workList, envelopWorkLabelMatcher); err != nil {
 						return err
@@ -4090,15 +4262,15 @@ func bindingStatusUpdatedActual(
 	}
 }
 
-func fetchEnvelopedWork(workList *placementv1beta1.WorkList, binding *placementv1beta1.ClusterResourceBinding) {
+func fetchEnvelopedWork(workList *placementv1beta1.WorkList, binding *placementv1beta1.ClusterResourceBinding, envelopeType, envelopeName, envelopeNamespace string) {
 	// try to locate the work that contains enveloped object
 	Eventually(func() error {
 		envelopWorkLabelMatcher := client.MatchingLabels{
 			placementv1beta1.ParentBindingLabel:     binding.Name,
 			placementv1beta1.CRPTrackingLabel:       testCRPName,
-			placementv1beta1.EnvelopeTypeLabel:      string(placementv1beta1.ConfigMapEnvelopeType),
-			placementv1beta1.EnvelopeNameLabel:      "envelop-configmap",
-			placementv1beta1.EnvelopeNamespaceLabel: "app",
+			placementv1beta1.EnvelopeTypeLabel:      envelopeType,
+			placementv1beta1.EnvelopeNameLabel:      envelopeName,
+			placementv1beta1.EnvelopeNamespaceLabel: envelopeNamespace,
 		}
 		if err := k8sClient.List(ctx, workList, envelopWorkLabelMatcher); err != nil {
 			return err

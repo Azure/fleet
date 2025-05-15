@@ -27,6 +27,7 @@ import (
 	metricsV1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
 )
@@ -58,6 +59,76 @@ var (
 	trafficManagerBackendGK = schema.GroupKind{
 		Group: NetworkingGroupName,
 		Kind:  "TrafficManagerBackend",
+	}
+
+	ClusterResourcePlacementGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.ClusterResourcePlacementKind,
+	}
+
+	ClusterResourceBindingGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.ClusterResourceBindingKind,
+	}
+
+	ClusterResourceSnapshotGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.ClusterResourceSnapshotKind,
+	}
+
+	ClusterSchedulingPolicySnapshotGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.ClusterSchedulingPolicySnapshotKind,
+	}
+
+	WorkGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.WorkKind,
+	}
+
+	ClusterStagedUpdateRunGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.ClusterStagedUpdateRunKind,
+	}
+
+	ClusterStagedUpdateStrategyGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.ClusterStagedUpdateStrategyKind,
+	}
+
+	ClusterApprovalRequestGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.ClusterApprovalRequestKind,
+	}
+
+	ClusterResourcePlacementEvictionGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.ClusterResourcePlacementEvictionKind,
+	}
+
+	ClusterResourcePlacementDisruptionBudgetGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.ClusterResourcePlacementDisruptionBudgetKind,
+	}
+
+	ClusterResourceOverrideGK = schema.GroupKind{
+		Group: placementv1alpha1.GroupVersion.Group,
+		Kind:  placementv1alpha1.ClusterResourceOverrideKind,
+	}
+
+	ClusterResourceOverrideSnapshotGK = schema.GroupKind{
+		Group: placementv1alpha1.GroupVersion.Group,
+		Kind:  placementv1alpha1.ClusterResourceOverrideSnapshotKind,
+	}
+
+	ResourceOverrideGK = schema.GroupKind{
+		Group: placementv1alpha1.GroupVersion.Group,
+		Kind:  placementv1alpha1.ResourceOverrideKind,
+	}
+
+	ResourceOverrideSnapshotGK = schema.GroupKind{
+		Group: placementv1alpha1.GroupVersion.Group,
+		Kind:  placementv1alpha1.ResourceOverrideSnapshotKind,
 	}
 
 	// we use `;` to separate the different api groups
@@ -92,11 +163,35 @@ func NewResourceConfig(isAllowList bool) *ResourceConfig {
 	if r.isAllowList {
 		return r
 	}
-	// disable fleet related resource by default
+	// TODO: remove after we remove v1alpha1 support
+	// disable v1alpha1 related resources by default
 	r.AddGroup(fleetv1alpha1.GroupVersion.Group)
-	r.AddGroup(placementv1beta1.GroupVersion.Group)
-	r.AddGroup(clusterv1beta1.GroupVersion.Group)
 	r.AddGroupVersionKind(WorkV1Alpha1GVK)
+
+	// disable cluster group by default
+	r.AddGroup(clusterv1beta1.GroupVersion.Group)
+
+	// disable some fleet networking resources
+	r.AddGroupKind(serviceImportGK)
+	r.AddGroupKind(trafficManagerProfileGK)
+	r.AddGroupKind(trafficManagerBackendGK)
+
+	// disable all fleet placement resources except for the envelope type
+	r.AddGroupKind(ClusterResourcePlacementGK)
+	r.AddGroupKind(ClusterResourceBindingGK)
+	r.AddGroupKind(ClusterResourceSnapshotGK)
+	r.AddGroupKind(ClusterSchedulingPolicySnapshotGK)
+	r.AddGroupKind(WorkGK)
+	r.AddGroupKind(ClusterStagedUpdateRunGK)
+	r.AddGroupKind(ClusterStagedUpdateStrategyGK)
+	r.AddGroupKind(ClusterApprovalRequestGK)
+	r.AddGroupKind(ClusterResourcePlacementEvictionGK)
+	r.AddGroupKind(ClusterResourcePlacementDisruptionBudgetGK)
+	// Add v1alpha1 resources to skip to not break when we move them to v1beta1
+	r.AddGroupKind(ClusterResourceOverrideGK)
+	r.AddGroupKind(ClusterResourceOverrideSnapshotGK)
+	r.AddGroupKind(ResourceOverrideGK)
+	r.AddGroupKind(ResourceOverrideSnapshotGK)
 
 	// disable the below built-in resources
 	r.AddGroup(eventsv1.GroupName)
@@ -104,10 +199,7 @@ func NewResourceConfig(isAllowList bool) *ResourceConfig {
 	r.AddGroup(metricsV1beta1.GroupName)
 	r.AddGroupVersionKind(corev1PodGVK)
 	r.AddGroupVersionKind(corev1NodeGVK)
-	// disable networking resources
-	r.AddGroupKind(serviceImportGK)
-	r.AddGroupKind(trafficManagerProfileGK)
-	r.AddGroupKind(trafficManagerBackendGK)
+
 	return r
 }
 

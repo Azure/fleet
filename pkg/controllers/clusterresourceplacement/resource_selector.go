@@ -524,8 +524,11 @@ func (r *Reconciler) selectResourcesForPlacement(placement *fleetv1beta1.Cluster
 		if err != nil {
 			return 0, nil, nil, err
 		}
-		if unstructuredObj.GetObjectKind().GroupVersionKind() == utils.ConfigMapGVK &&
-			len(unstructuredObj.GetAnnotations()[fleetv1beta1.EnvelopeConfigMapAnnotation]) != 0 {
+		uGVK := unstructuredObj.GetObjectKind().GroupVersionKind().GroupKind()
+		switch {
+		case uGVK == utils.ClusterResourceEnvelopeGK:
+			envelopeObjCount++
+		case uGVK == utils.ResourceEnvelopeGK:
 			envelopeObjCount++
 		}
 		resources[i] = *rc
