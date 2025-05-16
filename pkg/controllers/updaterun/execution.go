@@ -170,13 +170,19 @@ func (r *Reconciler) executeUpdatingStage(
 		}
 
 		// Now the cluster has to be updating, the binding should point to the right resource snapshot and the binding should be bound.
-		if !isBindingSyncedWithClusterStatus(resourceSnapshotName, updateRun, binding, clusterStatus) || binding.Spec.State != placementv1beta1.BindingStateBound ||
-			!condition.IsConditionStatusTrue(meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingRolloutStarted)), binding.Generation) {
-			unexpectedErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("the updating cluster `%s` in the stage %s does not match the cluster status: %+v, binding: %+v, condition: %+v",
-				clusterStatus.ClusterName, updatingStageStatus.StageName, clusterStatus, binding.Spec, binding.GetCondition(string(placementv1beta1.ResourceBindingRolloutStarted))))
-			klog.ErrorS(unexpectedErr, "The binding has been changed during updating, please check if there's concurrent clusterStagedUpdateRun", "clusterStagedUpdateRun", updateRunRef)
-			markClusterUpdatingFailed(clusterStatus, updateRun.Generation, unexpectedErr.Error())
-			return 0, fmt.Errorf("%w: %s", errStagedUpdatedAborted, unexpectedErr.Error())
+		inSync := isBindingSyncedWithClusterStatus(resourceSnapshotName, updateRun, binding, clusterStatus)
+		rolloutStarted := condition.IsConditionStatusTrue(meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingRolloutStarted)), binding.Generation)
+		if !inSync || !rolloutStarted || binding.Spec.State != placementv1beta1.BindingStateBound {
+			// This issue mostly happens when there are concurrent updateRuns referencing the same clusterResourcePlacement but releasing different versions.
+			// After the 1st updateRun updates the binding, and before the controller re-checks the binding status, the 2nd updateRun updates the same binding, and thus the 1st updateRun is preempted and observes the binding not matching the desired state.
+			preemptedErr := controller.NewUserError(fmt.Errorf("the clusterResourceBinding of the updating cluster `%s` in the stage `%s` is not up-to-date with the desired status, "+
+				"please check the status of binding `%s` and see if there is a concurrent updateRun referencing the same clusterResourcePlacement and updating the same cluster",
+				clusterStatus.ClusterName, updatingStageStatus.StageName, klog.KObj(binding)))
+			klog.ErrorS(preemptedErr, "The binding has been changed during updating",
+				"bindingSpecInSync", inSync, "bindingState", binding.Spec.State,
+				"bindingRolloutStarted", rolloutStarted, "binding", klog.KObj(binding), "clusterStagedUpdateRun", updateRunRef)
+			markClusterUpdatingFailed(clusterStatus, updateRun.Generation, preemptedErr.Error())
+			return 0, fmt.Errorf("%w: %s", errStagedUpdatedAborted, preemptedErr.Error())
 		}
 
 		finished, updateErr := checkClusterUpdateResult(binding, clusterStatus, updatingStageStatus, updateRun)
