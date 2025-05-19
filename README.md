@@ -1,6 +1,6 @@
 # Azure Fleet
 
-[![GitHub release (latest by date)][1]][1]
+![GitHub release (latest by date)][1]
 [![Go Report Card][2]][3]
 ![Build Status][4]
 ![GitHub go.mod Go version][5]
