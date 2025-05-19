@@ -7,7 +7,7 @@
 
 Azure Fleet repo contains the code that the [Azure Kubernetes Fleet Manager](https://learn.microsoft.com/en-us/azure/kubernetes-fleet/) service uses to provide multi-cluster workload scheduling and management capabilities. 
 
-It follows the CNC sandbox project [KubeFleet](https://github.com/kubefleet-dev/) and most of the development is done in the [KubeFleet](https://github.com/kubefleet-dev/).
+It follows the CNCF sandbox project [KubeFleet](https://github.com/kubefleet-dev/) and most of the development is done in the [KubeFleet](https://github.com/kubefleet-dev/).
 
 ## Get invovled 
 For any questions, please see the [KubeFleet discussion board](https://github.com/kubefleet-dev/kubefleet/discussions). 
