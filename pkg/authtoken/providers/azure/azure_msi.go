@@ -39,6 +39,12 @@ type AuthTokenProvider struct {
 	Scope    string
 }
 
+// GetDefaultAKSScope returns the default AKS scope value
+// This is useful for testing purposes
+func GetDefaultAKSScope() string {
+	return aksScope
+}
+
 func New(clientID, scope string) authtoken.Provider {
 	if scope == "" {
 		// Check environment variable first
