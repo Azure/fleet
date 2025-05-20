@@ -523,6 +523,7 @@ _Appears in:_
 | --- | --- |
 | `type` _[RolloutStrategyType](#rolloutstrategytype)_ | Type of rollout. Supported types are "RollingUpdate" and "External". Default is "RollingUpdate". |
 | `rollingUpdate` _[RollingUpdateConfig](#rollingupdateconfig)_ | Rolling update config params. Present only if RolloutStrategyType = RollingUpdate. |
+| `applyStrategy` _[ApplyStrategy](#applystrategy)_ | Controls when and how to apply the selected resources to the target cluster. |
 
 #### RolloutStrategyType
 
@@ -535,6 +536,35 @@ _Appears in:_
 | --- | --- |
 | `RollingUpdate` | Resources are rolled out incrementally in a phased manner. This is the default. |
 | `External` | An external controller handles the rollout of resources (e.g., Staged Update Run). |
+
+#### ApplyStrategy
+
+ApplyStrategy describes when and how to apply the selected resource to the target cluster.
+
+_Appears in:_
+- [RolloutStrategy](#rolloutstrategy)
+
+| Field | Description |
+| --- | --- |
+| `type` _[ApplyStrategyType](#applystategytype)_ | Type of strategy used to apply resources. Supported types are "ClientSideApply", "ServerSideApply", and "ReportDiff". Default is "ClientSideApply". |
+| `comparisonOption` _string_ | Controls how Fleet compares the desired state with the current state. Default is "PartialComparison". |
+| `whenToApply` _string_ | Controls when Fleet applies resources to the target cluster. |
+| `whenToTakeOver` _string_ | Controls when Fleet takes ownership of fields that are already managed by other controllers. |
+| `allowCoOwnership` _boolean_ | Controls whether co-ownership between Fleet and other agents is allowed. Default is false. |
+| `serverSideApplyConfig` _[ServerSideApplyConfig](#serversideapplyconfig)_ | Configuration for server-side apply. Present only if ApplyStrategyType = ServerSideApply. |
+
+#### ApplyStrategyType
+
+_Underlying type:_ _string_
+
+_Appears in:_
+- [ApplyStrategy](#applystrategy)
+
+| Value | Description |
+| --- | --- |
+| `ClientSideApply` | Uses three-way merge patch similar to how `kubectl apply` works. This is the default. |
+| `ServerSideApply` | Uses server-side apply to resolve conflicts between resources. |
+| `ReportDiff` | Only reports differences between desired and current state without applying changes. |
 
 #### SchedulingPolicySnapshotSpec
 
