@@ -9,7 +9,7 @@ Azure Fleet repo contains the code that the [Azure Kubernetes Fleet Manager](htt
 
 It follows the CNCF sandbox project [KubeFleet](https://github.com/kubefleet-dev/) and most of the development is done in the [KubeFleet](https://github.com/kubefleet-dev/).
 
-## Get invovled 
+## Get Involved 
 For any questions, please see the [KubeFleet discussion board](https://github.com/kubefleet-dev/kubefleet/discussions). 
 
 For any issues, please open an issue in the [KubeFleet](https://github.com/kubefleet-dev/kubefleet/issues)
