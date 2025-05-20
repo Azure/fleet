@@ -546,7 +546,7 @@ _Appears in:_
 
 | Field | Description |
 | --- | --- |
-| `type` _[ApplyStrategyType](#applystategytype)_ | Type of strategy used to apply resources. Supported types are "ClientSideApply", "ServerSideApply", and "ReportDiff". Default is "ClientSideApply". |
+| `type` _[ApplyStrategyType](#applystrategytype)_ | Type of strategy used to apply resources. Supported types are "ClientSideApply", "ServerSideApply", and "ReportDiff". Default is "ClientSideApply". |
 | `comparisonOption` _string_ | Controls how Fleet compares the desired state with the current state. Default is "PartialComparison". |
 | `whenToApply` _string_ | Controls when Fleet applies resources to the target cluster. |
 | `whenToTakeOver` _string_ | Controls when Fleet takes ownership of fields that are already managed by other controllers. |
@@ -565,6 +565,17 @@ _Appears in:_
 | `ClientSideApply` | Uses three-way merge patch similar to how `kubectl apply` works. This is the default. |
 | `ServerSideApply` | Uses server-side apply to resolve conflicts between resources. |
 | `ReportDiff` | Only reports differences between desired and current state without applying changes. |
+
+#### ServerSideApplyConfig
+
+ServerSideApplyConfig defines the configuration for server-side apply.
+
+_Appears in:_
+- [ApplyStrategy](#applystrategy)
+
+| Field | Description |
+| --- | --- |
+| `forceConflicts` _boolean_ | If true, forces the apply to succeed when resolving conflicts. Default is false. |
 
 #### SchedulingPolicySnapshotSpec
 
