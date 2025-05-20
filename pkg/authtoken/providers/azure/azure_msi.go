@@ -31,7 +31,7 @@ import (
 
 const (
 	aksScope            = "6dae42f8-4368-4678-94ff-3960e28e3630"
-	aksScopeEnvVarName  = "AKS_SCOPE"
+	aksScopeEnvVarName  = "AKS_SCOPE" // Environment variable to configure the AKS scope
 )
 
 type AuthTokenProvider struct {
