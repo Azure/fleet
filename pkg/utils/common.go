@@ -171,6 +171,12 @@ var (
 		Kind:    placementv1beta1.ClusterResourcePlacementKind,
 	}
 
+	ClusterResourcePlacementEvictionMetaGVK = metav1.GroupVersionKind{
+		Group:   placementv1beta1.GroupVersion.Group,
+		Version: placementv1beta1.GroupVersion.Version,
+		Kind:    placementv1beta1.ClusterResourcePlacementEvictionKind,
+	}
+
 	ConfigMapGVK = schema.GroupVersionKind{
 		Group:   corev1.GroupName,
 		Version: corev1.SchemeGroupVersion.Version,
