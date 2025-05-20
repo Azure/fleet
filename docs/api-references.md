@@ -521,7 +521,7 @@ _Appears in:_
 
 | Field | Description |
 | --- | --- |
-| `type` _[RolloutStrategyType](#rolloutstrategytype)_ | Type of rollout. The only supported type is "RollingUpdate". Default is "RollingUpdate". |
+| `type` _[RolloutStrategyType](#rolloutstrategytype)_ | Type of rollout. Supported types are "RollingUpdate" and "External". Default is "RollingUpdate". |
 | `rollingUpdate` _[RollingUpdateConfig](#rollingupdateconfig)_ | Rolling update config params. Present only if RolloutStrategyType = RollingUpdate. |
 
 #### RolloutStrategyType
@@ -530,6 +530,11 @@ _Underlying type:_ _string_
 
 _Appears in:_
 - [RolloutStrategy](#rolloutstrategy)
+
+| Value | Description |
+| --- | --- |
+| `RollingUpdate` | Resources are rolled out incrementally in a phased manner. This is the default. |
+| `External` | An external controller handles the rollout of resources (e.g., Staged Update Run). |
 
 #### SchedulingPolicySnapshotSpec
 
