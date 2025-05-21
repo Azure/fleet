@@ -42,11 +42,32 @@ consolidates agent statuses and marks the cluster as `Joined`.
 
 ### Leaving the Fleet
 
-Fleet administrators can deregister a cluster by deleting the `MemberCluster` CR. Upon detection of deletion events by 
-the `MemberCluster` controller within the hub cluster, it removes the corresponding `InternalMemberCluster` CR in the 
-reserved namespace of the member cluster. It awaits completion of the "leave" process by the `InternalMemberCluster` 
-controller of member agents, and then deletes role and role bindings and other resources including the member cluster reserved
-namespaces on the hub cluster.
+Fleet administrators can deregister a cluster by deleting the `MemberCluster` CR. The leave process involves several steps 
+coordinated between the hub and member clusters:
+
+1. **Initiating the Leave Process**:
+   - Upon deletion of the `MemberCluster` CR, the `MemberCluster` controller in the hub cluster detects this event.
+   - It sets the corresponding `InternalMemberCluster` CR's state to `Leave` in the reserved namespace for that member cluster.
+
+2. **Member Cluster Cleanup**:
+   - The `InternalMemberCluster` controller in the member cluster detects the state change to `Leave`.
+   - It initiates a cleanup process that removes all resources that were propagated to the member cluster via Fleet.
+   - The `ApplyWorkReconciler` in the member agent removes finalizers from work objects, enabling them to be garbage collected.
+   - Applied resources are removed from the member cluster through the deletion of `AppliedWork` objects.
+
+3. **Completion of Leave Process**:
+   - Once the cleanup is complete, the member agent marks the `InternalMemberCluster` CR as "left".
+   - If there are any errors during the leave process, the `InternalMemberCluster` will be marked with a "leave failed" status.
+   - When the leave process is successful, metrics are reported to indicate the member cluster has left.
+
+4. **Hub Cluster Cleanup**:
+   - After the member cluster completes the leave process, the `MemberCluster` controller deletes roles, role bindings, 
+     and other resources created for that member cluster.
+   - Finally, it removes the reserved namespace for the member cluster from the hub cluster.
+
+After a member cluster leaves the fleet, resource placements targeting that cluster are no longer applied. Any resources 
+that were previously placed on the cluster are removed as part of the cleanup process. The member agent can then be 
+uninstalled from the cluster as described in the [how-to guide](../../howtos/clusters.md#setting-a-cluster-to-leave-a-fleet).
 
 ## Taints
 
