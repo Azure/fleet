@@ -4,79 +4,102 @@
 
 This guide provides instructions on propagating a set of resources from the hub cluster to joined member clusters within an envelope object.
 
-## Envelope Object with ConfigMap
+## Envelope Objects with CRDs
 
-Currently, we support using a `ConfigMap` as an envelope object by leveraging a fleet-reserved annotation.
+Fleet now supports two types of envelope Custom Resource Definitions (CRDs) for propagating resources:
 
-To designate a `ConfigMap` as an envelope object, ensure that it contains the following annotation:
+1. **ClusterResourceEnvelope**: Used to wrap cluster-scoped resources for placement.
+2. **ResourceEnvelope**: Used to wrap namespace-scoped resources for placement.
+
+These CRDs provide a more structured and Kubernetes-native way to package resources for propagation to member clusters without causing unintended side effects on the hub cluster.
+
+### ClusterResourceEnvelope Example
+
+The `ClusterResourceEnvelope` is a cluster-scoped resource that can only wrap other cluster-scoped resources. For example:
 
 ```yaml
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourceEnvelope
 metadata:
-  annotations:
-    kubernetes-fleet.io/envelope-configmap: "true"
-```
-
-### Example ConfigMap Envelope Object:
-```
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: envelope-configmap
-  namespace: app
-  annotations:
-    kubernetes-fleet.io/envelope-configmap: "true"
+  name: example
 data:
-  resourceQuota.yaml: |
-    apiVersion: v1
-    kind: ResourceQuota
-    metadata:
-      name: mem-cpu-demo
-      namespace: app
-    spec:
-      hard:
-        requests.cpu: "1"
-        requests.memory: 1Gi
-        limits.cpu: "2"
-        limits.memory: 2Gi
-  webhook.yaml: |
+  "webhook.yaml":
     apiVersion: admissionregistration.k8s.io/v1
-    kind: MutatingWebhookConfiguration
+    kind: ValidatingWebhookConfiguration
     metadata:
-      creationTimestamp: null
-      labels:
-        azure-workload-identity.io/system: "true"
-      name: azure-wi-webhook-mutating-webhook-configuration
+      name: guard
     webhooks:
-    - admissionReviewVersions:
-      - v1
-      - v1beta1
+    - name: guard.example.com
+      rules:
+      - operations: ["CREATE"]
+        apiGroups: ["*"]
+        apiVersions: ["*"]
+        resources: ["*"]
       clientConfig:
         service:
-          name: azure-wi-webhook-webhook-service
-          namespace: app
-          path: /mutate-v1-pod
-      failurePolicy: Fail
-      matchPolicy: Equivalent
-      name: mutation.azure-workload-identity.io
-      rules:
-      - apiGroups:
-        - ""
-        apiVersions:
-        - v1
-        operations:
-        - CREATE
-        - UPDATE
-        resources:
-        - pods
+          name: guard
+          namespace: ops
+      admissionReviewVersions: ["v1"]
       sideEffects: None
+      timeoutSeconds: 10
+  "clusterrole.yaml":
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: pod-reader
+    rules:
+    - apiGroups: [""]
+      resources: ["pods"]
+      verbs: ["get", "list", "watch"]
 ```
 
-## Propagating an Envelope ConfigMap from Hub cluster to Member cluster:
+### ResourceEnvelope Example
 
-We will now apply the example envelope object above on our hub cluster. Then we use a `ClusterResourcePlacement` object to propagate the resource from hub to a member cluster named `kind-cluster-1`.
+The `ResourceEnvelope` is a namespace-scoped resource that can only wrap namespace-scoped resources. For example:
 
-### CRP spec:
+```yaml
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ResourceEnvelope
+metadata:
+  name: example
+  namespace: app
+data:
+  "cm.yaml":
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: config
+      namespace: app
+    data:
+      foo: bar
+  "deploy.yaml":
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: ingress
+      namespace: app
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: nginx
+      template:
+        metadata:
+          labels:
+            app: nginx
+        spec:
+          containers:
+          - name: web
+            image: nginx
 ```
+
+## Propagating Envelope Objects from Hub cluster to Member cluster
+
+We apply our envelope objects on the hub cluster and then use a `ClusterResourcePlacement` object to propagate these resources from the hub to member clusters.
+
+### Example CRP spec for propagating a ResourceEnvelope:
+
+```yaml
 spec:
   policy:
     clusterNames:
@@ -87,14 +110,37 @@ spec:
     kind: Namespace
     name: app
     version: v1
+  - group: placement.kubernetes-fleet.io
+    kind: ResourceEnvelope
+    name: example
+    namespace: app
+    version: v1beta1
   revisionHistoryLimit: 10
   strategy:
     type: RollingUpdate
 ```
 
-### CRP status:
+### Example CRP spec for propagating a ClusterResourceEnvelope:
 
+```yaml
+spec:
+  policy:
+    clusterNames:
+    - kind-cluster-1
+    placementType: PickFixed
+  resourceSelectors:
+  - group: placement.kubernetes-fleet.io
+    kind: ClusterResourceEnvelope
+    name: example
+    version: v1beta1
+  revisionHistoryLimit: 10
+  strategy:
+    type: RollingUpdate
 ```
+
+### CRP status for ResourceEnvelope:
+
+```yaml
 status:
   conditions:
   - lastTransitionTime: "2023-11-30T19:54:13Z"
@@ -142,23 +188,24 @@ status:
   - kind: Namespace
     name: app
     version: v1
-  - kind: ConfigMap
-    name: envelope-configmap
+  - group: placement.kubernetes-fleet.io
+    kind: ResourceEnvelope
+    name: example
     namespace: app
-    version: v1
+    version: v1beta1
 ```
 
->>Note: In the `selectedResources` section, we specifically display the propagated envelope object. Please note that we do not individually list all the resources contained within the envelope object in the status.
+> **Note:** In the `selectedResources` section, we specifically display the propagated envelope object. We do not individually list all the resources contained within the envelope object in the status.
 
-Upon inspection of the `selectedResources`, it indicates that the namespace `app` and the configmap `envelope-configmap` have been successfully propagated. Users can further verify the successful propagation of resources mentioned within the `envelope-configmap` object by ensuring that the `failedPlacements` section in the `placementStatus` for `kind-cluster-1` does not appear in the status.
+Upon inspection of the `selectedResources`, it indicates that the namespace `app` and the ResourceEnvelope `example` have been successfully propagated. Users can further verify the successful propagation of resources contained within the envelope object by ensuring that the `failedPlacements` section in the `placementStatus` for the target cluster does not appear in the status.
 
-## Example CRP status where resource within an envelope object failed to apply:
+## Example CRP status where resources within an envelope object failed to apply
 
-### CRP status:
+### CRP status with failed ResourceEnvelope resource:
 
-In the example below, within the `placementStatus` section for `kind-cluster-1`, the `failedPlacements` section provides details on resource that failed to apply along with information about the `envelope object` which contained the resource.
+In the example below, within the `placementStatus` section for `kind-cluster-1`, the `failedPlacements` section provides details on a resource that failed to apply along with information about the envelope object which contained the resource.
 
-```
+```yaml
 status:
   conditions:
   - lastTransitionTime: "2023-12-06T00:09:53Z"
@@ -211,19 +258,71 @@ status:
         status: "False"
         type: Applied
       envelope:
-        name: envelop-configmap
-        namespace: test-ns
-        type: ConfigMap
-      kind: ResourceQuota
-      name: mem-cpu-demo
+        name: example
+        namespace: app
+        type: ResourceEnvelope
+      kind: Deployment
+      name: ingress
       namespace: app
-      version: v1
+      version: apps/v1
   selectedResources:
   - kind: Namespace
-    name: test-ns
+    name: app
     version: v1
-  - kind: ConfigMap
-    name: envelop-configmap
-    namespace: test-ns
-    version: v1
+  - group: placement.kubernetes-fleet.io
+    kind: ResourceEnvelope
+    name: example
+    namespace: app
+    version: v1beta1
+```
+
+### CRP status with failed ClusterResourceEnvelope resource:
+
+Similar to namespace-scoped resources, cluster-scoped resources within a ClusterResourceEnvelope can also fail to apply:
+
+```yaml
+status:
+  conditions:
+  - lastTransitionTime: "2023-12-06T00:09:53Z"
+    message: found all the clusters needed as specified by the scheduling policy
+    observedGeneration: 2
+    reason: SchedulingPolicyFulfilled
+    status: "True"
+    type: ClusterResourcePlacementScheduled
+  - lastTransitionTime: "2023-12-06T00:09:58Z"
+    message: Failed to apply manifests to 1 clusters, please check the `failedPlacements`
+      status
+    observedGeneration: 2
+    reason: ApplyFailed
+    status: "False"
+    type: ClusterResourcePlacementApplied
+  placementStatuses:
+  - clusterName: kind-cluster-1
+    conditions:
+    - lastTransitionTime: "2023-12-06T00:09:58Z"
+      message: Failed to apply manifests, please check the `failedPlacements` status
+      observedGeneration: 2
+      reason: ApplyFailed
+      status: "False"
+      type: ResourceApplied
+    failedPlacements:
+    - condition:
+        lastTransitionTime: "2023-12-06T00:09:53Z"
+        message: 'Failed to apply manifest: service "guard" not found in namespace "ops"'
+        reason: AppliedManifestFailedReason
+        status: "False"
+        type: Applied
+      envelope:
+        name: example
+        type: ClusterResourceEnvelope
+      kind: ValidatingWebhookConfiguration
+      name: guard
+      group: admissionregistration.k8s.io
+      version: v1
+  selectedResources:
+  - group: placement.kubernetes-fleet.io
+    kind: ClusterResourceEnvelope
+    name: example
+    version: v1beta1
+```
 ```
