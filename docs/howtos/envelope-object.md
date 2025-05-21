@@ -4,6 +4,20 @@
 
 This guide provides instructions on propagating a set of resources from the hub cluster to joined member clusters within an envelope object.
 
+## Why Use Envelope Objects?
+
+When propagating resources to member clusters using Fleet, it's important to understand that the hub cluster itself is a fully functional Kubernetes cluster. Without envelope objects, any resource you want to propagate would first be applied directly to the hub cluster, which can cause several critical issues:
+
+1. **Unintended Side Effects**: Resources like ValidatingWebhookConfigurations, MutatingWebhookConfigurations, or Admission Controllers would become active on the hub cluster, potentially intercepting and affecting hub cluster operations.
+
+2. **Security Risks**: RBAC resources (Roles, ClusterRoles, RoleBindings, ClusterRoleBindings) intended for member clusters could grant unintended permissions on the hub cluster.
+
+3. **Resource Conflicts**: Resources intended for member clusters might conflict with hub cluster resources or disrupt hub services.
+
+4. **Resource Consumption**: Resources intended for member clusters could consume CPU, memory, and storage on the hub cluster.
+
+Envelope objects solve these problems by allowing you to define resources that should be propagated without actually deploying their contents on the hub cluster. The envelope object itself is applied to the hub, but the resources it contains are only extracted and applied when they reach the member clusters.
+
 ## Envelope Objects with CRDs
 
 Fleet now supports two types of envelope Custom Resource Definitions (CRDs) for propagating resources:
