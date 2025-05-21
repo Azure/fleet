@@ -325,4 +325,3 @@ status:
     name: example
     version: v1beta1
 ```
-```
