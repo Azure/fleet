@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	
+
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -103,7 +103,7 @@ func ValidateUserForFleetCRDWithCEL(celEnv *CELEnvironment, req admission.Reques
 		"fleetCRDGroups": fleetCRDGroups,
 	})
 	if err != nil {
-		klog.ErrorS(err, "Error evaluating CEL expression for checkCRDGroup", 
+		klog.ErrorS(err, "Error evaluating CEL expression for checkCRDGroup",
 			"user", userInfo.Username, "groups", userInfo.Groups, "group", group)
 		// Fall back to the non-CEL implementation if there's an error
 		return ValidateUserForFleetCRD(req, whiteListedUsers, group)
@@ -111,7 +111,7 @@ func ValidateUserForFleetCRDWithCEL(celEnv *CELEnvironment, req admission.Reques
 
 	isFleetCRDGroup, ok := val.Value().(bool)
 	if !ok {
-		klog.ErrorS(fmt.Errorf("unexpected result type"), "CEL expression didn't return a boolean", 
+		klog.ErrorS(fmt.Errorf("unexpected result type"), "CEL expression didn't return a boolean",
 			"user", userInfo.Username, "groups", userInfo.Groups, "group", group)
 		// Fall back to the non-CEL implementation if there's a type error
 		return ValidateUserForFleetCRD(req, whiteListedUsers, group)
@@ -126,13 +126,13 @@ func ValidateUserForFleetCRDWithCEL(celEnv *CELEnvironment, req admission.Reques
 	// Check if the user is allowed to modify this CRD
 	adminGroups := []string{mastersGroup, kubeadmClusterAdminsGroup}
 	val, _, err = celEnv.checkUserAccessExpr.Eval(map[string]interface{}{
-		"username":        userInfo.Username,
-		"userGroups":      userInfo.Groups,
+		"username":         userInfo.Username,
+		"userGroups":       userInfo.Groups,
 		"whiteListedUsers": whiteListedUsers,
-		"adminGroups":     adminGroups,
+		"adminGroups":      adminGroups,
 	})
 	if err != nil {
-		klog.ErrorS(err, "Error evaluating CEL expression for user access check", 
+		klog.ErrorS(err, "Error evaluating CEL expression for user access check",
 			"user", userInfo.Username, "groups", userInfo.Groups)
 		// Fall back to the non-CEL implementation if there's an error
 		if isFleetCRDGroup && !isAdminGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) {
@@ -142,7 +142,7 @@ func ValidateUserForFleetCRDWithCEL(celEnv *CELEnvironment, req admission.Reques
 	} else {
 		isAllowed, ok := val.Value().(bool)
 		if !ok {
-			klog.ErrorS(fmt.Errorf("unexpected result type"), "CEL expression didn't return a boolean", 
+			klog.ErrorS(fmt.Errorf("unexpected result type"), "CEL expression didn't return a boolean",
 				"user", userInfo.Username, "groups", userInfo.Groups)
 			// Fall back to the non-CEL implementation if there's a type error
 			if isFleetCRDGroup && !isAdminGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) {

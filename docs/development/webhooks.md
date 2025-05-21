@@ -33,6 +33,16 @@ Fleet currently uses CEL to validate:
 1. CRD group membership: `group in fleetCRDGroups`
 2. User permissions: `username in whiteListedUsers || userGroups.exists(g, g in adminGroups)`
 
+### CEL Annotations in API Types
+
+In addition to using CEL in webhooks, Fleet also uses CEL annotations directly in API type definitions:
+
+- To validate resource structure (taint uniqueness, key/value formats)
+- To enforce field immutability (preventing updates to certain fields)
+- To validate cross-field relationships (mutual exclusivity)
+
+For a complete list of these validations, see [CEL Validations in Fleet APIs](./cel_validations.md).
+
 ### Benefits of CEL
 
 Using CEL for validation provides several advantages:

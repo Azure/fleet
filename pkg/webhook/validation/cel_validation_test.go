@@ -90,46 +90,46 @@ func TestIsAdminGroupUserOrWhiteListedUserCEL(t *testing.T) {
 	assert.NoError(t, err)
 
 	tests := []struct {
-		name            string
-		username        string
-		userGroups      []string
+		name             string
+		username         string
+		userGroups       []string
 		whiteListedUsers []string
-		adminGroups     []string
-		expected        bool
+		adminGroups      []string
+		expected         bool
 	}{
 		{
-			name:            "whitelisted user",
-			username:        "allowed-user",
-			userGroups:      []string{"regular-group"},
+			name:             "whitelisted user",
+			username:         "allowed-user",
+			userGroups:       []string{"regular-group"},
 			whiteListedUsers: []string{"allowed-user", "another-user"},
-			adminGroups:     []string{"system:masters", "kubeadm:cluster-admins"},
-			expected:        true,
+			adminGroups:      []string{"system:masters", "kubeadm:cluster-admins"},
+			expected:         true,
 		},
 		{
-			name:            "admin group user",
-			username:        "admin-user",
-			userGroups:      []string{"system:masters", "regular-group"},
+			name:             "admin group user",
+			username:         "admin-user",
+			userGroups:       []string{"system:masters", "regular-group"},
 			whiteListedUsers: []string{"allowed-user"},
-			adminGroups:     []string{"system:masters", "kubeadm:cluster-admins"},
-			expected:        true,
+			adminGroups:      []string{"system:masters", "kubeadm:cluster-admins"},
+			expected:         true,
 		},
 		{
-			name:            "regular user",
-			username:        "regular-user",
-			userGroups:      []string{"regular-group"},
+			name:             "regular user",
+			username:         "regular-user",
+			userGroups:       []string{"regular-group"},
 			whiteListedUsers: []string{"allowed-user"},
-			adminGroups:     []string{"system:masters", "kubeadm:cluster-admins"},
-			expected:        false,
+			adminGroups:      []string{"system:masters", "kubeadm:cluster-admins"},
+			expected:         false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			val, _, err := program.Eval(map[string]interface{}{
-				"username":        tt.username,
-				"userGroups":      tt.userGroups,
+				"username":         tt.username,
+				"userGroups":       tt.userGroups,
 				"whiteListedUsers": tt.whiteListedUsers,
-				"adminGroups":     tt.adminGroups,
+				"adminGroups":      tt.adminGroups,
 			})
 			assert.NoError(t, err)
 			result, ok := val.Value().(bool)

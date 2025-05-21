@@ -36,12 +36,12 @@ const (
 func Add(mgr manager.Manager, whiteListedUsers []string, isFleetV1Beta1API bool, denyModifyMemberClusterLabels bool) error {
 	hookServer := mgr.GetWebhookServer()
 	adminGroups := []string{validation.MastersGroup, validation.KubeadmClusterAdminsGroup}
-	
+
 	celEnv, err := validation.NewCELEnvironment(validation.FleetCRDGroups, adminGroups)
 	if err != nil {
 		return fmt.Errorf("failed to initialize CEL environment: %w", err)
 	}
-	
+
 	handler := &fleetResourceValidator{
 		client:                        mgr.GetClient(),
 		whiteListedUsers:              whiteListedUsers,
@@ -107,12 +107,12 @@ func (v *fleetResourceValidator) handleCRD(req admission.Request) admission.Resp
 	var group string
 	// This regex works because every CRD name in kubernetes follows this pattern <plural>.<group>.
 	group = validation.ExtractCRDGroupWithCEL(req.Name)
-	
+
 	// Use CEL validation if the environment is initialized
 	if v.celEnv != nil {
 		return validation.ValidateUserForFleetCRDWithCEL(v.celEnv, req, v.whiteListedUsers, group)
 	}
-	
+
 	// Fall back to standard validation if CEL is not available
 	return validation.ValidateUserForFleetCRD(req, v.whiteListedUsers, group)
 }

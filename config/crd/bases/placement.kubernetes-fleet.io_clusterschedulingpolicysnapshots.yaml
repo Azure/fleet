@@ -1067,6 +1067,16 @@ spec:
                             If the operator is Exists, the value should be empty, otherwise just a regular string.
                           type: string
                       type: object
+                      x-kubernetes-validations:
+                      - message: toleration key must be a valid label name
+                        rule: self.key == '' || self.key.matches('^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$')
+                      - message: toleration value must be a valid label value
+                        rule: self.value == '' || self.value.matches('^([a-z0-9]([-a-z0-9_.]*[a-z0-9])?)?$')
+                      - message: toleration value needs to be empty when operator
+                          is Exists
+                        rule: self.operator != 'Exists' || self.value == ''
+                      - message: toleration key cannot be empty when operator is Equal
+                        rule: self.operator != 'Equal' || self.key != ''
                     maxItems: 100
                     type: array
                   topologySpreadConstraints:

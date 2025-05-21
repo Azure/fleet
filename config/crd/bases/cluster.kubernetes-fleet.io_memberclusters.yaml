@@ -497,6 +497,11 @@ spec:
                   - effect
                   - key
                   type: object
+                  x-kubernetes-validations:
+                  - message: taint key must be a valid label name
+                    rule: self.key.matches('^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$')
+                  - message: taint value must be a valid label value
+                    rule: self.value == '' || self.value.matches('^([a-z0-9]([-a-z0-9_.]*[a-z0-9])?)?$')
                 maxItems: 100
                 type: array
             required:
@@ -735,6 +740,9 @@ spec:
         x-kubernetes-validations:
         - message: metadata.name max length is 63
           rule: size(self.metadata.name) < 64
+        - message: taints must be unique
+          rule: '!self.spec.taints.exists(t1, self.spec.taints.exists(t2, t1 != t2
+            && t1.key == t2.key && t1.effect == t2.effect))'
     served: true
     storage: true
     subresources:
