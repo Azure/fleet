@@ -42,6 +42,7 @@ require (
 )
 
 require (
+	cel.dev/expr v0.23.1 // indirect
 	dario.cat/mergo v1.0.1 // indirect
 	github.com/Azure/azure-kusto-go v0.16.1 // indirect
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible // indirect
@@ -66,6 +67,7 @@ require (
 	github.com/Azure/go-autorest/logger v0.2.1 // indirect
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.3.1 // indirect
+	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/aws/karpenter-core v0.32.2-0.20231109191441-e32aafc81fb5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blendle/zapdriver v1.3.1 // indirect
@@ -84,6 +86,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/btree v1.1.3 // indirect
+	github.com/google/cel-go v0.25.0 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20241029153458-d1b30febd7db // indirect
@@ -105,6 +108,7 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/samber/lo v1.38.1 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
+	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
@@ -121,6 +125,8 @@ require (
 	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/tools v0.28.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240826202546-f6391c0de4c7 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240826202546-f6391c0de4c7 // indirect
 	google.golang.org/protobuf v1.35.1 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect

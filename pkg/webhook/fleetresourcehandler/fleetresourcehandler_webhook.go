@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"regexp"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -24,7 +23,6 @@ import (
 const (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating custom resource definition resources.
 	ValidationPath = "/validate-fleetresourcehandler"
-	groupMatch     = `^[^.]*\.(.*)`
 )
 
 const (
@@ -37,12 +35,20 @@ const (
 // Add registers the webhook for K8s built-in object types.
 func Add(mgr manager.Manager, whiteListedUsers []string, isFleetV1Beta1API bool, denyModifyMemberClusterLabels bool) error {
 	hookServer := mgr.GetWebhookServer()
+	adminGroups := []string{validation.MastersGroup, validation.KubeadmClusterAdminsGroup}
+	
+	celEnv, err := validation.NewCELEnvironment(validation.FleetCRDGroups, adminGroups)
+	if err != nil {
+		return fmt.Errorf("failed to initialize CEL environment: %w", err)
+	}
+	
 	handler := &fleetResourceValidator{
 		client:                        mgr.GetClient(),
 		whiteListedUsers:              whiteListedUsers,
 		isFleetV1Beta1API:             isFleetV1Beta1API,
 		decoder:                       admission.NewDecoder(mgr.GetScheme()),
 		denyModifyMemberClusterLabels: denyModifyMemberClusterLabels,
+		celEnv:                        celEnv,
 	}
 	hookServer.Register(ValidationPath, &webhook.Admission{Handler: handler})
 	return nil
@@ -54,6 +60,7 @@ type fleetResourceValidator struct {
 	isFleetV1Beta1API             bool
 	decoder                       webhook.AdmissionDecoder
 	denyModifyMemberClusterLabels bool
+	celEnv                        *validation.CELEnvironment
 }
 
 // Handle receives the request then allows/denies the request to modify fleet resources.
@@ -99,10 +106,14 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 func (v *fleetResourceValidator) handleCRD(req admission.Request) admission.Response {
 	var group string
 	// This regex works because every CRD name in kubernetes follows this pattern <plural>.<group>.
-	match := regexp.MustCompile(groupMatch).FindStringSubmatch(req.Name)
-	if len(match) > 1 {
-		group = match[1]
+	group = validation.ExtractCRDGroupWithCEL(req.Name)
+	
+	// Use CEL validation if the environment is initialized
+	if v.celEnv != nil {
+		return validation.ValidateUserForFleetCRDWithCEL(v.celEnv, req, v.whiteListedUsers, group)
 	}
+	
+	// Fall back to standard validation if CEL is not available
 	return validation.ValidateUserForFleetCRD(req, v.whiteListedUsers, group)
 }
 
