@@ -481,6 +481,55 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 			checkEvictionCompleteMetric(customRegistry, "true", "true")
 		})
 	})
+
+	It("Invalid Eviction Blocked - PickFixed CRP, invalid eviction denied - No PDB specified", func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+		// Create the CRP.
+		By("Create ClusterResourcePlacement", func() {
+			crp := placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+						ClusterNames:  []string{"test-cluster-1"},
+					},
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "",
+							Kind:    "Namespace",
+							Version: "v1",
+							Name:    "test-ns",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, &crp)).Should(Succeed())
+			// ensure CRP exists.
+			Eventually(func() error {
+				return k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, &crp)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		By("Create ClusterResourcePlacementEviction", func() {
+			eviction := buildTestEviction(evictionName, crpName, "test-cluster")
+			Expect(k8sClient.Create(ctx, eviction)).Should(Succeed())
+		})
+
+		By("Check eviction status", func() {
+			evictionStatusUpdatedActual := testutilseviction.StatusUpdatedActual(
+				ctx, k8sClient, evictionName,
+				&testutilseviction.IsValidEviction{IsValid: false, Msg: condition.EvictionInvalidPickFixedCRPMessage},
+				nil)
+			Eventually(evictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		By("Ensure eviction complete metric was emitted", func() {
+			checkEvictionCompleteMetric(customRegistry, "false", "true")
+		})
+	})
 })
 
 func buildTestPickNCRP(crpName string, clusterCount int32) placementv1beta1.ClusterResourcePlacement {

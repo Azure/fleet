@@ -25,7 +25,7 @@ func TestBuildFleetValidatingWebhooks(t *testing.T) {
 				serviceURL:           "test-url",
 				clientConnectionType: &url,
 			},
-			wantLength: 7,
+			wantLength: 8,
 		},
 	}
 

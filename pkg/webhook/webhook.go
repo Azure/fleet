@@ -59,6 +59,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/cmd/hubagent/options"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/clusterresourceoverride"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/clusterresourceplacement"
+	"github.com/kubefleet-dev/kubefleet/pkg/webhook/clusterresourceplacementeviction"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/fleetresourcehandler"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/membercluster"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/pod"
@@ -113,6 +114,7 @@ const (
 	podResourceName                      = "pods"
 	clusterResourceOverrideName          = "clusterresourceoverrides"
 	resourceOverrideName                 = "resourceoverrides"
+	evictionName                         = "clusterresourceplacementevictions"
 )
 
 var (
@@ -358,6 +360,22 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 						admv1.Update,
 					},
 					Rule: createRule([]string{placementv1alpha1.GroupVersion.Group}, []string{placementv1alpha1.GroupVersion.Version}, []string{resourceOverrideName}, &namespacedScope),
+				},
+			},
+			TimeoutSeconds: longWebhookTimeout,
+		},
+		{
+			Name:                    "fleet.clusterresourceplacementeviction.validating",
+			ClientConfig:            w.createClientConfig(clusterresourceplacementeviction.ValidationPath),
+			FailurePolicy:           &failFailurePolicy,
+			SideEffects:             &sideEffortsNone,
+			AdmissionReviewVersions: admissionReviewVersions,
+			Rules: []admv1.RuleWithOperations{
+				{
+					Operations: []admv1.OperationType{
+						admv1.Create,
+					},
+					Rule: createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{evictionName}, &clusterScope),
 				},
 			},
 			TimeoutSeconds: longWebhookTimeout,

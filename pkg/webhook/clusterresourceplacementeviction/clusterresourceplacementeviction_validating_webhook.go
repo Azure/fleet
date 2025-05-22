@@ -53,7 +53,7 @@ func Add(mgr manager.Manager) error {
 	return nil
 }
 
-// Handle clusterResourcePlacementEvictionValidator checks to see if resource override is valid.
+// Handle clusterResourcePlacementEvictionValidator checks to see if the eviction is valid.
 func (v *clusterResourcePlacementEvictionValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	var crpe fleetv1beta1.ClusterResourcePlacementEviction
 	klog.V(2).InfoS("Validating webhook handling cluster resource placement eviction", "operation", req.Operation, "clusterResourcePlacementEviction", req.Name)
