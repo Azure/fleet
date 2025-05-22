@@ -37,7 +37,9 @@ You can reach the KubeFleet community and developers via the following channels:
 
 We host bi-weekly community meetings that alternate between US/EU and APAC friendly time. In these sessions the community will showcase demos and discuss the current and future state of the project.
 
-Please refer to the [KubeFleet CNCF meeting calendar](https://zoom-lfx.platform.linuxfoundation.org/meetings/kubefleet?view=month) for the latest schedule.
+Please refer to the [calendar](https://zoom-lfx.platform.linuxfoundation.org/meetings/kubefleet?view=month) for the latest schedule:
+* Wednesdays at 09:30am PT [US/EU](https://zoom-lfx.platform.linuxfoundation.org/meeting/93624014488?password=27667a5c-9238-4b5a-b4d8-96daadaa9fa4) (biweekly). [Convert to your timezone](https://dateful.com/convert/pacific-time-pt?t=930am).
+* Thursday at 9:00am CST [APAC](https://zoom-lfx.platform.linuxfoundation.org/meeting/98901589453?password=9ab588fd-1214-40c3-84c2-757c124e984f) (biweekly).  [Convert to your timezone](https://dateful.com/convert/beijing-china?t=9am).
 
 For more meeting information, minutes and recordings, please see the [KubeFleet community meeting doc](https://docs.google.com/document/d/1iMcHn11fPlb9ZGoMHiGEBvdIc44W1CjZvsPH3eBg6pA/edit?usp=sharing).
 
