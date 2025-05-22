@@ -29,7 +29,7 @@ import (
 )
 
 // Note (chenyu1):
-// the metrics for the work applier are added the assumptions that:
+// the metrics for the work applier are added under the assumptions that:
 // a) the applier should provide low-cardinality metrics only to keep the memory footprint low,
 //    as there might be a high number (up to 10K) of works/manifests to process in a member cluster; and
 // b) keep the overhead of metrics collection low, esp. considering that the applier runs in
@@ -47,6 +47,8 @@ const (
 	manifestDriftOrDiffDetectionStatusNotFound = "NotFound"
 )
 
+// trackWorkAndManifestProcessingRequestMetrics tracks the work and manifest processing request metrics.
+// It is called right after the status of the work is refreshed.
 func trackWorkAndManifestProcessingRequestMetrics(work *fleetv1beta1.Work) {
 	// Increment the work processing request counter.
 
