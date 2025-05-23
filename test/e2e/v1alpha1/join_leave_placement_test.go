@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -27,9 +28,16 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/test/e2e/v1alpha1/utils"
+)
+var (
+	sortOption = cmpopts.SortSlices(func(a, b metav1.Condition) bool {
+		return a.Type < b.Type
+	})
 )
 
 // Serial - Ginkgo will guarantee that these specs will never run in parallel with other specs.
@@ -38,6 +46,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, func(
 	var (
 		crp *v1alpha1.ClusterResourcePlacement
 		ctx context.Context
+		workFinalizer = "work.fleet.azure.com/finalizer"
 
 		mcStatusCmpOptions = []cmp.Option{
 			cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"),
@@ -159,10 +168,23 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, func(
 		}
 		utils.CheckMemberClusterStatus(ctx, *HubCluster, &types.NamespacedName{Name: mc.Name}, wantMCStatus, mcStatusCmpOptions)
 
-		By("verify that the resource is still on the member cluster")
+		By("verify that the resource is still on the member cluster after leaving")
 		Consistently(func() error {
 			return MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name}, cr)
 		}, utils.PollTimeout, utils.PollInterval).Should(Succeed(), "Failed to verify cluster role %s is still on %s cluster", cr.Name, MemberCluster.ClusterName)
+		
+		By("verify that Work finalizers were properly removed")
+		workList := &v1alpha1.WorkList{}
+		memberWorkNamespace := fmt.Sprintf("fleet-member-%s", mc.Name)
+		Expect(HubCluster.KubeClient.List(ctx, workList, client.InNamespace(memberWorkNamespace))).Should(Succeed(), "Failed to list Work resources in namespace for member %s", mc.Name)
+		for _, work := range workList.Items {
+			Expect(controllerutil.ContainsFinalizer(&work, workFinalizer)).Should(BeFalse(), "Work %s still contains finalizer after member left", work.Name)
+			
+			By("verify that AppliedWork resources are preserved")
+			appliedWork := &v1alpha1.AppliedWork{}
+			err := MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: work.Name}, appliedWork)
+			Expect(err).Should(BeNil(), "Failed to find AppliedWork %s on member cluster after leaving", work.Name)
+		}
 
 		By("delete the crp from the hub")
 		utils.DeleteClusterResourcePlacement(ctx, *HubCluster, crp)
