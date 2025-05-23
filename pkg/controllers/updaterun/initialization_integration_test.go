@@ -554,8 +554,8 @@ var _ = Describe("Updaterun initialization tests", func() {
 				It("Should fail to initialize if any after stage task has 2 same tasks", func() {
 					By("Creating a clusterStagedUpdateStrategy with 2 same after stage tasks")
 					updateStrategy.Spec.Stages[0].AfterStageTasks = []placementv1beta1.AfterStageTask{
-						{Type: placementv1beta1.AfterStageTaskTypeTimedWait},
-						{Type: placementv1beta1.AfterStageTaskTypeTimedWait},
+						{Type: placementv1beta1.AfterStageTaskTypeTimedWait, WaitTime: &metav1.Duration{Duration: time.Second * 1}},
+						{Type: placementv1beta1.AfterStageTaskTypeTimedWait, WaitTime: &metav1.Duration{Duration: time.Second * 1}},
 					}
 					Expect(k8sClient.Create(ctx, updateStrategy)).To(Succeed())
 
@@ -569,7 +569,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 				It("Should fail to initialize if the wait time is not valid", func() {
 					By("Creating a clusterStagedUpdateStrategy with invalid wait time duration")
 					updateStrategy.Spec.Stages[0].AfterStageTasks = []placementv1beta1.AfterStageTask{
-						{Type: placementv1beta1.AfterStageTaskTypeTimedWait, WaitTime: metav1.Duration{Duration: time.Second * 0}},
+						{Type: placementv1beta1.AfterStageTaskTypeTimedWait, WaitTime: &metav1.Duration{Duration: time.Second * 0}},
 					}
 					Expect(k8sClient.Create(ctx, updateStrategy)).To(Succeed())
 

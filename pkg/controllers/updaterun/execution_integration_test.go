@@ -996,7 +996,7 @@ var _ = Describe("UpdateRun execution tests - delete ClusterApprovalRequest, don
 							},
 							{
 								Type: placementv1beta1.AfterStageTaskTypeTimedWait,
-								WaitTime: metav1.Duration{
+								WaitTime: &metav1.Duration{
 									// Set a large wait time to approve, delete the approval request
 									// and trigger an update run reconcile after time elapses.
 									Duration: time.Second * 90,

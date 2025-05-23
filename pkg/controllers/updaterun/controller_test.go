@@ -18,7 +18,9 @@ package updaterun
 
 import (
 	"testing"
+	"time"
 
+	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -450,6 +452,149 @@ func TestHandleClusterApprovalRequestDelete(t *testing.T) {
 				if req.Name != tt.queuedName {
 					t.Fatalf("handleClusterApprovalRequestDelete() queuedName got %s, want %s", req.Name, tt.queuedName)
 				}
+			}
+		})
+	}
+}
+
+func TestRemoveWaitTimeFromUpdateRunStatus(t *testing.T) {
+	waitTime := metav1.Duration{Duration: 5 * time.Minute}
+	tests := map[string]struct {
+		inputUpdateRun *placementv1beta1.ClusterStagedUpdateRun
+		wantUpdateRun  *placementv1beta1.ClusterStagedUpdateRun
+	}{
+		"should handle empty stages": {
+			inputUpdateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Status: placementv1beta1.StagedUpdateRunStatus{
+					StagedUpdateStrategySnapshot: &placementv1beta1.StagedUpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{},
+					},
+				},
+			},
+			wantUpdateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Status: placementv1beta1.StagedUpdateRunStatus{
+					StagedUpdateStrategySnapshot: &placementv1beta1.StagedUpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{},
+					},
+				},
+			},
+		},
+		"should handle nil StagedUpdateStrategySnapshot": {
+			inputUpdateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Status: placementv1beta1.StagedUpdateRunStatus{
+					StagedUpdateStrategySnapshot: nil,
+				},
+			},
+			wantUpdateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Status: placementv1beta1.StagedUpdateRunStatus{
+					StagedUpdateStrategySnapshot: nil,
+				},
+			},
+		},
+		"should remove waitTime from Approval tasks only": {
+			inputUpdateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Status: placementv1beta1.StagedUpdateRunStatus{
+					StagedUpdateStrategySnapshot: &placementv1beta1.StagedUpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								AfterStageTasks: []placementv1beta1.AfterStageTask{
+									{
+										Type:     placementv1beta1.AfterStageTaskTypeApproval,
+										WaitTime: &waitTime,
+									},
+									{
+										Type:     placementv1beta1.AfterStageTaskTypeTimedWait,
+										WaitTime: &waitTime,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantUpdateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Status: placementv1beta1.StagedUpdateRunStatus{
+					StagedUpdateStrategySnapshot: &placementv1beta1.StagedUpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								AfterStageTasks: []placementv1beta1.AfterStageTask{
+									{
+										Type: placementv1beta1.AfterStageTaskTypeApproval,
+									},
+									{
+										Type:     placementv1beta1.AfterStageTaskTypeTimedWait,
+										WaitTime: &waitTime,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"should handle multiple stages": {
+			inputUpdateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Status: placementv1beta1.StagedUpdateRunStatus{
+					StagedUpdateStrategySnapshot: &placementv1beta1.StagedUpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								AfterStageTasks: []placementv1beta1.AfterStageTask{
+									{
+										Type:     placementv1beta1.AfterStageTaskTypeApproval,
+										WaitTime: &waitTime,
+									},
+								},
+							},
+							{
+								AfterStageTasks: []placementv1beta1.AfterStageTask{
+									{
+										Type:     placementv1beta1.AfterStageTaskTypeTimedWait,
+										WaitTime: &waitTime,
+									},
+									{
+										Type:     placementv1beta1.AfterStageTaskTypeApproval,
+										WaitTime: &waitTime,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantUpdateRun: &placementv1beta1.ClusterStagedUpdateRun{
+				Status: placementv1beta1.StagedUpdateRunStatus{
+					StagedUpdateStrategySnapshot: &placementv1beta1.StagedUpdateStrategySpec{
+						Stages: []placementv1beta1.StageConfig{
+							{
+								AfterStageTasks: []placementv1beta1.AfterStageTask{
+									{
+										Type: placementv1beta1.AfterStageTaskTypeApproval,
+									},
+								},
+							},
+							{
+								AfterStageTasks: []placementv1beta1.AfterStageTask{
+									{
+										Type:     placementv1beta1.AfterStageTaskTypeTimedWait,
+										WaitTime: &waitTime,
+									},
+									{
+										Type: placementv1beta1.AfterStageTaskTypeApproval,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			removeWaitTimeFromUpdateRunStatus(tt.inputUpdateRun)
+			if diff := cmp.Diff(tt.wantUpdateRun, tt.inputUpdateRun); diff != "" {
+				t.Errorf("removeWaitTimeFromUpdateRunStatus() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
