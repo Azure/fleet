@@ -28,7 +28,7 @@ import (
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
 
-func TestHandleClusterApprovalRequest(t *testing.T) {
+func TestHandleClusterApprovalRequestUpdate(t *testing.T) {
 	tests := map[string]struct {
 		oldObj        client.Object
 		newObj        client.Object
@@ -299,14 +299,156 @@ func TestHandleClusterApprovalRequest(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			queue := &controllertest.Queue{TypedInterface: workqueue.NewTypedRateLimitingQueue[reconcile.Request](
 				workqueue.DefaultTypedItemBasedRateLimiter[reconcile.Request]())}
-			handleClusterApprovalRequest(tt.oldObj, tt.newObj, queue)
+			handleClusterApprovalRequestUpdate(tt.oldObj, tt.newObj, queue)
 			if got := queue.Len() != 0; got != tt.shouldEnqueue {
-				t.Fatalf("handleClusterApprovalRequest() shouldEnqueue test `%s` got %t, want %t", name, got, tt.shouldEnqueue)
+				t.Fatalf("handleClusterApprovalRequest() shouldEnqueue got %t, want %t", got, tt.shouldEnqueue)
 			}
 			if tt.shouldEnqueue {
 				req, _ := queue.TypedInterface.Get()
 				if req.Name != tt.queuedName {
-					t.Fatalf("handleClusterApprovalRequest() queuedName test `%s` got %s, want %s", name, req.Name, tt.queuedName)
+					t.Fatalf("handleClusterApprovalRequest() queuedName got %s, want %s", req.Name, tt.queuedName)
+				}
+			}
+		})
+	}
+}
+
+func TestHandleClusterApprovalRequestDelete(t *testing.T) {
+	tests := map[string]struct {
+		obj           client.Object
+		shouldEnqueue bool
+		queuedName    string
+	}{
+		"it should not enqueue anything if the obj is not a ClusterApprovalRequest": {
+			obj:           &placementv1beta1.ClusterStagedUpdateRun{},
+			shouldEnqueue: false,
+		},
+		"it should not enqueue anything if targetUpdateRun in spec is empty": {
+			obj: &placementv1beta1.ClusterApprovalRequest{
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "",
+				},
+			},
+			shouldEnqueue: false,
+		},
+		"it should enqueue the targetUpdateRun, if ClusterApprovalRequest has neither Approved/ApprovalAccepted status set": {
+			obj: &placementv1beta1.ClusterApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test-update-run",
+				},
+			},
+			shouldEnqueue: true,
+			queuedName:    "test-update-run",
+		},
+		"it should enqueue the targetUpdateRun, if ClusterApprovalRequest has only Approved status set to true": {
+			obj: &placementv1beta1.ClusterApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test-update-run",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			shouldEnqueue: true,
+			queuedName:    "test-update-run",
+		},
+		"it should enqueue the targetUpdateRun, if ClusterApprovalRequest has only Approved status set to false": {
+			obj: &placementv1beta1.ClusterApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test-update-run",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			shouldEnqueue: true,
+			queuedName:    "test-update-run",
+		},
+		"it should not enqueue updateRun, if ClusterApprovalRequest has Approved set to false, ApprovalAccepted status set to true": {
+			obj: &placementv1beta1.ClusterApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test-update-run",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionFalse,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApprovalAccepted),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			shouldEnqueue: false,
+		},
+		"it should not enqueue updateRun, if ClusterApprovalRequest has Approved, ApprovalAccepted status set to true": {
+			obj: &placementv1beta1.ClusterApprovalRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Spec: placementv1beta1.ApprovalRequestSpec{
+					TargetUpdateRun: "test-update-run",
+				},
+				Status: placementv1beta1.ApprovalRequestStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApproved),
+							ObservedGeneration: 1,
+						},
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(placementv1beta1.ApprovalRequestConditionApprovalAccepted),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			shouldEnqueue: false,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			queue := &controllertest.Queue{TypedInterface: workqueue.NewTypedRateLimitingQueue[reconcile.Request](
+				workqueue.DefaultTypedItemBasedRateLimiter[reconcile.Request]())}
+			handleClusterApprovalRequestDelete(tt.obj, queue)
+			if got := queue.Len() != 0; got != tt.shouldEnqueue {
+				t.Fatalf("handleClusterApprovalRequestDelete() shouldEnqueue got %t, want %t", got, tt.shouldEnqueue)
+			}
+			if tt.shouldEnqueue {
+				req, _ := queue.TypedInterface.Get()
+				if req.Name != tt.queuedName {
+					t.Fatalf("handleClusterApprovalRequestDelete() queuedName got %s, want %s", req.Name, tt.queuedName)
 				}
 			}
 		})

@@ -318,6 +318,11 @@ func (r *Reconciler) checkAfterStageTasksStatus(ctx context.Context, updatingSta
 				klog.V(2).InfoS("The after stage wait task has completed", "stage", updatingStage.Name, "clusterStagedUpdateRun", updateRunRef)
 			}
 		case placementv1beta1.AfterStageTaskTypeApproval:
+			afterStageTaskApproved := condition.IsConditionStatusTrue(meta.FindStatusCondition(updatingStageStatus.AfterStageTaskStatus[i].Conditions, string(placementv1beta1.AfterStageTaskConditionApprovalRequestApproved)), updateRun.Generation)
+			if afterStageTaskApproved {
+				// The afterStageTask has been approved.
+				continue
+			}
 			// Check if the approval request has been created.
 			approvalRequest := placementv1beta1.ClusterApprovalRequest{
 				ObjectMeta: metav1.ObjectMeta{
