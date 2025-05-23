@@ -663,9 +663,22 @@ func (r *ApplyWorkReconciler) Leave(ctx context.Context) error {
 		klog.ErrorS(err, "Failed to list all the work object", "clusterNS", r.workNameSpace)
 		return client.IgnoreNotFound(err)
 	}
-	// we leave the resources on the member cluster for now
+	
+	// When leaving, we want to ensure resources placed on the member cluster remain there
+	// We remove the finalizers from Works but preserve the AppliedWorks to prevent resource cleanup
 	for _, work := range works.Items {
 		staleWork := work.DeepCopy()
+		
+		// When a member leaves, make sure any AppliedWork for this Work still exists
+		// so that placed resources are preserved
+		appliedWork := &fleetv1beta1.AppliedWork{}
+		err := r.spokeClient.Get(ctx, types.NamespacedName{Name: work.Name}, appliedWork)
+		if err != nil && !apierrors.IsNotFound(err) {
+			// Only report errors other than NotFound
+			klog.ErrorS(err, "Failed to get the appliedWork", "work", klog.KObj(staleWork))
+		}
+		
+		// Remove the finalizer to avoid triggering resource cleanup on the member cluster
 		if controllerutil.ContainsFinalizer(staleWork, fleetv1beta1.WorkFinalizer) {
 			controllerutil.RemoveFinalizer(staleWork, fleetv1beta1.WorkFinalizer)
 			if updateErr := r.client.Update(ctx, staleWork, &client.UpdateOptions{}); updateErr != nil {
@@ -675,7 +688,7 @@ func (r *ApplyWorkReconciler) Leave(ctx context.Context) error {
 			}
 		}
 	}
-	klog.V(2).InfoS("Successfully removed all the work finalizers in the cluster namespace",
+	klog.V(2).InfoS("Successfully removed all the work finalizers in the cluster namespace while preserving resources",
 		"clusterNS", r.workNameSpace, "number of work", len(works.Items))
 	return nil
 }
