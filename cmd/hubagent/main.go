@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"math"
 	"os"
 	"strings"
@@ -113,7 +114,7 @@ func main() {
 	config := ctrl.GetConfigOrDie()
 	config.QPS, config.Burst = float32(opts.HubQPS), opts.HubBurst
 
-	mgr, err := ctrl.NewManager(config, ctrl.Options{
+	mgrOpts := ctrl.Options{
 		Scheme: scheme,
 		Cache: cache.Options{
 			SyncPeriod: &opts.ResyncPeriod.Duration,
@@ -130,7 +131,11 @@ func main() {
 			Port:    FleetWebhookPort,
 			CertDir: FleetWebhookCertDir,
 		}),
-	})
+	}
+	if opts.EnablePprof {
+		mgrOpts.PprofBindAddress = fmt.Sprintf(":%d", opts.PprofPort)
+	}
+	mgr, err := ctrl.NewManager(config, mgrOpts)
 	if err != nil {
 		klog.ErrorS(err, "unable to start controller manager.")
 		exitWithErrorFunc()
