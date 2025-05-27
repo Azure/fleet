@@ -1301,23 +1301,6 @@ var _ = Describe("webhook tests for ClusterResourcePlacementEviction CREATE oper
 		cleanupCRP(crpName)
 	})
 
-	It("should deny create on CRPE with missing placement name", func() {
-		// Create the CRPE.
-		crpe := &placementv1beta1.ClusterResourcePlacementEviction{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpeName,
-			},
-			Spec: placementv1beta1.PlacementEvictionSpec{
-				PlacementName: crpName,
-			},
-		}
-		By(fmt.Sprintf("expecting denial of CREATE eviction %s", crpeName))
-		err := hubClient.Create(ctx, crpe)
-		var statusErr *k8sErrors.StatusError
-		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRPE call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-		Expect(statusErr.Status().Message).Should(ContainSubstring(fmt.Sprintf("ClusterResourcePlacement.placement.kubernetes-fleet.io \"%s\" not found", crpName)))
-	})
-
 	It("should deny create on CRPE with deleting crp", func() {
 		// Create the CRP with deletion timestamp.
 		crp := &placementv1beta1.ClusterResourcePlacement{

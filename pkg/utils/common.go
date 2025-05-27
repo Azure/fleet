@@ -171,6 +171,12 @@ var (
 		Kind:    placementv1beta1.ClusterResourcePlacementKind,
 	}
 
+	ClusterResourcePlacementDisruptionBudgetMetaGVK = metav1.GroupVersionKind{
+		Group:   placementv1beta1.GroupVersion.Group,
+		Version: placementv1beta1.GroupVersion.Version,
+		Kind:    placementv1beta1.ClusterResourcePlacementDisruptionBudgetKind,
+	}
+
 	ClusterResourcePlacementEvictionMetaGVK = metav1.GroupVersionKind{
 		Group:   placementv1beta1.GroupVersion.Group,
 		Version: placementv1beta1.GroupVersion.Version,

@@ -67,7 +67,7 @@ func (v *clusterResourcePlacementEvictionValidator) Handle(ctx context.Context, 
 	if err := v.client.Get(ctx, types.NamespacedName{Name: crpe.Spec.PlacementName}, &crp); err != nil {
 		if k8serrors.IsNotFound(err) {
 			klog.V(2).InfoS(condition.EvictionInvalidMissingCRPMessage, "clusterResourcePlacementEviction", crpe.Name, "clusterResourcePlacement", crpe.Spec.PlacementName)
-			return admission.Denied(err.Error())
+			return admission.Allowed("Associated clusterResourcePlacement object for clusterResourcePlacementEviction is not found")
 		}
 		return admission.Errored(http.StatusBadRequest, fmt.Errorf("failed to get clusterResourcePlacement %s for clusterResourcePlacementEviction %s: %w", crpe.Spec.PlacementName, crpe.Name, err))
 	}
