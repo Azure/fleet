@@ -122,13 +122,6 @@ func main() {
 
 // installCRDs installs the CRDs from the specified directory based on the mode.
 func installCRDs(ctx context.Context, client dynamic.Interface, crdPath, mode string, wait bool, _ int) error {
-	// CRD GVR
-	crdGVR := schema.GroupVersionResource{
-		Group:    "apiextensions.k8s.io",
-		Version:  "v1",
-		Resource: "customresourcedefinitions",
-	}
-
 	// Set of CRD filenames to install based on mode.
 	crdFilesToInstall := make(map[string]bool)
 
@@ -191,10 +184,16 @@ func installCRDs(ctx context.Context, client dynamic.Interface, crdPath, mode st
 			return fmt.Errorf("failed to unmarshal CRD from %s: %w", path, err)
 		}
 
-		// Apply CRD.
+		// Create CRD.
 		crdName := crd.GetName()
 		klog.V(2).Infof("Creating CRD: %s", crdName)
 
+		// CRD GVR
+		crdGVR := schema.GroupVersionResource{
+			Group:    "apiextensions.k8s.io",
+			Version:  "v1",
+			Resource: "customresourcedefinitions",
+		}
 		_, err = client.Resource(crdGVR).Create(ctx, &crd, metav1.CreateOptions{})
 		if err != nil {
 			if apierrors.IsAlreadyExists(err) {
