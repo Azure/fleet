@@ -670,10 +670,29 @@ func (r *ApplyWorkReconciler) Leave(ctx context.Context) error {
 		staleWork := work.DeepCopy()
 		
 		// When a member leaves, make sure any AppliedWork for this Work still exists
-		// so that placed resources are preserved
+		// so that placed resources are preserved, even if bindings are marked unscheduled by the scheduler
 		appliedWork := &fleetv1beta1.AppliedWork{}
 		err := r.spokeClient.Get(ctx, types.NamespacedName{Name: work.Name}, appliedWork)
-		if err != nil && !apierrors.IsNotFound(err) {
+		if err == nil {
+			// Add an annotation to mark this AppliedWork as preserved during member leave
+			// This helps address a race condition where bindings might be marked as unscheduled 
+			// by the scheduler while we're removing finalizers
+			annotations := appliedWork.GetAnnotations()
+			if annotations == nil {
+				annotations = map[string]string{}
+			}
+			annotations["fleet.azure.com/preserved-on-leave"] = "true"
+			appliedWork.SetAnnotations(annotations)
+			
+			if updateErr := r.spokeClient.Update(ctx, appliedWork, &client.UpdateOptions{}); updateErr != nil {
+				klog.ErrorS(updateErr, "Failed to add preservation annotation to AppliedWork", 
+					"appliedWork", klog.KObj(appliedWork))
+				// Continue with finalizer removal even if this fails
+			} else {
+				klog.V(2).InfoS("Successfully marked AppliedWork for preservation", 
+					"appliedWork", klog.KObj(appliedWork))
+			}
+		} else if !apierrors.IsNotFound(err) {
 			// Only report errors other than NotFound
 			klog.ErrorS(err, "Failed to get the appliedWork", "work", klog.KObj(staleWork))
 		}
