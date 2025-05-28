@@ -164,6 +164,7 @@ install-hub-agent-helm:
     --set image.pullPolicy=Never \
     --set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME) \
     --set image.tag=$(HUB_AGENT_IMAGE_VERSION) \
+	--set crdInstaller.enabled=true \
 	--set crdInstaller.image.repository=$(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME) \
     --set crdInstaller.image.tag=$(TAG) \
     --set crdInstaller.image.pullPolicy=Never \
@@ -198,6 +199,7 @@ install-member-agent-helm: install-hub-agent-helm e2e-v1alpha1-hub-kubeconfig-se
     --set refreshtoken.repository=$(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME) \
     --set refreshtoken.tag=$(REFRESH_TOKEN_IMAGE_VERSION) \
     --set image.pullPolicy=Never --set refreshtoken.pullPolicy=Never \
+	--set crdInstaller.enabled=true \
 	--set crdInstaller.image.repository=$(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME) \
     --set crdInstaller.image.tag=$(TAG) \
     --set crdInstaller.image.pullPolicy=Never \
