@@ -121,6 +121,7 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set image.pullPolicy=Never \
     --set image.repository=$REGISTRY/$HUB_AGENT_IMAGE \
     --set image.tag=$TAG \
+    --set crdInstaller.enabled=true \
     --set crdInstaller.image.repository=$REGISTRY/$CRD_INSTALLER_IMAGE \
     --set crdInstaller.image.tag=$TAG \
     --set crdInstaller.image.pullPolicy=Never \
@@ -187,6 +188,7 @@ do
             --set refreshtoken.tag=$TAG \
             --set image.pullPolicy=Never \
             --set refreshtoken.pullPolicy=Never \
+            --set crdInstaller.enabled=true \
             --set crdInstaller.image.repository=$REGISTRY/$CRD_INSTALLER_IMAGE \
             --set crdInstaller.image.tag=$TAG \
             --set crdInstaller.image.pullPolicy=Never \
@@ -207,6 +209,7 @@ do
             --set refreshtoken.tag=$TAG \
             --set image.pullPolicy=Never \
             --set refreshtoken.pullPolicy=Never \
+            --set crdInstaller.enabled=true \
             --set crdInstaller.image.repository=$REGISTRY/$CRD_INSTALLER_IMAGE \
             --set crdInstaller.image.tag=$TAG \
             --set crdInstaller.image.pullPolicy=Never \

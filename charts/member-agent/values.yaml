@@ -7,7 +7,7 @@ image:
 
 # CRD installer configuration
 crdInstaller:
-  enabled: true
+  enabled: false
   image:
     repository: ghcr.io/azure/fleet/crd-installer
     pullPolicy: Always
