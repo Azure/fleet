@@ -1,8 +1,9 @@
 REGISTRY ?= ghcr.io
 KIND_IMAGE ?= kindest/node:v1.31.0
-ifndef TAG
-	TAG ?= $(shell git rev-parse --short=7 HEAD)
-endif
+# ifndef TAG
+# 	TAG ?= $(shell git rev-parse --short=7 HEAD)
+# endif
+TAG ?= e2e
 HUB_AGENT_IMAGE_VERSION ?= $(TAG)
 MEMBER_AGENT_IMAGE_VERSION ?= $(TAG)
 REFRESH_TOKEN_IMAGE_VERSION ?= $(TAG)
@@ -10,8 +11,8 @@ CRD_INSTALLER_IMAGE_VERSION ?= $(TAG)
 
 HUB_AGENT_IMAGE_NAME ?= hub-agent
 MEMBER_AGENT_IMAGE_NAME ?= member-agent
-REFRESH_TOKEN_IMAGE_NAME := refresh-token
-CRD_INSTALLER_IMAGE_NAME := crd-installer
+REFRESH_TOKEN_IMAGE_NAME ?= refresh-token
+CRD_INSTALLER_IMAGE_NAME ?= crd-installer
 
 KUBECONFIG ?= $(HOME)/.kube/config
 HUB_SERVER_URL ?= https://172.19.0.2:6443
@@ -123,10 +124,13 @@ create-member-kind-cluster:
 	kind create cluster --name $(MEMBER_KIND_CLUSTER_NAME) --image=$(KIND_IMAGE) --config=$(CLUSTER_CONFIG) --kubeconfig=$(KUBECONFIG)
 
 load-hub-docker-image:
-	kind load docker-image  --name $(HUB_KIND_CLUSTER_NAME) $(REGISTRY)/$(HUB_AGENT_IMAGE_NAME):$(HUB_AGENT_IMAGE_VERSION) $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION)
+	kind load docker-image --name $(HUB_KIND_CLUSTER_NAME) $(REGISTRY)/$(HUB_AGENT_IMAGE_NAME):$(HUB_AGENT_IMAGE_VERSION) 
+	kind load docker-image --name $(HUB_KIND_CLUSTER_NAME) $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION)
 
 load-member-docker-image:
-	kind load docker-image  --name $(MEMBER_KIND_CLUSTER_NAME) $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION) $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION)
+	kind load docker-image --name $(MEMBER_KIND_CLUSTER_NAME) $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) 
+	kind load docker-image --name $(MEMBER_KIND_CLUSTER_NAME) $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION) 
+	kind load docker-image --name $(MEMBER_KIND_CLUSTER_NAME) $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION)
 
 ## --------------------------------------
 ## test
@@ -161,6 +165,9 @@ install-hub-agent-helm:
     --set image.pullPolicy=Never \
     --set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME) \
     --set image.tag=$(HUB_AGENT_IMAGE_VERSION) \
+	--set crdInstaller.image.repository=$(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME) \
+    --set crdInstaller.image.tag=$(TAG) \
+    --set crdInstaller.image.pullPolicy=Never \
     --set logVerbosity=5 \
     --set namespace=fleet-system \
     --set enableWebhook=true \
@@ -192,6 +199,9 @@ install-member-agent-helm: install-hub-agent-helm e2e-v1alpha1-hub-kubeconfig-se
     --set refreshtoken.repository=$(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME) \
     --set refreshtoken.tag=$(REFRESH_TOKEN_IMAGE_VERSION) \
     --set image.pullPolicy=Never --set refreshtoken.pullPolicy=Never \
+	--set crdInstaller.image.repository=$(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME) \
+    --set crdInstaller.image.tag=$(TAG) \
+    --set crdInstaller.image.pullPolicy=Never \
     --set config.memberClusterName="kind-$(MEMBER_KIND_CLUSTER_NAME)" \
     --set logVerbosity=5 \
     --set namespace=fleet-system
