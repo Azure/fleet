@@ -29,7 +29,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
@@ -131,10 +130,11 @@ func installCRDs(ctx context.Context, client dynamic.Interface, crdPath, mode st
 	}
 
 	// Set of CRD filenames to install based on mode.
-	crdFilesToInstall := sets.New[string]()
+	crdFilesToInstall := make(map[string]bool)
 
 	// Walk through the CRD directory and collect filenames.
 	if err := filepath.WalkDir(crdPath, func(path string, d fs.DirEntry, err error) error {
+		// Handle errors from WalkDir.
 		if err != nil {
 			return err
 		}
@@ -157,11 +157,11 @@ func installCRDs(ctx context.Context, client dynamic.Interface, crdPath, mode st
 		switch mode {
 		case "hub":
 			if isHubCRD {
-				crdFilesToInstall.Insert(path)
+				crdFilesToInstall[path] = true
 			}
 		case "member":
 			if isMemberCRD {
-				crdFilesToInstall.Insert(path)
+				crdFilesToInstall[path] = true
 			}
 		}
 
@@ -170,11 +170,11 @@ func installCRDs(ctx context.Context, client dynamic.Interface, crdPath, mode st
 		return fmt.Errorf("failed to walk CRD directory: %w", err)
 	}
 
-	if crdFilesToInstall.Len() == 0 {
+	if len(crdFilesToInstall) == 0 {
 		return fmt.Errorf("no CRDs found for mode %s in directory %s", mode, crdPath)
 	}
 
-	klog.Infof("Found %d CRDs to install for mode %s", crdFilesToInstall.Len(), mode)
+	klog.Infof("Found %d CRDs to install for mode %s", len(crdFilesToInstall), mode)
 
 	// Install each CRD.
 	for path := range crdFilesToInstall {
