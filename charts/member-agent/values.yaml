@@ -5,6 +5,18 @@ image:
   pullPolicy: Always
   tag: main
 
+# CRD installer configuration
+crdInstaller:
+  enabled: true
+  image:
+    repository: ghcr.io/azure/fleet/crd-installer
+    pullPolicy: Always
+    tag: main
+  mode: member
+  logVerbosity: 2
+  waitForCRDs: true
+  timeout: 60
+
 logVerbosity: 5
 
 refreshtoken:
