@@ -16,6 +16,19 @@ spec:
     spec:
       restartPolicy: Always
       serviceAccountName: {{ include "member-agent.fullname" . }}-sa
+      initContainers:
+        {{- if .Values.crdInstaller.enabled }}
+        - name: crd-installer
+          image: "{{ .Values.crdInstaller.image.repository }}:{{ .Values.crdInstaller.image.tag }}"
+          imagePullPolicy: {{ .Values.crdInstaller.image.pullPolicy }}
+          args:
+            - --mode={{ .Values.crdInstaller.mode }}
+            - --wait={{ .Values.crdInstaller.waitForCRDs }}
+            - --timeout={{ .Values.crdInstaller.timeout }}
+            - --v={{ .Values.crdInstaller.logVerbosity }}
+            - --enablev1alpha1API={{ .Values.enableV1Alpha1APIs }}
+            - --enablev1beta1API={{ .Values.enableV1Beta1APIs }}
+        {{- end }}
       containers:
         - name: {{ include "member-agent.fullname" . }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
