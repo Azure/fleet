@@ -1,9 +1,8 @@
 REGISTRY ?= ghcr.io
 KIND_IMAGE ?= kindest/node:v1.31.0
-# ifndef TAG
-# 	TAG ?= $(shell git rev-parse --short=7 HEAD)
-# endif
-TAG ?= e2e
+ifndef TAG
+	TAG ?= $(shell git rev-parse --short=7 HEAD)
+endif
 HUB_AGENT_IMAGE_VERSION ?= $(TAG)
 MEMBER_AGENT_IMAGE_VERSION ?= $(TAG)
 REFRESH_TOKEN_IMAGE_VERSION ?= $(TAG)
