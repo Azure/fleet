@@ -6,10 +6,12 @@ endif
 HUB_AGENT_IMAGE_VERSION ?= $(TAG)
 MEMBER_AGENT_IMAGE_VERSION ?= $(TAG)
 REFRESH_TOKEN_IMAGE_VERSION ?= $(TAG)
+CRD_INSTALLER_IMAGE_VERSION ?= $(TAG)
 
 HUB_AGENT_IMAGE_NAME ?= hub-agent
 MEMBER_AGENT_IMAGE_NAME ?= member-agent
 REFRESH_TOKEN_IMAGE_NAME := refresh-token
+CRD_INSTALLER_IMAGE_NAME := crd-installer
 
 KUBECONFIG ?= $(HOME)/.kube/config
 HUB_SERVER_URL ?= https://172.19.0.2:6443
@@ -121,10 +123,10 @@ create-member-kind-cluster:
 	kind create cluster --name $(MEMBER_KIND_CLUSTER_NAME) --image=$(KIND_IMAGE) --config=$(CLUSTER_CONFIG) --kubeconfig=$(KUBECONFIG)
 
 load-hub-docker-image:
-	kind load docker-image  --name $(HUB_KIND_CLUSTER_NAME) $(REGISTRY)/$(HUB_AGENT_IMAGE_NAME):$(HUB_AGENT_IMAGE_VERSION)
+	kind load docker-image  --name $(HUB_KIND_CLUSTER_NAME) $(REGISTRY)/$(HUB_AGENT_IMAGE_NAME):$(HUB_AGENT_IMAGE_VERSION) $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION)
 
 load-member-docker-image:
-	kind load docker-image  --name $(MEMBER_KIND_CLUSTER_NAME) $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION)
+	kind load docker-image  --name $(MEMBER_KIND_CLUSTER_NAME) $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION) $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION)
 
 ## --------------------------------------
 ## test
@@ -250,6 +252,7 @@ generate: $(CONTROLLER_GEN)
 build: generate fmt vet ## Build agent binaries.
 	go build -o bin/hubagent cmd/hubagent/main.go
 	go build -o bin/memberagent cmd/memberagent/main.go
+	go build -o bin/crdinstaller cmd/crdinstaller/main.go
 
 .PHONY: run-hubagent
 run-hubagent: manifests generate fmt vet ## Run a controllers from your host.
@@ -258,6 +261,10 @@ run-hubagent: manifests generate fmt vet ## Run a controllers from your host.
 .PHONY: run-memberagent
 run-memberagent: manifests generate fmt vet ## Run a controllers from your host.
 	go run ./cmd/memberagent/main.go
+
+.PHONY: run-crdinstaller
+run-crdinstaller: manifests generate fmt vet ## Run CRD installer from your host.
+	go run ./cmd/crdinstaller/main.go --mode=$(MODE)
 
 ## --------------------------------------
 ## Images
@@ -270,7 +277,7 @@ BUILDKIT_VERSION ?= v0.18.1
 
 .PHONY: push
 push:
-	$(MAKE) OUTPUT_TYPE="type=registry" docker-build-hub-agent docker-build-member-agent docker-build-refresh-token
+	$(MAKE) OUTPUT_TYPE="type=registry" docker-build-hub-agent docker-build-member-agent docker-build-refresh-token docker-build-crd-installer
 
 # By default, docker buildx create will pull image moby/buildkit:buildx-stable-1 and hit the too many requests error
 .PHONY: docker-buildx-builder
@@ -307,6 +314,15 @@ docker-build-refresh-token: docker-buildx-builder
 		--platform="linux/amd64" \
 		--pull \
 		--tag $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) .
+
+.PHONY: docker-build-crd-installer
+docker-build-crd-installer: docker-buildx-builder
+	docker buildx build \
+		--file docker/crd-installer.Dockerfile \
+		--output=$(OUTPUT_TYPE) \
+		--platform="linux/amd64" \
+		--pull \
+		--tag $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION) .
 
 ## -----------------------------------
 ## Cleanup
