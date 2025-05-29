@@ -161,22 +161,22 @@ integration-test: $(ENVTEST) ## Run tests.
 install-hub-agent-helm:
 	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
 	helm install hub-agent ./charts/hub-agent/ \
-		--set image.pullPolicy=Never \
-		--set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME) \
-		--set image.tag=$(HUB_AGENT_IMAGE_VERSION) \
-		--set crdInstaller.enabled=true \
-		--set crdInstaller.image.repository=$(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME) \
-		--set crdInstaller.image.tag=$(TAG) \
-		--set crdInstaller.image.pullPolicy=Never \
-		--set logVerbosity=5 \
-		--set namespace=fleet-system \
-		--set enableWebhook=true \
-		--set webhookServiceName=fleetwebhook \
-		--set webhookClientConnectionType=service \
-		--set enableV1Alpha1APIs=true \
-		--set enableV1Beta1APIs=false \
-		--set enableClusterInventoryAPI=true \
-		--set logFileMaxSize=1000000
+	--set image.pullPolicy=Never \
+	--set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME) \
+	--set image.tag=$(HUB_AGENT_IMAGE_VERSION) \
+	--set crdInstaller.enabled=true \
+	--set crdInstaller.image.repository=$(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME) \
+	--set crdInstaller.image.tag=$(TAG) \
+	--set crdInstaller.image.pullPolicy=Never \
+	--set logVerbosity=5 \
+	--set namespace=fleet-system \
+	--set enableWebhook=true \
+	--set webhookServiceName=fleetwebhook \
+	--set webhookClientConnectionType=service \
+	--set enableV1Alpha1APIs=true \
+	--set enableV1Beta1APIs=false \
+	--set enableClusterInventoryAPI=true \
+	--set logFileMaxSize=1000000
 
 .PHONY: e2e-v1alpha1-hub-kubeconfig-secret
 e2e-v1alpha1-hub-kubeconfig-secret:
@@ -193,20 +193,20 @@ install-member-agent-helm: install-hub-agent-helm e2e-v1alpha1-hub-kubeconfig-se
 	HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ;\
 	kind export kubeconfig --name $(MEMBER_KIND_CLUSTER_NAME) ;\
 	helm install member-agent ./charts/member-agent/ \
-		--set config.hubURL=$$HUB_SERVER_URL \
-		--set image.repository=$(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME) \
-		--set image.tag=$(MEMBER_AGENT_IMAGE_VERSION) \
-		--set refreshtoken.repository=$(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME) \
-		--set refreshtoken.tag=$(REFRESH_TOKEN_IMAGE_VERSION) \
-		--set image.pullPolicy=Never \
-		--set refreshtoken.pullPolicy=Never \
-		--set crdInstaller.enabled=true \
-		--set crdInstaller.image.repository=$(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME) \
-		--set crdInstaller.image.tag=$(TAG) \
-		--set crdInstaller.image.pullPolicy=Never \
-		--set config.memberClusterName="kind-$(MEMBER_KIND_CLUSTER_NAME)" \
-		--set logVerbosity=5 \
-		--set namespace=fleet-system
+	--set config.hubURL=$$HUB_SERVER_URL \
+	--set image.repository=$(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME) \
+	--set image.tag=$(MEMBER_AGENT_IMAGE_VERSION) \
+	--set refreshtoken.repository=$(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME) \
+	--set refreshtoken.tag=$(REFRESH_TOKEN_IMAGE_VERSION) \
+	--set image.pullPolicy=Never \
+	--set refreshtoken.pullPolicy=Never \
+	--set crdInstaller.enabled=true \
+	--set crdInstaller.image.repository=$(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME) \
+	--set crdInstaller.image.tag=$(TAG) \
+	--set crdInstaller.image.pullPolicy=Never \
+	--set config.memberClusterName="kind-$(MEMBER_KIND_CLUSTER_NAME)" \
+	--set logVerbosity=5 \
+	--set namespace=fleet-system
 	# to make sure member-agent reads the token file.
 	kubectl delete pod --all -n fleet-system
 
