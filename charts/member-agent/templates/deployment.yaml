@@ -34,6 +34,9 @@ spec:
             - -add_dir_header
             - --enable-v1alpha1-apis={{ .Values.enableV1Alpha1APIs }}
             - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
+            - --enable-pprof={{ .Values.enablePprof }}
+            - --pprof-port={{ .Values.pprofPort }}
+            - --hub-pprof-port={{ .Values.hubPprofPort }}
             {{- if .Values.propertyProvider }}
             - --property-provider={{ .Values.propertyProvider }}
             {{- end }}
@@ -75,6 +78,14 @@ spec:
             - containerPort: 8091
               name: memberhealthz
               protocol: TCP
+            {{- if .Values.enablePprof }}
+            - containerPort: {{ .Values.pprofPort }}
+              name: memberpprof
+              protocol: TCP
+            - containerPort: {{ .Values.hubPprofPort }}
+              name: hubpprof
+              protocol: TCP
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz

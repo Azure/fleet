@@ -540,7 +540,7 @@ func createStagedUpdateStrategySucceed(strategyName string) *placementv1beta1.Cl
 						},
 						{
 							Type: placementv1beta1.AfterStageTaskTypeTimedWait,
-							WaitTime: metav1.Duration{
+							WaitTime: &metav1.Duration{
 								Duration: time.Second * 5,
 							},
 						},

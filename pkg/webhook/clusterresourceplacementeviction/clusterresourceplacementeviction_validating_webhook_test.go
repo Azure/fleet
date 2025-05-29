@@ -45,7 +45,7 @@ func TestHandle(t *testing.T) {
 			PlacementName: "test-crp",
 		},
 	}
-	invalidCRPEObjectInvalidPlacementName := &placementv1beta1.ClusterResourcePlacementEviction{
+	validCRPEObjectPlacementNameNotFound := &placementv1beta1.ClusterResourcePlacementEviction{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-crpe",
 		},
@@ -72,7 +72,7 @@ func TestHandle(t *testing.T) {
 
 	validCRPEObjectBytes, err := json.Marshal(validCRPEObject)
 	assert.Nil(t, err)
-	invalidCRPEObjectInvalidPlacementNameBytes, err := json.Marshal(invalidCRPEObjectInvalidPlacementName)
+	validCRPEObjectPlacementNameNotFoundBytes, err := json.Marshal(validCRPEObjectPlacementNameNotFound)
 	assert.Nil(t, err)
 	invalidCRPEObjectCRPDeletingBytes, err := json.Marshal(invalidCRPEObjectCRPDeleting)
 	assert.Nil(t, err)
@@ -156,13 +156,13 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Allowed("clusterResourcePlacementEviction has valid fields"),
 		},
-		"deny CRPE create - invalid CRPE object": {
+		"allow CRPE create - CRPE object with not found CRP": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crpe",
 					Object: runtime.RawExtension{
-						Raw:    invalidCRPEObjectInvalidPlacementNameBytes,
-						Object: invalidCRPEObjectInvalidPlacementName,
+						Raw:    validCRPEObjectPlacementNameNotFoundBytes,
+						Object: validCRPEObjectPlacementNameNotFound,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -176,7 +176,7 @@ func TestHandle(t *testing.T) {
 				decoder: decoder,
 				client:  fakeClient,
 			},
-			wantResponse: admission.Denied("clusterresourceplacements.placement.kubernetes-fleet.io \"does-not-exist\" not found"),
+			wantResponse: admission.Allowed("Associated clusterResourcePlacement object for clusterResourcePlacementEviction is not found"),
 		},
 		"deny CRPE create - CRP is deleting": {
 			req: admission.Request{

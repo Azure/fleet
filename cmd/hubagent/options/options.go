@@ -98,6 +98,10 @@ type Options struct {
 	EnableStagedUpdateRunAPIs bool
 	// EnableEvictionAPIs enables to agents to watch the eviction and placement disruption budget CRs.
 	EnableEvictionAPIs bool
+	// EnablePprof enables the pprof profiling.
+	EnablePprof bool
+	// PprofPort is the port for pprof profiling.
+	PprofPort int
 	// DenyModifyMemberClusterLabels indicates if the member cluster labels cannot be modified by groups (excluding system:masters)
 	DenyModifyMemberClusterLabels bool
 }
@@ -117,6 +121,8 @@ func NewOptions() *Options {
 		EnableV1Alpha1APIs:            false,
 		EnableClusterInventoryAPIs:    true,
 		EnableStagedUpdateRunAPIs:     true,
+		EnablePprof:                   false,
+		PprofPort:                     6065,
 	}
 }
 
@@ -160,6 +166,8 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.DurationVar(&o.ForceDeleteWaitTime.Duration, "force-delete-wait-time", 15*time.Minute, "The duration the hub agent waits before force deleting a member cluster.")
 	flags.BoolVar(&o.EnableStagedUpdateRunAPIs, "enable-staged-update-run-apis", true, "If set, the agents will watch for the ClusterStagedUpdateRun APIs.")
 	flags.BoolVar(&o.EnableEvictionAPIs, "enable-eviction-apis", true, "If set, the agents will watch for the Eviction and PlacementDisruptionBudget APIs.")
+	flags.BoolVar(&o.EnablePprof, "enable-pprof", false, "If set, the pprof profiling is enabled.")
+	flags.IntVar(&o.PprofPort, "pprof-port", 6065, "The port for pprof profiling.")
 	flags.BoolVar(&o.DenyModifyMemberClusterLabels, "deny-modify-member-cluster-labels", false, "If set, users not in the system:masters cannot modify member cluster labels.")
 
 	o.RateLimiterOpts.AddFlags(flags)
