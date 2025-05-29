@@ -197,13 +197,29 @@ func installCRDs(ctx context.Context, client dynamic.Interface, crdPath, mode st
 		_, err = client.Resource(crdGVR).Create(ctx, &crd, metav1.CreateOptions{})
 		if err != nil {
 			if apierrors.IsAlreadyExists(err) {
-				klog.V(2).Infof("CRD %s already exists", crdName)
+				klog.V(2).Infof("CRD %s already exists, updating it", crdName)
+
+				// Get the existing CRD.
+				existingCRD, err := client.Resource(crdGVR).Get(ctx, crdName, metav1.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to get existing CRD %s: %w", crdName, err)
+				}
+
+				// Set the resource version to ensure proper update.
+				crd.SetResourceVersion(existingCRD.GetResourceVersion())
+
+				// Update the CRD.
+				_, err = client.Resource(crdGVR).Update(ctx, &crd, metav1.UpdateOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to update CRD %s: %w", crdName, err)
+				}
+				klog.Infof("Successfully updated CRD: %s", crdName)
 			} else {
 				return fmt.Errorf("failed to create CRD %s: %w", crdName, err)
 			}
+		} else {
+			klog.Infof("Successfully created CRD: %s", crdName)
 		}
-
-		klog.Infof("Successfully installed CRD: %s", crdName)
 	}
 
 	if wait {
