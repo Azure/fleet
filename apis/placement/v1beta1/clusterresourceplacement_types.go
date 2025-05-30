@@ -49,6 +49,10 @@ const (
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementAvailable")].observedGeneration`,name="Available-Gen",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:validation:XValidation:rule="size(self.metadata.name) <= 63",message="metadata.name max length is 63"
+// +kubebuilder:validation:XValidation:rule="oldSelf == null || oldSelf.spec.policy == null || self.spec.policy == null || oldSelf.spec.policy.placementType == self.spec.policy.placementType",message="placement type is immutable"
+// +kubebuilder:validation:XValidation:rule="!self.spec.resourceSelectors.exists(s, s.labelSelector != null && s.name != '')",message="the labelSelector and name fields are mutually exclusive in resource selectors"
+// +kubebuilder:validation:XValidation:rule="oldSelf == null || oldSelf.spec.policy == null || self.spec.policy == null || oldSelf.spec.policy.tolerations == null || self.spec.policy.tolerations == null || oldSelf.spec.policy.tolerations.all(t, self.spec.policy.tolerations.exists(nt, nt == t))",message="tolerations cannot be updated or deleted, only additions are allowed"
 
 // ClusterResourcePlacement is used to select cluster scoped resources, including built-in resources and custom resources,
 // and placement them onto selected member clusters in a fleet.
@@ -1088,6 +1092,10 @@ type DiffedResourcePlacement struct {
 
 // Toleration allows ClusterResourcePlacement to tolerate any taint that matches
 // the triple <key,value,effect> using the matching operator <operator>.
+// +kubebuilder:validation:XValidation:rule="self.key == ” || self.key.matches('^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$')",message="toleration key must be a valid label name"
+// +kubebuilder:validation:XValidation:rule="self.value == ” || self.value.matches('^([a-z0-9]([-a-z0-9_.]*[a-z0-9])?)?$')",message="toleration value must be a valid label value"
+// +kubebuilder:validation:XValidation:rule="self.operator != 'Exists' || self.value == ”",message="toleration value needs to be empty when operator is Exists"
+// +kubebuilder:validation:XValidation:rule="self.operator != 'Equal' || self.key != ”",message="toleration key cannot be empty when operator is Equal"
 type Toleration struct {
 	// Key is the taint key that the toleration applies to. Empty means match all taint keys.
 	// If the key is empty, operator must be Exists; this combination means to match all values and all keys.
