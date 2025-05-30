@@ -11,8 +11,6 @@ RUN go mod download
 
 # Copy the go source
 COPY cmd/crdinstaller/ cmd/crdinstaller/
-COPY apis/ apis/
-COPY pkg/ pkg/
 
 ARG TARGETARCH
 
@@ -20,12 +18,11 @@ ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GO111MODULE=on go build -o crdinstaller cmd/crdinstaller/main.go
 
 # Use distroless as minimal base image to package the crdinstaller binary
-# Include kubectl for accessing the Kubernetes API
 FROM gcr.io/distroless/static:nonroot
-WORKDIR /workspace
-COPY --from=builder /workspace/crdinstaller /usr/local/bin/crdinstaller
+WORKDIR /
+COPY --from=builder /workspace/crdinstaller .
 COPY config/crd/bases/ /workspace/config/crd/bases/
 
 USER 65532:65532
 
-ENTRYPOINT ["/usr/local/bin/crdinstaller"]
+ENTRYPOINT ["/crdinstaller"]
