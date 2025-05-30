@@ -21,7 +21,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GO111MODULE=on go build -o crd
 
 # Use distroless as minimal base image to package the crdinstaller binary
 # Include kubectl for accessing the Kubernetes API
-FROM bitnami/kubectl:latest
+FROM gcr.io/distroless/static:nonroot
 WORKDIR /workspace
 COPY --from=builder /workspace/crdinstaller /usr/local/bin/crdinstaller
 COPY config/crd/bases/ /workspace/config/crd/bases/
