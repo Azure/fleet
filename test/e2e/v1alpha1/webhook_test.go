@@ -558,6 +558,9 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "memberclusters.fleet.azure.com"}, &crd)).Should(Succeed())
 				By("update labels in CRD")
 				labels := crd.GetLabels()
+				if labels == nil {
+					labels = make(map[string]string)
+				}
 				labels[testKey] = testValue
 				crd.SetLabels(labels)
 				By("expecting denial of operation UPDATE of CRD")
@@ -592,6 +595,9 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 
 				By("update labels in CRD")
 				labels := crd.GetLabels()
+				if labels == nil {
+					labels = make(map[string]string)
+				}
 				labels[testKey] = testValue
 				crd.SetLabels(labels)
 
