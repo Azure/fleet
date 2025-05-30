@@ -49,8 +49,6 @@ import (
 )
 
 const (
-	// timeout is the maximum wait time for Eventually
-	timeout = time.Second * 10
 	// interval is the time to wait between retries for Eventually and Consistently
 	interval = time.Millisecond * 250
 	// duration is the time to duration to check for Consistently
@@ -65,6 +63,11 @@ const (
 
 	// testResourceSnapshotIndex is the index of the test resource snapshot
 	testResourceSnapshotIndex = "0"
+)
+
+var (
+	// timeout is the maximum wait time for Eventually
+	timeout = time.Second * 10
 )
 
 var (
@@ -466,7 +469,7 @@ func generateTestClusterStagedUpdateStrategy() *placementv1beta1.ClusterStagedUp
 					AfterStageTasks: []placementv1beta1.AfterStageTask{
 						{
 							Type: placementv1beta1.AfterStageTaskTypeTimedWait,
-							WaitTime: metav1.Duration{
+							WaitTime: &metav1.Duration{
 								Duration: time.Second * 4,
 							},
 						},
@@ -490,7 +493,7 @@ func generateTestClusterStagedUpdateStrategy() *placementv1beta1.ClusterStagedUp
 						},
 						{
 							Type: placementv1beta1.AfterStageTaskTypeTimedWait,
-							WaitTime: metav1.Duration{
+							WaitTime: &metav1.Duration{
 								Duration: time.Second * 4,
 							},
 						},

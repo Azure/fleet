@@ -1814,6 +1814,13 @@ spec:
                             type: object
                           maxItems: 2
                           type: array
+                          x-kubernetes-validations:
+                          - message: AfterStageTaskType is Approval, waitTime is not
+                              allowed
+                            rule: '!self.exists(e, e.type == ''Approval'' && has(e.waitTime))'
+                          - message: AfterStageTaskType is TimedWait, waitTime is
+                              required
+                            rule: '!self.exists(e, e.type == ''TimedWait'' && !has(e.waitTime))'
                         labelSelector:
                           description: |-
                             LabelSelector is a label query over all the joined member clusters. Clusters matching the query are selected

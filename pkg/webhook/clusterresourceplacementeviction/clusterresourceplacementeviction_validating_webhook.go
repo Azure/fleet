@@ -53,7 +53,7 @@ func Add(mgr manager.Manager) error {
 	return nil
 }
 
-// Handle clusterResourcePlacementEvictionValidator checks to see if resource override is valid.
+// Handle clusterResourcePlacementEvictionValidator checks to see if the eviction is valid.
 func (v *clusterResourcePlacementEvictionValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	var crpe fleetv1beta1.ClusterResourcePlacementEviction
 	klog.V(2).InfoS("Validating webhook handling cluster resource placement eviction", "operation", req.Operation, "clusterResourcePlacementEviction", req.Name)
@@ -67,7 +67,7 @@ func (v *clusterResourcePlacementEvictionValidator) Handle(ctx context.Context, 
 	if err := v.client.Get(ctx, types.NamespacedName{Name: crpe.Spec.PlacementName}, &crp); err != nil {
 		if k8serrors.IsNotFound(err) {
 			klog.V(2).InfoS(condition.EvictionInvalidMissingCRPMessage, "clusterResourcePlacementEviction", crpe.Name, "clusterResourcePlacement", crpe.Spec.PlacementName)
-			return admission.Denied(err.Error())
+			return admission.Allowed("Associated clusterResourcePlacement object for clusterResourcePlacementEviction is not found")
 		}
 		return admission.Errored(http.StatusBadRequest, fmt.Errorf("failed to get clusterResourcePlacement %s for clusterResourcePlacementEviction %s: %w", crpe.Spec.PlacementName, crpe.Name, err))
 	}

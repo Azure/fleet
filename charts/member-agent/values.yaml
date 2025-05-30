@@ -61,3 +61,7 @@ useCAAuth: false
 
 enableV1Alpha1APIs: true
 enableV1Beta1APIs: false
+
+enablePprof: true
+pprofPort: 6065
+hubPprofPort: 6066

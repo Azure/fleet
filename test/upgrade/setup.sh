@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Note: this script is used to set up the before upgrade environment for the
+# version compatibility test **in the current commit**.
+
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -24,26 +27,6 @@ export OUTPUT_TYPE="${OUTPUT_TYPE:-type=docker}"
 export HUB_AGENT_IMAGE="${HUB_AGENT_IMAGE:-hub-agent}"
 export MEMBER_AGENT_IMAGE="${MEMBER_AGENT_IMAGE:-member-agent}"
 export REFRESH_TOKEN_IMAGE="${REFRESH_TOKEN_IMAGE:-refresh-token}"
-export GIT_TAG="${GIT_TAG:-}"
-
-PREVIOUS_BRANCH=""
-PREVIOUS_COMMIT=""
-if [ -z "${GIT_TAG}" ]; then
-    echo "No tag is specified; use the latest tag."
-
-    PREVIOUS_BRANCH=$(git branch --show-current)
-    PREVIOUS_COMMIT=$(git rev-parse HEAD)
-    echo "Current at branch $PREVIOUS_BRANCH, commit $PREVIOUS_COMMIT."
-
-    echo "Fetch all tags..."
-    git fetch --all
-    GIT_TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
-    git checkout $GIT_TAG
-    echo "Checked out source code at $GIT_TAG."
-
-    echo "Switch back to the root directory to avoid consistency issues."
-    cd ../..
-fi
 
 # Build the Fleet agent images.
 echo "Building and the Fleet agent images..."
@@ -51,16 +34,6 @@ echo "Building and the Fleet agent images..."
 TAG=$IMAGE_TAG make docker-build-hub-agent
 TAG=$IMAGE_TAG make docker-build-member-agent
 TAG=$IMAGE_TAG make docker-build-refresh-token
-
-# Restore to the previous branch. This must be done immediately after the image building to avoid
-# consistency issues.
-if [ -n "$PREVIOUS_COMMIT" ]; then
-    git checkout $PREVIOUS_COMMIT
-    echo "Checked out source code at $PREVIOUS_COMMIT."
-fi
-
-echo "Switch back to the test/upgrade directory to avoid consistency issues."
-cd test/upgrade
 
 # Create the kind clusters.
 echo "Creating the kind clusters..."
@@ -154,3 +127,5 @@ do
         --set enableV1Alpha1APIs=false \
         --set enableV1Beta1APIs=true
 done
+
+echo "Setup for the before upgrade environment has been completed."
