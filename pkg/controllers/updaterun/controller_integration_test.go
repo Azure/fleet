@@ -368,7 +368,7 @@ func generateTestClusterResourcePlacement() *placementv1beta1.ClusterResourcePla
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testCRPName,
 		},
-		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+		Spec: placementv1beta1.PlacementSpec{
 			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 				{
 					Group:   "",

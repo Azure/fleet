@@ -491,7 +491,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickFixedPlacementType,
 						ClusterNames:  []string{"test-cluster-1"},
@@ -537,7 +537,7 @@ func buildTestPickNCRP(crpName string, clusterCount int32) placementv1beta1.Clus
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crpName,
 		},
-		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+		Spec: placementv1beta1.PlacementSpec{
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType:    placementv1beta1.PickNPlacementType,
 				NumberOfClusters: ptr.To(clusterCount),

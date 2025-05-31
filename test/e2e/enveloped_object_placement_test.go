@@ -78,7 +78,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 					// the behavior of the controllers.
 					Finalizers: []string{customDeletionBlockerFinalizer},
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 						{
 							Group:   "",
@@ -247,7 +247,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 					// Add a custom finalizer; this would allow us to better observe the behavior of the controllers.
 					Finalizers: []string{customDeletionBlockerFinalizer},
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: workResourceSelector(),
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
@@ -345,7 +345,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 					Namespace: workNamespace.Name,
 				},
 			}
-			wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+			wantStatus := placementv1beta1.PlacementStatus{
 				Conditions:            crpNotAvailableConditions(1, false),
 				PlacementStatuses:     PlacementStatuses,
 				SelectedResources:     wantSelectedResources,
@@ -440,7 +440,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 					// the behavior of the controllers.
 					Finalizers: []string{customDeletionBlockerFinalizer},
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickFixedPlacementType,
@@ -466,7 +466,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 					return err
 				}
 
-				wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+				wantStatus := placementv1beta1.PlacementStatus{
 					Conditions: crpWorkSynchronizedFailedConditions(crp.Generation, false),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
@@ -559,7 +559,7 @@ var _ = Describe("Process objects with generate name", Ordered, func() {
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(),
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType: placementv1beta1.PickFixedPlacementType,
@@ -585,7 +585,7 @@ var _ = Describe("Process objects with generate name", Ordered, func() {
 				return err
 			}
 
-			wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+			wantStatus := placementv1beta1.PlacementStatus{
 				Conditions: crpAppliedFailedConditions(crp.Generation),
 				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 					{

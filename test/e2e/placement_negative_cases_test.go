@@ -96,7 +96,7 @@ var _ = Describe("handling errors and failures gracefully", func() {
 					// the behavior of the controllers.
 					Finalizers: []string{customDeletionBlockerFinalizer},
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickFixedPlacementType,
@@ -122,7 +122,7 @@ var _ = Describe("handling errors and failures gracefully", func() {
 					return err
 				}
 
-				wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+				wantStatus := placementv1beta1.PlacementStatus{
 					Conditions: crpAppliedFailedConditions(crp.Generation),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{

@@ -68,21 +68,21 @@ type ClusterResourcePlacement struct {
 
 	// The desired state of ClusterResourcePlacement.
 	// +kubebuilder:validation:Required
-	Spec ClusterResourcePlacementSpec `json:"spec"`
+	Spec PlacementSpec `json:"spec"`
 
 	// The observed status of ClusterResourcePlacement.
 	// +kubebuilder:validation:Optional
-	Status ClusterResourcePlacementStatus `json:"status,omitempty"`
+	Status PlacementStatus `json:"status,omitempty"`
 }
 
-// ClusterResourcePlacementSpec defines the desired state of ClusterResourcePlacement.
-type ClusterResourcePlacementSpec struct {
-	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:MaxItems=100
+// PlacementSpec defines the desired state of ClusterResourcePlacement.
+type PlacementSpec struct {
 
 	// ResourceSelectors is an array of selectors used to select cluster scoped resources. The selectors are `ORed`.
 	// You can have 1-100 selectors.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=100
 	ResourceSelectors []ClusterResourceSelector `json:"resourceSelectors"`
 
 	// Policy defines how to select member clusters to place the selected resources.
@@ -105,8 +105,8 @@ type ClusterResourcePlacementSpec struct {
 	RevisionHistoryLimit *int32 `json:"revisionHistoryLimit,omitempty"`
 }
 
+// TODO: rename this to ResourceSelectorTerm
 // ClusterResourceSelector is used to select cluster scoped resources as the target resources to be placed.
-// If a namespace is selected, ALL the resources under the namespace are selected automatically.
 // All the fields are `ANDed`. In other words, a resource must match all the fields to be selected.
 type ClusterResourceSelector struct {
 	// Group name of the cluster-scoped resource.
@@ -810,8 +810,8 @@ type RollingUpdateConfig struct {
 	UnavailablePeriodSeconds *int `json:"unavailablePeriodSeconds,omitempty"`
 }
 
-// ClusterResourcePlacementStatus defines the observed state of the ClusterResourcePlacement object.
-type ClusterResourcePlacementStatus struct {
+// PlacementStatus defines the observed state of the ClusterResourcePlacement object.
+type PlacementStatus struct {
 	// SelectedResources contains a list of resources selected by ResourceSelectors.
 	// This field is only meaningful if the `ObservedResourceIndex` is not empty.
 	// +kubebuilder:validation:Optional
@@ -1295,6 +1295,67 @@ func (m *ClusterResourcePlacement) GetCondition(conditionType string) *metav1.Co
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
 
+const (
+	// PlacementCleanupFinalizer is a finalizer added by the CRP controller to all CRPs, to make sure
+	// that the CRP controller can react to CRP deletions if necessary.
+	PlacementCleanupFinalizer = fleetPrefix + "rp-cleanup"
+)
+
+// +genclient
+// +genclient:Namespaced
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:scope="Namespaced",shortName=rp,categories={fleet,fleet-placement}
+// +kubebuilder:subresource:status
+// +kubebuilder:storageversion
+// +kubebuilder:printcolumn:JSONPath=`.metadata.generation`,name="Gen",type=string
+// +kubebuilder:printcolumn:JSONPath=`.spec.policy.placementType`,name="Type",priority=1,type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ResourcePlacementScheduled")].status`,name="Scheduled",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ResourcePlacementScheduled")].observedGeneration`,name="Scheduled-Gen",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ResourcePlacementWorkSynchronized")].status`,name="Work-Synchronized",priority=1,type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ResourcePlacementWorkSynchronized")].observedGeneration`,name="Work-Synchronized-Gen",priority=1,type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ResourcePlacementAvailable")].status`,name="Available",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ResourcePlacementAvailable")].observedGeneration`,name="Available-Gen",type=string
+// +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// ResourcePlacement is used to select namespace scoped resources, including built-in resources and custom resources,
+// and placement them onto selected member clusters in a fleet.
+// `SchedulingPolicySnapshot` and `ResourceSnapshot` objects are created in the same namespace when there are changes in the
+// system to keep the history of the changes affecting a `ResourcePlacement`. We will also create `ResourceBinding` objects in the same namespace.
+type ResourcePlacement struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// The desired state of ResourcePlacement.
+	// +kubebuilder:validation:Required
+	Spec PlacementSpec `json:"spec"`
+
+	// The observed status of ResourcePlacement.
+	// +kubebuilder:validation:Optional
+	Status PlacementStatus `json:"status,omitempty"`
+}
+
+// ResourcePlacementList contains a list of ResourcePlacement.
+// +kubebuilder:resource:scope="Namespaced"
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type ResourcePlacementList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []ResourcePlacement `json:"items"`
+}
+
+// SetConditions sets the conditions of the ResourcePlacement.
+func (m *ResourcePlacement) SetConditions(conditions ...metav1.Condition) {
+	for _, c := range conditions {
+		meta.SetStatusCondition(&m.Status.Conditions, c)
+	}
+}
+
+// GetCondition returns the condition of the ResourcePlacement objects.
+func (m *ResourcePlacement) GetCondition(conditionType string) *metav1.Condition {
+	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
+}
+
 func init() {
-	SchemeBuilder.Register(&ClusterResourcePlacement{}, &ClusterResourcePlacementList{})
+	SchemeBuilder.Register(&ClusterResourcePlacement{}, &ClusterResourcePlacementList{}, &ResourcePlacement{}, &ResourcePlacementList{})
 }

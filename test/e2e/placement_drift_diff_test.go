@@ -178,8 +178,8 @@ var _ = Describe("take over existing resources", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
@@ -347,8 +347,8 @@ var _ = Describe("take over existing resources", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
@@ -549,8 +549,8 @@ var _ = Describe("detect drifts on placed resources", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpRolloutCompletedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
@@ -685,8 +685,8 @@ var _ = Describe("detect drifts on placed resources", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
@@ -866,8 +866,8 @@ var _ = Describe("detect drifts on placed resources", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
@@ -1068,8 +1068,8 @@ var _ = Describe("report diff mode", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpDiffReportedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
@@ -1274,8 +1274,8 @@ var _ = Describe("report diff mode", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpDiffReportedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
@@ -1423,7 +1423,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(),
 				Strategy: placementv1beta1.RolloutStrategy{
 					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
@@ -1475,8 +1475,8 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 	})
 
 	It("should update CRP status as expected", func() {
-		buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-			return &placementv1beta1.ClusterResourcePlacementStatus{
+		buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+			return &placementv1beta1.PlacementStatus{
 				Conditions: crpAppliedFailedConditions(crpGeneration),
 				SelectedResources: []placementv1beta1.ResourceIdentifier{
 					{
@@ -1719,8 +1719,8 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 		var refreshedLastDeployDriftObservedTimeOnCluster2 metav1.Time
 		var refreshedFirstDeployDriftObservedTimeOnCluster2 metav1.Time
 
-		buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-			return &placementv1beta1.ClusterResourcePlacementStatus{
+		buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+			return &placementv1beta1.PlacementStatus{
 				Conditions: crpAppliedFailedConditions(crpGeneration),
 				SelectedResources: []placementv1beta1.ResourceIdentifier{
 					{
@@ -1953,8 +1953,8 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 	})
 
 	It("should update CRP status as expected", func() {
-		buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-			return &placementv1beta1.ClusterResourcePlacementStatus{
+		buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+			return &placementv1beta1.PlacementStatus{
 				Conditions: crpAppliedFailedConditions(crpGeneration),
 				SelectedResources: []placementv1beta1.ResourceIdentifier{
 					{
@@ -2103,8 +2103,8 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 	})
 
 	It("should update CRP status as expected", func() {
-		buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-			return &placementv1beta1.ClusterResourcePlacementStatus{
+		buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+			return &placementv1beta1.PlacementStatus{
 				Conditions: crpRolloutCompletedConditions(crpGeneration, false),
 				SelectedResources: []placementv1beta1.ResourceIdentifier{
 					{

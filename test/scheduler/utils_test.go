@@ -284,7 +284,7 @@ func createPickFixedCRPWithPolicySnapshot(crpName string, targetClusters []strin
 			Name:       crpName,
 			Finalizers: []string{customDeletionBlockerFinalizer},
 		},
-		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+		Spec: placementv1beta1.PlacementSpec{
 			ResourceSelectors: defaultResourceSelectors,
 			Policy:            policy,
 		},
@@ -320,7 +320,7 @@ func createNilSchedulingPolicyCRPWithPolicySnapshot(crpName string, policySnapsh
 			Name:       crpName,
 			Finalizers: []string{customDeletionBlockerFinalizer},
 		},
-		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+		Spec: placementv1beta1.PlacementSpec{
 			ResourceSelectors: defaultResourceSelectors,
 			Policy:            policy,
 		},
@@ -493,7 +493,7 @@ func createPickAllCRPWithPolicySnapshot(crpName string, policySnapshotName strin
 			Name:       crpName,
 			Finalizers: []string{customDeletionBlockerFinalizer},
 		},
-		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+		Spec: placementv1beta1.PlacementSpec{
 			ResourceSelectors: defaultResourceSelectors,
 			Policy:            policy,
 		},
@@ -567,7 +567,7 @@ func createPickNCRPWithPolicySnapshot(crpName string, policySnapshotName string,
 			Name:       crpName,
 			Finalizers: []string{customDeletionBlockerFinalizer},
 		},
-		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+		Spec: placementv1beta1.PlacementSpec{
 			ResourceSelectors: defaultResourceSelectors,
 			Policy:            policy,
 		},

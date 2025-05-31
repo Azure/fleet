@@ -34,10 +34,10 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 	}{
 		"ClusterResourcePlacement with nil Spec": {
 			obj: &fleetv1beta1.ClusterResourcePlacement{
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{},
+				Spec: fleetv1beta1.PlacementSpec{},
 			},
 			wantObj: &fleetv1beta1.ClusterResourcePlacement{
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+				Spec: fleetv1beta1.PlacementSpec{
 					Policy: &fleetv1beta1.PlacementPolicy{
 						PlacementType: fleetv1beta1.PickAllPlacementType,
 					},
@@ -61,7 +61,7 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 		},
 		"ClusterResourcePlacement with nil TopologySpreadConstraints & Tolerations fields": {
 			obj: &fleetv1beta1.ClusterResourcePlacement{
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+				Spec: fleetv1beta1.PlacementSpec{
 					Policy: &fleetv1beta1.PlacementPolicy{
 						TopologySpreadConstraints: []fleetv1beta1.TopologySpreadConstraint{
 							{
@@ -93,7 +93,7 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 				},
 			},
 			wantObj: &fleetv1beta1.ClusterResourcePlacement{
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+				Spec: fleetv1beta1.PlacementSpec{
 					Policy: &fleetv1beta1.PlacementPolicy{
 						TopologySpreadConstraints: []fleetv1beta1.TopologySpreadConstraint{
 							{
@@ -130,7 +130,7 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 		},
 		"ClusterResourcePlacement with serverside apply config not set": {
 			obj: &fleetv1beta1.ClusterResourcePlacement{
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+				Spec: fleetv1beta1.PlacementSpec{
 					Strategy: fleetv1beta1.RolloutStrategy{
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 							Type: fleetv1beta1.ApplyStrategyTypeServerSideApply,
@@ -139,7 +139,7 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 				},
 			},
 			wantObj: &fleetv1beta1.ClusterResourcePlacement{
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+				Spec: fleetv1beta1.PlacementSpec{
 					Policy: &fleetv1beta1.PlacementPolicy{
 						PlacementType: fleetv1beta1.PickAllPlacementType,
 					},
