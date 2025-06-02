@@ -33,6 +33,11 @@ const (
 	// unknown.
 	RolloutStartedUnknownReason = "RolloutStartedUnknown"
 
+	// RolloutControlledByExternalControllerReason is the reason string of the placement condition if
+	// the placement rollout strategy type is set to External, and either rollout not started at all or
+	// clusters observes different resource snapshot versions. This is a special case for unknown rolloutStarted condition.
+	RolloutControlledByExternalControllerReason = "RolloutControlledByExternalController"
+
 	// RolloutNotStartedYetReason is the reason string of placement condition if the rollout has not started yet.
 	RolloutNotStartedYetReason = "RolloutNotStartedYet"
 
@@ -392,7 +397,7 @@ func (c ResourceCondition) UnknownResourceConditionPerCluster(generation int64) 
 			Status:             metav1.ConditionUnknown,
 			Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
 			Reason:             RolloutStartedUnknownReason,
-			Message:            "In the process of deciding whether to roll out the latest resources or not",
+			Message:            "In the process of deciding whether to roll out some version of the resources or not",
 			ObservedGeneration: generation,
 		},
 		{

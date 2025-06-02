@@ -26,6 +26,7 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -360,6 +361,91 @@ func FetchAllClusterResourceSnapshots(ctx context.Context, k8Client client.Clien
 		return nil, NewExpectedBehaviorError(misMatchErr)
 	}
 	return resourceSnapshots, nil
+}
+
+// CollectResourceIdentifiersFromClusterResourceSnapshot collects the resource identifiers selected by a series of clusterResourceSnapshot.
+// Given the index of the clusterResourceSnapshot, it collects resources from all of the master snapshots as well as
+func CollectResourceIdentifiersFromClusterResourceSnapshot(
+	ctx context.Context,
+	k8Client client.Client,
+	crpName string,
+	resourceSnapshotIndex string,
+) ([]fleetv1beta1.ResourceIdentifier, error) {
+	labelMatcher := client.MatchingLabels{
+		fleetv1beta1.CRPTrackingLabel:   crpName,
+		fleetv1beta1.ResourceIndexLabel: resourceSnapshotIndex,
+	}
+	resourceSnapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
+	if err := k8Client.List(ctx, resourceSnapshotList, labelMatcher); err != nil {
+		klog.ErrorS(err, "Failed to list the clusterResourceSnapshots associated with the clusterResourcePlacement",
+			"resourceSnapshotIndex", resourceSnapshotIndex, "clusterResourcePlacement", crpName)
+		return nil, NewAPIServerError(true, err)
+	}
+
+	if len(resourceSnapshotList.Items) == 0 {
+		klog.V(2).InfoS("No clusterResourceSnapshots found for the clusterResourcePlacement when collecting resource identifiers",
+			"resourceSnapshotIndex", resourceSnapshotIndex, "clusterResourcePlacement", crpName)
+		return nil, nil
+	}
+
+	// Look for the master clusterResourceSnapshot.
+	var masterResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot
+	for i, resourceSnapshot := range resourceSnapshotList.Items {
+		// only master has this annotation
+		if len(resourceSnapshot.Annotations[fleetv1beta1.ResourceGroupHashAnnotation]) != 0 {
+			masterResourceSnapshot = &resourceSnapshotList.Items[i]
+			break
+		}
+	}
+	if masterResourceSnapshot == nil {
+		err := NewUnexpectedBehaviorError(fmt.Errorf("no master clusterResourceSnapshot found for clusterResourcePlacement `%s`", crpName))
+		klog.ErrorS(err, "Found clusterResourceSnapshots without master snapshot", "clusterResourcePlacement", crpName, "resourceSnapshotIndex", resourceSnapshotIndex, "resourceSnapshotCount", len(resourceSnapshotList.Items))
+		return nil, err
+	}
+
+	allResourceSnapshots, err := FetchAllClusterResourceSnapshots(ctx, k8Client, crpName, masterResourceSnapshot)
+	if err != nil {
+		klog.ErrorS(err, "Failed to fetch all the clusterResourceSnapshots", "resourceSnapshotIndex", resourceSnapshotIndex, "clusterResourcePlacement", crpName)
+		return nil, err
+	}
+
+	selectedResources := make([]fleetv1beta1.ResourceIdentifier, 0)
+	retrieveResourceIdentifierFromSnapshot := func(snapshot *fleetv1beta1.ClusterResourceSnapshot) error {
+		for _, res := range snapshot.Spec.SelectedResources {
+			var uResource unstructured.Unstructured
+			if err := uResource.UnmarshalJSON(res.Raw); err != nil {
+				klog.ErrorS(err, "Resource has invalid content", "snapshot", klog.KObj(snapshot), "selectedResource", res.Raw)
+				return NewUnexpectedBehaviorError(err)
+			}
+			identifier := fleetv1beta1.ResourceIdentifier{
+				Group:     uResource.GetObjectKind().GroupVersionKind().Group,
+				Version:   uResource.GetObjectKind().GroupVersionKind().Version,
+				Kind:      uResource.GetObjectKind().GroupVersionKind().Kind,
+				Name:      uResource.GetName(),
+				Namespace: uResource.GetNamespace(),
+			}
+			selectedResources = append(selectedResources, identifier)
+		}
+		return nil
+	}
+
+	// Retrieve the resource identitifers from snapshots following the order to preserve the order of the resource identifiers.
+	if err := retrieveResourceIdentifierFromSnapshot(masterResourceSnapshot); err != nil {
+		return nil, err
+	}
+	for i := range len(allResourceSnapshots) - 1 {
+		snapshotName := fmt.Sprintf("%s-%s-%d", crpName, resourceSnapshotIndex, i)
+		if resourceSnapshot, ok := allResourceSnapshots[snapshotName]; ok {
+			if err := retrieveResourceIdentifierFromSnapshot(resourceSnapshot); err != nil {
+				return nil, err
+			}
+		} else {
+			err := NewUnexpectedBehaviorError(fmt.Errorf("failed to find clusterResourceSnapshot with name %s", snapshotName))
+			klog.ErrorS(err, "Failed to retrieve resource identifiers from clusterResourceSnapshots", "resourceSnapshotIndex", resourceSnapshotIndex, "clusterResourcePlacement", crpName)
+			return nil, err
+		}
+	}
+	return selectedResources, nil
 }
 
 // MemberController configures how to join or leave the fleet as a member.

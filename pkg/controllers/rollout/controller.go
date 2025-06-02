@@ -89,6 +89,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		return runtime.Result{}, nil
 	}
 
+	// fill out all the default values for CRP just in case the mutation webhook is not enabled.
+	defaulter.SetDefaultsClusterResourcePlacement(&crp)
+
 	// check that it's actually rollingUpdate strategy
 	// TODO: support the rollout all at once type of RolloutStrategy
 	if crp.Spec.Strategy.Type != fleetv1beta1.RollingUpdateRolloutStrategyType {
@@ -158,8 +161,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	}
 	klog.V(2).InfoS("Found the latest resourceSnapshot for the clusterResourcePlacement", "clusterResourcePlacement", crpName, "latestResourceSnapshot", klog.KObj(latestResourceSnapshot))
 
-	// fill out all the default values for CRP just in case the mutation webhook is not enabled.
-	defaulter.SetDefaultsClusterResourcePlacement(&crp)
 	// Note: there is a corner case that an override is in-between snapshots (the old one is marked as not the latest while the new one is not created yet)
 	// This will result in one of the override is removed by the rollout controller so the first instance of the updated cluster can experience
 	// a complete removal of the override effect following by applying the new override effect.
@@ -1097,7 +1098,7 @@ func handleCRP(newCRPObj, oldCRPObj client.Object, q workqueue.TypedRateLimiting
 
 	// Check if the rollout strategy type has been updated.
 	if newCRP.Spec.Strategy.Type != oldCRP.Spec.Strategy.Type {
-		klog.V(2).InfoS("Detected an update to the rollout strategy type on the CRP", "clusterResourcePlacement", klog.KObj(newCRP))
+		klog.V(2).InfoS("Detected an update to the rollout strategy type on the CRP", "clusterResourcePlacement", klog.KObj(newCRP), "newType", newCRP.Spec.Strategy.Type, "oldType", oldCRP.Spec.Strategy.Type)
 		q.Add(reconcile.Request{
 			NamespacedName: types.NamespacedName{Name: newCRP.GetName()},
 		})

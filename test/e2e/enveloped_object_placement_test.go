@@ -278,7 +278,8 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 			PlacementStatuses := make([]placementv1beta1.ResourcePlacementStatus, 0)
 			for _, memberClusterName := range allMemberClusterNames {
 				unavailableResourcePlacementStatus := placementv1beta1.ResourcePlacementStatus{
-					ClusterName: memberClusterName,
+					ClusterName:           memberClusterName,
+					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
 							Type:               string(placementv1beta1.ResourceScheduledConditionType),
@@ -470,8 +471,9 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 					Conditions: crpWorkSynchronizedFailedConditions(crp.Generation, false),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: memberCluster1EastProdName,
-							Conditions:  resourcePlacementWorkSynchronizedFailedConditions(crp.Generation, false),
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementWorkSynchronizedFailedConditions(crp.Generation, false),
 						},
 					},
 					SelectedResources: []placementv1beta1.ResourceIdentifier{
@@ -589,7 +591,8 @@ var _ = Describe("Process objects with generate name", Ordered, func() {
 				Conditions: crpAppliedFailedConditions(crp.Generation),
 				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 					{
-						ClusterName: memberCluster1EastProdName,
+						ClusterName:           memberCluster1EastProdName,
+						ObservedResourceIndex: "0",
 						FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 							{
 								ResourceIdentifier: placementv1beta1.ResourceIdentifier{

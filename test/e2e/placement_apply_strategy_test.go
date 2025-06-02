@@ -270,7 +270,8 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 					Conditions: crpAppliedFailedConditions(crp.Generation),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: memberCluster1EastProdName,
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "0",
 							FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -289,12 +290,14 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 							Conditions: resourcePlacementApplyFailedConditions(crp.Generation),
 						},
 						{
-							ClusterName: memberCluster2EastCanaryName,
-							Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation, true, false),
+							ClusterName:           memberCluster2EastCanaryName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementRolloutCompletedConditions(crp.Generation, true, false),
 						},
 						{
-							ClusterName: memberCluster3WestProdName,
-							Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation, true, false),
+							ClusterName:           memberCluster3WestProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementRolloutCompletedConditions(crp.Generation, true, false),
 						},
 					},
 					SelectedResources: []placementv1beta1.ResourceIdentifier{
@@ -516,8 +519,9 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: memberCluster1EastProdName,
-							Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementApplyFailedConditions(crpGeneration),
 							FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -793,8 +797,9 @@ var _ = Describe("switching apply strategies", func() {
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: memberCluster1EastProdName,
-							Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementApplyFailedConditions(crpGeneration),
 							FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -811,8 +816,9 @@ var _ = Describe("switching apply strategies", func() {
 							},
 						},
 						{
-							ClusterName: memberCluster2EastCanaryName,
-							Conditions:  resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+							ClusterName:           memberCluster2EastCanaryName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
 						},
 					},
 					ObservedResourceIndex: "0",
@@ -858,8 +864,9 @@ var _ = Describe("switching apply strategies", func() {
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: memberCluster1EastProdName,
-							Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "1",
+							Conditions:            resourcePlacementApplyFailedConditions(crpGeneration),
 							FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -876,8 +883,9 @@ var _ = Describe("switching apply strategies", func() {
 							},
 						},
 						{
-							ClusterName: memberCluster2EastCanaryName,
-							Conditions:  resourcePlacementSyncPendingConditions(crpGeneration),
+							ClusterName:           memberCluster2EastCanaryName,
+							ObservedResourceIndex: "1",
+							Conditions:            resourcePlacementSyncPendingConditions(crpGeneration),
 						},
 					},
 					ObservedResourceIndex: "1",
@@ -927,12 +935,14 @@ var _ = Describe("switching apply strategies", func() {
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: memberCluster1EastProdName,
-							Conditions:  resourcePlacementDiffReportedConditions(crpGeneration),
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "1",
+							Conditions:            resourcePlacementDiffReportedConditions(crpGeneration),
 						},
 						{
-							ClusterName: memberCluster2EastCanaryName,
-							Conditions:  resourcePlacementDiffReportedConditions(crpGeneration),
+							ClusterName:           memberCluster2EastCanaryName,
+							ObservedResourceIndex: "1",
+							Conditions:            resourcePlacementDiffReportedConditions(crpGeneration),
 							DiffedPlacements: []placementv1beta1.DiffedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -1036,8 +1046,9 @@ var _ = Describe("switching apply strategies", func() {
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: memberCluster1EastProdName,
-							Conditions:  resourcePlacementDiffReportedConditions(crpGeneration),
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementDiffReportedConditions(crpGeneration),
 							DiffedPlacements: []placementv1beta1.DiffedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -1070,8 +1081,9 @@ var _ = Describe("switching apply strategies", func() {
 							},
 						},
 						{
-							ClusterName: memberCluster2EastCanaryName,
-							Conditions:  resourcePlacementDiffReportedConditions(crpGeneration),
+							ClusterName:           memberCluster2EastCanaryName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementDiffReportedConditions(crpGeneration),
 							DiffedPlacements: []placementv1beta1.DiffedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -1146,8 +1158,9 @@ var _ = Describe("switching apply strategies", func() {
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: memberCluster1EastProdName,
-							Conditions:  resourcePlacementDiffReportedConditions(crpGeneration),
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "1",
+							Conditions:            resourcePlacementDiffReportedConditions(crpGeneration),
 							DiffedPlacements: []placementv1beta1.DiffedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -1166,8 +1179,9 @@ var _ = Describe("switching apply strategies", func() {
 							},
 						},
 						{
-							ClusterName: memberCluster2EastCanaryName,
-							Conditions:  resourcePlacementDiffReportedConditions(crpGeneration),
+							ClusterName:           memberCluster2EastCanaryName,
+							ObservedResourceIndex: "1",
+							Conditions:            resourcePlacementDiffReportedConditions(crpGeneration),
 							DiffedPlacements: []placementv1beta1.DiffedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -1246,12 +1260,14 @@ var _ = Describe("switching apply strategies", func() {
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: memberCluster1EastProdName,
-							Conditions:  resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "1",
+							Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
 						},
 						{
-							ClusterName: memberCluster2EastCanaryName,
-							Conditions:  resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+							ClusterName:           memberCluster2EastCanaryName,
+							ObservedResourceIndex: "1",
+							Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
 						},
 					},
 					ObservedResourceIndex: "1",

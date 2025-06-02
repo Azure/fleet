@@ -65,7 +65,7 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 				Kind:    "Service",
 			}: true,
 			{
-				Group:   "",
+				Group:   "apps",
 				Version: "v1",
 				Kind:    "Deployment",
 			}: true,
@@ -468,7 +468,7 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
 							ResourceSelectors: []placementv1alpha1.ResourceSelector{
 								{
-									Group:   "",
+									Group:   "apps",
 									Version: "v1",
 									Kind:    "Deployment",
 									Name:    "not-exist",
@@ -495,7 +495,7 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
 							ResourceSelectors: []placementv1alpha1.ResourceSelector{
 								{
-									Group:   "",
+									Group:   "apps",
 									Version: "v1",
 									Kind:    "Deployment",
 									Name:    "deployment-name",
@@ -540,7 +540,7 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
 							ResourceSelectors: []placementv1alpha1.ResourceSelector{
 								{
-									Group:   "",
+									Group:   "apps",
 									Version: "v1",
 									Kind:    "Deployment",
 									Name:    "deployment-name",
@@ -561,7 +561,7 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
 							ResourceSelectors: []placementv1alpha1.ResourceSelector{
 								{
-									Group:   "",
+									Group:   "apps",
 									Version: "v1",
 									Kind:    "Deployment",
 									Name:    "not-exist",
@@ -693,7 +693,7 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
 							ResourceSelectors: []placementv1alpha1.ResourceSelector{
 								{
-									Group:   "",
+									Group:   "apps",
 									Version: "v1",
 									Kind:    "Deployment",
 									Name:    "not-exist",
@@ -723,7 +723,7 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 							},
 							ResourceSelectors: []placementv1alpha1.ResourceSelector{
 								{
-									Group:   "",
+									Group:   "apps",
 									Version: "v1",
 									Kind:    "Deployment",
 									Name:    "deployment-name",
@@ -771,7 +771,7 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 							},
 							ResourceSelectors: []placementv1alpha1.ResourceSelector{
 								{
-									Group:   "",
+									Group:   "apps",
 									Version: "v1",
 									Kind:    "Deployment",
 									Name:    "deployment-name",
@@ -792,7 +792,7 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
 							ResourceSelectors: []placementv1alpha1.ResourceSelector{
 								{
-									Group:   "",
+									Group:   "apps",
 									Version: "v1",
 									Kind:    "Deployment",
 									Name:    "not-exist",
@@ -1121,7 +1121,7 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 							},
 							ResourceSelectors: []placementv1alpha1.ResourceSelector{
 								{
-									Group:   "",
+									Group:   "apps",
 									Version: "v1",
 									Kind:    "Deployment",
 									Name:    "not-exist",
@@ -1151,7 +1151,7 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 							},
 							ResourceSelectors: []placementv1alpha1.ResourceSelector{
 								{
-									Group:   "",
+									Group:   "apps",
 									Version: "v1",
 									Kind:    "Deployment",
 									Name:    "deployment-name",

@@ -126,7 +126,8 @@ var _ = Describe("handling errors and failures gracefully", func() {
 					Conditions: crpAppliedFailedConditions(crp.Generation),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: memberCluster1EastProdName,
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "0",
 							FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{

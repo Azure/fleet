@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/defaulter"
 	"github.com/kubefleet-dev/kubefleet/test/utils/resource"
@@ -3272,6 +3273,880 @@ func TestIsRolloutComplete(t *testing.T) {
 			got := isRolloutCompleted(crp)
 			if got != tc.want {
 				t.Errorf("isRolloutCompleted() got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
+	namespaceResourceContent := *resource.NamespaceResourceContentForTest(t)
+	deploymentResourceContent := *resource.DeploymentResourceContentForTest(t)
+
+	tests := []struct {
+		name                          string
+		selected                      []*fleetv1beta1.ClusterDecision
+		allRPS                        []fleetv1beta1.ResourcePlacementStatus
+		resourceSnapshots             []*fleetv1beta1.ClusterResourceSnapshot
+		selectedResources             []fleetv1beta1.ResourceIdentifier
+		existingObservedResourceIndex string
+		existingConditions            []metav1.Condition
+		wantRolloutUnknown            bool
+		wantObservedResourceIndex     string
+		wantSelectedResources         []fleetv1beta1.ResourceIdentifier
+		wantConditions                []metav1.Condition
+		wantErr                       bool
+	}{
+		{
+			name:               "no selected clusters", // This should not happen in normal cases.
+			selected:           []*fleetv1beta1.ClusterDecision{},
+			allRPS:             []fleetv1beta1.ResourcePlacementStatus{},
+			resourceSnapshots:  []*fleetv1beta1.ClusterResourceSnapshot{},
+			existingConditions: []metav1.Condition{},
+			wantErr:            true,
+		},
+		{
+			name: "selected clusters with different observed resource indices",
+			selected: []*fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: "cluster1",
+					Selected:    true,
+				},
+				{
+					ClusterName: "cluster2",
+					Selected:    true,
+				},
+			},
+			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+				{
+					ClusterName:           "cluster1",
+					ObservedResourceIndex: "0",
+				},
+				{
+					ClusterName:           "cluster2",
+					ObservedResourceIndex: "1",
+				},
+			},
+			resourceSnapshots:         []*fleetv1beta1.ClusterResourceSnapshot{},
+			existingConditions:        []metav1.Condition{},
+			wantRolloutUnknown:        true,
+			wantObservedResourceIndex: "",
+			wantSelectedResources:     []fleetv1beta1.ResourceIdentifier{},
+			wantConditions: []metav1.Condition{
+				{
+					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+					Status:             metav1.ConditionUnknown,
+					Reason:             "RolloutControlledByExternalController",
+					Message:            "Rollout is controlled by an external controller and different resource snapshot versions are observed across clusters",
+					ObservedGeneration: 1,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "selected clusters with different observed resource indices and an empty ObservedResourceIndex",
+			selected: []*fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: "cluster1",
+					Selected:    true,
+				},
+				{
+					ClusterName: "cluster2",
+					Selected:    true,
+				},
+			},
+			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+				{
+					ClusterName:           "cluster1",
+					ObservedResourceIndex: "",
+				},
+				{
+					ClusterName:           "cluster2",
+					ObservedResourceIndex: "1",
+				},
+			},
+			resourceSnapshots:         []*fleetv1beta1.ClusterResourceSnapshot{},
+			wantRolloutUnknown:        true,
+			wantObservedResourceIndex: "",
+			wantSelectedResources:     []fleetv1beta1.ResourceIdentifier{},
+			wantConditions: []metav1.Condition{
+				{
+					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+					Status:             metav1.ConditionUnknown,
+					Reason:             "RolloutControlledByExternalController",
+					Message:            "Rollout is controlled by an external controller and different resource snapshot versions are observed across clusters",
+					ObservedGeneration: 1,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "selected clusters with different observed resource indices and crp has some conditions already",
+			selected: []*fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: "cluster1",
+					Selected:    true,
+				},
+				{
+					ClusterName: "cluster2",
+					Selected:    true,
+				},
+			},
+			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+				{
+					ClusterName:           "cluster1",
+					ObservedResourceIndex: "",
+				},
+				{
+					ClusterName:           "cluster2",
+					ObservedResourceIndex: "1",
+				},
+			},
+			resourceSnapshots: []*fleetv1beta1.ClusterResourceSnapshot{},
+			existingConditions: []metav1.Condition{
+				{
+					// Scheduled condition should be kept.
+					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             "Scheduled",
+					Message:            "Scheduling is complete",
+					ObservedGeneration: 1,
+				},
+				{
+					// RolloutStarted condition should be updated.
+					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.RolloutStartedReason,
+					Message:            "Rollout is started",
+					ObservedGeneration: 0,
+				},
+				{
+					// Overridden condition should be removed.
+					Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             "Overridden",
+					Message:            "Overridden",
+					ObservedGeneration: 0,
+				},
+			},
+			wantRolloutUnknown:        true,
+			wantObservedResourceIndex: "",
+			wantSelectedResources:     []fleetv1beta1.ResourceIdentifier{},
+			wantConditions: []metav1.Condition{
+				{
+					// Scheduled condition should be kept.
+					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             "Scheduled",
+					Message:            "Scheduling is complete",
+					ObservedGeneration: 1,
+				},
+				{
+					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+					Status:             metav1.ConditionUnknown,
+					Reason:             "RolloutControlledByExternalController",
+					Message:            "Rollout is controlled by an external controller and different resource snapshot versions are observed across clusters",
+					ObservedGeneration: 1,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "selected clusters all with empty ObservedResourceIndex",
+			selected: []*fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: "cluster1",
+					Selected:    true,
+				},
+				{
+					ClusterName: "cluster2",
+					Selected:    true,
+				},
+			},
+			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+				{
+					ClusterName:           "cluster1",
+					ObservedResourceIndex: "",
+				},
+				{
+					ClusterName:           "cluster2",
+					ObservedResourceIndex: "",
+				},
+				{
+					ClusterName:           "cluster-unselected",
+					ObservedResourceIndex: "1", // This should not be considered.
+				},
+			},
+			resourceSnapshots:         []*fleetv1beta1.ClusterResourceSnapshot{},
+			existingConditions:        []metav1.Condition{},
+			wantRolloutUnknown:        true,
+			wantObservedResourceIndex: "",
+			wantSelectedResources:     []fleetv1beta1.ResourceIdentifier{},
+			wantConditions: []metav1.Condition{
+				{
+					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+					Status:             metav1.ConditionUnknown,
+					Reason:             "RolloutControlledByExternalController",
+					Message:            "Rollout is controlled by an external controller and no resource snapshot name is observed across clusters, probably rollout has not started yet",
+					ObservedGeneration: 1,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "selected clusters all with empty ObservedResourceIndex and crp has some conditions already",
+			selected: []*fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: "cluster1",
+					Selected:    true,
+				},
+				{
+					ClusterName: "cluster2",
+					Selected:    true,
+				},
+			},
+			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+				{
+					ClusterName:           "cluster1",
+					ObservedResourceIndex: "",
+				},
+				{
+					ClusterName:           "cluster2",
+					ObservedResourceIndex: "",
+				},
+				{
+					ClusterName:           "cluster-unselected",
+					ObservedResourceIndex: "1", // This should not be considered.
+				},
+			},
+			resourceSnapshots: []*fleetv1beta1.ClusterResourceSnapshot{},
+			existingConditions: []metav1.Condition{
+				{
+					// Scheduled condition should be kept.
+					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             "Scheduled",
+					Message:            "Scheduling is complete",
+					ObservedGeneration: 1,
+				},
+				{
+					// RolloutStarted condition should be updated.
+					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.RolloutStartedReason,
+					Message:            "Rollout is started",
+					ObservedGeneration: 0,
+				},
+				{
+					// Overridden condition should be removed.
+					Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             "Overridden",
+					Message:            "Overridden",
+					ObservedGeneration: 0,
+				},
+			},
+			wantRolloutUnknown:        true,
+			wantObservedResourceIndex: "",
+			wantSelectedResources:     []fleetv1beta1.ResourceIdentifier{},
+			wantConditions: []metav1.Condition{
+				{
+					// Scheduled condition should be kept.
+					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             "Scheduled",
+					Message:            "Scheduling is complete",
+					ObservedGeneration: 1,
+				},
+				{
+					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+					Status:             metav1.ConditionUnknown,
+					Reason:             "RolloutControlledByExternalController",
+					Message:            "Rollout is controlled by an external controller and no resource snapshot name is observed across clusters, probably rollout has not started yet",
+					ObservedGeneration: 1,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "single selected cluster with empty ObservedResourceIndex",
+			selected: []*fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: "cluster1",
+					Selected:    true,
+				},
+			},
+			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+				{
+					ClusterName:           "cluster1",
+					ObservedResourceIndex: "",
+				},
+				{
+					ClusterName:           "cluster-unselected",
+					ObservedResourceIndex: "1", // This should not be considered.
+				},
+			},
+			resourceSnapshots:         []*fleetv1beta1.ClusterResourceSnapshot{},
+			existingConditions:        []metav1.Condition{},
+			wantRolloutUnknown:        true,
+			wantObservedResourceIndex: "",
+			wantSelectedResources:     []fleetv1beta1.ResourceIdentifier{},
+			wantConditions: []metav1.Condition{
+				{
+					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+					Status:             metav1.ConditionUnknown,
+					Reason:             "RolloutControlledByExternalController",
+					Message:            "Rollout is controlled by an external controller and no resource snapshot name is observed across clusters, probably rollout has not started yet",
+					ObservedGeneration: 1,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "single selected cluster with valid ObservedResourceIndex but no clusterResourceSnapshots found",
+			selected: []*fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: "cluster1",
+					Selected:    true,
+				},
+			},
+			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+				{
+					ClusterName:           "cluster1",
+					ObservedResourceIndex: "2",
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+				{
+					ClusterName:           "cluster-unselected",
+					ObservedResourceIndex: "1", // This should not be considered.
+				},
+			},
+			existingConditions:        []metav1.Condition{},
+			wantRolloutUnknown:        false,
+			wantObservedResourceIndex: "2",
+			wantSelectedResources:     nil,
+			wantConditions:            []metav1.Condition{},
+			wantErr:                   false,
+		},
+		{
+			name: "single selected cluster with valid ObservedResourceIndex but no master clusterResourceSnapshots with the specified index found",
+			selected: []*fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: "cluster1",
+					Selected:    true,
+				},
+			},
+			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+				{
+					ClusterName:           "cluster1",
+					ObservedResourceIndex: "2",
+				},
+				{
+					ClusterName:           "cluster-unselected",
+					ObservedResourceIndex: "1", // This should not be considered.
+				},
+			},
+			resourceSnapshots: []*fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 2, 1),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "2",
+							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+						},
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{
+						SelectedResources: []fleetv1beta1.ResourceContent{
+							namespaceResourceContent,
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "selected clusters with valid ObservedResourceIndex but no rollout started condition",
+			selected: []*fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: "cluster1",
+					Selected:    true,
+				},
+				{
+					ClusterName: "cluster2",
+					Selected:    true,
+				},
+			},
+			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+				{
+					ClusterName:           "cluster1",
+					ObservedResourceIndex: "2",
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+				{
+					ClusterName:           "cluster2",
+					ObservedResourceIndex: "2",
+				},
+				{
+					ClusterName:           "cluster-unselected",
+					ObservedResourceIndex: "1", // This should not be considered.
+				},
+			},
+			resourceSnapshots: []*fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 2),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "2",
+							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
+							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+						},
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{
+						SelectedResources: []fleetv1beta1.ResourceContent{
+							namespaceResourceContent,
+						},
+					},
+				},
+			},
+			wantRolloutUnknown:        true,
+			wantObservedResourceIndex: "2",
+			wantSelectedResources: []fleetv1beta1.ResourceIdentifier{
+				{
+					Group:     "",
+					Version:   "v1",
+					Kind:      "Namespace",
+					Namespace: "",
+					Name:      "namespace-name",
+				},
+			},
+			wantConditions: []metav1.Condition{
+				{
+					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+					Status:             metav1.ConditionUnknown,
+					Reason:             "RolloutControlledByExternalController",
+					Message:            "Rollout is controlled by an external controller and cluster cluster2 is in RolloutStarted Unknown state",
+					ObservedGeneration: 1,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "single selected cluster with valid ObservedResourceIndex",
+			selected: []*fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: "cluster1",
+					Selected:    true,
+				},
+			},
+			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+				{
+					ClusterName:           "cluster1",
+					ObservedResourceIndex: "2",
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+				{
+					ClusterName:           "cluster-unselected",
+					ObservedResourceIndex: "1", // This should not be considered.
+				},
+			},
+			resourceSnapshots: []*fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 2),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "2",
+							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
+							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+						},
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{
+						SelectedResources: []fleetv1beta1.ResourceContent{
+							namespaceResourceContent,
+						},
+					},
+				},
+			},
+			existingConditions:        []metav1.Condition{},
+			wantRolloutUnknown:        false,
+			wantObservedResourceIndex: "2",
+			wantSelectedResources: []fleetv1beta1.ResourceIdentifier{
+				{
+					Group:     "",
+					Version:   "v1",
+					Kind:      "Namespace",
+					Namespace: "",
+					Name:      "namespace-name",
+				},
+			},
+			wantConditions: []metav1.Condition{},
+			wantErr:        false,
+		},
+		{
+			name: "multiple selected clusters with the same valid ObservedResourceIndex and crp has some conditions already",
+			selected: []*fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: "cluster1",
+					Selected:    true,
+				},
+				{
+					ClusterName: "cluster2",
+					Selected:    true,
+				},
+			},
+			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+				{
+					ClusterName:           "cluster1",
+					ObservedResourceIndex: "2",
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+				{
+					ClusterName:           "cluster2",
+					ObservedResourceIndex: "2",
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+				{
+					ClusterName:           "cluster-unselected",
+					ObservedResourceIndex: "1", // This should not be considered.
+				},
+			},
+			resourceSnapshots: []*fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 2),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "2",
+							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
+							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "2",
+						},
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{
+						SelectedResources: []fleetv1beta1.ResourceContent{
+							namespaceResourceContent,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 2, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "2",
+							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
+						},
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{
+						SelectedResources: []fleetv1beta1.ResourceContent{
+							deploymentResourceContent,
+						},
+					},
+				},
+			},
+			existingConditions: []metav1.Condition{
+				// All conditions should be kept, which will be updated later in setCRPConditions.
+				{
+					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             "Scheduled",
+					Message:            "Scheduling is complete",
+					ObservedGeneration: 1,
+				},
+				{
+					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.RolloutStartedReason,
+					Message:            "Rollout is started",
+					ObservedGeneration: 0,
+				},
+				{
+					Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             "Overridden",
+					Message:            "Overridden",
+					ObservedGeneration: 0,
+				},
+			},
+			wantRolloutUnknown:        false,
+			wantObservedResourceIndex: "2",
+			wantSelectedResources: []fleetv1beta1.ResourceIdentifier{
+				{
+					Group:     "",
+					Version:   "v1",
+					Kind:      "Namespace",
+					Namespace: "",
+					Name:      "namespace-name",
+				},
+				{
+					Group:     "apps",
+					Version:   "v1",
+					Kind:      "Deployment",
+					Namespace: "deployment-namespace",
+					Name:      "deployment-name",
+				},
+			},
+			wantConditions: []metav1.Condition{
+				{
+					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             "Scheduled",
+					Message:            "Scheduling is complete",
+					ObservedGeneration: 1,
+				},
+				{
+					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             condition.RolloutStartedReason,
+					Message:            "Rollout is started",
+					ObservedGeneration: 0,
+				},
+				{
+					Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             "Overridden",
+					Message:            "Overridden",
+					ObservedGeneration: 0,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "multiple selected clusters with the same valid ObservedResourceIndex and multiple clusterResourceSnapshots found",
+			selected: []*fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: "cluster1",
+					Selected:    true,
+				},
+				{
+					ClusterName: "cluster2",
+					Selected:    true,
+				},
+			},
+			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+				{
+					ClusterName:           "cluster1",
+					ObservedResourceIndex: "2",
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+				{
+					ClusterName:           "cluster2",
+					ObservedResourceIndex: "2",
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+				{
+					ClusterName:           "cluster-unselected",
+					ObservedResourceIndex: "1", // This should not be considered.
+				},
+			},
+			resourceSnapshots: []*fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 2),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "2",
+							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
+							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "2",
+						},
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{
+						SelectedResources: []fleetv1beta1.ResourceContent{
+							namespaceResourceContent,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 2, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "2",
+							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
+						},
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{
+						SelectedResources: []fleetv1beta1.ResourceContent{
+							deploymentResourceContent,
+						},
+					},
+				},
+			},
+			existingConditions:        []metav1.Condition{},
+			wantRolloutUnknown:        false,
+			wantObservedResourceIndex: "2",
+			wantSelectedResources: []fleetv1beta1.ResourceIdentifier{
+				{
+					Group:     "",
+					Version:   "v1",
+					Kind:      "Namespace",
+					Namespace: "",
+					Name:      "namespace-name",
+				},
+				{
+					Group:     "apps",
+					Version:   "v1",
+					Kind:      "Deployment",
+					Namespace: "deployment-namespace",
+					Name:      "deployment-name",
+				},
+			},
+			wantConditions: []metav1.Condition{},
+			wantErr:        false,
+		},
+		{
+			name: "use selected resources passed in if clusters are on latest resource snapshot",
+			selected: []*fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: "cluster1",
+					Selected:    true,
+				},
+			},
+			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+				{
+					ClusterName:           "cluster1",
+					ObservedResourceIndex: "2",
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+				{
+					ClusterName:           "cluster-unselected",
+					ObservedResourceIndex: "1", // This should not be considered.
+				},
+			},
+			existingObservedResourceIndex: "2",
+			existingConditions:            []metav1.Condition{},
+			selectedResources: []fleetv1beta1.ResourceIdentifier{
+				{
+					Group:     "",
+					Version:   "v1",
+					Kind:      "Namespace",
+					Namespace: "",
+					Name:      "namespace-name",
+				},
+			},
+			wantRolloutUnknown:        false,
+			wantObservedResourceIndex: "2",
+			wantSelectedResources: []fleetv1beta1.ResourceIdentifier{
+				{
+					Group:     "",
+					Version:   "v1",
+					Kind:      "Namespace",
+					Namespace: "",
+					Name:      "namespace-name",
+				},
+			},
+			wantConditions: []metav1.Condition{},
+			wantErr:        false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			crp := &fleetv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       testCRPName,
+					Generation: 1,
+				},
+				Status: fleetv1beta1.PlacementStatus{
+					ObservedResourceIndex: tc.existingObservedResourceIndex,
+					Conditions:            tc.existingConditions,
+				},
+			}
+			objects := []client.Object{}
+			for _, snapshot := range tc.resourceSnapshots {
+				objects = append(objects, snapshot)
+			}
+			scheme := serviceScheme(t)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(objects...).
+				Build()
+			r := Reconciler{
+				Client: fakeClient,
+			}
+			var cmpOptions = []cmp.Option{
+				// ignore the message as we may change the message in the future
+				cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime"),
+			}
+			gotRolloutUnknown, gotErr := r.determineRolloutStateForCRPWithExternalRolloutStrategy(context.Background(), crp, tc.selected, tc.allRPS, tc.selectedResources)
+			if (gotErr != nil) != tc.wantErr {
+				t.Errorf("determineRolloutStateForCRPWithExternalRolloutStrategy() got error %v, want error %t", gotErr, tc.wantErr)
+			}
+			if !tc.wantErr {
+				if gotRolloutUnknown != tc.wantRolloutUnknown {
+					t.Errorf("determineRolloutStateForCRPWithExternalRolloutStrategy() got RolloutUnknown set to %v, want %v", gotRolloutUnknown, tc.wantRolloutUnknown)
+				}
+				if crp.Status.ObservedResourceIndex != tc.wantObservedResourceIndex {
+					t.Errorf("determineRolloutStateForCRPWithExternalRolloutStrategy() got crp.Status.ObservedResourceIndex set to %v, want %v", crp.Status.ObservedResourceIndex, tc.wantObservedResourceIndex)
+				}
+				if diff := cmp.Diff(tc.wantSelectedResources, crp.Status.SelectedResources); diff != "" {
+					t.Errorf("determineRolloutStateForCRPWithExternalRolloutStrategy() got crp.Status.SelectedResources mismatch (-want, +got):\n%s", diff)
+				}
+				if diff := cmp.Diff(tc.wantConditions, crp.Status.Conditions, cmpOptions...); diff != "" {
+					t.Errorf("determineRolloutStateForCRPWithExternalRolloutStrategy() got crp.Status.Conditions mismatch (-want, +got):\n%s", diff)
+				}
 			}
 		})
 	}

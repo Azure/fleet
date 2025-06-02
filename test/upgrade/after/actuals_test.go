@@ -348,8 +348,9 @@ func customizedCRPStatusUpdatedActual(crpName string,
 		wantPlacementStatus := []placementv1beta1.ResourcePlacementStatus{}
 		for _, name := range wantSelectedClusters {
 			wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.ResourcePlacementStatus{
-				ClusterName: name,
-				Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation, resourceIsTrackable, false),
+				ClusterName:           name,
+				ObservedResourceIndex: wantObservedResourceIndex,
+				Conditions:            resourcePlacementRolloutCompletedConditions(crp.Generation, resourceIsTrackable, false),
 			})
 		}
 		for i := 0; i < len(wantUnselectedClusters); i++ {

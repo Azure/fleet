@@ -829,7 +829,8 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 				Conditions: crpAppliedFailedConditions(crp.Generation),
 				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 					{
-						ClusterName: memberCluster1EastProdName,
+						ClusterName:           memberCluster1EastProdName,
+						ObservedResourceIndex: "0",
 						FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 							{
 								ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -848,12 +849,14 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 						Conditions: resourcePlacementApplyFailedConditions(crp.Generation),
 					},
 					{
-						ClusterName: memberCluster2EastCanaryName,
-						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation, true, false),
+						ClusterName:           memberCluster2EastCanaryName,
+						ObservedResourceIndex: "0",
+						Conditions:            resourcePlacementRolloutCompletedConditions(crp.Generation, true, false),
 					},
 					{
-						ClusterName: memberCluster3WestProdName,
-						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation, true, false),
+						ClusterName:           memberCluster3WestProdName,
+						ObservedResourceIndex: "0",
+						Conditions:            resourcePlacementRolloutCompletedConditions(crp.Generation, true, false),
 					},
 				},
 				SelectedResources: []placementv1beta1.ResourceIdentifier{
