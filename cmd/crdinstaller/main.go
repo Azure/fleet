@@ -25,10 +25,12 @@ import (
 	"os"
 	"path/filepath"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -202,14 +204,29 @@ func installCRDs(ctx context.Context, client client.Client, crdPath, mode string
 			return fmt.Errorf("unexpected type from %s, expected CustomResourceDefinition but got %s", path, gvk)
 		}
 
-		// Create or update using the typed CRD.
-		existingCRD := &apiextensionsv1.CustomResourceDefinition{
+		var existingCRD apiextensionsv1.CustomResourceDefinition
+		if err := client.Get(ctx, types.NamespacedName{Name: crd.Name}, &existingCRD); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return fmt.Errorf("failed to get existing CRD %s: %w", crd.Name, err)
+			}
+		}
+
+		labels := existingCRD.GetLabels()
+		if labels != nil {
+			if _, exists := labels["addonmanager.kubernetes.io/mode"]; exists {
+				klog.Infof("CRD %s is still managed by the addon manager, skipping installation", crd.Name)
+				continue
+			}
+		}
+
+		// Reset existing CRD to create or update it.
+		existingCRD = apiextensionsv1.CustomResourceDefinition{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crd.Name,
 			},
 		}
 
-		createOrUpdateRes, err := controllerutil.CreateOrUpdate(ctx, client, existingCRD, func() error {
+		createOrUpdateRes, err := controllerutil.CreateOrUpdate(ctx, client, &existingCRD, func() error {
 			// Copy spec from our decoded CRD to the object we're creating/updating.
 			existingCRD.Spec = crd.Spec
 			existingCRD.SetLabels(crd.Labels)
