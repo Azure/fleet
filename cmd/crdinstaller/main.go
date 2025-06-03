@@ -179,29 +179,29 @@ func installCRDs(ctx context.Context, client client.Client, crdPath, mode string
 			return fmt.Errorf("failed to read CRD file %s: %w", path, err)
 		}
 
-		// Create a scheme that knows about CRD types
+		// Create a scheme that knows about CRD types.
 		scheme := runtime.NewScheme()
 		if err := apiextensionsv1.AddToScheme(scheme); err != nil {
 			return fmt.Errorf("failed to add apiextensions scheme: %w", err)
 		}
 
-		// Create decoder for converting raw bytes to Go types
+		// Create decoder for converting raw bytes to Go types.
 		codecFactory := serializer.NewCodecFactory(scheme)
 		decoder := codecFactory.UniversalDeserializer()
 
-		// Decode YAML into a structured CRD object
+		// Decode YAML into a structured CRD object.
 		obj, gvk, err := decoder.Decode(crdBytes, nil, nil)
 		if err != nil {
 			return fmt.Errorf("failed to decode CRD from %s: %w", path, err)
 		}
 
-		// Type assertion to make sure we have a CRD
+		// Type assertion to make sure we have a CRD.
 		crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
 		if !ok {
 			return fmt.Errorf("unexpected type from %s, expected CustomResourceDefinition but got %s", path, gvk)
 		}
 
-		// Create or update using the typed CRD
+		// Create or update using the typed CRD.
 		existingCRD := &apiextensionsv1.CustomResourceDefinition{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crd.Name,
@@ -209,7 +209,7 @@ func installCRDs(ctx context.Context, client client.Client, crdPath, mode string
 		}
 
 		createOrUpdateRes, err := controllerutil.CreateOrUpdate(ctx, client, existingCRD, func() error {
-			// Copy spec from our decoded CRD to the object we're creating/updating
+			// Copy spec from our decoded CRD to the object we're creating/updating.
 			existingCRD.Spec = crd.Spec
 			existingCRD.SetLabels(crd.Labels)
 			existingCRD.SetAnnotations(crd.Annotations)
