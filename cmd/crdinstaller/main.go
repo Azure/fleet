@@ -105,7 +105,14 @@ func main() {
 	// Get Kubernetes config using controller-runtime.
 	config := ctrl.GetConfigOrDie()
 
-	client, err := client.New(config, client.Options{})
+	// Create a scheme that knows about CRD types.
+	scheme := runtime.NewScheme()
+	if err := apiextensionsv1.AddToScheme(scheme); err != nil {
+		klog.Fatalf("Failed to add apiextensions scheme: %v", err)
+	}
+	client, err := client.New(config, client.Options{
+		Scheme: scheme,
+	})
 
 	if err != nil {
 		klog.Fatalf("Failed to create Kubernetes client: %v", err)
@@ -179,14 +186,8 @@ func installCRDs(ctx context.Context, client client.Client, crdPath, mode string
 			return fmt.Errorf("failed to read CRD file %s: %w", path, err)
 		}
 
-		// Create a scheme that knows about CRD types.
-		scheme := runtime.NewScheme()
-		if err := apiextensionsv1.AddToScheme(scheme); err != nil {
-			return fmt.Errorf("failed to add apiextensions scheme: %w", err)
-		}
-
 		// Create decoder for converting raw bytes to Go types.
-		codecFactory := serializer.NewCodecFactory(scheme)
+		codecFactory := serializer.NewCodecFactory(client.Scheme())
 		decoder := codecFactory.UniversalDeserializer()
 
 		// Decode YAML into a structured CRD object.
@@ -212,6 +213,13 @@ func installCRDs(ctx context.Context, client client.Client, crdPath, mode string
 			// Copy spec from our decoded CRD to the object we're creating/updating.
 			existingCRD.Spec = crd.Spec
 			existingCRD.SetLabels(crd.Labels)
+
+			// Add an additional ownership label to indicate this CRD is managed by the installer.
+			if existingCRD.Labels == nil {
+				existingCRD.Labels = make(map[string]string)
+			}
+			existingCRD.Labels["crd-installer.kubernetes-fleet.io/managed"] = "true"
+
 			existingCRD.SetAnnotations(crd.Annotations)
 			return nil
 		})
