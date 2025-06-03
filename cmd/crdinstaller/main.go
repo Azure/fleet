@@ -25,14 +25,14 @@ import (
 	"os"
 	"path/filepath"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/yaml"
-	"k8s.io/client-go/dynamic"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
@@ -105,15 +105,15 @@ func main() {
 	// Get Kubernetes config using controller-runtime.
 	config := ctrl.GetConfigOrDie()
 
-	// Create dynamic client.
-	dynamicClient, err := dynamic.NewForConfig(config)
+	client, err := client.New(config, client.Options{})
+
 	if err != nil {
 		klog.Fatalf("Failed to create Kubernetes client: %v", err)
 	}
 
 	// Install CRDs from the fixed location.
 	const crdPath = "/workspace/config/crd/bases"
-	if err := installCRDs(ctx, dynamicClient, crdPath, *mode, *waitForSuccess, *timeout); err != nil {
+	if err := installCRDs(ctx, client, crdPath, *mode, *waitForSuccess, *timeout); err != nil {
 		klog.Fatalf("Failed to install CRDs: %v", err)
 	}
 
@@ -121,7 +121,7 @@ func main() {
 }
 
 // installCRDs installs the CRDs from the specified directory based on the mode.
-func installCRDs(ctx context.Context, client dynamic.Interface, crdPath, mode string, wait bool, _ int) error {
+func installCRDs(ctx context.Context, client client.Client, crdPath, mode string, wait bool, _ int) error {
 	// Set of CRD filenames to install based on mode.
 	crdFilesToInstall := make(map[string]bool)
 
@@ -179,47 +179,49 @@ func installCRDs(ctx context.Context, client dynamic.Interface, crdPath, mode st
 			return fmt.Errorf("failed to read CRD file %s: %w", path, err)
 		}
 
-		var crd unstructured.Unstructured
-		if err := yaml.Unmarshal(crdBytes, &crd); err != nil {
-			return fmt.Errorf("failed to unmarshal CRD from %s: %w", path, err)
+		// Create a scheme that knows about CRD types
+		scheme := runtime.NewScheme()
+		if err := apiextensionsv1.AddToScheme(scheme); err != nil {
+			return fmt.Errorf("failed to add apiextensions scheme: %w", err)
 		}
 
-		// Create CRD.
-		crdName := crd.GetName()
-		klog.V(2).Infof("Creating CRD: %s", crdName)
+		// Create decoder for converting raw bytes to Go types
+		codecFactory := serializer.NewCodecFactory(scheme)
+		decoder := codecFactory.UniversalDeserializer()
 
-		// CRD GVR
-		crdGVR := schema.GroupVersionResource{
-			Group:    "apiextensions.k8s.io",
-			Version:  "v1",
-			Resource: "customresourcedefinitions",
-		}
-		_, err = client.Resource(crdGVR).Create(ctx, &crd, metav1.CreateOptions{})
+		// Decode YAML into a structured CRD object
+		obj, gvk, err := decoder.Decode(crdBytes, nil, nil)
 		if err != nil {
-			if apierrors.IsAlreadyExists(err) {
-				klog.V(2).Infof("CRD %s already exists, updating it", crdName)
-
-				// Get the existing CRD.
-				existingCRD, err := client.Resource(crdGVR).Get(ctx, crdName, metav1.GetOptions{})
-				if err != nil {
-					return fmt.Errorf("failed to get existing CRD %s: %w", crdName, err)
-				}
-
-				// Set the resource version to ensure proper update.
-				crd.SetResourceVersion(existingCRD.GetResourceVersion())
-
-				// Update the CRD.
-				_, err = client.Resource(crdGVR).Update(ctx, &crd, metav1.UpdateOptions{})
-				if err != nil {
-					return fmt.Errorf("failed to update CRD %s: %w", crdName, err)
-				}
-				klog.Infof("Successfully updated CRD: %s", crdName)
-			} else {
-				return fmt.Errorf("failed to create CRD %s: %w", crdName, err)
-			}
-		} else {
-			klog.Infof("Successfully created CRD: %s", crdName)
+			return fmt.Errorf("failed to decode CRD from %s: %w", path, err)
 		}
+
+		// Type assertion to make sure we have a CRD
+		crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
+		if !ok {
+			return fmt.Errorf("unexpected type from %s, expected CustomResourceDefinition but got %s", path, gvk)
+		}
+
+		// Create or update using the typed CRD
+		existingCRD := &apiextensionsv1.CustomResourceDefinition{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crd.Name,
+			},
+		}
+
+		createOrUpdateRes, err := controllerutil.CreateOrUpdate(ctx, client, existingCRD, func() error {
+			// Copy spec from our decoded CRD to the object we're creating/updating
+			existingCRD.Spec = crd.Spec
+			existingCRD.SetLabels(crd.Labels)
+			existingCRD.SetAnnotations(crd.Annotations)
+			return nil
+		})
+
+		if err != nil {
+			klog.ErrorS(err, "Failed to create or update CRD", "name", crd.Name, "operation", createOrUpdateRes)
+			return err
+		}
+
+		klog.Infof("Successfully created/updated CRD %s", crd.Name)
 	}
 
 	if wait {
