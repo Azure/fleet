@@ -72,7 +72,7 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 			},
 			{
 				Group:   placementv1beta1.GroupVersion.Group,
-				Kind:    "ClusterResourceEnvelope",
+				Kind:    placementv1beta1.ClusterResourceEnvelopeKind,
 				Version: placementv1beta1.GroupVersion.Version,
 				Name:    testClusterResourceEnvelope.Name,
 			},
@@ -212,10 +212,18 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 			checkIfAllMemberClustersHaveLeft()
 		})
 
-		It("should update CRP status to not placing any resources since all clusters are left", func() {
+		It("Should update CRP status to not placing any resources since all clusters are left", func() {
 			// resourceQuota is enveloped so it's not trackable yet
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, nil, nil, "0", false)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("Valdiating if the resources are still on all member clusters", func() {
+			for idx := range allMemberClusters {
+				memberCluster := allMemberClusters[idx]
+				workResourcesPlacedActual := checkAllResourcesPlacement(memberCluster)
+				Consistently(workResourcesPlacedActual, 3*consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+			}
 		})
 
 		It("Should be able to rejoin the cluster", func() {

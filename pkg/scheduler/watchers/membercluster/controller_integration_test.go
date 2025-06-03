@@ -24,6 +24,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -512,19 +513,31 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 		})
 	})
 
-	Context("ready cluster has left", func() {
+	Context("leaving clusters should not trigger rescheduling until the member cluster object is fully deleted", func() {
 		BeforeAll(func() {
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 
 			// Retrieve the cluster.
 			memberCluster := &clusterv1beta1.MemberCluster{}
 			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName1}, memberCluster)).To(Succeed(), "Failed to get member cluster")
-
-			// Update the spec as leave.
+			// Delete the cluster to simulate leaving which will not delete the MC as it has finalizers.
 			Expect(hubClient.Delete(ctx, memberCluster)).To(Succeed(), "Failed to delete member cluster")
 		})
 
-		It("should enqueue all CRPs for cluster left (case 1b)", func() {
+		It("should not enqueue all CRPs for cluster leaving", func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+		})
+
+		It("remove the finalizer", func() {
+			// Retrieve the cluster.
+			memberCluster := &clusterv1beta1.MemberCluster{}
+			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName1}, memberCluster)).To(Succeed(), "Failed to get member cluster")
+			// Remove the finalizer from cluster.
+			controllerutil.RemoveFinalizer(memberCluster, placementv1beta1.MemberClusterFinalizer)
+			Expect(hubClient.Update(ctx, memberCluster)).Should(Succeed(), "Failed to update member cluster taints")
+		})
+
+		It("should enqueue all CRPs for cluster left (case 2c)", func() {
 			Eventually(allKeysEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Keys are not enqueued as expected")
 			Consistently(allKeysEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Keys are not enqueued as expected")
 		})

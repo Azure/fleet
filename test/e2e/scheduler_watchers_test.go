@@ -589,6 +589,17 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
+		It("can mark the cluster as leaving", func() {
+			markMemberClusterAsLeaving(fakeClusterName1ForWatcherTests)
+		})
+
+		It("should not remove the leaving cluster from the scheduling decision", func() {
+			targetClusterNames := allMemberClusterNames
+			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
 		It("can mark the cluster as left", func() {
 			markMemberClusterAsLeft(fakeClusterName1ForWatcherTests)
 		})
@@ -1512,6 +1523,17 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests)
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("can mark the cluster as leaving", func() {
+			markMemberClusterAsLeaving(fakeClusterName1ForWatcherTests)
+		})
+
+		It("should not remove the leaving cluster from the scheduling decision", func() {
+			targetClusterNames := allMemberClusterNames
+			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 

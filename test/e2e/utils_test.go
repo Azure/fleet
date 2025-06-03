@@ -166,8 +166,8 @@ func markMemberClusterAsUnhealthy(name string) {
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to mark member cluster as unhealthy")
 }
 
-// markMemberClusterAsLeft marks the specified member cluster as left.
-func markMemberClusterAsLeft(name string) {
+// markMemberClusterAsLeaving marks the specified member cluster as leaving.
+func markMemberClusterAsLeaving(name string) {
 	mcObj := &clusterv1beta1.MemberCluster{}
 	Eventually(func() error {
 		// Add a custom deletion blocker finalizer to the member cluster.
@@ -177,9 +177,27 @@ func markMemberClusterAsLeft(name string) {
 
 		mcObj.Finalizers = append(mcObj.Finalizers, customDeletionBlockerFinalizer)
 		return hubClient.Update(ctx, mcObj)
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to mark member cluster as left")
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add finalizer")
 
-	Expect(hubClient.Delete(ctx, mcObj)).To(Succeed(), "Failed to delete member cluster")
+	Expect(hubClient.Delete(ctx, mcObj)).To(Succeed(), "Failed to mark member cluster as leaving")
+}
+
+// markMemberClusterAsLeft deletes the specified member cluster.
+func markMemberClusterAsLeft(name string) {
+	mcObj := &clusterv1beta1.MemberCluster{}
+	Eventually(func() error {
+		// remove finalizer to the member cluster.
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj); err != nil {
+			return err
+		}
+		if len(mcObj.Finalizers) > 0 {
+			mcObj.Finalizers = []string{}
+			return hubClient.Update(ctx, mcObj)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove finalizer")
+
+	Expect(hubClient.Delete(ctx, mcObj)).To(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete member cluster")
 }
 
 // setAllMemberClustersToJoin creates a MemberCluster object for each member cluster.

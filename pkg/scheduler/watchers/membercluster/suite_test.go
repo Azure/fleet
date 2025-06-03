@@ -30,6 +30,7 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -62,11 +63,13 @@ var (
 
 var (
 	newMemberCluster = func(name string) *clusterv1beta1.MemberCluster {
-		return &clusterv1beta1.MemberCluster{
+		memberCluster := &clusterv1beta1.MemberCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: name,
 			},
 		}
+		controllerutil.AddFinalizer(memberCluster, placementv1beta1.MemberClusterFinalizer)
+		return memberCluster
 	}
 
 	newCRP = func(name string, policy *placementv1beta1.PlacementPolicy) *placementv1beta1.ClusterResourcePlacement {
@@ -143,7 +146,9 @@ func setupResources() {
 }
 
 var _ = BeforeSuite(func() {
-	klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+	logger := zap.New(zap.UseDevMode(true), zap.WriteTo(GinkgoWriter))
+	klog.SetLogger(logger)
+	ctrl.SetLogger(logger)
 
 	ctx, cancel = context.WithCancel(context.TODO())
 
