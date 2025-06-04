@@ -30,9 +30,9 @@ fi
 # Build the Fleet agent images.
 echo "Building and the Fleet agent images..."
 
-TAG=$IMAGE_TAG make -C "../.." docker-build-hub-agent
-TAG=$IMAGE_TAG make -C "../.." docker-build-member-agent
-TAG=$IMAGE_TAG make -C "../.." docker-build-refresh-token
+TAG=$IMAGE_TAG make docker-build-hub-agent
+TAG=$IMAGE_TAG make docker-build-member-agent
+TAG=$IMAGE_TAG make docker-build-refresh-token
 
 # Load the Fleet agent images (for upgrading) into the kind clusters.
 
