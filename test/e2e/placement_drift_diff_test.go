@@ -178,14 +178,15 @@ var _ = Describe("take over existing resources", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: memberCluster1EastProdName,
-							Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementApplyFailedConditions(crpGeneration),
 							FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -222,12 +223,14 @@ var _ = Describe("take over existing resources", func() {
 							},
 						},
 						{
-							ClusterName: memberCluster2EastCanaryName,
-							Conditions:  resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+							ClusterName:           memberCluster2EastCanaryName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
 						},
 						{
-							ClusterName: memberCluster3WestProdName,
-							Conditions:  resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+							ClusterName:           memberCluster3WestProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
 						},
 					},
 					ObservedResourceIndex: "0",
@@ -347,14 +350,15 @@ var _ = Describe("take over existing resources", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: memberCluster1EastProdName,
-							Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementApplyFailedConditions(crpGeneration),
 							FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -418,12 +422,14 @@ var _ = Describe("take over existing resources", func() {
 							},
 						},
 						{
-							ClusterName: memberCluster2EastCanaryName,
-							Conditions:  resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+							ClusterName:           memberCluster2EastCanaryName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
 						},
 						{
-							ClusterName: memberCluster3WestProdName,
-							Conditions:  resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+							ClusterName:           memberCluster3WestProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
 						},
 					},
 					ObservedResourceIndex: "0",
@@ -549,15 +555,16 @@ var _ = Describe("detect drifts on placed resources", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpRolloutCompletedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName:      memberCluster1EastProdName,
-							Conditions:       resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
-							FailedPlacements: []placementv1beta1.FailedResourcePlacement{},
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+							FailedPlacements:      []placementv1beta1.FailedResourcePlacement{},
 							DriftedPlacements: []placementv1beta1.DriftedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -576,12 +583,14 @@ var _ = Describe("detect drifts on placed resources", func() {
 							},
 						},
 						{
-							ClusterName: memberCluster2EastCanaryName,
-							Conditions:  resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+							ClusterName:           memberCluster2EastCanaryName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
 						},
 						{
-							ClusterName: memberCluster3WestProdName,
-							Conditions:  resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+							ClusterName:           memberCluster3WestProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
 						},
 					},
 					ObservedResourceIndex: "0",
@@ -685,14 +694,15 @@ var _ = Describe("detect drifts on placed resources", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: memberCluster1EastProdName,
-							Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementApplyFailedConditions(crpGeneration),
 							FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -729,12 +739,14 @@ var _ = Describe("detect drifts on placed resources", func() {
 							},
 						},
 						{
-							ClusterName: memberCluster2EastCanaryName,
-							Conditions:  resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+							ClusterName:           memberCluster2EastCanaryName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
 						},
 						{
-							ClusterName: memberCluster3WestProdName,
-							Conditions:  resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+							ClusterName:           memberCluster3WestProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
 						},
 					},
 					ObservedResourceIndex: "0",
@@ -866,14 +878,15 @@ var _ = Describe("detect drifts on placed resources", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: memberCluster1EastProdName,
-							Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementApplyFailedConditions(crpGeneration),
 							FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -937,12 +950,14 @@ var _ = Describe("detect drifts on placed resources", func() {
 							},
 						},
 						{
-							ClusterName: memberCluster2EastCanaryName,
-							Conditions:  resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+							ClusterName:           memberCluster2EastCanaryName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
 						},
 						{
-							ClusterName: memberCluster3WestProdName,
-							Conditions:  resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+							ClusterName:           memberCluster3WestProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
 						},
 					},
 					ObservedResourceIndex: "0",
@@ -1068,15 +1083,16 @@ var _ = Describe("report diff mode", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpDiffReportedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName:      memberCluster1EastProdName,
-							Conditions:       resourcePlacementDiffReportedConditions(crpGeneration),
-							FailedPlacements: []placementv1beta1.FailedResourcePlacement{},
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementDiffReportedConditions(crpGeneration),
+							FailedPlacements:      []placementv1beta1.FailedResourcePlacement{},
 							DiffedPlacements: []placementv1beta1.DiffedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -1111,9 +1127,10 @@ var _ = Describe("report diff mode", func() {
 							},
 						},
 						{
-							ClusterName:      memberCluster2EastCanaryName,
-							Conditions:       resourcePlacementDiffReportedConditions(crpGeneration),
-							FailedPlacements: []placementv1beta1.FailedResourcePlacement{},
+							ClusterName:           memberCluster2EastCanaryName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementDiffReportedConditions(crpGeneration),
+							FailedPlacements:      []placementv1beta1.FailedResourcePlacement{},
 							DiffedPlacements: []placementv1beta1.DiffedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -1145,9 +1162,10 @@ var _ = Describe("report diff mode", func() {
 							},
 						},
 						{
-							ClusterName:      memberCluster3WestProdName,
-							Conditions:       resourcePlacementDiffReportedConditions(crpGeneration),
-							FailedPlacements: []placementv1beta1.FailedResourcePlacement{},
+							ClusterName:           memberCluster3WestProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementDiffReportedConditions(crpGeneration),
+							FailedPlacements:      []placementv1beta1.FailedResourcePlacement{},
 							DiffedPlacements: []placementv1beta1.DiffedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -1274,21 +1292,23 @@ var _ = Describe("report diff mode", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpDiffReportedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName:      memberCluster1EastProdName,
-							Conditions:       resourcePlacementDiffReportedConditions(crpGeneration),
-							FailedPlacements: []placementv1beta1.FailedResourcePlacement{},
-							DiffedPlacements: []placementv1beta1.DiffedResourcePlacement{},
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementDiffReportedConditions(crpGeneration),
+							FailedPlacements:      []placementv1beta1.FailedResourcePlacement{},
+							DiffedPlacements:      []placementv1beta1.DiffedResourcePlacement{},
 						},
 						{
-							ClusterName:      memberCluster2EastCanaryName,
-							Conditions:       resourcePlacementDiffReportedConditions(crpGeneration),
-							FailedPlacements: []placementv1beta1.FailedResourcePlacement{},
+							ClusterName:           memberCluster2EastCanaryName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementDiffReportedConditions(crpGeneration),
+							FailedPlacements:      []placementv1beta1.FailedResourcePlacement{},
 							DiffedPlacements: []placementv1beta1.DiffedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -1320,9 +1340,10 @@ var _ = Describe("report diff mode", func() {
 							},
 						},
 						{
-							ClusterName:      memberCluster3WestProdName,
-							Conditions:       resourcePlacementDiffReportedConditions(crpGeneration),
-							FailedPlacements: []placementv1beta1.FailedResourcePlacement{},
+							ClusterName:           memberCluster3WestProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            resourcePlacementDiffReportedConditions(crpGeneration),
+							FailedPlacements:      []placementv1beta1.FailedResourcePlacement{},
 							DiffedPlacements: []placementv1beta1.DiffedResourcePlacement{
 								{
 									ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -1423,7 +1444,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(),
 				Strategy: placementv1beta1.RolloutStrategy{
 					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
@@ -1475,8 +1496,8 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 	})
 
 	It("should update CRP status as expected", func() {
-		buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-			return &placementv1beta1.ClusterResourcePlacementStatus{
+		buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+			return &placementv1beta1.PlacementStatus{
 				Conditions: crpAppliedFailedConditions(crpGeneration),
 				SelectedResources: []placementv1beta1.ResourceIdentifier{
 					{
@@ -1494,8 +1515,9 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 				},
 				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 					{
-						ClusterName: memberCluster1EastProdName,
-						Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
+						ClusterName:           memberCluster1EastProdName,
+						ObservedResourceIndex: "0",
+						Conditions:            resourcePlacementApplyFailedConditions(crpGeneration),
 						FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 							{
 								ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -1534,8 +1556,9 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 						},
 					},
 					{
-						ClusterName: memberCluster2EastCanaryName,
-						Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
+						ClusterName:           memberCluster2EastCanaryName,
+						ObservedResourceIndex: "0",
+						Conditions:            resourcePlacementApplyFailedConditions(crpGeneration),
 						FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 							{
 								ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -1574,8 +1597,9 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 						},
 					},
 					{
-						ClusterName: memberCluster3WestProdName,
-						Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
+						ClusterName:           memberCluster3WestProdName,
+						ObservedResourceIndex: "0",
+						Conditions:            resourcePlacementApplyFailedConditions(crpGeneration),
 						FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 							{
 								ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -1719,8 +1743,8 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 		var refreshedLastDeployDriftObservedTimeOnCluster2 metav1.Time
 		var refreshedFirstDeployDriftObservedTimeOnCluster2 metav1.Time
 
-		buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-			return &placementv1beta1.ClusterResourcePlacementStatus{
+		buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+			return &placementv1beta1.PlacementStatus{
 				Conditions: crpAppliedFailedConditions(crpGeneration),
 				SelectedResources: []placementv1beta1.ResourceIdentifier{
 					{
@@ -1738,8 +1762,9 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 				},
 				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 					{
-						ClusterName: memberCluster1EastProdName,
-						Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
+						ClusterName:           memberCluster1EastProdName,
+						ObservedResourceIndex: "0",
+						Conditions:            resourcePlacementApplyFailedConditions(crpGeneration),
 						FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 							{
 								ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -1778,8 +1803,9 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 						},
 					},
 					{
-						ClusterName: memberCluster2EastCanaryName,
-						Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
+						ClusterName:           memberCluster2EastCanaryName,
+						ObservedResourceIndex: "0",
+						Conditions:            resourcePlacementApplyFailedConditions(crpGeneration),
 						FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 							{
 								ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -1818,8 +1844,9 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 						},
 					},
 					{
-						ClusterName: memberCluster3WestProdName,
-						Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
+						ClusterName:           memberCluster3WestProdName,
+						ObservedResourceIndex: "0",
+						Conditions:            resourcePlacementApplyFailedConditions(crpGeneration),
 						FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 							{
 								ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -1953,8 +1980,8 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 	})
 
 	It("should update CRP status as expected", func() {
-		buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-			return &placementv1beta1.ClusterResourcePlacementStatus{
+		buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+			return &placementv1beta1.PlacementStatus{
 				Conditions: crpAppliedFailedConditions(crpGeneration),
 				SelectedResources: []placementv1beta1.ResourceIdentifier{
 					{
@@ -1972,20 +1999,23 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 				},
 				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 					{
-						ClusterName:      memberCluster1EastProdName,
-						Conditions:       resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
-						FailedPlacements: []placementv1beta1.FailedResourcePlacement{},
-						DiffedPlacements: []placementv1beta1.DiffedResourcePlacement{},
+						ClusterName:           memberCluster1EastProdName,
+						ObservedResourceIndex: "0",
+						Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+						FailedPlacements:      []placementv1beta1.FailedResourcePlacement{},
+						DiffedPlacements:      []placementv1beta1.DiffedResourcePlacement{},
 					},
 					{
-						ClusterName:       memberCluster2EastCanaryName,
-						Conditions:        resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
-						FailedPlacements:  []placementv1beta1.FailedResourcePlacement{},
-						DriftedPlacements: []placementv1beta1.DriftedResourcePlacement{},
+						ClusterName:           memberCluster2EastCanaryName,
+						ObservedResourceIndex: "0",
+						Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+						FailedPlacements:      []placementv1beta1.FailedResourcePlacement{},
+						DriftedPlacements:     []placementv1beta1.DriftedResourcePlacement{},
 					},
 					{
-						ClusterName: memberCluster3WestProdName,
-						Conditions:  resourcePlacementApplyFailedConditions(crpGeneration),
+						ClusterName:           memberCluster3WestProdName,
+						ObservedResourceIndex: "0",
+						Conditions:            resourcePlacementApplyFailedConditions(crpGeneration),
 						FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 							{
 								ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -2103,9 +2133,10 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 	})
 
 	It("should update CRP status as expected", func() {
-		buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-			return &placementv1beta1.ClusterResourcePlacementStatus{
-				Conditions: crpRolloutCompletedConditions(crpGeneration, false),
+		buildWantCRPStatus := func(crpGeneration int64, observedResourceIndex string) *placementv1beta1.PlacementStatus {
+			return &placementv1beta1.PlacementStatus{
+				ObservedResourceIndex: observedResourceIndex,
+				Conditions:            crpRolloutCompletedConditions(crpGeneration, false),
 				SelectedResources: []placementv1beta1.ResourceIdentifier{
 					{
 						Kind:    "Namespace",
@@ -2122,23 +2153,26 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 				},
 				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 					{
-						ClusterName:      memberCluster1EastProdName,
-						Conditions:       resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
-						FailedPlacements: []placementv1beta1.FailedResourcePlacement{},
-						DiffedPlacements: []placementv1beta1.DiffedResourcePlacement{},
+						ClusterName:           memberCluster1EastProdName,
+						ObservedResourceIndex: observedResourceIndex,
+						Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+						FailedPlacements:      []placementv1beta1.FailedResourcePlacement{},
+						DiffedPlacements:      []placementv1beta1.DiffedResourcePlacement{},
 					},
 					{
-						ClusterName:       memberCluster2EastCanaryName,
-						Conditions:        resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
-						FailedPlacements:  []placementv1beta1.FailedResourcePlacement{},
-						DriftedPlacements: []placementv1beta1.DriftedResourcePlacement{},
+						ClusterName:           memberCluster2EastCanaryName,
+						ObservedResourceIndex: observedResourceIndex,
+						Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+						FailedPlacements:      []placementv1beta1.FailedResourcePlacement{},
+						DriftedPlacements:     []placementv1beta1.DriftedResourcePlacement{},
 					},
 					{
-						ClusterName:       memberCluster3WestProdName,
-						Conditions:        resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
-						FailedPlacements:  []placementv1beta1.FailedResourcePlacement{},
-						DiffedPlacements:  []placementv1beta1.DiffedResourcePlacement{},
-						DriftedPlacements: []placementv1beta1.DriftedResourcePlacement{},
+						ClusterName:           memberCluster3WestProdName,
+						ObservedResourceIndex: observedResourceIndex,
+						Conditions:            resourcePlacementRolloutCompletedConditions(crpGeneration, true, false),
+						FailedPlacements:      []placementv1beta1.FailedResourcePlacement{},
+						DiffedPlacements:      []placementv1beta1.DiffedResourcePlacement{},
+						DriftedPlacements:     []placementv1beta1.DriftedResourcePlacement{},
 					},
 				},
 			}
@@ -2149,12 +2183,11 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
 				return err
 			}
-			wantCRPStatus := buildWantCRPStatus(crp.Generation)
 
 			// There is no guarantee on how many resource snapshots Fleet will create based
 			// on the previous round of changes; consequently the test spec here drops the field
 			// for comparison.
-			wantCRPStatus.ObservedResourceIndex = crp.Status.ObservedResourceIndex
+			wantCRPStatus := buildWantCRPStatus(crp.Generation, crp.Status.ObservedResourceIndex)
 
 			if diff := cmp.Diff(crp.Status, *wantCRPStatus, crpStatusCmpOptions...); diff != "" {
 				return fmt.Errorf("CRP status diff (-got, +want): %s", diff)

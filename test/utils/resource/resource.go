@@ -18,6 +18,7 @@ limitations under the License.
 package resource
 
 import (
+	"encoding/json"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -67,7 +68,7 @@ func ServiceResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
 func DeploymentResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
 	d := appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
+			APIVersion: "apps/v1",
 			Kind:       "Deployment",
 		},
 		ObjectMeta: metav1.ObjectMeta{
@@ -152,6 +153,73 @@ func ClusterRoleResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceConte
 		},
 	}
 	return CreateResourceContentForTest(t, role)
+}
+
+// ClusterResourceEnvelopeResourceContentForTest creates a ClusterResourceEnvelope for testing.
+// It contains a ClusterRole as the resource.
+func ClusterResourceEnvelopeResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
+	clusterRole := rbacv1.ClusterRole{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "ClusterRole",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "clusterrole-name",
+		},
+	}
+	roleBytes, err := json.Marshal(clusterRole)
+	if err != nil {
+		t.Fatalf("ClusterRole marshalJSON failed: %v", err)
+	}
+
+	clusterResourceEnvelope := fleetv1beta1.ClusterResourceEnvelope{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "placement.kubernetes-fleet.io/v1beta1",
+			Kind:       "ClusterResourceEnvelope",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-cluster-resource-envelope",
+		},
+		Data: map[string]runtime.RawExtension{"clusterRole.yaml": {Raw: roleBytes}},
+	}
+
+	return CreateResourceContentForTest(t, clusterResourceEnvelope)
+}
+
+// ResourceEnvelopeResourceContentForTest creates a ResourceEnvelope for testing.
+// It contains a ConfigMap as the resource.
+func ResourceEnvelopeResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
+	cm := corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "ConfigMap",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cm-name",
+			Namespace: "test-namespace",
+		},
+		Data: map[string]string{
+			"key1": "value1",
+		},
+	}
+	cmBytes, err := json.Marshal(cm)
+	if err != nil {
+		t.Fatalf("ConfigMap marshalJSON failed: %v", err)
+	}
+
+	resourceEnvelope := fleetv1beta1.ResourceEnvelope{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "placement.kubernetes-fleet.io/v1beta1",
+			Kind:       "ResourceEnvelope",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-resource-envelope",
+			Namespace: "test-namespace",
+		},
+		Data: map[string]runtime.RawExtension{"cm.yaml": {Raw: cmBytes}},
+	}
+
+	return CreateResourceContentForTest(t, resourceEnvelope)
 }
 
 // CreateResourceContentForTest creates a ResourceContent for testing.

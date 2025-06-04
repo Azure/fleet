@@ -28,6 +28,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -975,8 +976,122 @@ func (r *Reconciler) setPlacementStatus(
 		return false, nil
 	}
 
+	if crp.Spec.Strategy.Type == fleetv1beta1.ExternalRolloutStrategyType {
+		// For external rollout strategy, if clusters observe different resource snapshot versions,
+		// we set RolloutStarted to Unknown without any other conditions since we do not know exactly which version is rolling out.
+		// We also need to reset ObservedResourceIndex and selectedResources.
+		rolloutStartedUnknown, err := r.determineRolloutStateForCRPWithExternalRolloutStrategy(ctx, crp, selected, allRPS, selectedResourceIDs)
+		if err != nil || rolloutStartedUnknown {
+			return true, err
+		}
+	}
+
 	setCRPConditions(crp, allRPS, rpsSetCondTypeCounter, expectedCondTypes)
 	return true, nil
+}
+
+func (r *Reconciler) determineRolloutStateForCRPWithExternalRolloutStrategy(
+	ctx context.Context,
+	crp *fleetv1beta1.ClusterResourcePlacement,
+	selected []*fleetv1beta1.ClusterDecision,
+	allRPS []fleetv1beta1.ResourcePlacementStatus,
+	selectedResourceIDs []fleetv1beta1.ResourceIdentifier,
+) (bool, error) {
+	if len(selected) == 0 {
+		// This should not happen as we already checked in setPlacementStatus.
+		err := controller.NewUnexpectedBehaviorError(fmt.Errorf("selected cluster list is empty for placement %s when checking per-cluster rollout state", crp.Name))
+		klog.ErrorS(err, "Should not happen: selected cluster list is empty in determineRolloutStateForCRPWithExternalRolloutStrategy()")
+		return false, err
+	}
+
+	differentResourceIndicesObserved := false
+	observedResourceIndex := allRPS[0].ObservedResourceIndex
+	for i := range len(selected) - 1 {
+		if allRPS[i].ObservedResourceIndex != allRPS[i+1].ObservedResourceIndex {
+			differentResourceIndicesObserved = true
+			break
+		}
+	}
+
+	if differentResourceIndicesObserved {
+		// If clusters observe different resource snapshot versions, we set RolloutStarted condition to Unknown.
+		// ObservedResourceIndex and selectedResources are reset, too.
+		klog.V(2).InfoS("Placement has External rollout strategy and different resource snapshot versions are observed across clusters, set RolloutStarted condition to Unknown", "clusterResourcePlacement", klog.KObj(crp))
+		crp.Status.ObservedResourceIndex = ""
+		crp.Status.SelectedResources = []fleetv1beta1.ResourceIdentifier{}
+		crp.SetConditions(metav1.Condition{
+			Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+			Status:             metav1.ConditionUnknown,
+			Reason:             condition.RolloutControlledByExternalControllerReason,
+			Message:            "Rollout is controlled by an external controller and different resource snapshot versions are observed across clusters",
+			ObservedGeneration: crp.Generation,
+		})
+		// As CRP status will refresh even if the spec has not changed, we reset any unused conditions
+		// to avoid confusion.
+		for i := condition.RolloutStartedCondition + 1; i < condition.TotalCondition; i++ {
+			meta.RemoveStatusCondition(&crp.Status.Conditions, string(i.ClusterResourcePlacementConditionType()))
+		}
+		return true, nil
+	}
+
+	if observedResourceIndex == "" {
+		// All bindings have empty resource snapshot name, we set the rollout condition to Unknown.
+		// ObservedResourceIndex and selectedResources are reset, too.
+		klog.V(2).InfoS("Placement has External rollout strategy and no resource snapshot name is observed across clusters, set RolloutStarted condition to Unknown", "clusterResourcePlacement", klog.KObj(crp))
+		crp.Status.ObservedResourceIndex = ""
+		crp.Status.SelectedResources = []fleetv1beta1.ResourceIdentifier{}
+		crp.SetConditions(metav1.Condition{
+			Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+			Status:             metav1.ConditionUnknown,
+			Reason:             condition.RolloutControlledByExternalControllerReason,
+			Message:            "Rollout is controlled by an external controller and no resource snapshot name is observed across clusters, probably rollout has not started yet",
+			ObservedGeneration: crp.Generation,
+		})
+		// As CRP status will refresh even if the spec has not changed, we reset any unused conditions
+		// to avoid confusion.
+		for i := condition.RolloutStartedCondition + 1; i < condition.TotalCondition; i++ {
+			meta.RemoveStatusCondition(&crp.Status.Conditions, string(i.ClusterResourcePlacementConditionType()))
+		}
+		return true, nil
+	}
+
+	// All bindings have the same observed resource snapshot.
+	// We only set the ObservedResourceIndex and selectedResources, as the conditions will be set with setCRPConditions.
+	// If all clusters observe the latest resource snapshot, we do not need to go through all the resource snapshots again to collect selected resources.
+	if observedResourceIndex == crp.Status.ObservedResourceIndex {
+		crp.Status.SelectedResources = selectedResourceIDs
+	} else {
+		crp.Status.ObservedResourceIndex = observedResourceIndex
+		selectedResources, err := controller.CollectResourceIdentifiersFromClusterResourceSnapshot(ctx, r.Client, crp.Name, observedResourceIndex)
+		if err != nil {
+			klog.ErrorS(err, "Failed to collect resource identifiers from clusterResourceSnapshot", "clusterResourcePlacement", klog.KObj(crp), "resourceSnapshotIndex", observedResourceIndex)
+			return false, err
+		}
+		crp.Status.SelectedResources = selectedResources
+	}
+
+	for i := range len(selected) {
+		rolloutStartedCond := meta.FindStatusCondition(allRPS[i].Conditions, string(fleetv1beta1.ResourceRolloutStartedConditionType))
+		if !condition.IsConditionStatusTrue(rolloutStartedCond, crp.Generation) &&
+			!condition.IsConditionStatusFalse(rolloutStartedCond, crp.Generation) {
+			klog.V(2).InfoS("Placement has External rollout strategy and some cluster is in RolloutStarted Unknown state, set RolloutStarted condition to Unknown",
+				"clusterName", allRPS[i].ClusterName, "observedResourceIndex", observedResourceIndex, "clusterResourcePlacement", klog.KObj(crp))
+			crp.SetConditions(metav1.Condition{
+				Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+				Status:             metav1.ConditionUnknown,
+				Reason:             condition.RolloutControlledByExternalControllerReason,
+				Message:            fmt.Sprintf("Rollout is controlled by an external controller and cluster %s is in RolloutStarted Unknown state", allRPS[i].ClusterName),
+				ObservedGeneration: crp.Generation,
+			})
+			// As CRP status will refresh even if the spec has not changed, we reset any unused conditions
+			// to avoid confusion.
+			for i := condition.RolloutStartedCondition + 1; i < condition.TotalCondition; i++ {
+				meta.RemoveStatusCondition(&crp.Status.Conditions, string(i.ClusterResourcePlacementConditionType()))
+			}
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func buildScheduledCondition(crp *fleetv1beta1.ClusterResourcePlacement, latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot) metav1.Condition {

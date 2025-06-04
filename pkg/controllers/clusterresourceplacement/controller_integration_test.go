@@ -387,7 +387,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testCRPName,
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 						{
 							Group:   corev1.GroupName,
@@ -416,7 +416,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
@@ -457,7 +457,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
@@ -512,7 +512,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
@@ -569,7 +569,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
@@ -585,7 +585,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: member1Name,
+							ClusterName:           member1Name,
+							ObservedResourceIndex: "0",
 							Conditions: []metav1.Condition{
 								{
 									Status: metav1.ConditionTrue,
@@ -610,7 +611,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 							},
 						},
 						{
-							ClusterName: member2Name,
+							ClusterName:           member2Name,
+							ObservedResourceIndex: "", // Empty as the binding is not created yet.
 							Conditions: []metav1.Condition{
 								{
 									Status: metav1.ConditionTrue,
@@ -686,7 +688,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			}
 			wantCRP.Status.PlacementStatuses = []placementv1beta1.ResourcePlacementStatus{
 				{
-					ClusterName: member1Name,
+					ClusterName:           member1Name,
+					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionTrue,
@@ -711,7 +714,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 				{
-					ClusterName: member2Name,
+					ClusterName:           member2Name,
+					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionTrue,
@@ -772,7 +776,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
@@ -788,7 +792,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: member1Name,
+							ClusterName:           member1Name,
+							ObservedResourceIndex: "0",
 							Conditions: []metav1.Condition{
 								{
 									Status: metav1.ConditionTrue,
@@ -813,7 +818,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 							},
 						},
 						{
-							ClusterName: member2Name,
+							ClusterName:           member2Name,
+							ObservedResourceIndex: "", // Empty as the binding is not created yet.
 							Conditions: []metav1.Condition{
 								{
 									Status: metav1.ConditionTrue,
@@ -887,7 +893,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			}
 			wantCRP.Status.PlacementStatuses = []placementv1beta1.ResourcePlacementStatus{
 				{
-					ClusterName: member1Name,
+					ClusterName:           member1Name,
+					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionTrue,
@@ -912,7 +919,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 				{
-					ClusterName: member2Name,
+					ClusterName:           member2Name,
+					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionTrue,
@@ -1054,7 +1062,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			}
 			wantCRP.Status.PlacementStatuses = []placementv1beta1.ResourcePlacementStatus{
 				{
-					ClusterName: member1Name,
+					ClusterName:           member1Name,
+					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
 							Status:             metav1.ConditionTrue,
@@ -1083,7 +1092,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 				{
-					ClusterName: member2Name,
+					ClusterName:           member2Name,
+					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
 							Status:             metav1.ConditionTrue,
@@ -1155,7 +1165,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
@@ -1181,7 +1191,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: member1Name,
+							ClusterName:           member1Name,
+							ObservedResourceIndex: "0",
 							Conditions: []metav1.Condition{
 								{
 									Status: metav1.ConditionTrue,
@@ -1211,7 +1222,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 							},
 						},
 						{
-							ClusterName: member2Name,
+							ClusterName:           member2Name,
+							ObservedResourceIndex: "0",
 							Conditions: []metav1.Condition{
 								{
 									Status: metav1.ConditionTrue,
@@ -1372,7 +1384,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testCRPName,
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 						{
 							Group:   corev1.GroupName,
@@ -1406,7 +1418,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
@@ -1449,7 +1461,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
@@ -1475,7 +1487,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: member1Name,
+							ClusterName:           member1Name,
+							ObservedResourceIndex: "0",
 							Conditions: []metav1.Condition{
 								{
 									Status: metav1.ConditionTrue,
@@ -1500,7 +1513,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 							},
 						},
 						{
-							ClusterName: member2Name,
+							ClusterName:           member2Name,
+							ObservedResourceIndex: "0",
 							Conditions: []metav1.Condition{
 								{
 									Status: metav1.ConditionTrue,
@@ -1626,7 +1640,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
@@ -1652,7 +1666,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
-							ClusterName: member1Name,
+							ClusterName:           member1Name,
+							ObservedResourceIndex: "0",
 							Conditions: []metav1.Condition{
 								{
 									Status: metav1.ConditionTrue,
@@ -1677,7 +1692,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 							},
 						},
 						{
-							ClusterName: member2Name,
+							ClusterName:           member2Name,
+							ObservedResourceIndex: "0",
 							Conditions: []metav1.Condition{
 								{
 									Status: metav1.ConditionTrue,
@@ -1780,7 +1796,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			}
 			wantCRP.Status.PlacementStatuses = []placementv1beta1.ResourcePlacementStatus{
 				{
-					ClusterName: member1Name,
+					ClusterName:           member1Name,
+					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionTrue,
@@ -1810,7 +1827,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 				{
-					ClusterName: member2Name,
+					ClusterName:           member2Name,
+					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionTrue,

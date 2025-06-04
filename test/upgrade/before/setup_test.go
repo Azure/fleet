@@ -125,6 +125,8 @@ var (
 	ignoreServiceSpecIPAndPolicyFields     = cmpopts.IgnoreFields(corev1.ServiceSpec{}, "ClusterIP", "ClusterIPs", "ExternalIPs", "SessionAffinity", "IPFamilies", "IPFamilyPolicy", "InternalTrafficPolicy")
 	ignoreServicePortNodePortProtocolField = cmpopts.IgnoreFields(corev1.ServicePort{}, "NodePort", "Protocol")
 	ignoreRPSClusterNameField              = cmpopts.IgnoreFields(placementv1beta1.ResourcePlacementStatus{}, "ClusterName")
+	// TODO (wantjian): Remove this ignore option with next release.
+	ignoreRPSObservedResourceIndexField = cmpopts.IgnoreFields(placementv1beta1.ResourcePlacementStatus{}, "ObservedResourceIndex")
 
 	// Since Fleet agents v0.14.0 a minor reason string change was applied on the hub side that
 	// affects CRP availability status reportings in the resource placement section when untrackable
@@ -148,6 +150,7 @@ var (
 		utils.IgnoreConditionLTTAndMessageFields,
 		availableDueToUntrackableResCondAcyclicTransformer,
 		cmpopts.EquateEmpty(),
+		ignoreRPSObservedResourceIndexField,
 	}
 	crpWithStuckRolloutStatusCmpOptions = cmp.Options{
 		cmpopts.SortSlices(lessFuncConditionByType),
@@ -158,6 +161,7 @@ var (
 		ignoreRPSClusterNameField,
 		availableDueToUntrackableResCondAcyclicTransformer,
 		cmpopts.EquateEmpty(),
+		ignoreRPSObservedResourceIndexField,
 	}
 )
 
