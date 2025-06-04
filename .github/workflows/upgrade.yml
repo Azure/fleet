@@ -83,7 +83,7 @@ jobs:
       - name: Prepare the fleet using the before upgrade version
         # Set up the Fleet using images built the older source code but with the current setup script.
         run: |
-          git checkout $PREVIOUS_COMMIT -- /test/upgrade
+          git checkout $PREVIOUS_COMMIT -- test/upgrade
           cd test/upgrade && chmod +x setup.sh && cd -
           ./test/upgrade/setup.sh 3
         env:
@@ -163,7 +163,7 @@ jobs:
       - name: Prepare the fleet using the before upgrade version
         # Set up the Fleet using images built the older source code but with the current setup script.
         run: |
-          git checkout $PREVIOUS_COMMIT -- /test/upgrade
+          git checkout $PREVIOUS_COMMIT -- test/upgrade
           cd test/upgrade && chmod +x setup.sh && cd -
           ./test/upgrade/setup.sh 3
         env:
@@ -243,7 +243,7 @@ jobs:
       - name: Prepare the fleet using the before upgrade version
         # Set up the Fleet using images built the older source code but with the current setup script.
         run: |
-          git checkout $PREVIOUS_COMMIT -- /test/upgrade
+          git checkout $PREVIOUS_COMMIT -- test/upgrade
           cd test/upgrade && chmod +x setup.sh && cd -
           ./test/upgrade/setup.sh 3
         env:
