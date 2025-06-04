@@ -90,7 +90,7 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 					// the behavior of the controllers.
 					Finalizers: []string{customDeletionBlockerFinalizer},
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 						{
 							Group:   "",

@@ -74,7 +74,7 @@ var (
 			ObjectMeta: metav1.ObjectMeta{
 				Name: name,
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: defaultResourceSelectors,
 				Policy:            policy,
 			},

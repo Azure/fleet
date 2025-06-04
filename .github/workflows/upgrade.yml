@@ -73,7 +73,6 @@ jobs:
 
               git fetch --all
               GIT_TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
-              
           else
               echo "A tag is specified; go back to the state tracked by the specified tag."
               echo "Fetch all tags..."
@@ -85,7 +84,10 @@ jobs:
           echo "Checked out source code at $GIT_TAG."
 
       - name: Prepare the fleet using the before upgrade version
-        run: cd test/upgrade && chmod +x setup.sh && ./setup.sh 3 && cd -
+        # The GIT_TAG variable is explicitly set up for compatibility reasons.
+        run: |
+          cd test/upgrade && chmod +x setup.sh && cd -
+          GIT_TAG=NOTRAVEL ./test/upgrade/setup.sh 3
         env:
           KUBECONFIG: '/home/runner/.kube/config'
           HUB_SERVER_URL: 'https://172.19.0.2:6443'
@@ -94,7 +96,14 @@ jobs:
         # Note: Fleet always uses the version compatibility test suite from the 
         # baseline commit, i.e., the commit that triggers the workflow.
         run: |
-          echo "Returning to the current state..."
+          GIT_TAG="${{ github.event.inputs.afterTagOrCommit }}"
+          if [ -z "${GIT_TAG}" ]
+          then
+              echo "No tag is specified; travel to the baseline commit (the commit that triggers the workflow)."
+          else
+              echo "A tag is specified; travel to the state tracked by the specified tag."
+              PREVIOUS_COMMIT="${GIT_TAG}"
+          fi
           git checkout $PREVIOUS_COMMIT
           echo "Checked out source code at $PREVIOUS_COMMIT."
 
@@ -102,38 +111,15 @@ jobs:
         run: cd test/upgrade/before && ginkgo -v -p . && cd -
         env:
           KUBECONFIG: '/home/runner/.kube/config'
-      
-      - name: Travel back in time to the after upgrade version
-        run: |
-          GIT_TAG="${{ github.event.inputs.afterTagOrCommit }}"
-          PREVIOUS_BRANCH=$(git branch --show-current)
-          PREVIOUS_COMMIT=$(git rev-parse HEAD)
-          echo "Current at branch $PREVIOUS_BRANCH, commit $PREVIOUS_COMMIT."
-
-          if [ -z "${GIT_TAG}" ]
-          then
-              echo "No tag is specified; go back to the current state."
-          else
-              echo "A tag is specified; go back to the state tracked by the specified tag."
-              echo "Fetch all tags..."
-
-              git fetch --all
-              git checkout $GIT_TAG
-            echo "Checked out source code at $GIT_TAG."
-          fi
     
       - name: Upgrade the Fleet hub agent to the after upgrade version
-        run: cd test/upgrade && chmod +x upgrade.sh && UPGRADE_HUB_SIDE=true ./upgrade.sh 3 && cd -
+        # Note that at this point the source code has been restored to the baseline
+        # commit, i.e., the commit that triggered the workflow.
+        run: |
+          cd test/upgrade && chmod +x upgrade.sh && cd -
+          UPGRADE_HUB_SIDE=true ./test/upgrade/upgrade.sh 3
         env:
           KUBECONFIG: '/home/runner/.kube/config'
-      
-      - name: Travel to the current state
-        # Note: Fleet always uses the version compatibility test suite from the 
-        # baseline commit, i.e., the commit that triggers the workflow.
-        run: |
-          echo "Returning to the current state..."
-          git checkout $PREVIOUS_COMMIT
-          echo "Checked out source code at $PREVIOUS_COMMIT."
     
       - name: Run the After suite
         run: cd test/upgrade/after && ginkgo -v -p . && cd -
@@ -176,8 +162,7 @@ jobs:
               echo "Fetch all tags..."
 
               git fetch --all
-              GIT_TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
-              
+              GIT_TAG=$(git describe --tags $(git rev-list --tags --max-count=1)) 
           else
               echo "A tag is specified; go back to the state tracked by the specified tag."
               echo "Fetch all tags..."
@@ -188,8 +173,11 @@ jobs:
           git checkout $GIT_TAG
           echo "Checked out source code at $GIT_TAG."
 
-      - name: Prepare the fleet
-        run: cd test/upgrade && chmod +x setup.sh && ./setup.sh 3 && cd -
+      - name: Prepare the fleet using the before upgrade version
+        # The GIT_TAG variable is explicitly set up for compatibility reasons.
+        run: |
+          cd test/upgrade && chmod +x setup.sh && cd -
+          GIT_TAG=NOTRAVEL ./test/upgrade/setup.sh 3
         env:
           KUBECONFIG: '/home/runner/.kube/config'
           HUB_SERVER_URL: 'https://172.19.0.2:6443'
@@ -198,7 +186,14 @@ jobs:
         # Note: Fleet always uses the version compatibility test suite from the 
         # baseline commit, i.e., the commit that triggers the workflow.
         run: |
-          echo "Returning to the current state..."
+          GIT_TAG="${{ github.event.inputs.afterTagOrCommit }}"
+          if [ -z "${GIT_TAG}" ]
+          then
+              echo "No tag is specified; travel to the baseline commit (the commit that triggers the workflow)."
+          else
+              echo "A tag is specified; travel to the state tracked by the specified tag."
+              PREVIOUS_COMMIT="${GIT_TAG}"
+          fi
           git checkout $PREVIOUS_COMMIT
           echo "Checked out source code at $PREVIOUS_COMMIT."
 
@@ -206,38 +201,15 @@ jobs:
         run: cd test/upgrade/before && ginkgo -v -p . && cd -
         env:
           KUBECONFIG: '/home/runner/.kube/config'
-      
-      - name: Travel back in time to the after upgrade version
-        run: |
-          GIT_TAG="${{ github.event.inputs.afterTagOrCommit }}"
-          PREVIOUS_BRANCH=$(git branch --show-current)
-          PREVIOUS_COMMIT=$(git rev-parse HEAD)
-          echo "Current at branch $PREVIOUS_BRANCH, commit $PREVIOUS_COMMIT."
-
-          if [ -z "${GIT_TAG}" ]
-          then
-              echo "No tag is specified; go back to the current state."
-          else
-              echo "A tag is specified; go back to the state tracked by the specified tag."
-              echo "Fetch all tags..."
-
-              git fetch --all
-              git checkout $GIT_TAG
-            echo "Checked out source code at $GIT_TAG."
-          fi
     
       - name: Upgrade the Fleet member agent
-        run: cd test/upgrade && chmod +x upgrade.sh && UPGRADE_MEMBER_SIDE=true ./upgrade.sh 3 && cd -
+        # Note that at this point the source code has been restored to the baseline
+        # commit, i.e., the commit that triggered the workflow.
+        run: |
+          cd test/upgrade && chmod +x upgrade.sh && cd -
+          UPGRADE_MEMBER_SIDE=true ./test/upgrade/upgrade.sh 3
         env:
           KUBECONFIG: '/home/runner/.kube/config'
-      
-      - name: Travel to the current state
-        # Note: Fleet always uses the version compatibility test suite from the 
-        # baseline commit, i.e., the commit that triggers the workflow.
-        run: |
-          echo "Returning to the current state..."
-          git checkout $PREVIOUS_COMMIT
-          echo "Checked out source code at $PREVIOUS_COMMIT."
     
       - name: Run the After suite
         run: cd test/upgrade/after && ginkgo -v -p . && cd -
@@ -280,8 +252,7 @@ jobs:
               echo "Fetch all tags..."
 
               git fetch --all
-              GIT_TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
-              
+              GIT_TAG=$(git describe --tags $(git rev-list --tags --max-count=1)) 
           else
               echo "A tag is specified; go back to the state tracked by the specified tag."
               echo "Fetch all tags..."
@@ -292,8 +263,11 @@ jobs:
           git checkout $GIT_TAG
           echo "Checked out source code at $GIT_TAG."
 
-      - name: Prepare the fleet
-        run: cd test/upgrade && chmod +x setup.sh && ./setup.sh 3 && cd -
+      - name: Prepare the fleet using the before upgrade version
+        # The GIT_TAG variable is explicitly set up for compatibility reasons.
+        run: |
+          cd test/upgrade && chmod +x setup.sh && cd -
+          GIT_TAG=NOTRAVEL ./test/upgrade/setup.sh 3
         env:
           KUBECONFIG: '/home/runner/.kube/config'
           HUB_SERVER_URL: 'https://172.19.0.2:6443'
@@ -302,7 +276,14 @@ jobs:
         # Note: Fleet always uses the version compatibility test suite from the 
         # baseline commit, i.e., the commit that triggers the workflow.
         run: |
-          echo "Returning to the current state..."
+          GIT_TAG="${{ github.event.inputs.afterTagOrCommit }}"
+          if [ -z "${GIT_TAG}" ]
+          then
+              echo "No tag is specified; travel to the baseline commit (the commit that triggers the workflow)."
+          else
+              echo "A tag is specified; travel to the state tracked by the specified tag."
+              PREVIOUS_COMMIT="${GIT_TAG}"
+          fi
           git checkout $PREVIOUS_COMMIT
           echo "Checked out source code at $PREVIOUS_COMMIT."
 
@@ -310,28 +291,13 @@ jobs:
         run: cd test/upgrade/before && ginkgo -v -p . && cd -
         env:
           KUBECONFIG: '/home/runner/.kube/config'
-    
-      - name: Travel back in time to the after upgrade version
-        run: |
-          GIT_TAG="${{ github.event.inputs.afterTagOrCommit }}"
-          PREVIOUS_BRANCH=$(git branch --show-current)
-          PREVIOUS_COMMIT=$(git rev-parse HEAD)
-          echo "Current at branch $PREVIOUS_BRANCH, commit $PREVIOUS_COMMIT."
-
-          if [ -z "${GIT_TAG}" ]
-          then
-              echo "No tag is specified; go back to the current state."
-          else
-              echo "A tag is specified; go back to the state tracked by the specified tag."
-              echo "Fetch all tags..."
-
-              git fetch --all
-              git checkout $GIT_TAG
-            echo "Checked out source code at $GIT_TAG."
-          fi
 
       - name: Upgrade all Fleet agents
-        run: cd test/upgrade && GIT_TAG="${{ github.event.inputs.afterTagOrCommit }}" chmod +x upgrade.sh && UPGRADE_HUB_SIDE=true UPGRADE_MEMBER_SIDE=true ./upgrade.sh 3 && cd -
+        # Note that at this point the source code has been restored to the baseline
+        # commit, i.e., the commit that triggered the workflow.
+        run: |
+          cd test/upgrade && chmod +x upgrade.sh && cd -
+          UPGRADE_HUB_SIDE=true UPGRADE_MEMBER_SIDE=true ./test/upgrade/upgrade.sh 3
         env:
           KUBECONFIG: '/home/runner/.kube/config'
     

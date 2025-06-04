@@ -101,7 +101,7 @@ func clusterResourcePlacementForTest() *fleetv1beta1.ClusterResourcePlacement {
 			Name:       testCRPName,
 			Generation: crpGeneration,
 		},
-		Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+		Spec: fleetv1beta1.PlacementSpec{
 			ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
 				{
 					Group:   corev1.GroupName,
@@ -3265,7 +3265,7 @@ func TestIsRolloutComplete(t *testing.T) {
 					Name:       testCRPName,
 					Generation: crpGeneration,
 				},
-				Status: fleetv1beta1.ClusterResourcePlacementStatus{
+				Status: fleetv1beta1.PlacementStatus{
 					Conditions: tc.conditions,
 				},
 			}
