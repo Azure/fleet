@@ -97,14 +97,14 @@ func TestSetPlacementStatus(t *testing.T) {
 	}
 	tests := []struct {
 		name                    string
-		crpStatus               fleetv1beta1.ClusterResourcePlacementStatus
+		crpStatus               fleetv1beta1.PlacementStatus
 		policy                  *fleetv1beta1.PlacementPolicy
 		strategy                fleetv1beta1.RolloutStrategy
 		latestPolicySnapshot    *fleetv1beta1.ClusterSchedulingPolicySnapshot
 		latestResourceSnapshot  *fleetv1beta1.ClusterResourceSnapshot
 		clusterResourceBindings []fleetv1beta1.ClusterResourceBinding
 		want                    bool
-		wantStatus              *fleetv1beta1.ClusterResourcePlacementStatus
+		wantStatus              *fleetv1beta1.PlacementStatus
 		wantErr                 error
 	}{
 		{
@@ -137,7 +137,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: false,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -196,7 +196,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: false,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -255,7 +255,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: false,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -314,7 +314,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: false,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -394,7 +394,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -528,7 +528,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: false,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -604,7 +604,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -746,7 +746,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: false,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -879,7 +879,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -1148,7 +1148,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -1558,7 +1558,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -1836,7 +1836,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -2066,7 +2066,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -2377,7 +2377,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -2514,7 +2514,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				PlacementType:    fleetv1beta1.PickNPlacementType,
 				NumberOfClusters: ptr.To(int32(1)),
 			},
-			crpStatus: fleetv1beta1.ClusterResourcePlacementStatus{
+			crpStatus: fleetv1beta1.PlacementStatus{
 				ObservedResourceIndex: "-1",
 				Conditions: []metav1.Condition{
 					{
@@ -2672,7 +2672,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -2771,7 +2771,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -2878,7 +2878,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -2937,7 +2937,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				PlacementType:    fleetv1beta1.PickNPlacementType,
 				NumberOfClusters: ptr.To(int32(3)),
 			},
-			crpStatus: fleetv1beta1.ClusterResourcePlacementStatus{
+			crpStatus: fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -3082,7 +3082,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -3332,7 +3332,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -3651,7 +3651,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -3963,7 +3963,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -4263,7 +4263,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -4495,7 +4495,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			crpStatus: fleetv1beta1.ClusterResourcePlacementStatus{
+			crpStatus: fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -4592,7 +4592,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					},
 				},
 			},
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -4788,7 +4788,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 			},
 			want: true,
-			crpStatus: fleetv1beta1.ClusterResourcePlacementStatus{
+			crpStatus: fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -4871,7 +4871,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					},
 				},
 			},
-			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+			wantStatus: &fleetv1beta1.PlacementStatus{
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
@@ -4977,7 +4977,7 @@ func TestSetPlacementStatus(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testCRPName,
 				},
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+				Spec: fleetv1beta1.PlacementSpec{
 					ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
 						{
 							Group:   corev1.GroupName,
@@ -5102,7 +5102,7 @@ func TestBuildResourcePlacementStatusMap(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			crp := fleetv1beta1.ClusterResourcePlacement{
-				Status: fleetv1beta1.ClusterResourcePlacementStatus{
+				Status: fleetv1beta1.PlacementStatus{
 					PlacementStatuses: tc.status,
 				},
 			}

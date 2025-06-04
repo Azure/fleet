@@ -190,7 +190,7 @@ func TestFindPlacementsSelectedDeletedResV1Beta11(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
-					Status: placementv1beta1.ClusterResourcePlacementStatus{
+					Status: placementv1beta1.PlacementStatus{
 						SelectedResources: []placementv1beta1.ResourceIdentifier{
 							deletedResV1Beta1,
 						},
@@ -206,7 +206,7 @@ func TestFindPlacementsSelectedDeletedResV1Beta11(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
-					Status: placementv1beta1.ClusterResourcePlacementStatus{
+					Status: placementv1beta1.PlacementStatus{
 						SelectedResources: []placementv1beta1.ResourceIdentifier{
 							deletedResV1Beta1,
 						},
@@ -216,7 +216,7 @@ func TestFindPlacementsSelectedDeletedResV1Beta11(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected-2",
 					},
-					Status: placementv1beta1.ClusterResourcePlacementStatus{
+					Status: placementv1beta1.PlacementStatus{
 						SelectedResources: []placementv1beta1.ResourceIdentifier{
 							deletedResV1Beta1,
 							{
@@ -237,7 +237,7 @@ func TestFindPlacementsSelectedDeletedResV1Beta11(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
-					Status: placementv1beta1.ClusterResourcePlacementStatus{
+					Status: placementv1beta1.PlacementStatus{
 						SelectedResources: []placementv1beta1.ResourceIdentifier{
 							{
 								Group:     "xyz",
@@ -257,7 +257,7 @@ func TestFindPlacementsSelectedDeletedResV1Beta11(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
-					Status: placementv1beta1.ClusterResourcePlacementStatus{
+					Status: placementv1beta1.PlacementStatus{
 						SelectedResources: []placementv1beta1.ResourceIdentifier{},
 					},
 				},
@@ -680,7 +680,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
-					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Spec: placementv1beta1.PlacementSpec{
 						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 							{
 								Group:   corev1.GroupName,
@@ -703,7 +703,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
-					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Spec: placementv1beta1.PlacementSpec{
 						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{},
 					},
 				},
@@ -717,7 +717,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
-					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Spec: placementv1beta1.PlacementSpec{
 						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 							{
 								Group:   corev1.GroupName,
@@ -738,7 +738,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
-					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Spec: placementv1beta1.PlacementSpec{
 						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 							{
 								Group:   corev1.GroupName,
@@ -766,7 +766,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
-					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Spec: placementv1beta1.PlacementSpec{
 						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 							{
 								Group:   corev1.GroupName,
@@ -789,7 +789,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
-					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Spec: placementv1beta1.PlacementSpec{
 						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 							{
 								Group:   corev1.GroupName,
@@ -816,7 +816,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
-					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Spec: placementv1beta1.PlacementSpec{
 						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 							{
 								Group:   corev1.GroupName,
@@ -852,7 +852,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
-					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Spec: placementv1beta1.PlacementSpec{
 						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 							{
 								Group:   corev1.GroupName,
@@ -889,7 +889,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
-					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Spec: placementv1beta1.PlacementSpec{
 						// the mis-matching resource selector
 						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 							{
@@ -904,7 +904,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 							},
 						},
 					},
-					Status: placementv1beta1.ClusterResourcePlacementStatus{
+					Status: placementv1beta1.PlacementStatus{
 						SelectedResources: []placementv1beta1.ResourceIdentifier{
 							{
 								Group:     corev1.GroupName,
@@ -933,7 +933,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
-					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Spec: placementv1beta1.PlacementSpec{
 						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 							{
 								Group:   corev1.GroupName,
@@ -947,7 +947,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 							},
 						},
 					},
-					Status: placementv1beta1.ClusterResourcePlacementStatus{
+					Status: placementv1beta1.PlacementStatus{
 						SelectedResources: []placementv1beta1.ResourceIdentifier{
 							{
 								Group:     corev1.GroupName,
@@ -969,7 +969,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
-					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Spec: placementv1beta1.PlacementSpec{
 						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 							{
 								Group:   corev1.GroupName,
@@ -990,7 +990,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
-					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Spec: placementv1beta1.PlacementSpec{
 						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 							{
 								Group:   corev1.GroupName,

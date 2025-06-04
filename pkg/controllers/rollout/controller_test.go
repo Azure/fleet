@@ -2263,7 +2263,7 @@ func clusterResourcePlacementForTest(crpName string, policy *fleetv1beta1.Placem
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crpName,
 		},
-		Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+		Spec: fleetv1beta1.PlacementSpec{
 			ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
 				{
 					Group:   corev1.GroupName,
@@ -2924,7 +2924,7 @@ func TestProcessApplyStrategyUpdates(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
 				},
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+				Spec: fleetv1beta1.PlacementSpec{
 					Strategy: fleetv1beta1.RolloutStrategy{},
 				},
 			},
@@ -2959,7 +2959,7 @@ func TestProcessApplyStrategyUpdates(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
 				},
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+				Spec: fleetv1beta1.PlacementSpec{
 					Strategy: fleetv1beta1.RolloutStrategy{
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 							Type:             fleetv1beta1.ApplyStrategyTypeServerSideApply,
@@ -3066,7 +3066,7 @@ func TestProcessApplyStrategyUpdates(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
 				},
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+				Spec: fleetv1beta1.PlacementSpec{
 					Strategy: fleetv1beta1.RolloutStrategy{
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 							Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,

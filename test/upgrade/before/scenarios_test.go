@@ -50,7 +50,7 @@ var _ = Describe("CRP with trackable resources, all available (before upgrade)",
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(workNamespaceName),
 				Strategy: placementv1beta1.RolloutStrategy{
 					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
@@ -113,7 +113,7 @@ var _ = Describe("CRP with non-trackable resources, all available (before upgrad
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(workNamespaceName),
 				Strategy: placementv1beta1.RolloutStrategy{
 					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
@@ -204,7 +204,7 @@ var _ = Describe("CRP with availability failure (before upgrade)", Ordered, func
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(workNamespaceName),
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType: placementv1beta1.PickFixedPlacementType,
@@ -292,7 +292,7 @@ var _ = Describe("CRP with apply op failure (before upgrade)", Ordered, func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(workNamespaceName),
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType: placementv1beta1.PickFixedPlacementType,
@@ -413,7 +413,7 @@ var _ = Describe("CRP stuck in the rollout process (blocked by availability fail
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(workNamespaceName),
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType: placementv1beta1.PickAllPlacementType,
@@ -585,7 +585,7 @@ var _ = Describe("CRP stuck in the rollout process (blocked by apply op failure)
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(workNamespaceName),
 				Strategy: placementv1beta1.RolloutStrategy{
 					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
@@ -739,7 +739,7 @@ var _ = Describe("CRP stuck in the rollout process (long wait time)", Ordered, f
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(workNamespaceName),
 				Strategy: placementv1beta1.RolloutStrategy{
 					Type: placementv1beta1.RollingUpdateRolloutStrategyType,

@@ -123,7 +123,7 @@ func TestHandle(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "pick-all-crp",
 		},
-		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+		Spec: placementv1beta1.PlacementSpec{
 			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{},
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickAllPlacementType,
@@ -134,7 +134,7 @@ func TestHandle(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "crp-pickn",
 		},
-		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+		Spec: placementv1beta1.PlacementSpec{
 			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{},
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType:    placementv1beta1.PickNPlacementType,
@@ -146,7 +146,7 @@ func TestHandle(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "crp-pickfixed",
 		},
-		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+		Spec: placementv1beta1.PlacementSpec{
 			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{},
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickFixedPlacementType,

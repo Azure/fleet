@@ -720,7 +720,7 @@ func crpStatusWithOverrideUpdatedActual(
 				ApplicableClusterResourceOverrides: wantClusterResourceOverrides,
 			})
 		}
-		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+		wantStatus := placementv1beta1.PlacementStatus{
 			Conditions:            crpRolloutCompletedConditions(crp.Generation, hasOverride),
 			PlacementStatuses:     wantPlacementStatus,
 			SelectedResources:     wantSelectedResourceIdentifiers,
@@ -762,7 +762,7 @@ func crpStatusWithOverrideUpdatedFailedActual(
 			})
 		}
 
-		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+		wantStatus := placementv1beta1.PlacementStatus{
 			Conditions:            crpOverrideFailedConditions(crp.Generation),
 			PlacementStatuses:     wantPlacementStatus,
 			SelectedResources:     wantSelectedResourceIdentifiers,
@@ -800,7 +800,7 @@ func crpStatusWithWorkSynchronizedUpdatedFailedActual(
 			})
 		}
 
-		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+		wantStatus := placementv1beta1.PlacementStatus{
 			Conditions:            crpWorkSynchronizedFailedConditions(crp.Generation, hasOverrides),
 			PlacementStatuses:     wantPlacementStatus,
 			SelectedResources:     wantSelectedResourceIdentifiers,
@@ -865,7 +865,7 @@ func customizedCRPStatusUpdatedActual(crpName string,
 		//
 		// * The CRP is of the PickN placement type and the required N count cannot be fulfilled; or
 		// * The CRP is of the PickFixed placement type and the list of target clusters specified cannot be fulfilled.
-		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+		wantStatus := placementv1beta1.PlacementStatus{
 			Conditions:            wantCRPConditions,
 			PlacementStatuses:     wantPlacementStatus,
 			SelectedResources:     wantSelectedResourceIdentifiers,
@@ -978,7 +978,7 @@ func safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResourceIdentifiers [
 			},
 		}
 
-		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+		wantStatus := placementv1beta1.PlacementStatus{
 			Conditions:            wantCRPConditions,
 			PlacementStatuses:     wantPlacementStatus,
 			SelectedResources:     wantSelectedResourceIdentifiers,

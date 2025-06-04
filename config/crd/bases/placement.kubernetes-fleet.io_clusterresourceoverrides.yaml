@@ -54,7 +54,6 @@ spec:
                 items:
                   description: |-
                     ClusterResourceSelector is used to select cluster scoped resources as the target resources to be placed.
-                    If a namespace is selected, ALL the resources under the namespace are selected automatically.
                     All the fields are `ANDed`. In other words, a resource must match all the fields to be selected.
                   properties:
                     group:

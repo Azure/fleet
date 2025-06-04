@@ -45,7 +45,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: selector,
 			},
 		}
@@ -63,7 +63,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType:    placementv1beta1.PickFixedPlacementType,
@@ -86,7 +86,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickNPlacementType,
@@ -137,7 +137,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 					// the behavior of the controllers.
 					Finalizers: []string{customDeletionBlockerFinalizer},
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 						{
 							Group:   "",
@@ -167,7 +167,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 					// the behavior of the controllers.
 					Finalizers: []string{customDeletionBlockerFinalizer},
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 						{
 							Group:   "apps",
@@ -200,7 +200,7 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(),
 			},
 		}
@@ -305,7 +305,7 @@ var _ = Describe("webhook tests for CRP tolerations", Ordered, func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(),
 				Policy: &placementv1beta1.PlacementPolicy{
 					Tolerations: []placementv1beta1.Toleration{
@@ -1308,7 +1308,7 @@ var _ = Describe("webhook tests for ClusterResourcePlacementEviction CREATE oper
 				Name:       crpName,
 				Finalizers: []string{"example.com/finalizer"},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(),
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType: placementv1beta1.PickAllPlacementType,
@@ -1340,7 +1340,7 @@ var _ = Describe("webhook tests for ClusterResourcePlacementEviction CREATE oper
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(),
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType: placementv1beta1.PickFixedPlacementType,

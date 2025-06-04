@@ -387,7 +387,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testCRPName,
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 						{
 							Group:   corev1.GroupName,
@@ -416,7 +416,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
@@ -457,7 +457,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
@@ -512,7 +512,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
@@ -569,7 +569,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
@@ -772,7 +772,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
@@ -1155,7 +1155,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
@@ -1372,7 +1372,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testCRPName,
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 						{
 							Group:   corev1.GroupName,
@@ -1406,7 +1406,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
@@ -1449,7 +1449,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
@@ -1626,7 +1626,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{

@@ -190,7 +190,7 @@ func TestCollectClusterScopedResourcesSelectedByCRP(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-crp",
 				},
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					SelectedResources: []placementv1beta1.ResourceIdentifier{
 						{
 							Group:   "rbac.authorization.k8s.io",
@@ -237,7 +237,7 @@ func TestCollectClusterScopedResourcesSelectedByCRP(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-crp",
 				},
-				Status: placementv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.PlacementStatus{
 					SelectedResources: []placementv1beta1.ResourceIdentifier{
 						{
 							Group:     "",

@@ -61,7 +61,7 @@ const (
 	// cluster.
 	WorkFinalizer = fleetPrefix + "work-cleanup"
 
-	// CRPTrackingLabel points to the cluster resource placement that creates this resource binding.
+	// CRPTrackingLabel points to the placement that creates this resource binding.
 	CRPTrackingLabel = fleetPrefix + "parent-CRP"
 
 	// IsLatestSnapshotLabel indicates if the snapshot is the latest one.

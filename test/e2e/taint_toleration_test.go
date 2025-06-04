@@ -45,7 +45,7 @@ var _ = Describe("placing resource using a cluster resource placement with pickF
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(),
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType: placementv1beta1.PickFixedPlacementType,
@@ -95,7 +95,7 @@ var _ = Describe("placing resources using a cluster resource placement with no p
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(),
 				Strategy: placementv1beta1.RolloutStrategy{
 					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
@@ -168,7 +168,7 @@ var _ = Describe("placing resources using a cluster resource placement with no p
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(),
 				Strategy: placementv1beta1.RolloutStrategy{
 					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
@@ -241,7 +241,7 @@ var _ = Describe("picking N clusters with affinities and topology spread constra
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(),
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType:    placementv1beta1.PickNPlacementType,
@@ -327,7 +327,7 @@ var _ = Describe("picking all clusters using pickAll placement policy, add taint
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType: placementv1beta1.PickAllPlacementType,
 				},

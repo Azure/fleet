@@ -544,7 +544,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType:    placementv1beta1.PickNPlacementType,
 					NumberOfClusters: ptr.To(int32(len(allMemberClusterNames))),
@@ -636,7 +636,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType:    placementv1beta1.PickNPlacementType,
 					NumberOfClusters: ptr.To(int32(len(allMemberClusterNames))),
@@ -742,7 +742,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType:    placementv1beta1.PickNPlacementType,
 					NumberOfClusters: ptr.To(int32(len(allMemberClusterNames))),
@@ -840,7 +840,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType:    placementv1beta1.PickNPlacementType,
 					NumberOfClusters: ptr.To(int32(len(allMemberClusterNames))),
@@ -932,7 +932,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType:    placementv1beta1.PickNPlacementType,
 					NumberOfClusters: ptr.To(int32(len(allMemberClusterNames))),
@@ -1024,7 +1024,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType:    placementv1beta1.PickNPlacementType,
 					NumberOfClusters: ptr.To(int32(len(allMemberClusterNames))),
@@ -1130,7 +1130,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType:    placementv1beta1.PickNPlacementType,
 					NumberOfClusters: ptr.To(int32(len(allMemberClusterNames))),
@@ -1228,7 +1228,7 @@ var _ = Describe("ClusterResourcePlacement eviction of bound binding - PickN CRP
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType:    placementv1beta1.PickNPlacementType,
 					NumberOfClusters: ptr.To(int32(len(allMemberClusterNames))),

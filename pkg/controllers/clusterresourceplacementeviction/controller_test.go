@@ -63,7 +63,7 @@ func TestValidateEviction(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testCRPName,
 		},
-		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+		Spec: placementv1beta1.PlacementSpec{
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickAllPlacementType,
 			},
@@ -134,7 +134,7 @@ func TestValidateEviction(t *testing.T) {
 					DeletionTimestamp: &metav1.Time{Time: time.Now()},
 					Finalizers:        []string{"test-finalizer"},
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickAllPlacementType,
 					},
@@ -159,7 +159,7 @@ func TestValidateEviction(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testCRPName,
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickFixedPlacementType,
 					},
@@ -223,7 +223,7 @@ func TestValidateEviction(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-crp",
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{},
+				Spec: placementv1beta1.PlacementSpec{},
 			},
 			bindings: []placementv1beta1.ClusterResourceBinding{testBinding2},
 			wantValidationResult: &evictionValidationResult{
@@ -1555,7 +1555,7 @@ func buildTestPickAllCRP(crpName string) placementv1beta1.ClusterResourcePlaceme
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crpName,
 		},
-		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+		Spec: placementv1beta1.PlacementSpec{
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickAllPlacementType,
 			},

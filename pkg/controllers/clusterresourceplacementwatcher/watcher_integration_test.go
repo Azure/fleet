@@ -37,7 +37,7 @@ func clusterResourcePlacementForTest() *fleetv1beta1.ClusterResourcePlacement {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testCRPName,
 		},
-		Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+		Spec: fleetv1beta1.PlacementSpec{
 			ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
 				{
 					Group:   corev1.GroupName,

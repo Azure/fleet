@@ -266,7 +266,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 
 				workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 				appConfigMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
-				wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+				wantStatus := placementv1beta1.PlacementStatus{
 					Conditions: crpAppliedFailedConditions(crp.Generation),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 						{
@@ -448,7 +448,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 					// the behavior of the controllers.
 					Finalizers: []string{customDeletionBlockerFinalizer},
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickFixedPlacementType,
@@ -487,7 +487,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 					Name: conflictedCRPName,
 					// No need for the custom deletion blocker finalizer.
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickFixedPlacementType,
@@ -510,8 +510,8 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 		})
 
 		It("should update conflicted CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
@@ -642,7 +642,7 @@ var _ = Describe("SSA", Ordered, func() {
 					// the behavior of the controllers.
 					Finalizers: []string{customDeletionBlockerFinalizer},
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickAllPlacementType,
@@ -758,7 +758,7 @@ var _ = Describe("switching apply strategies", func() {
 					// the behavior of the controllers.
 					Finalizers: []string{customDeletionBlockerFinalizer},
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickFixedPlacementType,
@@ -787,8 +787,8 @@ var _ = Describe("switching apply strategies", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
@@ -852,8 +852,8 @@ var _ = Describe("switching apply strategies", func() {
 			// The rollout of the previous change will be blocked due to the rollout
 			// strategy configuration (1 member cluster has failed; 0 clusters are
 			// allowed to become unavailable).
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpRolloutStuckConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
@@ -921,8 +921,8 @@ var _ = Describe("switching apply strategies", func() {
 			// The rollout of the previous change will be blocked due to the rollout
 			// strategy configuration (1 member cluster has failed; 0 clusters are
 			// allowed to become unavailable).
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpDiffReportedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
@@ -1003,7 +1003,7 @@ var _ = Describe("switching apply strategies", func() {
 					// the behavior of the controllers.
 					Finalizers: []string{customDeletionBlockerFinalizer},
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickFixedPlacementType,
@@ -1030,8 +1030,8 @@ var _ = Describe("switching apply strategies", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpDiffReportedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
@@ -1140,8 +1140,8 @@ var _ = Describe("switching apply strategies", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpDiffReportedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
@@ -1240,8 +1240,8 @@ var _ = Describe("switching apply strategies", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.ClusterResourcePlacementStatus {
-				return &placementv1beta1.ClusterResourcePlacementStatus{
+			buildWantCRPStatus := func(crpGeneration int64) *placementv1beta1.PlacementStatus {
+				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpRolloutCompletedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{

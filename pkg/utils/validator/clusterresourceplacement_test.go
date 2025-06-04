@@ -221,7 +221,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-crp",
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
@@ -238,7 +238,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-crp-with-very-long-name-field-exceeding-DNS1035LabelMaxLength",
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
@@ -256,7 +256,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-crp",
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 						{
 							Group:   "rbac.authorization.k8s.io",
@@ -284,7 +284,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-crp",
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 						{
 							Group:   "rbac.authorization.k8s.io",
@@ -304,7 +304,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-crp",
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 						{
 							Group:   "apps",
@@ -326,7 +326,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-crp",
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
 				},
 			},
