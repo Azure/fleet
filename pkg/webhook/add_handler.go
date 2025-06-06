@@ -3,6 +3,7 @@ package webhook
 import (
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/clusterresourceoverride"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/clusterresourceplacement"
+	"github.com/kubefleet-dev/kubefleet/pkg/webhook/clusterresourceplacementdisruptionbudget"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/clusterresourceplacementeviction"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/fleetresourcehandler"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/membercluster"
@@ -23,4 +24,5 @@ func init() {
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceoverride.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, resourceoverride.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacementeviction.Add)
+	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacementdisruptionbudget.Add)
 }

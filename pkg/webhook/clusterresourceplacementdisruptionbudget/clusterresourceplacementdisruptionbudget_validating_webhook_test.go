@@ -54,10 +54,7 @@ func TestHandle(t *testing.T) {
 				Type:   intstr.Int,
 				IntVal: 1,
 			},
-			MinAvailable: &intstr.IntOrString{
-				Type:   intstr.String,
-				StrVal: "50%",
-			},
+			MinAvailable: nil,
 		},
 	}
 	invalidCRPDBObjectMinAvailablePercentage := &placementv1beta1.ClusterResourcePlacementDisruptionBudget{
@@ -72,7 +69,7 @@ func TestHandle(t *testing.T) {
 			},
 		},
 	}
-	invalidCRPDBObjectMaxAvailablePercentage := &placementv1beta1.ClusterResourcePlacementDisruptionBudget{
+	invalidCRPDBObjectMaxUnavailablePercentage := &placementv1beta1.ClusterResourcePlacementDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "pick-all-crp",
 		},
@@ -84,7 +81,7 @@ func TestHandle(t *testing.T) {
 			MinAvailable: nil,
 		},
 	}
-	invalidCRPDBObjectMaxAvailableInteger := &placementv1beta1.ClusterResourcePlacementDisruptionBudget{
+	invalidCRPDBObjectMaxUnavailableInteger := &placementv1beta1.ClusterResourcePlacementDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "pick-all-crp",
 		},
@@ -112,9 +109,9 @@ func TestHandle(t *testing.T) {
 	assert.Nil(t, err)
 	invalidCRPDBObjectMinAvailablePercentageBytes, err := json.Marshal(invalidCRPDBObjectMinAvailablePercentage)
 	assert.Nil(t, err)
-	invalidCRPDBObjectMaxAvailablePercentageBytes, err := json.Marshal(invalidCRPDBObjectMaxAvailablePercentage)
+	invalidCRPDBObjectMaxUnavailablePercentageBytes, err := json.Marshal(invalidCRPDBObjectMaxUnavailablePercentage)
 	assert.Nil(t, err)
-	invalidCRPDBObjectMaxAvailableIntegerBytes, err := json.Marshal(invalidCRPDBObjectMaxAvailableInteger)
+	invalidCRPDBObjectMaxUnavailableIntegerBytes, err := json.Marshal(invalidCRPDBObjectMaxUnavailableInteger)
 	assert.Nil(t, err)
 	validCRPDBObjectCRPNotFoundBytes, err := json.Marshal(validCRPDBObjectCRPNotFound)
 	assert.Nil(t, err)
@@ -237,13 +234,13 @@ func TestHandle(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf("cluster resource placement policy type PickAll is not supported with min available as a percentage %v", invalidCRPDBObjectMinAvailablePercentage.Spec.MinAvailable)),
 		},
-		"deny CRPDB create - MaxAvailable as percentage": {
+		"deny CRPDB create - MaxUnavailable as percentage": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "pick-all-crp",
 					Object: runtime.RawExtension{
-						Raw:    invalidCRPDBObjectMaxAvailablePercentageBytes,
-						Object: invalidCRPDBObjectMaxAvailablePercentage,
+						Raw:    invalidCRPDBObjectMaxUnavailablePercentageBytes,
+						Object: invalidCRPDBObjectMaxUnavailablePercentage,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -257,15 +254,15 @@ func TestHandle(t *testing.T) {
 				decoder: decoder,
 				client:  fakeClient,
 			},
-			wantResponse: admission.Denied(fmt.Sprintf("cluster resource placement policy type PickAll is not supported with any specified max unavailable %v", invalidCRPDBObjectMaxAvailablePercentage.Spec.MaxUnavailable)),
+			wantResponse: admission.Denied(fmt.Sprintf("cluster resource placement policy type PickAll is not supported with any specified max unavailable %v", invalidCRPDBObjectMaxUnavailablePercentage.Spec.MaxUnavailable)),
 		},
-		"deny CRPDB create - MaxAvailable as integer": {
+		"deny CRPDB create - MaxUnavailable as integer": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "pick-all-crp",
 					Object: runtime.RawExtension{
-						Raw:    invalidCRPDBObjectMaxAvailableIntegerBytes,
-						Object: invalidCRPDBObjectMaxAvailableInteger,
+						Raw:    invalidCRPDBObjectMaxUnavailableIntegerBytes,
+						Object: invalidCRPDBObjectMaxUnavailableInteger,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
@@ -279,7 +276,7 @@ func TestHandle(t *testing.T) {
 				decoder: decoder,
 				client:  fakeClient,
 			},
-			wantResponse: admission.Denied(fmt.Sprintf("cluster resource placement policy type PickAll is not supported with any specified max unavailable %v", invalidCRPDBObjectMaxAvailableInteger.Spec.MaxUnavailable)),
+			wantResponse: admission.Denied(fmt.Sprintf("cluster resource placement policy type PickAll is not supported with any specified max unavailable %v", invalidCRPDBObjectMaxUnavailableInteger.Spec.MaxUnavailable)),
 		},
 		"allow CRPDB create - CRP not found": {
 			req: admission.Request{
@@ -288,6 +285,136 @@ func TestHandle(t *testing.T) {
 					Object: runtime.RawExtension{
 						Raw:    validCRPDBObjectCRPNotFoundBytes,
 						Object: validCRPDBObjectCRPNotFound,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"system:masters"},
+					},
+					RequestKind: &utils.ClusterResourcePlacementDisruptionBudgetMetaGVK,
+					Operation:   admissionv1.Create,
+				},
+			},
+			resourceValidator: clusterResourcePlacementDisruptionBudgetValidator{
+				decoder: decoder,
+				client:  fakeClient,
+			},
+			wantResponse: admission.Allowed("Associated clusterResourcePlacement object for clusterResourcePlacementDisruptionBudget is not found"),
+		},
+		"deny CRPDB update - CRPDB valid to invalid (MinAvailable as Percentage)": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "pick-all-crp",
+					Object: runtime.RawExtension{
+						Raw:    invalidCRPDBObjectMinAvailablePercentageBytes,
+						Object: invalidCRPDBObjectMinAvailablePercentage,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    validCRPDBObjectBytes,
+						Object: validCRPDBObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"system:masters"},
+					},
+					RequestKind: &utils.ClusterResourcePlacementDisruptionBudgetMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: clusterResourcePlacementDisruptionBudgetValidator{
+				decoder: decoder,
+				client:  fakeClient,
+			},
+			wantResponse: admission.Denied(fmt.Sprintf("cluster resource placement policy type PickAll is not supported with min available as a percentage %v", invalidCRPDBObjectMinAvailablePercentage.Spec.MinAvailable)),
+		},
+		"deny CRPDB update - CRPDB valid to invalid (MaxUnavailable as Integer)": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "pick-all-crp",
+					Object: runtime.RawExtension{
+						Raw:    invalidCRPDBObjectMaxUnavailableIntegerBytes,
+						Object: invalidCRPDBObjectMaxUnavailableInteger,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    validCRPDBObjectBytes,
+						Object: validCRPDBObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"system:masters"},
+					},
+					RequestKind: &utils.ClusterResourcePlacementDisruptionBudgetMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: clusterResourcePlacementDisruptionBudgetValidator{
+				decoder: decoder,
+				client:  fakeClient,
+			},
+			wantResponse: admission.Denied(fmt.Sprintf("cluster resource placement policy type PickAll is not supported with any specified max unavailable %v", invalidCRPDBObjectMaxUnavailableInteger.Spec.MaxUnavailable)),
+		},
+		"deny CRPDB update - CRPDB valid to invalid (MaxUnavailable as Percentage)": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "pick-all-crp",
+					Object: runtime.RawExtension{
+						Raw:    invalidCRPDBObjectMaxUnavailablePercentageBytes,
+						Object: invalidCRPDBObjectMaxUnavailablePercentage,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    validCRPDBObjectBytes,
+						Object: validCRPDBObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"system:masters"},
+					},
+					RequestKind: &utils.ClusterResourcePlacementDisruptionBudgetMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: clusterResourcePlacementDisruptionBudgetValidator{
+				decoder: decoder,
+				client:  fakeClient,
+			},
+			wantResponse: admission.Denied(fmt.Sprintf("cluster resource placement policy type PickAll is not supported with any specified max unavailable %v", invalidCRPDBObjectMaxUnavailablePercentage.Spec.MaxUnavailable)),
+		},
+		"allow CRPDB update - CRPDB valid (PickAll CRP to PickN CRP)": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "pick-n-crp",
+					Object: runtime.RawExtension{
+						Raw:    validCRPDBObjectPickNCRPBytes,
+						Object: validCRPDBObjectPickNCRP,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    validCRPDBObjectBytes,
+						Object: validCRPDBObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"system:masters"},
+					},
+					RequestKind: &utils.ClusterResourcePlacementDisruptionBudgetMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: clusterResourcePlacementDisruptionBudgetValidator{
+				decoder: decoder,
+				client:  fakeClient,
+			},
+			wantResponse: admission.Allowed("clusterResourcePlacementDisruptionBudget has valid fields"),
+		},
+		"allow CRPDB update - CRPDB valid (PickAll CRP to not found CRP)": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "does-not-exist",
+					Object: runtime.RawExtension{
+						Raw:    validCRPDBObjectCRPNotFoundBytes,
+						Object: validCRPDBObjectCRPNotFound,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    validCRPDBObjectBytes,
+						Object: validCRPDBObject,
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
