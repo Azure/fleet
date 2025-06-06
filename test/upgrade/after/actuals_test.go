@@ -348,8 +348,9 @@ func customizedCRPStatusUpdatedActual(crpName string,
 		wantPlacementStatus := []placementv1beta1.ResourcePlacementStatus{}
 		for _, name := range wantSelectedClusters {
 			wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.ResourcePlacementStatus{
-				ClusterName: name,
-				Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation, resourceIsTrackable, false),
+				ClusterName:           name,
+				ObservedResourceIndex: wantObservedResourceIndex,
+				Conditions:            resourcePlacementRolloutCompletedConditions(crp.Generation, resourceIsTrackable, false),
 			})
 		}
 		for i := 0; i < len(wantUnselectedClusters); i++ {
@@ -386,7 +387,7 @@ func customizedCRPStatusUpdatedActual(crpName string,
 		//
 		// * The CRP is of the PickN placement type and the required N count cannot be fulfilled; or
 		// * The CRP is of the PickFixed placement type and the list of target clusters specified cannot be fulfilled.
-		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+		wantStatus := placementv1beta1.PlacementStatus{
 			Conditions:            wantCRPConditions,
 			PlacementStatuses:     wantPlacementStatus,
 			SelectedResources:     wantSelectedResourceIdentifiers,
@@ -441,7 +442,7 @@ func crpWithOneFailedAvailabilityCheckStatusUpdatedActual(
 			})
 		}
 
-		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+		wantStatus := placementv1beta1.PlacementStatus{
 			Conditions:            crpNotAvailableConditions(crp.Generation, false),
 			PlacementStatuses:     wantPlacementStatus,
 			SelectedResources:     wantSelectedResourceIdentifiers,
@@ -498,7 +499,7 @@ func crpWithOneFailedApplyOpStatusUpdatedActual(
 			})
 		}
 
-		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+		wantStatus := placementv1beta1.PlacementStatus{
 			Conditions:            crpNotAppliedConditions(crp.Generation),
 			PlacementStatuses:     wantPlacementStatus,
 			SelectedResources:     wantSelectedResourceIdentifiers,
@@ -619,7 +620,7 @@ func crpWithStuckRolloutDueToOneFailedAvailabilityCheckStatusUpdatedActual(
 			},
 		}
 
-		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+		wantStatus := placementv1beta1.PlacementStatus{
 			Conditions:            wantCRPConditions,
 			PlacementStatuses:     wantPlacementStatus,
 			SelectedResources:     wantSelectedResourceIdentifiers,
@@ -734,7 +735,7 @@ func crpWithStuckRolloutDueToOneFailedApplyOpStatusUpdatedActual(
 			},
 		}
 
-		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+		wantStatus := placementv1beta1.PlacementStatus{
 			Conditions:            wantCRPConditions,
 			PlacementStatuses:     wantPlacementStatus,
 			SelectedResources:     wantSelectedResourceIdentifiers,
@@ -798,7 +799,7 @@ func crpWithStuckRolloutDueToUntrackableResourcesStatusUpdatedActual(
 			},
 		}
 
-		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+		wantStatus := placementv1beta1.PlacementStatus{
 			Conditions:            wantCRPConditions,
 			PlacementStatuses:     wantPlacementStatus,
 			SelectedResources:     wantSelectedResourceIdentifiers,

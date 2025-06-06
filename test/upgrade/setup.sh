@@ -63,7 +63,7 @@ done
 
 # Install the hub agent to the hub cluster.
 kind export kubeconfig --name $HUB_CLUSTER
-helm install hub-agent ../../charts/hub-agent/ \
+helm install hub-agent charts/hub-agent/ \
     --set image.pullPolicy=Never \
     --set image.repository=$REGISTRY/$HUB_AGENT_IMAGE \
     --set image.tag=$IMAGE_TAG \
@@ -113,7 +113,7 @@ HUB_SERVER_URL="https://$(docker inspect $HUB_CLUSTER-control-plane --format='{{
 for (( i=0; i<${MEMBER_CLUSTER_COUNT}; i++ ));
 do
     kind export kubeconfig --name "${MEMBER_CLUSTERS[$i]}"
-    helm install member-agent ../../charts/member-agent/ \
+    helm install member-agent charts/member-agent/ \
         --set config.hubURL=$HUB_SERVER_URL \
         --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
         --set image.tag=$IMAGE_TAG \

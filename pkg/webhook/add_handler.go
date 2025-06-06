@@ -3,6 +3,7 @@ package webhook
 import (
 	"go.goms.io/fleet/pkg/webhook/clusterresourceoverride"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
+	"go.goms.io/fleet/pkg/webhook/clusterresourceplacementdisruptionbudget"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacementeviction"
 	"go.goms.io/fleet/pkg/webhook/fleetresourcehandler"
 	"go.goms.io/fleet/pkg/webhook/membercluster"
@@ -23,4 +24,5 @@ func init() {
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceoverride.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, resourceoverride.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacementeviction.Add)
+	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacementdisruptionbudget.Add)
 }

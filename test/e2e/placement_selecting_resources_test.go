@@ -60,7 +60,7 @@ var _ = Describe("creating CRP and selecting resources by name", Ordered, func()
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(),
 			},
 		}
@@ -113,7 +113,7 @@ var _ = Describe("creating CRP and selecting resources by label", Ordered, func(
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					{
 						Group:   "",
@@ -177,7 +177,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become selected a
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					{
 						Group:   "",
@@ -263,7 +263,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					{
 						Group:   "",
@@ -348,7 +348,7 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(),
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
@@ -441,7 +441,7 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(),
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
@@ -528,7 +528,7 @@ var _ = Describe("validating CRP when deleting resources in a matching namespace
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(),
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
@@ -619,7 +619,7 @@ var _ = Describe("validating CRP when selecting a reserved resource", Ordered, f
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					{
 						Group:   "",
@@ -651,7 +651,7 @@ var _ = Describe("validating CRP when selecting a reserved resource", Ordered, f
 				return err
 			}
 
-			wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+			wantStatus := placementv1beta1.PlacementStatus{
 				Conditions: []metav1.Condition{
 					{
 						Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
@@ -701,7 +701,7 @@ var _ = Describe("When creating a pickN ClusterResourcePlacement with duplicated
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					{
 						Group:   corev1.GroupName,
@@ -733,7 +733,7 @@ var _ = Describe("When creating a pickN ClusterResourcePlacement with duplicated
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, gotCRP); err != nil {
 				return err
 			}
-			wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+			wantStatus := placementv1beta1.PlacementStatus{
 				Conditions: []metav1.Condition{
 					{
 						Status:             metav1.ConditionFalse,
@@ -799,7 +799,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: workResourceSelector(),
 			},
 		}
@@ -825,11 +825,12 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 
 			workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 			appConfigMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
-			wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+			wantStatus := placementv1beta1.PlacementStatus{
 				Conditions: crpAppliedFailedConditions(crp.Generation),
 				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 					{
-						ClusterName: memberCluster1EastProdName,
+						ClusterName:           memberCluster1EastProdName,
+						ObservedResourceIndex: "0",
 						FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 							{
 								ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -848,12 +849,14 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 						Conditions: resourcePlacementApplyFailedConditions(crp.Generation),
 					},
 					{
-						ClusterName: memberCluster2EastCanaryName,
-						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation, true, false),
+						ClusterName:           memberCluster2EastCanaryName,
+						ObservedResourceIndex: "0",
+						Conditions:            resourcePlacementRolloutCompletedConditions(crp.Generation, true, false),
 					},
 					{
-						ClusterName: memberCluster3WestProdName,
-						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation, true, false),
+						ClusterName:           memberCluster3WestProdName,
+						ObservedResourceIndex: "0",
+						Conditions:            resourcePlacementRolloutCompletedConditions(crp.Generation, true, false),
 					},
 				},
 				SelectedResources: []placementv1beta1.ResourceIdentifier{
@@ -937,7 +940,7 @@ var _ = Describe("validating CRP when placing cluster scope resource (other than
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					{
 						Group:   "rbac.authorization.k8s.io",
@@ -1037,7 +1040,7 @@ var _ = Describe("validating CRP revision history allowing single revision when 
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					{
 						Group:   "",
@@ -1131,7 +1134,7 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					{
 						Group:   "",
@@ -1224,7 +1227,7 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 				// the behavior of the controllers.
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType: placementv1beta1.PickFixedPlacementType,
 					ClusterNames:  []string{memberCluster1EastProdName, memberCluster2EastCanaryName},
@@ -1363,7 +1366,7 @@ var _ = Describe("creating CRP and checking selected resources order", Ordered, 
 				Name:       crpName,
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.PlacementSpec{
 				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					{
 						Group:   "",
