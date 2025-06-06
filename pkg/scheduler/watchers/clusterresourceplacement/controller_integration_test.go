@@ -98,7 +98,7 @@ var _ = Describe("scheduler cluster resource placement source controller", Seria
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
 				},
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+				Spec: fleetv1beta1.PlacementSpec{
 					ResourceSelectors: resourceSelectors,
 				},
 			}
@@ -221,7 +221,7 @@ var _ = Describe("scheduler cluster resource placement source controller", Seria
 				ObjectMeta: metav1.ObjectMeta{
 					Name: noFinalizerCRP,
 				},
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+				Spec: fleetv1beta1.PlacementSpec{
 					ResourceSelectors: resourceSelectors,
 				},
 			}

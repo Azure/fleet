@@ -37,7 +37,7 @@ func clusterResourcePlacementForTest() *fleetv1beta1.ClusterResourcePlacement {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testCRPName,
 		},
-		Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+		Spec: fleetv1beta1.PlacementSpec{
 			ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
 				{
 					Group:   corev1.GroupName,
@@ -79,7 +79,14 @@ var _ = Describe("Test ClusterResourcePlacement Watcher", Serial, func() {
 		}, eventuallyTimeout, interval).Should(BeTrue(), "placementController should receive the CRP name when creating CRP")
 
 		By("By resetting the placement queue")
-		fakePlacementController.ResetQueue()
+		// Reset the queue to avoid the multiple create events triggered.
+		Consistently(func() error {
+			if fakePlacementController.Key() == testCRPName {
+				By("By finding the key and resetting the placement queue")
+				fakePlacementController.ResetQueue()
+			}
+			return nil
+		}, consistentlyDuration, interval).Should(Succeed(), "placementController queue should be stable empty after resetting")
 	})
 
 	Context("When updating clusterResourcePlacement", func() {
@@ -123,7 +130,7 @@ var _ = Describe("Test ClusterResourcePlacement Watcher", Serial, func() {
 			By("By checking placement controller queue")
 			Consistently(func() bool {
 				return fakePlacementController.Key() == ""
-			}, consistentlyDuration, interval).Should(BeTrue(), "watcher should ignore the update status event and not enqueue the request into the placementController queue")
+			}, consistentlyDuration, interval).Should(BeTrue(), "watcher should ignore the update status event and not enqueue the request into the placementController queue, got CRP %+v", createdCRP)
 		})
 	})
 

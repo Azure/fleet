@@ -491,7 +491,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
 				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.PlacementSpec{
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickFixedPlacementType,
 						ClusterNames:  []string{"test-cluster-1"},
@@ -530,6 +530,177 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 			checkEvictionCompleteMetric(customRegistry, "false", "true")
 		})
 	})
+
+	Context("Eviction with PickAll CRP and Invalid ClusterResourcePlacementBudget", func() {
+		// This context is used to test the scenarios where the ClusterResourcePlacementDisruptionBudget is misconfigured.
+		evictionName = fmt.Sprintf(evictionNameTemplate, GinkgoParallelProcess())
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crbName := fmt.Sprintf(crbNameTemplate, GinkgoParallelProcess())
+
+		BeforeEach(func() {
+			// Create the CRP.
+			By("Create ClusterResourcePlacement", func() {
+				crp := buildTestPickAllCRP(crpName)
+				crp.Spec.ResourceSelectors = []placementv1beta1.ClusterResourceSelector{
+					{
+						Group:   "",
+						Kind:    "Namespace",
+						Version: "v1",
+						Name:    "test-ns",
+					},
+				}
+				Expect(k8sClient.Create(ctx, &crp)).Should(Succeed())
+				// ensure CRP exists.
+				Eventually(func() error {
+					return k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, &crp)
+				}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+			})
+
+			By("Create ClusterResourceBinding", func() {
+				// Create CRB.
+				crb := placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   crbName,
+						Labels: map[string]string{placementv1beta1.CRPTrackingLabel: crpName},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:                        placementv1beta1.BindingStateBound,
+						ResourceSnapshotName:         "test-resource-snapshot",
+						SchedulingPolicySnapshotName: "test-scheduling-policy-snapshot",
+						TargetCluster:                "test-cluster",
+					},
+				}
+				Expect(k8sClient.Create(ctx, &crb)).Should(Succeed())
+				// ensure CRB exists.
+				Eventually(func() error {
+					return k8sClient.Get(ctx, types.NamespacedName{Name: crb.Name}, &crb)
+				}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+			})
+
+			By("Create ClusterResourcePlacementEviction", func() {
+				eviction := buildTestEviction(evictionName, crpName, "test-cluster")
+				Expect(k8sClient.Create(ctx, eviction)).Should(Succeed())
+			})
+		})
+
+		AfterEach(func() {
+			ensureCRPDBRemoved(crpName)
+			ensureCRBRemoved(crbName)
+			ensureEvictionRemoved(evictionName)
+			ensureCRPRemoved(crpName)
+		})
+
+		It("Eviction Blocked - PickAll CRP, PDB with MaxUnavailable set as Percentage, eviction denied due to misconfigured PDB", func() {
+			By("Create cluster resource placement disruption budget to block eviction", func() {
+				crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: crpName,
+					},
+					Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
+						MaxUnavailable: &intstr.IntOrString{
+							Type:   intstr.String,
+							StrVal: "50%",
+						},
+					},
+				}
+				Expect(k8sClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
+			})
+
+			By("should update cluster resource placement eviction status as expected", func() {
+				crpEvictionStatusUpdatedActual := testutilseviction.StatusUpdatedActual(
+					ctx, k8sClient, evictionName,
+					&testutilseviction.IsValidEviction{IsValid: true, Msg: condition.EvictionValidMessage},
+					&testutilseviction.IsExecutedEviction{IsExecuted: false, Msg: condition.EvictionBlockedMisconfiguredPDBSpecifiedMessage})
+				Eventually(crpEvictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement eviction status as expected")
+			})
+
+			By("Ensure eviction was not successful", func() {
+				var crb placementv1beta1.ClusterResourceBinding
+				// check to see CRB was not deleted.
+				Consistently(func() bool {
+					return !k8serrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: crbName}, &crb))
+				}, consistentlyDuration, consistentlyInterval).Should(BeTrue())
+			})
+
+			By("Ensure eviction complete metric was emitted", func() {
+				checkEvictionCompleteMetric(customRegistry, "true", "true")
+			})
+		})
+
+		It("Eviction Blocked - PickAll CRP, PDB with MaxUnavailable set as Integer, eviction denied due to misconfigured PDB", func() {
+			By("Create cluster resource placement disruption budget to block eviction", func() {
+				crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: crpName,
+					},
+					Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
+						MaxUnavailable: &intstr.IntOrString{
+							Type:   intstr.Int,
+							IntVal: 1,
+						},
+					},
+				}
+				Expect(k8sClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
+			})
+
+			By("should update cluster resource placement eviction status as expected", func() {
+				crpEvictionStatusUpdatedActual := testutilseviction.StatusUpdatedActual(
+					ctx, k8sClient, evictionName,
+					&testutilseviction.IsValidEviction{IsValid: true, Msg: condition.EvictionValidMessage},
+					&testutilseviction.IsExecutedEviction{IsExecuted: false, Msg: condition.EvictionBlockedMisconfiguredPDBSpecifiedMessage})
+				Eventually(crpEvictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement eviction status as expected")
+			})
+
+			By("Ensure eviction was not successful", func() {
+				var crb placementv1beta1.ClusterResourceBinding
+				// check to see CRB was not deleted.
+				Consistently(func() bool {
+					return !k8serrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: crbName}, &crb))
+				}, consistentlyDuration, consistentlyInterval).Should(BeTrue())
+			})
+
+			By("Ensure eviction complete metric was emitted", func() {
+				checkEvictionCompleteMetric(customRegistry, "true", "true")
+			})
+		})
+
+		It("Eviction Blocked - PickAll CRP, PDB with MinAvailable set as Percentage, eviction denied due to misconfigured PDB", func() {
+			By("Create cluster resource placement disruption budget to block eviction", func() {
+				crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: crpName,
+					},
+					Spec: placementv1beta1.PlacementDisruptionBudgetSpec{
+						MinAvailable: &intstr.IntOrString{
+							Type:   intstr.String,
+							StrVal: "100%",
+						},
+					},
+				}
+				Expect(k8sClient.Create(ctx, &crpdb)).To(Succeed(), "Failed to create CRP Disruption Budget %s", crpName)
+			})
+
+			By("should update cluster resource placement eviction status as expected", func() {
+				crpEvictionStatusUpdatedActual := testutilseviction.StatusUpdatedActual(
+					ctx, k8sClient, evictionName,
+					&testutilseviction.IsValidEviction{IsValid: true, Msg: condition.EvictionValidMessage},
+					&testutilseviction.IsExecutedEviction{IsExecuted: false, Msg: condition.EvictionBlockedMisconfiguredPDBSpecifiedMessage})
+				Eventually(crpEvictionStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement eviction status as expected")
+			})
+
+			By("Ensure eviction was not successful", func() {
+				var crb placementv1beta1.ClusterResourceBinding
+				// check to see CRB was not deleted.
+				Consistently(func() bool {
+					return !k8serrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: crbName}, &crb))
+				}, consistentlyDuration, consistentlyInterval).Should(BeTrue())
+			})
+
+			By("Ensure eviction complete metric was emitted", func() {
+				checkEvictionCompleteMetric(customRegistry, "true", "true")
+			})
+		})
+	})
 })
 
 func buildTestPickNCRP(crpName string, clusterCount int32) placementv1beta1.ClusterResourcePlacement {
@@ -537,7 +708,7 @@ func buildTestPickNCRP(crpName string, clusterCount int32) placementv1beta1.Clus
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crpName,
 		},
-		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+		Spec: placementv1beta1.PlacementSpec{
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType:    placementv1beta1.PickNPlacementType,
 				NumberOfClusters: ptr.To(clusterCount),

@@ -59,6 +59,7 @@ import (
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceoverride"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
+	"go.goms.io/fleet/pkg/webhook/clusterresourceplacementdisruptionbudget"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacementeviction"
 	"go.goms.io/fleet/pkg/webhook/fleetresourcehandler"
 	"go.goms.io/fleet/pkg/webhook/membercluster"
@@ -115,6 +116,7 @@ const (
 	clusterResourceOverrideName          = "clusterresourceoverrides"
 	resourceOverrideName                 = "resourceoverrides"
 	evictionName                         = "clusterresourceplacementevictions"
+	disruptionBudgetName                 = "clusterresourceplacementdisruptionbudgets"
 )
 
 var (
@@ -376,6 +378,22 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 						admv1.Create,
 					},
 					Rule: createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{evictionName}, &clusterScope),
+				},
+			},
+			TimeoutSeconds: longWebhookTimeout,
+		},
+		{
+			Name:                    "fleet.clusterresourceplacementdisruptionbudget.validating",
+			ClientConfig:            w.createClientConfig(clusterresourceplacementdisruptionbudget.ValidationPath),
+			FailurePolicy:           &failFailurePolicy,
+			SideEffects:             &sideEffortsNone,
+			AdmissionReviewVersions: admissionReviewVersions,
+			Rules: []admv1.RuleWithOperations{
+				{
+					Operations: []admv1.OperationType{
+						admv1.Create, admv1.Update,
+					},
+					Rule: createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{disruptionBudgetName}, &clusterScope),
 				},
 			},
 			TimeoutSeconds: longWebhookTimeout,

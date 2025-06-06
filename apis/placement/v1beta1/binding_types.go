@@ -211,6 +211,41 @@ type ClusterResourceBindingList struct {
 	Items []ClusterResourceBinding `json:"items"`
 }
 
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Namespaced,categories={fleet,fleet-placement},shortName=rb
+// +kubebuilder:subresource:status
+// +kubebuilder:storageversion
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="WorkSynchronized")].status`,name="WorkSynchronized",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Applied")].status`,name="ResourcesApplied",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Available")].status`,name="ResourceAvailable",priority=1,type=string
+// +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
+
+// ResourceBinding represents a scheduling decision that binds a group of resources to a cluster.
+// It MUST have a label named `CRPTrackingLabel` that points to the resource placement that creates it.
+type ResourceBinding struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// The desired state of ResourceBinding.
+	// +required
+	Spec ResourceBindingSpec `json:"spec"`
+
+	// The observed status of ResourceBinding.
+	// +optional
+	Status ResourceBindingStatus `json:"status,omitempty"`
+}
+
+// ResourceBindingList is a collection of ResourceBinding.
+// +kubebuilder:resource:scope="Namespaced"
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type ResourceBindingList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	// items is the list of ResourceBindings.
+	Items []ResourceBinding `json:"items"`
+}
+
 // SetConditions set the given conditions on the ClusterResourceBinding.
 func (b *ClusterResourceBinding) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {
@@ -228,6 +263,23 @@ func (b *ClusterResourceBinding) GetCondition(conditionType string) *metav1.Cond
 	return meta.FindStatusCondition(b.Status.Conditions, conditionType)
 }
 
+// SetConditions set the given conditions on the ResourceBinding.
+func (b *ResourceBinding) SetConditions(conditions ...metav1.Condition) {
+	for _, c := range conditions {
+		meta.SetStatusCondition(&b.Status.Conditions, c)
+	}
+}
+
+// RemoveCondition removes the condition of the given ResourceBinding.
+func (b *ResourceBinding) RemoveCondition(conditionType string) {
+	meta.RemoveStatusCondition(&b.Status.Conditions, conditionType)
+}
+
+// GetCondition returns the condition of the given ResourceBinding.
+func (b *ResourceBinding) GetCondition(conditionType string) *metav1.Condition {
+	return meta.FindStatusCondition(b.Status.Conditions, conditionType)
+}
+
 func init() {
-	SchemeBuilder.Register(&ClusterResourceBinding{}, &ClusterResourceBindingList{})
+	SchemeBuilder.Register(&ClusterResourceBinding{}, &ClusterResourceBindingList{}, &ResourceBinding{}, &ResourceBindingList{})
 }

@@ -116,6 +116,8 @@ var (
 	ignoreServiceSpecIPAndPolicyFields     = cmpopts.IgnoreFields(corev1.ServiceSpec{}, "ClusterIP", "ClusterIPs", "ExternalIPs", "SessionAffinity", "IPFamilies", "IPFamilyPolicy", "InternalTrafficPolicy")
 	ignoreServicePortNodePortProtocolField = cmpopts.IgnoreFields(corev1.ServicePort{}, "NodePort", "Protocol")
 	ignoreRPSClusterNameField              = cmpopts.IgnoreFields(placementv1beta1.ResourcePlacementStatus{}, "ClusterName")
+	// TODO (wantjian): Remove this ignore option with next release.
+	ignoreRPSObservedResourceIndexField = cmpopts.IgnoreFields(placementv1beta1.ResourcePlacementStatus{}, "ObservedResourceIndex")
 
 	crpStatusCmpOptions = cmp.Options{
 		cmpopts.SortSlices(lessFuncConditionByType),
@@ -124,6 +126,7 @@ var (
 		cmpopts.SortSlices(utils.LessFuncFailedResourcePlacements),
 		utils.IgnoreConditionLTTAndMessageFields,
 		cmpopts.EquateEmpty(),
+		ignoreRPSObservedResourceIndexField,
 	}
 	crpWithStuckRolloutStatusCmpOptions = cmp.Options{
 		cmpopts.SortSlices(lessFuncConditionByType),
@@ -133,6 +136,7 @@ var (
 		utils.IgnoreConditionLTTAndMessageFields,
 		ignoreRPSClusterNameField,
 		cmpopts.EquateEmpty(),
+		ignoreRPSObservedResourceIndexField,
 	}
 )
 
