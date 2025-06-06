@@ -1168,12 +1168,14 @@ func isCRPScheduled(crp *fleetv1beta1.ClusterResourcePlacement) bool {
 func emitPlacementStatusMetric(crp *fleetv1beta1.ClusterResourcePlacement) {
 	// Check CRP Scheduled condition.
 	status := "nil"
+	reason := "nil"
 	cond := crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType))
 	if !condition.IsConditionStatusTrue(cond, crp.Generation) {
 		if cond != nil && cond.ObservedGeneration == crp.Generation {
 			status = string(cond.Status)
+			reason = cond.Reason
 		}
-		metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(crp.Name, strconv.FormatInt(crp.Generation, 10), string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType), status).SetToCurrentTime()
+		metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(crp.Name, strconv.FormatInt(crp.Generation, 10), string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType), status, reason).SetToCurrentTime()
 		return
 	}
 
@@ -1184,13 +1186,14 @@ func emitPlacementStatusMetric(crp *fleetv1beta1.ClusterResourcePlacement) {
 		if !condition.IsConditionStatusTrue(cond, crp.Generation) {
 			if cond != nil && cond.ObservedGeneration == crp.Generation {
 				status = string(cond.Status)
+				reason = cond.Reason
 			}
-			metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(crp.Name, strconv.FormatInt(crp.Generation, 10), string(condType.ClusterResourcePlacementConditionType()), status).SetToCurrentTime()
+			metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(crp.Name, strconv.FormatInt(crp.Generation, 10), string(condType.ClusterResourcePlacementConditionType()), status, reason).SetToCurrentTime()
 			return
 		}
 	}
 
 	// Emit the "Completed" condition metric to indicate that the CRP has completed.
 	// This condition is used solely for metric reporting purposes.
-	metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(crp.Name, strconv.FormatInt(crp.Generation, 10), "Completed", string(metav1.ConditionTrue)).SetToCurrentTime()
+	metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(crp.Name, strconv.FormatInt(crp.Generation, 10), "Completed", string(metav1.ConditionTrue), "Completed").SetToCurrentTime()
 }
