@@ -695,7 +695,7 @@ func TestMarkMemberClusterJoined(t *testing.T) {
 
 	// Check expected conditions.
 	expectedConditions := []metav1.Condition{
-		{Type: string(clusterv1beta1.ConditionTypeMemberClusterJoined), Status: metav1.ConditionTrue, Reason: reasonMemberClusterJoined},
+		{Type: string(clusterv1beta1.ConditionTypeMemberClusterJoined), Status: metav1.ConditionTrue, Reason: reasonMemberClusterJoined, Message: "Member cluster has successfully joined the fleet"},
 	}
 
 	for i := range expectedConditions {
@@ -799,16 +799,14 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							Reason: reasonMemberClusterJoined,
 						},
 						{
-							Type:    propertyProviderConditionType1,
-							Status:  propertyProviderConditionStatus1,
-							Reason:  propertyProviderConditionReason1,
-							Message: propertyProviderConditionMessage1,
+							Type:   propertyProviderConditionType1,
+							Status: propertyProviderConditionStatus1,
+							Reason: propertyProviderConditionReason1,
 						},
 						{
-							Type:    propertyProviderConditionType2,
-							Status:  propertyProviderConditionStatus2,
-							Reason:  propertyProviderConditionReason2,
-							Message: propertyProviderConditionMessage2,
+							Type:   propertyProviderConditionType2,
+							Status: propertyProviderConditionStatus2,
+							Reason: propertyProviderConditionReason2,
 						},
 					},
 					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
@@ -1444,30 +1442,19 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
 			tt.r.syncInternalMemberClusterStatus(tt.internalMemberCluster, tt.memberCluster)
-
-			// Compare the Joined condition.
-			diff := cmp.Diff(tt.wantedMemberCluster.GetCondition(string(clusterv1beta1.ConditionTypeMemberClusterJoined)),
-				tt.memberCluster.GetCondition(string(clusterv1beta1.ConditionTypeMemberClusterJoined)),
-				cmpopts.IgnoreTypes(time.Time{}))
-			assert.Equal(t, "", diff)
-
-			// Compare the property provider conditions (if present).
-			diff = cmp.Diff(tt.wantedMemberCluster.GetCondition(propertyProviderConditionType1),
-				tt.memberCluster.GetCondition(propertyProviderConditionType1),
-				cmpopts.IgnoreTypes(time.Time{}))
-			assert.Equal(t, "", diff)
-
-			diff = cmp.Diff(tt.wantedMemberCluster.GetCondition(propertyProviderConditionType2),
-				tt.memberCluster.GetCondition(propertyProviderConditionType2),
-				cmpopts.IgnoreTypes(time.Time{}))
-			assert.Equal(t, "", diff)
-
-			// Compare the properties (if present).
-			assert.Equal(t, tt.wantedMemberCluster.Status.Properties, tt.memberCluster.Status.Properties)
-			// Compare the resource usage.
-			assert.Equal(t, tt.wantedMemberCluster.Status.ResourceUsage, tt.memberCluster.Status.ResourceUsage)
-			// Compare the agent status.
-			assert.Equal(t, tt.wantedMemberCluster.Status.AgentStatus, tt.memberCluster.Status.AgentStatus)
+			// Compare the entire MemberCluster status struct, ignoring time.Time fields.
+			cmpOptions := cmp.Options{
+				cmpopts.IgnoreFields(metav1.Condition{}, "Message", "LastTransitionTime"),
+				cmpopts.SortSlices(func(c1, c2 metav1.Condition) bool {
+					return c1.Type < c2.Type
+				}),
+				cmpopts.SortSlices(func(a1, a2 clusterv1beta1.AgentStatus) bool {
+					return a1.Type < a2.Type
+				}),
+			}
+			if diff := cmp.Diff(tt.wantedMemberCluster.Status, tt.memberCluster.Status, cmpOptions); diff != "" {
+				t.Errorf("syncInternalMemberClusterStatus() mismatch (-want +got):\n%s", diff)
+			}
 		})
 	}
 }

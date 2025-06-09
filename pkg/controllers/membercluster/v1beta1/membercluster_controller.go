@@ -548,8 +548,10 @@ func (r *Reconciler) updateMemberClusterStatus(ctx context.Context, mc *clusterv
 // aggregateJoinedCondition is used to calculate and mark the joined or left status for member cluster based on join conditions from all agents.
 func (r *Reconciler) aggregateJoinedCondition(mc *clusterv1beta1.MemberCluster) {
 	klog.V(2).InfoS("Aggregate joined condition from all agents", "memberCluster", klog.KObj(mc))
+	var unknownMessage string
 	if len(mc.Status.AgentStatus) < len(r.agents) {
-		markMemberClusterUnknown(r.recorder, mc)
+		unknownMessage = fmt.Sprintf("Member cluster %s has not reported all the expected agents, expected %d, got %d", mc.Name, len(r.agents), len(mc.Status.AgentStatus))
+		markMemberClusterUnknown(r.recorder, mc, unknownMessage)
 		return
 	}
 	joined := true
@@ -562,7 +564,8 @@ func (r *Reconciler) aggregateJoinedCondition(mc *clusterv1beta1.MemberCluster) 
 		}
 		condition := meta.FindStatusCondition(agentStatus.Conditions, string(clusterv1beta1.AgentJoined))
 		if condition == nil {
-			markMemberClusterUnknown(r.recorder, mc)
+			unknownMessage = fmt.Sprintf("Member cluster %s has not reported the join condition for agent %s", mc.Name, agentStatus.Type)
+			markMemberClusterUnknown(r.recorder, mc, unknownMessage)
 			return
 		}
 
@@ -572,7 +575,8 @@ func (r *Reconciler) aggregateJoinedCondition(mc *clusterv1beta1.MemberCluster) 
 	}
 
 	if len(reportedAgents) < len(r.agents) {
-		markMemberClusterUnknown(r.recorder, mc)
+		unknownMessage = fmt.Sprintf("Member cluster %s has not reported all the expected agents, expected %d, got %d", mc.Name, len(r.agents), len(reportedAgents))
+		markMemberClusterUnknown(r.recorder, mc, unknownMessage)
 		return
 	}
 
@@ -581,7 +585,8 @@ func (r *Reconciler) aggregateJoinedCondition(mc *clusterv1beta1.MemberCluster) 
 	} else if !joined && left {
 		markMemberClusterLeft(r.recorder, mc)
 	} else {
-		markMemberClusterUnknown(r.recorder, mc)
+		unknownMessage = "Member agents are not in a consistent state"
+		markMemberClusterUnknown(r.recorder, mc, unknownMessage)
 	}
 }
 
@@ -592,6 +597,7 @@ func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.Conditi
 		Type:               string(clusterv1beta1.ConditionTypeMemberClusterReadyToJoin),
 		Status:             metav1.ConditionTrue,
 		Reason:             reasonMemberClusterReadyToJoin,
+		Message:            "Member cluster is ready to join the fleet",
 		ObservedGeneration: mc.GetGeneration(),
 	}
 
@@ -612,6 +618,7 @@ func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedO
 		Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
 		Status:             metav1.ConditionTrue,
 		Reason:             reasonMemberClusterJoined,
+		Message:            "Member cluster has successfully joined the fleet",
 		ObservedGeneration: mc.GetGeneration(),
 	}
 
@@ -633,12 +640,14 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 		Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
 		Status:             metav1.ConditionFalse,
 		Reason:             reasonMemberClusterLeft,
+		Message:            "Member cluster has left the fleet",
 		ObservedGeneration: mc.GetGeneration(),
 	}
 	notReadyCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.ConditionTypeMemberClusterReadyToJoin),
 		Status:             metav1.ConditionFalse,
 		Reason:             reasonMemberClusterNotReadyToJoin,
+		Message:            "Member cluster is not ready to join the fleet",
 		ObservedGeneration: mc.GetGeneration(),
 	}
 
@@ -654,12 +663,13 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 }
 
 // markMemberClusterUnknown is used to update the status of the member cluster to have the left condition.
-func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.ConditionedObj) {
+func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.ConditionedObj, unknownMessage string) {
 	klog.V(2).InfoS("Mark the member cluster join condition unknown", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
 		Status:             metav1.ConditionUnknown,
 		Reason:             reasonMemberClusterUnknown,
+		Message:            unknownMessage,
 		ObservedGeneration: mc.GetGeneration(),
 	}
 
