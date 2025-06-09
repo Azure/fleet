@@ -43,8 +43,6 @@ var (
 	enablev1alpha1API = flag.Bool("enablev1alpha1API", false, "Enable v1alpha1 APIs (default false)")
 	enablev1beta1API  = flag.Bool("enablev1beta1API", false, "Enable v1beta1 APIs (default false)")
 	mode              = flag.String("mode", "", "Mode to run in: 'hub' or 'member' (required)")
-	waitForSuccess    = flag.Bool("wait", true, "Wait for CRDs to be established before returning")
-	timeout           = flag.Int("timeout", 60, "Timeout in seconds for waiting for CRDs to be established")
 
 	v1beta1HubCRDs = map[string]bool{
 		"cluster.kubernetes-fleet.io_memberclusters.yaml":                              true,
@@ -122,7 +120,7 @@ func main() {
 
 	// Install CRDs from the fixed location.
 	const crdPath = "/workspace/config/crd/bases"
-	if err := installCRDs(ctx, client, crdPath, *mode, *waitForSuccess, *timeout); err != nil {
+	if err := installCRDs(ctx, client, crdPath, *mode); err != nil {
 		klog.Fatalf("Failed to install CRDs: %v", err)
 	}
 
@@ -130,7 +128,131 @@ func main() {
 }
 
 // installCRDs installs the CRDs from the specified directory based on the mode.
-func installCRDs(ctx context.Context, client client.Client, crdPath, mode string, wait bool, _ int) error {
+func installCRDs(ctx context.Context, client client.Client, crdPath, mode string) error {
+	// Set of CRD filenames to install based on mode.
+	crdFilesToInstall, err := collectCRDFileNames(crdPath, mode)
+	if err != nil {
+		return err
+	}
+
+	if len(crdFilesToInstall) == 0 {
+		return fmt.Errorf("no CRDs found for mode %s in directory %s", mode, crdPath)
+	}
+
+	klog.Infof("Found %d CRDs to install for mode %s", len(crdFilesToInstall), mode)
+
+	// Install each CRD.
+	for path := range crdFilesToInstall {
+		klog.V(2).Infof("Installing CRD from: %s", path)
+
+		// Read and parse CRD file.
+		crdBytes, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("failed to read CRD file %s: %w", path, err)
+		}
+
+		// Create decoder for converting raw bytes to Go types.
+		codecFactory := serializer.NewCodecFactory(client.Scheme())
+		decoder := codecFactory.UniversalDeserializer()
+
+		// Decode YAML into a structured CRD object.
+		obj, gvk, err := decoder.Decode(crdBytes, nil, nil)
+		if err != nil {
+			return fmt.Errorf("failed to decode CRD from %s: %w", path, err)
+		}
+
+		// Type assertion to make sure we have a CRD.
+		crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
+		if !ok {
+			return fmt.Errorf("unexpected type from %s, expected CustomResourceDefinition but got %s", path, gvk)
+		}
+
+		isManagedByAddonManager, err := isCRDManagedByAddonManager(ctx, client, crd.Name)
+		if err != nil {
+			return err
+		}
+		if isManagedByAddonManager {
+			continue
+		}
+
+		existingCRD := apiextensionsv1.CustomResourceDefinition{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crd.Name,
+			},
+		}
+
+		createOrUpdateRes, err := controllerutil.CreateOrUpdate(ctx, client, &existingCRD, func() error {
+			// Copy spec from our decoded CRD to the object we're creating/updating.
+			existingCRD.Spec = crd.Spec
+			
+			// Add an additional ownership label to indicate this CRD is managed by the installer.
+			if existingCRD.Labels == nil {
+				existingCRD.Labels = make(map[string]string)
+			}
+			// Ensure the label for management by the installer is set.
+			_, ok := existingCRD.Labels["crd-installer.kubernetes-fleet.io/managed"] 
+			if !ok {
+				existingCRD.Labels["crd-installer.kubernetes-fleet.io/managed"] = "true"
+			}
+			return nil
+		})
+
+		if err != nil {
+			klog.ErrorS(err, "Failed to create or update CRD", "name", crd.Name, "operation", createOrUpdateRes)
+			return err
+		}
+
+		klog.Infof("Successfully created/updated CRD %s", crd.Name)
+	}
+
+	return nil
+}
+
+func isCRDManagedByAddonManager(ctx context.Context, client client.Client, crdName string) (bool, error) {
+	var crd apiextensionsv1.CustomResourceDefinition
+	if err := client.Get(ctx, types.NamespacedName{Name: crdName}, &crd); err != nil {
+		if errors.IsNotFound(err) {
+			return false, fmt.Errorf("CRD %s doesn't exist: %w", crdName, err)
+		} else {
+			return false, fmt.Errorf("failed to get CRD %s: %w", crdName, err)
+		}
+	}
+
+	labels := crd.GetLabels()
+	if labels != nil {
+		if _, exists := labels["addonmanager.kubernetes.io/mode"]; exists {
+			klog.Infof("CRD %s is still managed by the addon manager, skipping installation", crd.Name)
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// isHubCRD determines if a CRD should be installed on the hub cluster.
+func isHubCRD(filename string) bool {
+	var hubCRDs map[string]bool
+	if *enablev1beta1API {
+		hubCRDs = v1beta1HubCRDs
+	} else if *enablev1alpha1API {
+		hubCRDs = v1alpha1HubCRDs
+	}
+
+	return hubCRDs[filename]
+}
+
+// isMemberCRD determines if a CRD should be installed on the member cluster.
+func isMemberCRD(filename string) bool {
+	var memberCRDs map[string]bool
+	if *enablev1beta1API {
+		memberCRDs = v1beta1MemberCRDs
+	} else if *enablev1alpha1API {
+		memberCRDs = v1alpha1MemberCRDs
+	}
+
+	return memberCRDs[filename]
+}
+
+func collectCRDFileNames(crdPath, mode string) (map[string]bool, error) {
 	// Set of CRD filenames to install based on mode.
 	crdFilesToInstall := make(map[string]bool)
 
@@ -169,114 +291,8 @@ func installCRDs(ctx context.Context, client client.Client, crdPath, mode string
 
 		return nil
 	}); err != nil {
-		return fmt.Errorf("failed to walk CRD directory: %w", err)
+		return nil, fmt.Errorf("failed to walk CRD directory: %w", err)
 	}
 
-	if len(crdFilesToInstall) == 0 {
-		return fmt.Errorf("no CRDs found for mode %s in directory %s", mode, crdPath)
-	}
-
-	klog.Infof("Found %d CRDs to install for mode %s", len(crdFilesToInstall), mode)
-
-	// Install each CRD.
-	for path := range crdFilesToInstall {
-		klog.V(2).Infof("Installing CRD from: %s", path)
-
-		// Read and parse CRD file.
-		crdBytes, err := os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("failed to read CRD file %s: %w", path, err)
-		}
-
-		// Create decoder for converting raw bytes to Go types.
-		codecFactory := serializer.NewCodecFactory(client.Scheme())
-		decoder := codecFactory.UniversalDeserializer()
-
-		// Decode YAML into a structured CRD object.
-		obj, gvk, err := decoder.Decode(crdBytes, nil, nil)
-		if err != nil {
-			return fmt.Errorf("failed to decode CRD from %s: %w", path, err)
-		}
-
-		// Type assertion to make sure we have a CRD.
-		crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
-		if !ok {
-			return fmt.Errorf("unexpected type from %s, expected CustomResourceDefinition but got %s", path, gvk)
-		}
-
-		var existingCRD apiextensionsv1.CustomResourceDefinition
-		if err := client.Get(ctx, types.NamespacedName{Name: crd.Name}, &existingCRD); err != nil {
-			if !errors.IsNotFound(err) {
-				return fmt.Errorf("failed to get existing CRD %s: %w", crd.Name, err)
-			}
-		}
-
-		labels := existingCRD.GetLabels()
-		if labels != nil {
-			if _, exists := labels["addonmanager.kubernetes.io/mode"]; exists {
-				klog.Infof("CRD %s is still managed by the addon manager, skipping installation", crd.Name)
-				continue
-			}
-		}
-
-		// Reset existing CRD to create or update it.
-		existingCRD = apiextensionsv1.CustomResourceDefinition{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crd.Name,
-			},
-		}
-
-		createOrUpdateRes, err := controllerutil.CreateOrUpdate(ctx, client, &existingCRD, func() error {
-			// Copy spec from our decoded CRD to the object we're creating/updating.
-			existingCRD.Spec = crd.Spec
-			existingCRD.SetLabels(crd.Labels)
-
-			// Add an additional ownership label to indicate this CRD is managed by the installer.
-			if existingCRD.Labels == nil {
-				existingCRD.Labels = make(map[string]string)
-			}
-			existingCRD.Labels["crd-installer.kubernetes-fleet.io/managed"] = "true"
-
-			existingCRD.SetAnnotations(crd.Annotations)
-			return nil
-		})
-
-		if err != nil {
-			klog.ErrorS(err, "Failed to create or update CRD", "name", crd.Name, "operation", createOrUpdateRes)
-			return err
-		}
-
-		klog.Infof("Successfully created/updated CRD %s", crd.Name)
-	}
-
-	if wait {
-		// TODO: Implement wait logic for CRDs to be established.
-		klog.Info("Waiting for CRDs to be established is not implemented yet")
-	}
-
-	return nil
-}
-
-// isHubCRD determines if a CRD should be installed on the hub cluster.
-func isHubCRD(filename string) bool {
-	var hubCRDs map[string]bool
-	if *enablev1beta1API {
-		hubCRDs = v1beta1HubCRDs
-	} else if *enablev1alpha1API {
-		hubCRDs = v1alpha1HubCRDs
-	}
-
-	return hubCRDs[filename]
-}
-
-// isMemberCRD determines if a CRD should be installed on the member cluster.
-func isMemberCRD(filename string) bool {
-	var memberCRDs map[string]bool
-	if *enablev1beta1API {
-		memberCRDs = v1beta1MemberCRDs
-	} else if *enablev1alpha1API {
-		memberCRDs = v1alpha1MemberCRDs
-	}
-
-	return memberCRDs[filename]
+	return crdFilesToInstall, nil
 }
