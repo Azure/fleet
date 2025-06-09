@@ -184,13 +184,13 @@ func installCRDs(ctx context.Context, client client.Client, crdPath, mode string
 		createOrUpdateRes, err := controllerutil.CreateOrUpdate(ctx, client, &existingCRD, func() error {
 			// Copy spec from our decoded CRD to the object we're creating/updating.
 			existingCRD.Spec = crd.Spec
-			
+
 			// Add an additional ownership label to indicate this CRD is managed by the installer.
 			if existingCRD.Labels == nil {
 				existingCRD.Labels = make(map[string]string)
 			}
 			// Ensure the label for management by the installer is set.
-			_, ok := existingCRD.Labels["crd-installer.kubernetes-fleet.io/managed"] 
+			_, ok := existingCRD.Labels["crd-installer.kubernetes-fleet.io/managed"]
 			if !ok {
 				existingCRD.Labels["crd-installer.kubernetes-fleet.io/managed"] = "true"
 			}
