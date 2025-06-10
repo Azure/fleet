@@ -19,8 +19,6 @@ crdInstaller:
     tag: main
   mode: hub
   logVerbosity: 2
-  waitForCRDs: true
-  timeout: 60
 
 logVerbosity: 5
 
