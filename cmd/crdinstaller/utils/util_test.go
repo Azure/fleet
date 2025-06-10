@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package utils
 
 import (
 	"os"
@@ -25,14 +25,6 @@ import (
 
 // Test using the actual config/crd/bases directory
 func TestCollectCRDFileNamesWithActualPath(t *testing.T) {
-	// Save and restore global variables
-	origEnablev1beta1API := *enablev1beta1API
-	origEnablev1alpha1API := *enablev1alpha1API
-	defer func() {
-		*enablev1beta1API = origEnablev1beta1API
-		*enablev1alpha1API = origEnablev1alpha1API
-	}()
-
 	const realCRDPath = "../../config/crd/bases"
 
 	// Skip this test if the directory doesn't exist
@@ -113,11 +105,8 @@ func TestCollectCRDFileNamesWithActualPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			*enablev1beta1API = tt.enablev1beta1API
-			*enablev1alpha1API = tt.enablev1alpha1API
-
 			// Call the function
-			gotCRDFiles, err := collectCRDFileNames(realCRDPath, tt.mode)
+			gotCRDFiles, err := CollectCRDFileNames(realCRDPath, tt.mode, tt.enablev1beta1API, tt.enablev1alpha1API)
 			if (err != nil) != tt.wantError {
 				t.Errorf("collectCRDFileNames() error = %v, wantError %v", err, tt.wantError)
 			}
