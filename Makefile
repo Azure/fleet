@@ -124,12 +124,10 @@ create-member-kind-cluster:
 
 load-hub-docker-image:
 	kind load docker-image --name $(HUB_KIND_CLUSTER_NAME) $(REGISTRY)/$(HUB_AGENT_IMAGE_NAME):$(HUB_AGENT_IMAGE_VERSION)
-	kind load docker-image --name $(HUB_KIND_CLUSTER_NAME) $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION)
 
 load-member-docker-image:
 	kind load docker-image --name $(MEMBER_KIND_CLUSTER_NAME) $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION)
 	kind load docker-image --name $(MEMBER_KIND_CLUSTER_NAME) $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION)
-	kind load docker-image --name $(MEMBER_KIND_CLUSTER_NAME) $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION)
 
 ## --------------------------------------
 ## test
@@ -164,10 +162,6 @@ install-hub-agent-helm:
 	--set image.pullPolicy=Never \
 	--set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME) \
 	--set image.tag=$(HUB_AGENT_IMAGE_VERSION) \
-	--set crdInstaller.enabled=true \
-	--set crdInstaller.image.repository=$(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME) \
-	--set crdInstaller.image.tag=$(TAG) \
-	--set crdInstaller.image.pullPolicy=Never \
 	--set logVerbosity=5 \
 	--set namespace=fleet-system \
 	--set enableWebhook=true \
@@ -200,10 +194,6 @@ install-member-agent-helm: install-hub-agent-helm e2e-v1alpha1-hub-kubeconfig-se
 	--set refreshtoken.tag=$(REFRESH_TOKEN_IMAGE_VERSION) \
 	--set image.pullPolicy=Never \
 	--set refreshtoken.pullPolicy=Never \
-	--set crdInstaller.enabled=true \
-	--set crdInstaller.image.repository=$(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME) \
-	--set crdInstaller.image.tag=$(TAG) \
-	--set crdInstaller.image.pullPolicy=Never \
 	--set config.memberClusterName="kind-$(MEMBER_KIND_CLUSTER_NAME)" \
 	--set logVerbosity=5 \
 	--set namespace=fleet-system
