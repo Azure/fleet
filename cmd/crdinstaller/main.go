@@ -33,10 +33,7 @@ import (
 )
 
 var (
-	// Common flags.
-	enablev1alpha1API = flag.Bool("enablev1alpha1API", false, "Enable v1alpha1 APIs (default false)")
-	enablev1beta1API  = flag.Bool("enablev1beta1API", false, "Enable v1beta1 APIs (default false)")
-	mode              = flag.String("mode", "", "Mode to run in: 'hub' or 'member' (required)")
+	mode = flag.String("mode", "", "Mode to run in: 'hub' or 'member' (required)")
 )
 
 func main() {
@@ -79,7 +76,7 @@ func main() {
 
 	// Install CRDs from the fixed location.
 	const crdPath = "/workspace/config/crd/bases"
-	if err := installCRDs(ctx, client, crdPath, *mode, *enablev1alpha1API, *enablev1beta1API); err != nil {
+	if err := installCRDs(ctx, client, crdPath, *mode); err != nil {
 		klog.Fatalf("Failed to install CRDs: %v", err)
 	}
 
@@ -87,9 +84,9 @@ func main() {
 }
 
 // installCRDs installs the CRDs from the specified directory based on the mode.
-func installCRDs(ctx context.Context, client client.Client, crdPath, mode string, enablev1alpha1API, enablev1beta1API bool) error {
+func installCRDs(ctx context.Context, client client.Client, crdPath, mode string) error {
 	// Set of CRD filenames to install based on mode.
-	crdFilesToInstall, err := utils.CollectCRDFileNames(crdPath, mode, enablev1alpha1API, enablev1beta1API)
+	crdFilesToInstall, err := utils.CollectCRDFileNames(crdPath, mode)
 	if err != nil {
 		return err
 	}

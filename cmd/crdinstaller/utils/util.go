@@ -35,7 +35,7 @@ import (
 )
 
 var (
-	v1beta1HubCRDs = map[string]bool{
+	hubCRDs = map[string]bool{
 		"cluster.kubernetes-fleet.io_memberclusters.yaml":                              true,
 		"cluster.kubernetes-fleet.io_internalmemberclusters.yaml":                      true,
 		"placement.kubernetes-fleet.io_clusterapprovalrequests.yaml":                   true,
@@ -56,18 +56,8 @@ var (
 		"placement.kubernetes-fleet.io_works.yaml":                                     true,
 		"multicluster.x-k8s.io_clusterprofiles.yaml":                                   true,
 	}
-	v1beta1MemberCRDs = map[string]bool{
+	memberCRDs = map[string]bool{
 		"placement.kubernetes-fleet.io_appliedworks.yaml": true,
-	}
-
-	v1alpha1HubCRDs = map[string]bool{
-		"fleet.azure.com_memberclusters.yaml":            true,
-		"fleet.azure.com_internalmemberclusters.yaml":    true,
-		"fleet.azure.com_clusterresourceplacements.yaml": true,
-		"multicluster.x-k8s.io_works.yaml":               true,
-	}
-	v1alpha1MemberCRDs = map[string]bool{
-		"multicluster.x-k8s.io_appliedworks.yaml": true,
 	}
 )
 
@@ -158,7 +148,7 @@ func isCRDManagedByAddonManager(ctx context.Context, client client.Client, crdNa
 }
 
 // CollectCRDFileNames collects CRD filenames from the specified path based on the mode either hub/member.
-func CollectCRDFileNames(crdPath, mode string, enablev1alpha1API, enablev1beta1API bool) (map[string]bool, error) {
+func CollectCRDFileNames(crdPath, mode string) (map[string]bool, error) {
 	// Set of CRD filenames to install based on mode.
 	crdFilesToInstall := make(map[string]bool)
 
@@ -181,8 +171,8 @@ func CollectCRDFileNames(crdPath, mode string, enablev1alpha1API, enablev1beta1A
 
 		// Process based on mode.
 		filename := filepath.Base(path)
-		isHubCRD := isHubCRD(filename, enablev1alpha1API, enablev1beta1API)
-		isMemberCRD := isMemberCRD(filename, enablev1alpha1API, enablev1beta1API)
+		isHubCRD := hubCRDs[filename]
+		isMemberCRD := memberCRDs[filename]
 
 		switch mode {
 		case "hub":
@@ -201,28 +191,4 @@ func CollectCRDFileNames(crdPath, mode string, enablev1alpha1API, enablev1beta1A
 	}
 
 	return crdFilesToInstall, nil
-}
-
-// isHubCRD determines if a CRD should be installed on the hub cluster.
-func isHubCRD(filename string, enablev1alpha1API, enablev1beta1API bool) bool {
-	var hubCRDs map[string]bool
-	if enablev1beta1API {
-		hubCRDs = v1beta1HubCRDs
-	} else if enablev1alpha1API {
-		hubCRDs = v1alpha1HubCRDs
-	}
-
-	return hubCRDs[filename]
-}
-
-// isMemberCRD determines if a CRD should be installed on the member cluster.
-func isMemberCRD(filename string, enablev1alpha1API, enablev1beta1API bool) bool {
-	var memberCRDs map[string]bool
-	if enablev1beta1API {
-		memberCRDs = v1beta1MemberCRDs
-	} else if enablev1alpha1API {
-		memberCRDs = v1alpha1MemberCRDs
-	}
-
-	return memberCRDs[filename]
 }
