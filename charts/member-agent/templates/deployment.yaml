@@ -23,8 +23,6 @@ spec:
           imagePullPolicy: {{ .Values.crdInstaller.image.pullPolicy }}
           args:
             - --mode={{ .Values.crdInstaller.mode }}
-            - --wait={{ .Values.crdInstaller.waitForCRDs }}
-            - --timeout={{ .Values.crdInstaller.timeout }}
             - --v={{ .Values.crdInstaller.logVerbosity }}
             - --enablev1alpha1API={{ .Values.enableV1Alpha1APIs }}
             - --enablev1beta1API={{ .Values.enableV1Beta1APIs }}
