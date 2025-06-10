@@ -43,10 +43,8 @@ func TestCollectCRDFileNamesWithActualPath(t *testing.T) {
 		wantError         bool
 	}{
 		{
-			name:              "hub mode v1beta1 with actual directory",
-			mode:              "hub",
-			enablev1beta1API:  true,
-			enablev1alpha1API: false,
+			name: "hub mode v1beta1 with actual directory",
+			mode: "hub",
 			wantedCRDFiles: map[string]bool{
 				"../../config/crd/bases/cluster.kubernetes-fleet.io_memberclusters.yaml":                              true,
 				"../../config/crd/bases/cluster.kubernetes-fleet.io_internalmemberclusters.yaml":                      true,
@@ -71,35 +69,10 @@ func TestCollectCRDFileNamesWithActualPath(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name:              "member mode v1beta1 with actual directory",
-			mode:              "member",
-			enablev1beta1API:  true,
-			enablev1alpha1API: false,
+			name: "member mode v1beta1 with actual directory",
+			mode: "member",
 			wantedCRDFiles: map[string]bool{
 				"../../config/crd/bases/placement.kubernetes-fleet.io_appliedworks.yaml": true,
-			},
-			wantError: false,
-		},
-		{
-			name:              "hub mode v1alpha1 with actual directory",
-			mode:              "hub",
-			enablev1beta1API:  false,
-			enablev1alpha1API: true,
-			wantedCRDFiles: map[string]bool{
-				"../../config/crd/bases/fleet.azure.com_memberclusters.yaml":            true,
-				"../../config/crd/bases/fleet.azure.com_internalmemberclusters.yaml":    true,
-				"../../config/crd/bases/fleet.azure.com_clusterresourceplacements.yaml": true,
-				"../../config/crd/bases/multicluster.x-k8s.io_works.yaml":               true,
-			},
-			wantError: false,
-		},
-		{
-			name:              "member mode v1alpha1 with actual directory",
-			mode:              "member",
-			enablev1beta1API:  false,
-			enablev1alpha1API: true,
-			wantedCRDFiles: map[string]bool{
-				"../../config/crd/bases/multicluster.x-k8s.io_appliedworks.yaml": true,
 			},
 			wantError: false,
 		},
@@ -108,7 +81,7 @@ func TestCollectCRDFileNamesWithActualPath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Call the function
-			gotCRDFiles, err := cmdCRDInstaller.CollectCRDFileNames(realCRDPath, tt.mode, tt.enablev1alpha1API, tt.enablev1beta1API)
+			gotCRDFiles, err := cmdCRDInstaller.CollectCRDFileNames(realCRDPath, tt.mode)
 			if (err != nil) != tt.wantError {
 				t.Errorf("collectCRDFileNames() error = %v, wantError %v", err, tt.wantError)
 			}
