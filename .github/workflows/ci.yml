@@ -80,7 +80,7 @@ jobs:
 
       - name: Run e2e tests
         run: |
-          OUTPUT_TYPE=type=docker make docker-build-member-agent docker-build-hub-agent docker-build-refresh-token docker-build-crd-installer e2e-tests-v1alpha1
+          OUTPUT_TYPE=type=docker make docker-build-member-agent docker-build-hub-agent docker-build-refresh-token e2e-tests-v1alpha1
         env:
           KUBECONFIG: '/home/runner/.kube/config'
           HUB_SERVER_URL: 'https://172.19.0.2:6443'
