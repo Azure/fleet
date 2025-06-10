@@ -28,8 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
 )
 
 var (
@@ -58,9 +56,6 @@ var _ = BeforeSuite(func() {
 	cfg, err = testEnv.Start()
 	Expect(err).Should(Succeed())
 	Expect(cfg).NotTo(BeNil())
-
-	err = testv1alpha1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:scheme
 	By("construct the k8s client")

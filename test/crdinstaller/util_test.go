@@ -37,8 +37,6 @@ func TestCollectCRDFileNamesWithActualPath(t *testing.T) {
 	tests := []struct {
 		name              string
 		mode              string
-		enablev1beta1API  bool
-		enablev1alpha1API bool
 		wantedCRDFiles    map[string]bool
 		wantError         bool
 	}{
