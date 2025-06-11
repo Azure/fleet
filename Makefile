@@ -144,14 +144,14 @@ local-unit-test: $(ENVTEST) ## Run tests.
 	export CGO_ENABLED=1 && \
 	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" && \
 	go test ./pkg/controllers/workv1alpha1 -race -coverprofile=ut-coverage.xml -covermode=atomic -v && \
-	go test `go list ./pkg/... ./cmd/... | grep -v pkg/controllers/workv1alpha1` -race -coverpkg=./...  -coverprofile=ut-coverage.xml -covermode=atomic -v
+	go test `go list ./pkg/... ./cmd/... ./test/crdinstaller/util_test.go | grep -v pkg/controllers/workv1alpha1` -race -coverpkg=./...  -coverprofile=ut-coverage.xml -covermode=atomic -v
 
 .PHONY: integration-test
 integration-test: $(ENVTEST) ## Run tests.
 	export CGO_ENABLED=1 && \
 	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" && \
 	ginkgo -v -p --race --cover --coverpkg=./pkg/scheduler/... ./test/scheduler && \
-	ginkgo -v -p --race --cover --coverpkg=./... ./test/apis/... && \
+	ginkgo -v -p --race --cover --coverpkg=./... ./test/apis/... ./test/crdinstaller && \
 	go test ./test/integration/... -coverpkg=./...  -race -coverprofile=it-coverage.xml -v
 
 ## local tests & e2e tests

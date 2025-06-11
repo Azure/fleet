@@ -17,8 +17,10 @@ limitations under the License.
 package crdinstaller
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -41,17 +43,15 @@ const (
 // This test verifies the behavior of the CRD installer when creating and updating CRDs.
 // It ensures that the installer can create a CRD, update it with new fields, and handle ownership labels correctly.
 // The original CRD has 4 properties, and the updated CRD adds a new property to simulate CRD upgrade.
-var _ = Describe("Test CRD Installer, Create and Update CRD", func() {
+var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 	It("should create original CRD", func() {
 		Expect(cmdCRDInstaller.InstallCRD(ctx, k8sClient, originalCRDPath)).To(Succeed())
 	})
 
 	It("should verify original CRD installation", func() {
+		ensureCRDExistsWithLabels(map[string]string{cmdCRDInstaller.CRDInstallerLabelKey: "true"})
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
-		Expect(len(crd.Labels)).Should(Equal(1), "CRD %s should have 1 label defined", crdName)
-		Expect(crd.Labels[cmdCRDInstaller.CRDInstallerLabelKey]).Should(Equal("true"), "CRD %s should have crd-installer label set to true", crdName)
-
 		spec := getSpecJSONSchemaProperties(crd)
 		// Original CRD should have 4 properties defined in spec.
 		Expect(len(spec.Properties)).Should(Equal(4), "CRD %s should have 4 properties defined in spec", crdName)
@@ -69,11 +69,9 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", func() {
 	})
 
 	It("should verify original CRD still exists, because it's owned by addonmanager", func() {
+		ensureCRDExistsWithLabels(map[string]string{cmdCRDInstaller.AddonManagerLabelKey: "Reconcile"})
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
-		Expect(len(crd.Labels)).Should(Equal(1), "CRD %s should have 1 label defined", crdName)
-		Expect(crd.Labels[cmdCRDInstaller.AddonManagerLabelKey]).Should(Equal("Reconcile"), "CRD %s should have addonmanager label set to Reconcile", crdName)
-
 		spec := getSpecJSONSchemaProperties(crd)
 		// Original CRD should still have 4 properties defined in spec.
 		Expect(len(spec.Properties)).Should(Equal(4), "CRD %s should have 4 properties defined in spec", crdName)
@@ -91,13 +89,13 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", func() {
 	})
 
 	It("should verify updated CRD", func() {
+		// ensure we don't overwrite the random label.
+		ensureCRDExistsWithLabels(map[string]string{
+			randomLabelKey:                       "true",
+			cmdCRDInstaller.CRDInstallerLabelKey: "true",
+		})
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
-		// ensure we don't overwrite the random label.
-		Expect(len(crd.Labels)).Should(Equal(2), "CRD %s should have 1 label defined", crdName)
-		Expect(crd.Labels[randomLabelKey]).Should(Equal("true"), "CRD %s should have random label still set", crdName)
-		Expect(crd.Labels[cmdCRDInstaller.CRDInstallerLabelKey]).Should(Equal("true"), "CRD %s should have crd-installer label set to true", crdName)
-
 		spec := getSpecJSONSchemaProperties(crd)
 		// Updated CRD should have 5 properties defined in spec.
 		Expect(len(spec.Properties)).Should(Equal(5), "CRD %s should have 5 properties defined in spec", crdName)
@@ -127,4 +125,18 @@ func getSpecJSONSchemaProperties(crd *apiextensionsv1.CustomResourceDefinition) 
 	Expect(v1alpha1Version.Schema.OpenAPIV3Schema).ShouldNot(BeNil(), "CRD %s should have OpenAPIV3Schema defined", crdName)
 	Expect(v1alpha1Version.Schema.OpenAPIV3Schema.Properties["spec"]).ShouldNot(BeNil(), "CRD %s should have spec defined in Properties", crdName)
 	return v1alpha1Version.Schema.OpenAPIV3Schema.Properties["spec"]
+}
+
+func ensureCRDExistsWithLabels(wantLabels map[string]string) {
+	Eventually(func() error {
+		crd := &apiextensionsv1.CustomResourceDefinition{}
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)
+		if err != nil {
+			return err
+		}
+		if diff := cmp.Diff(wantLabels, crd.GetLabels()); diff != "" {
+			return fmt.Errorf("crd labels mismatch (-want, +got) :\n%s", diff)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).ShouldNot(HaveOccurred(), "CRD %s should exist with labels %v", crdName)
 }
