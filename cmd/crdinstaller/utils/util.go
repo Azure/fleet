@@ -34,6 +34,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
+const (
+	// CRDInstallerLabelKey is the label key used to indicate that a CRD is managed by the installer.
+	CRDInstallerLabelKey = "crd-installer.kubefleet.io/managed"
+	// AddonManagerLabelKey is the label key used to indicate that a CRD is managed by the addon manager.
+	AddonManagerLabelKey = "addonmanager.kubernetes.io/mode"
+)
+
 var (
 	hubCRDs = map[string]bool{
 		"cluster.kubernetes-fleet.io_memberclusters.yaml":                              true,
@@ -110,9 +117,9 @@ func InstallCRD(ctx context.Context, client client.Client, path string) error {
 			existingCRD.Labels = make(map[string]string)
 		}
 		// Ensure the label for management by the installer is set.
-		_, ok := existingCRD.Labels["crd-installer.kubernetes-fleet.io/managed"]
+		_, ok := existingCRD.Labels[CRDInstallerLabelKey]
 		if !ok {
-			existingCRD.Labels["crd-installer.kubernetes-fleet.io/managed"] = "true"
+			existingCRD.Labels[CRDInstallerLabelKey] = "true"
 		}
 		return nil
 	})
@@ -139,7 +146,7 @@ func isCRDManagedByAddonManager(ctx context.Context, client client.Client, crdNa
 
 	labels := crd.GetLabels()
 	if labels != nil {
-		if _, exists := labels["addonmanager.kubernetes.io/mode"]; exists {
+		if _, exists := labels[AddonManagerLabelKey]; exists {
 			klog.Infof("CRD %s is still managed by the addon manager, skipping installation", crd.Name)
 			return true, nil
 		}
