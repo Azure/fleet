@@ -14,15 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package crdinstaller
+// Package utils contains utility functions for the CRD installer.
+package utils
 
 import (
 	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-
-	cmdCRDInstaller "go.goms.io/fleet/cmd/crdinstaller/utils"
 )
 
 // Test using the actual config/crd/bases directory
@@ -79,7 +78,7 @@ func TestCollectCRDFileNamesWithActualPath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Call the function
-			gotCRDFiles, err := cmdCRDInstaller.CollectCRDFileNames(realCRDPath, tt.mode)
+			gotCRDFiles, err := CollectCRDFileNames(realCRDPath, tt.mode)
 			if (err != nil) != tt.wantError {
 				t.Errorf("collectCRDFileNames() error = %v, wantError %v", err, tt.wantError)
 			}
