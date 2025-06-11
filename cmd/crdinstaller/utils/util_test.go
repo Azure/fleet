@@ -26,13 +26,27 @@ import (
 
 // Test using the actual config/crd/bases directory
 func TestCollectCRDFileNamesWithActualPath(t *testing.T) {
-	const realCRDPath = "../../config/crd/bases"
+	// Use a path relative to the project root when running with make local-unit-test
+	const realCRDPath = "config/crd/bases"
 
 	// Skip this test if the directory doesn't exist
 	if _, err := os.Stat(realCRDPath); os.IsNotExist(err) {
-		t.Skipf("Skipping test: directory %s does not exist", realCRDPath)
+		// Try the original path (for when tests are run from the package directory)
+		const fallbackPath = "../../../config/crd/bases"
+		if _, fallBackPathErr := os.Stat(fallbackPath); os.IsNotExist(fallBackPathErr) {
+			t.Skipf("Skipping test: neither %s nor %s exist", realCRDPath, fallbackPath)
+		} else {
+			// Use the fallback path if it exists
+			runTest(t, fallbackPath)
+		}
+	} else {
+		// Use the primary path if it exists
+		runTest(t, realCRDPath)
 	}
+}
 
+// runTest contains the actual test logic, separated to allow running with different paths
+func runTest(t *testing.T, crdPath string) {
 	tests := []struct {
 		name           string
 		mode           string
@@ -43,25 +57,25 @@ func TestCollectCRDFileNamesWithActualPath(t *testing.T) {
 			name: "hub mode v1beta1 with actual directory",
 			mode: "hub",
 			wantedCRDFiles: map[string]bool{
-				"../../config/crd/bases/cluster.kubernetes-fleet.io_memberclusters.yaml":                              true,
-				"../../config/crd/bases/cluster.kubernetes-fleet.io_internalmemberclusters.yaml":                      true,
-				"../../config/crd/bases/placement.kubernetes-fleet.io_clusterapprovalrequests.yaml":                   true,
-				"../../config/crd/bases/placement.kubernetes-fleet.io_clusterresourcebindings.yaml":                   true,
-				"../../config/crd/bases/placement.kubernetes-fleet.io_clusterresourceenvelopes.yaml":                  true,
-				"../../config/crd/bases/placement.kubernetes-fleet.io_clusterresourceplacements.yaml":                 true,
-				"../../config/crd/bases/placement.kubernetes-fleet.io_clusterresourceoverrides.yaml":                  true,
-				"../../config/crd/bases/placement.kubernetes-fleet.io_clusterresourceoverridesnapshots.yaml":          true,
-				"../../config/crd/bases/placement.kubernetes-fleet.io_clusterresourceplacementdisruptionbudgets.yaml": true,
-				"../../config/crd/bases/placement.kubernetes-fleet.io_clusterresourceplacementevictions.yaml":         true,
-				"../../config/crd/bases/placement.kubernetes-fleet.io_clusterresourcesnapshots.yaml":                  true,
-				"../../config/crd/bases/placement.kubernetes-fleet.io_clusterschedulingpolicysnapshots.yaml":          true,
-				"../../config/crd/bases/placement.kubernetes-fleet.io_clusterstagedupdateruns.yaml":                   true,
-				"../../config/crd/bases/placement.kubernetes-fleet.io_clusterstagedupdatestrategies.yaml":             true,
-				"../../config/crd/bases/placement.kubernetes-fleet.io_resourceenvelopes.yaml":                         true,
-				"../../config/crd/bases/placement.kubernetes-fleet.io_resourceoverrides.yaml":                         true,
-				"../../config/crd/bases/placement.kubernetes-fleet.io_resourceoverridesnapshots.yaml":                 true,
-				"../../config/crd/bases/placement.kubernetes-fleet.io_works.yaml":                                     true,
-				"../../config/crd/bases/multicluster.x-k8s.io_clusterprofiles.yaml":                                   true,
+				crdPath + "/cluster.kubernetes-fleet.io_memberclusters.yaml":                              true,
+				crdPath + "/cluster.kubernetes-fleet.io_internalmemberclusters.yaml":                      true,
+				crdPath + "/placement.kubernetes-fleet.io_clusterapprovalrequests.yaml":                   true,
+				crdPath + "/placement.kubernetes-fleet.io_clusterresourcebindings.yaml":                   true,
+				crdPath + "/placement.kubernetes-fleet.io_clusterresourceenvelopes.yaml":                  true,
+				crdPath + "/placement.kubernetes-fleet.io_clusterresourceplacements.yaml":                 true,
+				crdPath + "/placement.kubernetes-fleet.io_clusterresourceoverrides.yaml":                  true,
+				crdPath + "/placement.kubernetes-fleet.io_clusterresourceoverridesnapshots.yaml":          true,
+				crdPath + "/placement.kubernetes-fleet.io_clusterresourceplacementdisruptionbudgets.yaml": true,
+				crdPath + "/placement.kubernetes-fleet.io_clusterresourceplacementevictions.yaml":         true,
+				crdPath + "/placement.kubernetes-fleet.io_clusterresourcesnapshots.yaml":                  true,
+				crdPath + "/placement.kubernetes-fleet.io_clusterschedulingpolicysnapshots.yaml":          true,
+				crdPath + "/placement.kubernetes-fleet.io_clusterstagedupdateruns.yaml":                   true,
+				crdPath + "/placement.kubernetes-fleet.io_clusterstagedupdatestrategies.yaml":             true,
+				crdPath + "/placement.kubernetes-fleet.io_resourceenvelopes.yaml":                         true,
+				crdPath + "/placement.kubernetes-fleet.io_resourceoverrides.yaml":                         true,
+				crdPath + "/placement.kubernetes-fleet.io_resourceoverridesnapshots.yaml":                 true,
+				crdPath + "/placement.kubernetes-fleet.io_works.yaml":                                     true,
+				crdPath + "/multicluster.x-k8s.io_clusterprofiles.yaml":                                   true,
 			},
 			wantError: false,
 		},
@@ -69,7 +83,7 @@ func TestCollectCRDFileNamesWithActualPath(t *testing.T) {
 			name: "member mode v1beta1 with actual directory",
 			mode: "member",
 			wantedCRDFiles: map[string]bool{
-				"../../config/crd/bases/placement.kubernetes-fleet.io_appliedworks.yaml": true,
+				crdPath + "/placement.kubernetes-fleet.io_appliedworks.yaml": true,
 			},
 			wantError: false,
 		},
@@ -78,7 +92,7 @@ func TestCollectCRDFileNamesWithActualPath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Call the function
-			gotCRDFiles, err := CollectCRDFileNames(realCRDPath, tt.mode)
+			gotCRDFiles, err := CollectCRDFileNames(crdPath, tt.mode)
 			if (err != nil) != tt.wantError {
 				t.Errorf("collectCRDFileNames() error = %v, wantError %v", err, tt.wantError)
 			}
@@ -88,3 +102,4 @@ func TestCollectCRDFileNamesWithActualPath(t *testing.T) {
 		})
 	}
 }
+
