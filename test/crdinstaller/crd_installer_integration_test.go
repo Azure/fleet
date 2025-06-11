@@ -31,12 +31,16 @@ const (
 	crdName         = "testresources.test.kubernetes-fleet.io"
 	originalCRDPath = "./original_crds/test.kubernetes-fleet.io_testresources.yaml"
 	updatedCRDPath  = "./updated_crds/test.kubernetes-fleet.io_testresources.yaml"
+	randomLabelKey  = "random-label.io"
 )
 const (
 	eventuallyDuration = time.Minute * 1
 	eventuallyInterval = time.Millisecond * 250
 )
 
+// This test verifies the behavior of the CRD installer when creating and updating CRDs.
+// It ensures that the installer can create a CRD, update it with new fields, and handle ownership labels correctly.
+// The original CRD has 4 properties, and the updated CRD adds a new property to simulate CRD upgrade.
 var _ = Describe("Test CRD Installer, Create and Update CRD", func() {
 	It("should create original CRD", func() {
 		Expect(cmdCRDInstaller.InstallCRD(ctx, k8sClient, originalCRDPath)).To(Succeed())
@@ -46,22 +50,18 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", func() {
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
 		Expect(len(crd.Labels)).Should(Equal(1), "CRD %s should have 1 label defined", crdName)
-		Expect(crd.Labels["crd-installer.kubernetes-fleet.io/managed"]).Should(Equal("true"), "CRD %s should have addonmanager label set to Reconcile", crdName)
+		Expect(crd.Labels[cmdCRDInstaller.CRDInstallerLabelKey]).Should(Equal("true"), "CRD %s should have crd-installer label set to true", crdName)
 
-		v1alpha1Version := crd.Spec.Versions[0]
-		Expect(v1alpha1Version.Name).Should(Equal("v1alpha1"), "CRD %s should have version v1alpha1", crdName)
-		Expect(v1alpha1Version.Schema).ShouldNot(BeNil(), "CRD %s should have a schema defined", crdName)
-		Expect(v1alpha1Version.Schema.OpenAPIV3Schema).ShouldNot(BeNil(), "CRD %s should have OpenAPIV3Schema defined", crdName)
-		Expect(v1alpha1Version.Schema.OpenAPIV3Schema.Properties["spec"]).ShouldNot(BeNil(), "CRD %s should have spec defined in Properties", crdName)
+		spec := getSpecJSONSchemaProperties(crd)
 		// Original CRD should have 4 properties defined in spec.
-		Expect(len(v1alpha1Version.Schema.OpenAPIV3Schema.Properties["spec"].Properties)).Should(Equal(4), "CRD %s should have 4 properties defined in spec", crdName)
-		Expect(v1alpha1Version.Schema.OpenAPIV3Schema.Properties["spec"].Properties["bar"].Type).Should(Equal("string"), "CRD %s should have 'bar' property of type string defined in properties", crdName)
-		_, ok := v1alpha1Version.Schema.OpenAPIV3Schema.Properties["spec"].Properties["newField"]
+		Expect(len(spec.Properties)).Should(Equal(4), "CRD %s should have 4 properties defined in spec", crdName)
+		Expect(spec.Properties["bar"].Type).Should(Equal("string"), "CRD %s should have 'bar' property of type string defined in properties", crdName)
+		_, ok := spec.Properties["newField"]
 		Expect(ok).To(BeFalse(), "CRD %s should not have 'newField' property defined in properties", crdName)
 	})
 
 	It("update the CRD to have the addonmanger ownership label", func() {
-		updateCRDLabels(crdName, map[string]string{"addonmanager.kubernetes.io/mode": "Reconcile"})
+		updateCRDLabels(crdName, map[string]string{cmdCRDInstaller.AddonManagerLabelKey: "Reconcile"})
 	})
 
 	It("should not update the CRD with new fields with addonmanager ownership label", func() {
@@ -72,22 +72,18 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", func() {
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
 		Expect(len(crd.Labels)).Should(Equal(1), "CRD %s should have 1 label defined", crdName)
-		Expect(crd.Labels["addonmanager.kubernetes.io/mode"]).Should(Equal("Reconcile"), "CRD %s should have addonmanager label set to Reconcile", crdName)
+		Expect(crd.Labels[cmdCRDInstaller.AddonManagerLabelKey]).Should(Equal("Reconcile"), "CRD %s should have addonmanager label set to Reconcile", crdName)
 
-		v1alpha1Version := crd.Spec.Versions[0]
-		Expect(v1alpha1Version.Name).Should(Equal("v1alpha1"), "CRD %s should have version v1alpha1", crdName)
-		Expect(v1alpha1Version.Schema).ShouldNot(BeNil(), "CRD %s should have a schema defined", crdName)
-		Expect(v1alpha1Version.Schema.OpenAPIV3Schema).ShouldNot(BeNil(), "CRD %s should have OpenAPIV3Schema defined", crdName)
-		Expect(v1alpha1Version.Schema.OpenAPIV3Schema.Properties["spec"]).ShouldNot(BeNil(), "CRD %s should have spec defined in Properties", crdName)
+		spec := getSpecJSONSchemaProperties(crd)
 		// Original CRD should still have 4 properties defined in spec.
-		Expect(len(v1alpha1Version.Schema.OpenAPIV3Schema.Properties["spec"].Properties)).Should(Equal(4), "CRD %s should have 4 properties defined in spec", crdName)
-		Expect(v1alpha1Version.Schema.OpenAPIV3Schema.Properties["spec"].Properties["bar"].Type).Should(Equal("string"), "CRD %s should have 'bar' property of type string defined in properties", crdName)
-		_, ok := v1alpha1Version.Schema.OpenAPIV3Schema.Properties["spec"].Properties["newField"]
+		Expect(len(spec.Properties)).Should(Equal(4), "CRD %s should have 4 properties defined in spec", crdName)
+		Expect(spec.Properties["bar"].Type).Should(Equal("string"), "CRD %s should have 'bar' property of type string defined in properties", crdName)
+		_, ok := spec.Properties["newField"]
 		Expect(ok).To(BeFalse(), "CRD %s should not have 'newField' property defined in properties", crdName)
 	})
 
 	It("update the CRD to remove addonmanager owenership label", func() {
-		updateCRDLabels(crdName, map[string]string{"random-label.io": "true"})
+		updateCRDLabels(crdName, map[string]string{randomLabelKey: "true"})
 	})
 
 	It("should update the CRD with new field in spec with crdinstaller label", func() {
@@ -97,21 +93,18 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", func() {
 	It("should verify updated CRD", func() {
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
+		// ensure we don't overwrite the random label.
 		Expect(len(crd.Labels)).Should(Equal(2), "CRD %s should have 1 label defined", crdName)
-		Expect(crd.Labels["random-label.io"]).Should(Equal("true"), "CRD %s should have random label still set", crdName)
-		Expect(crd.Labels["crd-installer.kubernetes-fleet.io/managed"]).Should(Equal("true"), "CRD %s should have addonmanager label set to Reconcile", crdName)
+		Expect(crd.Labels[randomLabelKey]).Should(Equal("true"), "CRD %s should have random label still set", crdName)
+		Expect(crd.Labels[cmdCRDInstaller.CRDInstallerLabelKey]).Should(Equal("true"), "CRD %s should have crd-installer label set to true", crdName)
 
-		v1alpha1Version := crd.Spec.Versions[0]
-		Expect(v1alpha1Version.Name).Should(Equal("v1alpha1"), "CRD %s should have version v1alpha1", crdName)
-		Expect(v1alpha1Version.Schema).ShouldNot(BeNil(), "CRD %s should have a schema defined", crdName)
-		Expect(v1alpha1Version.Schema.OpenAPIV3Schema).ShouldNot(BeNil(), "CRD %s should have OpenAPIV3Schema defined", crdName)
-		Expect(v1alpha1Version.Schema.OpenAPIV3Schema.Properties["spec"]).ShouldNot(BeNil(), "CRD %s should have spec defined in Properties", crdName)
+		spec := getSpecJSONSchemaProperties(crd)
 		// Updated CRD should have 5 properties defined in spec.
-		Expect(len(v1alpha1Version.Schema.OpenAPIV3Schema.Properties["spec"].Properties)).Should(Equal(5), "CRD %s should have 5 properties defined in spec", crdName)
-		Expect(v1alpha1Version.Schema.OpenAPIV3Schema.Properties["spec"].Properties["bar"].Type).Should(Equal("string"), "CRD %s should have 'bar' property of type string defined in properties", crdName)
-		_, ok := v1alpha1Version.Schema.OpenAPIV3Schema.Properties["spec"].Properties["newField"]
+		Expect(len(spec.Properties)).Should(Equal(5), "CRD %s should have 5 properties defined in spec", crdName)
+		Expect(spec.Properties["bar"].Type).Should(Equal("string"), "CRD %s should have 'bar' property of type string defined in properties", crdName)
+		_, ok := spec.Properties["newField"]
 		Expect(ok).To(BeTrue(), "CRD %s should have 'newField' property defined in properties", crdName)
-		Expect(v1alpha1Version.Schema.OpenAPIV3Schema.Properties["spec"].Properties["newField"].Type).Should(Equal("string"), "CRD %s should have 'newField' property of type string defined in properties", crdName)
+		Expect(spec.Properties["newField"].Type).Should(Equal("string"), "CRD %s should have 'newField' property of type string defined in properties", crdName)
 	})
 })
 
@@ -124,4 +117,14 @@ func updateCRDLabels(crdName string, labels map[string]string) {
 		crd.Labels = labels
 		return k8sClient.Update(ctx, &crd)
 	}, eventuallyDuration, eventuallyInterval).ShouldNot(HaveOccurred(), "CRD %s should have addonmanager label", crdName)
+}
+
+func getSpecJSONSchemaProperties(crd *apiextensionsv1.CustomResourceDefinition) apiextensionsv1.JSONSchemaProps {
+	Expect(len(crd.Spec.Versions)).Should(Equal(1), "CRD %s should have exactly one version", crdName)
+	v1alpha1Version := crd.Spec.Versions[0]
+	Expect(v1alpha1Version.Name).Should(Equal("v1alpha1"), "CRD %s should have version v1alpha1", crdName)
+	Expect(v1alpha1Version.Schema).ShouldNot(BeNil(), "CRD %s should have a schema defined", crdName)
+	Expect(v1alpha1Version.Schema.OpenAPIV3Schema).ShouldNot(BeNil(), "CRD %s should have OpenAPIV3Schema defined", crdName)
+	Expect(v1alpha1Version.Schema.OpenAPIV3Schema.Properties["spec"]).ShouldNot(BeNil(), "CRD %s should have spec defined in Properties", crdName)
+	return v1alpha1Version.Schema.OpenAPIV3Schema.Properties["spec"]
 }
