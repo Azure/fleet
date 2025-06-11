@@ -45,7 +45,7 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", func() {
 	It("should verify original CRD installation", func() {
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
-		Expect(crd.Labels).ShouldNot(BeNil(), "CRD %s should have labels defined", crdName)
+		Expect(len(crd.Labels)).Should(Equal(1), "CRD %s should have 1 label defined", crdName)
 		Expect(crd.Labels["crd-installer.kubernetes-fleet.io/managed"]).Should(Equal("true"), "CRD %s should have addonmanager label set to Reconcile", crdName)
 
 		v1alpha1Version := crd.Spec.Versions[0]
@@ -71,7 +71,7 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", func() {
 	It("should verify original CRD still exists, because it's owned by addonmanager", func() {
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
-		Expect(crd.Labels).ShouldNot(BeNil(), "CRD %s should have labels defined", crdName)
+		Expect(len(crd.Labels)).Should(Equal(1), "CRD %s should have 1 label defined", crdName)
 		Expect(crd.Labels["addonmanager.kubernetes.io/mode"]).Should(Equal("Reconcile"), "CRD %s should have addonmanager label set to Reconcile", crdName)
 
 		v1alpha1Version := crd.Spec.Versions[0]
@@ -86,8 +86,8 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", func() {
 		Expect(ok).To(BeFalse(), "CRD %s should not have 'newField' property defined in properties", crdName)
 	})
 
-	It("update the CRD to have the crd-installer ownership label", func() {
-		updateCRDLabels(crdName, map[string]string{"crd-installer.kubernetes-fleet.io/managed": "true"})
+	It("update the CRD to remove addonmanager owenership label", func() {
+		updateCRDLabels(crdName, map[string]string{"random-label.io": "true"})
 	})
 
 	It("should update the CRD with new field in spec with crdinstaller label", func() {
@@ -97,7 +97,8 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", func() {
 	It("should verify updated CRD", func() {
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
-		Expect(crd.Labels).ShouldNot(BeNil(), "CRD %s should have labels defined", crdName)
+		Expect(len(crd.Labels)).Should(Equal(2), "CRD %s should have 1 label defined", crdName)
+		Expect(crd.Labels["random-label.io"]).Should(Equal("true"), "CRD %s should have random label still set", crdName)
 		Expect(crd.Labels["crd-installer.kubernetes-fleet.io/managed"]).Should(Equal("true"), "CRD %s should have addonmanager label set to Reconcile", crdName)
 
 		v1alpha1Version := crd.Spec.Versions[0]

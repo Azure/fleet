@@ -35,10 +35,10 @@ func TestCollectCRDFileNamesWithActualPath(t *testing.T) {
 	}
 
 	tests := []struct {
-		name              string
-		mode              string
-		wantedCRDFiles    map[string]bool
-		wantError         bool
+		name           string
+		mode           string
+		wantedCRDFiles map[string]bool
+		wantError      bool
 	}{
 		{
 			name: "hub mode v1beta1 with actual directory",
