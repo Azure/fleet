@@ -91,7 +91,7 @@ func InstallCRD(ctx context.Context, client client.Client, path string) error {
 	// Type assertion to make sure we have a CRD.
 	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
 	if !ok {
-		return fmt.Errorf("unexpected type from %s, expected CustomResourceDefinition but got %s", path, gvk)
+		return fmt.Errorf("unexpected type from %s, expected %s but got %s", path, gvk, apiextensionsv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"))
 	}
 
 	isManagedByAddonManager, err := isCRDManagedByAddonManager(ctx, client, crd.Name)
