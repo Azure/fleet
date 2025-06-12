@@ -12,7 +12,6 @@ crdInstaller:
     repository: ghcr.io/azure/fleet/crd-installer
     pullPolicy: Always
     tag: main
-  mode: member
   logVerbosity: 2
 
 logVerbosity: 5

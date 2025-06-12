@@ -22,7 +22,7 @@ spec:
           image: "{{ .Values.crdInstaller.image.repository }}:{{ .Values.crdInstaller.image.tag }}"
           imagePullPolicy: {{ .Values.crdInstaller.image.pullPolicy }}
           args:
-            - --mode={{ .Values.crdInstaller.mode }}
+            - --mode=member
             - --v={{ .Values.crdInstaller.logVerbosity }}
         {{- end }}
       containers:
