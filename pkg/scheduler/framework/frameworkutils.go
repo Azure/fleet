@@ -44,7 +44,7 @@ import (
 //   - obsolete bindings, i.e., bindings that are no longer associated with the latest scheduling
 //     policy; and
 //   - deleting bindings, i.e., bindings that have a deletionTimeStamp on them.
-func classifyBindings(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, bindings []placementv1beta1.ClusterResourceBinding, clusters []clusterv1beta1.MemberCluster) (bound, scheduled, obsolete, unscheduled, dangling, deleting []*placementv1beta1.ClusterResourceBinding) {
+func classifyBindings(policy placementv1beta1.PolicySnapshotObj, bindings []placementv1beta1.ClusterResourceBinding, clusters []clusterv1beta1.MemberCluster) (bound, scheduled, obsolete, unscheduled, dangling, deleting []*placementv1beta1.ClusterResourceBinding) {
 	// Pre-allocate arrays.
 	bound = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
 	scheduled = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
@@ -78,7 +78,7 @@ func classifyBindings(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, 
 			// bindings are stranded on a leaving/left cluster; it does not perform any binding
 			// association eligibility check for the cluster.
 			dangling = append(dangling, &binding)
-		case binding.Spec.SchedulingPolicySnapshotName != policy.Name:
+		case binding.Spec.SchedulingPolicySnapshotName != policy.GetName():
 			// The binding is in the scheduled or bound state, but is no longer associated
 			// with the latest scheduling policy snapshot.
 			obsolete = append(obsolete, &binding)
@@ -119,7 +119,7 @@ type bindingWithPatch struct {
 // Note that this function will return bindings with all fields fulfilled/refreshed, as applicable.
 func crossReferencePickedClustersAndDeDupBindings(
 	crpName string,
-	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	policy placementv1beta1.PolicySnapshotObj,
 	picked ScoredClusters,
 	unscheduled, obsolete []*placementv1beta1.ClusterResourceBinding,
 ) (toCreate, toDelete []*placementv1beta1.ClusterResourceBinding, toPatch []*bindingWithPatch, err error) {
@@ -202,7 +202,7 @@ func crossReferencePickedClustersAndDeDupBindings(
 					State: placementv1beta1.BindingStateScheduled,
 					// Leave the associated resource snapshot name empty; it is up to another controller
 					// to fulfill this field.
-					SchedulingPolicySnapshotName: policy.Name,
+					SchedulingPolicySnapshotName: policy.GetName(),
 					TargetCluster:                scored.Cluster.Name,
 					ClusterDecision: placementv1beta1.ClusterDecision{
 						ClusterName: scored.Cluster.Name,
@@ -224,14 +224,14 @@ func crossReferencePickedClustersAndDeDupBindings(
 }
 
 func patchBindingFromScoredCluster(binding *placementv1beta1.ClusterResourceBinding, desiredState placementv1beta1.BindingState,
-	scored *ScoredCluster, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) *bindingWithPatch {
+	scored *ScoredCluster, policy placementv1beta1.PolicySnapshotObj) *bindingWithPatch {
 	// Update the binding so that it is associated with the latest score.
 	updated := binding.DeepCopy()
 	affinityScore := scored.Score.AffinityScore
 	topologySpreadScore := scored.Score.TopologySpreadScore
 	// Update the binding so that it is associated with the latest scheduling policy.
 	updated.Spec.State = desiredState
-	updated.Spec.SchedulingPolicySnapshotName = policy.Name
+	updated.Spec.SchedulingPolicySnapshotName = policy.GetName()
 	// copy the scheduling decision
 	updated.Spec.ClusterDecision = placementv1beta1.ClusterDecision{
 		ClusterName: scored.Cluster.Name,
@@ -251,12 +251,12 @@ func patchBindingFromScoredCluster(binding *placementv1beta1.ClusterResourceBind
 }
 
 func patchBindingFromFixedCluster(binding *placementv1beta1.ClusterResourceBinding, desiredState placementv1beta1.BindingState,
-	clusterName string, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) *bindingWithPatch {
+	clusterName string, policy placementv1beta1.PolicySnapshotObj) *bindingWithPatch {
 	// Update the binding so that it is associated with the latest score.
 	updated := binding.DeepCopy()
 	// Update the binding so that it is associated with the latest scheduling policy.
 	updated.Spec.State = desiredState
-	updated.Spec.SchedulingPolicySnapshotName = policy.Name
+	updated.Spec.SchedulingPolicySnapshotName = policy.GetName()
 	// Technically speaking, overwriting the cluster decision is not needed, as the same value
 	// should have been set in the previous run. Here the scheduler writes the information
 	// again just in case.
@@ -357,11 +357,11 @@ func newSchedulingDecisionsFromBindings(
 }
 
 // newSchedulingCondition returns a new scheduling condition.
-func newScheduledCondition(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, status metav1.ConditionStatus, reason, message string) metav1.Condition {
+func newScheduledCondition(policy placementv1beta1.PolicySnapshotObj, status metav1.ConditionStatus, reason, message string) metav1.Condition {
 	return metav1.Condition{
 		Type:               string(placementv1beta1.PolicySnapshotScheduled),
 		Status:             status,
-		ObservedGeneration: policy.Generation,
+		ObservedGeneration: policy.GetGeneration(),
 		Reason:             reason,
 		Message:            message,
 	}
@@ -369,7 +369,7 @@ func newScheduledCondition(policy *placementv1beta1.ClusterSchedulingPolicySnaps
 
 // newScheduledConditionFromBindings prepares a scheduling condition by comparing the desired
 // number of cluster and the count of existing bindings.
-func newScheduledConditionFromBindings(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, numOfClusters int, existing ...[]*placementv1beta1.ClusterResourceBinding) metav1.Condition {
+func newScheduledConditionFromBindings(policy placementv1beta1.PolicySnapshotObj, numOfClusters int, existing ...[]*placementv1beta1.ClusterResourceBinding) metav1.Condition {
 	count := 0
 	for _, bindingSet := range existing {
 		count += len(bindingSet)
@@ -454,8 +454,8 @@ func equalDecisions(current, desired []placementv1beta1.ClusterDecision) bool {
 
 // shouldDownscale checks if the scheduler needs to perform some downscaling, and (if so) how
 // many scheduled or bound bindings it should remove.
-func shouldDownscale(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, desired, present, obsolete int) (act bool, count int) {
-	if policy.Spec.Policy.PlacementType == placementv1beta1.PickNPlacementType && desired <= present {
+func shouldDownscale(policy placementv1beta1.PolicySnapshotObj, desired, present, obsolete int) (act bool, count int) {
+	if policy.GetPolicySnapshotSpec().Policy.PlacementType == placementv1beta1.PickNPlacementType && desired <= present {
 		// Downscale only applies to CRPs of the Pick N placement type; and it only applies when the number of
 		// clusters requested by the user is less than the number of currently bound + scheduled bindings combined;
 		// or there are the right number of bound + scheduled bindings, yet some obsolete bindings still linger
@@ -607,7 +607,7 @@ func shouldRequeue(desiredBatchSize, batchSizeLimit, bindingCount int) bool {
 // Note that this function will return bindings with all fields fulfilled/refreshed, as applicable.
 func crossReferenceValidTargetsWithBindings(
 	crpName string,
-	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	policy placementv1beta1.PolicySnapshotObj,
 	valid []*clusterv1beta1.MemberCluster,
 	bound, scheduled, unscheduled, obsolete []*placementv1beta1.ClusterResourceBinding,
 ) (
@@ -701,7 +701,7 @@ func crossReferenceValidTargetsWithBindings(
 					State: placementv1beta1.BindingStateScheduled,
 					// Leave the associated resource snapshot name empty; it is up to another controller
 					// to fulfill this field.
-					SchedulingPolicySnapshotName: policy.Name,
+					SchedulingPolicySnapshotName: policy.GetName(),
 					TargetCluster:                cluster.Name,
 					ClusterDecision: placementv1beta1.ClusterDecision{
 						ClusterName: cluster.Name,

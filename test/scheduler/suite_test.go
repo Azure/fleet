@@ -532,8 +532,9 @@ func beforeSuiteForProcess1() []byte {
 	klog.InitFlags(nil)
 	Expect(flag.Set("v", "5")).To(Succeed(), "Failed to set verbosity flag")
 	flag.Parse()
-	klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true), zap.Level(zapcore.Level(-5))))
-
+	logger := zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true), zap.Level(zapcore.Level(-5)))
+	klog.SetLogger(logger)
+	ctrl.SetLogger(logger)
 	By("bootstrapping the test environment")
 	// Start the hub cluster.
 	hubTestEnv = &envtest.Environment{
@@ -562,7 +563,7 @@ func beforeSuiteForProcess1() []byte {
 	Expect(err).NotTo(HaveOccurred(), "Failed to create controller manager")
 
 	// Spin up a scheduler work queue.
-	schedulerWorkQueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue()
+	schedulerWorkQueue := queue.NewSimplePlacementSchedulingQueue()
 
 	// Build a custom cluster eligibility checker.
 	clusterEligibilityChecker := clustereligibilitychecker.New(

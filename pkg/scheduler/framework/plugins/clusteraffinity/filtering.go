@@ -28,13 +28,13 @@ import (
 func (p *Plugin) PreFilter(
 	_ context.Context,
 	_ framework.CycleStatePluginReadWriter,
-	ps *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	ps placementv1beta1.PolicySnapshotObj,
 ) (status *framework.Status) {
-	noRequiredClusterAffinityTerms := ps.Spec.Policy == nil ||
-		ps.Spec.Policy.Affinity == nil ||
-		ps.Spec.Policy.Affinity.ClusterAffinity == nil ||
-		ps.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil ||
-		len(ps.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms) == 0
+	noRequiredClusterAffinityTerms := ps.GetPolicySnapshotSpec().Policy == nil ||
+		ps.GetPolicySnapshotSpec().Policy.Affinity == nil ||
+		ps.GetPolicySnapshotSpec().Policy.Affinity.ClusterAffinity == nil ||
+		ps.GetPolicySnapshotSpec().Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil ||
+		len(ps.GetPolicySnapshotSpec().Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms) == 0
 	if noRequiredClusterAffinityTerms {
 		// There are no required cluster affinity terms to enforce; consider all clusters
 		// eligible for resource placement in the scope of this plugin.
@@ -50,15 +50,15 @@ func (p *Plugin) PreFilter(
 func (p *Plugin) Filter(
 	_ context.Context,
 	_ framework.CycleStatePluginReadWriter,
-	ps *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	ps placementv1beta1.PolicySnapshotObj,
 	cluster *clusterv1beta1.MemberCluster,
 ) (status *framework.Status) {
 	// Note that this extension point assumes that previous extension point (PreFilter) has
 	// guaranteed that if scheduling policy reaches this stage, it must have at least one
 	// required cluster affinity term to enforce.
 
-	for idx := range ps.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms {
-		t := &ps.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms[idx]
+	for idx := range ps.GetPolicySnapshotSpec().Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms {
+		t := &ps.GetPolicySnapshotSpec().Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms[idx]
 		r := clusterRequirement(*t)
 		isMatched, err := r.Matches(cluster)
 		if err != nil {

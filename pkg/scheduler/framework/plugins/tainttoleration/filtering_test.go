@@ -27,7 +27,7 @@ func TestFilter(t *testing.T) {
 	tests := []struct {
 		name           string
 		cluster        *clusterv1beta1.MemberCluster
-		policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot
+		policySnapshot placementv1beta1.PolicySnapshotObj
 		wantStatus     *framework.Status
 	}{
 		{

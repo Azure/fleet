@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -28,10 +29,52 @@ const (
 	// that the CRP controller can react to CRP deletions if necessary.
 	ClusterResourcePlacementCleanupFinalizer = fleetPrefix + "crp-cleanup"
 
-	// SchedulerCRPCleanupFinalizer is a finalizer added by the scheduler to CRPs, to make sure
+	// SchedulerCleanupFinalizer is a finalizer added by the scheduler to CRPs, to make sure
 	// that all bindings derived from a CRP can be cleaned up after the CRP is deleted.
-	SchedulerCRPCleanupFinalizer = fleetPrefix + "scheduler-cleanup"
+	SchedulerCleanupFinalizer = fleetPrefix + "scheduler-cleanup"
 )
+
+// make sure the PlacementObj and PlacementObjList interfaces are implemented by the
+// ClusterResourcePlacement and ResourcePlacement types.
+var _ PlacementObj = &ClusterResourcePlacement{}
+var _ PlacementObj = &ResourcePlacement{}
+var _ PlacementObjList = &ClusterResourcePlacementList{}
+var _ PlacementObjList = &ResourcePlacementList{}
+
+// PlacementSpecGetterSetter offers the functionality to work with the PlacementSpecGetterSetter.
+// +kubebuilder:object:generate=false
+type PlacementSpecGetterSetter interface {
+	GetPlacementSpec() *PlacementSpec
+	SetPlacementSpec(PlacementSpec)
+}
+
+// PlacementStatusGetterSetter offers the functionality to work with the PlacementStatusGetterSetter.
+// +kubebuilder:object:generate=false
+type PlacementStatusGetterSetter interface {
+	GetPlacementStatus() *PlacementStatus
+	SetPlacementStatus(PlacementStatus)
+}
+
+// PlacementObj offers the functionality to work with fleet placement object.
+// +kubebuilder:object:generate=false
+type PlacementObj interface {
+	client.Object
+	PlacementSpecGetterSetter
+	PlacementStatusGetterSetter
+}
+
+// PlacementListItemGetter offers the functionality to get a list of PlacementObj items.
+// +kubebuilder:object:generate=false
+type PlacementListItemGetter interface {
+	GetPlacementObjs() []PlacementObj
+}
+
+// PlacementObjList offers the functionality to work with fleet placement object list.
+// +kubebuilder:object:generate=false
+type PlacementObjList interface {
+	client.ObjectList
+	PlacementListItemGetter
+}
 
 // +genclient
 // +genclient:nonNamespaced
@@ -75,7 +118,7 @@ type ClusterResourcePlacement struct {
 	Status PlacementStatus `json:"status,omitempty"`
 }
 
-// PlacementSpec defines the desired state of ClusterResourcePlacement.
+// PlacementSpec defines the desired state of ClusterResourcePlacement and ResourcePlacement.
 type PlacementSpec struct {
 
 	// ResourceSelectors is an array of selectors used to select cluster scoped resources. The selectors are `ORed`.
@@ -103,6 +146,14 @@ type PlacementSpec struct {
 	// +kubebuilder:default=10
 	// +kubebuilder:validation:Optional
 	RevisionHistoryLimit *int32 `json:"revisionHistoryLimit,omitempty"`
+}
+
+// Tolerations returns tolerations for PlacementSpec to handle nil policy case.
+func (p *PlacementSpec) Tolerations() []Toleration {
+	if p.Policy != nil {
+		return p.Policy.Tolerations
+	}
+	return nil
 }
 
 // TODO: rename this to ResourceSelectorTerm
@@ -484,8 +535,8 @@ type ApplyStrategy struct {
 	//   managed by Fleet (i.e., specified in the hub cluster manifest). This is the default
 	//   option.
 	//
-	//   Note that this option would revert any ad-hoc changes made on the member cluster side in
-	//   the managed fields; if you would like to make temporary edits on the member cluster side
+	//   Note that this option would revert any ad-hoc changes made on the member cluster side in the
+	//   managed fields; if you would like to make temporary edits on the member cluster side
 	//   in the managed fields, switch to IfNotDrifted option. Note that changes in unmanaged
 	//   fields will be left alone; if you use the FullDiff compare option, such changes will
 	//   be reported as drifts.
@@ -810,7 +861,7 @@ type RollingUpdateConfig struct {
 	UnavailablePeriodSeconds *int `json:"unavailablePeriodSeconds,omitempty"`
 }
 
-// PlacementStatus defines the observed state of the ClusterResourcePlacement object.
+// PlacementStatus defines the observed status of the ClusterResourcePlacement and ResourcePlacement object.
 type PlacementStatus struct {
 	// SelectedResources contains a list of resources selected by ResourceSelectors.
 	// This field is only meaningful if the `ObservedResourceIndex` is not empty.
@@ -1275,14 +1326,6 @@ type ClusterResourcePlacementList struct {
 	Items           []ClusterResourcePlacement `json:"items"`
 }
 
-// Tolerations returns tolerations for ClusterResourcePlacement.
-func (m *ClusterResourcePlacement) Tolerations() []Toleration {
-	if m.Spec.Policy != nil {
-		return m.Spec.Policy.Tolerations
-	}
-	return nil
-}
-
 // SetConditions sets the conditions of the ClusterResourcePlacement.
 func (m *ClusterResourcePlacement) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {
@@ -1290,15 +1333,44 @@ func (m *ClusterResourcePlacement) SetConditions(conditions ...metav1.Condition)
 	}
 }
 
+// GetPlacementObjs returns the placement objects in the list.
+func (crpl *ClusterResourcePlacementList) GetPlacementObjs() []PlacementObj {
+	objs := make([]PlacementObj, len(crpl.Items))
+	for i := range crpl.Items {
+		objs[i] = &crpl.Items[i]
+	}
+	return objs
+}
+
 // GetCondition returns the condition of the ClusterResourcePlacement objects.
 func (m *ClusterResourcePlacement) GetCondition(conditionType string) *metav1.Condition {
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
 
+// GetPlacementSpec returns the placement spec.
+func (m *ClusterResourcePlacement) GetPlacementSpec() *PlacementSpec {
+	return &m.Spec
+}
+
+// SetPlacementSpec sets the placement spec.
+func (m *ClusterResourcePlacement) SetPlacementSpec(spec PlacementSpec) {
+	spec.DeepCopyInto(&m.Spec)
+}
+
+// GetPlacementStatus returns the placement status.
+func (m *ClusterResourcePlacement) GetPlacementStatus() *PlacementStatus {
+	return &m.Status
+}
+
+// SetPlacementStatus sets the placement status.
+func (m *ClusterResourcePlacement) SetPlacementStatus(status PlacementStatus) {
+	status.DeepCopyInto(&m.Status)
+}
+
 const (
-	// PlacementCleanupFinalizer is a finalizer added by the CRP controller to all CRPs, to make sure
-	// that the CRP controller can react to CRP deletions if necessary.
-	PlacementCleanupFinalizer = fleetPrefix + "rp-cleanup"
+	// ResourcePlacementCleanupFinalizer is a finalizer added by the RP controller to all RPs, to make sure
+	// that the RP controller can react to RP deletions if necessary.
+	ResourcePlacementCleanupFinalizer = fleetPrefix + "rp-cleanup"
 )
 
 // +genclient
@@ -1354,6 +1426,35 @@ func (m *ResourcePlacement) SetConditions(conditions ...metav1.Condition) {
 // GetCondition returns the condition of the ResourcePlacement objects.
 func (m *ResourcePlacement) GetCondition(conditionType string) *metav1.Condition {
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
+}
+
+// GetPlacementSpec returns the placement spec.
+func (m *ResourcePlacement) GetPlacementSpec() *PlacementSpec {
+	return &m.Spec
+}
+
+// SetPlacementSpec sets the placement spec.
+func (m *ResourcePlacement) SetPlacementSpec(spec PlacementSpec) {
+	spec.DeepCopyInto(&m.Spec)
+}
+
+// GetPlacementStatus returns the placement status.
+func (m *ResourcePlacement) GetPlacementStatus() *PlacementStatus {
+	return &m.Status
+}
+
+// SetPlacementStatus sets the placement status.
+func (m *ResourcePlacement) SetPlacementStatus(status PlacementStatus) {
+	status.DeepCopyInto(&m.Status)
+}
+
+// GetPlacementObjs returns the placement objects in the list.
+func (rpl *ResourcePlacementList) GetPlacementObjs() []PlacementObj {
+	objs := make([]PlacementObj, len(rpl.Items))
+	for i := range rpl.Items {
+		objs[i] = &rpl.Items[i]
+	}
+	return objs
 }
 
 func init() {

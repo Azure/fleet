@@ -10,9 +10,7 @@ The main idea is that we are creating a multi-cluster application management sol
 - If you're waiting for my confirmation ("OK"), proceed without further prompting.
 - Follow the [Uber Go Style Guide](https://github.com/uber-go/guide/blob/master/style.md) if possible.
 - Favor using the standard library over third-party libraries.
-- Run goimports on save.
-- Run golint and go vet to check for errors.
-- Use go mod tidy if the dependencies are changed.
+- Run "make reviewable" before submitting a pull request to ensure the code is formatted correctly and all dependencies are up to date.
 
 ## Terminology
 - **Fleet**: A conceptual term referring to a collection of clusters.
@@ -123,6 +121,7 @@ A breadcrumb is a collaborative scratch pad that allow the user and agent to get
    - **Get explicit approval** on the plan before implementation.
    - Update the breadcrumb **AFTER completing each significant change**.
    - Keep the breadcrumb as our single source of truth as it contains the most recent information.
+   - Do not ask for approval **BEFORE** running unit tests or integration tests.
 
 5. Ask me to verify the plan with: "Are you happy with this implementation plan?" before proceeding with code changes.
 

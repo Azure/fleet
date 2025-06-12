@@ -158,13 +158,13 @@ func willViolate(counter *bindingCounterByDomain, name domainName, maxSkew int) 
 
 // classifyConstraints classifies topology spread constraints in a policy based on their
 // whenUnsatisfiable requirements.
-func classifyConstraints(policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (doNotSchedule, scheduleAnyway []*placementv1beta1.TopologySpreadConstraint) {
+func classifyConstraints(policy placementv1beta1.PolicySnapshotObj) (doNotSchedule, scheduleAnyway []*placementv1beta1.TopologySpreadConstraint) {
 	// Pre-allocate arrays.
-	doNotSchedule = make([]*placementv1beta1.TopologySpreadConstraint, 0, len(policy.Spec.Policy.TopologySpreadConstraints))
-	scheduleAnyway = make([]*placementv1beta1.TopologySpreadConstraint, 0, len(policy.Spec.Policy.TopologySpreadConstraints))
+	doNotSchedule = make([]*placementv1beta1.TopologySpreadConstraint, 0, len(policy.GetPolicySnapshotSpec().Policy.TopologySpreadConstraints))
+	scheduleAnyway = make([]*placementv1beta1.TopologySpreadConstraint, 0, len(policy.GetPolicySnapshotSpec().Policy.TopologySpreadConstraints))
 
-	for idx := range policy.Spec.Policy.TopologySpreadConstraints {
-		constraint := policy.Spec.Policy.TopologySpreadConstraints[idx]
+	for idx := range policy.GetPolicySnapshotSpec().Policy.TopologySpreadConstraints {
+		constraint := policy.GetPolicySnapshotSpec().Policy.TopologySpreadConstraints[idx]
 		if constraint.WhenUnsatisfiable == placementv1beta1.ScheduleAnyway {
 			scheduleAnyway = append(scheduleAnyway, &constraint)
 			continue
@@ -298,7 +298,7 @@ func evaluateAllConstraints(
 
 // prepareTopologySpreadConstraintsPluginState initializes the state for the plugin to use
 // in the scheduling cycle.
-func prepareTopologySpreadConstraintsPluginState(state framework.CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (*pluginState, error) {
+func prepareTopologySpreadConstraintsPluginState(state framework.CycleStatePluginReadWriter, policy placementv1beta1.PolicySnapshotObj) (*pluginState, error) {
 	// Classify the topology spread constraints.
 	doNotSchedule, scheduleAnyway := classifyConstraints(policy)
 

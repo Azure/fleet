@@ -63,7 +63,7 @@ func crpSchedulerFinalizerAddedActual(crpName string) func() error {
 		}
 
 		// Check that the scheduler finalizer has been added.
-		if !controllerutil.ContainsFinalizer(crp, placementv1beta1.SchedulerCRPCleanupFinalizer) {
+		if !controllerutil.ContainsFinalizer(crp, placementv1beta1.SchedulerCleanupFinalizer) {
 			return fmt.Errorf("scheduler cleanup finalizer has not been added")
 		}
 
@@ -80,7 +80,7 @@ func crpSchedulerFinalizerRemovedActual(crpName string) func() error {
 		}
 
 		// Check that the scheduler finalizer has been added.
-		if controllerutil.ContainsFinalizer(crp, placementv1beta1.SchedulerCRPCleanupFinalizer) {
+		if controllerutil.ContainsFinalizer(crp, placementv1beta1.SchedulerCleanupFinalizer) {
 			return fmt.Errorf("scheduler cleanup finalizer is still present")
 		}
 

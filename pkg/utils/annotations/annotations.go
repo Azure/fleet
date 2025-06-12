@@ -21,13 +21,15 @@ import (
 	"fmt"
 	"strconv"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
 
 // ExtractNumOfClustersFromPolicySnapshot extracts the numOfClusters value from the annotations
 // on a policy snapshot.
-func ExtractNumOfClustersFromPolicySnapshot(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (int, error) {
-	numOfClustersStr, ok := policy.Annotations[fleetv1beta1.NumberOfClustersAnnotation]
+func ExtractNumOfClustersFromPolicySnapshot(policy client.Object) (int, error) {
+	numOfClustersStr, ok := policy.GetAnnotations()[fleetv1beta1.NumberOfClustersAnnotation]
 	if !ok {
 		return 0, fmt.Errorf("cannot find annotation %s", fleetv1beta1.NumberOfClustersAnnotation)
 	}
@@ -56,8 +58,8 @@ func ExtractSubindexFromClusterResourceSnapshot(snapshot *fleetv1beta1.ClusterRe
 }
 
 // ExtractObservedCRPGenerationFromPolicySnapshot extracts the observed CRP generation from policySnapshot.
-func ExtractObservedCRPGenerationFromPolicySnapshot(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (int64, error) {
-	crpGenerationStr, ok := policy.Annotations[fleetv1beta1.CRPGenerationAnnotation]
+func ExtractObservedCRPGenerationFromPolicySnapshot(policy client.Object) (int64, error) {
+	crpGenerationStr, ok := policy.GetAnnotations()[fleetv1beta1.CRPGenerationAnnotation]
 	if !ok {
 		return 0, fmt.Errorf("cannot find annotation %s", fleetv1beta1.CRPGenerationAnnotation)
 	}

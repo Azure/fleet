@@ -22,20 +22,20 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// TestSimpleClusterResourcePlacementSchedulingQueueBasicOps tests the basic ops
+// TestSimplePlacementSchedulingQueueBasicOps tests the basic ops
 // (Add, Next, Done) of a simpleClusterResourcePlacementSchedulingQueue.
-func TestSimpleClusterResourcePlacementSchedulingQueueBasicOps(t *testing.T) {
-	sq := NewSimpleClusterResourcePlacementSchedulingQueue()
+func TestSimplePlacementSchedulingQueueBasicOps(t *testing.T) {
+	sq := NewSimplePlacementSchedulingQueue()
 	sq.Run()
 
-	keysToAdd := []ClusterResourcePlacementKey{"A", "B", "C", "D", "E"}
+	keysToAdd := []PlacementKey{"A", "B", "C", "D", "E"}
 	for _, key := range keysToAdd {
 		sq.Add(key)
 	}
 
-	keysRecved := []ClusterResourcePlacementKey{}
+	keysRecved := []PlacementKey{}
 	for i := 0; i < len(keysToAdd); i++ {
-		key, closed := sq.NextClusterResourcePlacementKey()
+		key, closed := sq.NextPlacementKey()
 		if closed {
 			t.Fatalf("Queue closed unexpected")
 		}

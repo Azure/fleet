@@ -27,7 +27,7 @@ import (
 // SchedulerWorkqueueKeyCollector helps collect keys from a scheduler work queue for testing
 // purposes.
 type SchedulerWorkqueueKeyCollector struct {
-	schedulerWorkqueue queue.ClusterResourcePlacementSchedulingQueue
+	schedulerWorkqueue queue.PlacementSchedulingQueue
 	// Uses a mutex to guard against concurrent access; for simplicity reasons, the struct
 	// uses a regular map rather than its currency safe variant.
 	lock          sync.Mutex
@@ -35,7 +35,7 @@ type SchedulerWorkqueueKeyCollector struct {
 }
 
 // NewSchedulerWorkqueueKeyCollector returns a new SchedulerWorkqueueKeyCollector.
-func NewSchedulerWorkqueueKeyCollector(wq queue.ClusterResourcePlacementSchedulingQueue) *SchedulerWorkqueueKeyCollector {
+func NewSchedulerWorkqueueKeyCollector(wq queue.PlacementSchedulingQueue) *SchedulerWorkqueueKeyCollector {
 	return &SchedulerWorkqueueKeyCollector{
 		schedulerWorkqueue: wq,
 		collectedKeys:      make(map[string]bool),
@@ -46,7 +46,7 @@ func NewSchedulerWorkqueueKeyCollector(wq queue.ClusterResourcePlacementScheduli
 func (kc *SchedulerWorkqueueKeyCollector) Run(ctx context.Context) {
 	go func() {
 		for {
-			key, closed := kc.schedulerWorkqueue.NextClusterResourcePlacementKey()
+			key, closed := kc.schedulerWorkqueue.NextPlacementKey()
 			if closed {
 				break
 			}

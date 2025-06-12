@@ -144,16 +144,16 @@ func (p *Plugin) readPluginState(state framework.CycleStatePluginReadWriter) (*p
 func (p *Plugin) PostBatch(
 	_ context.Context,
 	_ framework.CycleStatePluginReadWriter,
-	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	policy placementv1beta1.PolicySnapshotObj,
 ) (int, *framework.Status) {
-	if policy.Spec.Policy == nil {
+	if policy.GetPolicySnapshotSpec().Policy == nil {
 		// The policy does not exist; note that this normally will not occur as in this case
 		// the policy is considered of the PickAll type and this extension point will not
 		// run for this placement type.
 		return 0, framework.FromError(fmt.Errorf("policy does not exist"), p.Name(), "failed to get policy")
 	}
 
-	if len(policy.Spec.Policy.TopologySpreadConstraints) == 0 {
+	if len(policy.GetPolicySnapshotSpec().Policy.TopologySpreadConstraints) == 0 {
 		// There are no topology spread constraints to enforce; skip.
 		return 0, framework.NewNonErrorStatus(framework.Skip, p.Name(), "no topology spread constraint is present")
 	}
@@ -172,9 +172,9 @@ func (p *Plugin) PostBatch(
 func (p *Plugin) PreFilter(
 	_ context.Context,
 	state framework.CycleStatePluginReadWriter,
-	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	policy placementv1beta1.PolicySnapshotObj,
 ) (status *framework.Status) {
-	if policy.Spec.Policy == nil {
+	if policy.GetPolicySnapshotSpec().Policy == nil {
 		// The policy does not exist; in this case the policy is considered of the PickAll
 		// type, and topology spread constraints do not apply to this type.
 		//
@@ -183,7 +183,7 @@ func (p *Plugin) PreFilter(
 		return framework.NewNonErrorStatus(framework.Skip, p.Name(), "policy does not exist")
 	}
 
-	if len(policy.Spec.Policy.TopologySpreadConstraints) == 0 {
+	if len(policy.GetPolicySnapshotSpec().Policy.TopologySpreadConstraints) == 0 {
 		// There are no topology spread constraints to enforce; skip.
 		//
 		// Note that this will lead the scheduler to skip this plugin in the next stage
@@ -220,7 +220,7 @@ func (p *Plugin) PreFilter(
 func (p *Plugin) Filter(
 	_ context.Context,
 	state framework.CycleStatePluginReadWriter,
-	_ *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	_ placementv1beta1.PolicySnapshotObj,
 	cluster *clusterv1beta1.MemberCluster,
 ) (status *framework.Status) {
 	// Read the plugin state.
@@ -247,16 +247,16 @@ func (p *Plugin) Filter(
 func (p *Plugin) PreScore(
 	_ context.Context,
 	state framework.CycleStatePluginReadWriter,
-	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	policy placementv1beta1.PolicySnapshotObj,
 ) (status *framework.Status) {
-	if policy.Spec.Policy == nil {
+	if policy.GetPolicySnapshotSpec().Policy == nil {
 		// The policy does not exist; in this case the policy is considered of the PickAll
 		// type, and topology spread constraints do not apply to this type. Note also that
 		// normally this extension point will not run at all for this placement type.
 		return framework.FromError(fmt.Errorf("policy does not exist"), p.Name(), "failed to get policy")
 	}
 
-	if len(policy.Spec.Policy.TopologySpreadConstraints) == 0 {
+	if len(policy.GetPolicySnapshotSpec().Policy.TopologySpreadConstraints) == 0 {
 		// There are no topology spread constraints to enforce; skip.
 		//
 		// Note that this will lead the scheduler to skip this plugin in the next stage
@@ -288,7 +288,7 @@ func (p *Plugin) PreScore(
 func (p *Plugin) Score(
 	_ context.Context,
 	state framework.CycleStatePluginReadWriter,
-	_ *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	_ placementv1beta1.PolicySnapshotObj,
 	cluster *clusterv1beta1.MemberCluster,
 ) (score *framework.ClusterScore, status *framework.Status) {
 	// Read the plugin state.

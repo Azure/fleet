@@ -29,7 +29,7 @@ import (
 func (p *Plugin) Filter(
 	_ context.Context,
 	state framework.CycleStatePluginReadWriter,
-	_ *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	_ placementv1beta1.PolicySnapshotObj,
 	cluster *clusterv1beta1.MemberCluster,
 ) (status *framework.Status) {
 	if !state.HasScheduledOrBoundBindingFor(cluster.Name) {

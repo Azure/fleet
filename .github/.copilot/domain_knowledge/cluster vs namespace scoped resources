@@ -1,0 +1,9 @@
+# naming convention
+All APIs whose name starts with Cluster are clusterScoped resources while its counterpart whose name matches the remainder of the API represents a namespace scoped resource. 
+For example, we have ClusterResourcePlacement API and ResourcePlacement API. The former is cluster scoped while the latter is namespace scoped. 
+# The difference between cluster scoped and namespace scoped resources
+The main difference between cluster scoped and namespace scoped resources is that cluster scoped resources are not bound to a specific namespace and can be accessed across the entire cluster, while namespace scoped resources are bound to a specific namespace and can only be accessed within that namespace. This translates to the following differences in how to get, list, create, update, and delete these resources:
+## Cluster Scoped Resources
+When one does CRUD on a cluster scoped resources, it only needs to know its name and type, i.e. something like this	client.Get(ctx, types.NamespacedName{Name: string(name)}, crp)
+## Namespace Scoped Resources
+When one does CRUD on a namespace scoped resources, it needs to know its name, type, and namespace, i.e. something like this	client.Get(ctx, types.NamespacedName{Name: string(name), Namespace: namespace}, rp)

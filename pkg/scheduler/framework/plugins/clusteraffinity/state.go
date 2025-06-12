@@ -35,7 +35,7 @@ type pluginState struct {
 
 // preparePluginState prepares a common state for easier queries of min. and max.
 // observed values of properties (if applicable).
-func preparePluginState(state framework.CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (*pluginState, error) {
+func preparePluginState(state framework.CycleStatePluginReadWriter, policy placementv1beta1.PolicySnapshotObj) (*pluginState, error) {
 	ps := &pluginState{
 		minMaxValuesByProperty: make(map[string]observedMinMaxValues),
 	}
@@ -44,8 +44,9 @@ func preparePluginState(state framework.CycleStatePluginReadWriter, policy *plac
 	// enforceable preferred cluster affinity term, as guaranteed by its caller.
 
 	var cs []clusterv1beta1.MemberCluster
-	for tidx := range policy.Spec.Policy.Affinity.ClusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
-		t := &policy.Spec.Policy.Affinity.ClusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution[tidx]
+	clusterAffnity := policy.GetPolicySnapshotSpec().Policy.Affinity.ClusterAffinity
+	for tidx := range clusterAffnity.PreferredDuringSchedulingIgnoredDuringExecution {
+		t := &clusterAffnity.PreferredDuringSchedulingIgnoredDuringExecution[tidx]
 		if t.Preference.PropertySorter != nil {
 			if cs == nil {
 				// Do a lazy retrieval of the cluster list; as the copy has some overhead.

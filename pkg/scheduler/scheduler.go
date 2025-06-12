@@ -26,7 +26,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
@@ -55,7 +54,7 @@ type Scheduler struct {
 
 	// queue is the work queue in use by the scheduler; the scheduler pulls items from the queue and
 	// performs scheduling in accordance with them.
-	queue queue.ClusterResourcePlacementSchedulingQueue
+	queue queue.PlacementSchedulingQueue
 
 	// client is the (cached) client in use by the scheduler for accessing Kubernetes API server.
 	client client.Client
@@ -81,7 +80,7 @@ type Scheduler struct {
 func NewScheduler(
 	name string,
 	framework framework.Framework,
-	queue queue.ClusterResourcePlacementSchedulingQueue,
+	queue queue.PlacementSchedulingQueue,
 	manager ctrl.Manager,
 	workerNumber int,
 ) *Scheduler {
@@ -100,10 +99,10 @@ func NewScheduler(
 // ScheduleOnce performs scheduling for one single item pulled from the work queue.
 // it returns true if the context is not canceled, false otherwise.
 func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
-	// Retrieve the next item (name of a CRP) from the work queue.
+	// Retrieve the next item (name of a placement) from the work queue.
 	//
 	// Note that this will block if no item is available.
-	crpName, closed := s.queue.NextClusterResourcePlacementKey()
+	placementName, closed := s.queue.NextPlacementKey()
 	if closed {
 		// End the run immediately if the work queue has been closed.
 		klog.InfoS("Work queue has been closed")
@@ -115,7 +114,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 		//
 		// Note that this will happen even if an error occurs. Should the key get requeued by Add()
 		// during the call, it will be added to the queue after this call returns.
-		s.queue.Done(crpName)
+		s.queue.Done(placementName)
 	}()
 
 	// keep track of the number of active scheduling loop
@@ -123,87 +122,87 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 	defer metrics.SchedulerActiveWorkers.WithLabelValues().Add(-1)
 
 	startTime := time.Now()
-	crpRef := klog.KRef("", string(crpName))
-	klog.V(2).InfoS("Schedule once started", "clusterResourcePlacement", crpRef, "worker", worker)
+	placementRef := klog.KRef("", string(placementName))
+	klog.V(2).InfoS("Schedule once started", "placement", placementRef, "worker", worker)
 	defer func() {
 		// Note that the time spent on pulling keys from the work queue (and the time spent on waiting
 		// for a key to arrive) is not counted here, as we cannot reliably distinguish between
-		// system processing latencies and actual duration of cluster resource placement absence.
+		// system processing latencies and actual duration of placement absence.
 		latency := time.Since(startTime).Milliseconds()
-		klog.V(2).InfoS("Schedule once completed", "clusterResourcePlacement", crpRef, "latency", latency, "worker", worker)
+		klog.V(2).InfoS("Schedule once completed", "placement", placementRef, "latency", latency, "worker", worker)
 	}()
 
-	// Retrieve the CRP.
-	crp := &fleetv1beta1.ClusterResourcePlacement{}
-	crpKey := types.NamespacedName{Name: string(crpName)}
-	if err := s.client.Get(ctx, crpKey, crp); err != nil {
-		// Wrap the error for metrics; this method does not return an error.
-		klog.ErrorS(controller.NewAPIServerError(true, err), "Failed to get cluster resource placement", "clusterResourcePlacement", crpRef)
-
+	// Retrieve the placement object (either ClusterResourcePlacement or ResourcePlacement).
+	placement, err := controller.FetchPlacementFromKey(ctx, s.client, placementName)
+	if err != nil {
 		if errors.IsNotFound(err) {
-			// The CRP has been gone before the scheduler gets a chance to
-			// process it; normally this would not happen as sources would not enqueue any CRP that
+			// The placement has been gone before the scheduler gets a chance to
+			// process it; normally this would not happen as sources would not enqueue any placement that
 			// has been marked for deletion but does not have the scheduler cleanup finalizer to
-			// the work queue. Such CRPs needs no further processing any way though, as the absence
-			// of the cleanup finalizer implies that bindings derived from the CRP are no longer present.
+			// the work queue. Such placements needs no further processing any way though, as the absence
+			// of the cleanup finalizer implies that bindings derived from the placement are no longer present.
+			klog.ErrorS(err, "placement is already deleted", "placement", placementRef)
 			return
 		}
+		// Wrap the error for metrics; this method does not return an error.
+		klog.ErrorS(controller.NewAPIServerError(true, err), "Failed to get placement", "placement", placementRef)
 
 		// Requeue for later processing.
-		s.queue.AddRateLimited(crpName)
+		s.queue.AddRateLimited(placementName)
 		return
 	}
 
-	// Check if the CRP has been marked for deletion, and if it has the scheduler cleanup finalizer.
-	if crp.DeletionTimestamp != nil {
-		if controllerutil.ContainsFinalizer(crp, fleetv1beta1.SchedulerCRPCleanupFinalizer) {
-			if err := s.cleanUpAllBindingsFor(ctx, crp); err != nil {
-				klog.ErrorS(err, "Failed to clean up all bindings for cluster resource placement", "clusterResourcePlacement", crpRef)
+	// Check if the placement has been marked for deletion, and if it has the scheduler cleanup finalizer.
+	if placement.GetDeletionTimestamp() != nil {
+		// Use SchedulerCRPCleanupFinalizer consistently for all placement types
+		if controllerutil.ContainsFinalizer(placement, fleetv1beta1.SchedulerCleanupFinalizer) {
+			if err := s.cleanUpAllBindingsFor(ctx, placement); err != nil {
+				klog.ErrorS(err, "Failed to clean up all bindings for placement", "placement", placementRef)
 				// Requeue for later processing.
-				s.queue.AddRateLimited(crpName)
+				s.queue.AddRateLimited(placementName)
 				return
 			}
 		}
-		// The CRP has been marked for deletion but no longer has the scheduler cleanup finalizer; no
+		// The placement has been marked for deletion but no longer has the scheduler cleanup finalizer; no
 		// additional handling is needed.
 
 		// Untrack the key from the rate limiter.
-		s.queue.Forget(crpName)
+		s.queue.Forget(placementName)
 		return
 	}
 
-	// The CRP has not been marked for deletion; run the scheduling cycle for it.
+	// The placement has not been marked for deletion; run the scheduling cycle for it.
 
 	// Verify that it has an active policy snapshot.
-	latestPolicySnapshot, err := s.lookupLatestPolicySnapshot(ctx, crp)
+	latestPolicySnapshot, err := s.lookupLatestPolicySnapshot(ctx, placement)
 	if err != nil {
-		klog.ErrorS(err, "Failed to lookup latest policy snapshot", "clusterResourcePlacement", crpRef)
+		klog.ErrorS(err, "Failed to lookup latest policy snapshot", "placement", placementRef)
 		// No requeue is needed; the scheduler will be triggered again when an active policy
 		// snapshot is created.
 
 		// Untrack the key for quicker reprocessing.
-		s.queue.Forget(crpName)
+		s.queue.Forget(placementName)
 		return
 	}
 
-	// Add the scheduler cleanup finalizer to the CRP (if it does not have one yet).
-	if err := s.addSchedulerCleanUpFinalizer(ctx, crp); err != nil {
-		klog.ErrorS(err, "Failed to add scheduler cleanup finalizer", "clusterResourcePlacement", crpRef)
+	// Add the scheduler cleanup finalizer to the placement (if it does not have one yet).
+	if err := s.addSchedulerCleanUpFinalizer(ctx, placement); err != nil {
+		klog.ErrorS(err, "Failed to add scheduler cleanup finalizer", "placement", placementRef)
 		// Requeue for later processing.
-		s.queue.AddRateLimited(crpName)
+		s.queue.AddRateLimited(placementName)
 		return
 	}
 
 	// Run the scheduling cycle.
 	//
-	// Note that the scheduler will enter this cycle as long as the CRP is active and an active
+	// Note that the scheduler will enter this cycle as long as the placement is active and an active
 	// policy snapshot has been produced.
 	cycleStartTime := time.Now()
-	res, err := s.framework.RunSchedulingCycleFor(ctx, crp.Name, latestPolicySnapshot)
+	res, err := s.framework.RunSchedulingCycleFor(ctx, placement.GetName(), latestPolicySnapshot)
 	if err != nil {
-		klog.ErrorS(err, "Failed to run scheduling cycle", "clusterResourcePlacement", crpRef)
+		klog.ErrorS(err, "Failed to run scheduling cycle", "placement", placementRef)
 		// Requeue for later processing.
-		s.queue.AddRateLimited(crpName)
+		s.queue.AddRateLimited(placementName)
 		observeSchedulingCycleMetrics(cycleStartTime, true, false)
 		return
 	}
@@ -211,12 +210,12 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 	// Requeue if the scheduling cycle suggests so.
 	if res.Requeue {
 		if res.RequeueAfter > 0 {
-			s.queue.AddAfter(crpName, res.RequeueAfter)
+			s.queue.AddAfter(placementName, res.RequeueAfter)
 			observeSchedulingCycleMetrics(cycleStartTime, false, true)
 			return
 		}
 		// Untrack the key from the rate limiter.
-		s.queue.Forget(crpName)
+		s.queue.Forget(placementName)
 		// Requeue for later processing.
 		//
 		// Note that the key is added directly to the queue without having to wait for any rate limiter's
@@ -225,11 +224,11 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 		// one cycle (e.g., a plugin sets up a per-cycle batch limit, and consequently the scheduler must
 		// finish the scheduling in multiple cycles); in such cases, rate limiter should not add
 		// any delay to the requeues.
-		s.queue.Add(crpName)
+		s.queue.Add(placementName)
 		observeSchedulingCycleMetrics(cycleStartTime, false, true)
 	} else {
 		// no more failure, the following queue don't need to be rate limited
-		s.queue.Forget(crpName)
+		s.queue.Forget(placementName)
 		observeSchedulingCycleMetrics(cycleStartTime, false, false)
 	}
 }
@@ -275,41 +274,52 @@ func (s *Scheduler) Run(ctx context.Context) {
 	s.queue.CloseWithDrain()
 }
 
-// cleanUpAllBindingsFor cleans up all bindings derived from a CRP.
-func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) error {
-	crpRef := klog.KObj(crp)
+// cleanUpAllBindingsFor cleans up all bindings derived from a placement.
+func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, placement fleetv1beta1.PlacementObj) error {
+	placementRef := klog.KObj(placement)
 
-	// List all bindings derived from the CRP.
+	// Get the placement key which handles both cluster-scoped and namespaced placements
+	placementKey := controller.GetPlacementKeyFromObj(placement)
+
+	// List all bindings derived from the placement.
 	//
 	// Note that the listing is performed using the uncached client; this is to ensure that all related
 	// bindings can be found, even if they have not been synced to the cache yet.
-	bindingList := &fleetv1beta1.ClusterResourceBindingList{}
-	listOptions := client.MatchingLabels{
-		fleetv1beta1.CRPTrackingLabel: crp.Name,
+	var listOptions []client.ListOption
+	listOptions = append(listOptions, client.MatchingLabels{
+		fleetv1beta1.CRPTrackingLabel: string(placementKey),
+	})
+	var bindingList fleetv1beta1.BindingObjList
+	if placement.GetNamespace() == "" {
+		bindingList = &fleetv1beta1.ClusterResourceBindingList{}
+	} else {
+		bindingList = &fleetv1beta1.ResourceBindingList{}
+		listOptions = append(listOptions, client.InNamespace(placement.GetNamespace()))
 	}
 	// TO-DO (chenyu1): this is a very expensive op; explore options for optimization.
-	if err := s.uncachedReader.List(ctx, bindingList, listOptions); err != nil {
-		klog.ErrorS(err, "Failed to list all bindings", "ClusterResourcePlacement", crpRef)
+	if err := s.uncachedReader.List(ctx, bindingList, listOptions...); err != nil {
+		klog.ErrorS(err, "Failed to list all bindings", "placement", placementRef)
 		return controller.NewAPIServerError(false, err)
 	}
 
 	// Remove scheduler CRB cleanup finalizer from deleting bindings.
 	//
-	// Note that once a CRP has been marked for deletion, it will no longer enter the scheduling cycle,
+	// Note that once a placement has been marked for deletion, it will no longer enter the scheduling cycle,
 	// so any cleanup finalizer has to be removed here.
 	//
-	// Also note that for deleted CRPs, derived bindings are deleted right away by the scheduler;
+	// Also note that for deleted placements, derived bindings are deleted right away by the scheduler;
 	// the scheduler no longer marks them as deleting and waits for another controller to actually
 	// run the deletion.
-	for idx := range bindingList.Items {
-		binding := &bindingList.Items[idx]
+	bindings := bindingList.GetBindingObjs()
+	for idx := range bindings {
+		binding := bindings[idx]
 		controllerutil.RemoveFinalizer(binding, fleetv1beta1.SchedulerCRBCleanupFinalizer)
 		if err := s.client.Update(ctx, binding); err != nil {
 			klog.ErrorS(err, "Failed to remove scheduler reconcile finalizer from cluster resource binding", "clusterResourceBinding", klog.KObj(binding))
 			return controller.NewUpdateIgnoreConflictError(err)
 		}
 		// Delete the binding if it has not been marked for deletion yet.
-		if binding.DeletionTimestamp == nil {
+		if binding.GetDeletionTimestamp() == nil {
 			if err := s.client.Delete(ctx, binding); err != nil && !errors.IsNotFound(err) {
 				klog.ErrorS(err, "Failed to delete binding", "clusterResourceBinding", klog.KObj(binding))
 				return controller.NewAPIServerError(false, err)
@@ -317,75 +327,85 @@ func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, crp *fleetv1beta1
 		}
 	}
 
-	// All bindings have been deleted; remove the scheduler cleanup finalizer from the CRP.
-	controllerutil.RemoveFinalizer(crp, fleetv1beta1.SchedulerCRPCleanupFinalizer)
-	if err := s.client.Update(ctx, crp); err != nil {
-		klog.ErrorS(err, "Failed to remove scheduler cleanup finalizer from cluster resource placement", "clusterResourcePlacement", crpRef)
+	// All bindings have been deleted; remove the scheduler cleanup finalizer from the placement.
+	// Use SchedulerCRPCleanupFinalizer consistently for all placement types.
+	controllerutil.RemoveFinalizer(placement, fleetv1beta1.SchedulerCleanupFinalizer)
+	if err := s.client.Update(ctx, placement); err != nil {
+		klog.ErrorS(err, "Failed to remove scheduler cleanup finalizer from placement", "placement", placementRef)
 		return controller.NewUpdateIgnoreConflictError(err)
 	}
 
 	return nil
 }
 
-// lookupLatestPolicySnapshot returns the latest (i.e., active) policy snapshot associated with
-// a CRP.
-func (s *Scheduler) lookupLatestPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (*fleetv1beta1.ClusterSchedulingPolicySnapshot, error) {
-	crpRef := klog.KObj(crp)
+// lookupLatestPolicySnapshot returns the latest (i.e., active) policy snapshot associated with a placement.
+// TODO: move this to a common lib
+func (s *Scheduler) lookupLatestPolicySnapshot(ctx context.Context, placement fleetv1beta1.PlacementObj) (fleetv1beta1.PolicySnapshotObj, error) {
+	placementRef := klog.KObj(placement)
 
-	// Find out the latest policy snapshot associated with the CRP.
-	policySnapshotList := &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
+	// Get the placement key which handles both cluster-scoped and namespaced placements
+	placementKey := controller.GetPlacementKeyFromObj(placement)
+	var listOptions []client.ListOption
 	labelSelector := labels.SelectorFromSet(labels.Set{
-		fleetv1beta1.CRPTrackingLabel:      crp.Name,
+		fleetv1beta1.CRPTrackingLabel:      string(placementKey),
 		fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
 	})
-	listOptions := &client.ListOptions{LabelSelector: labelSelector}
-	// The scheduler lists with a cached client; this does not have any consistency concern as sources
-	// will always trigger the scheduler when a new policy snapshot is created.
-	if err := s.client.List(ctx, policySnapshotList, listOptions); err != nil {
-		klog.ErrorS(err, "Failed to list policy snapshots of a cluster resource placement", "clusterResourcePlacement", crpRef)
-		return nil, controller.NewAPIServerError(true, err)
+	listOptions = append(listOptions, &client.ListOptions{LabelSelector: labelSelector})
+	// Find out the latest policy snapshot associated with the placement.
+	var policySnapshotList fleetv1beta1.PolicySnapshotList
+	if placement.GetNamespace() == "" {
+		policySnapshotList = &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
+	} else {
+		policySnapshotList = &fleetv1beta1.SchedulingPolicySnapshotList{}
+		listOptions = append(listOptions, client.InNamespace(placement.GetNamespace()))
 	}
 
+	// The scheduler lists with a cached client; this does not have any consistency concern as sources
+	// will always trigger the scheduler when a new policy snapshot is created.
+	if err := s.client.List(ctx, policySnapshotList, listOptions...); err != nil {
+		klog.ErrorS(err, "Failed to list policy snapshots of a placement", "placement", placementRef)
+		return nil, controller.NewAPIServerError(true, err)
+	}
+	policySnapshots := policySnapshotList.GetPolicySnapshotObjs()
 	switch {
-	case len(policySnapshotList.Items) == 0:
-		// There is no latest policy snapshot associated with the CRP; it could happen when
-		// * the CRP is newly created; or
-		// * the sequence of policy snapshots is in an inconsistent state.
+	case len(policySnapshots) == 0:
+		// There is no latest policy snapshot associated with the placement; it could happen when
+		// * the placement is newly created; or
+		// * the new policy snapshots is in the middle of being replaced.
 		//
 		// Either way, it is out of the scheduler's scope to handle such a case; the scheduler will
 		// be triggered again if the situation is corrected.
-		err := controller.NewExpectedBehaviorError(fmt.Errorf("no latest policy snapshot associated with cluster resource placement"))
-		klog.ErrorS(err, "Failed to find the latest policy snapshot", "clusterResourcePlacement", crpRef)
+		err := fmt.Errorf("no latest policy snapshot associated with placement")
+		klog.ErrorS(err, "Failed to find the latest policy snapshot, will retry", "placement", placementRef)
 		return nil, err
-	case len(policySnapshotList.Items) > 1:
-		// There are multiple active policy snapshots associated with the CRP; normally this
+	case len(policySnapshots) > 1:
+		// There are multiple active policy snapshots associated with the placement; normally this
 		// will never happen, as only one policy snapshot can be active in the sequence.
 		//
 		// Similarly, it is out of the scheduler's scope to handle such a case; the scheduler will
 		// report this unexpected occurrence but does not register it as a scheduler-side error.
 		// If (and when) the situation is corrected, the scheduler will be triggered again.
-		err := controller.NewUnexpectedBehaviorError(fmt.Errorf("too many active policy snapshots: %d, want 1", len(policySnapshotList.Items)))
-		klog.ErrorS(err, "There are multiple latest policy snapshots associated with cluster resource placement", "clusterResourcePlacement", crpRef)
+		err := controller.NewUnexpectedBehaviorError(fmt.Errorf("too many active policy snapshots: %d, want 1", len(policySnapshots)))
+		klog.ErrorS(err, "There are multiple latest policy snapshots associated with placement", "placement", placementRef)
 		return nil, err
 	default:
 		// Found the one and only active policy snapshot.
-		return &policySnapshotList.Items[0], nil
+		return policySnapshots[0], nil
 	}
 }
 
-// addSchedulerCleanupFinalizer adds the scheduler cleanup finalizer to a CRP (if it does not
+// addSchedulerCleanupFinalizer adds the scheduler cleanup finalizer to a placement (if it does not
 // have it yet).
-func (s *Scheduler) addSchedulerCleanUpFinalizer(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) error {
-	// Add the finalizer only if the CRP does not have one yet.
-	if !controllerutil.ContainsFinalizer(crp, fleetv1beta1.SchedulerCRPCleanupFinalizer) {
-		controllerutil.AddFinalizer(crp, fleetv1beta1.SchedulerCRPCleanupFinalizer)
+func (s *Scheduler) addSchedulerCleanUpFinalizer(ctx context.Context, placement fleetv1beta1.PlacementObj) error {
+	// Add the finalizer only if the placement does not have one yet.
+	if !controllerutil.ContainsFinalizer(placement, fleetv1beta1.SchedulerCleanupFinalizer) {
+		controllerutil.AddFinalizer(placement, fleetv1beta1.SchedulerCleanupFinalizer)
 
-		if err := s.client.Update(ctx, crp); err != nil {
-			klog.ErrorS(err, "Failed to update cluster resource placement", "clusterResourcePlacement", klog.KObj(crp))
+		if err := s.client.Update(ctx, placement); err != nil {
+			klog.ErrorS(err, "Failed to update placement", "placement", klog.KObj(placement))
 			return controller.NewUpdateIgnoreConflictError(err)
 		}
 	}
-
 	return nil
 }
 
