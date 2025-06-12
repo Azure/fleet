@@ -282,7 +282,7 @@ func (r *Reconciler) ensureFinalizer(ctx context.Context, mc *clusterv1beta1.Mem
 // Condition ReadyToJoin == true means all the above actions have been done successfully at least once.
 // It will never turn false after true.
 func (r *Reconciler) join(ctx context.Context, mc *clusterv1beta1.MemberCluster, imc *clusterv1beta1.InternalMemberCluster) error {
-	klog.V(2).InfoS("join", "memberCluster", klog.KObj(mc))
+	klog.V(4).InfoS("join", "memberCluster", klog.KObj(mc))
 
 	namespaceName, err := r.syncNamespace(ctx, mc)
 	if err != nil {
@@ -311,7 +311,7 @@ func (r *Reconciler) join(ctx context.Context, mc *clusterv1beta1.MemberCluster,
 //
 // Note that leave doesn't delete any of the resources created by join(). Instead, deleting MemberCluster will delete them.
 func (r *Reconciler) leave(ctx context.Context, mc *clusterv1beta1.MemberCluster, imc *clusterv1beta1.InternalMemberCluster) error {
-	klog.V(2).InfoS("Mark the internal cluster state as `Leave`", "memberCluster", klog.KObj(mc))
+	klog.V(4).InfoS("Mark the internal cluster state as `Leave`", "memberCluster", klog.KObj(mc))
 
 	// Copy spec from member cluster to internal member cluster.
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
@@ -324,7 +324,7 @@ func (r *Reconciler) leave(ctx context.Context, mc *clusterv1beta1.MemberCluster
 
 // syncNamespace creates or updates the namespace for member cluster.
 func (r *Reconciler) syncNamespace(ctx context.Context, mc *clusterv1beta1.MemberCluster) (string, error) {
-	klog.V(2).InfoS("Sync the namespace for the member cluster", "memberCluster", klog.KObj(mc))
+	klog.V(4).InfoS("Sync the namespace for the member cluster", "memberCluster", klog.KObj(mc))
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
 	fleetNamespaceLabelValue := "true"
 	expectedNS := corev1.Namespace{
@@ -367,7 +367,7 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *clusterv1beta1.Membe
 
 // syncRole creates or updates the role for member cluster to access its namespace in hub cluster.
 func (r *Reconciler) syncRole(ctx context.Context, mc *clusterv1beta1.MemberCluster, namespaceName string) (string, error) {
-	klog.V(2).InfoS("Sync the role for the member cluster", "memberCluster", klog.KObj(mc))
+	klog.V(4).InfoS("Sync the role for the member cluster", "memberCluster", klog.KObj(mc))
 	// Role name is created using member cluster name.
 	roleName := fmt.Sprintf(utils.RoleNameFormat, mc.Name)
 	expectedRole := rbacv1.Role{
@@ -410,7 +410,7 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *clusterv1beta1.MemberClus
 
 // syncRoleBinding creates or updates the role binding for member cluster to access its namespace in hub cluster.
 func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *clusterv1beta1.MemberCluster, namespaceName string, roleName string) error {
-	klog.V(2).InfoS("Sync the roleBinding for the member cluster", "memberCluster", klog.KObj(mc))
+	klog.V(4).InfoS("Sync the roleBinding for the member cluster", "memberCluster", klog.KObj(mc))
 	// Role binding name is created using member cluster name
 	roleBindingName := fmt.Sprintf(utils.RoleBindingNameFormat, mc.Name)
 	expectedRoleBinding := rbacv1.RoleBinding{
@@ -460,7 +460,7 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *clusterv1beta1.Mem
 // syncInternalMemberCluster is used to sync spec from MemberCluster to InternalMemberCluster.
 func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *clusterv1beta1.MemberCluster,
 	namespaceName string, currentImc *clusterv1beta1.InternalMemberCluster) (*clusterv1beta1.InternalMemberCluster, error) {
-	klog.V(2).InfoS("Sync internalMemberCluster spec from member cluster", "memberCluster", klog.KObj(mc))
+	klog.V(4).InfoS("Sync internalMemberCluster spec from member cluster", "memberCluster", klog.KObj(mc))
 	expectedImc := clusterv1beta1.InternalMemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            mc.Name,
@@ -509,7 +509,7 @@ func toOwnerReference(memberCluster *clusterv1beta1.MemberCluster) *metav1.Owner
 
 // syncInternalMemberClusterStatus is used to sync status from InternalMemberCluster to MemberCluster & aggregate join conditions from all agents.
 func (r *Reconciler) syncInternalMemberClusterStatus(imc *clusterv1beta1.InternalMemberCluster, mc *clusterv1beta1.MemberCluster) {
-	klog.V(2).InfoS("Sync the internalMemberCluster status", "memberCluster", klog.KObj(mc))
+	klog.V(4).InfoS("Sync the internalMemberCluster status", "memberCluster", klog.KObj(mc))
 	if imc == nil {
 		return
 	}
@@ -532,7 +532,15 @@ func (r *Reconciler) syncInternalMemberClusterStatus(imc *clusterv1beta1.Interna
 
 // updateMemberClusterStatus is used to update member cluster status.
 func (r *Reconciler) updateMemberClusterStatus(ctx context.Context, mc *clusterv1beta1.MemberCluster) error {
-	klog.V(2).InfoS("Update the memberCluster status", "memberCluster", klog.KObj(mc))
+	joined := condition.IsConditionStatusTrue(meta.FindStatusCondition(mc.Status.Conditions, string(clusterv1beta1.ConditionTypeMemberClusterJoined)), mc.Generation)
+	healthy := condition.IsConditionStatusTrue(mc.GetAgentCondition(clusterv1beta1.MemberAgent, clusterv1beta1.AgentHealthy), mc.Generation)
+	lastReceivedHeartbeat := "nil"
+	memberAgentStatus := mc.GetAgentStatus(clusterv1beta1.MemberAgent)
+	if memberAgentStatus != nil {
+		lastReceivedHeartbeat = memberAgentStatus.LastReceivedHeartbeat.Format(time.RFC3339)
+	}
+	klog.V(2).InfoS("Update the memberCluster status", "memberCluster", klog.KObj(mc), "joined", joined, "healthy", healthy, "lastReceivedHeartbeat", lastReceivedHeartbeat)
+
 	backOffPeriod := retry.DefaultRetry
 	backOffPeriod.Cap = time.Second * time.Duration(mc.Spec.HeartbeatPeriodSeconds/2)
 
@@ -547,7 +555,7 @@ func (r *Reconciler) updateMemberClusterStatus(ctx context.Context, mc *clusterv
 
 // aggregateJoinedCondition is used to calculate and mark the joined or left status for member cluster based on join conditions from all agents.
 func (r *Reconciler) aggregateJoinedCondition(mc *clusterv1beta1.MemberCluster) {
-	klog.V(2).InfoS("Aggregate joined condition from all agents", "memberCluster", klog.KObj(mc))
+	klog.V(4).InfoS("Aggregate joined condition from all agents", "memberCluster", klog.KObj(mc))
 	var unknownMessage string
 	if len(mc.Status.AgentStatus) < len(r.agents) {
 		unknownMessage = fmt.Sprintf("Member cluster %s has not reported all the expected agents, expected %d, got %d", mc.Name, len(r.agents), len(mc.Status.AgentStatus))
@@ -592,7 +600,7 @@ func (r *Reconciler) aggregateJoinedCondition(mc *clusterv1beta1.MemberCluster) 
 
 // markMemberClusterReadyToJoin is used to update the ReadyToJoin condition as true of member cluster.
 func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.ConditionedObj) {
-	klog.V(2).InfoS("Mark the member cluster ReadyToJoin", "memberCluster", klog.KObj(mc))
+	klog.V(4).InfoS("Mark the member cluster ReadyToJoin", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.ConditionTypeMemberClusterReadyToJoin),
 		Status:             metav1.ConditionTrue,
@@ -613,7 +621,7 @@ func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.Conditi
 
 // markMemberClusterJoined is used to the update the status of the member cluster to have the joined condition.
 func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedObj) {
-	klog.V(2).InfoS("Mark the member cluster joined", "memberCluster", klog.KObj(mc))
+	klog.V(4).InfoS("Mark the member cluster joined", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
 		Status:             metav1.ConditionTrue,
@@ -635,7 +643,7 @@ func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedO
 
 // markMemberClusterLeft is used to update the status of the member cluster to have the left condition and mark member cluster as not ready to join.
 func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj) {
-	klog.V(2).InfoS("Mark the member cluster left", "memberCluster", klog.KObj(mc))
+	klog.V(4).InfoS("Mark the member cluster left", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
 		Status:             metav1.ConditionFalse,
@@ -664,7 +672,7 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 
 // markMemberClusterUnknown is used to update the status of the member cluster to have the left condition.
 func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.ConditionedObj, unknownMessage string) {
-	klog.V(2).InfoS("Mark the member cluster join condition unknown", "memberCluster", klog.KObj(mc))
+	klog.V(4).InfoS("Mark the member cluster join condition unknown", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
 		Status:             metav1.ConditionUnknown,
