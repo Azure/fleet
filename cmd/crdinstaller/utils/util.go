@@ -36,7 +36,7 @@ import (
 
 const (
 	// CRDInstallerLabelKey is the label key used to indicate that a CRD is managed by the installer.
-	CRDInstallerLabelKey = "crd-installer.kubefleet.io/managed"
+	CRDInstallerLabelKey = "crd-installer.azurefleet.io/managed"
 	// AddonManagerLabelKey is the label key used to indicate that a CRD is managed by the addon manager.
 	AddonManagerLabelKey = "addonmanager.kubernetes.io/mode"
 )
@@ -117,10 +117,7 @@ func InstallCRD(ctx context.Context, client client.Client, path string) error {
 			existingCRD.Labels = make(map[string]string)
 		}
 		// Ensure the label for management by the installer is set.
-		_, ok := existingCRD.Labels[CRDInstallerLabelKey]
-		if !ok {
-			existingCRD.Labels[CRDInstallerLabelKey] = "true"
-		}
+		existingCRD.Labels[CRDInstallerLabelKey] = "true"
 		return nil
 	})
 
