@@ -28,6 +28,9 @@ type TestResourceSpec struct {
 	// +optional
 	Bar string `json:"bar,omitempty"`
 
+	// optional
+	NewField string `json:"newField,omitempty"`
+
 	// +optional
 	Items []string `json:"items,omitempty"`
 

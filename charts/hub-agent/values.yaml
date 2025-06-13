@@ -10,6 +10,15 @@ image:
   # Overrides the image tag whose default is the chart appVersion.
   tag: main
 
+# CRD installer configuration.
+crdInstaller:
+  enabled: false
+  image:
+    repository: ghcr.io/azure/fleet/crd-installer
+    pullPolicy: Always
+    tag: main
+  logVerbosity: 2
+
 logVerbosity: 5
 
 enableWebhook: true

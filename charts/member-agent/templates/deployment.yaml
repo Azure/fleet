@@ -16,6 +16,15 @@ spec:
     spec:
       restartPolicy: Always
       serviceAccountName: {{ include "member-agent.fullname" . }}-sa
+      initContainers:
+        {{- if and .Values.crdInstaller.enabled .Values.enableV1Beta1APIs }}
+        - name: crd-installer
+          image: "{{ .Values.crdInstaller.image.repository }}:{{ .Values.crdInstaller.image.tag }}"
+          imagePullPolicy: {{ .Values.crdInstaller.image.pullPolicy }}
+          args:
+            - --mode=member
+            - --v={{ .Values.crdInstaller.logVerbosity }}
+        {{- end }}
       containers:
         - name: {{ include "member-agent.fullname" . }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
