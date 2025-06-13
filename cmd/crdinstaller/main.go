@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-// Package main contains the CRD installer utility for KubeFleet
+// Package main contains the CRD installer utility for KubeFleet.
 package main
 
 import (

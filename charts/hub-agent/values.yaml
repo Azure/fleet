@@ -10,7 +10,7 @@ image:
   # Overrides the image tag whose default is the chart appVersion.
   tag: main
 
-# CRD installer configuration
+# CRD installer configuration.
 crdInstaller:
   enabled: false
   image:
