@@ -5,7 +5,7 @@ image:
   pullPolicy: Always
   tag: main
 
-# CRD installer configuration
+# CRD installer configuration.
 crdInstaller:
   enabled: false
   image:

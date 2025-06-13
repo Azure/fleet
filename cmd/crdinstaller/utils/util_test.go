@@ -13,28 +13,28 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// Test using the actual config/crd/bases directory
+// Test using the actual config/crd/bases directory.
 func TestCollectCRDFileNamesWithActualPath(t *testing.T) {
 	// Use a path relative to the project root when running with make local-unit-test
 	const realCRDPath = "config/crd/bases"
 
-	// Skip this test if the directory doesn't exist
+	// Skip this test if the directory doesn't exist.
 	if _, err := os.Stat(realCRDPath); os.IsNotExist(err) {
-		// Try the original path (for when tests are run from the package directory)
+		// Try the original path (for when tests are run from the package directory).
 		const fallbackPath = "../../../config/crd/bases"
 		if _, fallBackPathErr := os.Stat(fallbackPath); os.IsNotExist(fallBackPathErr) {
 			t.Skipf("Skipping test: neither %s nor %s exist", realCRDPath, fallbackPath)
 		} else {
-			// Use the fallback path if it exists
+			// Use the fallback path if it exists.
 			runTest(t, fallbackPath)
 		}
 	} else {
-		// Use the primary path if it exists
+		// Use the primary path if it exists.
 		runTest(t, realCRDPath)
 	}
 }
 
-// runTest contains the actual test logic, separated to allow running with different paths
+// runTest contains the actual test logic, separated to allow running with different paths.
 func runTest(t *testing.T, crdPath string) {
 	tests := []struct {
 		name           string
@@ -80,7 +80,7 @@ func runTest(t *testing.T, crdPath string) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Call the function
+			// Call the function.
 			gotCRDFiles, err := CollectCRDFileNames(crdPath, tt.mode)
 			if (err != nil) != tt.wantError {
 				t.Errorf("collectCRDFileNames() error = %v, wantError %v", err, tt.wantError)
