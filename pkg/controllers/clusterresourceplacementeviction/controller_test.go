@@ -26,7 +26,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/prometheus/client_golang/prometheus"
 	prometheusclientmodel "github.com/prometheus/client_model/go"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -36,6 +35,7 @@ import (
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
@@ -1492,12 +1492,6 @@ func TestReconcileForIncompleteEvictionMetric(t *testing.T) {
 	isValid := "unknown"
 	isComplete := "false"
 
-	// Create a test registry
-	customRegistry := prometheus.NewRegistry()
-	if err := customRegistry.Register(metrics.FleetEvictionStatus); err != nil {
-		t.Errorf("Failed to register metric: %v", err)
-	}
-
 	// Reset metrics before each test
 	metrics.FleetEvictionStatus.Reset()
 
@@ -1513,7 +1507,7 @@ func TestReconcileForIncompleteEvictionMetric(t *testing.T) {
 		t.Errorf("reconcile should have failed")
 	}
 
-	metricFamilies, err := customRegistry.Gather()
+	metricFamilies, err := ctrlmetrics.Registry.Gather()
 	if err != nil {
 		t.Errorf("error gathering metrics: %v", err)
 	}

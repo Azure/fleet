@@ -30,12 +30,12 @@ import (
 func (p *Plugin) PreScore(
 	_ context.Context,
 	state framework.CycleStatePluginReadWriter,
-	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	policy placementv1beta1.PolicySnapshotObj,
 ) (status *framework.Status) {
-	noPreferredClusterAffinityTerms := policy.Spec.Policy == nil ||
-		policy.Spec.Policy.Affinity == nil ||
-		policy.Spec.Policy.Affinity.ClusterAffinity == nil ||
-		len(policy.Spec.Policy.Affinity.ClusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution) == 0
+	noPreferredClusterAffinityTerms := policy.GetPolicySnapshotSpec().Policy == nil ||
+		policy.GetPolicySnapshotSpec().Policy.Affinity == nil ||
+		policy.GetPolicySnapshotSpec().Policy.Affinity.ClusterAffinity == nil ||
+		len(policy.GetPolicySnapshotSpec().Policy.Affinity.ClusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution) == 0
 	if noPreferredClusterAffinityTerms {
 		// There are no preferred cluster affinity terms specified in the scheduling policy;
 		// skip the step.
@@ -62,7 +62,7 @@ func (p *Plugin) PreScore(
 func (p *Plugin) Score(
 	_ context.Context,
 	state framework.CycleStatePluginReadWriter,
-	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	policy placementv1beta1.PolicySnapshotObj,
 	cluster *clusterv1beta1.MemberCluster,
 ) (score *framework.ClusterScore, status *framework.Status) {
 	// Read the plugin state.
@@ -74,7 +74,7 @@ func (p *Plugin) Score(
 	}
 
 	score = &framework.ClusterScore{}
-	for _, t := range policy.Spec.Policy.Affinity.ClusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
+	for _, t := range policy.GetPolicySnapshotSpec().Policy.Affinity.ClusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
 		if t.Weight != 0 {
 			cp := clusterPreference(t)
 			ts, err := cp.Scores(ps, cluster)

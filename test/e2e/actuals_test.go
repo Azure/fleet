@@ -853,14 +853,16 @@ func crpStatusWithWorkSynchronizedUpdatedFailedActual(
 func crpStatusWithExternalStrategyActual(
 	wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier,
 	wantObservedResourceIndex string,
-	wantAvailable bool,
+	wantCRPRolloutCompleted bool,
 	wantSelectedClusters []string,
 	wantObservedResourceIndexPerCluster []string,
-	wantAvailablePerCluster []bool,
+	wantRolloutCompletedPerCluster []bool,
 	wantClusterResourceOverrides map[string][]string,
 	wantResourceOverrides map[string][]placementv1beta1.NamespacedName,
 ) func() error {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	nsName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	cmName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
 
 	return func() error {
 		crp := &placementv1beta1.ClusterResourcePlacement{}
@@ -868,10 +870,12 @@ func crpStatusWithExternalStrategyActual(
 			return err
 		}
 
+		reportDiff := crp.Spec.Strategy.ApplyStrategy != nil && crp.Spec.Strategy.ApplyStrategy.Type == placementv1beta1.ApplyStrategyTypeReportDiff
+
 		var wantPlacementStatus []placementv1beta1.ResourcePlacementStatus
 		crpHasOverrides := false
 		for i, name := range wantSelectedClusters {
-			if !wantAvailablePerCluster[i] {
+			if !wantRolloutCompletedPerCluster[i] {
 				// No observed resource index for this cluster, assume rollout is still pending.
 				wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.ResourcePlacementStatus{
 					ClusterName:           name,
@@ -885,13 +889,52 @@ func crpStatusWithExternalStrategyActual(
 				if hasOverrides {
 					crpHasOverrides = true
 				}
-				wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.ResourcePlacementStatus{
-					ClusterName:                        name,
-					Conditions:                         resourcePlacementRolloutCompletedConditions(crp.Generation, true, hasOverrides),
-					ApplicableResourceOverrides:        wantResourceOverrides,
-					ApplicableClusterResourceOverrides: wantClusterResourceOverrides,
-					ObservedResourceIndex:              wantObservedResourceIndexPerCluster[i],
-				})
+				if reportDiff {
+					wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.ResourcePlacementStatus{
+						ClusterName:                        name,
+						Conditions:                         resourcePlacementDiffReportedConditions(crp.Generation),
+						ApplicableResourceOverrides:        wantResourceOverrides,
+						ApplicableClusterResourceOverrides: wantClusterResourceOverrides,
+						ObservedResourceIndex:              wantObservedResourceIndexPerCluster[i],
+						DiffedPlacements: []placementv1beta1.DiffedResourcePlacement{
+							{
+								ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+									Version: "v1",
+									Kind:    "Namespace",
+									Name:    nsName,
+								},
+								ObservedDiffs: []placementv1beta1.PatchDetail{
+									{
+										Path:       "/",
+										ValueInHub: "(the whole object)",
+									},
+								},
+							},
+							{
+								ResourceIdentifier: placementv1beta1.ResourceIdentifier{
+									Version:   "v1",
+									Kind:      "ConfigMap",
+									Name:      cmName,
+									Namespace: nsName,
+								},
+								ObservedDiffs: []placementv1beta1.PatchDetail{
+									{
+										Path:       "/",
+										ValueInHub: "(the whole object)",
+									},
+								},
+							},
+						},
+					})
+				} else {
+					wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.ResourcePlacementStatus{
+						ClusterName:                        name,
+						Conditions:                         resourcePlacementRolloutCompletedConditions(crp.Generation, true, hasOverrides),
+						ApplicableResourceOverrides:        wantResourceOverrides,
+						ApplicableClusterResourceOverrides: wantClusterResourceOverrides,
+						ObservedResourceIndex:              wantObservedResourceIndexPerCluster[i],
+					})
+				}
 			}
 		}
 
@@ -900,8 +943,12 @@ func crpStatusWithExternalStrategyActual(
 			SelectedResources:     wantSelectedResourceIdentifiers,
 			ObservedResourceIndex: wantObservedResourceIndex,
 		}
-		if wantAvailable {
-			wantStatus.Conditions = crpRolloutCompletedConditions(crp.Generation, crpHasOverrides)
+		if wantCRPRolloutCompleted {
+			if reportDiff {
+				wantStatus.Conditions = crpDiffReportedConditions(crp.Generation, crpHasOverrides)
+			} else {
+				wantStatus.Conditions = crpRolloutCompletedConditions(crp.Generation, crpHasOverrides)
+			}
 		} else {
 			wantStatus.Conditions = crpRolloutPendingDueToExternalStrategyConditions(crp.Generation)
 		}

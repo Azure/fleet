@@ -22,7 +22,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/prometheus/client_golang/prometheus"
 	prometheusclientmodel "github.com/prometheus/client_model/go"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
@@ -55,12 +55,8 @@ const (
 var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	evictionName := fmt.Sprintf(evictionNameTemplate, GinkgoParallelProcess())
-	var customRegistry *prometheus.Registry
 
 	BeforeEach(func() {
-		// Create a test registry
-		customRegistry = prometheus.NewRegistry()
-		Expect(customRegistry.Register(metrics.FleetEvictionStatus)).Should(Succeed())
 		// Reset metrics before each test
 		metrics.FleetEvictionStatus.Reset()
 		// emit incomplete eviction metric to simulate eviction failed once.
@@ -72,7 +68,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		ensureAllBindingsAreRemoved(crpName)
 		ensureEvictionRemoved(evictionName)
 		ensureCRPRemoved(crpName)
-		Expect(customRegistry.Unregister(metrics.FleetEvictionStatus)).Should(BeTrue())
+		metrics.FleetEvictionStatus.Reset()
 	})
 
 	It("Invalid Eviction Blocked - emit complete metric with isValid=false, isComplete=true", func() {
@@ -90,7 +86,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		})
 
 		By("Ensure eviction complete metric was emitted", func() {
-			checkEvictionCompleteMetric(customRegistry, "false", "true")
+			checkEvictionCompleteMetric("false", "true")
 		})
 	})
 
@@ -169,7 +165,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		})
 
 		By("Ensure eviction complete metric was emitted", func() {
-			checkEvictionCompleteMetric(customRegistry, "true", "true")
+			checkEvictionCompleteMetric("true", "true")
 		})
 	})
 
@@ -269,7 +265,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		})
 
 		By("Ensure eviction complete metric was emitted", func() {
-			checkEvictionCompleteMetric(customRegistry, "true", "true")
+			checkEvictionCompleteMetric("true", "true")
 		})
 	})
 
@@ -348,7 +344,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		})
 
 		By("Ensure eviction complete metric was emitted", func() {
-			checkEvictionCompleteMetric(customRegistry, "true", "true")
+			checkEvictionCompleteMetric("true", "true")
 		})
 	})
 
@@ -478,7 +474,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		})
 
 		By("Ensure eviction complete metric was emitted", func() {
-			checkEvictionCompleteMetric(customRegistry, "true", "true")
+			checkEvictionCompleteMetric("true", "true")
 		})
 	})
 
@@ -527,7 +523,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 		})
 
 		By("Ensure eviction complete metric was emitted", func() {
-			checkEvictionCompleteMetric(customRegistry, "false", "true")
+			checkEvictionCompleteMetric("false", "true")
 		})
 	})
 
@@ -623,7 +619,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 			})
 
 			By("Ensure eviction complete metric was emitted", func() {
-				checkEvictionCompleteMetric(customRegistry, "true", "true")
+				checkEvictionCompleteMetric("true", "true")
 			})
 		})
 
@@ -660,7 +656,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 			})
 
 			By("Ensure eviction complete metric was emitted", func() {
-				checkEvictionCompleteMetric(customRegistry, "true", "true")
+				checkEvictionCompleteMetric("true", "true")
 			})
 		})
 
@@ -697,7 +693,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 			})
 
 			By("Ensure eviction complete metric was emitted", func() {
-				checkEvictionCompleteMetric(customRegistry, "true", "true")
+				checkEvictionCompleteMetric("true", "true")
 			})
 		})
 	})
@@ -818,8 +814,8 @@ func ensureAllBindingsAreRemoved(crpName string) {
 	}
 }
 
-func checkEvictionCompleteMetric(registry *prometheus.Registry, isValid, isComplete string) {
-	metricFamilies, err := registry.Gather()
+func checkEvictionCompleteMetric(isValid, isComplete string) {
+	metricFamilies, err := ctrlmetrics.Registry.Gather()
 	Expect(err).Should(Succeed())
 	var evictionCompleteMetrics []*prometheusclientmodel.Metric
 	for _, mf := range metricFamilies {

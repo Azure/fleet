@@ -45,7 +45,7 @@ type Reconciler struct {
 	Client client.Client
 
 	// SchedulerWorkQueue is the work queue for the scheduler.
-	SchedulerWorkQueue queue.ClusterResourcePlacementSchedulingQueueWriter
+	SchedulerWorkQueue queue.PlacementSchedulingQueueWriter
 
 	// clusterEligibilityCheck helps check if a cluster is eligible for resource replacement.
 	ClusterEligibilityChecker *clustereligibilitychecker.ClusterEligibilityChecker
@@ -160,7 +160,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			"Enqueueing CRP for scheduler processing",
 			"memberCluster", memberClusterRef,
 			"clusterResourcePlacement", klog.KObj(crp))
-		r.SchedulerWorkQueue.Add(queue.ClusterResourcePlacementKey(crp.Name))
+		r.SchedulerWorkQueue.Add(queue.PlacementKey(crp.Name))
 	}
 
 	// The reconciliation loop completes.

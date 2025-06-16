@@ -20,10 +20,10 @@ var (
 func (p *Plugin) Filter(
 	_ context.Context,
 	_ framework.CycleStatePluginReadWriter,
-	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	policy placementv1beta1.PolicySnapshotObj,
 	cluster *clusterv1beta1.MemberCluster,
 ) (status *framework.Status) {
-	taint, isUntolerated := findUntoleratedTaint(cluster.Spec.Taints, policy.Tolerations())
+	taint, isUntolerated := findUntoleratedTaint(cluster.Spec.Taints, policy.GetPolicySnapshotSpec().Tolerations())
 	if !isUntolerated {
 		return nil
 	}

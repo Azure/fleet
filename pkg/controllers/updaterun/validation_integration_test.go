@@ -18,7 +18,6 @@ package updaterun
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -27,8 +26,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/prometheus/client_golang/prometheus"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -46,11 +43,10 @@ var _ = Describe("UpdateRun validation tests", func() {
 	var updateStrategy *placementv1beta1.ClusterStagedUpdateStrategy
 	var resourceBindings []*placementv1beta1.ClusterResourceBinding
 	var targetClusters []*clusterv1beta1.MemberCluster
-	var unscheduledCluster []*clusterv1beta1.MemberCluster
+	var unscheduledClusters []*clusterv1beta1.MemberCluster
 	var resourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 	var clusterResourceOverride *placementv1alpha1.ClusterResourceOverrideSnapshot
 	var wantStatus *placementv1beta1.StagedUpdateRunStatus
-	var customRegistry *prometheus.Registry
 
 	BeforeEach(func() {
 		testUpdateRunName = "updaterun-" + utils.RandStr()
@@ -62,51 +58,15 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 		updateRun = generateTestClusterStagedUpdateRun()
 		crp = generateTestClusterResourcePlacement()
-		policySnapshot = generateTestClusterSchedulingPolicySnapshot(1)
 		updateStrategy = generateTestClusterStagedUpdateStrategy()
 		clusterResourceOverride = generateTestClusterResourceOverride()
-
-		resourceBindings = make([]*placementv1beta1.ClusterResourceBinding, numTargetClusters+numUnscheduledClusters)
-		targetClusters = make([]*clusterv1beta1.MemberCluster, numTargetClusters)
-		for i := range targetClusters {
-			// split the clusters into 2 regions
-			region := regionEastus
-			if i%2 == 0 {
-				region = regionWestus
-			}
-			// reserse the order of the clusters by index
-			targetClusters[i] = generateTestMemberCluster(numTargetClusters-1-i, "cluster-"+strconv.Itoa(i), map[string]string{"group": "prod", "region": region})
-			resourceBindings[i] = generateTestClusterResourceBinding(policySnapshot.Name, targetClusters[i].Name, placementv1beta1.BindingStateBound)
-		}
-
-		unscheduledCluster = make([]*clusterv1beta1.MemberCluster, numUnscheduledClusters)
-		for i := range unscheduledCluster {
-			unscheduledCluster[i] = generateTestMemberCluster(i, "unscheduled-cluster-"+strconv.Itoa(i), map[string]string{"group": "staging"})
-			// update the policySnapshot name so that these clusters are considered to-be-deleted
-			resourceBindings[numTargetClusters+i] = generateTestClusterResourceBinding(policySnapshot.Name+"a", unscheduledCluster[i].Name, placementv1beta1.BindingStateUnscheduled)
-		}
-
-		var err error
-		testNamespace, err = json.Marshal(corev1.Namespace{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "v1",
-				Kind:       "Namespace",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-namespace",
-				Labels: map[string]string{
-					"fleet.azure.com/name": "test-namespace",
-				},
-			},
-		})
-		Expect(err).To(Succeed())
+		resourceBindings, targetClusters, unscheduledClusters = generateTestClusterResourceBindingsAndClusters(1)
+		policySnapshot = generateTestClusterSchedulingPolicySnapshot(1, len(targetClusters))
 		resourceSnapshot = generateTestClusterResourceSnapshot()
 
 		// Set smaller wait time for testing
 		stageUpdatingWaitTime = time.Second * 3
 		clusterUpdatingWaitTime = time.Second * 2
-
-		customRegistry = initializeUpdateRunMetricsRegistry()
 
 		By("Creating a new clusterResourcePlacement")
 		Expect(k8sClient.Create(ctx, crp)).To(Succeed())
@@ -127,7 +87,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 		for _, cluster := range targetClusters {
 			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 		}
-		for _, cluster := range unscheduledCluster {
+		for _, cluster := range unscheduledClusters {
 			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 		}
 
@@ -177,10 +137,10 @@ var _ = Describe("UpdateRun validation tests", func() {
 		for _, cluster := range targetClusters {
 			Expect(k8sClient.Delete(ctx, cluster)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 		}
-		for _, cluster := range unscheduledCluster {
+		for _, cluster := range unscheduledClusters {
 			Expect(k8sClient.Delete(ctx, cluster)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 		}
-		targetClusters, unscheduledCluster = nil, nil
+		targetClusters, unscheduledClusters = nil, nil
 
 		By("Deleting the clusterStagedUpdateStrategy")
 		Expect(k8sClient.Delete(ctx, updateStrategy)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
@@ -196,14 +156,14 @@ var _ = Describe("UpdateRun validation tests", func() {
 
 		By("Checking the update run status metrics are removed")
 		// No metrics are emitted as all are removed after updateRun is deleted.
-		validateUpdateRunMetricsEmitted(customRegistry)
-		unregisterUpdateRunMetrics(customRegistry)
+		validateUpdateRunMetricsEmitted()
+		resetUpdateRunMetrics()
 	})
 
 	Context("Test validateCRP", func() {
 		AfterEach(func() {
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, generateProgressingMetric(updateRun), generateFailedMetric(updateRun))
+			validateUpdateRunMetricsEmitted(generateProgressingMetric(updateRun), generateFailedMetric(updateRun))
 		})
 
 		It("Should fail to validate if the CRP is not found", func() {
@@ -247,7 +207,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 			validateClusterStagedUpdateRunStatus(ctx, updateRun, wantStatus, "no latest policy snapshot associated")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, generateProgressingMetric(updateRun), generateFailedMetric(updateRun))
+			validateUpdateRunMetricsEmitted(generateProgressingMetric(updateRun), generateFailedMetric(updateRun))
 		})
 
 		It("Should fail to validate if the latest policySnapshot has changed", func() {
@@ -255,7 +215,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 			Expect(k8sClient.Delete(ctx, policySnapshot)).Should(Succeed())
 
 			By("Creating a new policySnapshot")
-			newPolicySnapshot := generateTestClusterSchedulingPolicySnapshot(2)
+			newPolicySnapshot := generateTestClusterSchedulingPolicySnapshot(2, len(targetClusters))
 			Expect(k8sClient.Create(ctx, newPolicySnapshot)).To(Succeed())
 
 			By("Setting the latest policy snapshot condition as fully scheduled")
@@ -276,12 +236,12 @@ var _ = Describe("UpdateRun validation tests", func() {
 			Expect(k8sClient.Delete(ctx, newPolicySnapshot)).Should(Succeed())
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, generateProgressingMetric(updateRun), generateFailedMetric(updateRun))
+			validateUpdateRunMetricsEmitted(generateProgressingMetric(updateRun), generateFailedMetric(updateRun))
 		})
 
 		It("Should fail to validate if the cluster count has changed", func() {
 			By("Updating the cluster count in the policySnapshot")
-			policySnapshot.Annotations["kubernetes-fleet.io/number-of-clusters"] = strconv.Itoa(numberOfClustersAnnotation + 1)
+			policySnapshot.Annotations["kubernetes-fleet.io/number-of-clusters"] = strconv.Itoa(len(targetClusters) + 1)
 			Expect(k8sClient.Update(ctx, policySnapshot)).Should(Succeed())
 
 			By("Validating the validation failed")
@@ -290,7 +250,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 				"the cluster count initialized in the clusterStagedUpdateRun is outdated")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, generateProgressingMetric(updateRun), generateFailedMetric(updateRun))
+			validateUpdateRunMetricsEmitted(generateProgressingMetric(updateRun), generateFailedMetric(updateRun))
 		})
 
 		It("Should not fail due to different cluster count if it's pickAll policy", func() {
@@ -311,14 +271,14 @@ var _ = Describe("UpdateRun validation tests", func() {
 			validateClusterStagedUpdateRunStatusConsistently(ctx, updateRun, wantStatus, "")
 
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, generateProgressingMetric(updateRun))
+			validateUpdateRunMetricsEmitted(generateProgressingMetric(updateRun))
 		})
 	})
 
 	Context("Test validateStagesStatus", func() {
 		AfterEach(func() {
 			By("Checking update run status metrics are emitted")
-			validateUpdateRunMetricsEmitted(customRegistry, generateProgressingMetric(updateRun), generateFailedMetric(updateRun))
+			validateUpdateRunMetricsEmitted(generateProgressingMetric(updateRun), generateFailedMetric(updateRun))
 		})
 
 		It("Should fail to validate if the StagedUpdateStrategySnapshot is nil", func() {
