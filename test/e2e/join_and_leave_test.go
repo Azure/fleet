@@ -235,7 +235,7 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 
 		It("should update CRP status to applied to all clusters again automatically after rejoining", func() {
 			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", true)
-			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 	})
 
