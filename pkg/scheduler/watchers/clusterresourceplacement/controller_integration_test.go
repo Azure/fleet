@@ -158,7 +158,7 @@ var _ = Describe("scheduler cluster resource placement source controller", Seria
 			crp := &fleetv1beta1.ClusterResourcePlacement{}
 			Expect(hubClient.Get(ctx, client.ObjectKey{Name: crpName}, crp)).Should(Succeed(), "Failed to get cluster resource placement")
 
-			crp.Finalizers = append(crp.Finalizers, fleetv1beta1.SchedulerCRPCleanupFinalizer)
+			crp.Finalizers = append(crp.Finalizers, fleetv1beta1.SchedulerCleanupFinalizer)
 			Expect(hubClient.Update(ctx, crp)).Should(Succeed(), "Failed to update cluster resource placement")
 		})
 

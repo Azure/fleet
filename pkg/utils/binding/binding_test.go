@@ -241,7 +241,6 @@ func TestHasBindingFailed(t *testing.T) {
 							Reason:             "resourceBindingWorkSynchronized",
 							Message:            "test message",
 						},
-
 						{
 							Type:               string(placementv1beta1.ResourceBindingAvailable),
 							Status:             metav1.ConditionTrue,

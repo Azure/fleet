@@ -83,7 +83,7 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).NotTo(HaveOccurred(), "Failed to create controller manager")
 
-	schedulerWorkQueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue()
+	schedulerWorkQueue := queue.NewSimplePlacementSchedulingQueue()
 
 	// Create ClusterResourceBinding watcher reconciler.
 	reconciler := &Reconciler{

@@ -19,6 +19,7 @@ package v1beta1
 import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -31,6 +32,48 @@ const (
 	// NumberOfClustersAnnotation is the annotation that indicates how many clusters should be selected for selectN placement type.
 	NumberOfClustersAnnotation = fleetPrefix + "number-of-clusters"
 )
+
+// make sure the PolicySnapshotObj and PolicySnapshotList interfaces are implemented by the
+// ClusterSchedulingPolicySnapshot and SchedulingPolicySnapshot types.
+var _ PolicySnapshotObj = &ClusterSchedulingPolicySnapshot{}
+var _ PolicySnapshotObj = &SchedulingPolicySnapshot{}
+var _ PolicySnapshotList = &ClusterSchedulingPolicySnapshotList{}
+var _ PolicySnapshotList = &SchedulingPolicySnapshotList{}
+
+// A PolicySnapshotSpecGetterSetter offers methods to get and set the policy snapshot spec.
+// +kubebuilder:object:generate=false
+type PolicySnapshotSpecGetterSetter interface {
+	GetPolicySnapshotSpec() *SchedulingPolicySnapshotSpec
+	SetPolicySnapshotSpec(SchedulingPolicySnapshotSpec)
+}
+
+// A PolicySnapshotStatusGetterSetter offers methods to get and set the policy snapshot status.
+// +kubebuilder:object:generate=false
+type PolicySnapshotStatusGetterSetter interface {
+	GetPolicySnapshotStatus() *SchedulingPolicySnapshotStatus
+	SetPolicySnapshotStatus(SchedulingPolicySnapshotStatus)
+}
+
+// A PolicySnapshotObj offers an abstract way to work with a fleet policy snapshot object.
+// +kubebuilder:object:generate=false
+type PolicySnapshotObj interface {
+	client.Object
+	PolicySnapshotSpecGetterSetter
+	PolicySnapshotStatusGetterSetter
+}
+
+// PolicySnapshotListItemGetter offers a method to get the list of PolicySnapshotObj.
+// +kubebuilder:object:generate=false
+type PolicySnapshotListItemGetter interface {
+	GetPolicySnapshotObjs() []PolicySnapshotObj
+}
+
+// A PolicySnapshotList offers an abstract way to work with a list of fleet policy snapshot objects.
+// +kubebuilder:object:generate=false
+type PolicySnapshotList interface {
+	client.ObjectList
+	PolicySnapshotListItemGetter
+}
 
 // +genclient
 // +genclient:nonNamespaced
@@ -63,6 +106,26 @@ type ClusterSchedulingPolicySnapshot struct {
 	Status SchedulingPolicySnapshotStatus `json:"status,omitempty"`
 }
 
+// GetPolicySnapshotSpec returns the policy snapshot spec.
+func (m *ClusterSchedulingPolicySnapshot) GetPolicySnapshotSpec() *SchedulingPolicySnapshotSpec {
+	return &m.Spec
+}
+
+// SetPolicySnapshotSpec sets the policy snapshot spec.
+func (m *ClusterSchedulingPolicySnapshot) SetPolicySnapshotSpec(spec SchedulingPolicySnapshotSpec) {
+	spec.DeepCopyInto(&m.Spec)
+}
+
+// GetPolicySnapshotStatus returns the policy snapshot status.
+func (m *ClusterSchedulingPolicySnapshot) GetPolicySnapshotStatus() *SchedulingPolicySnapshotStatus {
+	return &m.Status
+}
+
+// SetPolicySnapshotStatus sets the policy snapshot status.
+func (m *ClusterSchedulingPolicySnapshot) SetPolicySnapshotStatus(status SchedulingPolicySnapshotStatus) {
+	status.DeepCopyInto(&m.Status)
+}
+
 // SchedulingPolicySnapshotSpec defines the desired state of SchedulingPolicySnapshot.
 type SchedulingPolicySnapshotSpec struct {
 	// Policy defines how to select member clusters to place the selected resources.
@@ -73,6 +136,14 @@ type SchedulingPolicySnapshotSpec struct {
 	// PolicyHash is the sha-256 hash value of the Policy field.
 	// +required
 	PolicyHash []byte `json:"policyHash"`
+}
+
+// Tolerations returns tolerations for SchedulingPolicySnapshotSpec to handle nil policy case.
+func (s *SchedulingPolicySnapshotSpec) Tolerations() []Toleration {
+	if s.Policy != nil {
+		return s.Policy.Tolerations
+	}
+	return nil
 }
 
 // SchedulingPolicySnapshotStatus defines the observed state of SchedulingPolicySnapshot.
@@ -160,14 +231,6 @@ type ClusterSchedulingPolicySnapshotList struct {
 	Items           []ClusterSchedulingPolicySnapshot `json:"items"`
 }
 
-// Tolerations returns tolerations for ClusterSchedulingPolicySnapshot.
-func (m *ClusterSchedulingPolicySnapshot) Tolerations() []Toleration {
-	if m.Spec.Policy != nil {
-		return m.Spec.Policy.Tolerations
-	}
-	return nil
-}
-
 // SetConditions sets the given conditions on the ClusterSchedulingPolicySnapshot.
 func (m *ClusterSchedulingPolicySnapshot) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {
@@ -178,6 +241,15 @@ func (m *ClusterSchedulingPolicySnapshot) SetConditions(conditions ...metav1.Con
 // GetCondition returns the condition of the given type if exists.
 func (m *ClusterSchedulingPolicySnapshot) GetCondition(conditionType string) *metav1.Condition {
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
+}
+
+// GetPolicySnapshotObjs returns the list of PolicySnapshotObj from the ClusterSchedulingPolicySnapshotList.
+func (c *ClusterSchedulingPolicySnapshotList) GetPolicySnapshotObjs() []PolicySnapshotObj {
+	objs := make([]PolicySnapshotObj, 0, len(c.Items))
+	for i := range c.Items {
+		objs = append(objs, &c.Items[i])
+	}
+	return objs
 }
 
 // +genclient
@@ -211,6 +283,26 @@ type SchedulingPolicySnapshot struct {
 	Status SchedulingPolicySnapshotStatus `json:"status,omitempty"`
 }
 
+// GetPolicySnapshotSpec returns the policy snapshot spec.
+func (m *SchedulingPolicySnapshot) GetPolicySnapshotSpec() *SchedulingPolicySnapshotSpec {
+	return &m.Spec
+}
+
+// SetPolicySnapshotSpec sets the policy snapshot spec.
+func (m *SchedulingPolicySnapshot) SetPolicySnapshotSpec(spec SchedulingPolicySnapshotSpec) {
+	spec.DeepCopyInto(&m.Spec)
+}
+
+// GetPolicySnapshotStatus returns the policy snapshot status.
+func (m *SchedulingPolicySnapshot) GetPolicySnapshotStatus() *SchedulingPolicySnapshotStatus {
+	return &m.Status
+}
+
+// SetPolicySnapshotStatus sets the policy snapshot status.
+func (m *SchedulingPolicySnapshot) SetPolicySnapshotStatus(status SchedulingPolicySnapshotStatus) {
+	status.DeepCopyInto(&m.Status)
+}
+
 // SchedulingPolicySnapshotList contains a list of SchedulingPolicySnapshotList.
 // +kubebuilder:resource:scope="Namespaced"
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -218,14 +310,6 @@ type SchedulingPolicySnapshotList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []SchedulingPolicySnapshot `json:"items"`
-}
-
-// Tolerations returns tolerations for ClusterSchedulingPolicySnapshot.
-func (m *SchedulingPolicySnapshot) Tolerations() []Toleration {
-	if m.Spec.Policy != nil {
-		return m.Spec.Policy.Tolerations
-	}
-	return nil
 }
 
 // SetConditions sets the given conditions on the ClusterSchedulingPolicySnapshot.
@@ -238,6 +322,15 @@ func (m *SchedulingPolicySnapshot) SetConditions(conditions ...metav1.Condition)
 // GetCondition returns the condition of the given type if exists.
 func (m *SchedulingPolicySnapshot) GetCondition(conditionType string) *metav1.Condition {
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
+}
+
+// GetPolicySnapshotObjs returns the list of PolicySnapshotObj from the SchedulingPolicySnapshotList.
+func (c *SchedulingPolicySnapshotList) GetPolicySnapshotObjs() []PolicySnapshotObj {
+	objs := make([]PolicySnapshotObj, 0, len(c.Items))
+	for i := range c.Items {
+		objs = append(objs, &c.Items[i])
+	}
+	return objs
 }
 
 func init() {

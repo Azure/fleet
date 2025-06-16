@@ -24,29 +24,32 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
-// ClusterResourcePlacementKey is the unique identifier (its name) for a ClusterResourcePlacement checked
-// into a scheduling queue.
-type ClusterResourcePlacementKey string
+// PlacementKey is the unique identifier for a Placement checked into a scheduling queue.
+// If the Placement is a ClusterResourcePlacement, the PlacementKey is the
+// ClusterResourcePlacement's name in the form of "name".
+// If the Placement is a NamespaceResourcePlacement, the PlacementKey is the
+// NamespaceResourcePlacement's name in the form of "namespace/name".
+type PlacementKey string
 
-// ClusterResourcePlacementSchedulingQueueWriter is an interface which allows sources, such as controllers, to add
-// ClusterResourcePlacementKeys to the scheduling queue.
-type ClusterResourcePlacementSchedulingQueueWriter interface {
-	// Add adds a ClusterResourcePlacementKey to the work queue.
+// PlacementSchedulingQueueWriter is an interface which allows sources, such as controllers, to add
+// PlacementKeys to the scheduling queue.
+type PlacementSchedulingQueueWriter interface {
+	// Add adds a PlacementKey to the work queue.
 	//
 	// Note that this bypasses the rate limiter.
-	Add(crpKey ClusterResourcePlacementKey)
-	// AddRateLimited adds a ClusterResourcePlacementKey to the work queue after the rate limiter (if any)
+	Add(crpKey PlacementKey)
+	// AddRateLimited adds a PlacementKey to the work queue after the rate limiter (if any)
 	// says that it is OK.
-	AddRateLimited(crpKey ClusterResourcePlacementKey)
-	// AddAfter adds a ClusterResourcePlacementKey to the work queue after a set duration.
-	AddAfter(crpKey ClusterResourcePlacementKey, duration time.Duration)
+	AddRateLimited(crpKey PlacementKey)
+	// AddAfter adds a PlacementKey to the work queue after a set duration.
+	AddAfter(crpKey PlacementKey, duration time.Duration)
 }
 
-// ClusterResourcePlacementSchedulingQueue is an interface which queues ClusterResourcePlacements for the scheduler
+// PlacementSchedulingQueue is an interface which queues PlacementKeys for the scheduler
 // to consume; specifically, the scheduler finds the latest scheduling policy snapshot associated with the
-// ClusterResourcePlacement.
-type ClusterResourcePlacementSchedulingQueue interface {
-	ClusterResourcePlacementSchedulingQueueWriter
+// PlacementKey.
+type PlacementSchedulingQueue interface {
+	PlacementSchedulingQueueWriter
 
 	// Run starts the scheduling queue.
 	Run()
@@ -54,54 +57,54 @@ type ClusterResourcePlacementSchedulingQueue interface {
 	Close()
 	// CloseWithDrain closes the scheduling queue after all items in the queue are processed.
 	CloseWithDrain()
-	// NextClusterResourcePlacementKey returns the next-in-line ClusterResourcePlacementKey for the scheduler to consume.
-	NextClusterResourcePlacementKey() (key ClusterResourcePlacementKey, closed bool)
-	// Done marks a ClusterResourcePlacementKey as done.
-	Done(crpKey ClusterResourcePlacementKey)
-	// Forget untracks a ClusterResourcePlacementKey from rate limiter(s) (if any) set up with the queue.
-	Forget(crpKey ClusterResourcePlacementKey)
+	// NextPlacementKey returns the next-in-line PlacementKey for the scheduler to consume.
+	NextPlacementKey() (key PlacementKey, closed bool)
+	// Done marks a PlacementKey as done.
+	Done(crpKey PlacementKey)
+	// Forget untracks a PlacementKey from rate limiter(s) (if any) set up with the queue.
+	Forget(crpKey PlacementKey)
 }
 
-// simpleClusterResourcePlacementSchedulingQueue is a simple implementation of
-// ClusterResourcePlacementSchedulingQueue.
+// simplePlacementSchedulingQueue is a simple implementation of
+// PlacementSchedulingQueue.
 //
 // At this moment, one single workqueue would suffice, as sources such as the cluster watcher,
 // the binding watcher, etc., can catch all changes that need the scheduler's attention.
 // In the future, when more features, e.g., inter-placement affinity/anti-affinity, are added,
 // more queues, such as a backoff queue, might become necessary.
-type simpleClusterResourcePlacementSchedulingQueue struct {
+type simplePlacementSchedulingQueue struct {
 	active workqueue.TypedRateLimitingInterface[any]
 }
 
-// Verify that simpleClusterResourcePlacementSchedulingQueue implements
-// ClusterResourceSchedulingQueue at compile time.
-var _ ClusterResourcePlacementSchedulingQueue = &simpleClusterResourcePlacementSchedulingQueue{}
+// Verify that simplePlacementSchedulingQueue implements
+// PlacementSchedulingQueue at compile time.
+var _ PlacementSchedulingQueue = &simplePlacementSchedulingQueue{}
 
-// simpleClusterResourcePlacementSchedulingQueueOptions are the options for the
-// simpleClusterResourcePlacementSchedulingQueue.
-type simpleClusterResourcePlacementSchedulingQueueOptions struct {
+// simplePlacementSchedulingQueueOptions are the options for the
+// simplePlacementSchedulingQueue.
+type simplePlacementSchedulingQueueOptions struct {
 	rateLimiter workqueue.TypedRateLimiter[any]
 	name        string
 }
 
-// Option is the function that configures the simpleClusterResourcePlacmentSchedulingQueue.
-type Option func(*simpleClusterResourcePlacementSchedulingQueueOptions)
+// Option is the function that configures the simplePlacementSchedulingQueue.
+type Option func(*simplePlacementSchedulingQueueOptions)
 
-var defaultSimpleClusterResourcePlacementSchedulingQueueOptions = simpleClusterResourcePlacementSchedulingQueueOptions{
+var defaultSimplePlacementSchedulingQueueOptions = simplePlacementSchedulingQueueOptions{
 	rateLimiter: workqueue.DefaultTypedControllerRateLimiter[any](),
-	name:        "clusterResourcePlacementSchedulingQueue",
+	name:        "placementSchedulingQueue",
 }
 
 // WithRateLimiter sets a rate limiter for the workqueue.
 func WithRateLimiter(rateLimiter workqueue.TypedRateLimiter[any]) Option {
-	return func(o *simpleClusterResourcePlacementSchedulingQueueOptions) {
+	return func(o *simplePlacementSchedulingQueueOptions) {
 		o.rateLimiter = rateLimiter
 	}
 }
 
 // WithName sets a name for the workqueue.
 func WithName(name string) Option {
-	return func(o *simpleClusterResourcePlacementSchedulingQueueOptions) {
+	return func(o *simplePlacementSchedulingQueueOptions) {
 		o.name = name
 	}
 }
@@ -111,72 +114,72 @@ func WithName(name string) Option {
 // At this moment, Run is an no-op as there is only one queue present; in the future,
 // when more queues are added, Run would start goroutines that move items between queues as
 // appropriate.
-func (sq *simpleClusterResourcePlacementSchedulingQueue) Run() {}
+func (sq *simplePlacementSchedulingQueue) Run() {}
 
 // Close shuts down the scheduling queue immediately.
-func (sq *simpleClusterResourcePlacementSchedulingQueue) Close() {
+func (sq *simplePlacementSchedulingQueue) Close() {
 	sq.active.ShutDown()
 }
 
 // CloseWithDrain shuts down the scheduling queue and returns until all items are processed.
-func (sq *simpleClusterResourcePlacementSchedulingQueue) CloseWithDrain() {
+func (sq *simplePlacementSchedulingQueue) CloseWithDrain() {
 	sq.active.ShutDownWithDrain()
 }
 
-// NextClusterResourcePlacementKey returns the next ClusterResourcePlacementKey in the work queue for
+// NextPlacementKey returns the next ClusterResourcePlacementKey in the work queue for
 // the scheduler to process.
 //
 // Note that for now the queue simply wraps a work queue, and consider its state (whether it
 // is shut down or not) as its own closedness. In the future, when more queues are added, the
 // queue implementation must manage its own state.
-func (sq *simpleClusterResourcePlacementSchedulingQueue) NextClusterResourcePlacementKey() (key ClusterResourcePlacementKey, closed bool) {
+func (sq *simplePlacementSchedulingQueue) NextPlacementKey() (key PlacementKey, closed bool) {
 	// This will block on a condition variable if the queue is empty.
 	crpKey, shutdown := sq.active.Get()
 	if shutdown {
 		return "", true
 	}
-	return crpKey.(ClusterResourcePlacementKey), false
+	return crpKey.(PlacementKey), false
 }
 
 // Done marks a ClusterResourcePlacementKey as done.
-func (sq *simpleClusterResourcePlacementSchedulingQueue) Done(crpKey ClusterResourcePlacementKey) {
+func (sq *simplePlacementSchedulingQueue) Done(crpKey PlacementKey) {
 	sq.active.Done(crpKey)
 }
 
 // Add adds a ClusterResourcePlacementKey to the work queue.
 //
 // Note that this bypasses the rate limiter (if any).
-func (sq *simpleClusterResourcePlacementSchedulingQueue) Add(crpKey ClusterResourcePlacementKey) {
+func (sq *simplePlacementSchedulingQueue) Add(crpKey PlacementKey) {
 	sq.active.Add(crpKey)
 }
 
 // AddRateLimited adds a ClusterResourcePlacementKey to the work queue after the rate limiter (if any)
 // says that it is OK.
-func (sq *simpleClusterResourcePlacementSchedulingQueue) AddRateLimited(crpKey ClusterResourcePlacementKey) {
+func (sq *simplePlacementSchedulingQueue) AddRateLimited(crpKey PlacementKey) {
 	sq.active.AddRateLimited(crpKey)
 }
 
 // AddAfter adds a ClusterResourcePlacementKey to the work queue after a set duration.
 //
 // Note that this bypasses the rate limiter (if any)
-func (sq *simpleClusterResourcePlacementSchedulingQueue) AddAfter(crpKey ClusterResourcePlacementKey, duration time.Duration) {
+func (sq *simplePlacementSchedulingQueue) AddAfter(crpKey PlacementKey, duration time.Duration) {
 	sq.active.AddAfter(crpKey, duration)
 }
 
 // Forget untracks a ClusterResourcePlacementKey from rate limiter(s) (if any) set up with the queue.
-func (sq *simpleClusterResourcePlacementSchedulingQueue) Forget(crpKey ClusterResourcePlacementKey) {
+func (sq *simplePlacementSchedulingQueue) Forget(crpKey PlacementKey) {
 	sq.active.Forget(crpKey)
 }
 
-// NewSimpleClusterResourcePlacementSchedulingQueue returns a
+// NewSimplePlacementSchedulingQueue returns a
 // simpleClusterResourcePlacementSchedulingQueue.
-func NewSimpleClusterResourcePlacementSchedulingQueue(opts ...Option) ClusterResourcePlacementSchedulingQueue {
-	options := defaultSimpleClusterResourcePlacementSchedulingQueueOptions
+func NewSimplePlacementSchedulingQueue(opts ...Option) PlacementSchedulingQueue {
+	options := defaultSimplePlacementSchedulingQueueOptions
 	for _, opt := range opts {
 		opt(&options)
 	}
 
-	return &simpleClusterResourcePlacementSchedulingQueue{
+	return &simplePlacementSchedulingQueue{
 		active: workqueue.NewTypedRateLimitingQueueWithConfig(options.rateLimiter, workqueue.TypedRateLimitingQueueConfig[any]{
 			Name: options.name,
 		}),

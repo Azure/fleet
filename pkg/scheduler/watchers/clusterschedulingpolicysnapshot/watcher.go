@@ -40,7 +40,7 @@ type Reconciler struct {
 	// Client is the client the controller uses to access the hub cluster.
 	client.Client
 	// SchedulerWorkQueue is the workqueue in use by the scheduler.
-	SchedulerWorkQueue queue.ClusterResourcePlacementSchedulingQueueWriter
+	SchedulerWorkQueue queue.PlacementSchedulingQueueWriter
 }
 
 // Reconcile reconciles the cluster scheduling policy snapshot.
@@ -109,7 +109,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Enqueue the CRP name for scheduler processing.
-	r.SchedulerWorkQueue.Add(queue.ClusterResourcePlacementKey(crpName))
+	r.SchedulerWorkQueue.Add(queue.PlacementKey(crpName))
 
 	// The reconciliation loop ends.
 	return ctrl.Result{}, nil

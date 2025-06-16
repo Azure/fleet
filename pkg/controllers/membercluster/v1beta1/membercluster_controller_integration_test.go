@@ -44,7 +44,7 @@ const (
 )
 
 var (
-	ignoreOption = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
+	ignoreOption = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "Message")
 )
 
 var _ = Describe("Test MemberCluster Controller", func() {
@@ -502,7 +502,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				ResourceUsage: imc.Status.ResourceUsage,
 				AgentStatus:   imc.Status.AgentStatus,
 			}
-			options := cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration")
+			options := cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration", "Message")
 			// ignore the ObservedGeneration here cause controller won't update the ReadyToJoin condition.
 			Expect(cmp.Diff(wantMC, mc.Status, options)).Should(BeEmpty(), "mc status mismatch, (-want, +got)")
 

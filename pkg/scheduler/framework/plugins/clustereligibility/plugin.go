@@ -101,7 +101,7 @@ func (p *Plugin) SetUpWithFramework(handle framework.Handle) {
 func (p *Plugin) Filter(
 	_ context.Context,
 	_ framework.CycleStatePluginReadWriter,
-	_ *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	_ placementv1beta1.PolicySnapshotObj,
 	cluster *clusterv1beta1.MemberCluster,
 ) (status *framework.Status) {
 	if eligible, reason := p.handle.ClusterEligibilityChecker().IsEligible(cluster); !eligible {

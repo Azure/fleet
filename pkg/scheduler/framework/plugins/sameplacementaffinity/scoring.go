@@ -28,7 +28,7 @@ import (
 func (p *Plugin) Score(
 	_ context.Context,
 	state framework.CycleStatePluginReadWriter,
-	_ *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	_ placementv1beta1.PolicySnapshotObj,
 	cluster *clusterv1beta1.MemberCluster,
 ) (score *framework.ClusterScore, status *framework.Status) {
 	if state.HasObsoleteBindingFor(cluster.Name) {
