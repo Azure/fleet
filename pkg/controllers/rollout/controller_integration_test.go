@@ -102,7 +102,7 @@ var _ = Describe("Test the rollout Controller", func() {
 			bindings = append(bindings, binding)
 		}
 		// Check that all bindings are bound.
-		verifyBindingsRolledOut(bindings, masterSnapshot)
+		verifyBindingsRolledOut(bindings, masterSnapshot, timeout)
 	})
 
 	It("should push apply strategy changes to all the bindings (if applicable) and refresh their status", func() {
@@ -333,7 +333,7 @@ var _ = Describe("Test the rollout Controller", func() {
 			bindings = append(bindings, binding)
 		}
 		// Check that all bindings are bound.
-		verifyBindingsRolledOut(bindings, masterSnapshot)
+		verifyBindingsRolledOut(bindings, masterSnapshot, timeout)
 	})
 
 	It("Should rollout the selected and unselected bindings (not trackable resources)", func() {
@@ -357,7 +357,7 @@ var _ = Describe("Test the rollout Controller", func() {
 			bindings = append(bindings, binding)
 		}
 		// Check that all bindings are bound.
-		verifyBindingsRolledOut(bindings, masterSnapshot)
+		verifyBindingsRolledOut(bindings, masterSnapshot, timeout)
 
 		// simulate that some of the bindings are available and not trackable.
 		firstApplied := 3
@@ -447,7 +447,7 @@ var _ = Describe("Test the rollout Controller", func() {
 			bindings = append(bindings, binding)
 		}
 		// Check that all bindings are bound.
-		verifyBindingsRolledOut(bindings, masterSnapshot)
+		verifyBindingsRolledOut(bindings, masterSnapshot, timeout)
 
 		// simulate that some of the bindings are available
 		firstApplied := 3
@@ -608,7 +608,11 @@ var _ = Describe("Test the rollout Controller", func() {
 		}, timeout, interval).Should(BeTrue(), "the second deleting binding should now be deleted")
 		By("Verified that the second deleting binding is deleted")
 		// Check that the bindings are rolledout.
-		verifyBindingsRolledOut(bindings, latestSnapshot)
+		// When there is a binding assigned to a cluster with another deleting bindings, the controller
+		// will wait until the deleting binding is deleted before it rolls out the bindings.
+		// It requeues the bindings every 5 sceconds by checking waitForResourcesToCleanUp func.
+		// Leave 5 seconds for the controller to requeue the bindings and roll them out.
+		verifyBindingsRolledOut(bindings, latestSnapshot, 5*time.Second+timeout)
 		By("Verified that the rollout is finally unblocked")
 	})
 
@@ -633,7 +637,7 @@ var _ = Describe("Test the rollout Controller", func() {
 			bindings = append(bindings, binding)
 		}
 		// Check that all bindings are bound.
-		verifyBindingsRolledOut(bindings, masterSnapshot)
+		verifyBindingsRolledOut(bindings, masterSnapshot, timeout)
 
 		// simulate that some of the bindings are available successfully
 		applySuccessfully := 3
@@ -694,7 +698,7 @@ var _ = Describe("Test the rollout Controller", func() {
 			bindings = append(bindings, binding)
 		}
 		// Check that all bindings are bound.
-		verifyBindingsRolledOut(bindings, masterSnapshot)
+		verifyBindingsRolledOut(bindings, masterSnapshot, timeout)
 
 		// simulate that some of the bindings are available successfully
 		applySuccessfully := 3
@@ -773,7 +777,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		}
 
 		// Check that all bindings are bound..
-		verifyBindingsRolledOut(bindings, masterSnapshot)
+		verifyBindingsRolledOut(bindings, masterSnapshot, timeout)
 
 		// mark one binding as ready i.e. applied and available.
 		availableBinding := 1
@@ -873,7 +877,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		}
 
 		// Check that all bindings are bound.
-		verifyBindingsRolledOut(bindings, masterSnapshot)
+		verifyBindingsRolledOut(bindings, masterSnapshot, timeout)
 
 		// Note: This scenario is very unlikely in production user has to change the target from 2->3->2,
 		// where scheduler created new scheduled binding but user changed the target number from 3->2 again, before rollout controller reads CRP.
@@ -956,7 +960,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		Expect(k8sClient.Update(ctx, rolloutCRP)).Should(Succeed(), "Failed to update CRP")
 
 		By("Verifying that rollout is unblocked")
-		verifyBindingsRolledOut(bindings, masterSnapshot)
+		verifyBindingsRolledOut(bindings, masterSnapshot, timeout)
 	})
 
 	It("Should rollout all the selected bindings when strategy type is changed from External to empty", func() {
@@ -991,7 +995,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		Expect(k8sClient.Update(ctx, rolloutCRP)).Should(Succeed(), "Failed to update CRP")
 
 		By("Verifying that rollout is unblocked")
-		verifyBindingsRolledOut(bindings, masterSnapshot)
+		verifyBindingsRolledOut(bindings, masterSnapshot, timeout)
 	})
 
 	It("Should not rollout anymore if the rollout strategy type is changed from RollingUpdate to External", func() {
@@ -1018,7 +1022,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		}
 
 		By("Checking bindings are rolled out")
-		verifyBindingsRolledOut(bindings, masterSnapshot)
+		verifyBindingsRolledOut(bindings, masterSnapshot, timeout)
 
 		By("Updating CRP rollout strategy type to External")
 		rolloutCRP.Spec.Strategy.Type = fleetv1beta1.ExternalRolloutStrategyType
@@ -1084,7 +1088,7 @@ func verifyBindingsNotRolledOutConsistently(bindings []*fleetv1beta1.ClusterReso
 	}, consistentTimeout, consistentInterval).Should(Succeed(), "rollout controller should not roll any binding to Bound state")
 }
 
-func verifyBindingsRolledOut(bindings []*fleetv1beta1.ClusterResourceBinding, masterSnapshot *fleetv1beta1.ClusterResourceSnapshot) {
+func verifyBindingsRolledOut(bindings []*fleetv1beta1.ClusterResourceBinding, masterSnapshot *fleetv1beta1.ClusterResourceSnapshot, timeout time.Duration) {
 	// Check that all bindings are bound and updated to the latest snapshot.
 	Eventually(func() error {
 		for _, binding := range bindings {
