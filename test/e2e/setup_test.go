@@ -243,6 +243,7 @@ var (
 	}
 
 	updateRunStatusCmpOption = cmp.Options{
+		cmpopts.SortSlices(lessFuncCondition),
 		utils.IgnoreConditionLTTAndMessageFields,
 		cmpopts.IgnoreFields(placementv1beta1.StageUpdatingStatus{}, "StartTime", "EndTime"),
 		cmpopts.EquateEmpty(),

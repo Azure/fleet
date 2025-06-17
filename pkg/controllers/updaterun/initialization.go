@@ -190,22 +190,25 @@ func (r *Reconciler) collectScheduledClusters(
 	var toBeDeletedBindings, selectedBindings []*placementv1beta1.ClusterResourceBinding
 	for i, binding := range bindingList.Items {
 		if binding.Spec.SchedulingPolicySnapshotName == latestPolicySnapshot.Name {
-			if binding.Spec.State != placementv1beta1.BindingStateScheduled && binding.Spec.State != placementv1beta1.BindingStateBound {
-				stateErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("binding `%s`'s state %s is not scheduled or bound", binding.Name, binding.Spec.State))
-				klog.ErrorS(stateErr, "Failed to collect clusterResourceBindings", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
-				// no more retries here.
-				return nil, nil, fmt.Errorf("%w: %s", errInitializedFailed, stateErr.Error())
+			if binding.Spec.State == placementv1beta1.BindingStateUnscheduled {
+				klog.V(2).InfoS("Found an unscheduled binding with the latest policy snapshot, delete it", "binding", binding.Name, "clusterResourcePlacement", placementName,
+					"latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
+				toBeDeletedBindings = append(toBeDeletedBindings, &bindingList.Items[i])
+			} else {
+				klog.V(2).InfoS("Found a scheduled binding", "binding", binding.Name, "clusterResourcePlacement", placementName,
+					"latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
+				selectedBindings = append(selectedBindings, &bindingList.Items[i])
 			}
-			klog.V(2).InfoS("Found a scheduled binding", "binding", binding.Name, "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
-			selectedBindings = append(selectedBindings, &bindingList.Items[i])
 		} else {
 			if binding.Spec.State != placementv1beta1.BindingStateUnscheduled {
-				stateErr := controller.NewUnexpectedBehaviorError(fmt.Errorf("binding `%s` with old policy snapshot %s has state %s, not unscheduled", binding.Name, binding.Spec.SchedulingPolicySnapshotName, binding.Spec.State))
-				klog.ErrorS(stateErr, "Failed to collect clusterResourceBindings", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
-				// no more retries here.
-				return nil, nil, fmt.Errorf("%w: %s", errInitializedFailed, stateErr.Error())
+				stateErr := fmt.Errorf("binding `%s` with old policy snapshot %s has state %s, we might observe a transient state, need retry", binding.Name, binding.Spec.SchedulingPolicySnapshotName, binding.Spec.State)
+				klog.V(2).InfoS("Found a not-unscheduled binding with old policy snapshot, retrying", "binding", binding.Name, "clusterResourcePlacement", placementName,
+					"latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
+				// Transient state can be retried.
+				return nil, nil, stateErr
 			}
-			klog.V(2).InfoS("Found a to-be-deleted binding", "binding", binding.Name, "cluster", binding.Spec.TargetCluster, "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
+			klog.V(2).InfoS("Found an unscheduled binding with old policy snapshot", "binding", binding.Name, "cluster", binding.Spec.TargetCluster,
+				"clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
 			toBeDeletedBindings = append(toBeDeletedBindings, &bindingList.Items[i])
 		}
 	}
