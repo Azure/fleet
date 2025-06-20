@@ -38,7 +38,10 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 	})
 
 	It("should verify original CRD installation", func() {
-		ensureCRDExistsWithLabels(map[string]string{cmdCRDInstaller.CRDInstallerLabelKey: "true"})
+		ensureCRDExistsWithLabels(map[string]string{
+			cmdCRDInstaller.CRDInstallerLabelKey: "true",
+			cmdCRDInstaller.AzureManagedLabelKey: cmdCRDInstaller.FleetLabelValue,
+		})
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
 		spec := fetchSpecJSONSchemaProperties(crd)
@@ -62,6 +65,7 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 		ensureCRDExistsWithLabels(map[string]string{
 			randomLabelKey:                       "true",
 			cmdCRDInstaller.CRDInstallerLabelKey: "true",
+			cmdCRDInstaller.AzureManagedLabelKey: cmdCRDInstaller.FleetLabelValue,
 		})
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)

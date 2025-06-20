@@ -24,6 +24,10 @@ import (
 const (
 	// CRDInstallerLabelKey is the label key used to indicate that a CRD is managed by the installer.
 	CRDInstallerLabelKey = "crd-installer.azurefleet.io/managed"
+	// AzureManagedLabelKey is the label key used to indicate that a CRD is managed by an azure resource.
+	AzureManagedLabelKey = "kubernetes.azure.com/managedby"
+	// FleetLabelValue is the value for the AzureManagedLabelKey indicating management by Fleet.
+	FleetLabelValue = "fleet"
 )
 
 var (
@@ -95,6 +99,9 @@ func InstallCRD(ctx context.Context, client client.Client, path string) error {
 		}
 		// Ensure the label for management by the installer is set.
 		existingCRD.Labels[CRDInstallerLabelKey] = "true"
+		// Also set the Azure managed label to indicate this is managed by Fleet,
+		// needed for clean up for CRD by kube-addon-manager.
+		existingCRD.Labels[AzureManagedLabelKey] = FleetLabelValue
 		return nil
 	})
 
