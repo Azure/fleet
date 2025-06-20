@@ -24,8 +24,6 @@ import (
 const (
 	// CRDInstallerLabelKey is the label key used to indicate that a CRD is managed by the installer.
 	CRDInstallerLabelKey = "crd-installer.azurefleet.io/managed"
-	// AddonManagerLabelKey is the label key used to indicate that a CRD is managed by the addon manager.
-	AddonManagerLabelKey = "addonmanager.kubernetes.io/mode"
 )
 
 var (

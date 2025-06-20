@@ -30,8 +30,8 @@ const (
 )
 
 // This test verifies the behavior of the CRD installer when creating and updating CRDs.
-// It ensures that the installer can create a CRD, update it with new fields, and handle ownership labels correctly.
-// The original CRD has 4 properties, and the updated CRD adds a new property to simulate CRD upgrade.
+// It ensures that the installer can create a CRD, update it with new fields, and handle ownership label correctly.
+// The original CRD has 4 properties, and the updated CRD has a new property to simulate CRD upgrade.
 var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 	It("should create original CRD", func() {
 		Expect(cmdCRDInstaller.InstallCRD(ctx, k8sClient, originalCRDPath)).To(Succeed())
@@ -41,7 +41,7 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 		ensureCRDExistsWithLabels(map[string]string{cmdCRDInstaller.CRDInstallerLabelKey: "true"})
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
-		spec := getSpecJSONSchemaProperties(crd)
+		spec := fetchSpecJSONSchemaProperties(crd)
 		// Original CRD should have 4 properties defined in spec.
 		Expect(len(spec.Properties)).Should(Equal(4), "CRD %s should have 4 properties defined in spec", crdName)
 		Expect(spec.Properties["bar"].Type).Should(Equal("string"), "CRD %s should have 'bar' property of type string defined in properties", crdName)
@@ -65,7 +65,7 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 		})
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
-		spec := getSpecJSONSchemaProperties(crd)
+		spec := fetchSpecJSONSchemaProperties(crd)
 		// Updated CRD should have 5 properties defined in spec.
 		Expect(len(spec.Properties)).Should(Equal(5), "CRD %s should have 5 properties defined in spec", crdName)
 		Expect(spec.Properties["bar"].Type).Should(Equal("string"), "CRD %s should have 'bar' property of type string defined in properties", crdName)
@@ -86,7 +86,7 @@ func updateCRDLabels(crdName string, labels map[string]string) {
 	}, eventuallyDuration, eventuallyInterval).ShouldNot(HaveOccurred(), "CRD %s should have addonmanager label", crdName)
 }
 
-func getSpecJSONSchemaProperties(crd *apiextensionsv1.CustomResourceDefinition) apiextensionsv1.JSONSchemaProps {
+func fetchSpecJSONSchemaProperties(crd *apiextensionsv1.CustomResourceDefinition) apiextensionsv1.JSONSchemaProps {
 	Expect(len(crd.Spec.Versions)).Should(Equal(1), "CRD %s should have exactly one version", crdName)
 	v1alpha1Version := crd.Spec.Versions[0]
 	Expect(v1alpha1Version.Name).Should(Equal("v1alpha1"), "CRD %s should have version v1alpha1", crdName)
