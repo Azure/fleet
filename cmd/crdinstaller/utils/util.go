@@ -100,7 +100,7 @@ func InstallCRD(ctx context.Context, client client.Client, path string) error {
 		// Ensure the label for management by the installer is set.
 		existingCRD.Labels[CRDInstallerLabelKey] = "true"
 		// Also set the Azure managed label to indicate this is managed by Fleet,
-		// needed for clean up for CRD by kube-addon-manager.
+		// needed for clean up of CRD by kube-addon-manager.
 		existingCRD.Labels[AzureManagedLabelKey] = FleetLabelValue
 		return nil
 	})
