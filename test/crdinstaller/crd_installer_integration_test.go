@@ -49,27 +49,7 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 		Expect(ok).To(BeFalse(), "CRD %s should not have 'newField' property defined in properties", crdName)
 	})
 
-	It("update the CRD to have the addonmanger ownership label", func() {
-		updateCRDLabels(crdName, map[string]string{cmdCRDInstaller.AddonManagerLabelKey: "Reconcile"})
-	})
-
-	It("should not update the CRD with new fields with addonmanager ownership label", func() {
-		Expect(cmdCRDInstaller.InstallCRD(ctx, k8sClient, updatedCRDPath)).To(Succeed())
-	})
-
-	It("should verify original CRD still exists, because it's owned by addonmanager", func() {
-		ensureCRDExistsWithLabels(map[string]string{cmdCRDInstaller.AddonManagerLabelKey: "Reconcile"})
-		crd := &apiextensionsv1.CustomResourceDefinition{}
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).NotTo(HaveOccurred(), "CRD %s should be installed", crdName)
-		spec := getSpecJSONSchemaProperties(crd)
-		// Original CRD should still have 4 properties defined in spec.
-		Expect(len(spec.Properties)).Should(Equal(4), "CRD %s should have 4 properties defined in spec", crdName)
-		Expect(spec.Properties["bar"].Type).Should(Equal("string"), "CRD %s should have 'bar' property of type string defined in properties", crdName)
-		_, ok := spec.Properties["newField"]
-		Expect(ok).To(BeFalse(), "CRD %s should not have 'newField' property defined in properties", crdName)
-	})
-
-	It("update the CRD to remove addonmanager owenership label", func() {
+	It("update the CRD to add a random label", func() {
 		updateCRDLabels(crdName, map[string]string{randomLabelKey: "true"})
 	})
 

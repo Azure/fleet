@@ -14,10 +14,8 @@ import (
 	"path/filepath"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -83,14 +81,6 @@ func InstallCRD(ctx context.Context, client client.Client, path string) error {
 		return fmt.Errorf("unexpected type from %s, expected %s but got %s", path, gvk, apiextensionsv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"))
 	}
 
-	isManagedByAddonManager, err := isCRDManagedByAddonManager(ctx, client, crd.Name)
-	if err != nil {
-		return err
-	}
-	if isManagedByAddonManager {
-		return nil
-	}
-
 	existingCRD := apiextensionsv1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crd.Name,
@@ -117,27 +107,6 @@ func InstallCRD(ctx context.Context, client client.Client, path string) error {
 
 	klog.Infof("Successfully created/updated CRD %s", crd.Name)
 	return nil
-}
-
-// isCRDManagedByAddonManager checks if a CRD is managed by the addon manager.
-func isCRDManagedByAddonManager(ctx context.Context, client client.Client, crdName string) (bool, error) {
-	var crd apiextensionsv1.CustomResourceDefinition
-	if err := client.Get(ctx, types.NamespacedName{Name: crdName}, &crd); err != nil {
-		if errors.IsNotFound(err) {
-			return false, nil
-		} else {
-			return false, fmt.Errorf("failed to get CRD %s: %w", crdName, err)
-		}
-	}
-
-	labels := crd.GetLabels()
-	if labels != nil {
-		if _, exists := labels[AddonManagerLabelKey]; exists {
-			klog.Infof("CRD %s is still managed by the addon manager, skipping installation", crd.Name)
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 // CollectCRDFileNames collects CRD filenames from the specified path based on the mode either hub/member.
