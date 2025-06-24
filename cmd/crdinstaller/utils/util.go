@@ -77,7 +77,7 @@ func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.
 
 // CollectCRDs collects CRDs from the specified path based on the mode either hub/member.
 func CollectCRDs(crdDirectoryPath, mode string, scheme *runtime.Scheme) ([]apiextensionsv1.CustomResourceDefinition, error) {
-	// // Set of CRDs to install based on mode.
+	// Set of CRDs to install based on mode.
 	crdsToInstall := []apiextensionsv1.CustomResourceDefinition{}
 
 	// Walk through the CRD directory and collect filenames.
