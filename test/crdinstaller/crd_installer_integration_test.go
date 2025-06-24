@@ -34,7 +34,7 @@ const (
 // The original CRD has 4 properties, and the updated CRD has a new property to simulate CRD upgrade.
 var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 	It("should create original CRD", func() {
-		crd, err := cmdCRDInstaller.GetCRDFromPath(originalCRDPath, k8sClient.Scheme())
+		crd, err := cmdCRDInstaller.GetCRDFromPath(originalCRDPath, scheme)
 		Expect(err).NotTo(HaveOccurred(), "should get CRD from path %s", originalCRDPath)
 		Expect(cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd)).To(Succeed())
 	})
@@ -59,7 +59,7 @@ var _ = Describe("Test CRD Installer, Create and Update CRD", Ordered, func() {
 	})
 
 	It("should update the CRD with new field in spec with crdinstaller label", func() {
-		crd, err := cmdCRDInstaller.GetCRDFromPath(updatedCRDPath, k8sClient.Scheme())
+		crd, err := cmdCRDInstaller.GetCRDFromPath(updatedCRDPath, scheme)
 		Expect(err).NotTo(HaveOccurred(), "should get CRD from path %s", updatedCRDPath)
 		Expect(cmdCRDInstaller.InstallCRD(ctx, k8sClient, crd)).To(Succeed())
 	})

@@ -11,7 +11,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/client-go/kubernetes/scheme"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -25,6 +26,7 @@ var (
 	testEnv   *envtest.Environment
 	ctx       context.Context
 	cancel    context.CancelFunc
+	scheme    *runtime.Scheme
 )
 
 func TestAPIs(t *testing.T) {
@@ -46,9 +48,12 @@ var _ = BeforeSuite(func() {
 	Expect(err).Should(Succeed())
 	Expect(cfg).NotTo(BeNil())
 
+	scheme = runtime.NewScheme()
+	Expect(apiextensionsv1.AddToScheme(scheme)).Should(Succeed())
+
 	//+kubebuilder:scaffold:scheme
 	By("construct the k8s client")
-	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme})
 	Expect(err).Should(Succeed())
 	Expect(k8sClient).NotTo(BeNil())
 })
