@@ -20,8 +20,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/Azure/karpenter/pkg/providers/pricing"
-	"github.com/Azure/karpenter/pkg/providers/pricing/client"
+	"github.com/Azure/karpenter-provider-azure/pkg/providers/pricing"
+	"github.com/Azure/karpenter-provider-azure/pkg/providers/pricing/client"
 )
 
 // PricingProvider is an interface that the Azure property provider uses to sync pricing information.
