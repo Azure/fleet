@@ -75,20 +75,20 @@ func main() {
 // installCRDs installs the CRDs from the specified directory based on the mode.
 func installCRDs(ctx context.Context, client client.Client, crdPath, mode string) error {
 	// Set of CRD filenames to install based on mode.
-	crdFilesToInstall, err := utils.CollectCRDFileNames(crdPath, mode)
+	crdsToInstall, err := utils.CollectCRDs(crdPath, mode, client.Scheme())
 	if err != nil {
 		return err
 	}
 
-	if len(crdFilesToInstall) == 0 {
+	if len(crdsToInstall) == 0 {
 		return fmt.Errorf("no CRDs found for mode %s in directory %s", mode, crdPath)
 	}
 
-	klog.Infof("Found %d CRDs to install for mode %s", len(crdFilesToInstall), mode)
+	klog.Infof("Found %d CRDs to install for mode %s", len(crdsToInstall), mode)
 
 	// Install each CRD.
-	for path := range crdFilesToInstall {
-		if err := utils.InstallCRD(ctx, client, path); err != nil {
+	for i := range crdsToInstall {
+		if err := utils.InstallCRD(ctx, client, &crdsToInstall[i]); err != nil {
 			return err
 		}
 	}

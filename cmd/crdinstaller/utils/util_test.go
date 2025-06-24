@@ -11,6 +11,15 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+)
+
+var (
+	lessFunc = func(s1, s2 string) bool {
+		return s1 < s2
+	}
 )
 
 // Test using the actual config/crd/bases directory.
@@ -39,54 +48,67 @@ func runTest(t *testing.T, crdPath string) {
 	tests := []struct {
 		name           string
 		mode           string
-		wantedCRDFiles map[string]bool
+		wantedCRDNames []string
 		wantError      bool
 	}{
 		{
 			name: "hub mode v1beta1 with actual directory",
 			mode: "hub",
-			wantedCRDFiles: map[string]bool{
-				crdPath + "/cluster.kubernetes-fleet.io_memberclusters.yaml":                              true,
-				crdPath + "/cluster.kubernetes-fleet.io_internalmemberclusters.yaml":                      true,
-				crdPath + "/placement.kubernetes-fleet.io_clusterapprovalrequests.yaml":                   true,
-				crdPath + "/placement.kubernetes-fleet.io_clusterresourcebindings.yaml":                   true,
-				crdPath + "/placement.kubernetes-fleet.io_clusterresourceenvelopes.yaml":                  true,
-				crdPath + "/placement.kubernetes-fleet.io_clusterresourceplacements.yaml":                 true,
-				crdPath + "/placement.kubernetes-fleet.io_clusterresourceoverrides.yaml":                  true,
-				crdPath + "/placement.kubernetes-fleet.io_clusterresourceoverridesnapshots.yaml":          true,
-				crdPath + "/placement.kubernetes-fleet.io_clusterresourceplacementdisruptionbudgets.yaml": true,
-				crdPath + "/placement.kubernetes-fleet.io_clusterresourceplacementevictions.yaml":         true,
-				crdPath + "/placement.kubernetes-fleet.io_clusterresourcesnapshots.yaml":                  true,
-				crdPath + "/placement.kubernetes-fleet.io_clusterschedulingpolicysnapshots.yaml":          true,
-				crdPath + "/placement.kubernetes-fleet.io_clusterstagedupdateruns.yaml":                   true,
-				crdPath + "/placement.kubernetes-fleet.io_clusterstagedupdatestrategies.yaml":             true,
-				crdPath + "/placement.kubernetes-fleet.io_resourceenvelopes.yaml":                         true,
-				crdPath + "/placement.kubernetes-fleet.io_resourceoverrides.yaml":                         true,
-				crdPath + "/placement.kubernetes-fleet.io_resourceoverridesnapshots.yaml":                 true,
-				crdPath + "/placement.kubernetes-fleet.io_works.yaml":                                     true,
-				crdPath + "/multicluster.x-k8s.io_clusterprofiles.yaml":                                   true,
+			wantedCRDNames: []string{
+				"memberclusters.cluster.kubernetes-fleet.io",
+				"internalmemberclusters.cluster.kubernetes-fleet.io",
+				"clusterapprovalrequests.placement.kubernetes-fleet.io",
+				"clusterresourcebindings.placement.kubernetes-fleet.io",
+				"clusterresourceenvelopes.placement.kubernetes-fleet.io",
+				"clusterresourceplacements.placement.kubernetes-fleet.io",
+				"clusterresourceoverrides.placement.kubernetes-fleet.io",
+				"clusterresourceoverridesnapshots.placement.kubernetes-fleet.io",
+				"clusterresourceplacementdisruptionbudgets.placement.kubernetes-fleet.io",
+				"clusterresourceplacementevictions.placement.kubernetes-fleet.io",
+				"clusterresourcesnapshots.placement.kubernetes-fleet.io",
+				"clusterschedulingpolicysnapshots.placement.kubernetes-fleet.io",
+				"clusterstagedupdateruns.placement.kubernetes-fleet.io",
+				"clusterstagedupdatestrategies.placement.kubernetes-fleet.io",
+				"resourcebindings.placement.kubernetes-fleet.io",
+				"resourceenvelopes.placement.kubernetes-fleet.io",
+				"resourceoverrides.placement.kubernetes-fleet.io",
+				"resourceoverridesnapshots.placement.kubernetes-fleet.io",
+				"resourceplacements.placement.kubernetes-fleet.io",
+				"resourcesnapshots.placement.kubernetes-fleet.io",
+				"schedulingpolicysnapshots.placement.kubernetes-fleet.io",
+				"works.placement.kubernetes-fleet.io",
+				"clusterprofiles.multicluster.x-k8s.io",
 			},
 			wantError: false,
 		},
 		{
 			name: "member mode v1beta1 with actual directory",
 			mode: "member",
-			wantedCRDFiles: map[string]bool{
-				crdPath + "/placement.kubernetes-fleet.io_appliedworks.yaml": true,
+			wantedCRDNames: []string{
+				"appliedworks.placement.kubernetes-fleet.io",
 			},
 			wantError: false,
 		},
 	}
 
 	for _, tt := range tests {
+		scheme := runtime.NewScheme()
+		if err := apiextensionsv1.AddToScheme(scheme); err != nil {
+			t.Fatalf("Failed to add apiextensions scheme: %v", err)
+		}
 		t.Run(tt.name, func(t *testing.T) {
 			// Call the function.
-			gotCRDFiles, err := CollectCRDFileNames(crdPath, tt.mode)
+			gotCRDs, err := CollectCRDs(crdPath, tt.mode, scheme)
 			if (err != nil) != tt.wantError {
-				t.Errorf("collectCRDFileNames() error = %v, wantError %v", err, tt.wantError)
+				t.Errorf("collectCRDs() error = %v, wantError %v", err, tt.wantError)
 			}
-			if diff := cmp.Diff(tt.wantedCRDFiles, gotCRDFiles); diff != "" {
-				t.Errorf("removeWaitTimeFromUpdateRunStatus() mismatch (-want +got):\n%s", diff)
+			gotCRDNames := make([]string, len(gotCRDs))
+			for i, crd := range gotCRDs {
+				gotCRDNames[i] = crd.Name
+			}
+			// Sort the names for comparison.
+			if diff := cmp.Diff(tt.wantedCRDNames, gotCRDNames, cmpopts.SortSlices(lessFunc)); diff != "" {
+				t.Errorf("CRD names mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
