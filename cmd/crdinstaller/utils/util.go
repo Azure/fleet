@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,7 +33,7 @@ const (
 )
 
 var (
-	hubCRD = map[string]bool{
+	multiclusterCRD = map[string]bool{
 		"multicluster.x-k8s.io_clusterprofiles.yaml": true,
 	}
 	memberCRD = map[string]bool{
@@ -112,18 +113,17 @@ func CollectCRDs(crdDirectoryPath, mode string, scheme *runtime.Scheme) ([]apiex
 			return err
 		}
 
-		// For hub mode, only collect CRDs that are in fleet-placement, fleet-cluster categories.
+		// For hub mode, only collect CRDs whose group has substring kubernetes-fleet.io.
 		if mode == "hub" {
-			if hubCRD[crdFileName] {
-				// special case for hub CRD that is not in any category.
+			if multiclusterCRD[crdFileName] {
+				// special case for multicluster external CRD in hub cluster.
 				crdsToInstall = append(crdsToInstall, *crd)
 				return nil
 			}
-			categories := crd.Spec.Names.Categories
-			for _, category := range categories {
-				if (category == "fleet-placement" || category == "fleet-cluster") && !memberCRD[crdFileName] {
-					crdsToInstall = append(crdsToInstall, *crd)
-				}
+			group := crd.Spec.Group
+			// Check if the group contains "kubernetes-fleet.io" substring.
+			if strings.Contains(group, "kubernetes-fleet.io") && !memberCRD[crdFileName] {
+				crdsToInstall = append(crdsToInstall, *crd)
 			}
 		}
 
