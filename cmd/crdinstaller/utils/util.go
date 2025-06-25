@@ -115,8 +115,8 @@ func CollectCRDs(crdDirectoryPath, mode string, scheme *runtime.Scheme) ([]apiex
 
 		// For hub mode, only collect CRDs whose group has substring kubernetes-fleet.io.
 		if mode == "hub" {
+			// special case for multicluster external CRD in hub cluster.
 			if multiclusterCRD[crdFileName] {
-				// special case for multicluster external CRD in hub cluster.
 				crdsToInstall = append(crdsToInstall, *crd)
 				return nil
 			}
