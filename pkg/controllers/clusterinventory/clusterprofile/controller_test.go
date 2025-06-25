@@ -159,13 +159,13 @@ func TestSyncClusterProfileCondition(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			reconciler.syncClusterProfileCondition(tt.memberCluster, tt.clusterProfile)
 			condition := meta.FindStatusCondition(tt.clusterProfile.Status.Conditions, clusterinventory.ClusterConditionControlPlaneHealthy)
-			if condition == nil {
+			if condition == nil { //nolint: staticcheck // false positive SA5011: possible nil pointer dereference
 				t.Fatalf("expected condition to be set, but it was not")
 			}
-			if condition.Status != tt.expectedConditionStatus {
+			if condition.Status != tt.expectedConditionStatus { //nolint: staticcheck // false positive SA5011: possible nil pointer dereference
 				t.Errorf("test case `%s` failed, expected condition status %v, got %v", tt.name, tt.expectedConditionStatus, condition.Status)
 			}
-			if condition.Reason != tt.expectedConditionReason {
+			if condition.Reason != tt.expectedConditionReason { //nolint: staticcheck // false positive SA5011: possible nil pointer dereference
 				t.Errorf("test case `%s` failed, expected condition reason %v, got %v", tt.name, tt.expectedConditionReason, condition.Reason)
 			}
 		})
