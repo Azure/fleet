@@ -87,6 +87,8 @@ func NewExpectedBehaviorError(err error) error {
 // NewAPIServerError returns error types when accessing data from cache or API server.
 func NewAPIServerError(fromCache bool, err error) error {
 	if err != nil {
+		// The func may return other unexpected runtime errors other than API server errors.
+		// https://github.com/kubernetes-sigs/controller-runtime/blob/main/pkg/client/client.go#L334-L339
 		if fromCache && isUnexpectedCacheError(err) {
 			return NewUnexpectedBehaviorError(err)
 		}
@@ -98,8 +100,9 @@ func NewAPIServerError(fromCache bool, err error) error {
 
 func isUnexpectedCacheError(err error) bool {
 	// may need to add more error code based on the production
-	// Cache will return notFound for GET.
-	return !apierrors.IsNotFound(err)
+	// When the cache is missed, it will query API server and return API server errors.
+	var statusErr *apierrors.StatusError
+	return !errors.Is(err, context.Canceled) && !errors.As(err, &statusErr) && !errors.Is(err, context.DeadlineExceeded)
 }
 
 // NewUserError returns ErrUserError type error when err is not nil.

@@ -203,10 +203,10 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		return ctrl.Result{}, err
 	}
 
-	latestResourceSnapshot, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, envelopeObjCount,
+	res, latestResourceSnapshot, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, envelopeObjCount,
 		&fleetv1beta1.ResourceSnapshotSpec{SelectedResources: selectedResources}, int(revisionLimit))
-	if err != nil {
-		return ctrl.Result{}, err
+	if err != nil || res.Requeue {
+		return res, err
 	}
 
 	// isClusterScheduled is to indicate whether we need to requeue the CRP request to track the rollout status.
@@ -426,18 +426,21 @@ func (r *Reconciler) deleteRedundantResourceSnapshots(ctx context.Context, crp *
 	return nil
 }
 
-func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, envelopeObjCount int, resourceSnapshotSpec *fleetv1beta1.ResourceSnapshotSpec, revisionHistoryLimit int) (*fleetv1beta1.ClusterResourceSnapshot, error) {
+// getOrCreateClusterResourceSnapshot gets or creates a clusterResourceSnapshot for the given clusterResourcePlacement.
+// It returns the latest clusterResourceSnapshot if it exists and is up to date, otherwise it creates a new one.
+// It also returns the ctrl.Result to indicate whether the request should be requeued or not.
+func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, envelopeObjCount int, resourceSnapshotSpec *fleetv1beta1.ResourceSnapshotSpec, revisionHistoryLimit int) (ctrl.Result, *fleetv1beta1.ClusterResourceSnapshot, error) {
 	resourceHash, err := resource.HashOf(resourceSnapshotSpec)
 	crpKObj := klog.KObj(crp)
 	if err != nil {
 		klog.ErrorS(err, "Failed to generate resource hash of crp", "clusterResourcePlacement", crpKObj)
-		return nil, controller.NewUnexpectedBehaviorError(err)
+		return ctrl.Result{}, nil, controller.NewUnexpectedBehaviorError(err)
 	}
 
 	// latestResourceSnapshotIndex should be -1 when there is no snapshot.
 	latestResourceSnapshot, latestResourceSnapshotIndex, err := r.lookupLatestResourceSnapshot(ctx, crp)
 	if err != nil {
-		return nil, err
+		return ctrl.Result{}, nil, err
 	}
 
 	latestResourceSnapshotHash := ""
@@ -446,12 +449,12 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 		latestResourceSnapshotHash, err = parseResourceGroupHashFromAnnotation(latestResourceSnapshot)
 		if err != nil {
 			klog.ErrorS(err, "Failed to get the ResourceGroupHashAnnotation", "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
-			return nil, controller.NewUnexpectedBehaviorError(err)
+			return ctrl.Result{}, nil, controller.NewUnexpectedBehaviorError(err)
 		}
 		numberOfSnapshots, err = annotations.ExtractNumberOfResourceSnapshotsFromResourceSnapshot(latestResourceSnapshot)
 		if err != nil {
 			klog.ErrorS(err, "Failed to get the NumberOfResourceSnapshotsAnnotation", "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
-			return nil, controller.NewUnexpectedBehaviorError(err)
+			return ctrl.Result{}, nil, controller.NewUnexpectedBehaviorError(err)
 		}
 	}
 
@@ -463,7 +466,7 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 	resourceSnapshotStartIndex := 0
 	if latestResourceSnapshot != nil && latestResourceSnapshotHash == resourceHash {
 		if err := r.ensureLatestResourceSnapshot(ctx, latestResourceSnapshot); err != nil {
-			return nil, err
+			return ctrl.Result{}, nil, err
 		}
 		// check to see all that the master cluster resource snapshot and sub-indexed snapshots belonging to the same group index exists.
 		latestGroupResourceLabelMatcher := client.MatchingLabels{
@@ -474,11 +477,11 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 		if err := r.Client.List(ctx, resourceSnapshotList, latestGroupResourceLabelMatcher); err != nil {
 			klog.ErrorS(err, "Failed to list the latest group clusterResourceSnapshots associated with the clusterResourcePlacement",
 				"clusterResourcePlacement", crp.Name)
-			return nil, controller.NewAPIServerError(true, err)
+			return ctrl.Result{}, nil, controller.NewAPIServerError(true, err)
 		}
 		if len(resourceSnapshotList.Items) == numberOfSnapshots {
 			klog.V(2).InfoS("ClusterResourceSnapshots have not changed", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
-			return latestResourceSnapshot, nil
+			return ctrl.Result{}, latestResourceSnapshot, nil
 		}
 		// we should not create a new master cluster resource snapshot.
 		shouldCreateNewMasterClusterSnapshot = false
@@ -490,14 +493,22 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 	// mark the last resource snapshot as inactive if it is different from what we have now or 3) when some
 	// sub-indexed cluster resource snapshots belonging to the same group have not been created, the master
 	// cluster resource snapshot should exist and be latest.
-	if latestResourceSnapshot != nil &&
-		latestResourceSnapshotHash != resourceHash &&
-		latestResourceSnapshot.Labels[fleetv1beta1.IsLatestSnapshotLabel] == strconv.FormatBool(true) {
+	if latestResourceSnapshot != nil && latestResourceSnapshotHash != resourceHash && latestResourceSnapshot.Labels[fleetv1beta1.IsLatestSnapshotLabel] == strconv.FormatBool(true) {
+		// When the latest resource snapshot without the isLastest label, it means it fails to create the new
+		// resource snapshot in the last reconcile and we don't need to check and delay the request.
+		if since := time.Since(latestResourceSnapshot.CreationTimestamp.Time); since < r.ResourceSnapshotCreationInterval {
+			// If the latest resource snapshot is created less than configured the resourceSnapshotCreationInterval,
+			//  requeue the request to avoid too frequent update.
+			klog.V(2).InfoS("The latest resource snapshot is just created, skipping the update", "clusterResourcePlacement", crpKObj,
+				"clusterResourceSnapshot", klog.KObj(latestResourceSnapshot), "creationTime", latestResourceSnapshot.CreationTimestamp, "configuredResourceSnapshotCreationInterval", r.ResourceSnapshotCreationInterval, "afterDuration", r.ResourceSnapshotCreationInterval-since)
+			return ctrl.Result{Requeue: true, RequeueAfter: r.ResourceSnapshotCreationInterval - since}, nil, nil
+		}
+
 		// set the latest label to false first to make sure there is only one or none active resource snapshot
 		latestResourceSnapshot.Labels[fleetv1beta1.IsLatestSnapshotLabel] = strconv.FormatBool(false)
 		if err := r.Client.Update(ctx, latestResourceSnapshot); err != nil {
 			klog.ErrorS(err, "Failed to set the isLatestSnapshot label to false", "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
-			return nil, controller.NewUpdateIgnoreConflictError(err)
+			return ctrl.Result{}, nil, controller.NewUpdateIgnoreConflictError(err)
 		}
 		klog.V(2).InfoS("Marked the existing clusterResourceSnapshot as inactive", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
 	}
@@ -507,7 +518,7 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 		// delete redundant snapshot revisions before creating a new master cluster resource snapshot to guarantee that the number of snapshots
 		// won't exceed the limit.
 		if err := r.deleteRedundantResourceSnapshots(ctx, crp, revisionHistoryLimit); err != nil {
-			return nil, err
+			return ctrl.Result{}, nil, err
 		}
 		latestResourceSnapshotIndex++
 	}
@@ -522,7 +533,7 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 			resourceSnapshot = buildSubIndexResourceSnapshot(latestResourceSnapshotIndex, i-1, crp.Name, selectedResourcesList[i])
 		}
 		if err = r.createResourceSnapshot(ctx, crp, resourceSnapshot); err != nil {
-			return nil, err
+			return ctrl.Result{}, nil, err
 		}
 	}
 	// shouldCreateNewMasterClusterSnapshot is used here to be defensive in case of the regression.
@@ -530,10 +541,10 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 		resourceSnapshot = buildMasterClusterResourceSnapshot(latestResourceSnapshotIndex, 1, envelopeObjCount, crp.Name, resourceHash, []fleetv1beta1.ResourceContent{})
 		latestResourceSnapshot = resourceSnapshot
 		if err = r.createResourceSnapshot(ctx, crp, resourceSnapshot); err != nil {
-			return nil, err
+			return ctrl.Result{}, nil, err
 		}
 	}
-	return latestResourceSnapshot, nil
+	return ctrl.Result{}, latestResourceSnapshot, nil
 }
 
 // buildMasterClusterResourceSnapshot builds and returns the master cluster resource snapshot for the latest resource snapshot index and selected resources.

@@ -112,6 +112,8 @@ var (
 
 	allMemberClusters     []*framework.Cluster
 	allMemberClusterNames = []string{}
+
+	resourceSnapshotCreationInterval time.Duration
 )
 
 var (
@@ -243,6 +245,7 @@ var (
 	}
 
 	updateRunStatusCmpOption = cmp.Options{
+		cmpopts.SortSlices(lessFuncCondition),
 		utils.IgnoreConditionLTTAndMessageFields,
 		cmpopts.IgnoreFields(placementv1beta1.StageUpdatingStatus{}, "StartTime", "EndTime"),
 		cmpopts.EquateEmpty(),
@@ -300,6 +303,16 @@ func beforeSuiteForAllProcesses() {
 
 	// Check if the required environment variable, which specifies the path to kubeconfig file, has been set.
 	Expect(os.Getenv(kubeConfigPathEnvVarName)).NotTo(BeEmpty(), "Required environment variable KUBECONFIG is not set")
+
+	resourceSnapshotCreationIntervalEnv := os.Getenv("RESOURCE_SNAPSHOT_CREATION_INTERVAL")
+	if resourceSnapshotCreationIntervalEnv == "" {
+		// If the environment variable is not set, use a default value.
+		resourceSnapshotCreationInterval = 0
+	} else {
+		var err error
+		resourceSnapshotCreationInterval, err = time.ParseDuration(resourceSnapshotCreationIntervalEnv)
+		Expect(err).Should(Succeed(), "failed to parse RESOURCE_SNAPSHOT_CREATION_INTERVAL")
+	}
 
 	// Initialize the cluster objects and their clients.
 	hubCluster = framework.NewCluster(hubClusterName, "", scheme, nil)

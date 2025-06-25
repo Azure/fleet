@@ -410,10 +410,16 @@ func generateTestClusterResourceBindingsAndClusters(policySnapshotIndex int) ([]
 	}
 
 	unscheduledClusters := make([]*clusterv1beta1.MemberCluster, numUnscheduledClusters)
-	for i := range unscheduledClusters {
+	// Half of the unscheduled clusters have old policy snapshot.
+	for i := range numUnscheduledClusters / 2 {
 		unscheduledClusters[i] = generateTestMemberCluster(i, "unscheduled-cluster-"+strconv.Itoa(i), map[string]string{"group": "staging"})
-		// update the policySnapshot name so that these clusters are considered to-be-deleted
+		// Update the policySnapshot name so that these clusters are considered to-be-deleted.
 		resourceBindings[numTargetClusters+i] = generateTestClusterResourceBinding(policySnapshotName+"a", unscheduledClusters[i].Name, placementv1beta1.BindingStateUnscheduled)
+	}
+	// The other half of the unscheduled clusters have latest policy snapshot but still unscheduled.
+	for i := numUnscheduledClusters / 2; i < numUnscheduledClusters; i++ {
+		unscheduledClusters[i] = generateTestMemberCluster(i, "unscheduled-cluster-"+strconv.Itoa(i), map[string]string{"group": "staging"})
+		resourceBindings[numTargetClusters+i] = generateTestClusterResourceBinding(policySnapshotName, unscheduledClusters[i].Name, placementv1beta1.BindingStateUnscheduled)
 	}
 	return resourceBindings, targetClusters, unscheduledClusters
 }

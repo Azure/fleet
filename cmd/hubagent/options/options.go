@@ -104,6 +104,8 @@ type Options struct {
 	PprofPort int
 	// DenyModifyMemberClusterLabels indicates if the member cluster labels cannot be modified by groups (excluding system:masters)
 	DenyModifyMemberClusterLabels bool
+	// ResourceSnapshotCreationInterval is the interval at which resource snapshots are created.
+	ResourceSnapshotCreationInterval time.Duration
 }
 
 // NewOptions builds an empty options.
@@ -115,14 +117,15 @@ func NewOptions() *Options {
 			ResourceNamespace: utils.FleetSystemNamespace,
 			ResourceName:      "136224848560.hub.fleet.azure.com",
 		},
-		MaxConcurrentClusterPlacement: 10,
-		ConcurrentResourceChangeSyncs: 1,
-		MaxFleetSizeSupported:         100,
-		EnableV1Alpha1APIs:            false,
-		EnableClusterInventoryAPIs:    true,
-		EnableStagedUpdateRunAPIs:     true,
-		EnablePprof:                   false,
-		PprofPort:                     6065,
+		MaxConcurrentClusterPlacement:    10,
+		ConcurrentResourceChangeSyncs:    1,
+		MaxFleetSizeSupported:            100,
+		EnableV1Alpha1APIs:               false,
+		EnableClusterInventoryAPIs:       true,
+		EnableStagedUpdateRunAPIs:        true,
+		EnablePprof:                      false,
+		PprofPort:                        6065,
+		ResourceSnapshotCreationInterval: 1 * time.Minute,
 	}
 }
 
@@ -169,6 +172,7 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.BoolVar(&o.EnablePprof, "enable-pprof", false, "If set, the pprof profiling is enabled.")
 	flags.IntVar(&o.PprofPort, "pprof-port", 6065, "The port for pprof profiling.")
 	flags.BoolVar(&o.DenyModifyMemberClusterLabels, "deny-modify-member-cluster-labels", false, "If set, users not in the system:masters cannot modify member cluster labels.")
+	flags.DurationVar(&o.ResourceSnapshotCreationInterval, "resource-snapshot-creation-interval", 1*time.Minute, "The interval at which resource snapshots are created.")
 
 	o.RateLimiterOpts.AddFlags(flags)
 }

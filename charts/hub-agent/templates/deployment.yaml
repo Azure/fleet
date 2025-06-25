@@ -43,6 +43,7 @@ spec:
             - --hub-api-burst={{ .Values.hubAPIBurst }}
             - --force-delete-wait-time={{ .Values.forceDeleteWaitTime }}
             - --cluster-unhealthy-threshold={{ .Values.clusterUnhealthyThreshold }}
+            - --resource-snapshot-creation-interval={{ .Values.resourceSnapshotCreationInterval }}
           ports:
             - name: metrics
               containerPort: 8080
