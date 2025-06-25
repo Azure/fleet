@@ -6,10 +6,12 @@ endif
 HUB_AGENT_IMAGE_VERSION ?= $(TAG)
 MEMBER_AGENT_IMAGE_VERSION ?= $(TAG)
 REFRESH_TOKEN_IMAGE_VERSION ?= $(TAG)
+CRD_INSTALLER_IMAGE_VERSION ?= $(TAG)
 
 HUB_AGENT_IMAGE_NAME ?= hub-agent
 MEMBER_AGENT_IMAGE_NAME ?= member-agent
-REFRESH_TOKEN_IMAGE_NAME := refresh-token
+REFRESH_TOKEN_IMAGE_NAME ?= refresh-token
+CRD_INSTALLER_IMAGE_NAME ?= crd-installer
 
 KUBECONFIG ?= $(HOME)/.kube/config
 HUB_SERVER_URL ?= https://172.19.0.2:6443
@@ -48,7 +50,7 @@ ENVTEST_K8S_VERSION = 1.30.0
 # ENVTEST_VER is the version of the ENVTEST binary
 ENVTEST_VER = v0.0.0-20240317073005-bd9ea79e8d18
 ENVTEST_BIN := setup-envtest
-ENVTEST :=  $(abspath $(TOOLS_BIN_DIR)/$(ENVTEST_BIN)-$(ENVTEST_VER))
+ENVTEST := $(abspath $(TOOLS_BIN_DIR)/$(ENVTEST_BIN)-$(ENVTEST_VER))
 
 # Scripts
 GO_INSTALL := ./hack/go-install.sh
@@ -100,7 +102,7 @@ staticcheck: $(STATICCHECK)
 	$(STATICCHECK) ./...
 
 .PHONY: fmt
-fmt:  $(GOIMPORTS) ## Run go fmt against code.
+fmt: $(GOIMPORTS) ## Run go fmt against code.
 	go fmt ./...
 	$(GOIMPORTS) -local go.goms.io/fleet -w $$(go list -f {{.Dir}} ./...)
 
@@ -121,17 +123,18 @@ create-member-kind-cluster:
 	kind create cluster --name $(MEMBER_KIND_CLUSTER_NAME) --image=$(KIND_IMAGE) --config=$(CLUSTER_CONFIG) --kubeconfig=$(KUBECONFIG)
 
 load-hub-docker-image:
-	kind load docker-image  --name $(HUB_KIND_CLUSTER_NAME) $(REGISTRY)/$(HUB_AGENT_IMAGE_NAME):$(HUB_AGENT_IMAGE_VERSION)
+	kind load docker-image --name $(HUB_KIND_CLUSTER_NAME) $(REGISTRY)/$(HUB_AGENT_IMAGE_NAME):$(HUB_AGENT_IMAGE_VERSION)
 
 load-member-docker-image:
-	kind load docker-image  --name $(MEMBER_KIND_CLUSTER_NAME) $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION)
+	kind load docker-image --name $(MEMBER_KIND_CLUSTER_NAME) $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION)
+	kind load docker-image --name $(MEMBER_KIND_CLUSTER_NAME) $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION)
 
 ## --------------------------------------
 ## test
 ## --------------------------------------
 
 .PHONY: test
-test: manifests generate fmt vet local-unit-test integration-test## Run tests.
+test: manifests generate fmt vet local-unit-test integration-test ## Run tests.
 
 ##
 ## workaround to bypass the pkg/controllers/workv1alpha1 tests failure
@@ -148,7 +151,7 @@ integration-test: $(ENVTEST) ## Run tests.
 	export CGO_ENABLED=1 && \
 	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" && \
 	ginkgo -v -p --race --cover --coverpkg=./pkg/scheduler/... ./test/scheduler && \
-	ginkgo -v -p --race --cover --coverpkg=./... ./test/apis/... && \
+	ginkgo -v -p --race --cover --coverpkg=./... ./test/apis/... ./test/crdinstaller && \
 	go test ./test/integration/... -coverpkg=./...  -race -coverprofile=it-coverage.xml -v
 
 ## local tests & e2e tests
@@ -156,18 +159,18 @@ integration-test: $(ENVTEST) ## Run tests.
 install-hub-agent-helm:
 	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
 	helm install hub-agent ./charts/hub-agent/ \
-    --set image.pullPolicy=Never \
-    --set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME) \
-    --set image.tag=$(HUB_AGENT_IMAGE_VERSION) \
-    --set logVerbosity=5 \
-    --set namespace=fleet-system \
-    --set enableWebhook=true \
-    --set webhookServiceName=fleetwebhook \
-    --set webhookClientConnectionType=service \
-    --set enableV1Alpha1APIs=true \
-    --set enableV1Beta1APIs=false \
-    --set enableClusterInventoryAPI=true \
-    --set logFileMaxSize=1000000
+	--set image.pullPolicy=Never \
+	--set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME) \
+	--set image.tag=$(HUB_AGENT_IMAGE_VERSION) \
+	--set logVerbosity=5 \
+	--set namespace=fleet-system \
+	--set enableWebhook=true \
+	--set webhookServiceName=fleetwebhook \
+	--set webhookClientConnectionType=service \
+	--set enableV1Alpha1APIs=true \
+	--set enableV1Beta1APIs=false \
+	--set enableClusterInventoryAPI=true \
+	--set logFileMaxSize=1000000
 
 .PHONY: e2e-v1alpha1-hub-kubeconfig-secret
 e2e-v1alpha1-hub-kubeconfig-secret:
@@ -187,12 +190,13 @@ install-member-agent-helm: install-hub-agent-helm e2e-v1alpha1-hub-kubeconfig-se
 	--set config.hubURL=$$HUB_SERVER_URL \
 	--set image.repository=$(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME) \
 	--set image.tag=$(MEMBER_AGENT_IMAGE_VERSION) \
-    --set refreshtoken.repository=$(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME) \
-    --set refreshtoken.tag=$(REFRESH_TOKEN_IMAGE_VERSION) \
-    --set image.pullPolicy=Never --set refreshtoken.pullPolicy=Never \
-    --set config.memberClusterName="kind-$(MEMBER_KIND_CLUSTER_NAME)" \
-    --set logVerbosity=5 \
-    --set namespace=fleet-system
+	--set refreshtoken.repository=$(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME) \
+	--set refreshtoken.tag=$(REFRESH_TOKEN_IMAGE_VERSION) \
+	--set image.pullPolicy=Never \
+	--set refreshtoken.pullPolicy=Never \
+	--set config.memberClusterName="kind-$(MEMBER_KIND_CLUSTER_NAME)" \
+	--set logVerbosity=5 \
+	--set namespace=fleet-system
 	# to make sure member-agent reads the token file.
 	kubectl delete pod --all -n fleet-system
 
@@ -206,7 +210,7 @@ run-e2e-v1alpha1: build-e2e-v1alpha1
 create-kind-cluster: create-hub-kind-cluster create-member-kind-cluster install-helm
 
 .PHONY: install-helm
-install-helm:  load-hub-docker-image load-member-docker-image install-member-agent-helm
+install-helm: load-hub-docker-image load-member-docker-image install-member-agent-helm
 
 .PHONY: e2e-tests-v1alpha1
 e2e-tests-v1alpha1: create-kind-cluster run-e2e-v1alpha1
@@ -250,6 +254,7 @@ generate: $(CONTROLLER_GEN)
 build: generate fmt vet ## Build agent binaries.
 	go build -o bin/hubagent cmd/hubagent/main.go
 	go build -o bin/memberagent cmd/memberagent/main.go
+	go build -o bin/crdinstaller cmd/crdinstaller/main.go
 
 .PHONY: run-hubagent
 run-hubagent: manifests generate fmt vet ## Run a controllers from your host.
@@ -258,6 +263,10 @@ run-hubagent: manifests generate fmt vet ## Run a controllers from your host.
 .PHONY: run-memberagent
 run-memberagent: manifests generate fmt vet ## Run a controllers from your host.
 	go run ./cmd/memberagent/main.go
+
+.PHONY: run-crdinstaller
+run-crdinstaller: manifests generate fmt vet ## Run CRD installer from your host.
+	go run ./cmd/crdinstaller/main.go --mode=$(MODE)
 
 ## --------------------------------------
 ## Images
@@ -270,7 +279,7 @@ BUILDKIT_VERSION ?= v0.18.1
 
 .PHONY: push
 push:
-	$(MAKE) OUTPUT_TYPE="type=registry" docker-build-hub-agent docker-build-member-agent docker-build-refresh-token
+	$(MAKE) OUTPUT_TYPE="type=registry" docker-build-hub-agent docker-build-member-agent docker-build-refresh-token docker-build-crd-installer
 
 # By default, docker buildx create will pull image moby/buildkit:buildx-stable-1 and hit the too many requests error
 .PHONY: docker-buildx-builder
@@ -307,6 +316,15 @@ docker-build-refresh-token: docker-buildx-builder
 		--platform="linux/amd64" \
 		--pull \
 		--tag $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) .
+
+.PHONY: docker-build-crd-installer
+docker-build-crd-installer: docker-buildx-builder
+	docker buildx build \
+		--file docker/crd-installer.Dockerfile \
+		--output=$(OUTPUT_TYPE) \
+		--platform="linux/amd64" \
+		--pull \
+		--tag $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION) .
 
 ## -----------------------------------
 ## Cleanup
