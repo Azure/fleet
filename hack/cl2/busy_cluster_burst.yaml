@@ -1,0 +1,122 @@
+name: busy_cluster_burst_test
+
+{{$duration := "10m"}}
+{{$count := 1000}}
+
+namespace:
+  number: 2
+  prefix: busy-cluster-burst-test-ns
+
+tuningSets:
+- name: Uniform100qps
+  qpsLoad:
+    qps: 100
+
+steps:
+- name: Create CRPs
+  phases:
+  - replicasPerNamespace: 2
+    tuningSet: Uniform100qps
+    objectBundle:
+    - basename: test-crp 
+      objectTemplatePath: "manifests/test-crp.yaml"
+- name: Create ConfigMaps
+  phases:
+  - namespaceRange:
+      min: 1
+      max: 2
+    replicasPerNamespace: {{$count}}
+    tuningSet: Uniform100qps
+    objectBundle:
+    - basename: test-configmap 
+      objectTemplatePath: "manifests/test-configmap.yaml"
+- name: Wait for CRPs to be Ready
+  measurements:
+  - Identifier: WaitForGenericK8sObjects
+    Method: WaitForGenericK8sObjects
+    Params:
+      objectGroup: placement.kubernetes-fleet.io
+      objectVersion: v1beta1
+      objectResource: clusterresourceplacements
+      timeout: {{$duration}}
+      successfulConditions: 
+      - ClusterResourcePlacementAvailable=True
+      failedConditions:
+      - ClusterResourcePlacementAvailable=False
+      minDesiredObjectCount: 2
+      maxFailedObjectCount: 0
+- name: Delete ConfigMaps
+  phases:
+  - namespaceRange:
+      min: 1
+      max: 2
+    replicasPerNamespace: 0
+    tuningSet: Uniform100qps
+    objectBundle:
+    - basename: test-configmap 
+      objectTemplatePath: "manifests/test-configmap.yaml"
+- name: Wait for CRPs to be Ready
+  measurements:
+  - Identifier: WaitForGenericK8sObjects
+    Method: WaitForGenericK8sObjects
+    Params:
+      objectGroup: placement.kubernetes-fleet.io
+      objectVersion: v1beta1
+      objectResource: clusterresourceplacements
+      timeout: {{$duration}}
+      successfulConditions: 
+      - ClusterResourcePlacementAvailable=True
+      failedConditions:
+      - ClusterResourcePlacementAvailable=False
+      minDesiredObjectCount: 2
+      maxFailedObjectCount: 0
+- name: Create ConfigMaps
+  phases:
+  - namespaceRange:
+      min: 1
+      max: 2
+    replicasPerNamespace: {{$count}}
+    tuningSet: Uniform100qps
+    objectBundle:
+    - basename: test-configmap 
+      objectTemplatePath: "manifests/test-configmap.yaml"
+- name: Wait for CRPs to be Ready
+  measurements:
+  - Identifier: WaitForGenericK8sObjects
+    Method: WaitForGenericK8sObjects
+    Params:
+      objectGroup: placement.kubernetes-fleet.io
+      objectVersion: v1beta1
+      objectResource: clusterresourceplacements
+      timeout: {{$duration}}
+      successfulConditions: 
+      - ClusterResourcePlacementAvailable=True
+      failedConditions:
+      - ClusterResourcePlacementAvailable=False
+      minDesiredObjectCount: 2
+      maxFailedObjectCount: 0
+- name: Delete ConfigMaps
+  phases:
+  - namespaceRange:
+      min: 1
+      max: 2
+    replicasPerNamespace: 0
+    tuningSet: Uniform100qps
+    objectBundle:
+    - basename: test-configmap 
+      objectTemplatePath: "manifests/test-configmap.yaml"
+- name: Wait for CRPs to be Ready
+  measurements:
+  - Identifier: WaitForGenericK8sObjects
+    Method: WaitForGenericK8sObjects
+    Params:
+      objectGroup: placement.kubernetes-fleet.io
+      objectVersion: v1beta1
+      objectResource: clusterresourceplacements
+      timeout: {{$duration}}
+      successfulConditions: 
+      - ClusterResourcePlacementAvailable=True
+      failedConditions:
+      - ClusterResourcePlacementAvailable=False
+      minDesiredObjectCount: 2
+      maxFailedObjectCount: 0

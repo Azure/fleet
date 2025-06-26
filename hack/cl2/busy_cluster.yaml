@@ -1,0 +1,107 @@
+name: busy_cluster_test
+
+{{$duration := "30m"}}
+{{$count := 1}}
+{{$namespaceCount := 1000}}
+
+namespace:
+  number: {{$namespaceCount}}
+  prefix: busy-cluster-test-ns
+
+tuningSets:
+- name: Uniform10qps
+  qpsLoad:
+    qps: 10
+- name: SteppedLoad
+  steppedLoad:
+    burstSize: 20
+    stepDelay: 30s
+
+steps:
+- name: Create CRPs
+  phases:
+  - replicasPerNamespace: {{$namespaceCount}}
+    tuningSet: Uniform10qps
+    objectBundle:
+    - basename: test-crp 
+      objectTemplatePath: "manifests/test-crp.yaml"
+- name: Wait for CRPs to be Ready
+  measurements:
+  - Identifier: WaitForGenericK8sObjects
+    Method: WaitForGenericK8sObjects
+    Params:
+      objectGroup: placement.kubernetes-fleet.io
+      objectVersion: v1beta1
+      objectResource: clusterresourceplacements
+      timeout: {{$duration}}
+      successfulConditions: 
+      - ClusterResourcePlacementAvailable=True
+      failedConditions:
+      - ClusterResourcePlacementAvailable=False
+      minDesiredObjectCount: {{$namespaceCount}}
+      maxFailedObjectCount: 0
+- module:
+    path: /modules/configmaps.yaml
+    params:
+      namespaceCount: {{$namespaceCount}}
+      configmapCount: {{$count}}
+- module:
+    path: /modules/configmaps.yaml
+    params:
+      namespaceCount: {{$namespaceCount}}
+      configmapCount: {{MultiplyInt $count 2}}
+- module:
+    path: /modules/configmaps.yaml
+    params:
+      namespaceCount: {{$namespaceCount}}
+      configmapCount: {{MultiplyInt $count 3}}
+- module:
+    path: /modules/configmaps.yaml
+    params:
+      namespaceCount: {{$namespaceCount}}
+      configmapCount: {{MultiplyInt $count 4}}
+- module:
+    path: /modules/configmaps.yaml
+    params:
+      namespaceCount: {{$namespaceCount}}
+      configmapCount: {{MultiplyInt $count 5}}
+- module:
+    path: /modules/configmaps.yaml
+    params:
+      namespaceCount: {{$namespaceCount}}
+      configmapCount: {{MultiplyInt $count 6}}
+- module:
+    path: /modules/configmaps.yaml
+    params:
+      namespaceCount: {{$namespaceCount}}
+      configmapCount: {{MultiplyInt $count 7}}
+- module:
+    path: /modules/configmaps.yaml
+    params:
+      namespaceCount: {{$namespaceCount}}
+      configmapCount: {{MultiplyInt $count 8}}
+- module:
+    path: /modules/configmaps.yaml
+    params:
+      namespaceCount: {{$namespaceCount}}
+      configmapCount: {{MultiplyInt $count 9}}
+- module:
+    path: /modules/configmaps.yaml
+    params:
+      namespaceCount: {{$namespaceCount}}
+      configmapCount: {{MultiplyInt $count 10}}
+- name: Wait for CRPs to be Ready
+  measurements:
+  - Identifier: WaitForGenericK8sObjects
+    Method: WaitForGenericK8sObjects
+    Params:
+      objectGroup: placement.kubernetes-fleet.io
+      objectVersion: v1beta1
+      objectResource: clusterresourceplacements
+      timeout: {{$duration}}
+      successfulConditions: 
+      - ClusterResourcePlacementAvailable=True
+      failedConditions:
+      - ClusterResourcePlacementAvailable=False
+      minDesiredObjectCount: {{$namespaceCount}}
+      maxFailedObjectCount: 0
