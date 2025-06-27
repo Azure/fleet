@@ -23,12 +23,12 @@ import (
 // prepareScheduledOrBoundBindingsMap returns a map that allows quick lookup of whether a cluster
 // already has a binding of the scheduled or bound state relevant to the current scheduling
 // cycle.
-func prepareScheduledOrBoundBindingsMap(scheduledOrBoundBindings ...[]*fleetv1beta1.ClusterResourceBinding) map[string]bool {
+func prepareScheduledOrBoundBindingsMap(scheduledOrBoundBindings ...[]fleetv1beta1.BindingObj) map[string]bool {
 	bm := make(map[string]bool)
 
 	for _, bindingSet := range scheduledOrBoundBindings {
 		for _, binding := range bindingSet {
-			bm[binding.Spec.TargetCluster] = true
+			bm[binding.GetBindingSpec().TargetCluster] = true
 		}
 	}
 
@@ -37,11 +37,11 @@ func prepareScheduledOrBoundBindingsMap(scheduledOrBoundBindings ...[]*fleetv1be
 
 // prepareObsoleteBindingsMap returns a map that allows quick lookup of whether a cluster
 // already has an obsolete binding relevant to the current scheduling cycle.
-func prepareObsoleteBindingsMap(obsoleteBindings []*fleetv1beta1.ClusterResourceBinding) map[string]bool {
+func prepareObsoleteBindingsMap(obsoleteBindings []fleetv1beta1.BindingObj) map[string]bool {
 	bm := make(map[string]bool)
 
 	for _, binding := range obsoleteBindings {
-		bm[binding.Spec.TargetCluster] = true
+		bm[binding.GetBindingSpec().TargetCluster] = true
 	}
 
 	return bm

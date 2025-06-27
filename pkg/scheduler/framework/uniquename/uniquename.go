@@ -37,32 +37,32 @@ func minInt(a, b int) int {
 	return b
 }
 
-// NewClusterResourceBindingName returns a unique name for a cluster resource binding in the
+// NewBindingName returns a unique name for a resource binding in the
 // format of DNS label names (RFC 1123). It will be used as a label on the work resource.
 //
 // The name is generated using the following format:
-// * [CRP-NAME] - [TARGET-CLUSTER-NAME] - [RANDOM-SUFFIX]
+// * [PLACEMENT-NAME] - [TARGET-CLUSTER-NAME] - [RANDOM-SUFFIX]
 //
 // Segments will be truncated if necessary.
 //
 // Note that the name generation is, in essence, a best-effort process, though the chances
 // of name collisions are extremely low.
 //
-// In addition, note that this function assumes that both the CRP name and the cluster name
+// In addition, note that this function assumes that both the placement name and the cluster name
 // are valid DNS label names (RFC 1123).
-func NewClusterResourceBindingName(CRPName string, clusterName string) (string, error) {
+func NewBindingName(placementName string, clusterName string) (string, error) {
 	reservedSlots := 2 + uuidLength // 2 dashes + 8 character UUID string
 
 	slotsPerSeg := (validation.DNS1123LabelMaxLength - reservedSlots) / 2
 	uniqueName := fmt.Sprintf("%s-%s-%s",
-		CRPName[:minInt(slotsPerSeg, len(CRPName))],
+		placementName[:minInt(slotsPerSeg, len(placementName))],
 		clusterName[:minInt(slotsPerSeg+1, len(clusterName))],
 		uuid.NewUUID()[:uuidLength],
 	)
 
 	if errs := validation.IsDNS1123Label(uniqueName); len(errs) != 0 {
 		// Do a sanity check here; normally this would not occur.
-		return "", fmt.Errorf("failed to format a unique RFC 1123 label name with CRP name %s, cluster name %s: %v", CRPName, clusterName, errs)
+		return "", fmt.Errorf("failed to format a unique RFC 1123 label name with placement name %s, cluster name %s: %v", placementName, clusterName, errs)
 	}
 	return uniqueName, nil
 }

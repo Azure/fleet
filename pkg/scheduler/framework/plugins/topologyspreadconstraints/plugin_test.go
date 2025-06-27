@@ -28,6 +28,7 @@ import (
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
 var (
@@ -101,7 +102,7 @@ func TestPostBatch(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
-			state := framework.NewCycleState([]clusterv1beta1.MemberCluster{}, []*placementv1beta1.ClusterResourceBinding{})
+			state := framework.NewCycleState([]clusterv1beta1.MemberCluster{}, controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{}))
 
 			limit, status := plugin.PostBatch(ctx, state, tc.policy)
 			if limit != tc.wantLimit {
@@ -323,7 +324,7 @@ func TestPreFilter(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
-			state := framework.NewCycleState(tc.clusters, nil, tc.bindings)
+			state := framework.NewCycleState(tc.clusters, nil, controller.ConvertCRBArrayToBindingObjs(tc.bindings))
 			status := plugin.PreFilter(ctx, state, tc.policy)
 			// It is safe to compare unexported fields here as the struct is owned by the project.
 			if diff := cmp.Diff(status, tc.wantStatus, cmp.AllowUnexported(framework.Status{}), ignoreStatusErrorField); diff != "" {

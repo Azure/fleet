@@ -61,7 +61,7 @@ func countByDomain(clusters []clusterv1beta1.MemberCluster, state framework.Cycl
 	// count.
 
 	// Initialize the special counts with a placeholder value.
-	var smallest, secondSmallest, largest int = -1, -1, -1
+	var smallest, secondSmallest, largest = -1, -1, -1
 	sorted := make([]int, 0, len(counter))
 
 	for _, c := range counter {

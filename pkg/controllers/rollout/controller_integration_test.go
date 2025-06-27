@@ -125,10 +125,10 @@ var _ = Describe("Test the rollout Controller", func() {
 
 			// Prepare bindings of various states.
 			var binding *fleetv1beta1.ClusterResourceBinding
-			switch {
-			case i%3 == 0:
+			switch i % 3 {
+			case 0:
 				binding = generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, resourceSnapshot.Name, clusters[i])
-			case i%3 == 1:
+			case 1:
 				binding = generateClusterResourceBinding(fleetv1beta1.BindingStateBound, resourceSnapshot.Name, clusters[i])
 			default:
 				binding = generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, resourceSnapshot.Name, clusters[i])

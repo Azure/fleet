@@ -24,6 +24,7 @@ import (
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
 // TestCycleStateBasicOps tests the basic ops of a CycleState.
@@ -67,7 +68,9 @@ func TestCycleStateBasicOps(t *testing.T) {
 		},
 	}
 
-	cs := NewCycleState(clusters, obsoleteBindings, scheduledOrBoundBindings)
+	// Convert concrete bindings to interface slices
+
+	cs := NewCycleState(clusters, controller.ConvertCRBArrayToBindingObjs(obsoleteBindings), controller.ConvertCRBArrayToBindingObjs(scheduledOrBoundBindings))
 
 	k, v := "key", "value"
 	cs.Write(StateKey(k), StateValue(v))
@@ -125,7 +128,8 @@ func TestPrepareScheduledOrBoundBindingsMap(t *testing.T) {
 		altClusterName: true,
 	}
 
-	scheduleOrBoundBindingsMap := prepareScheduledOrBoundBindingsMap(scheduled, bound)
+	// Convert concrete bindings to interface slices
+	scheduleOrBoundBindingsMap := prepareScheduledOrBoundBindingsMap(controller.ConvertCRBArrayToBindingObjs(scheduled), controller.ConvertCRBArrayToBindingObjs(bound))
 	if diff := cmp.Diff(scheduleOrBoundBindingsMap, want); diff != "" {
 		t.Errorf("preparedScheduledOrBoundBindingsMap() scheduledOrBoundBindingsMap diff (-got, +want): %s", diff)
 	}
@@ -157,7 +161,8 @@ func TestPrepareObsoleteBindingsMap(t *testing.T) {
 		altClusterName: true,
 	}
 
-	obsoleteBindingsMap := prepareObsoleteBindingsMap(obsolete)
+	// Convert concrete bindings to interface slice
+	obsoleteBindingsMap := prepareObsoleteBindingsMap(controller.ConvertCRBArrayToBindingObjs(obsolete))
 	if diff := cmp.Diff(obsoleteBindingsMap, want); diff != "" {
 		t.Errorf("prepareObsoleteBindingsMap() obsoleteBindingsMap diff (-got, +want): %s", diff)
 	}

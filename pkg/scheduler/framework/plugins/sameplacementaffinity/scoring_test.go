@@ -26,6 +26,7 @@ import (
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
 func TestScore(t *testing.T) {
@@ -72,7 +73,7 @@ func TestScore(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			p := New()
-			state := framework.NewCycleState(nil, tc.obsoleteBindings)
+			state := framework.NewCycleState(nil, controller.ConvertCRBArrayToBindingObjs(tc.obsoleteBindings))
 			cluster := clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,

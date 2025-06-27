@@ -140,7 +140,7 @@ func (c *CycleState) HasObsoleteBindingFor(clusterName string) bool {
 // IsClusterObsolete
 
 // NewCycleState creates a CycleState.
-func NewCycleState(clusters []clusterv1beta1.MemberCluster, obsoleteBindings []*placementv1beta1.ClusterResourceBinding, scheduledOrBoundBindings ...[]*placementv1beta1.ClusterResourceBinding) *CycleState {
+func NewCycleState(clusters []clusterv1beta1.MemberCluster, obsoleteBindings []placementv1beta1.BindingObj, scheduledOrBoundBindings ...[]placementv1beta1.BindingObj) *CycleState {
 	return &CycleState{
 		store:                    sync.Map{},
 		clusters:                 clusters,

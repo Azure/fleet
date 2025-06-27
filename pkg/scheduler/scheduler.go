@@ -19,12 +19,13 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/record"
@@ -135,13 +136,20 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 	// Retrieve the placement object (either ClusterResourcePlacement or ResourcePlacement).
 	placement, err := controller.FetchPlacementFromKey(ctx, s.client, placementName)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if apiErrors.IsNotFound(err) {
 			// The placement has been gone before the scheduler gets a chance to
 			// process it; normally this would not happen as sources would not enqueue any placement that
 			// has been marked for deletion but does not have the scheduler cleanup finalizer to
 			// the work queue. Such placements needs no further processing any way though, as the absence
 			// of the cleanup finalizer implies that bindings derived from the placement are no longer present.
 			klog.ErrorS(err, "placement is already deleted", "placement", placementRef)
+			return
+		}
+		if errors.Is(err, controller.ErrUnexpectedBehavior) {
+			// The placement is in an unexpected state; this is a scheduler-side error, and
+			// Note that this is a scheduler-side error, so it does not return an error to the caller.
+			// Raise an alert for it.
+			klog.ErrorS(err, "Placement is in an unexpected state", "placement", placementRef)
 			return
 		}
 		// Wrap the error for metrics; this method does not return an error.
@@ -158,6 +166,10 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 		if controllerutil.ContainsFinalizer(placement, fleetv1beta1.SchedulerCleanupFinalizer) {
 			if err := s.cleanUpAllBindingsFor(ctx, placement); err != nil {
 				klog.ErrorS(err, "Failed to clean up all bindings for placement", "placement", placementRef)
+				if errors.Is(err, controller.ErrUnexpectedBehavior) {
+					// The placement is in an unexpected state, don't requeue it.
+					return
+				}
 				// Requeue for later processing.
 				s.queue.AddRateLimited(placementName)
 				return
@@ -198,12 +210,20 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 	// Note that the scheduler will enter this cycle as long as the placement is active and an active
 	// policy snapshot has been produced.
 	cycleStartTime := time.Now()
-	res, err := s.framework.RunSchedulingCycleFor(ctx, placement.GetName(), latestPolicySnapshot)
+	res, err := s.framework.RunSchedulingCycleFor(ctx, controller.GetPlacementKeyFromObj(placement), latestPolicySnapshot)
 	if err != nil {
-		klog.ErrorS(err, "Failed to run scheduling cycle", "placement", placementRef)
+		if errors.Is(err, controller.ErrUnexpectedBehavior) {
+			// The placement is in an unexpected state; this is a scheduler-side error, and
+			// Note that this is a scheduler-side error, so it does not return an error to the caller.
+			// Raise an alert for it.
+			klog.ErrorS(err, "Placement is in an unexpected state", "placement", placementRef)
+			observeSchedulingCycleMetrics(cycleStartTime, true, false)
+			return
+		}
 		// Requeue for later processing.
+		klog.ErrorS(err, "Failed to run scheduling cycle", "placement", placementRef)
 		s.queue.AddRateLimited(placementName)
-		observeSchedulingCycleMetrics(cycleStartTime, true, false)
+		observeSchedulingCycleMetrics(cycleStartTime, true, true)
 		return
 	}
 
@@ -285,21 +305,11 @@ func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, placement fleetv1
 	//
 	// Note that the listing is performed using the uncached client; this is to ensure that all related
 	// bindings can be found, even if they have not been synced to the cache yet.
-	var listOptions []client.ListOption
-	listOptions = append(listOptions, client.MatchingLabels{
-		fleetv1beta1.CRPTrackingLabel: string(placementKey),
-	})
-	var bindingList fleetv1beta1.BindingObjList
-	if placement.GetNamespace() == "" {
-		bindingList = &fleetv1beta1.ClusterResourceBindingList{}
-	} else {
-		bindingList = &fleetv1beta1.ResourceBindingList{}
-		listOptions = append(listOptions, client.InNamespace(placement.GetNamespace()))
-	}
 	// TO-DO (chenyu1): this is a very expensive op; explore options for optimization.
-	if err := s.uncachedReader.List(ctx, bindingList, listOptions...); err != nil {
+	bindings, err := controller.ListBindingsFromKey(ctx, s.uncachedReader, placementKey)
+	if err != nil {
 		klog.ErrorS(err, "Failed to list all bindings", "placement", placementRef)
-		return controller.NewAPIServerError(false, err)
+		return err
 	}
 
 	// Remove scheduler CRB cleanup finalizer from deleting bindings.
@@ -310,18 +320,17 @@ func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, placement fleetv1
 	// Also note that for deleted placements, derived bindings are deleted right away by the scheduler;
 	// the scheduler no longer marks them as deleting and waits for another controller to actually
 	// run the deletion.
-	bindings := bindingList.GetBindingObjs()
 	for idx := range bindings {
 		binding := bindings[idx]
 		controllerutil.RemoveFinalizer(binding, fleetv1beta1.SchedulerCRBCleanupFinalizer)
 		if err := s.client.Update(ctx, binding); err != nil {
-			klog.ErrorS(err, "Failed to remove scheduler reconcile finalizer from cluster resource binding", "clusterResourceBinding", klog.KObj(binding))
+			klog.ErrorS(err, "Failed to remove scheduler reconcile finalizer from binding", "binding", klog.KObj(binding))
 			return controller.NewUpdateIgnoreConflictError(err)
 		}
 		// Delete the binding if it has not been marked for deletion yet.
 		if binding.GetDeletionTimestamp() == nil {
-			if err := s.client.Delete(ctx, binding); err != nil && !errors.IsNotFound(err) {
-				klog.ErrorS(err, "Failed to delete binding", "clusterResourceBinding", klog.KObj(binding))
+			if err := s.client.Delete(ctx, binding); err != nil && !apiErrors.IsNotFound(err) {
+				klog.ErrorS(err, "Failed to delete binding", "binding", klog.KObj(binding))
 				return controller.NewAPIServerError(false, err)
 			}
 		}
@@ -339,15 +348,13 @@ func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, placement fleetv1
 }
 
 // lookupLatestPolicySnapshot returns the latest (i.e., active) policy snapshot associated with a placement.
-// TODO: move this to a common lib
+// TODO(ryan): move this to a common lib
 func (s *Scheduler) lookupLatestPolicySnapshot(ctx context.Context, placement fleetv1beta1.PlacementObj) (fleetv1beta1.PolicySnapshotObj, error) {
 	placementRef := klog.KObj(placement)
-
-	// Get the placement key which handles both cluster-scoped and namespaced placements
-	placementKey := controller.GetPlacementKeyFromObj(placement)
+	// Prepare the list options to filter policy snapshots by the placement name and the latest snapshot label.
 	var listOptions []client.ListOption
 	labelSelector := labels.SelectorFromSet(labels.Set{
-		fleetv1beta1.CRPTrackingLabel:      string(placementKey),
+		fleetv1beta1.CRPTrackingLabel:      placement.GetName(),
 		fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
 	})
 	listOptions = append(listOptions, &client.ListOptions{LabelSelector: labelSelector})

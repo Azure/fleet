@@ -40,6 +40,8 @@ import (
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/clustereligibilitychecker"
+	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/queue"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/parallelizer"
 )
 
@@ -198,62 +200,6 @@ func TestCollectClusters(t *testing.T) {
 	}
 }
 
-// TestCollectBindings tests the collectBindings method.
-func TestCollectBindings(t *testing.T) {
-	binding := &placementv1beta1.ClusterResourceBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: bindingName,
-			Labels: map[string]string{
-				placementv1beta1.CRPTrackingLabel: crpName,
-			},
-		},
-	}
-	altCRPName := "another-test-placement"
-
-	testCases := []struct {
-		name    string
-		binding *placementv1beta1.ClusterResourceBinding
-		crpName string
-		want    []placementv1beta1.ClusterResourceBinding
-	}{
-		{
-			name:    "found matching bindings",
-			binding: binding,
-			crpName: crpName,
-			want:    []placementv1beta1.ClusterResourceBinding{*binding},
-		},
-		{
-			name:    "no matching bindings",
-			binding: binding,
-			crpName: altCRPName,
-			want:    []placementv1beta1.ClusterResourceBinding{},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			fakeClientBuilder := fake.NewClientBuilder().WithScheme(scheme.Scheme)
-			if tc.binding != nil {
-				fakeClientBuilder.WithObjects(tc.binding)
-			}
-			fakeClient := fakeClientBuilder.Build()
-			// Construct framework manually instead of using NewFramework() to avoid mocking the controller manager.
-			f := &framework{
-				uncachedReader: fakeClient,
-			}
-
-			ctx := context.Background()
-			bindings, err := f.collectBindings(ctx, tc.crpName)
-			if err != nil {
-				t.Fatalf("collectBindings() = %v, want no error", err)
-			}
-			if diff := cmp.Diff(bindings, tc.want, ignoreObjectMetaResourceVersionField); diff != "" {
-				t.Fatalf("collectBindings() diff (-got, +want) = %s", diff)
-			}
-		})
-	}
-}
-
 // TestClassifyBindings tests the classifyBindings function.
 func TestClassifyBindings(t *testing.T) {
 	policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
@@ -364,14 +310,14 @@ func TestClassifyBindings(t *testing.T) {
 		boundBinding,
 		scheduledBinding,
 	}
-	wantBound := []*placementv1beta1.ClusterResourceBinding{&boundBinding}
-	wantScheduled := []*placementv1beta1.ClusterResourceBinding{&scheduledBinding}
-	wantObsolete := []*placementv1beta1.ClusterResourceBinding{&obsoleteBinding}
-	wantUnscheduled := []*placementv1beta1.ClusterResourceBinding{&unscheduledBinding}
-	wantDangling := []*placementv1beta1.ClusterResourceBinding{&associatedWithLeavingClusterBinding, &assocaitedWithDisappearedClusterBinding}
-	wantDeleting := []*placementv1beta1.ClusterResourceBinding{&deletingBinding}
+	wantBound := controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{&boundBinding})
+	wantScheduled := controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{&scheduledBinding})
+	wantObsolete := controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{&obsoleteBinding})
+	wantUnscheduled := controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{&unscheduledBinding})
+	wantDangling := controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{&associatedWithLeavingClusterBinding, &assocaitedWithDisappearedClusterBinding})
+	wantDeleting := controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{&deletingBinding})
 
-	bound, scheduled, obsolete, unscheduled, dangling, deleting := classifyBindings(policy, bindings, clusters)
+	bound, scheduled, obsolete, unscheduled, dangling, deleting := classifyBindings(policy, controller.ConvertCRBObjsToBindingObjs(bindings), clusters)
 	if diff := cmp.Diff(bound, wantBound); diff != "" {
 		t.Errorf("classifyBindings() bound diff (-got, +want): %s", diff)
 	}
@@ -410,20 +356,23 @@ func TestUpdateBindingsWithErrors(t *testing.T) {
 		WithScheme(scheme.Scheme).
 		Build()
 
-	var genericUpdateFn = func(ctx context.Context, hubClient client.Client, binding *placementv1beta1.ClusterResourceBinding) error {
-		binding.SetLabels(map[string]string{"test-key": "test-value"})
-		return hubClient.Update(ctx, binding, &client.UpdateOptions{})
+	var genericUpdateFn = func(ctx context.Context, hubClient client.Client, binding placementv1beta1.BindingObj) error {
+		if crb, ok := binding.(*placementv1beta1.ClusterResourceBinding); ok {
+			crb.SetLabels(map[string]string{"test-key": "test-value"})
+			return hubClient.Update(ctx, crb, &client.UpdateOptions{})
+		}
+		return errors.New("unsupported binding type")
 	}
 
 	testCases := []struct {
 		name         string
-		bindings     []*placementv1beta1.ClusterResourceBinding
+		bindings     []placementv1beta1.BindingObj
 		customClient client.Client
 		wantErr      error
 	}{
 		{
 			name:     "service unavailable error on update, successful get & retry update keeps returning service unavailable error",
-			bindings: []*placementv1beta1.ClusterResourceBinding{&binding},
+			bindings: controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{&binding}),
 			customClient: &errorClient{
 				Client: fakeClient,
 				// set large error retry count to keep returning of update error.
@@ -434,7 +383,7 @@ func TestUpdateBindingsWithErrors(t *testing.T) {
 		},
 		{
 			name:     "service unavailable error on update, successful get & retry update returns nil",
-			bindings: []*placementv1beta1.ClusterResourceBinding{&binding},
+			bindings: controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{&binding}),
 			customClient: &errorClient{
 				Client:             fakeClient,
 				errorForRetryCount: 1,
@@ -444,7 +393,7 @@ func TestUpdateBindingsWithErrors(t *testing.T) {
 		},
 		{
 			name:     "server timeout error on update, successful get & retry update returns nil",
-			bindings: []*placementv1beta1.ClusterResourceBinding{&binding},
+			bindings: controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{&binding}),
 			customClient: &errorClient{
 				Client:             fakeClient,
 				errorForRetryCount: 1,
@@ -454,7 +403,7 @@ func TestUpdateBindingsWithErrors(t *testing.T) {
 		},
 		{
 			name:     "conflict error on update, get failed, retry update returns get error",
-			bindings: []*placementv1beta1.ClusterResourceBinding{&binding},
+			bindings: controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{&binding}),
 			customClient: &errorClient{
 				Client:             fakeClient,
 				errorForRetryCount: 1,
@@ -543,7 +492,7 @@ func TestUpdateBindingsMarkAsUnscheduledForAndUpdate(t *testing.T) {
 	}
 	// call markAsUnscheduledForAndUpdate
 	ctx := context.Background()
-	if err := f.updateBindings(ctx, []*placementv1beta1.ClusterResourceBinding{&boundBinding, &scheduledBinding}, markUnscheduledForAndUpdate); err != nil {
+	if err := f.updateBindings(ctx, controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{&boundBinding, &scheduledBinding}), markUnscheduledForAndUpdate); err != nil {
 		t.Fatalf("updateBindings() = %v, want no error", err)
 	}
 	// check if the boundBinding has been updated
@@ -624,7 +573,7 @@ func TestUpdateBindingRemoveFinalizerAndUpdate(t *testing.T) {
 	}
 	// call markAsUnscheduledForAndUpdate
 	ctx := context.Background()
-	if err := f.updateBindings(ctx, []*placementv1beta1.ClusterResourceBinding{&boundBinding, &scheduledBinding, &unScheduledBinding}, removeFinalizerAndUpdate); err != nil {
+	if err := f.updateBindings(ctx, controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{&boundBinding, &scheduledBinding, &unScheduledBinding}), removeFinalizerAndUpdate); err != nil {
 		t.Fatalf("updateBindings() = %v, want no error", err)
 	}
 
@@ -743,7 +692,7 @@ func TestRunPreFilterPlugins(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []*placementv1beta1.ClusterResourceBinding{})
+			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []placementv1beta1.BindingObj{})
 			policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
@@ -872,7 +821,7 @@ func TestRunFilterPluginsFor(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []*placementv1beta1.ClusterResourceBinding{})
+			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []placementv1beta1.BindingObj{})
 			for _, name := range tc.skippedPluginNames {
 				state.skippedFilterPlugins.Insert(name)
 			}
@@ -1074,7 +1023,7 @@ func TestRunFilterPlugins(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []*placementv1beta1.ClusterResourceBinding{})
+			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []placementv1beta1.BindingObj{})
 			policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
@@ -1377,7 +1326,7 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []*placementv1beta1.ClusterResourceBinding{})
+			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []placementv1beta1.BindingObj{})
 			scored, filtered, err := f.runAllPluginsForPickAllPlacementType(ctx, state, policy, clusters)
 			if tc.expectedToFail {
 				if err == nil {
@@ -1469,9 +1418,9 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 		picked       ScoredClusters
 		unscheduled  []*placementv1beta1.ClusterResourceBinding
 		obsolete     []*placementv1beta1.ClusterResourceBinding
-		wantToCreate []*placementv1beta1.ClusterResourceBinding
+		wantToCreate []placementv1beta1.ClusterResourceBinding
 		wantToPatch  []*bindingWithPatch
-		wantToDelete []*placementv1beta1.ClusterResourceBinding
+		wantToDelete []placementv1beta1.ClusterResourceBinding
 	}{
 		{
 			name:   "no matching obsolete bindings",
@@ -1486,7 +1435,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					},
 				},
 			},
-			wantToCreate: []*placementv1beta1.ClusterResourceBinding{
+			wantToCreate: []placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
@@ -1558,7 +1507,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 				},
 			},
 			wantToPatch: []*bindingWithPatch{},
-			wantToDelete: []*placementv1beta1.ClusterResourceBinding{
+			wantToDelete: []placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName4,
@@ -1601,7 +1550,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					},
 				},
 			},
-			wantToCreate: []*placementv1beta1.ClusterResourceBinding{},
+			wantToCreate: []placementv1beta1.ClusterResourceBinding{},
 			wantToPatch: []*bindingWithPatch{
 				{
 					updated: &placementv1beta1.ClusterResourceBinding{
@@ -1691,7 +1640,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					}),
 				},
 			},
-			wantToDelete: []*placementv1beta1.ClusterResourceBinding{},
+			wantToDelete: []placementv1beta1.ClusterResourceBinding{},
 		},
 		{
 			name:   "mixed obsolete bindings",
@@ -1725,7 +1674,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					},
 				},
 			},
-			wantToCreate: []*placementv1beta1.ClusterResourceBinding{
+			wantToCreate: []placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
@@ -1810,7 +1759,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					}),
 				},
 			},
-			wantToDelete: []*placementv1beta1.ClusterResourceBinding{
+			wantToDelete: []placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName4,
@@ -1835,7 +1784,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					},
 				},
 			},
-			wantToCreate: []*placementv1beta1.ClusterResourceBinding{
+			wantToCreate: []placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
@@ -1907,7 +1856,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 				},
 			},
 			wantToPatch:  []*bindingWithPatch{},
-			wantToDelete: []*placementv1beta1.ClusterResourceBinding{},
+			wantToDelete: []placementv1beta1.ClusterResourceBinding{},
 		},
 		{
 			name:   "matching 1 unscheduled bindings",
@@ -1925,7 +1874,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					},
 				},
 			},
-			wantToCreate: []*placementv1beta1.ClusterResourceBinding{
+			wantToCreate: []placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
@@ -2005,7 +1954,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					}),
 				},
 			},
-			wantToDelete: []*placementv1beta1.ClusterResourceBinding{},
+			wantToDelete: []placementv1beta1.ClusterResourceBinding{},
 		},
 		{
 			name:   "matching 1 unscheduled with previous state scheduled and 1 obsolete bindings",
@@ -2034,7 +1983,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					},
 				},
 			},
-			wantToCreate: []*placementv1beta1.ClusterResourceBinding{
+			wantToCreate: []placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
@@ -2120,27 +2069,32 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					}, client.MergeFromWithOptimisticLock{}),
 				},
 			},
-			wantToDelete: []*placementv1beta1.ClusterResourceBinding{},
+			wantToDelete: []placementv1beta1.ClusterResourceBinding{},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			toCreate, toDelete, toPatch, err := crossReferencePickedClustersAndDeDupBindings(crpName, policy, tc.picked, tc.unscheduled, tc.obsolete)
+			toCreate, toDelete, toPatch, err := crossReferencePickedClustersAndDeDupBindings(queue.PlacementKey(crpName), policy, tc.picked, controller.ConvertCRBArrayToBindingObjs(tc.unscheduled), controller.ConvertCRBArrayToBindingObjs(tc.obsolete))
 			if err != nil {
 				t.Errorf("crossReferencePickedClustersAndDeDupBindings test `%s`, err = %v, want no error", tc.name, err)
 				return
 			}
 
-			if diff := cmp.Diff(toCreate, tc.wantToCreate, ignoreObjectMetaNameField); diff != "" {
+			wantToCreate := controller.ConvertCRBObjsToBindingObjs(tc.wantToCreate)
+			if len(tc.wantToCreate) == 0 {
+				wantToCreate = []placementv1beta1.BindingObj{}
+			}
+			if diff := cmp.Diff(toCreate, wantToCreate, ignoreObjectMetaNameField); diff != "" {
 				t.Errorf("crossReferencePickedClustersAndDeDupBindings test `%s` toCreate diff (-got, +want) = %s", tc.name, diff)
 			}
 
 			// Verify names separately.
 			for _, binding := range toCreate {
-				prefix := fmt.Sprintf("%s-%s-", crpName, binding.Spec.TargetCluster)
-				if !strings.HasPrefix(binding.Name, prefix) {
-					t.Errorf("toCreate binding name, got %s, want prefix %s", binding.Name, prefix)
+				spec := binding.GetBindingSpec()
+				prefix := fmt.Sprintf("%s-%s-", crpName, spec.TargetCluster)
+				if !strings.HasPrefix(binding.GetName(), prefix) {
+					t.Errorf("toCreate binding name, got %s, want prefix %s", binding.GetName(), prefix)
 				}
 			}
 
@@ -2149,7 +2103,11 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 				t.Errorf("crossReferencePickedClustersAndDeDupBindings test `%s` toPatch diff (-got, +want): %s", tc.name, diff)
 			}
 
-			if diff := cmp.Diff(toDelete, tc.wantToDelete); diff != "" {
+			wantToDelete := controller.ConvertCRBObjsToBindingObjs(tc.wantToDelete)
+			if len(tc.wantToDelete) == 0 {
+				wantToDelete = []placementv1beta1.BindingObj{}
+			}
+			if diff := cmp.Diff(toDelete, wantToDelete); diff != "" {
 				t.Errorf("crossReferencePickedClustersAndDeDupBindings test `%s` toDelete diff (-got, +want): %s", tc.name, diff)
 			}
 		})
@@ -2175,7 +2133,7 @@ func TestCreateBindings(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	if err := f.createBindings(ctx, toCreate); err != nil {
+	if err := f.createBindings(ctx, controller.ConvertCRBArrayToBindingObjs(toCreate)); err != nil {
 		t.Fatalf("createBindings() = %v, want no error", err)
 	}
 
@@ -2341,7 +2299,7 @@ func TestManipulateBindings(t *testing.T) {
 		},
 	}
 	toDelete := []*placementv1beta1.ClusterResourceBinding{toDeleteBinding}
-	if err := f.manipulateBindings(ctx, policy, toCreate, toDelete, toPatch); err != nil {
+	if err := f.manipulateBindings(ctx, policy, controller.ConvertCRBArrayToBindingObjs(toCreate), controller.ConvertCRBArrayToBindingObjs(toDelete), toPatch); err != nil {
 		t.Fatalf("manipulateBindings() = %v, want no error", err)
 	}
 
@@ -2963,7 +2921,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 			for _, bindingSet := range tc.existing {
 				numOfClusters += len(bindingSet)
 			}
-			if err := f.updatePolicySnapshotStatusFromBindings(ctx, tc.policy, numOfClusters, tc.notPicked, tc.filtered, tc.existing...); err != nil {
+			if err := f.updatePolicySnapshotStatusFromBindings(ctx, tc.policy, numOfClusters, tc.notPicked, tc.filtered, controller.ConvertCRB2DArrayToBindingObjs(tc.existing)...); err != nil {
 				t.Fatalf("updatePolicySnapshotStatusFromBindings() = %v, want no error", err)
 			}
 
@@ -3085,12 +3043,12 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 
 	testCases := []struct {
 		name     string
-		bindings []*placementv1beta1.ClusterResourceBinding
-		want     []*placementv1beta1.ClusterResourceBinding
+		bindings []placementv1beta1.BindingObj
+		want     []placementv1beta1.BindingObj
 	}{
 		{
 			name: "no scores assigned to any cluster",
-			bindings: []*placementv1beta1.ClusterResourceBinding{
+			bindings: controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName,
@@ -3107,8 +3065,8 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 						TargetCluster: altClusterName,
 					},
 				},
-			},
-			want: []*placementv1beta1.ClusterResourceBinding{
+			}),
+			want: controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName,
@@ -3125,11 +3083,11 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 						TargetCluster: altClusterName,
 					},
 				},
-			},
+			}),
 		},
 		{
 			name: "no scores assigned to one cluster",
-			bindings: []*placementv1beta1.ClusterResourceBinding{
+			bindings: controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName,
@@ -3152,8 +3110,8 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 						TargetCluster: altClusterName,
 					},
 				},
-			},
-			want: []*placementv1beta1.ClusterResourceBinding{
+			}),
+			want: controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: altBindingName,
@@ -3176,11 +3134,11 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 		},
 		{
 			name: "different scores",
-			bindings: []*placementv1beta1.ClusterResourceBinding{
+			bindings: controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName,
@@ -3223,8 +3181,8 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 						},
 					},
 				},
-			},
-			want: []*placementv1beta1.ClusterResourceBinding{
+			}),
+			want: controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: anotherBindingName,
@@ -3267,11 +3225,11 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 		},
 		{
 			name: "same score, different names",
-			bindings: []*placementv1beta1.ClusterResourceBinding{
+			bindings: controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName,
@@ -3314,8 +3272,8 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 						},
 					},
 				},
-			},
-			want: []*placementv1beta1.ClusterResourceBinding{
+			}),
+			want: controller.ConvertCRBArrayToBindingObjs([]*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName,
@@ -3358,7 +3316,7 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 		},
 	}
 
@@ -3910,7 +3868,7 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			decisions := newSchedulingDecisionsFromBindings(tc.maxUnselectedClusterDecisionCount, tc.notPicked, tc.filtered, tc.existing...)
+			decisions := newSchedulingDecisionsFromBindings(tc.maxUnselectedClusterDecisionCount, tc.notPicked, tc.filtered, controller.ConvertCRB2DArrayToBindingObjs(tc.existing)...)
 			if diff := cmp.Diff(tc.want, decisions); diff != "" {
 				t.Errorf("newSchedulingDecisionsFrom() decisions diff (-got, +want): %s", diff)
 			}
@@ -3990,7 +3948,7 @@ func TestNewSchedulingDecisionsFromOversized(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			decisions := newSchedulingDecisionsFromBindings(tc.maxUnselectedClusterDecisionCount, tc.notPicked, tc.filtered, tc.bindingSets...)
+			decisions := newSchedulingDecisionsFromBindings(tc.maxUnselectedClusterDecisionCount, tc.notPicked, tc.filtered, controller.ConvertCRB2DArrayToBindingObjs(tc.bindingSets)...)
 			if diff := cmp.Diff(decisions, tc.wantDecisions, ignoreClusterDecisionScoreAndReasonFields); diff != "" {
 				t.Errorf("newSchedulingDecisionsFrom() decisions diff (-got, +want): %s", diff)
 			}
@@ -4205,7 +4163,7 @@ func TestRunPostBatchPlugins(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []*placementv1beta1.ClusterResourceBinding{})
+			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []placementv1beta1.BindingObj{})
 			state.desiredBatchSize = tc.desiredBatchSize
 			policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
@@ -4300,7 +4258,7 @@ func TestRunPreScorePlugins(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []*placementv1beta1.ClusterResourceBinding{})
+			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []placementv1beta1.BindingObj{})
 			policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
@@ -5059,7 +5017,7 @@ func TestDownscale(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			scheduled, bound, err := f.downscale(ctx, tc.scheduled, tc.bound, tc.count)
+			scheduled, bound, err := f.downscale(ctx, controller.ConvertCRBArrayToBindingObjs(tc.scheduled), controller.ConvertCRBArrayToBindingObjs(tc.bound), tc.count)
 			if tc.expectedToFail {
 				if err == nil {
 					t.Fatalf("downscaled() = nil, want error")
@@ -5068,11 +5026,11 @@ func TestDownscale(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(scheduled, tc.wantUpdatedScheduled, ignoreObjectMetaResourceVersionField, ignoreTypeMetaAPIVersionKindFields); diff != "" {
+			if diff := cmp.Diff(scheduled, controller.ConvertCRBArrayToBindingObjs(tc.wantUpdatedScheduled), ignoreObjectMetaResourceVersionField, ignoreTypeMetaAPIVersionKindFields); diff != "" {
 				t.Errorf("downscale() updated scheduled diff (-got, +want) = %s", diff)
 			}
 
-			if diff := cmp.Diff(bound, tc.wantUpdatedBound, ignoreObjectMetaResourceVersionField, ignoreTypeMetaAPIVersionKindFields); diff != "" {
+			if diff := cmp.Diff(bound, controller.ConvertCRBArrayToBindingObjs(tc.wantUpdatedBound), ignoreObjectMetaResourceVersionField, ignoreTypeMetaAPIVersionKindFields); diff != "" {
 				t.Errorf("downscale() updated bound diff (-got, +want) = %s", diff)
 			}
 
@@ -5235,7 +5193,7 @@ func TestRunScorePluginsFor(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []*placementv1beta1.ClusterResourceBinding{})
+			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []placementv1beta1.BindingObj{})
 			for _, name := range tc.skippedPluginNames {
 				state.skippedScorePlugins.Insert(name)
 			}
@@ -5447,7 +5405,7 @@ func TestRunScorePlugins(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []*placementv1beta1.ClusterResourceBinding{})
+			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []placementv1beta1.BindingObj{})
 			policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,

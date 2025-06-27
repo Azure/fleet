@@ -26,6 +26,7 @@ import (
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
 const (
@@ -522,7 +523,7 @@ func TestCountByDomain(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			state := framework.NewCycleState(tc.clusters, nil, tc.bindings)
+			state := framework.NewCycleState(tc.clusters, nil, controller.ConvertCRBArrayToBindingObjs(tc.bindings))
 			counter := countByDomain(tc.clusters, state, topologyKey1)
 			if diff := cmp.Diff(counter, tc.wantBindingCounterByDomain, cmp.AllowUnexported(bindingCounterByDomain{})); diff != "" {
 				t.Errorf("countByDomain() diff (-got, +want): %s", diff)
@@ -1614,7 +1615,7 @@ func TestEvaluateAllConstraints(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			state := framework.NewCycleState(tc.clusters, nil, tc.bindings)
+			state := framework.NewCycleState(tc.clusters, nil, controller.ConvertCRBArrayToBindingObjs(tc.bindings))
 
 			violations, scores, err := evaluateAllConstraints(state, tc.doNotSchedule, tc.scheduleAnyway)
 			if err != nil {
@@ -2030,7 +2031,7 @@ func TestPrepareTopologySpreadConstraintsPluginState(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			state := framework.NewCycleState(tc.clusters, nil, tc.bindings)
+			state := framework.NewCycleState(tc.clusters, nil, controller.ConvertCRBArrayToBindingObjs(tc.bindings))
 			genPluginState, err := prepareTopologySpreadConstraintsPluginState(state, tc.policy)
 			if err != nil {
 				t.Fatalf("prepareTopologySpreadConstraintsPluginState() = %v, want no error", err)
