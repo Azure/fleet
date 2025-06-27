@@ -1,20 +1,4 @@
 /*
-Copyright 2021 The Kubernetes Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
-/*
 Copyright 2025 The KubeFleet Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,6 +18,7 @@ package workapplier
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"go.uber.org/atomic"
@@ -212,6 +197,7 @@ type Reconciler struct {
 
 	availabilityCheckRequeueAfter time.Duration
 	driftCheckRequeueAfter        time.Duration
+	deletionWaitTime              time.Duration
 }
 
 func NewReconciler(
@@ -222,6 +208,7 @@ func NewReconciler(
 	workerCount int,
 	availabilityCheckRequestAfter time.Duration,
 	driftCheckRequestAfter time.Duration,
+	deletionWaitTime time.Duration,
 	watchWorkWithPriorityQueue bool,
 	watchWorkReconcileAgeMinutes int,
 ) *Reconciler {
@@ -251,6 +238,7 @@ func NewReconciler(
 		joined:                        atomic.NewBool(false),
 		availabilityCheckRequeueAfter: acRequestAfter,
 		driftCheckRequeueAfter:        dcRequestAfter,
+		deletionWaitTime:              deletionWaitTime,
 	}
 }
 
@@ -417,7 +405,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		Kind:               fleetv1beta1.AppliedWorkKind,
 		Name:               appliedWork.GetName(),
 		UID:                appliedWork.GetUID(),
-		BlockOwnerDeletion: ptr.To(false),
+		BlockOwnerDeletion: ptr.To(true),
 	}
 
 	// Set the default values for the Work object to avoid additional validation logic in the
@@ -485,29 +473,112 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return ctrl.Result{RequeueAfter: r.driftCheckRequeueAfter}, nil
 }
 
-// garbageCollectAppliedWork deletes the appliedWork and all the manifests associated with it from the cluster.
 func (r *Reconciler) garbageCollectAppliedWork(ctx context.Context, work *fleetv1beta1.Work) (ctrl.Result, error) {
-	deletePolicy := metav1.DeletePropagationBackground
+	deletePolicy := metav1.DeletePropagationForeground
 	if !controllerutil.ContainsFinalizer(work, fleetv1beta1.WorkFinalizer) {
 		return ctrl.Result{}, nil
 	}
-	// delete the appliedWork which will remove all the manifests associated with it
-	// TODO: allow orphaned manifest
-	appliedWork := fleetv1beta1.AppliedWork{
+	appliedWork := &fleetv1beta1.AppliedWork{
 		ObjectMeta: metav1.ObjectMeta{Name: work.Name},
 	}
-	err := r.spokeClient.Delete(ctx, &appliedWork, &client.DeleteOptions{PropagationPolicy: &deletePolicy})
-	switch {
-	case apierrors.IsNotFound(err):
-		klog.V(2).InfoS("The appliedWork is already deleted", "appliedWork", work.Name)
-	case err != nil:
-		klog.ErrorS(err, "Failed to delete the appliedWork", "appliedWork", work.Name)
+	// Get the AppliedWork object
+	if err := r.spokeClient.Get(ctx, types.NamespacedName{Name: work.Name}, appliedWork); err != nil {
+		if apierrors.IsNotFound(err) {
+			klog.V(2).InfoS("The appliedWork is already deleted, removing the finalizer from the work", "appliedWork", work.Name)
+			return r.removeWorkFinalizer(ctx, work)
+		}
+		klog.ErrorS(err, "Failed to get AppliedWork", "appliedWork", work.Name)
 		return ctrl.Result{}, controller.NewAPIServerError(false, err)
-	default:
-		klog.InfoS("Successfully deleted the appliedWork", "appliedWork", work.Name)
 	}
-	controllerutil.RemoveFinalizer(work, fleetv1beta1.WorkFinalizer)
 
+	// Handle stuck deletion after 5 minutes where the other owner references might not exist or are invalid.
+	if !appliedWork.DeletionTimestamp.IsZero() && time.Since(appliedWork.DeletionTimestamp.Time) >= r.deletionWaitTime {
+		klog.V(2).InfoS("AppliedWork deletion appears stuck; attempting to patch owner references", "appliedWork", work.Name)
+		if err := r.updateOwnerReference(ctx, work, appliedWork); err != nil {
+			klog.ErrorS(err, "Failed to update owner references for AppliedWork", "appliedWork", work.Name)
+			return ctrl.Result{}, controller.NewAPIServerError(false, err)
+		}
+		return ctrl.Result{}, fmt.Errorf("AppliedWork %s is being deleted, waiting for the deletion to complete", work.Name)
+	}
+
+	if err := r.spokeClient.Delete(ctx, appliedWork, &client.DeleteOptions{PropagationPolicy: &deletePolicy}); err != nil {
+		if apierrors.IsNotFound(err) {
+			klog.V(2).InfoS("AppliedWork already deleted", "appliedWork", work.Name)
+			return r.removeWorkFinalizer(ctx, work)
+		}
+		klog.V(2).ErrorS(err, "Failed to delete the appliedWork", "appliedWork", work.Name)
+		return ctrl.Result{}, controller.NewAPIServerError(false, err)
+	}
+
+	klog.V(2).InfoS("AppliedWork deletion in progress", "appliedWork", work.Name)
+	return ctrl.Result{}, fmt.Errorf("AppliedWork %s is being deleted, waiting for the deletion to complete", work.Name)
+}
+
+// updateOwnerReference updates the AppliedWork owner reference in the manifest objects.
+// It changes the blockOwnerDeletion field to false, so that the AppliedWork can be deleted in cases where
+// the other owner references do not exist or are invalid.
+// https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/#owner-references-in-object-specifications
+func (r *Reconciler) updateOwnerReference(ctx context.Context, work *fleetv1beta1.Work, appliedWork *fleetv1beta1.AppliedWork) error {
+	appliedWorkOwnerRef := &metav1.OwnerReference{
+		APIVersion: fleetv1beta1.GroupVersion.String(),
+		Kind:       "AppliedWork",
+		Name:       appliedWork.Name,
+		UID:        appliedWork.UID,
+	}
+
+	if err := r.hubClient.Get(ctx, types.NamespacedName{Name: work.Name, Namespace: work.Namespace}, work); err != nil {
+		if apierrors.IsNotFound(err) {
+			klog.V(2).InfoS("Work object not found, skipping owner reference update", "work", work.Name, "namespace", work.Namespace)
+			return nil
+		}
+		klog.ErrorS(err, "Failed to get Work object for owner reference update", "work", work.Name, "namespace", work.Namespace)
+		return controller.NewAPIServerError(false, err)
+	}
+
+	for _, cond := range work.Status.ManifestConditions {
+		res := cond.Identifier
+		gvr := schema.GroupVersionResource{
+			Group:    res.Group,
+			Version:  res.Version,
+			Resource: res.Resource,
+		}
+
+		var obj *unstructured.Unstructured
+		var err error
+		if obj, err = r.spokeDynamicClient.Resource(gvr).Namespace(res.Namespace).Get(ctx, res.Name, metav1.GetOptions{}); err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			klog.ErrorS(err, "Failed to get manifest", "gvr", gvr, "name", res.Name, "namespace", res.Namespace)
+			return err
+		}
+		// Check if there is more than one owner reference. If there is only one owner reference, it is the appliedWork itself.
+		// Otherwise, at least one other owner reference exists, and we need to leave resource alone.
+		if len(obj.GetOwnerReferences()) > 1 {
+			ownerRefs := obj.GetOwnerReferences()
+			updated := false
+			for idx := range ownerRefs {
+				if areOwnerRefsEqual(&ownerRefs[idx], appliedWorkOwnerRef) {
+					ownerRefs[idx].BlockOwnerDeletion = ptr.To(false)
+					updated = true
+				}
+			}
+			if updated {
+				obj.SetOwnerReferences(ownerRefs)
+				if _, err = r.spokeDynamicClient.Resource(gvr).Namespace(obj.GetNamespace()).Update(ctx, obj, metav1.UpdateOptions{}); err != nil {
+					klog.ErrorS(err, "Failed to update manifest owner references", "gvr", gvr, "name", res.Name, "namespace", res.Namespace)
+					return err
+				}
+				klog.V(4).InfoS("Patched manifest owner references", "gvr", gvr, "name", res.Name, "namespace", res.Namespace)
+			}
+		}
+	}
+	return nil
+}
+
+// removeWorkFinalizer removes the finalizer from the work and updates it in the hub.
+func (r *Reconciler) removeWorkFinalizer(ctx context.Context, work *fleetv1beta1.Work) (ctrl.Result, error) {
+	controllerutil.RemoveFinalizer(work, fleetv1beta1.WorkFinalizer)
 	if err := r.hubClient.Update(ctx, work, &client.UpdateOptions{}); err != nil {
 		klog.ErrorS(err, "Failed to remove the finalizer from the work", "work", klog.KObj(work))
 		return ctrl.Result{}, controller.NewAPIServerError(false, err)

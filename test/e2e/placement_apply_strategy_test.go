@@ -43,27 +43,29 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 	annotationValue := "annotation-value"
 	annotationUpdatedValue := "annotation-updated-value"
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	anotherOwnerReference := metav1.OwnerReference{}
 
 	BeforeAll(func() {
 		By("creating work resources on hub cluster")
 		createWorkResources()
+
+		By("creating owner reference for the namespace")
+		anotherOwnerReference = createAnotherValidOwnerReference(fmt.Sprintf("owner-namespace-%d", GinkgoParallelProcess()))
 	})
 
 	AfterAll(func() {
 		By("deleting created work resources on hub cluster")
 		cleanupWorkResources()
+
+		By("deleting owner reference namespace")
+		cleanupAnotherValidOwnerReference(anotherOwnerReference.Name)
 	})
 
 	Context("Test a CRP place objects successfully (client-side-apply and allow co-own)", Ordered, func() {
 		BeforeAll(func() {
 			ns := appNamespace()
 			ns.SetOwnerReferences([]metav1.OwnerReference{
-				{
-					APIVersion: "another-api-version",
-					Kind:       "another-kind",
-					Name:       "another-owner",
-					UID:        "another-uid",
-				},
+				anotherOwnerReference,
 			})
 			ns.Annotations = map[string]string{
 				annotationKey: annotationValue,
@@ -117,10 +119,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 		})
 
 		It("namespace should be kept on member cluster", func() {
-			Consistently(func() error {
-				ns := &corev1.Namespace{}
-				return allMemberClusters[0].KubeClient.Get(ctx, types.NamespacedName{Name: workNamespaceName}, ns)
-			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Namespace which is not owned by the CRP should not be deleted")
+			checkNamespaceExistsWithOwnerRefOnMemberCluster(workNamespaceName, crpName)
 		})
 	})
 
@@ -231,12 +230,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 		BeforeAll(func() {
 			ns := appNamespace()
 			ns.SetOwnerReferences([]metav1.OwnerReference{
-				{
-					APIVersion: "another-api-version",
-					Kind:       "another-kind",
-					Name:       "another-owner",
-					UID:        "another-uid",
-				},
+				anotherOwnerReference,
 			})
 			By(fmt.Sprintf("creating namespace %s on member cluster", ns.Name))
 			Expect(allMemberClusters[0].KubeClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
@@ -345,11 +339,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 		})
 
 		It("namespace should be kept on member cluster", func() {
-			Consistently(func() error {
-				workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-				ns := &corev1.Namespace{}
-				return allMemberClusters[0].KubeClient.Get(ctx, types.NamespacedName{Name: workNamespaceName}, ns)
-			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Namespace which is not owned by the CRP should not be deleted")
+			checkNamespaceExistsWithOwnerRefOnMemberCluster(workNamespaceName, crpName)
 		})
 	})
 
@@ -357,12 +347,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 		BeforeAll(func() {
 			ns := appNamespace()
 			ns.SetOwnerReferences([]metav1.OwnerReference{
-				{
-					APIVersion: "another-api-version",
-					Kind:       "another-kind",
-					Name:       "another-owner",
-					UID:        "another-uid",
-				},
+				anotherOwnerReference,
 			})
 			ns.Annotations = map[string]string{
 				annotationKey: annotationValue,
@@ -430,10 +415,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 		})
 
 		It("namespace should be kept on member cluster", func() {
-			Consistently(func() error {
-				ns := &corev1.Namespace{}
-				return allMemberClusters[0].KubeClient.Get(ctx, types.NamespacedName{Name: workNamespaceName}, ns)
-			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Namespace which is not owned by the CRP should not be deleted")
+			checkNamespaceExistsWithOwnerRefOnMemberCluster(workNamespaceName, crpName)
 		})
 	})
 

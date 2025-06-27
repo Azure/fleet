@@ -730,6 +730,36 @@ func setAllMemberClustersToLeave() {
 	}
 }
 
+func createAnotherValidOwnerReference(nsName string) metav1.OwnerReference {
+	// Create a namespace to be owner.
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: nsName,
+		},
+	}
+	Expect(allMemberClusters[0].KubeClient.Create(ctx, ns)).Should(Succeed(), "Failed to create namespace %s", nsName)
+
+	// Get the namespace to ensure to create a valid owner reference.
+	Expect(allMemberClusters[0].KubeClient.Get(ctx, types.NamespacedName{Name: nsName}, ns)).Should(Succeed(), "Failed to get namespace %s", nsName)
+
+	return metav1.OwnerReference{
+		APIVersion: "v1",
+		Kind:       "Namespace",
+		Name:       nsName,
+		UID:        ns.UID,
+	}
+}
+
+func cleanupAnotherValidOwnerReference(nsName string) {
+	// Cleanup the namespace created for the owner reference.
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: nsName,
+		},
+	}
+	Expect(allMemberClusters[0].KubeClient.Delete(ctx, ns)).Should(Succeed(), "Failed to create namespace %s", nsName)
+}
+
 func checkIfAllMemberClustersHaveLeft() {
 	for idx := range allMemberClusters {
 		memberCluster := allMemberClusters[idx]
@@ -788,6 +818,27 @@ func checkIfRemovedWorkResourcesFromMemberClustersConsistently(clusters []*frame
 		Consistently(workResourcesRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s consistently", memberCluster.ClusterName)
 	}
 }
+func checkNamespaceExistsWithOwnerRefOnMemberCluster(nsName, crpName string) {
+	Consistently(func() error {
+		ns := &corev1.Namespace{}
+		if err := allMemberClusters[0].KubeClient.Get(ctx, types.NamespacedName{Name: nsName}, ns); err != nil {
+			return fmt.Errorf("failed to get namespace %s: %w", nsName, err)
+		}
+
+		if len(ns.OwnerReferences) > 0 {
+			for _, ownerRef := range ns.OwnerReferences {
+				if ownerRef.APIVersion == placementv1beta1.GroupVersion.String() &&
+					ownerRef.Kind == placementv1beta1.AppliedWorkKind &&
+					ownerRef.Name == fmt.Sprintf("%s-work", crpName) {
+					if *ownerRef.BlockOwnerDeletion {
+						return fmt.Errorf("namespace %s owner reference for AppliedWork should have been updated to have BlockOwnerDeletion set to false", nsName)
+					}
+				}
+			}
+		}
+		return nil
+	}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Namespace which is not owned by the CRP should not be deleted")
+}
 
 // cleanupCRP deletes the CRP and waits until the resources are not found.
 func cleanupCRP(name string) {
@@ -815,6 +866,30 @@ func cleanupCRP(name string) {
 	// Wait until the CRP is removed.
 	removedActual := crpRemovedActual(name)
 	Eventually(removedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove CRP %s", name)
+
+	// Check if work is deleted. Needed to ensure that the Work resource is cleaned up before the next CRP is created.
+	// This is because the Work resource is created with a finalizer that blocks deletion until the all applied work
+	// and applied work itself is successfully deleted. If the Work resource is not deleted, it can cause resource overlap
+	// and flakiness in subsequent tests.
+	By("Check if work is deleted")
+	var workNS string
+	work := &placementv1beta1.Work{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("%s-work", name),
+		},
+	}
+	Eventually(func() bool {
+		for i := range allMemberClusters {
+			workNS = fmt.Sprintf("fleet-member-%s", allMemberClusterNames[i])
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: work.Name, Namespace: workNS}, work); err != nil && k8serrors.IsNotFound(err) {
+				// Work resource is not found, which is expected.
+				continue
+			}
+			// Work object still exists, or some other error occurred, return false to retry.
+			return false
+		}
+		return true
+	}, workloadEventuallyDuration, eventuallyInterval).Should(BeTrue(), fmt.Sprintf("Work resource %s from namespace %s should be deleted from hub", work.Name, workNS))
 }
 
 // createResourceOverrides creates a number of resource overrides.
@@ -1234,6 +1309,7 @@ func readJobTestManifest(testManifest *batchv1.Job) {
 
 func readEnvelopeResourceTestManifest(testEnvelopeObj *placementv1beta1.ResourceEnvelope) {
 	By("Read testEnvelopConfigMap resource")
+	testEnvelopeObj.ResourceVersion = ""
 	err := utils.GetObjectFromManifest("resources/test-envelope-object.yaml", testEnvelopeObj)
 	Expect(err).Should(Succeed())
 }
@@ -1283,7 +1359,7 @@ func buildOwnerReference(cluster *framework.Cluster, crpName string) *metav1.Own
 		Kind:               "AppliedWork",
 		Name:               workName,
 		UID:                appliedWork.UID,
-		BlockOwnerDeletion: ptr.To(false),
+		BlockOwnerDeletion: ptr.To(true),
 	}
 }
 
