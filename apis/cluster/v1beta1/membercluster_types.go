@@ -38,6 +38,7 @@ import (
 
 // MemberCluster is a resource created in the hub cluster to represent a member cluster within a fleet.
 // +kubebuilder:validation:XValidation:rule="size(self.metadata.name) < 64",message="metadata.name max length is 63"
+// +kubebuilder:validation:XValidation:rule="!self.spec.taints.exists(t1, self.spec.taints.exists(t2, t1 != t2 && t1.key == t2.key && t1.effect == t2.effect))",message="taints must be unique"
 type MemberCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -124,6 +125,8 @@ type MemberClusterStatus struct {
 
 // Taint attached to MemberCluster has the "effect" on
 // any ClusterResourcePlacement that does not tolerate the Taint.
+// +kubebuilder:validation:XValidation:rule="self.key.matches('^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$')",message="taint key must be a valid label name"
+// +kubebuilder:validation:XValidation:rule="self.value == ” || self.value.matches('^([a-z0-9]([-a-z0-9_.]*[a-z0-9])?)?$')",message="taint value must be a valid label value"
 type Taint struct {
 	// The taint key to be applied to a MemberCluster.
 	// +required
