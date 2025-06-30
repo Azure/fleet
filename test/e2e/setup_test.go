@@ -80,6 +80,8 @@ const (
 	azurePropertyProviderEnvVarValue    = "azure"
 	fleetClusterResourceIDAnnotationKey = "fleet.azure.com/cluster-resource-id"
 	fleetLocationAnnotationKey          = "fleet.azure.com/location"
+
+	memberClusterHeartbeatPeriodSeconds = 60
 )
 
 const (

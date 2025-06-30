@@ -81,7 +81,7 @@ func createMemberCluster(name, svcAccountName string, labels, annotations map[st
 				Kind:      "ServiceAccount",
 				Namespace: fleetSystemNS,
 			},
-			HeartbeatPeriodSeconds: 60,
+			HeartbeatPeriodSeconds: memberClusterHeartbeatPeriodSeconds,
 		},
 	}
 	Expect(hubClient.Create(ctx, mcObj)).To(Succeed(), "Failed to create member cluster object %s", name)
