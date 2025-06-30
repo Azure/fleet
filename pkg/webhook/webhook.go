@@ -62,6 +62,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/clusterresourceplacementdisruptionbudget"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/clusterresourceplacementeviction"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/fleetresourcehandler"
+	"github.com/kubefleet-dev/kubefleet/pkg/webhook/managedresource"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/membercluster"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/pod"
 	"github.com/kubefleet-dev/kubefleet/pkg/webhook/replicaset"
@@ -127,12 +128,16 @@ var (
 	sideEffortsNone     = admv1.SideEffectClassNone
 	namespacedScope     = admv1.NamespacedScope
 	clusterScope        = admv1.ClusterScope
+	allScopes           = admv1.AllScopes
 	shortWebhookTimeout = ptr.To(int32(1))
 	longWebhookTimeout  = ptr.To(int32(5))
 )
 
-var AddToManagerFuncs []func(manager.Manager) error
-var AddToManagerFleetResourceValidator func(manager.Manager, []string, bool, bool) error
+var (
+	AddToManagerFuncs                  []func(manager.Manager) error
+	AddtoManagerManagedResource        func(manager.Manager, []string) error
+	AddToManagerFleetResourceValidator func(manager.Manager, []string, bool, bool) error
+)
 
 // AddToManager adds all Controllers to the Manager
 func AddToManager(m manager.Manager, whiteListedUsers []string, isFleetV1Beta1API bool, denyModifyMemberClusterLabels bool) error {
@@ -140,6 +145,9 @@ func AddToManager(m manager.Manager, whiteListedUsers []string, isFleetV1Beta1AP
 		if err := f(m); err != nil {
 			return err
 		}
+	}
+	if err := AddtoManagerManagedResource(m, whiteListedUsers); err != nil {
+		return err
 	}
 	return AddToManagerFleetResourceValidator(m, whiteListedUsers, isFleetV1Beta1API, denyModifyMemberClusterLabels)
 }
@@ -398,6 +406,38 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 			},
 			TimeoutSeconds: longWebhookTimeout,
 		},
+		{
+			Name:                    "fleet.managedresource.validating",
+			ClientConfig:            w.createClientConfig(managedresource.ValidationPath),
+			FailurePolicy:           &failFailurePolicy,
+			SideEffects:             &sideEffortsNone,
+			AdmissionReviewVersions: admissionReviewVersions,
+			Rules: []admv1.RuleWithOperations{
+				{
+					Operations: []admv1.OperationType{
+						admv1.Create, admv1.Update, admv1.Delete,
+					},
+					Rule: createRule(
+						[]string{
+							placementv1beta1.GroupVersion.Group,
+							corev1.SchemeGroupVersion.Group,
+							networkingv1.SchemeGroupVersion.Group,
+						},
+						[]string{
+							placementv1beta1.GroupVersion.Version,
+							corev1.SchemeGroupVersion.Version,
+							networkingv1.SchemeGroupVersion.Version,
+						},
+						[]string{
+							fleetv1alpha1.ClusterResourcePlacementResource,
+							namespaceResourceName,
+							resourceQuotaResourceName,
+							networkPolicyResourceName,
+						}, &allScopes),
+				},
+			},
+			TimeoutSeconds: longWebhookTimeout,
+		},
 	}
 
 	return webHooks
@@ -452,15 +492,19 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 		// TODO(ArvindThiru): not handling pods, replicasets as part of the fleet guard rail since they have validating webhooks, need to remove validating webhooks before adding these resources to fleet guard rail.
 		{
 			Operations: cuOperations,
-			Rule: createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{bindingResourceName, configMapResourceName, endPointResourceName,
+			Rule: createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{
+				bindingResourceName, configMapResourceName, endPointResourceName,
 				limitRangeResourceName, persistentVolumeClaimsName, persistentVolumeClaimsName + "/status", podTemplateResourceName,
 				replicationControllerResourceName, replicationControllerResourceName + "/status", resourceQuotaResourceName, resourceQuotaResourceName + "/status", secretResourceName,
-				serviceAccountResourceName, servicesResourceName, servicesResourceName + "/status"}, &namespacedScope),
+				serviceAccountResourceName, servicesResourceName, servicesResourceName + "/status",
+			}, &namespacedScope),
 		},
 		{
 			Operations: cuOperations,
-			Rule: createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{controllerRevisionResourceName, daemonSetResourceName, daemonSetResourceName + "/status",
-				deploymentResourceName, deploymentResourceName + "/status", statefulSetResourceName, statefulSetResourceName + "/status"}, &namespacedScope),
+			Rule: createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{
+				controllerRevisionResourceName, daemonSetResourceName, daemonSetResourceName + "/status",
+				deploymentResourceName, deploymentResourceName + "/status", statefulSetResourceName, statefulSetResourceName + "/status",
+			}, &namespacedScope),
 		},
 		{
 			Operations: cuOperations,
