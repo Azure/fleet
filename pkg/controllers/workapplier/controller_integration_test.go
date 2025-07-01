@@ -17,6 +17,8 @@ limitations under the License.
 package workapplier
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"time"
 
@@ -5485,7 +5487,7 @@ var _ = Describe("report diff", func() {
 	})
 })
 
-var _ = Describe("switch apply strategies", func() {
+var _ = Describe("handling different apply strategies", func() {
 	Context("switch from report diff to CSA", Ordered, func() {
 		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
 		// The environment prepared by the envtest package does not support namespace
@@ -6490,6 +6492,229 @@ var _ = Describe("switch apply strategies", func() {
 
 			workRemovedActual := workRemovedActual(workName)
 			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
+
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt so verify its deletion.
+		})
+	})
+
+	Context("falling back from CSA to SSA", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+
+		var appliedWorkOwnerRef *metav1.OwnerReference
+		var regularNS *corev1.Namespace
+		var oversizedCM *corev1.ConfigMap
+
+		BeforeAll(func() {
+			// Prepare a NS object.
+			regularNS = ns.DeepCopy()
+			regularNS.Name = nsName
+			regularNSJSON := marshalK8sObjJSON(regularNS)
+
+			// Prepare an oversized configMap object.
+
+			// Generate a large bytes array.
+			//
+			// Kubernetes will reject configMaps larger than 1048576 bytes (~1 MB);
+			// and when an object's spec size exceeds 262144 bytes, KubeFleet will not
+			// be able to use client-side apply with the object as it cannot set
+			// an last applied configuration annotation of that size. Consequently,
+			// for this test case, it prepares a configMap object of 600000 bytes so
+			// that Kubernetes will accept it but CSA cannot use it, forcing the
+			// work applier to fall back to server-side apply.
+			randomBytes := make([]byte, 600000)
+			// Note that this method never returns an error and will always fill the given
+			// slice completely.
+			_, _ = rand.Read(randomBytes)
+			// Encode the random bytes to a base64 string.
+			randomBase64Str := base64.StdEncoding.EncodeToString(randomBytes)
+			oversizedCM = &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "ConfigMap",
+					APIVersion: "v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: nsName,
+					Name:      configMapName,
+				},
+				Data: map[string]string{
+					"randomBase64Str": randomBase64Str,
+				},
+			}
+			oversizedCMJSON := marshalK8sObjJSON(oversizedCM)
+
+			// Create a new Work object with all the manifest JSONs and proper apply strategy.
+			createWorkObject(workName, nil, regularNSJSON, oversizedCMJSON)
+		})
+
+		It("should add cleanup finalizer to the Work object", func() {
+			finalizerAddedActual := workFinalizerAddedActual(workName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+		})
+
+		It("should prepare an AppliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
+
+			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
+		})
+
+		It("should apply the manifests", func() {
+			// Ensure that the NS object has been applied as expected.
+			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
+
+			// Ensure that the oversized ConfigMap object has been applied as expected via SSA.
+			Eventually(func() error {
+				gotConfigMap := &corev1.ConfigMap{}
+				if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, gotConfigMap); err != nil {
+					return fmt.Errorf("failed to retrieve the ConfigMap object: %w", err)
+				}
+
+				wantConfigMap := oversizedCM.DeepCopy()
+				wantConfigMap.TypeMeta = metav1.TypeMeta{}
+				wantConfigMap.OwnerReferences = []metav1.OwnerReference{
+					*appliedWorkOwnerRef,
+				}
+
+				rebuiltConfigMap := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:       gotConfigMap.Namespace,
+						Name:            gotConfigMap.Name,
+						OwnerReferences: gotConfigMap.OwnerReferences,
+					},
+					Data: gotConfigMap.Data,
+				}
+				if diff := cmp.Diff(rebuiltConfigMap, wantConfigMap); diff != "" {
+					return fmt.Errorf("configMap diff (-got +want):\n%s", diff)
+				}
+
+				// Perform additional checks to ensure that the work applier has fallen back
+				// from CSA to SSA.
+				lastAppliedConf, foundAnnotation := gotConfigMap.Annotations[fleetv1beta1.LastAppliedConfigAnnotation]
+				if foundAnnotation && len(lastAppliedConf) > 0 {
+					return fmt.Errorf("the configMap object has annotation %s (value: %s) in presence when SSA should be used", fleetv1beta1.LastAppliedConfigAnnotation, lastAppliedConf)
+				}
+
+				foundFieldMgr := false
+				fieldMgrs := gotConfigMap.GetManagedFields()
+				for _, fieldMgr := range fieldMgrs {
+					// For simplicity reasons, here the test case verifies only against the field
+					// manager name.
+					if fieldMgr.Manager == workFieldManagerName {
+						foundFieldMgr = true
+					}
+				}
+				if !foundFieldMgr {
+					return fmt.Errorf("the configMap object does not list the KubeFleet member agent as a field manager (%s) when SSA should be used", workFieldManagerName)
+				}
+
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the oversized configMap object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, oversizedCM)).To(Succeed(), "Failed to retrieve the ConfigMap object")
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: WorkAllManifestsAppliedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionTrue,
+					Reason: WorkAllManifestsAvailableReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Resource:  "configmaps",
+						Name:      configMapName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		AfterAll(func() {
+			// Delete the Work object and related resources.
+			deleteWorkObject(workName)
+
+			// Ensure that all applied manifests have been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			Eventually(func() error {
+				// Retrieve the ConfigMap object.
+				cm := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: nsName,
+						Name:      configMapName,
+					},
+				}
+				if err := memberClient.Delete(ctx, cm); err != nil && !errors.IsNotFound(err) {
+					return fmt.Errorf("failed to delete the ConfigMap object: %w", err)
+				}
+
+				if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, cm); !errors.IsNotFound(err) {
+					return fmt.Errorf("the ConfigMap object still exists or an unexpected error occurred: %w", err)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the oversized configMap object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.

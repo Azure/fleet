@@ -168,7 +168,12 @@ func (r *Reconciler) apply(
 		return r.serverSideApply(
 			ctx,
 			gvr, manifestObjCopy, inMemberClusterObj,
-			applyStrategy.ServerSideApplyConfig.ForceConflicts, isOptimisticLockEnabled, false,
+			// When falling back to SSA, always disable force apply ops (this is also the default
+			// behavior).
+			//
+			// Note that the work applier might still enable force apply ops if it finds that
+			// self-conflicts might be occur.
+			false, isOptimisticLockEnabled, false,
 		)
 	case applyStrategy.Type == fleetv1beta1.ApplyStrategyTypeServerSideApply:
 		// The apply strategy dictates that server-side apply should be used.
