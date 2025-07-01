@@ -55,14 +55,13 @@ const (
 
 const (
 	// The condition related values in use by the Azure property provider.
-
-	// PropertyCollectionSucceededConditionType is a condition type that indicates whether a
-	// property collection attempt has succeeded.
-	PropertyCollectionSucceededConditionType         = "AKSClusterPropertyCollectionSucceeded"
-	PropertyCollectionSucceededReason                = "AllPropertiesCollectedSuccessfully"
-	PropertyCollectionFailedCostErrorReason          = "FailedToCollectCosts"
-	PropertyCollectionSucceededMessage               = "All properties have been collected successfully"
-	PropertyCollectionFailedCostErrorMessageTemplate = "An error has occurred when collecting cost properties: %v"
+	CostPropertiesCollectionSucceededCondType   = "AKSClusterCostPropertiesCollectionSucceeded"
+	CostPropertiesCollectionSucceededReason     = "CostsCalculated"
+	CostPropertiesCollectionDegradedReason      = "CostsCalculationDegraded"
+	CostPropertiesCollectionFailedReason        = "CostsCalculationFailed"
+	CostPropertiesCollectionSucceededMsg        = "All cost properties have been collected successfully"
+	CostPropertiesCollectionDegradedMsgTemplate = "Cost properties are collected in a degraded mode with the following warning(s): %v"
+	CostPropertiesCollectionFailedMsgTemplate   = "An error has occurred when collecting cost properties: %v"
 )
 
 // PropertyProvider is the Azure property provider for Fleet.
@@ -203,17 +202,20 @@ func (p *PropertyProvider) Collect(_ context.Context) propertyprovider.PropertyC
 		ObservationTime: metav1.Now(),
 	}
 
-	perCPUCost, perGBMemoryCost, err := p.nodeTracker.Costs()
-	if err != nil {
-		// Note that the last transition time is not tracked here, as the provider does not
-		// track the previously returned condition. A timestamp will be added in the upper layer.
+	perCPUCost, perGBMemoryCost, warnings, err := p.nodeTracker.Costs()
+	switch {
+	case err != nil:
+		// An error occurred when calculating costs; do no set the cost properties and
+		// track the error.
 		conds = append(conds, metav1.Condition{
-			Type:    PropertyCollectionSucceededConditionType,
+			Type:    CostPropertiesCollectionSucceededCondType,
 			Status:  metav1.ConditionFalse,
-			Reason:  "FailedToCollectCosts",
-			Message: fmt.Sprintf(PropertyCollectionFailedCostErrorMessageTemplate, err),
+			Reason:  CostPropertiesCollectionFailedReason,
+			Message: fmt.Sprintf(CostPropertiesCollectionFailedMsgTemplate, err),
 		})
-	} else {
+	case len(warnings) > 0:
+		// The costs are calculated, but some warnings have been issued; set the cost
+		// properties and report the warnings as a condition.
 		properties[PerCPUCoreCostProperty] = clusterv1beta1.PropertyValue{
 			Value:           fmt.Sprintf(CostPrecisionTemplate, perCPUCost),
 			ObservationTime: metav1.Now(),
@@ -222,6 +224,29 @@ func (p *PropertyProvider) Collect(_ context.Context) propertyprovider.PropertyC
 			Value:           fmt.Sprintf(CostPrecisionTemplate, perGBMemoryCost),
 			ObservationTime: metav1.Now(),
 		}
+		conds = append(conds, metav1.Condition{
+			Type:    CostPropertiesCollectionSucceededCondType,
+			Status:  metav1.ConditionTrue,
+			Reason:  CostPropertiesCollectionDegradedReason,
+			Message: fmt.Sprintf(CostPropertiesCollectionDegradedMsgTemplate, warnings),
+		})
+	default:
+		// The costs are calculated successfully; set the cost properties and
+		// report a success as a condition.
+		properties[PerCPUCoreCostProperty] = clusterv1beta1.PropertyValue{
+			Value:           fmt.Sprintf(CostPrecisionTemplate, perCPUCost),
+			ObservationTime: metav1.Now(),
+		}
+		properties[PerGBMemoryCostProperty] = clusterv1beta1.PropertyValue{
+			Value:           fmt.Sprintf(CostPrecisionTemplate, perGBMemoryCost),
+			ObservationTime: metav1.Now(),
+		}
+		conds = append(conds, metav1.Condition{
+			Type:    CostPropertiesCollectionSucceededCondType,
+			Status:  metav1.ConditionTrue,
+			Reason:  CostPropertiesCollectionSucceededReason,
+			Message: CostPropertiesCollectionSucceededMsg,
+		})
 	}
 
 	// Collect the resource properties.
@@ -249,18 +274,6 @@ func (p *PropertyProvider) Collect(_ context.Context) propertyprovider.PropertyC
 		available[rn] = left
 	}
 	resources.Available = available
-
-	// If no errors are found, report a success as a condition.
-	if len(conds) == 0 {
-		// Note that the last transition time is not tracked here, as the provider does not
-		// track the previously returned condition. A timestamp will be added in the upper layer.
-		conds = append(conds, metav1.Condition{
-			Type:    PropertyCollectionSucceededConditionType,
-			Status:  metav1.ConditionTrue,
-			Reason:  PropertyCollectionSucceededReason,
-			Message: PropertyCollectionSucceededMessage,
-		})
-	}
 
 	// Return the collection response.
 	return propertyprovider.PropertyCollectionResponse{
