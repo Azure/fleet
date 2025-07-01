@@ -1,3 +1,8 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package managedresource
 
 import (
@@ -6,6 +11,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
@@ -110,9 +116,9 @@ func Test_managedResourceValidzaator_Handle(t *testing.T) {
 				tt.modReq(&req)
 			}
 			resp := validator.Handle(context.Background(), req)
-			assert.Equal(t, tt.expectedResp.Allowed, resp.Allowed)
-			assert.Equal(t, tt.expectedResp.Result.Code, resp.Result.Code)
-			assert.Equal(t, tt.expectedResp.Result.Message, resp.Result.Message)
+			if diff := cmp.Diff(tt.expectedResp.Result, resp.Result); diff != "" {
+				t.Errorf("managedResourceValidator Handle response (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
