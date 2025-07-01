@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -60,7 +59,7 @@ func Test_managedResourceValidzaator_Handle(t *testing.T) {
 			operation:      admissionv1.Create,
 			oldLabels:      nil,
 			oldAnnotations: nil,
-			newLabels:      map[string]string{managedByArmKey: managedByArmValue},
+			newLabels:      map[string]string{ManagedByArmKey: ManagedByArmValue},
 			newAnnotations: nil,
 			expectedResp:   admission.Denied(fmt.Sprintf(resourceDeniedFormat, metav1.GroupVersionKind{Kind: "TestKind"}, "test-resource", "default")),
 		},
@@ -70,7 +69,7 @@ func Test_managedResourceValidzaator_Handle(t *testing.T) {
 			oldLabels:      nil,
 			oldAnnotations: nil,
 			newLabels:      nil,
-			newAnnotations: map[string]string{managedByArmKey: managedByArmValue},
+			newAnnotations: map[string]string{ManagedByArmKey: ManagedByArmValue},
 			expectedResp:   admission.Denied(fmt.Sprintf(resourceDeniedFormat, metav1.GroupVersionKind{Kind: "TestKind"}, "test-resource", "default")),
 		},
 		{
@@ -86,7 +85,7 @@ func Test_managedResourceValidzaator_Handle(t *testing.T) {
 			name:           "allowed for other operations - managed by arm, but user whitelisted",
 			username:       "fleet1p",
 			operation:      admissionv1.Update,
-			oldLabels:      map[string]string{"managedBy": managedByArmValue},
+			oldLabels:      map[string]string{"managedBy": ManagedByArmValue},
 			oldAnnotations: nil,
 			newLabels:      nil,
 			newAnnotations: nil,
@@ -164,12 +163,14 @@ func Test_getLabelsAndAnnotations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			labels, annotations, err := getLabelsAndAnnotations(tt.obj)
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.wantLabels, labels)
-				assert.Equal(t, tt.wantAnnotations, annotations)
+			if err != nil && !tt.expectError {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(tt.wantLabels, labels); diff != "" {
+				t.Errorf("labels mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tt.wantAnnotations, annotations); diff != "" {
+				t.Errorf("annotations mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -198,24 +199,26 @@ func Test_managedByArm(t *testing.T) {
 		},
 		{
 			name: "key present, not managed key",
-			m:    map[string]string{"managingBy": managedByArmValue},
+			m:    map[string]string{"managingBy": ManagedByArmValue},
 			want: false,
 		},
 		{
 			name: "key present, not managed value",
-			m:    map[string]string{managedByArmKey: "not-arm"},
+			m:    map[string]string{ManagedByArmKey: "not-arm"},
 			want: false,
 		},
 		{
 			name: "key present, managed key and value",
-			m:    map[string]string{managedByArmKey: managedByArmValue},
+			m:    map[string]string{ManagedByArmKey: ManagedByArmValue},
 			want: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, managedByArm(tt.m))
+			if diff := cmp.Diff(tt.want, managedByArm(tt.m)); diff != "" {
+				t.Errorf("managedByArm result (-want +got):\n%s", diff)
+			}
 		})
 	}
 }

@@ -32,6 +32,8 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/webhook/managedresource"
 	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 )
 
@@ -1288,6 +1290,78 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 			Expect(statusErr.Status().Message).Should(MatchRegexp("path cannot contain empty string"))
 			Expect(statusErr.Status().Message).Should(MatchRegexp("cannot override metadata fields except annotations and labels"))
 			return nil
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+	})
+})
+
+var _ = Describe("webhook tests for operations on ARM managed resources", Ordered, func() {
+	BeforeAll(func() {
+		By("creating a managed namespace")
+		createManagedNamespace()
+	})
+
+	AfterAll(func() {
+		By("deleting the managed namespace")
+		ns := createManagedNamespace()
+		Expect(hubClient.Delete(ctx, &ns)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete the managed namespace")
+		Eventually(
+			func() error {
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: ns.Name}, &corev1.Namespace{}); !k8sErrors.IsNotFound(err) {
+					return fmt.Errorf("The managed namespace still exists or an unexpected error occurred: %w", err)
+				}
+				return nil
+			}, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the managed namespace %s", ns.Name)
+	})
+
+	It("should deny create a managed resource namespace", func() {
+		Eventually(func(g Gomega) error {
+			createNs := createManagedNamespace()
+			createNs.Name = fmt.Sprintf("test-create-managed-ns-%d", GinkgoParallelProcess())
+			err := impersonateHubClient.Update(ctx, &createNs)
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
+			var statusErr *k8sErrors.StatusError
+			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create managed namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("the operation on the managed resource type * is not allowed"))
+			return nil
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+	})
+
+	It("should deny update a managed resource namespace", func() {
+		Eventually(func(g Gomega) error {
+			updateNamespace := createManagedNamespace()
+			updateNamespace.Labels["foo"] = "NotManaged"
+			err := impersonateHubClient.Update(ctx, &updateNamespace)
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
+			var statusErr *k8sErrors.StatusError
+			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update managed namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("the operation on the managed resource type * is not allowed"))
+			return nil
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+	})
+
+	It("should deny delete a managed resource namespace", func() {
+		Eventually(func(g Gomega) error {
+			created := createManagedNamespace()
+			err := impersonateHubClient.Delete(ctx, &created)
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
+			var statusErr *k8sErrors.StatusError
+			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete managed namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("the operation on the managed resource type * is not allowed"))
+			return nil
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+	})
+
+	It("should allow create an unmanaged resource namespace", func() {
+		Eventually(func(g Gomega) error {
+			creating := createManagedNamespace()
+			delete(creating.Labels, managedresource.ManagedByArmKey)
+			return impersonateHubClient.Create(ctx, &creating)
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
 })

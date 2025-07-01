@@ -24,8 +24,8 @@ import (
 )
 
 const (
-	managedByArmKey      = "managed-by"
-	managedByArmValue    = "arm"
+	ManagedByArmKey      = "managed-by"
+	ManagedByArmValue    = "arm"
 	deniedResource       = "denied admission for managed resource"
 	resourceDeniedFormat = "the operation on the managed resource type '%s' name '%s' in namespace '%s' is not allowed"
 )
@@ -33,7 +33,6 @@ const (
 // ValidationPath is the webhook service path which admission requests are routed to.
 var (
 	ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, "arm", "managed", "resources")
-	metaAccessor   = meta.NewAccessor()
 )
 
 // Add registers the webhook for K8s bulit-in object types.
@@ -81,7 +80,7 @@ func managedByArm(m map[string]string) bool {
 	if len(m) == 0 {
 		return false
 	}
-	if v, ok := m[managedByArmKey]; ok && v == managedByArmValue {
+	if v, ok := m[ManagedByArmKey]; ok && v == ManagedByArmValue {
 		return true
 	}
 	return false

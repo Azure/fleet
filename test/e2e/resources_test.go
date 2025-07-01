@@ -50,6 +50,7 @@ const (
 	crpEvictionNameTemplate           = "crpe-%d"
 	updateRunStrategyNameTemplate     = "curs-%d"
 	updateRunNameWithSubIndexTemplate = "cur-%d-%d"
+	managedNamespaceTemplate          = "managedns-%d"
 
 	customDeletionBlockerFinalizer = "kubernetes-fleet.io/custom-deletion-blocker-finalizer"
 	workNamespaceLabelName         = "process"

@@ -429,7 +429,7 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 							networkingv1.SchemeGroupVersion.Version,
 						},
 						[]string{
-							fleetv1alpha1.ClusterResourcePlacementResource,
+							placementv1beta1.ClusterResourcePlacementResource,
 							namespaceResourceName,
 							resourceQuotaResourceName,
 							networkPolicyResourceName,

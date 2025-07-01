@@ -52,6 +52,7 @@ import (
 	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/pkg/webhook/managedresource"
 	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
 	"go.goms.io/fleet/test/e2e/framework"
 )
@@ -706,6 +707,20 @@ func createWorkResources() {
 // cleanupWorkResources deletes the resources created by createWorkResources and waits until the resources are not found.
 func cleanupWorkResources() {
 	cleanWorkResourcesOnCluster(hubCluster)
+}
+
+func createManagedNamespace() corev1.Namespace {
+	ns := corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(managedNamespaceTemplate, GinkgoParallelProcess()),
+			Labels: map[string]string{
+				managedresource.ManagedByArmKey: managedresource.ManagedByArmValue,
+			},
+		},
+	}
+
+	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
+	return ns
 }
 
 func cleanWorkResourcesOnCluster(cluster *framework.Cluster) {
