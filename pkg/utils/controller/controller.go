@@ -406,6 +406,19 @@ func CollectResourceIdentifiersFromClusterResourceSnapshot(
 		return nil, err
 	}
 
+	return CollectResourceIdentifiersUsingMasterClusterResourceSnapshot(ctx, k8Client, crpName, masterResourceSnapshot, resourceSnapshotIndex)
+}
+
+// CollectResourceIdentifiersUsingMasterClusterResourceSnapshot collects the resource identifiers selected by a series of clusterResourceSnapshot.
+// It uses the master clusterResourceSnapshot to collect the resource identifiers from all the clusterResourceSnapshots in the same index group.
+// The order of the resource identifiers is preserved by the order of the clusterResourceSnapshots.
+func CollectResourceIdentifiersUsingMasterClusterResourceSnapshot(
+	ctx context.Context,
+	k8Client client.Client,
+	crpName string,
+	masterResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot,
+	resourceSnapshotIndex string,
+) ([]fleetv1beta1.ResourceIdentifier, error) {
 	allResourceSnapshots, err := FetchAllClusterResourceSnapshots(ctx, k8Client, crpName, masterResourceSnapshot)
 	if err != nil {
 		klog.ErrorS(err, "Failed to fetch all the clusterResourceSnapshots", "resourceSnapshotIndex", resourceSnapshotIndex, "clusterResourcePlacement", crpName)
@@ -432,7 +445,7 @@ func CollectResourceIdentifiersFromClusterResourceSnapshot(
 		return nil
 	}
 
-	// Retrieve the resource identitifers from snapshots following the order to preserve the order of the resource identifiers.
+	// Retrieve the resource identifiers from snapshots following the order to preserve the order of the resource identifiers.
 	if err := retrieveResourceIdentifierFromSnapshot(masterResourceSnapshot); err != nil {
 		return nil, err
 	}

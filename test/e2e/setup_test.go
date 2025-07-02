@@ -115,7 +115,10 @@ var (
 	allMemberClusters     []*framework.Cluster
 	allMemberClusterNames = []string{}
 
-	resourceSnapshotCreationInterval time.Duration
+	resourceSnapshotCreationMinimumInterval time.Duration
+	resourceChangesCollectionDuration       time.Duration
+
+	resourceSnapshotDelayDuration time.Duration
 )
 
 var (
@@ -306,15 +309,25 @@ func beforeSuiteForAllProcesses() {
 	// Check if the required environment variable, which specifies the path to kubeconfig file, has been set.
 	Expect(os.Getenv(kubeConfigPathEnvVarName)).NotTo(BeEmpty(), "Required environment variable KUBECONFIG is not set")
 
-	resourceSnapshotCreationIntervalEnv := os.Getenv("RESOURCE_SNAPSHOT_CREATION_INTERVAL")
-	if resourceSnapshotCreationIntervalEnv == "" {
+	resourceSnapshotCreationMinimumIntervalEnv := os.Getenv("RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL")
+	if resourceSnapshotCreationMinimumIntervalEnv == "" {
 		// If the environment variable is not set, use a default value.
-		resourceSnapshotCreationInterval = 0
+		resourceSnapshotCreationMinimumInterval = 0
 	} else {
 		var err error
-		resourceSnapshotCreationInterval, err = time.ParseDuration(resourceSnapshotCreationIntervalEnv)
+		resourceSnapshotCreationMinimumInterval, err = time.ParseDuration(resourceSnapshotCreationMinimumIntervalEnv)
 		Expect(err).Should(Succeed(), "failed to parse RESOURCE_SNAPSHOT_CREATION_INTERVAL")
 	}
+	resourceChangesCollectionDurationEnv := os.Getenv("RESOURCE_CHANGES_COLLECTION_DURATION")
+	if resourceChangesCollectionDurationEnv == "" {
+		// If the environment variable is not set, use a default value.
+		resourceChangesCollectionDuration = 0
+	} else {
+		var err error
+		resourceChangesCollectionDuration, err = time.ParseDuration(resourceChangesCollectionDurationEnv)
+		Expect(err).Should(Succeed(), "failed to parse RESOURCE_CHANGES_COLLECTION_DURATION")
+	}
+	resourceSnapshotDelayDuration = maxDuration(resourceSnapshotCreationMinimumInterval, resourceChangesCollectionDuration)
 
 	// Initialize the cluster objects and their clients.
 	hubCluster = framework.NewCluster(hubClusterName, "", scheme, nil)
@@ -369,6 +382,13 @@ func beforeSuiteForAllProcesses() {
 		_, err = os.Stat(uncordonBinaryPath)
 		Expect(os.IsNotExist(err)).To(BeFalse(), fmt.Sprintf("uncordon binary not found at %s", uncordonBinaryPath))
 	})
+}
+
+func maxDuration(a, b time.Duration) time.Duration {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func beforeSuiteForProcess1() {

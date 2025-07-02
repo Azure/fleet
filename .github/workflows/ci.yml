@@ -93,9 +93,11 @@ jobs:
         include:
           - customized-settings: default
             # to shorten the test duration, set the resource snapshot creation interval to 0
-            resource-snapshot-creation-interval: 0m
+            resource-snapshot-creation-minimum-interval: 0m
+            resource-changes-collection-duration: 0m
           - customized-settings: custom
-            resource-snapshot-creation-interval: 1m
+            resource-snapshot-creation-minimum-interval: 30s
+            resource-changes-collection-duration: 15s
     runs-on: ubuntu-latest
     needs: [
       detect-noop,
@@ -143,5 +145,6 @@ jobs:
           # TO-DO (chenyu1): to ensure a vendor-neutral experience, switch to a dummy
           # property provider once the AKS one is split out.
           PROPERTY_PROVIDER: 'azure'
-          RESOURCE_SNAPSHOT_CREATION_INTERVAL: ${{ matrix.resource-snapshot-creation-interval }}
+          RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL: ${{ matrix.resource-snapshot-creation-minimum-interval }}
+          RESOURCE_CHANGES_COLLECTION_DURATION: ${{ matrix.resource-changes-collection-duration }}
 

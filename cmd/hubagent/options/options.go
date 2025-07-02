@@ -104,8 +104,11 @@ type Options struct {
 	PprofPort int
 	// DenyModifyMemberClusterLabels indicates if the member cluster labels cannot be modified by groups (excluding system:masters)
 	DenyModifyMemberClusterLabels bool
-	// ResourceSnapshotCreationInterval is the interval at which resource snapshots are created.
-	ResourceSnapshotCreationInterval time.Duration
+	// ResourceSnapshotCreationMinimumInterval is the minimum interval at which resource snapshots could be created.
+	// Whether the resource snapshot is created or not depends on the both ResourceSnapshotCreationMinimumInterval and ResourceChangesCollectionDuration.
+	ResourceSnapshotCreationMinimumInterval time.Duration
+	// ResourceChangesCollectionDuration is the duration for collecting resource changes into one snapshot.
+	ResourceChangesCollectionDuration time.Duration
 }
 
 // NewOptions builds an empty options.
@@ -117,15 +120,16 @@ func NewOptions() *Options {
 			ResourceNamespace: utils.FleetSystemNamespace,
 			ResourceName:      "136224848560.hub.fleet.azure.com",
 		},
-		MaxConcurrentClusterPlacement:    10,
-		ConcurrentResourceChangeSyncs:    1,
-		MaxFleetSizeSupported:            100,
-		EnableV1Alpha1APIs:               false,
-		EnableClusterInventoryAPIs:       true,
-		EnableStagedUpdateRunAPIs:        true,
-		EnablePprof:                      false,
-		PprofPort:                        6065,
-		ResourceSnapshotCreationInterval: 1 * time.Minute,
+		MaxConcurrentClusterPlacement:           10,
+		ConcurrentResourceChangeSyncs:           1,
+		MaxFleetSizeSupported:                   100,
+		EnableV1Alpha1APIs:                      false,
+		EnableClusterInventoryAPIs:              true,
+		EnableStagedUpdateRunAPIs:               true,
+		EnablePprof:                             false,
+		PprofPort:                               6065,
+		ResourceSnapshotCreationMinimumInterval: 30 * time.Second,
+		ResourceChangesCollectionDuration:       15 * time.Second,
 	}
 }
 
@@ -172,7 +176,8 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.BoolVar(&o.EnablePprof, "enable-pprof", false, "If set, the pprof profiling is enabled.")
 	flags.IntVar(&o.PprofPort, "pprof-port", 6065, "The port for pprof profiling.")
 	flags.BoolVar(&o.DenyModifyMemberClusterLabels, "deny-modify-member-cluster-labels", false, "If set, users not in the system:masters cannot modify member cluster labels.")
-	flags.DurationVar(&o.ResourceSnapshotCreationInterval, "resource-snapshot-creation-interval", 1*time.Minute, "The interval at which resource snapshots are created.")
-
+	flags.DurationVar(&o.ResourceSnapshotCreationMinimumInterval, "resource-snapshot-creation-minimum-interval", 30*time.Second, "The minimum interval at which resource snapshots could be created.")
+	flags.DurationVar(&o.ResourceChangesCollectionDuration, "resource-changes-collection-duration", 15*time.Second,
+		"The duration for collecting resource changes into one snapshot. The default is 15 seconds, which means that the controller will collect resource changes for 15 seconds before creating a resource snapshot.")
 	o.RateLimiterOpts.AddFlags(flags)
 }

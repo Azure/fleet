@@ -20,6 +20,7 @@ package annotations
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -97,4 +98,18 @@ func ExtractNumberOfEnvelopeObjFromResourceSnapshot(snapshot *fleetv1beta1.Clust
 			"resource snapshot %s has an invalid enveloped object count %d or err %w", snapshot.Name, envelopeObjCount, err)
 	}
 	return envelopeObjCount, nil
+}
+
+// ExtractNextResourceSnapshotCandidateDetectionTimeFromResourceSnapshot extracts the next resource snapshot candidate detection time from the annotations of a clusterResourceSnapshot.
+// If the annotation does not exist, it returns 0 duration.
+func ExtractNextResourceSnapshotCandidateDetectionTimeFromResourceSnapshot(snapshot fleetv1beta1.ResourceSnapshotObj) (time.Time, error) {
+	nextDetectionTimeStr, ok := snapshot.GetAnnotations()[fleetv1beta1.NextResourceSnapshotCandidateDetectionTimeAnnotation]
+	if !ok {
+		return time.Time{}, nil
+	}
+	nextDetectionTime, err := time.Parse(time.RFC3339, nextDetectionTimeStr)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("invalid annotation %s: %s is not a valid RFC3339 time: %w", fleetv1beta1.NextResourceSnapshotCandidateDetectionTimeAnnotation, nextDetectionTimeStr, err)
+	}
+	return nextDetectionTime, nil
 }
