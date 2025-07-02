@@ -128,7 +128,6 @@ var (
 	sideEffortsNone     = admv1.SideEffectClassNone
 	namespacedScope     = admv1.NamespacedScope
 	clusterScope        = admv1.ClusterScope
-	allScopes           = admv1.AllScopes
 	shortWebhookTimeout = ptr.To(int32(1))
 	longWebhookTimeout  = ptr.To(int32(5))
 )
@@ -420,20 +419,58 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 					Rule: createRule(
 						[]string{
 							placementv1beta1.GroupVersion.Group,
-							corev1.SchemeGroupVersion.Group,
-							networkingv1.SchemeGroupVersion.Group,
 						},
 						[]string{
 							placementv1beta1.GroupVersion.Version,
-							corev1.SchemeGroupVersion.Version,
-							networkingv1.SchemeGroupVersion.Version,
 						},
 						[]string{
 							placementv1beta1.ClusterResourcePlacementResource,
+						}, &clusterScope),
+				},
+				{
+					Operations: []admv1.OperationType{
+						admv1.Create, admv1.Update, admv1.Delete,
+					},
+					Rule: createRule(
+						[]string{
+							corev1.SchemeGroupVersion.Group,
+						},
+						[]string{
+							corev1.SchemeGroupVersion.Version,
+						},
+						[]string{
 							namespaceResourceName,
+						}, &clusterScope),
+				},
+				{
+					Operations: []admv1.OperationType{
+						admv1.Create, admv1.Update, admv1.Delete,
+					},
+					Rule: createRule(
+						[]string{
+							corev1.SchemeGroupVersion.Group,
+						},
+						[]string{
+							corev1.SchemeGroupVersion.Version,
+						},
+						[]string{
 							resourceQuotaResourceName,
+						}, &namespacedScope),
+				},
+				{
+					Operations: []admv1.OperationType{
+						admv1.Create, admv1.Update, admv1.Delete,
+					},
+					Rule: createRule(
+						[]string{
+							networkingv1.SchemeGroupVersion.Group,
+						},
+						[]string{
+							networkingv1.SchemeGroupVersion.Version,
+						},
+						[]string{
 							networkPolicyResourceName,
-						}, &allScopes),
+						}, &namespacedScope),
 				},
 			},
 			TimeoutSeconds: longWebhookTimeout,
