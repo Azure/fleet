@@ -413,64 +413,20 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 			AdmissionReviewVersions: admissionReviewVersions,
 			Rules: []admv1.RuleWithOperations{
 				{
-					Operations: []admv1.OperationType{
-						admv1.Create, admv1.Update, admv1.Delete,
-					},
-					Rule: createRule(
-						[]string{
-							placementv1beta1.GroupVersion.Group,
-						},
-						[]string{
-							placementv1beta1.GroupVersion.Version,
-						},
-						[]string{
-							placementv1beta1.ClusterResourcePlacementResource,
-						}, &clusterScope),
+					Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
+					Rule:       createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{placementv1beta1.ClusterResourcePlacementResource}, &clusterScope),
 				},
 				{
-					Operations: []admv1.OperationType{
-						admv1.Create, admv1.Update, admv1.Delete,
-					},
-					Rule: createRule(
-						[]string{
-							corev1.SchemeGroupVersion.Group,
-						},
-						[]string{
-							corev1.SchemeGroupVersion.Version,
-						},
-						[]string{
-							namespaceResourceName,
-						}, &clusterScope),
+					Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
+					Rule:       createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{namespaceResourceName}, &clusterScope),
 				},
 				{
-					Operations: []admv1.OperationType{
-						admv1.Create, admv1.Update, admv1.Delete,
-					},
-					Rule: createRule(
-						[]string{
-							corev1.SchemeGroupVersion.Group,
-						},
-						[]string{
-							corev1.SchemeGroupVersion.Version,
-						},
-						[]string{
-							resourceQuotaResourceName,
-						}, &namespacedScope),
+					Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
+					Rule:       createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{resourceQuotaResourceName}, &namespacedScope),
 				},
 				{
-					Operations: []admv1.OperationType{
-						admv1.Create, admv1.Update, admv1.Delete,
-					},
-					Rule: createRule(
-						[]string{
-							networkingv1.SchemeGroupVersion.Group,
-						},
-						[]string{
-							networkingv1.SchemeGroupVersion.Version,
-						},
-						[]string{
-							networkPolicyResourceName,
-						}, &namespacedScope),
+					Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
+					Rule:       createRule([]string{networkingv1.SchemeGroupVersion.Group}, []string{networkingv1.SchemeGroupVersion.Version}, []string{networkPolicyResourceName}, &namespacedScope),
 				},
 			},
 			TimeoutSeconds: longWebhookTimeout,
