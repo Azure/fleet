@@ -18,6 +18,7 @@ package annotations
 
 import (
 	"testing"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -390,6 +391,62 @@ func TestExtractNumberOfEnvelopeObjFromResourceSnapshot(t *testing.T) {
 			}
 			if !tc.wantError && got != tc.want {
 				t.Fatalf("ExtractNumberOfEnvelopeObjFromResourceSnapshot() got %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestExtractNextResourceSnapshotCandidateDetectionTimeFromResourceSnapshot(t *testing.T) {
+	validTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	testCases := []struct {
+		name      string
+		snapshot  *fleetv1beta1.ClusterResourceSnapshot
+		want      time.Time
+		wantError bool
+	}{
+		{
+			name: "valid annotation",
+			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: snapshotName,
+					Annotations: map[string]string{
+						fleetv1beta1.NextResourceSnapshotCandidateDetectionTimeAnnotation: validTime.Format(time.RFC3339),
+					},
+				},
+			},
+			want: validTime,
+		},
+		{
+			name: "no annotation means no next detection time",
+			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: snapshotName,
+				},
+			},
+			want: time.Time{},
+		},
+		{
+			name: "invalid annotation format",
+			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: snapshotName,
+					Annotations: map[string]string{
+						fleetv1beta1.NextResourceSnapshotCandidateDetectionTimeAnnotation: "invalid-time",
+					},
+				},
+			},
+			wantError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ExtractNextResourceSnapshotCandidateDetectionTimeFromResourceSnapshot(tc.snapshot)
+			if gotErr := err != nil; gotErr != tc.wantError {
+				t.Fatalf("ExtractNextResourceSnapshotCandidateDetectionTimeFromResourceSnapshot() got err %v, want err %v", err, tc.wantError)
+			}
+			if !tc.wantError && got != tc.want {
+				t.Errorf("ExtractNextResourceSnapshotCandidateDetectionTimeFromResourceSnapshot() got %s, want %s", got, tc.want)
 			}
 		})
 	}

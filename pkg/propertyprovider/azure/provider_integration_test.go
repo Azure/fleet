@@ -18,7 +18,10 @@ package azure
 
 import (
 	"fmt"
+	"slices"
+	"time"
 
+	"github.com/Azure/karpenter-provider-azure/pkg/providers/pricing"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
@@ -172,29 +175,100 @@ var (
 				// calculation is done using the latest pricing data. Inconsistency
 				// should seldom occur though.
 				totalCost := 0.0
+				missingSKUSet := map[string]bool{}
+				isPricingDataStale := false
+
+				pricingDataLastUpdated := pp.LastUpdated()
+				pricingDataBestAfter := time.Now().Add(-trackers.PricingDataShelfLife)
+				if pricingDataLastUpdated.Before(pricingDataBestAfter) {
+					isPricingDataStale = true
+				}
+
 				for idx := range nodes {
 					node := nodes[idx]
-					cost, found := pp.OnDemandPrice(node.Labels[trackers.AKSClusterNodeSKULabelName])
-					if !found {
-						return fmt.Errorf("on-demand price not found for SKU %s", node.Labels[trackers.AKSClusterNodeSKULabelName])
+					sku := node.Labels[trackers.AKSClusterNodeSKULabelName]
+					cost, found := pp.OnDemandPrice(sku)
+					if !found || cost == pricing.MissingPrice {
+						missingSKUSet[sku] = true
+						continue
 					}
 					totalCost += cost
 				}
-				perCPUCost := fmt.Sprintf(CostPrecisionTemplate, totalCost/totalCPUCores)
-				perGBMemoryCost := fmt.Sprintf(CostPrecisionTemplate, totalCost/totalMemoryGBs)
+				missingSKUs := []string{}
+				for sku := range missingSKUSet {
+					missingSKUs = append(missingSKUs, sku)
+				}
+				slices.Sort(missingSKUs)
+
+				perCPUCoreCost := "0.0"
+				perGBMemoryCost := "0.0"
+				costCollectionWarnings := []string{}
+				var costCollectionErr error
+
+				switch {
+				case len(nodes) == 0:
+				case totalCost == 0.0:
+					costCollectionErr = fmt.Errorf("nodes are present, but no pricing data is available for any node SKUs (%v)", missingSKUs)
+				case len(missingSKUs) > 0:
+					costCollectionErr = fmt.Errorf("no pricing data is available for one or more of the node SKUs (%v) in the cluster", missingSKUs)
+				default:
+					perCPUCoreCost = fmt.Sprintf(CostPrecisionTemplate, totalCost/totalCPUCores)
+					perGBMemoryCost = fmt.Sprintf(CostPrecisionTemplate, totalCost/totalMemoryGBs)
+				}
+
+				if isPricingDataStale {
+					costCollectionWarnings = append(costCollectionWarnings,
+						fmt.Sprintf("the pricing data is stale (last updated at %v); the system might have issues connecting to the Azure Retail Prices API, or the current region is unsupported", pricingDataLastUpdated),
+					)
+				}
+
+				wantProperties := map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+					propertyprovider.NodeCountProperty: {
+						Value: fmt.Sprintf("%d", len(nodes)),
+					},
+				}
+				if costCollectionErr == nil {
+					wantProperties[PerCPUCoreCostProperty] = clusterv1beta1.PropertyValue{
+						Value: perCPUCoreCost,
+					}
+					wantProperties[PerGBMemoryCostProperty] = clusterv1beta1.PropertyValue{
+						Value: perGBMemoryCost,
+					}
+				}
+
+				var wantConditions []metav1.Condition
+				switch {
+				case costCollectionErr != nil:
+					wantConditions = []metav1.Condition{
+						{
+							Type:    CostPropertiesCollectionSucceededCondType,
+							Status:  metav1.ConditionFalse,
+							Reason:  CostPropertiesCollectionFailedReason,
+							Message: fmt.Sprintf(CostPropertiesCollectionFailedMsgTemplate, costCollectionErr),
+						},
+					}
+				case len(costCollectionWarnings) > 0:
+					wantConditions = []metav1.Condition{
+						{
+							Type:    CostPropertiesCollectionSucceededCondType,
+							Status:  metav1.ConditionTrue,
+							Reason:  CostPropertiesCollectionDegradedReason,
+							Message: fmt.Sprintf(CostPropertiesCollectionDegradedMsgTemplate, costCollectionWarnings),
+						},
+					}
+				default:
+					wantConditions = []metav1.Condition{
+						{
+							Type:    CostPropertiesCollectionSucceededCondType,
+							Status:  metav1.ConditionTrue,
+							Reason:  CostPropertiesCollectionSucceededReason,
+							Message: CostPropertiesCollectionSucceededMsg,
+						},
+					}
+				}
 
 				expectedRes := propertyprovider.PropertyCollectionResponse{
-					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
-						propertyprovider.NodeCountProperty: {
-							Value: fmt.Sprintf("%d", len(nodes)),
-						},
-						PerCPUCoreCostProperty: {
-							Value: perCPUCost,
-						},
-						PerGBMemoryCostProperty: {
-							Value: perGBMemoryCost,
-						},
-					},
+					Properties: wantProperties,
 					Resources: clusterv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
 							corev1.ResourceCPU:    totalCPUCapacity,
@@ -209,14 +283,7 @@ var (
 							corev1.ResourceMemory: availableMemoryCapacity,
 						},
 					},
-					Conditions: []metav1.Condition{
-						{
-							Type:    PropertyCollectionSucceededConditionType,
-							Status:  metav1.ConditionTrue,
-							Reason:  PropertyCollectionSucceededReason,
-							Message: PropertyCollectionSucceededMessage,
-						},
-					},
+					Conditions: wantConditions,
 				}
 
 				res := p.Collect(ctx)
@@ -309,6 +376,236 @@ var (
 				Allocatable: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("1900m"),
 					corev1.ResourceMemory: resource.MustParse("4652372Ki"),
+				},
+			},
+		},
+	}
+
+	nodesWithSomeUnsupportedSKUs = []corev1.Node{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName1,
+				Labels: map[string]string{
+					trackers.AKSClusterNodeSKULabelName: aksNodeSKU1,
+				},
+			},
+			Spec: corev1.NodeSpec{},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("8130080Ki"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("3860m"),
+					corev1.ResourceMemory: resource.MustParse("5474848Ki"),
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName2,
+				Labels: map[string]string{
+					trackers.AKSClusterNodeSKULabelName: unsupportedSKU1,
+				},
+			},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("1000000Ki"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("1000000Ki"),
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName3,
+				Labels: map[string]string{
+					trackers.AKSClusterNodeSKULabelName: unsupportedSKU2,
+				},
+			},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2"),
+					corev1.ResourceMemory: resource.MustParse("2000000Ki"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2"),
+					corev1.ResourceMemory: resource.MustParse("2000000Ki"),
+				},
+			},
+		},
+	}
+
+	nodesWithSomeEmptySKUs = []corev1.Node{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName1,
+				Labels: map[string]string{
+					trackers.AKSClusterNodeSKULabelName: aksNodeSKU1,
+				},
+			},
+			Spec: corev1.NodeSpec{},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("8130080Ki"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("3860m"),
+					corev1.ResourceMemory: resource.MustParse("5474848Ki"),
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName2,
+			},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("1000000Ki"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("1000000Ki"),
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName3,
+			},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2"),
+					corev1.ResourceMemory: resource.MustParse("2000000Ki"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2"),
+					corev1.ResourceMemory: resource.MustParse("2000000Ki"),
+				},
+			},
+		},
+	}
+
+	nodesWithAllUnsupportedSKUs = []corev1.Node{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName1,
+				Labels: map[string]string{
+					trackers.AKSClusterNodeSKULabelName: unsupportedSKU1,
+				},
+			},
+			Spec: corev1.NodeSpec{},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("8130080Ki"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("3860m"),
+					corev1.ResourceMemory: resource.MustParse("5474848Ki"),
+				},
+			},
+		},
+	}
+
+	nodesWithAllEmptySKUs = []corev1.Node{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName1,
+			},
+			Spec: corev1.NodeSpec{},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("8130080Ki"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("3860m"),
+					corev1.ResourceMemory: resource.MustParse("5474848Ki"),
+				},
+			},
+		},
+	}
+
+	nodesWithSomeKnownMissingSKUs = []corev1.Node{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName1,
+				Labels: map[string]string{
+					trackers.AKSClusterNodeSKULabelName: aksNodeSKU1,
+				},
+			},
+			Spec: corev1.NodeSpec{},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("8130080Ki"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("3860m"),
+					corev1.ResourceMemory: resource.MustParse("5474848Ki"),
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName2,
+				Labels: map[string]string{
+					trackers.AKSClusterNodeSKULabelName: aksNodeKnownMissingSKU1,
+				},
+			},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("1000000Ki"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("1000000Ki"),
+				},
+			},
+		},
+	}
+
+	nodesWithAllKnownMissingSKUs = []corev1.Node{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName1,
+				Labels: map[string]string{
+					trackers.AKSClusterNodeSKULabelName: aksNodeKnownMissingSKU1,
+				},
+			},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("1000000Ki"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("1000000Ki"),
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName2,
+				Labels: map[string]string{
+					trackers.AKSClusterNodeSKULabelName: aksNodeKnownMissingSKU2,
+				},
+			},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("1000000Ki"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("1000000Ki"),
 				},
 			},
 		},
@@ -577,5 +874,57 @@ var _ = Describe("azure property provider", func() {
 		AfterAll(shouldDeletePods(pods[0], pods[3]))
 
 		AfterAll(shouldDeleteNodes(nodes...))
+	})
+
+	Context("nodes with some unsupported SKUs", Serial, Ordered, func() {
+		BeforeAll(shouldCreateNodes(nodesWithSomeUnsupportedSKUs...))
+
+		It("should report correct properties", shouldReportCorrectPropertiesForNodes(nodesWithSomeUnsupportedSKUs, nil))
+
+		AfterAll(shouldDeleteNodes(nodesWithSomeUnsupportedSKUs...))
+	})
+
+	Context("nodes with some empty SKUs", Serial, Ordered, func() {
+		BeforeAll(shouldCreateNodes(nodesWithSomeEmptySKUs...))
+
+		It("should report correct properties", shouldReportCorrectPropertiesForNodes(nodesWithSomeEmptySKUs, nil))
+
+		AfterAll(shouldDeleteNodes(nodesWithSomeEmptySKUs...))
+	})
+
+	Context("nodes with all unsupported SKUs", Serial, Ordered, func() {
+		BeforeAll(shouldCreateNodes(nodesWithAllUnsupportedSKUs...))
+
+		It("should report correct properties", shouldReportCorrectPropertiesForNodes(nodesWithAllUnsupportedSKUs, nil))
+
+		AfterAll(shouldDeleteNodes(nodesWithAllUnsupportedSKUs...))
+	})
+
+	Context("nodes with all empty SKUs", Serial, Ordered, func() {
+		BeforeAll(shouldCreateNodes(nodesWithAllEmptySKUs...))
+
+		It("should report correct properties", shouldReportCorrectPropertiesForNodes(nodesWithAllEmptySKUs, nil))
+
+		AfterAll(shouldDeleteNodes(nodesWithAllEmptySKUs...))
+	})
+
+	// This covers a known issue with Azure Retail Prices API, where some deprecated SKUs are no longer
+	// reported by the API, but can still be used in an AKS cluster.
+	Context("nodes with some known missing SKUs", Serial, Ordered, func() {
+		BeforeAll(shouldCreateNodes(nodesWithSomeKnownMissingSKUs...))
+
+		It("should report correct properties", shouldReportCorrectPropertiesForNodes(nodesWithSomeKnownMissingSKUs, nil))
+
+		AfterAll(shouldDeleteNodes(nodesWithSomeKnownMissingSKUs...))
+	})
+
+	// This covers a known issue with Azure Retail Prices API, where some deprecated SKUs are no longer
+	// reported by the API, but can still be used in an AKS cluster.
+	Context("nodes with all known missing SKUs", Serial, Ordered, func() {
+		BeforeAll(shouldCreateNodes(nodesWithAllKnownMissingSKUs...))
+
+		It("should report correct properties", shouldReportCorrectPropertiesForNodes(nodesWithAllKnownMissingSKUs, nil))
+
+		AfterAll(shouldDeleteNodes(nodesWithAllKnownMissingSKUs...))
 	})
 })

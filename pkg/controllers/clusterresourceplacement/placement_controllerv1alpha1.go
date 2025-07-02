@@ -69,6 +69,13 @@ type Reconciler struct {
 	Recorder record.EventRecorder
 
 	Scheme *runtime.Scheme
+
+	// ResourceSnapshotCreationMinimumInterval is the minimum interval to create a new resourcesnapshot
+	// to avoid too frequent updates.
+	ResourceSnapshotCreationMinimumInterval time.Duration
+
+	// ResourceChangesCollectionDuration is the duration for collecting resource changes into one snapshot.
+	ResourceChangesCollectionDuration time.Duration
 }
 
 // ReconcileV1Alpha1 reconciles v1aplha1 APIs.

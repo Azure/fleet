@@ -1,0 +1,19 @@
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourcePlacement
+metadata:
+  name: {{.Name}}
+  labels:
+    test: cl2-test
+spec:
+  resourceSelectors:
+    - group: ""
+      kind: Namespace
+      name: busy-cluster-test-ns-{{AddInt .Index 1}}
+      version: v1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+      unavailablePeriodSeconds: 60
+  revisionHistoryLimit: 15

@@ -26,6 +26,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -41,9 +42,10 @@ import (
 const (
 	workName = "work-1"
 
-	deployName    = "deploy-1"
-	configMapName = "configmap-1"
-	nsName        = "ns-1"
+	deployName      = "deploy-1"
+	configMapName   = "configmap-1"
+	nsName          = "ns-1"
+	clusterRoleName = "clusterrole-1"
 )
 
 var (
@@ -117,6 +119,23 @@ var (
 		},
 		Data: map[string]string{
 			dummyLabelKey: dummyLabelValue1,
+		},
+	}
+
+	clusterRole = &rbacv1.ClusterRole{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "ClusterRole",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterRoleName,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get", "list", "watch"},
+			},
 		},
 	}
 

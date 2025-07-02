@@ -34,45 +34,33 @@ const (
 )
 
 // FetchPlacementFromKey resolves a PlacementKey to a concrete placement object that implements PlacementObj.
-func FetchPlacementFromKey(ctx context.Context, c client.Client, placementKey queue.PlacementKey) (fleetv1beta1.PlacementObj, error) {
-	keyStr := string(placementKey)
-
+func FetchPlacementFromKey(ctx context.Context, c client.Reader, placementKey queue.PlacementKey) (fleetv1beta1.PlacementObj, error) {
+	// Extract namespace and name from the placement key
+	namespace, name, err := ExtractNamespaceNameFromKey(placementKey)
+	if err != nil {
+		return nil, err
+	}
 	// Check if the key contains a namespace separator
-	if strings.Contains(keyStr, namespaceSeparator) {
+	if namespace != "" {
 		// This is a namespaced ResourcePlacement
-		parts := strings.Split(keyStr, namespaceSeparator)
-		if len(parts) != 2 {
-			return nil, NewUnexpectedBehaviorError(fmt.Errorf("invalid placement key format: %s", keyStr))
-		}
-
-		namespace := parts[0]
-		name := parts[1]
-
 		rp := &fleetv1beta1.ResourcePlacement{}
 		key := types.NamespacedName{
 			Namespace: namespace,
 			Name:      name,
 		}
-
 		if err := c.Get(ctx, key, rp); err != nil {
 			return nil, err
 		}
-
 		return rp, nil
 	} else {
-		if len(keyStr) == 0 {
-			return nil, NewUnexpectedBehaviorError(fmt.Errorf("invalid placement key format: %s", keyStr))
-		}
 		// This is a cluster-scoped ClusterResourcePlacement
 		crp := &fleetv1beta1.ClusterResourcePlacement{}
 		key := types.NamespacedName{
-			Name: keyStr,
+			Name: name,
 		}
-
 		if err := c.Get(ctx, key, crp); err != nil {
 			return nil, err
 		}
-
 		return crp, nil
 	}
 }
@@ -85,5 +73,28 @@ func GetPlacementKeyFromObj(obj fleetv1beta1.PlacementObj) queue.PlacementKey {
 	} else {
 		// Namespaced placement
 		return queue.PlacementKey(obj.GetNamespace() + namespaceSeparator + obj.GetName())
+	}
+}
+
+// ExtractNamespaceNameFromKey resolves a PlacementKey to a (namespace, name) tuple of the placement object.
+func ExtractNamespaceNameFromKey(placementKey queue.PlacementKey) (string, string, error) {
+	keyStr := string(placementKey)
+	// Check if the key contains a namespace separator
+	if strings.Contains(keyStr, namespaceSeparator) {
+		// This is a namespaced ResourcePlacement
+		parts := strings.Split(keyStr, namespaceSeparator)
+		if len(parts) != 2 {
+			return "", "", NewUnexpectedBehaviorError(fmt.Errorf("invalid placement key format: %s", keyStr))
+		}
+		if len(parts[0]) == 0 || len(parts[1]) == 0 {
+			return "", "", NewUnexpectedBehaviorError(fmt.Errorf("empty placement key <namespace/name>: %s", keyStr))
+		}
+		return parts[0], parts[1], nil
+	} else {
+		if len(keyStr) == 0 {
+			return "", "", NewUnexpectedBehaviorError(fmt.Errorf("empty placement key"))
+		}
+		// This is a cluster-scoped ClusterResourcePlacement
+		return "", keyStr, nil
 	}
 }

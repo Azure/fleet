@@ -207,6 +207,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 		AfterAll(func() {
 			By(fmt.Sprintf("deleting envelope %s", testResourceEnvelope.Name))
 			Expect(hubClient.Delete(ctx, &testResourceEnvelope)).To(Succeed(), "Failed to delete ResourceEnvelope")
+			By(fmt.Sprintf("deleting envelope %s", testClusterResourceEnvelope.Name))
 			Expect(hubClient.Delete(ctx, &testClusterResourceEnvelope)).To(Succeed(), "Failed to delete testClusterResourceEnvelope")
 			By(fmt.Sprintf("deleting placement %s and related resources", crpName))
 			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)

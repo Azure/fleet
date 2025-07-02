@@ -525,10 +525,10 @@ func (r *Reconciler) selectResourcesForPlacement(placement *fleetv1beta1.Cluster
 			return 0, nil, nil, err
 		}
 		uGVK := unstructuredObj.GetObjectKind().GroupVersionKind().GroupKind()
-		switch {
-		case uGVK == utils.ClusterResourceEnvelopeGK:
+		switch uGVK {
+		case utils.ClusterResourceEnvelopeGK:
 			envelopeObjCount++
-		case uGVK == utils.ResourceEnvelopeGK:
+		case utils.ResourceEnvelopeGK:
 			envelopeObjCount++
 		}
 		resources[i] = *rc

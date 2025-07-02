@@ -163,10 +163,10 @@ var _ = BeforeSuite(func() {
 		hubMgr.GetEventRecorderFor("work-applier"),
 		maxConcurrentReconciles,
 		workerCount,
-		time.Second*5,
-		time.Second*5,
+		30*time.Second,
 		true,
 		60,
+		defaultRequeueRateLimiter,
 	)
 	Expect(workApplier.SetupWithManager(hubMgr)).To(Succeed())
 

@@ -19,7 +19,6 @@ package workapplier
 import (
 	"context"
 	"fmt"
-	"reflect"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -544,7 +543,7 @@ func isInMemberClusterObjectDerivedFromManifestObj(inMemberClusterObj *unstructu
 	// Verify if the owner reference still stands.
 	curOwners := inMemberClusterObj.GetOwnerReferences()
 	for idx := range curOwners {
-		if reflect.DeepEqual(curOwners[idx], *expectedAppliedWorkOwnerRef) {
+		if areOwnerRefsEqual(&curOwners[idx], expectedAppliedWorkOwnerRef) {
 			return true
 		}
 	}
@@ -558,9 +557,19 @@ func removeOwnerRef(obj *unstructured.Unstructured, expectedAppliedWorkOwnerRef 
 
 	// Re-build the owner references; remove the given one from the list.
 	for idx := range ownerRefs {
-		if !reflect.DeepEqual(ownerRefs[idx], *expectedAppliedWorkOwnerRef) {
-			updatedOwnerRefs = append(updatedOwnerRefs, ownerRefs[idx])
+		if areOwnerRefsEqual(&ownerRefs[idx], expectedAppliedWorkOwnerRef) {
+			// Skip the expected owner reference.
+			continue
 		}
+		updatedOwnerRefs = append(updatedOwnerRefs, ownerRefs[idx])
 	}
 	obj.SetOwnerReferences(updatedOwnerRefs)
+}
+
+// areOwnerRefsEqual returns true if two owner references are equal based on UID, Name, Kind, and APIVersion.
+func areOwnerRefsEqual(a, b *metav1.OwnerReference) bool {
+	return a.UID == b.UID &&
+		a.Name == b.Name &&
+		a.Kind == b.Kind &&
+		a.APIVersion == b.APIVersion
 }

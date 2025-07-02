@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -1075,7 +1076,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 		t.Fatalf("failed to create the resourceSnapshotSpecWithMultipleResources hash: %v", err)
 	}
 	resourceSnapshotSpecWithMultipleResourcesHash := fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
-
+	now := metav1.Now()
+	nowToString := now.Time.Format(time.RFC3339)
 	tests := []struct {
 		name                       string
 		envelopeObjCount           int
@@ -1085,6 +1087,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 		resourceSnapshots          []fleetv1beta1.ClusterResourceSnapshot
 		wantResourceSnapshots      []fleetv1beta1.ClusterResourceSnapshot
 		wantLatestSnapshotIndex    int // index of the wantPolicySnapshots array
+		wantRequeue                bool
 	}{
 		{
 			name:                 "new resourceSnapshot and no existing snapshots owned by my-crp",
@@ -1303,6 +1306,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithServiceResourceHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
 						},
+						CreationTimestamp: now,
 					},
 					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent}},
 				},
@@ -1338,7 +1342,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 			wantLatestSnapshotIndex: 0,
 		},
 		{
-			name:                 "resource has changed and there is an active snapshot with multiple revisionLimit",
+			name:                 "resource has changed too fast and there is an active snapshot with multiple revisionLimit",
 			envelopeObjCount:     3,
 			resourceSnapshotSpec: &fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{}},
 			revisionHistoryLimit: &multipleRevisionLimit,
@@ -1364,6 +1368,159 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithServiceResourceHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "3",
 						},
+						CreationTimestamp: now,
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent}},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "0",
+							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testCRPName,
+								BlockOwnerDeletion: ptr.To(true),
+								Controller:         ptr.To(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
+						},
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{}},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 1),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "0",
+							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testCRPName,
+								BlockOwnerDeletion: ptr.To(true),
+								Controller:         ptr.To(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "1",
+						},
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{}},
+				},
+			},
+			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "0",
+							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testCRPName,
+								BlockOwnerDeletion: ptr.To(true),
+								Controller:         ptr.To(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation:                          resourceSnapshotSpecWithServiceResourceHash,
+							fleetv1beta1.NumberOfResourceSnapshotsAnnotation:                  "3",
+							fleetv1beta1.NextResourceSnapshotCandidateDetectionTimeAnnotation: nowToString,
+						},
+						CreationTimestamp: now,
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent}},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "0",
+							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testCRPName,
+								BlockOwnerDeletion: ptr.To(true),
+								Controller:         ptr.To(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
+						},
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{}},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 1),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "0",
+							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testCRPName,
+								BlockOwnerDeletion: ptr.To(true),
+								Controller:         ptr.To(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "1",
+						},
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{}},
+				},
+			},
+			wantRequeue:             true,
+			wantLatestSnapshotIndex: 0,
+		},
+		{
+			name:                 "resource has changed and there is an active snapshot with multiple revisionLimit",
+			envelopeObjCount:     3,
+			resourceSnapshotSpec: &fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{}},
+			revisionHistoryLimit: &multipleRevisionLimit,
+			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "0",
+							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testCRPName,
+								BlockOwnerDeletion: ptr.To(true),
+								Controller:         ptr.To(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation:                          resourceSnapshotSpecWithServiceResourceHash,
+							fleetv1beta1.NumberOfResourceSnapshotsAnnotation:                  "3",
+							fleetv1beta1.NextResourceSnapshotCandidateDetectionTimeAnnotation: now.Add(-5 * time.Minute).Format(time.RFC3339),
+						},
+						CreationTimestamp: metav1.NewTime(now.Time.Add(-1 * time.Hour)),
 					},
 					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent}},
 				},
@@ -1475,8 +1632,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithServiceResourceHash,
-							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "3",
+							fleetv1beta1.ResourceGroupHashAnnotation:                          resourceSnapshotSpecWithServiceResourceHash,
+							fleetv1beta1.NumberOfResourceSnapshotsAnnotation:                  "3",
+							fleetv1beta1.NextResourceSnapshotCandidateDetectionTimeAnnotation: now.Add(-5 * time.Minute).Format(time.RFC3339),
 						},
 					},
 					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent}},
@@ -1535,6 +1693,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "2",
 							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
 						},
+						CreationTimestamp: now,
 					},
 					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent}},
 				},
@@ -1694,6 +1853,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "3",
 							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
 						},
+						CreationTimestamp: now,
 					},
 					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent}},
 				},
@@ -1795,10 +1955,12 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithMultipleResourcesHash,
-							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "3",
-							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
+							fleetv1beta1.ResourceGroupHashAnnotation:                          resourceSnapshotSpecWithMultipleResourcesHash,
+							fleetv1beta1.NumberOfResourceSnapshotsAnnotation:                  "3",
+							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:                   "0",
+							fleetv1beta1.NextResourceSnapshotCandidateDetectionTimeAnnotation: now.Add(-5 * time.Minute).Format(time.RFC3339),
 						},
+						CreationTimestamp: metav1.NewTime(now.Time.Add(-1 * time.Hour)),
 					},
 					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent}},
 				},
@@ -1899,9 +2061,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 			wantLatestSnapshotIndex: 0,
 		},
 		{
-			name:                       "selected resources cross clusterResourceSnapshot limit, revision limit is 1, delete existing clusterResourceSnapshot with missing sub-indexed snapshots & create new clusterResourceSnapshots",
+			name:                       "resource has changed too fast, selected resources cross clusterResourceSnapshot limit, revision limit is 1",
 			selectedResourcesSizeLimit: 100,
-			resourceSnapshotSpec:       &fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent}},
+			resourceSnapshotSpec:       &fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent, secretResourceContent}},
 			revisionHistoryLimit:       &singleRevisionLimit,
 			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
 				{
@@ -1926,6 +2088,161 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "3",
 							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
 						},
+						CreationTimestamp: now,
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent}},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "0",
+							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testCRPName,
+								BlockOwnerDeletion: ptr.To(true),
+								Controller:         ptr.To(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
+						},
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{secretResourceContent}},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 1),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "0",
+							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testCRPName,
+								BlockOwnerDeletion: ptr.To(true),
+								Controller:         ptr.To(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "1",
+						},
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{deploymentResourceContent}},
+				},
+			},
+			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "0",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testCRPName,
+								BlockOwnerDeletion: ptr.To(true),
+								Controller:         ptr.To(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation:                          resourceSnapshotSpecWithMultipleResourcesHash,
+							fleetv1beta1.NumberOfResourceSnapshotsAnnotation:                  "3",
+							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:                   "0",
+							fleetv1beta1.NextResourceSnapshotCandidateDetectionTimeAnnotation: nowToString,
+						},
+						CreationTimestamp: now,
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent}},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "0",
+							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testCRPName,
+								BlockOwnerDeletion: ptr.To(true),
+								Controller:         ptr.To(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
+						},
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{secretResourceContent}},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 1),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "0",
+							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testCRPName,
+								BlockOwnerDeletion: ptr.To(true),
+								Controller:         ptr.To(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "1",
+						},
+					},
+					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{deploymentResourceContent}},
+				},
+			},
+			wantRequeue:             true,
+			wantLatestSnapshotIndex: 0,
+		},
+		{
+			name:                       "selected resources cross clusterResourceSnapshot limit, revision limit is 1, delete existing clusterResourceSnapshot with missing sub-indexed snapshots & create new clusterResourceSnapshots",
+			selectedResourcesSizeLimit: 100,
+			resourceSnapshotSpec:       &fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent}},
+			revisionHistoryLimit:       &singleRevisionLimit,
+			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "0",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testCRPName,
+								BlockOwnerDeletion: ptr.To(true),
+								Controller:         ptr.To(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation:                          resourceSnapshotSpecWithMultipleResourcesHash,
+							fleetv1beta1.NumberOfResourceSnapshotsAnnotation:                  "3",
+							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:                   "0",
+							fleetv1beta1.NextResourceSnapshotCandidateDetectionTimeAnnotation: now.Add(-5 * time.Minute).Format(time.RFC3339),
+						},
+						CreationTimestamp: metav1.NewTime(now.Time.Add(-1 * time.Hour)),
 					},
 					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent}},
 				},
@@ -2005,10 +2322,12 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithServiceResourceHash,
-							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
-							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
+							fleetv1beta1.ResourceGroupHashAnnotation:                          resourceSnapshotSpecWithServiceResourceHash,
+							fleetv1beta1.NumberOfResourceSnapshotsAnnotation:                  "1",
+							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:                   "0",
+							fleetv1beta1.NextResourceSnapshotCandidateDetectionTimeAnnotation: now.Add(-5 * time.Minute).Format(time.RFC3339),
 						},
+						CreationTimestamp: metav1.NewTime(now.Time.Add(-1 * time.Hour)),
 					},
 					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent}},
 				},
@@ -2032,9 +2351,10 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithServiceResourceHash,
-							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
-							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
+							fleetv1beta1.ResourceGroupHashAnnotation:                          resourceSnapshotSpecWithServiceResourceHash,
+							fleetv1beta1.NumberOfResourceSnapshotsAnnotation:                  "1",
+							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:                   "0",
+							fleetv1beta1.NextResourceSnapshotCandidateDetectionTimeAnnotation: now.Add(-5 * time.Minute).Format(time.RFC3339),
 						},
 					},
 					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent}},
@@ -2117,6 +2437,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "2",
 							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
 						},
+						CreationTimestamp: now,
 					},
 					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent}},
 				},
@@ -2222,6 +2543,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
 							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
 						},
+						CreationTimestamp: now,
 					},
 					Spec: fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent}},
 				},
@@ -2369,24 +2691,34 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 				WithObjects(objects...).
 				Build()
 			r := Reconciler{
-				Client:   fakeClient,
-				Scheme:   scheme,
-				Recorder: record.NewFakeRecorder(10),
+				Client:                                  fakeClient,
+				Scheme:                                  scheme,
+				Recorder:                                record.NewFakeRecorder(10),
+				ResourceSnapshotCreationMinimumInterval: 1 * time.Minute,
 			}
 			limit := int32(defaulter.DefaultRevisionHistoryLimitValue)
 			if tc.revisionHistoryLimit != nil {
 				limit = *tc.revisionHistoryLimit
 			}
 			resourceSnapshotResourceSizeLimit = tc.selectedResourcesSizeLimit
-			got, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, tc.envelopeObjCount, tc.resourceSnapshotSpec, int(limit))
+			res, got, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, tc.envelopeObjCount, tc.resourceSnapshotSpec, int(limit))
 			if err != nil {
 				t.Fatalf("failed to handle getOrCreateClusterResourceSnapshot: %v", err)
 			}
+			if res.Requeue != tc.wantRequeue {
+				t.Fatalf("getOrCreateClusterResourceSnapshot() got Requeue %v, want %v", res.Requeue, tc.wantRequeue)
+			}
+
 			options := []cmp.Option{
-				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
+				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "CreationTimestamp"),
 				// Fake API server will add a newline for the runtime.RawExtension type.
 				// ignoring the resourceContent field for now
 				cmpopts.IgnoreFields(runtime.RawExtension{}, "Raw"),
+			}
+			if tc.wantRequeue {
+				if res.RequeueAfter <= 0 {
+					t.Fatalf("getOrCreateClusterResourceSnapshot() got RequeueAfter %v, want greater than zero value", res.RequeueAfter)
+				}
 			}
 			if diff := cmp.Diff(tc.wantResourceSnapshots[tc.wantLatestSnapshotIndex], *got, options...); diff != "" {
 				t.Errorf("getOrCreateClusterResourceSnapshot() mismatch (-want, +got):\n%s", diff)
@@ -2395,7 +2727,22 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 			if err := fakeClient.List(ctx, clusterResourceSnapshotList); err != nil {
 				t.Fatalf("clusterResourceSnapshot List() got error %v, want no error", err)
 			}
-			options = append(options, sortClusterResourceSnapshotOption)
+			annotationOption := cmp.Transformer("NormalizeAnnotations", func(m map[string]string) map[string]string {
+				normalized := map[string]string{}
+				for k, v := range m {
+					if k == fleetv1beta1.NextResourceSnapshotCandidateDetectionTimeAnnotation {
+						// Normalize the resource group hash annotation to a fixed value for comparison.
+						if _, err := time.Parse(time.RFC3339, v); err != nil {
+							normalized[k] = ""
+						}
+						normalized[k] = nowToString
+					} else {
+						normalized[k] = v
+					}
+				}
+				return normalized
+			})
+			options = append(options, sortClusterResourceSnapshotOption, annotationOption)
 			if diff := cmp.Diff(tc.wantResourceSnapshots, clusterResourceSnapshotList.Items, options...); diff != "" {
 				t.Errorf("clusterResourceSnapshot List() mismatch (-want, +got):\n%s", diff)
 			}
@@ -2742,9 +3089,12 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 				Client: fakeClient,
 				Scheme: scheme,
 			}
-			_, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, 0, resourceSnapshotSpecA, 1)
+			res, _, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, 0, resourceSnapshotSpecA, 1)
 			if err == nil { // if error is nil
 				t.Fatal("getOrCreateClusterResourceSnapshot() = nil, want err")
+			}
+			if res.Requeue {
+				t.Fatal("getOrCreateClusterResourceSnapshot() requeue = true, want false")
 			}
 			if !errors.Is(err, controller.ErrUnexpectedBehavior) {
 				t.Errorf("getOrCreateClusterResourceSnapshot() got %v, want %v type", err, controller.ErrUnexpectedBehavior)
@@ -4147,6 +4497,133 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 				if diff := cmp.Diff(tc.wantConditions, crp.Status.Conditions, cmpOptions...); diff != "" {
 					t.Errorf("determineRolloutStateForCRPWithExternalRolloutStrategy() got crp.Status.Conditions mismatch (-want, +got):\n%s", diff)
 				}
+			}
+		})
+	}
+}
+
+func TestShouldCreateNewResourceSnapshotNow(t *testing.T) {
+	now := time.Now()
+
+	cases := []struct {
+		name               string
+		creationInterval   time.Duration
+		collectionDuration time.Duration
+		creationTime       time.Time
+		annotationValue    string
+		wantAnnoation      bool
+		wantRequeue        ctrl.Result
+	}{
+		{
+			name:               "ResourceSnapshotCreationMinimumInterval and ResourceChangesCollectionDuration are 0",
+			creationInterval:   0,
+			collectionDuration: 0,
+			wantRequeue:        ctrl.Result{Requeue: false},
+		},
+		{
+			name:               "ResourceSnapshotCreationMinimumInterval is 0",
+			creationInterval:   0,
+			collectionDuration: 30 * time.Second,
+			annotationValue:    now.Add(-10 * time.Second).Format(time.RFC3339),
+			wantAnnoation:      true,
+			wantRequeue:        ctrl.Result{Requeue: true, RequeueAfter: 20 * time.Second},
+		},
+		{
+			name:               "ResourceChangesCollectionDuration is 0",
+			creationInterval:   300 * time.Second,
+			collectionDuration: 0,
+			creationTime:       now.Add(-5 * time.Second),
+			// no annotation → sets it and requeues
+			annotationValue: "",
+			wantAnnoation:   true,
+			wantRequeue:     ctrl.Result{Requeue: true, RequeueAfter: 295 * time.Second},
+		},
+		{
+			name:               "next detection time (now) + collection duration < latest resource snapshot creation time + creation interval",
+			creationInterval:   300 * time.Second,
+			collectionDuration: 30 * time.Second,
+			creationTime:       now.Add(-5 * time.Second),
+			// no annotation → sets it and requeues
+			annotationValue: "",
+			wantAnnoation:   true,
+			wantRequeue:     ctrl.Result{Requeue: true, RequeueAfter: 295 * time.Second},
+		},
+		{
+			name:               "next detection time (annotation) + collection duration < latest resource snapshot creation time + creation interval",
+			creationInterval:   300 * time.Second,
+			collectionDuration: 30 * time.Second,
+			creationTime:       now.Add(-10 * time.Second),
+			annotationValue:    now.Add(-5 * time.Second).Format(time.RFC3339),
+			wantAnnoation:      true,
+			wantRequeue:        ctrl.Result{Requeue: true, RequeueAfter: 290 * time.Second},
+		},
+		{
+			name:               "last resource snapshot created long time before",
+			creationInterval:   60 * time.Second,
+			collectionDuration: 30 * time.Second,
+			creationTime:       now.Add(-1 * time.Hour),
+			wantAnnoation:      true,
+			wantRequeue:        ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second},
+		},
+		{
+			name:               "next detection time (now) + collection duration >= latest resource snapshot creation time + creation interval",
+			creationInterval:   60 * time.Second,
+			collectionDuration: 60 * time.Second,
+			creationTime:       now.Add(-40 * time.Second),
+			wantAnnoation:      true,
+			wantRequeue:        ctrl.Result{Requeue: true, RequeueAfter: 60 * time.Second},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// initialize a snapshot with given creation time and annotation
+			snapshot := &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "test-snapshot",
+					CreationTimestamp: metav1.Time{Time: tc.creationTime},
+					Annotations:       map[string]string{},
+				},
+			}
+			if tc.annotationValue != "" {
+				snapshot.Annotations[fleetv1beta1.NextResourceSnapshotCandidateDetectionTimeAnnotation] = tc.annotationValue
+			}
+
+			// use fake client seeded with the snapshot
+			scheme := serviceScheme(t)
+			client := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithRuntimeObjects(snapshot.DeepCopy()).
+				Build()
+
+			r := &Reconciler{
+				Client:                                  client,
+				ResourceSnapshotCreationMinimumInterval: tc.creationInterval,
+				ResourceChangesCollectionDuration:       tc.collectionDuration,
+			}
+
+			ctx := context.Background()
+			if err := client.Get(ctx, types.NamespacedName{Name: snapshot.Name}, snapshot); err != nil {
+				t.Fatalf("Failed to get snapshot: %v", err)
+			}
+			got, err := r.shouldCreateNewResourceSnapshotNow(ctx, snapshot)
+			if err != nil {
+				t.Fatalf("shouldCreateNewResourceSnapshotNow() failed: %v", err)
+			}
+			cmpOptions := []cmp.Option{cmp.Comparer(func(d1, d2 time.Duration) bool {
+				if d1 == 0 {
+					return d2 == 0 // both are zero
+				}
+				return time.Duration.Abs(d1-d2) < 3*time.Second // allow 1 second difference
+			})}
+			if !cmp.Equal(got, tc.wantRequeue, cmpOptions...) {
+				t.Errorf("shouldCreateNewResourceSnapshotNow() = %v, want %v", got, tc.wantRequeue)
+			}
+			if err := client.Get(ctx, types.NamespacedName{Name: snapshot.Name}, snapshot); err != nil {
+				t.Fatalf("failed to get snapshot after shouldCreateNewResourceSnapshotNow: %v", err)
+			}
+			if gotAnnotation := len(snapshot.Annotations[fleetv1beta1.NextResourceSnapshotCandidateDetectionTimeAnnotation]) != 0; tc.wantAnnoation != gotAnnotation {
+				t.Errorf("shouldCreateNewResourceSnapshotNow() = annotation %v, want %v", snapshot.Annotations[fleetv1beta1.NextResourceSnapshotCandidateDetectionTimeAnnotation], tc.wantAnnoation)
 			}
 		})
 	}
