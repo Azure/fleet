@@ -1,20 +1,4 @@
 /*
-Copyright 2021 The Kubernetes Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
-/*
 Copyright 2025 The KubeFleet Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,6 +18,7 @@ package workapplier
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"go.uber.org/atomic"
@@ -69,8 +54,6 @@ import (
 
 const (
 	patchDetailPerObjLimit = 100
-
-	minRequestAfterDuration = time.Second * 5
 )
 
 const (
@@ -196,6 +179,41 @@ func (h *PriorityQueueEventHandler) Generic(ctx context.Context, evt event.Typed
 	h.AddToPriorityQueue(ctx, evt.Object, false)
 }
 
+var defaultRequeueRateLimiter *RequeueMultiStageWithExponentialBackoffRateLimiter = NewRequeueMultiStageWithExponentialBackoffRateLimiter(
+	// Allow 1 attempt of fixed delay; this helps give objects a bit of headroom to get available (or have
+	// diffs reported).
+	1,
+	// Use a fixed delay of 5 seconds for the first two attempts.
+	//
+	// Important (chenyu1): before the introduction of the requeue rate limiter, the work
+	// applier uses static requeue intervals, specifically 5 seconds (if the work object is unavailable),
+	// and 15 seconds (if the work object is available). There are a number of test cases that
+	// implicitly assume this behavior (e.g., a test case might expect that the availability check completes
+	// w/in 10 seconds), which is why the rate limiter uses the 5 seconds fast requeue delay by default.
+	// If you need to change this value and see that some test cases begin to fail, update the test
+	// cases accordingly.
+	5,
+	// Then switch to slow exponential backoff with a base of 1.2 with an initial delay of 2 seconds
+	// and a cap of 15 seconds (12 requeues in total, ~90 seconds in total).
+	// This is to allow fast checkups in cases where objects are not yet available or have not yet reported diffs.
+	1.2,
+	2,
+	15,
+	// Eventually, switch to a fast exponential backoff with a base of 1.5 with an initial delay of 15 seconds
+	// and a cap of 15 minutes (10 requeues in total, ~42 minutes in total).
+	1.5,
+	900,
+	// Allow skipping to the fast exponential backoff stage if the Work object becomes available
+	// or has reported diffs.
+	true,
+	// When the Work object spec does not change and the processing result remains the same (unavailable or failed
+	// to report diffs), the requeue pattern is essentially:
+	// * 1 attempt of requeue with fixed delays (5 seconds); then
+	// * 12 attempts of requeues with slow exponential backoff (factor of 1.2, ~90 seconds in total); then
+	// * 10 attempts of requeues with fast exponential backoff (factor of 1.5, ~42 minutes in total);
+	// * afterwards, requeue with a delay of 15 minutes indefinitely.
+)
+
 // Reconciler reconciles a Work object.
 type Reconciler struct {
 	hubClient                    client.Client
@@ -207,50 +225,45 @@ type Reconciler struct {
 	concurrentReconciles         int
 	watchWorkWithPriorityQueue   bool
 	watchWorkReconcileAgeMinutes int
+	deletionWaitTime             time.Duration
 	joined                       *atomic.Bool
 	parallelizer                 *parallelizer.Parallerlizer
-
-	availabilityCheckRequeueAfter time.Duration
-	driftCheckRequeueAfter        time.Duration
+	requeueRateLimiter           *RequeueMultiStageWithExponentialBackoffRateLimiter
 }
 
+// NewReconciler returns a new Work object reconciler for the work applier.
+//
+// TO-DO (chenyu1): evaluate if KubeFleet needs to expose the requeue rate limiter
+// parameters as command-line arguments for user-side configuration.
 func NewReconciler(
 	hubClient client.Client, workNameSpace string,
 	spokeDynamicClient dynamic.Interface, spokeClient client.Client, restMapper meta.RESTMapper,
 	recorder record.EventRecorder,
 	concurrentReconciles int,
 	workerCount int,
-	availabilityCheckRequestAfter time.Duration,
-	driftCheckRequestAfter time.Duration,
+	deletionWaitTime time.Duration,
 	watchWorkWithPriorityQueue bool,
 	watchWorkReconcileAgeMinutes int,
+	requeueRateLimiter *RequeueMultiStageWithExponentialBackoffRateLimiter,
 ) *Reconciler {
-	acRequestAfter := availabilityCheckRequestAfter
-	if acRequestAfter < minRequestAfterDuration {
-		klog.V(2).InfoS("Availability check requeue after duration is too short; set to the longer default", "availabilityCheckRequestAfter", acRequestAfter)
-		acRequestAfter = minRequestAfterDuration
-	}
-
-	dcRequestAfter := driftCheckRequestAfter
-	if dcRequestAfter < minRequestAfterDuration {
-		klog.V(2).InfoS("Drift check requeue after duration is too short; set to the longer default", "driftCheckRequestAfter", dcRequestAfter)
-		dcRequestAfter = minRequestAfterDuration
+	if requeueRateLimiter == nil {
+		requeueRateLimiter = defaultRequeueRateLimiter
 	}
 
 	return &Reconciler{
-		hubClient:                     hubClient,
-		spokeDynamicClient:            spokeDynamicClient,
-		spokeClient:                   spokeClient,
-		restMapper:                    restMapper,
-		recorder:                      recorder,
-		concurrentReconciles:          concurrentReconciles,
-		parallelizer:                  parallelizer.NewParallelizer(workerCount),
-		watchWorkWithPriorityQueue:    watchWorkWithPriorityQueue,
-		watchWorkReconcileAgeMinutes:  watchWorkReconcileAgeMinutes,
-		workNameSpace:                 workNameSpace,
-		joined:                        atomic.NewBool(false),
-		availabilityCheckRequeueAfter: acRequestAfter,
-		driftCheckRequeueAfter:        dcRequestAfter,
+		hubClient:                    hubClient,
+		spokeDynamicClient:           spokeDynamicClient,
+		spokeClient:                  spokeClient,
+		restMapper:                   restMapper,
+		recorder:                     recorder,
+		concurrentReconciles:         concurrentReconciles,
+		parallelizer:                 parallelizer.NewParallelizer(workerCount),
+		watchWorkWithPriorityQueue:   watchWorkWithPriorityQueue,
+		watchWorkReconcileAgeMinutes: watchWorkReconcileAgeMinutes,
+		workNameSpace:                workNameSpace,
+		joined:                       atomic.NewBool(false),
+		deletionWaitTime:             deletionWaitTime,
+		requeueRateLimiter:           requeueRateLimiter,
 	}
 }
 
@@ -417,7 +430,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		Kind:               fleetv1beta1.AppliedWorkKind,
 		Name:               appliedWork.GetName(),
 		UID:                appliedWork.GetUID(),
-		BlockOwnerDeletion: ptr.To(false),
+		BlockOwnerDeletion: ptr.To(true),
 	}
 
 	// Set the default values for the Work object to avoid additional validation logic in the
@@ -475,39 +488,121 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	trackWorkAndManifestProcessingRequestMetrics(work)
 
-	// If the Work object is not yet available, reconcile again.
-	if !isWorkObjectAvailable(work) {
-		klog.V(2).InfoS("Work object is not yet in an available state; requeue to monitor its availability", "work", workRef)
-		return ctrl.Result{RequeueAfter: r.availabilityCheckRequeueAfter}, nil
-	}
-	// Otherwise, reconcile again for drift detection purposes.
-	klog.V(2).InfoS("Work object is available; requeue to check for drifts", "work", workRef)
-	return ctrl.Result{RequeueAfter: r.driftCheckRequeueAfter}, nil
+	// Requeue the Work object with a delay based on the requeue rate limiter.
+	requeueDelay := r.requeueRateLimiter.When(work, bundles)
+	klog.V(2).InfoS("Requeue the Work object for re-processing", "work", workRef, "delaySeconds", requeueDelay.Seconds())
+	return ctrl.Result{RequeueAfter: requeueDelay}, nil
 }
 
-// garbageCollectAppliedWork deletes the appliedWork and all the manifests associated with it from the cluster.
 func (r *Reconciler) garbageCollectAppliedWork(ctx context.Context, work *fleetv1beta1.Work) (ctrl.Result, error) {
-	deletePolicy := metav1.DeletePropagationBackground
+	deletePolicy := metav1.DeletePropagationForeground
 	if !controllerutil.ContainsFinalizer(work, fleetv1beta1.WorkFinalizer) {
 		return ctrl.Result{}, nil
 	}
-	// delete the appliedWork which will remove all the manifests associated with it
-	// TODO: allow orphaned manifest
-	appliedWork := fleetv1beta1.AppliedWork{
+	appliedWork := &fleetv1beta1.AppliedWork{
 		ObjectMeta: metav1.ObjectMeta{Name: work.Name},
 	}
-	err := r.spokeClient.Delete(ctx, &appliedWork, &client.DeleteOptions{PropagationPolicy: &deletePolicy})
-	switch {
-	case apierrors.IsNotFound(err):
-		klog.V(2).InfoS("The appliedWork is already deleted", "appliedWork", work.Name)
-	case err != nil:
-		klog.ErrorS(err, "Failed to delete the appliedWork", "appliedWork", work.Name)
+	// Get the AppliedWork object
+	if err := r.spokeClient.Get(ctx, types.NamespacedName{Name: work.Name}, appliedWork); err != nil {
+		if apierrors.IsNotFound(err) {
+			klog.V(2).InfoS("The appliedWork is already deleted, removing the finalizer from the work", "appliedWork", work.Name)
+			return r.forgetWorkAndRemoveFinalizer(ctx, work)
+		}
+		klog.ErrorS(err, "Failed to get AppliedWork", "appliedWork", work.Name)
 		return ctrl.Result{}, controller.NewAPIServerError(false, err)
-	default:
-		klog.InfoS("Successfully deleted the appliedWork", "appliedWork", work.Name)
 	}
-	controllerutil.RemoveFinalizer(work, fleetv1beta1.WorkFinalizer)
 
+	// Handle stuck deletion after 5 minutes where the other owner references might not exist or are invalid.
+	if !appliedWork.DeletionTimestamp.IsZero() && time.Since(appliedWork.DeletionTimestamp.Time) >= r.deletionWaitTime {
+		klog.V(2).InfoS("AppliedWork deletion appears stuck; attempting to patch owner references", "appliedWork", work.Name)
+		if err := r.updateOwnerReference(ctx, work, appliedWork); err != nil {
+			klog.ErrorS(err, "Failed to update owner references for AppliedWork", "appliedWork", work.Name)
+			return ctrl.Result{}, controller.NewAPIServerError(false, err)
+		}
+		return ctrl.Result{}, fmt.Errorf("AppliedWork %s is being deleted, waiting for the deletion to complete", work.Name)
+	}
+
+	if err := r.spokeClient.Delete(ctx, appliedWork, &client.DeleteOptions{PropagationPolicy: &deletePolicy}); err != nil {
+		if apierrors.IsNotFound(err) {
+			klog.V(2).InfoS("AppliedWork already deleted", "appliedWork", work.Name)
+			return r.forgetWorkAndRemoveFinalizer(ctx, work)
+		}
+		klog.V(2).ErrorS(err, "Failed to delete the appliedWork", "appliedWork", work.Name)
+		return ctrl.Result{}, controller.NewAPIServerError(false, err)
+	}
+
+	klog.V(2).InfoS("AppliedWork deletion in progress", "appliedWork", work.Name)
+	return ctrl.Result{}, fmt.Errorf("AppliedWork %s is being deleted, waiting for the deletion to complete", work.Name)
+}
+
+// updateOwnerReference updates the AppliedWork owner reference in the manifest objects.
+// It changes the blockOwnerDeletion field to false, so that the AppliedWork can be deleted in cases where
+// the other owner references do not exist or are invalid.
+// https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/#owner-references-in-object-specifications
+func (r *Reconciler) updateOwnerReference(ctx context.Context, work *fleetv1beta1.Work, appliedWork *fleetv1beta1.AppliedWork) error {
+	appliedWorkOwnerRef := &metav1.OwnerReference{
+		APIVersion: fleetv1beta1.GroupVersion.String(),
+		Kind:       "AppliedWork",
+		Name:       appliedWork.Name,
+		UID:        appliedWork.UID,
+	}
+
+	if err := r.hubClient.Get(ctx, types.NamespacedName{Name: work.Name, Namespace: work.Namespace}, work); err != nil {
+		if apierrors.IsNotFound(err) {
+			klog.V(2).InfoS("Work object not found, skipping owner reference update", "work", work.Name, "namespace", work.Namespace)
+			return nil
+		}
+		klog.ErrorS(err, "Failed to get Work object for owner reference update", "work", work.Name, "namespace", work.Namespace)
+		return controller.NewAPIServerError(false, err)
+	}
+
+	for _, cond := range work.Status.ManifestConditions {
+		res := cond.Identifier
+		gvr := schema.GroupVersionResource{
+			Group:    res.Group,
+			Version:  res.Version,
+			Resource: res.Resource,
+		}
+
+		var obj *unstructured.Unstructured
+		var err error
+		if obj, err = r.spokeDynamicClient.Resource(gvr).Namespace(res.Namespace).Get(ctx, res.Name, metav1.GetOptions{}); err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			klog.ErrorS(err, "Failed to get manifest", "gvr", gvr, "name", res.Name, "namespace", res.Namespace)
+			return err
+		}
+		// Check if there is more than one owner reference. If there is only one owner reference, it is the appliedWork itself.
+		// Otherwise, at least one other owner reference exists, and we need to leave resource alone.
+		if len(obj.GetOwnerReferences()) > 1 {
+			ownerRefs := obj.GetOwnerReferences()
+			updated := false
+			for idx := range ownerRefs {
+				if areOwnerRefsEqual(&ownerRefs[idx], appliedWorkOwnerRef) {
+					ownerRefs[idx].BlockOwnerDeletion = ptr.To(false)
+					updated = true
+				}
+			}
+			if updated {
+				obj.SetOwnerReferences(ownerRefs)
+				if _, err = r.spokeDynamicClient.Resource(gvr).Namespace(obj.GetNamespace()).Update(ctx, obj, metav1.UpdateOptions{}); err != nil {
+					klog.ErrorS(err, "Failed to update manifest owner references", "gvr", gvr, "name", res.Name, "namespace", res.Namespace)
+					return err
+				}
+				klog.V(4).InfoS("Patched manifest owner references", "gvr", gvr, "name", res.Name, "namespace", res.Namespace)
+			}
+		}
+	}
+	return nil
+}
+
+// forgetWorkAndRemoveFinalizer untracks the Work object in the requeue rate limiter and removes
+// the finalizer from the Work object.
+func (r *Reconciler) forgetWorkAndRemoveFinalizer(ctx context.Context, work *fleetv1beta1.Work) (ctrl.Result, error) {
+	r.requeueRateLimiter.Forget(work)
+
+	controllerutil.RemoveFinalizer(work, fleetv1beta1.WorkFinalizer)
 	if err := r.hubClient.Update(ctx, work, &client.UpdateOptions{}); err != nil {
 		klog.ErrorS(err, "Failed to remove the finalizer from the work", "work", klog.KObj(work))
 		return ctrl.Result{}, controller.NewAPIServerError(false, err)

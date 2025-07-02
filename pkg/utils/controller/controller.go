@@ -87,6 +87,8 @@ func NewExpectedBehaviorError(err error) error {
 // NewAPIServerError returns error types when accessing data from cache or API server.
 func NewAPIServerError(fromCache bool, err error) error {
 	if err != nil {
+		// The func may return other unexpected runtime errors other than API server errors.
+		// https://github.com/kubernetes-sigs/controller-runtime/blob/main/pkg/client/client.go#L334-L339
 		if fromCache && isUnexpectedCacheError(err) {
 			return NewUnexpectedBehaviorError(err)
 		}
@@ -98,8 +100,9 @@ func NewAPIServerError(fromCache bool, err error) error {
 
 func isUnexpectedCacheError(err error) bool {
 	// may need to add more error code based on the production
-	// Cache will return notFound for GET.
-	return !apierrors.IsNotFound(err)
+	// When the cache is missed, it will query API server and return API server errors.
+	var statusErr *apierrors.StatusError
+	return !errors.Is(err, context.Canceled) && !errors.As(err, &statusErr) && !errors.Is(err, context.DeadlineExceeded)
 }
 
 // NewUserError returns ErrUserError type error when err is not nil.
@@ -403,6 +406,19 @@ func CollectResourceIdentifiersFromClusterResourceSnapshot(
 		return nil, err
 	}
 
+	return CollectResourceIdentifiersUsingMasterClusterResourceSnapshot(ctx, k8Client, crpName, masterResourceSnapshot, resourceSnapshotIndex)
+}
+
+// CollectResourceIdentifiersUsingMasterClusterResourceSnapshot collects the resource identifiers selected by a series of clusterResourceSnapshot.
+// It uses the master clusterResourceSnapshot to collect the resource identifiers from all the clusterResourceSnapshots in the same index group.
+// The order of the resource identifiers is preserved by the order of the clusterResourceSnapshots.
+func CollectResourceIdentifiersUsingMasterClusterResourceSnapshot(
+	ctx context.Context,
+	k8Client client.Client,
+	crpName string,
+	masterResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot,
+	resourceSnapshotIndex string,
+) ([]fleetv1beta1.ResourceIdentifier, error) {
 	allResourceSnapshots, err := FetchAllClusterResourceSnapshots(ctx, k8Client, crpName, masterResourceSnapshot)
 	if err != nil {
 		klog.ErrorS(err, "Failed to fetch all the clusterResourceSnapshots", "resourceSnapshotIndex", resourceSnapshotIndex, "clusterResourcePlacement", crpName)
@@ -429,7 +445,7 @@ func CollectResourceIdentifiersFromClusterResourceSnapshot(
 		return nil
 	}
 
-	// Retrieve the resource identitifers from snapshots following the order to preserve the order of the resource identifiers.
+	// Retrieve the resource identifiers from snapshots following the order to preserve the order of the resource identifiers.
 	if err := retrieveResourceIdentifierFromSnapshot(masterResourceSnapshot); err != nil {
 		return nil, err
 	}

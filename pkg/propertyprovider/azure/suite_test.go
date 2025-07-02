@@ -47,6 +47,12 @@ const (
 	aksNodeSKU1 = "Standard_B4ms"
 	aksNodeSKU2 = "Standard_A4_v2"
 	aksNodeSKU3 = "Standard_F4s"
+	// Note (chenyu1): cross-reference between the Azure VM SKU list and the Azure Retail Prices API
+	// for a list of currently known SKUs to be missing from the Azure Retail Prices API.
+	aksNodeKnownMissingSKU1 = "Standard_DS2_v2"
+	aksNodeKnownMissingSKU2 = "Standard_A2"
+	unsupportedSKU1         = "Unsupported_SKU_1"
+	unsupportedSKU2         = "Unsupported_SKU_2"
 )
 
 var (

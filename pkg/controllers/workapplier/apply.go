@@ -19,7 +19,6 @@ package workapplier
 import (
 	"context"
 	"fmt"
-	"reflect"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/validation"
@@ -169,7 +168,12 @@ func (r *Reconciler) apply(
 		return r.serverSideApply(
 			ctx,
 			gvr, manifestObjCopy, inMemberClusterObj,
-			applyStrategy.ServerSideApplyConfig.ForceConflicts, isOptimisticLockEnabled, false,
+			// When falling back to SSA, always disable force apply ops (this is also the default
+			// behavior).
+			//
+			// Note that the work applier might still enable force apply ops if it finds that
+			// self-conflicts might be occur.
+			false, isOptimisticLockEnabled, false,
 		)
 	case applyStrategy.Type == fleetv1beta1.ApplyStrategyTypeServerSideApply:
 		// The apply strategy dictates that server-side apply should be used.
@@ -518,7 +522,7 @@ func validateOwnerReferences(
 	// expected AppliedWork object. For safety reasons, Fleet will still do a sanity check.
 	found := false
 	for _, ownerRef := range inMemberClusterObjOwnerRefs {
-		if reflect.DeepEqual(ownerRef, *expectedAppliedWorkOwnerRef) {
+		if areOwnerRefsEqual(&ownerRef, expectedAppliedWorkOwnerRef) {
 			found = true
 			break
 		}

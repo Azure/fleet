@@ -20,6 +20,7 @@ package e2e
 
 import (
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -1381,7 +1382,9 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		It("should pick the new cluster", func() {
 			targetClusterNames := []string{memberCluster3WestProdName}
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
-			Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			// CRP should be scheduled only after member-agent reports the newly added capacity.
+			// Set the timeout to be a bit longer than the member cluster heartbeat period.
+			Eventually(crpStatusUpdatedActual, eventuallyDuration+time.Second*memberClusterHeartbeatPeriodSeconds, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 

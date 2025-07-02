@@ -13,7 +13,7 @@ on:
     paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
 
 env:
-  GO_VERSION: '1.23.8'
+  GO_VERSION: '1.24.4'
 
 jobs:
   detect-noop:
@@ -86,6 +86,18 @@ jobs:
           HUB_SERVER_URL: 'https://172.19.0.2:6443'
   
   e2e-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        customized-settings: [default, custom]
+        include:
+          - customized-settings: default
+            # to shorten the test duration, set the resource snapshot creation interval to 0
+            resource-snapshot-creation-minimum-interval: 0m
+            resource-changes-collection-duration: 0m
+          - customized-settings: custom
+            resource-snapshot-creation-minimum-interval: 30s
+            resource-changes-collection-duration: 15s
     runs-on: ubuntu-latest
     needs: [
       detect-noop,
@@ -119,7 +131,11 @@ jobs:
 
       - name: Run e2e tests
         run: |
-          make e2e-tests
+          if [ "${{ matrix.customized-settings }}" = "default" ]; then
+            make e2e-tests
+          else
+            make e2e-tests-custom
+          fi
         env:
           KUBECONFIG: '/home/runner/.kube/config'
           HUB_SERVER_URL: 'https://172.19.0.2:6443'
@@ -129,4 +145,6 @@ jobs:
           # TO-DO (chenyu1): to ensure a vendor-neutral experience, switch to a dummy
           # property provider once the AKS one is split out.
           PROPERTY_PROVIDER: 'azure'
+          RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL: ${{ matrix.resource-snapshot-creation-minimum-interval }}
+          RESOURCE_CHANGES_COLLECTION_DURATION: ${{ matrix.resource-changes-collection-duration }}
 

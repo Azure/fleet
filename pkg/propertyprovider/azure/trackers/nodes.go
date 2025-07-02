@@ -21,9 +21,11 @@ package trackers
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sync"
 	"time"
 
+	"github.com/Azure/karpenter-provider-azure/pkg/providers/pricing"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/klog/v2"
@@ -33,6 +35,12 @@ const (
 	// AKSClusterNodeSKULabelName is the node label added by AKS, which indicated the SKU
 	// of the node.
 	AKSClusterNodeSKULabelName = "beta.kubernetes.io/instance-type"
+)
+
+const (
+	// pricingDataShelfLife is a period of time that the Azure property provider would consider
+	// the pricing data as stale if it has not been updated within this period.
+	PricingDataShelfLife = time.Hour * 24
 )
 
 // supportedResourceNames is a list of resource names that the Azure property provider supports.
@@ -59,6 +67,9 @@ type costInfo struct {
 
 	// lastUpdated is the timestamp when the per-resource-unit costs above are last calculated.
 	lastUpdated time.Time
+	// warnings is a list of warnings in the form of strings that signals a downgraded
+	// state of the cost calculation.
+	warnings []string
 	// err tracks any error that occurs during cost calculation.
 	err error
 }
@@ -120,7 +131,8 @@ func NewNodeTracker(pp PricingProvider) *NodeTracker {
 // at this moment.
 //
 // b) if a node is of an unrecognizable SKU, i.e., the SKU is absent from the Azure Retail Prices
-// API reportings, the node is considered to be free of charge. This should be a very rare occurrence.
+// API reportings, the node is considered to be free of charge. This should be a very rare occurrence;
+// a warning will be issued in this case.
 //
 // Note that this method assumes that the access lock has been acquired.
 func (nt *NodeTracker) calculateCosts() {
@@ -129,10 +141,29 @@ func (nt *NodeTracker) calculateCosts() {
 
 	// Sum up the total costs.
 	totalHourlyRate := 0.0
+
+	missingSKUs := make([]string, 0)
+	isPricingDataStale := false
+
+	pricingDataLastUpdated := nt.pricingProvider.LastUpdated()
+	pricingDataBestAfter := time.Now().Add(-PricingDataShelfLife)
+	if pricingDataLastUpdated.Before(pricingDataBestAfter) {
+		// The pricing data is stale; the pricing client might have failed connecting to the
+		// Azure Retail Prices API, or the region is not listed in the API reportings, which
+		// sets the pricing client to fall back to hard-coded fallback pricing data.
+		//
+		// Note that the pricing data is updated in an asynchronous manner; there might be a
+		// rare chance that the pricing data is refreshed right after the check. This should be
+		// fine as the warning will disappear upon the next cost calculation attempt.
+		isPricingDataStale = true
+	}
+
 	for sku, ns := range nt.nodeSetBySKU {
 		hourlyRate, found := nt.pricingProvider.OnDemandPrice(sku)
-		if !found {
+		if !found || hourlyRate == pricing.MissingPrice {
 			// The SKU is not found in the pricing data.
+			missingSKUs = append(missingSKUs, sku)
+			klog.Warning("SKU is not found in the retail pricing data", "SKU", sku, "nodes", ns, "isKnownToBeMissingSKU", hourlyRate == pricing.MissingPrice)
 			continue
 		}
 		totalHourlyRate += hourlyRate * float64(len(ns))
@@ -140,8 +171,61 @@ func (nt *NodeTracker) calculateCosts() {
 	}
 	// TO-DO (chenyu1): add a cap on the total hourly rate to ensure safe division.
 
+	// Sort the missing SKUs for stability reasons.
+	slices.Sort(missingSKUs)
+
 	// Calculate the per CPU core and per GB memory costs.
 	ci := nt.costs
+	// Reset the warnings and errors.
+	ci.warnings = make([]string, 0)
+	ci.err = nil
+
+	switch {
+	case len(nt.nodeSetBySKU) == 0:
+		// No nodes are present in the cluster. This is not considered as an error.
+
+		// Reset the cost data.
+		ci.lastUpdated = time.Now()
+		ci.perCPUCoreHourlyCost = 0.0
+		ci.perGBMemoryHourlyCost = 0.0
+		klog.V(2).InfoS("No nodes are present in the cluster; costs are set to 0")
+		return
+	case totalHourlyRate == 0.0:
+		// The cluster features nodes of a single SKU, but no pricing data is available for the SKU;
+		// or the cluster features nodes of multiple SKUs, but no pricing data is available for any of the SKUs.
+		err := fmt.Errorf("nodes are present, but no pricing data is available for any node SKUs (%v)", missingSKUs)
+		klog.ErrorS(err, "Failed to calculate costs", "nodeSetBySKU", nt.nodeSetBySKU)
+		ci.err = err
+
+		// Reset the cost data.
+		ci.lastUpdated = time.Now()
+		ci.perCPUCoreHourlyCost = 0.0
+		ci.perGBMemoryHourlyCost = 0.0
+		return
+	case len(missingSKUs) > 0:
+		// The cluster has nodes of multiple SKUs, but some SKUs do not have pricing data available.
+		//
+		// Note (chenyu1): originally such case is handled by treating the nodes of the missing SKUs as
+		// free of charge nodes; this would yield skewed pricing information, which might be misleading
+		// to the users.
+		//
+		// TO-DO (chenyu1): evaluate if customers would like to have an option to allows usage of such
+		// skewed pricing information.
+		err := fmt.Errorf("no pricing data is available for one or more of the node SKUs (%v) in the cluster", missingSKUs)
+		klog.ErrorS(err, "Failed to calculate costs", "nodeSetBySKU", nt.nodeSetBySKU)
+		ci.err = err
+
+		// Reset the cost data.
+		ci.lastUpdated = time.Now()
+		ci.perCPUCoreHourlyCost = 0.0
+		ci.perGBMemoryHourlyCost = 0.0
+	}
+
+	if isPricingDataStale {
+		// The pricing data is stale; issue a warning.
+		ci.warnings = append(ci.warnings, fmt.Sprintf("the pricing data is stale (last updated at %v); the system might have issues connecting to the Azure Retail Prices API, or the current region is unsupported", pricingDataLastUpdated))
+		klog.Warningf("The pricing data is stale: last updated at %v, should be later than %v", pricingDataLastUpdated, pricingDataBestAfter)
+	}
 
 	// Cast the CPU resource quantity into a float64 value. Precision might suffer a bit of loss,
 	// but it should be mostly acceptable in the case of cost calculation.
@@ -158,6 +242,7 @@ func (nt *NodeTracker) calculateCosts() {
 		ci.err = costErr
 
 		// Reset the cost data.
+		ci.lastUpdated = time.Now()
 		ci.perCPUCoreHourlyCost = 0.0
 		ci.perGBMemoryHourlyCost = 0.0
 		return
@@ -179,6 +264,7 @@ func (nt *NodeTracker) calculateCosts() {
 		ci.err = costErr
 
 		// Reset the cost data.
+		ci.lastUpdated = time.Now()
 		ci.perCPUCoreHourlyCost = 0.0
 		ci.perGBMemoryHourlyCost = 0.0
 		return
@@ -187,13 +273,14 @@ func (nt *NodeTracker) calculateCosts() {
 	klog.V(2).InfoS("Calculated per GB memory hourly cost", "perGBMemoryHourlyCost", ci.perGBMemoryHourlyCost)
 
 	ci.lastUpdated = time.Now()
-	ci.err = nil
 }
 
 // trackSKU tracks the SKU of a node. It returns true if a recalculation of costs is needed.
 //
 // Note that this method assumes that the access lock has been acquired.
 func (nt *NodeTracker) trackSKU(node *corev1.Node) bool {
+	// It could happen that the label is absent from the node; empty string is handled as a regular
+	// SKU string by the provider and is not considered an error.
 	sku := node.Labels[AKSClusterNodeSKULabelName]
 	registeredSKU, found := nt.skuByNode[node.Name]
 
@@ -470,12 +557,12 @@ func (nt *NodeTracker) TotalAllocatable() corev1.ResourceList {
 }
 
 // Costs returns the per CPU core and per GB memory costs in the cluster.
-func (nt *NodeTracker) Costs() (perCPUCoreCost, perGBMemoryCost float64, err error) {
+func (nt *NodeTracker) Costs() (perCPUCoreCost, perGBMemoryCost float64, warnings []string, err error) {
 	nt.mu.Lock()
 	defer nt.mu.Unlock()
 
 	if nt.costs.lastUpdated.Before(nt.pricingProvider.LastUpdated()) {
 		nt.calculateCosts()
 	}
-	return nt.costs.perCPUCoreHourlyCost, nt.costs.perGBMemoryHourlyCost, nt.costs.err
+	return nt.costs.perCPUCoreHourlyCost, nt.costs.perGBMemoryHourlyCost, nt.costs.warnings, nt.costs.err
 }

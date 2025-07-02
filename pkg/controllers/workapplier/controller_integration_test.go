@@ -17,6 +17,8 @@ limitations under the License.
 package workapplier
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"time"
 
@@ -26,6 +28,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -178,7 +181,7 @@ func prepareAppliedWorkOwnerRef(workName string) *metav1.OwnerReference {
 		Kind:               "AppliedWork",
 		Name:               appliedWork.Name,
 		UID:                appliedWork.GetUID(),
-		BlockOwnerDeletion: ptr.To(false),
+		BlockOwnerDeletion: ptr.To(true),
 	}
 }
 
@@ -272,6 +275,39 @@ func regularDeploymentObjectAppliedActual(nsName, deployName string, appliedWork
 		}
 		if diff := cmp.Diff(rebuiltGotDeploy, wantDeploy); diff != "" {
 			return fmt.Errorf("deployment diff (-got +want):\n%s", diff)
+		}
+		return nil
+	}
+}
+
+func regularClusterRoleObjectAppliedActual(clusterRoleName string, appliedWorkOwnerRef *metav1.OwnerReference) func() error {
+	return func() error {
+		// Retrieve the ClusterRole object.
+		gotClusterRole := &rbacv1.ClusterRole{}
+		if err := memberClient.Get(ctx, client.ObjectKey{Name: clusterRoleName}, gotClusterRole); err != nil {
+			return fmt.Errorf("failed to retrieve the ClusterRole object: %w", err)
+		}
+
+		// Check that the ClusterRole object has been created as expected.
+
+		// To ignore default values automatically, here the test suite rebuilds the objects.
+		wantClusterRole := clusterRole.DeepCopy()
+		wantClusterRole.TypeMeta = metav1.TypeMeta{}
+		wantClusterRole.Name = clusterRoleName
+		wantClusterRole.OwnerReferences = []metav1.OwnerReference{
+			*appliedWorkOwnerRef,
+		}
+
+		rebuiltGotClusterRole := &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            gotClusterRole.Name,
+				OwnerReferences: gotClusterRole.OwnerReferences,
+			},
+			Rules: gotClusterRole.Rules,
+		}
+
+		if diff := cmp.Diff(rebuiltGotClusterRole, wantClusterRole); diff != "" {
+			return fmt.Errorf("clusterRole diff (-got +want):\n%s", diff)
 		}
 		return nil
 	}
@@ -437,7 +473,22 @@ func appliedWorkStatusUpdated(workName string, appliedResourceMeta []fleetv1beta
 	}
 }
 
-func cleanupWorkObject(workName string) {
+func workRemovedActual(workName string) func() error {
+	// Wait for the removal of the Work object.
+	return func() error {
+		work := &fleetv1beta1.Work{}
+		if err := hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: memberReservedNSName}, work); !errors.IsNotFound(err) && err != nil {
+			return fmt.Errorf("work object still exists or an unexpected error occurred: %w", err)
+		}
+		if controllerutil.ContainsFinalizer(work, fleetv1beta1.WorkFinalizer) {
+			// The Work object is being deleted, but the finalizer is still present.
+			return fmt.Errorf("work object is being deleted, but the finalizer is still present")
+		}
+		return nil
+	}
+}
+
+func deleteWorkObject(workName string) {
 	// Retrieve the Work object.
 	work := &fleetv1beta1.Work{
 		ObjectMeta: metav1.ObjectMeta{
@@ -446,26 +497,47 @@ func cleanupWorkObject(workName string) {
 		},
 	}
 	Expect(hubClient.Delete(ctx, work)).To(Succeed(), "Failed to delete the Work object")
-
-	// Wait for the removal of the Work object.
-	workRemovedActual := func() error {
-		work := &fleetv1beta1.Work{}
-		if err := hubClient.Get(ctx, client.ObjectKey{Name: workName, Namespace: memberReservedNSName}, work); !errors.IsNotFound(err) {
-			return fmt.Errorf("work object still exists or an unexpected error occurred: %w", err)
-		}
-		return nil
-	}
-	Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 }
 
-func appliedWorkRemovedActual(workName string) func() error {
+func checkNSOwnerReferences(workName, nsName string) {
+	// Retrieve the AppliedWork object.
+	appliedWork := &fleetv1beta1.AppliedWork{}
+	Expect(memberClient.Get(ctx, client.ObjectKey{Name: workName}, appliedWork)).To(Succeed(), "Failed to retrieve the AppliedWork object")
+
+	// Check that the Namespace object has the AppliedWork as an owner reference.
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: nsName,
+		},
+	}
+	Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, ns)).To(Succeed(), "Failed to retrieve the Namespace object")
+	Expect(ns.OwnerReferences).To(ContainElement(metav1.OwnerReference{
+		APIVersion:         fleetv1beta1.GroupVersion.String(),
+		Kind:               "AppliedWork",
+		Name:               appliedWork.Name,
+		UID:                appliedWork.GetUID(),
+		BlockOwnerDeletion: ptr.To(true),
+	}), " AppliedWork OwnerReference not found in Namespace object")
+}
+
+func appliedWorkRemovedActual(workName, nsName string) func() error {
 	return func() error {
 		// Retrieve the AppliedWork object.
 		appliedWork := &fleetv1beta1.AppliedWork{}
-		if err := memberClient.Get(ctx, client.ObjectKey{Name: workName}, appliedWork); !errors.IsNotFound(err) {
-			return fmt.Errorf("appliedWork object still exists or an unexpected error occurred: %w", err)
+		if err := memberClient.Get(ctx, client.ObjectKey{Name: workName}, appliedWork); err != nil {
+			if errors.IsNotFound(err) {
+				// The AppliedWork object has been deleted, which is expected.
+				return nil
+			}
+			return fmt.Errorf("failed to retrieve the AppliedWork object: %w", err)
 		}
-		return nil
+		if !appliedWork.DeletionTimestamp.IsZero() && controllerutil.ContainsFinalizer(appliedWork, metav1.FinalizerDeleteDependents) {
+			// The AppliedWork object is being deleted, but the finalizer is still present. Remove the finalizer as there
+			// are no real built-in controllers in this test environment to handle garbage collection.
+			controllerutil.RemoveFinalizer(appliedWork, metav1.FinalizerDeleteDependents)
+			Expect(memberClient.Update(ctx, appliedWork)).To(Succeed(), "Failed to remove the finalizer from the AppliedWork object")
+		}
+		return fmt.Errorf("appliedWork object still exists")
 	}
 }
 
@@ -484,6 +556,25 @@ func regularDeployRemovedActual(nsName, deployName string) func() error {
 
 		if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, deploy); !errors.IsNotFound(err) {
 			return fmt.Errorf("deployment object still exists or an unexpected error occurred: %w", err)
+		}
+		return nil
+	}
+}
+
+func regularClusterRoleRemovedActual(clusterRoleName string) func() error {
+	return func() error {
+		// Retrieve the ClusterRole object.
+		clusterRole := &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterRoleName,
+			},
+		}
+		if err := memberClient.Delete(ctx, clusterRole); err != nil && !errors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete the ClusterRole object: %w", err)
+		}
+
+		if err := memberClient.Get(ctx, client.ObjectKey{Name: clusterRoleName}, clusterRole); !errors.IsNotFound(err) {
+			return fmt.Errorf("clusterRole object still exists or an unexpected error occurred: %w", err)
 		}
 		return nil
 	}
@@ -698,14 +789,22 @@ var _ = Describe("applying manifests", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
+			deleteWorkObject(workName)
 
-			// Ensure that all applied manifests have been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
-
+			// Ensure applied manifest has been removed.
 			regularDeployRemovedActual := regularDeployRemovedActual(nsName, deployName)
 			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the deployment object")
+
+			// Kubebuilder suggests that in a testing environment like this, to check for the existence of the AppliedWork object
+			// OwnerReference in the Namespace object (https://book.kubebuilder.io/reference/envtest.html#testing-considerations).
+			checkNSOwnerReferences(workName, nsName)
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -953,12 +1052,18 @@ var _ = Describe("applying manifests", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
+			deleteWorkObject(workName)
 
-			// Ensure that all applied manifests have been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
+			// Kubebuilder suggests that in a testing environment like this, to check for the existence of the AppliedWork object
+			// OwnerReference in the Namespace object (https://book.kubebuilder.io/reference/envtest.html#testing-considerations).
+			checkNSOwnerReferences(workName, nsName)
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
 			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
 
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
 		})
@@ -1144,11 +1249,18 @@ var _ = Describe("applying manifests", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
+			deleteWorkObject(workName)
 
-			// Ensure that all applied manifests have been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
+			// Kubebuilder suggests that in a testing environment like this, to check for the existence of the AppliedWork object
+			// OwnerReference in the Namespace object (https://book.kubebuilder.io/reference/envtest.html#testing-considerations).
+			checkNSOwnerReferences(workName, nsName)
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
 			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -1329,15 +1441,926 @@ var _ = Describe("applying manifests", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
+			deleteWorkObject(workName)
 
-			// Ensure that all applied manifests have been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
-
+			// Ensure applied manifest has been removed.
 			regularConfigMapRemovedActual := regularConfigMapRemovedActual(nsName, configMapName)
 			Eventually(regularConfigMapRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the ConfigMap object")
 
+			// Kubebuilder suggests that in a testing environment like this, to check for the existence of the AppliedWork object
+			// OwnerReference in the Namespace object (https://book.kubebuilder.io/reference/envtest.html#testing-considerations).
+			checkNSOwnerReferences(workName, nsName)
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
+
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt so verify its deletion.
+		})
+	})
+})
+
+var _ = Describe("work applier garbage collection", func() {
+	Context("update owner reference with blockOwnerDeletion to false (other owner reference does not exist)", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+		anotherOwnerReference := metav1.OwnerReference{
+			APIVersion: "another-api-version",
+			Kind:       "another-kind",
+			Name:       "another-owner",
+			UID:        "another-uid",
+		}
+
+		var appliedWorkOwnerRef *metav1.OwnerReference
+		var regularNS *corev1.Namespace
+		var regularDeploy *appsv1.Deployment
+
+		BeforeAll(func() {
+			// Prepare a NS object.
+			regularNS = ns.DeepCopy()
+			regularNS.Name = nsName
+			regularNSJSON := marshalK8sObjJSON(regularNS)
+
+			// Prepare a Deployment object.
+			regularDeploy = deploy.DeepCopy()
+			regularDeploy.Namespace = nsName
+			regularDeploy.Name = deployName
+			regularDeployJSON := marshalK8sObjJSON(regularDeploy)
+
+			// Create a new Work object with all the manifest JSONs.
+			createWorkObject(workName, &fleetv1beta1.ApplyStrategy{AllowCoOwnership: true}, regularNSJSON, regularDeployJSON)
+		})
+
+		It("should add cleanup finalizer to the Work object", func() {
+			finalizerAddedActual := workFinalizerAddedActual(workName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+		})
+
+		It("should prepare an AppliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
+
+			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
+		})
+
+		It("should apply the manifests", func() {
+			// Ensure that the NS object has been applied as expected.
+			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
+
+			// Ensure that the Deployment object has been applied as expected.
+			regularDeploymentObjectAppliedActual := regularDeploymentObjectAppliedActual(nsName, deployName, appliedWorkOwnerRef)
+			Eventually(regularDeploymentObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the deployment object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, regularDeploy)).To(Succeed(), "Failed to retrieve the Deployment object")
+		})
+
+		It("can mark the deployment as available", func() {
+			markDeploymentAsAvailable(nsName, deployName)
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: WorkAllManifestsAppliedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionTrue,
+					Reason: WorkAllManifestsAvailableReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Name:      deployName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 1,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should update the AppliedWork object status", func() {
+			// Prepare the status information.
+			appliedResourceMeta := []fleetv1beta1.AppliedResourceMeta{
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					UID: regularNS.UID,
+				},
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Name:      deployName,
+						Namespace: nsName,
+					},
+					UID: regularDeploy.UID,
+				},
+			}
+
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		It("can update Deployment object to add another owner reference", func() {
+			// Retrieve the Deployment object.
+			gotDeploy := &appsv1.Deployment{}
+			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, gotDeploy)).To(Succeed(), "Failed to retrieve the Deployment object")
+
+			// Add another owner reference to the Deployment object.
+			gotDeploy.OwnerReferences = append(gotDeploy.OwnerReferences, anotherOwnerReference)
+			Expect(memberClient.Update(ctx, gotDeploy)).To(Succeed(), "Failed to update the Deployment object with another owner reference")
+
+			// Ensure that the Deployment object has been updated as expected.
+			Eventually(func() error {
+				// Retrieve the Deployment object again.
+				if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, gotDeploy); err != nil {
+					return fmt.Errorf("failed to retrieve the Deployment object: %w", err)
+				}
+
+				// Check that the Deployment object has been updated as expected.
+				if len(gotDeploy.OwnerReferences) != 2 {
+					return fmt.Errorf("expected 2 owner references, got %d", len(gotDeploy.OwnerReferences))
+				}
+				for _, ownerRef := range gotDeploy.OwnerReferences {
+					if ownerRef.APIVersion == anotherOwnerReference.APIVersion &&
+						ownerRef.Kind == anotherOwnerReference.Kind &&
+						ownerRef.Name == anotherOwnerReference.Name &&
+						ownerRef.UID == anotherOwnerReference.UID {
+						return nil
+					}
+				}
+				return fmt.Errorf("another owner reference not found in the Deployment object")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to find another owner reference on Deployment")
+		})
+
+		It("should start deleting the Work object", func() {
+			// Start deleting the Work object.
+			deleteWorkObject(workName)
+		})
+
+		It("should start deleting the AppliedWork object", func() {
+			// Ensure that the Work object is being deleted.
+			Eventually(func() error {
+				appliedWork := &fleetv1beta1.AppliedWork{}
+				if err := memberClient.Get(ctx, client.ObjectKey{Name: workName}, appliedWork); err != nil {
+					return err
+				}
+				if !appliedWork.DeletionTimestamp.IsZero() && controllerutil.ContainsFinalizer(appliedWork, metav1.FinalizerDeleteDependents) {
+					return fmt.Errorf("appliedWork object still is not being deleted")
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to start deleting the AppliedWork object")
+
+			// Explicitly wait a minute to let the deletion timestamp progress
+			time.Sleep(30 * time.Second)
+		})
+
+		It("should update owner reference from the Deployment object", func() {
+			// Ensure that the Deployment object has been updated applied owner reference with blockOwnerDeletion to false.
+			Eventually(func() error {
+				// Retrieve the Deployment object again.
+				gotDeploy := &appsv1.Deployment{}
+				if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, gotDeploy); err != nil {
+					return fmt.Errorf("failed to retrieve the Deployment object: %w", err)
+				}
+				// Check that the Deployment object has been updated as expected.
+				for _, ownerRef := range gotDeploy.OwnerReferences {
+					if ownerRef.APIVersion == fleetv1beta1.GroupVersion.String() &&
+						ownerRef.Kind == fleetv1beta1.AppliedWorkKind &&
+						ownerRef.Name == workName &&
+						ownerRef.UID == appliedWorkOwnerRef.UID {
+						if *ownerRef.BlockOwnerDeletion {
+							return fmt.Errorf("owner reference from AppliedWork still has BlockOwnerDeletion set to true")
+						}
+					}
+				}
+				return nil
+			}, 2*eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove owner reference from Deployment")
+		})
+
+		AfterAll(func() {
+			// Kubebuilder suggests that in a testing environment like this, to check for the existence of the AppliedWork object
+			// OwnerReference in the Namespace object (https://book.kubebuilder.io/reference/envtest.html#testing-considerations).
+			checkNSOwnerReferences(workName, nsName)
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
+
+			// Ensure that the Deployment object still exists.
+			Consistently(func() error {
+				return memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, regularDeploy)
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Deployment object has been removed unexpectedly")
+			// Delete objects created by the test suite so that the next test case can run without issues.
+			Expect(memberClient.Delete(ctx, regularDeploy)).To(Succeed(), "Failed to delete the Deployment object")
+
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt so verify its deletion.
+		})
+	})
+
+	Context("update owner reference with blockOwnerDeletion to false (other owner reference invalid)", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+
+		var appliedWorkOwnerRef *metav1.OwnerReference
+		var regularNS *corev1.Namespace
+		var regularDeploy *appsv1.Deployment
+		var regularClusterRole *rbacv1.ClusterRole
+
+		BeforeAll(func() {
+			// Prepare a NS object.
+			regularNS = ns.DeepCopy()
+			regularNS.Name = nsName
+			regularNSJSON := marshalK8sObjJSON(regularNS)
+
+			// Prepare a Deployment object.
+			regularDeploy = deploy.DeepCopy()
+			regularDeploy.Namespace = nsName
+			regularDeploy.Name = deployName
+			regularDeployJSON := marshalK8sObjJSON(regularDeploy)
+
+			// Prepare a ClusterRole object.
+			regularClusterRole = clusterRole.DeepCopy()
+			regularClusterRole.Name = clusterRoleName
+			regularClusterRoleJSON := marshalK8sObjJSON(regularClusterRole)
+
+			// Create a new Work object with all the manifest JSONs.
+			createWorkObject(workName, &fleetv1beta1.ApplyStrategy{AllowCoOwnership: true}, regularNSJSON, regularDeployJSON, regularClusterRoleJSON)
+		})
+
+		It("should add cleanup finalizer to the Work object", func() {
+			finalizerAddedActual := workFinalizerAddedActual(workName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+		})
+
+		It("should prepare an AppliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
+
+			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
+		})
+
+		It("should apply the manifests", func() {
+			// Ensure that the NS object has been applied as expected.
+			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
+
+			// Ensure that the Deployment object has been applied as expected.
+			regularDeploymentObjectAppliedActual := regularDeploymentObjectAppliedActual(nsName, deployName, appliedWorkOwnerRef)
+			Eventually(regularDeploymentObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the deployment object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, regularDeploy)).To(Succeed(), "Failed to retrieve the Deployment object")
+
+			// Ensure that the ClusterRole object has been applied as expected.
+			regularClusterRoleObjectAppliedActual := regularClusterRoleObjectAppliedActual(clusterRoleName, appliedWorkOwnerRef)
+			Eventually(regularClusterRoleObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the clusterRole object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Name: clusterRoleName}, regularClusterRole)).To(Succeed(), "Failed to retrieve the clusterRole object")
+		})
+
+		It("can mark the deployment as available", func() {
+			markDeploymentAsAvailable(nsName, deployName)
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: WorkAllManifestsAppliedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionTrue,
+					Reason: WorkAllManifestsAvailableReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Name:      deployName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 1,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  2,
+						Group:    "rbac.authorization.k8s.io",
+						Version:  "v1",
+						Kind:     "ClusterRole",
+						Resource: "clusterroles",
+						Name:     clusterRoleName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should update the AppliedWork object status", func() {
+			// Prepare the status information.
+			appliedResourceMeta := []fleetv1beta1.AppliedResourceMeta{
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					UID: regularNS.UID,
+				},
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Name:      deployName,
+						Namespace: nsName,
+					},
+					UID: regularDeploy.UID,
+				},
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  2,
+						Group:    "rbac.authorization.k8s.io",
+						Version:  "v1",
+						Kind:     "ClusterRole",
+						Resource: "clusterroles",
+						Name:     clusterRoleName,
+					},
+					UID: regularClusterRole.UID,
+				},
+			}
+
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		It("can update ClusterRole object to add another owner reference", func() {
+			// Retrieve the ClusterRole object.
+			gotClusterRole := &rbacv1.ClusterRole{}
+			Expect(memberClient.Get(ctx, client.ObjectKey{Name: clusterRoleName}, gotClusterRole)).To(Succeed(), "Failed to retrieve the ClusterRole object")
+
+			// Retrieve the Deployment object.
+			gotDeploy := &appsv1.Deployment{}
+			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, gotDeploy)).To(Succeed(), "Failed to retrieve the Deployment object")
+
+			// Add another owner reference to the ClusterRole object.
+			// Note: This is an invalid owner reference, as it adds a namespace-scoped object as an owner of a cluster-scoped object.
+			gotClusterRole.OwnerReferences = append(gotClusterRole.OwnerReferences, metav1.OwnerReference{
+				APIVersion: appsv1.SchemeGroupVersion.String(),
+				Kind:       "Deployment",
+				Name:       gotDeploy.Name,
+				UID:        gotDeploy.UID,
+			})
+			Expect(memberClient.Update(ctx, gotClusterRole)).To(Succeed(), "Failed to update the ClusterRole object with another owner reference")
+
+			// Ensure that the ClusterRole object has been updated as expected.
+			Eventually(func() error {
+				// Retrieve the ClusterRole object again.
+				if err := memberClient.Get(ctx, client.ObjectKey{Name: clusterRoleName}, gotClusterRole); err != nil {
+					return fmt.Errorf("failed to retrieve the ClusterRole object: %w", err)
+				}
+
+				// Check that the ClusterRole object has been updated as expected.
+				if len(gotClusterRole.OwnerReferences) != 2 {
+					return fmt.Errorf("expected 2 owner references, got %d", len(gotClusterRole.OwnerReferences))
+				}
+				for _, ownerRef := range gotClusterRole.OwnerReferences {
+					if ownerRef.APIVersion == appsv1.SchemeGroupVersion.String() &&
+						ownerRef.Kind == "Deployment" &&
+						ownerRef.Name == gotDeploy.Name &&
+						ownerRef.UID == gotDeploy.UID {
+						return nil
+					}
+				}
+				return fmt.Errorf("another owner reference not found in the ClusterRole object")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to find another owner reference on ClusterRole")
+		})
+
+		It("should start deleting the Work object", func() {
+			// Start deleting the Work object.
+			deleteWorkObject(workName)
+		})
+
+		It("should start deleting the AppliedWork object", func() {
+			// Ensure that the Work object is being deleted.
+			Eventually(func() error {
+				appliedWork := &fleetv1beta1.AppliedWork{}
+				if err := memberClient.Get(ctx, client.ObjectKey{Name: workName}, appliedWork); err != nil {
+					return err
+				}
+				if !appliedWork.DeletionTimestamp.IsZero() && controllerutil.ContainsFinalizer(appliedWork, metav1.FinalizerDeleteDependents) {
+					return fmt.Errorf("appliedWork object still is not being deleted")
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to start deleting the AppliedWork object")
+
+			// Explicitly wait a minute to let the deletion timestamp progress
+			time.Sleep(30 * time.Second)
+		})
+
+		It("should update owner reference from the ClusterRole object", func() {
+			// Ensure that the ClusterRole object has been updated with AppliedWork owner reference to have BlockOwnerDeletion set to false.
+			Eventually(func() error {
+				// Retrieve the ClusterRole object again.
+				gotClusterRole := &rbacv1.ClusterRole{}
+				if err := memberClient.Get(ctx, client.ObjectKey{Name: clusterRoleName}, gotClusterRole); err != nil {
+					return fmt.Errorf("failed to retrieve the ClusterRole object: %w", err)
+				}
+
+				// Check that the ClusterRole object has been updated as expected.
+				for _, ownerRef := range gotClusterRole.OwnerReferences {
+					if ownerRef.APIVersion == appliedWorkOwnerRef.APIVersion &&
+						ownerRef.Kind == appliedWorkOwnerRef.Kind &&
+						ownerRef.Name == appliedWorkOwnerRef.Name &&
+						ownerRef.UID == appliedWorkOwnerRef.UID && *ownerRef.BlockOwnerDeletion {
+						return fmt.Errorf("owner reference from AppliedWork still has BlockOwnerDeletion set to true")
+					}
+				}
+
+				return nil
+			}, 2*eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove owner reference from ClusterRole")
+		})
+
+		AfterAll(func() {
+			// Kubebuilder suggests that in a testing environment like this, to check for the existence of the AppliedWork object
+			// OwnerReference in the Namespace object (https://book.kubebuilder.io/reference/envtest.html#testing-considerations).
+			checkNSOwnerReferences(workName, nsName)
+
+			// Ensure applied manifest has been removed.
+			regularDeployRemovedActual := regularDeployRemovedActual(nsName, deployName)
+			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the deployment object")
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
+
+			// Ensure that the ClusterRole object still exists.
+			Consistently(func() error {
+				return memberClient.Get(ctx, client.ObjectKey{Name: clusterRoleName}, regularClusterRole)
+			}, consistentlyDuration, consistentlyInterval).Should(BeNil(), "ClusterRole object has been removed unexpectedly")
+			// Delete objects created by the test suite so that the next test case can run without issues.
+			Expect(memberClient.Delete(ctx, regularClusterRole)).To(Succeed(), "Failed to delete the clusterRole object")
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt so verify its deletion.
+		})
+	})
+
+	Context("update owner reference with blockOwnerDeletion to false (other owner reference valid)", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+
+		var appliedWorkOwnerRef *metav1.OwnerReference
+		var regularNS *corev1.Namespace
+		var regularDeploy *appsv1.Deployment
+		var regularClusterRole *rbacv1.ClusterRole
+
+		BeforeAll(func() {
+			// Prepare a NS object.
+			regularNS = ns.DeepCopy()
+			regularNS.Name = nsName
+			regularNSJSON := marshalK8sObjJSON(regularNS)
+
+			// Prepare a Deployment object.
+			regularDeploy = deploy.DeepCopy()
+			regularDeploy.Namespace = nsName
+			regularDeploy.Name = deployName
+			regularDeployJSON := marshalK8sObjJSON(regularDeploy)
+
+			// Prepare a ClusterRole object.
+			regularClusterRole = clusterRole.DeepCopy()
+			regularClusterRole.Name = clusterRoleName
+			regularClusterRoleJSON := marshalK8sObjJSON(regularClusterRole)
+
+			// Create a new Work object with all the manifest JSONs.
+			createWorkObject(workName, &fleetv1beta1.ApplyStrategy{AllowCoOwnership: true}, regularNSJSON, regularDeployJSON, regularClusterRoleJSON)
+		})
+
+		It("should add cleanup finalizer to the Work object", func() {
+			finalizerAddedActual := workFinalizerAddedActual(workName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+		})
+
+		It("should prepare an AppliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
+
+			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
+		})
+
+		It("should apply the manifests", func() {
+			// Ensure that the NS object has been applied as expected.
+			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
+
+			// Ensure that the Deployment object has been applied as expected.
+			regularDeploymentObjectAppliedActual := regularDeploymentObjectAppliedActual(nsName, deployName, appliedWorkOwnerRef)
+			Eventually(regularDeploymentObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the deployment object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, regularDeploy)).To(Succeed(), "Failed to retrieve the Deployment object")
+
+			// Ensure that the ClusterRole object has been applied as expected.
+			regularClusterRoleObjectAppliedActual := regularClusterRoleObjectAppliedActual(clusterRoleName, appliedWorkOwnerRef)
+			Eventually(regularClusterRoleObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the clusterRole object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Name: clusterRoleName}, regularClusterRole)).To(Succeed(), "Failed to retrieve the clusterRole object")
+		})
+
+		It("can mark the deployment as available", func() {
+			markDeploymentAsAvailable(nsName, deployName)
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: WorkAllManifestsAppliedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionTrue,
+					Reason: WorkAllManifestsAvailableReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Name:      deployName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 1,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 1,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  2,
+						Group:    "rbac.authorization.k8s.io",
+						Version:  "v1",
+						Kind:     "ClusterRole",
+						Resource: "clusterroles",
+						Name:     clusterRoleName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should update the AppliedWork object status", func() {
+			// Prepare the status information.
+			appliedResourceMeta := []fleetv1beta1.AppliedResourceMeta{
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					UID: regularNS.UID,
+				},
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Resource:  "deployments",
+						Name:      deployName,
+						Namespace: nsName,
+					},
+					UID: regularDeploy.UID,
+				},
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  2,
+						Group:    "rbac.authorization.k8s.io",
+						Version:  "v1",
+						Kind:     "ClusterRole",
+						Resource: "clusterroles",
+						Name:     clusterRoleName,
+					},
+					UID: regularClusterRole.UID,
+				},
+			}
+
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		It("can update Deployment object to add another owner reference", func() {
+			// Retrieve the ClusterRole object.
+			gotClusterRole := &rbacv1.ClusterRole{}
+			Expect(memberClient.Get(ctx, client.ObjectKey{Name: clusterRoleName}, gotClusterRole)).To(Succeed(), "Failed to retrieve the ClusterRole object")
+
+			// Retrieve the Deployment object.
+			gotDeploy := &appsv1.Deployment{}
+			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, gotDeploy)).To(Succeed(), "Failed to retrieve the Deployment object")
+
+			// Add another owner reference to the Deployment object.
+			gotDeploy.OwnerReferences = append(gotDeploy.OwnerReferences, metav1.OwnerReference{
+				APIVersion: rbacv1.SchemeGroupVersion.String(),
+				Kind:       "ClusterRole",
+				Name:       gotClusterRole.Name,
+				UID:        gotClusterRole.UID,
+			})
+			Expect(memberClient.Update(ctx, gotDeploy)).To(Succeed(), "Failed to update the Deployment object with another owner reference")
+
+			// Ensure that the Deployment object has been updated as expected.
+			Eventually(func() error {
+				// Retrieve the Deployment object again.
+				if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, gotDeploy); err != nil {
+					return fmt.Errorf("failed to retrieve the Deployment object: %w", err)
+				}
+
+				// Check that the Deployment object has been updated as expected.
+				if len(gotDeploy.OwnerReferences) != 2 {
+					return fmt.Errorf("expected 2 owner references, got %d", len(gotDeploy.OwnerReferences))
+				}
+				for _, ownerRef := range gotDeploy.OwnerReferences {
+					if ownerRef.APIVersion == rbacv1.SchemeGroupVersion.String() &&
+						ownerRef.Kind == "ClusterRole" &&
+						ownerRef.Name == gotClusterRole.Name &&
+						ownerRef.UID == gotClusterRole.UID {
+						return nil
+					}
+				}
+				return fmt.Errorf("another owner reference not found in the Deployment object")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to find another owner reference on Deployment")
+		})
+
+		It("should start deleting the Work object", func() {
+			// Start deleting the Work object.
+			deleteWorkObject(workName)
+		})
+
+		It("should start deleting the AppliedWork object", func() {
+			// Ensure that the Work object is being deleted.
+			Eventually(func() error {
+				appliedWork := &fleetv1beta1.AppliedWork{}
+				if err := memberClient.Get(ctx, client.ObjectKey{Name: workName}, appliedWork); err != nil {
+					return err
+				}
+				if !appliedWork.DeletionTimestamp.IsZero() && controllerutil.ContainsFinalizer(appliedWork, metav1.FinalizerDeleteDependents) {
+					return fmt.Errorf("appliedWork object still is not being deleted")
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to start deleting the AppliedWork object")
+
+			// Explicitly wait a minute to let the deletion timestamp progress
+			time.Sleep(30 * time.Second)
+		})
+
+		It("should update owner reference from the Deployment object", func() {
+			// Ensure that the Deployment object has been updated with AppliedWork owner reference to have BlockOwnerDeletion set to false.
+			Eventually(func() error {
+				// Retrieve the Deployment object.
+				gotDeploy := &appsv1.Deployment{}
+				if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, gotDeploy); err != nil {
+					return fmt.Errorf("failed to retrieve the ClusterRole object: %w", err)
+				}
+
+				// Check that the Deployment object has been updated as expected.
+				for _, ownerRef := range gotDeploy.OwnerReferences {
+					if ownerRef.APIVersion == appliedWorkOwnerRef.APIVersion &&
+						ownerRef.Kind == appliedWorkOwnerRef.Kind &&
+						ownerRef.Name == appliedWorkOwnerRef.Name &&
+						ownerRef.UID == appliedWorkOwnerRef.UID && *ownerRef.BlockOwnerDeletion {
+						return fmt.Errorf("owner reference from AppliedWork still has BlockOwnerDeletion set to true")
+					}
+				}
+				return nil
+			}, 2*eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove owner reference from Deployment")
+		})
+
+		AfterAll(func() {
+			// Kubebuilder suggests that in a testing environment like this, to check for the existence of the AppliedWork object
+			// OwnerReference in the Namespace object (https://book.kubebuilder.io/reference/envtest.html#testing-considerations).
+			checkNSOwnerReferences(workName, nsName)
+
+			// Ensure applied manifest has been removed.
+			regularClusterRoleRemovedActual := regularClusterRoleRemovedActual(clusterRoleName)
+			Eventually(regularClusterRoleRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the ClusterRole object")
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, 2*time.Minute, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
+
+			// Ensure that the Deployment object still exists.
+			Consistently(func() error {
+				return memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, regularDeploy)
+			}, consistentlyDuration, consistentlyInterval).Should(BeNil(), "Deployment object has been removed unexpectedly")
+			// Delete objects created by the test suite so that the next test case can run without issues.
+			Expect(memberClient.Delete(ctx, regularDeploy)).To(Succeed(), "Failed to delete the Deployment object")
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
 		})
@@ -1513,14 +2536,22 @@ var _ = Describe("drift detection and takeover", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
+			deleteWorkObject(workName)
 
-			// Ensure that all applied manifests have been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
-
+			// Ensure applied manifest has been removed.
 			regularDeployRemovedActual := regularDeployRemovedActual(nsName, deployName)
 			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the deployment object")
+
+			// Kubebuilder suggests that in a testing environment like this, to check for the existence of the AppliedWork object
+			// OwnerReference in the Namespace object (https://book.kubebuilder.io/reference/envtest.html#testing-considerations).
+			checkNSOwnerReferences(workName, nsName)
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -1775,15 +2806,18 @@ var _ = Describe("drift detection and takeover", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
-
-			// Ensure that the AppliedWork object has been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+			deleteWorkObject(workName)
 
 			// Ensure that the Deployment object has been left alone.
 			regularDeployNotRemovedActual := regularDeployNotRemovedActual(nsName, deployName)
 			Consistently(regularDeployNotRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove the deployment object")
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -2050,15 +3084,18 @@ var _ = Describe("drift detection and takeover", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
-
-			// Ensure that the AppliedWork object has been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+			deleteWorkObject(workName)
 
 			// Ensure that the Deployment object has been left alone.
 			regularDeployNotRemovedActual := regularDeployNotRemovedActual(nsName, deployName)
 			Consistently(regularDeployNotRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove the deployment object")
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -2461,15 +3498,22 @@ var _ = Describe("drift detection and takeover", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
-
-			// Ensure that the AppliedWork object has been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+			deleteWorkObject(workName)
 
 			// Ensure that the Deployment object has been left alone.
 			regularDeployNotRemovedActual := regularDeployNotRemovedActual(nsName, deployName)
 			Consistently(regularDeployNotRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove the deployment object")
+
+			// Kubebuilder suggests that in a testing environment like this, to check for the existence of the AppliedWork object
+			// OwnerReference in the Namespace object (https://book.kubebuilder.io/reference/envtest.html#testing-considerations).
+			checkNSOwnerReferences(workName, nsName)
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -2700,11 +3744,14 @@ var _ = Describe("drift detection and takeover", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
+			deleteWorkObject(workName)
 
 			// Ensure that the AppliedWork object has been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
 			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -2951,11 +3998,18 @@ var _ = Describe("drift detection and takeover", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
+			deleteWorkObject(workName)
+
+			// Kubebuilder suggests that in a testing environment like this, to check for the existence of the AppliedWork object
+			// OwnerReference in the Namespace object (https://book.kubebuilder.io/reference/envtest.html#testing-considerations).
+			checkNSOwnerReferences(workName, nsName)
 
 			// Ensure that the AppliedWork object has been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
 			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -3305,11 +4359,18 @@ var _ = Describe("drift detection and takeover", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
+			deleteWorkObject(workName)
+
+			// Kubebuilder suggests that in a testing environment like this, to check for the existence of the AppliedWork object
+			// OwnerReference in the Namespace object (https://book.kubebuilder.io/reference/envtest.html#testing-considerations).
+			checkNSOwnerReferences(workName, nsName)
 
 			// Ensure that the AppliedWork object has been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
 			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -3573,6 +4634,25 @@ var _ = Describe("drift detection and takeover", func() {
 			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, &driftObservedMustBeforeTimestamp, &firstDriftedMustBeforeTimestamp)
 			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
 		})
+
+		AfterAll(func() {
+			// Delete the Work object and related resources.
+			deleteWorkObject(workName)
+
+			// Kubebuilder suggests that in a testing environment like this, to check for the existence of the AppliedWork object
+			// OwnerReference in the Namespace object (https://book.kubebuilder.io/reference/envtest.html#testing-considerations).
+			checkNSOwnerReferences(workName, nsName)
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
+
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt so verify its deletion.
+		})
 	})
 
 	Context("never take over", Ordered, func() {
@@ -3739,14 +4819,18 @@ var _ = Describe("drift detection and takeover", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
+			deleteWorkObject(workName)
 
-			// Ensure that all applied manifests have been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
-
+			// Ensure applied manifest has been removed.
 			regularDeployRemovedActual := regularDeployRemovedActual(nsName, deployName)
 			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the deployment object")
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -3845,11 +4929,14 @@ var _ = Describe("report diff", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
+			deleteWorkObject(workName)
 
 			// Ensure that the AppliedWork object has been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
 			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -4166,15 +5253,18 @@ var _ = Describe("report diff", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
-
-			// Ensure that the AppliedWork object has been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+			deleteWorkObject(workName)
 
 			// Ensure that the Deployment object has been left alone.
 			regularDeployNotRemovedActual := regularDeployNotRemovedActual(nsName, deployName)
 			Consistently(regularDeployNotRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove the deployment object")
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -4378,14 +5468,18 @@ var _ = Describe("report diff", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
+			deleteWorkObject(workName)
 
-			// Ensure that all applied manifests have been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
-
+			// Ensure applied manifest has been removed.
 			regularDeployRemovedActual := regularDeployRemovedActual(nsName, deployName)
 			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the deployment object")
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -4393,7 +5487,7 @@ var _ = Describe("report diff", func() {
 	})
 })
 
-var _ = Describe("switch apply strategies", func() {
+var _ = Describe("handling different apply strategies", func() {
 	Context("switch from report diff to CSA", Ordered, func() {
 		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
 		// The environment prepared by the envtest package does not support namespace
@@ -4736,14 +5830,22 @@ var _ = Describe("switch apply strategies", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
+			deleteWorkObject(workName)
 
-			// Ensure that all applied manifests have been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
-
+			// Ensure applied manifest has been removed.
 			regularDeployRemovedActual := regularDeployRemovedActual(nsName, deployName)
 			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the deployment object")
+
+			// Kubebuilder suggests that in a testing environment like this, to check for the existence of the AppliedWork object
+			// OwnerReference in the Namespace object (https://book.kubebuilder.io/reference/envtest.html#testing-considerations).
+			checkNSOwnerReferences(workName, nsName)
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -4989,14 +6091,22 @@ var _ = Describe("switch apply strategies", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
+			deleteWorkObject(workName)
 
-			// Ensure that all applied manifests have been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
-
+			// Ensure applied manifest has been removed.
 			regularDeployRemovedActual := regularDeployRemovedActual(nsName, deployName)
 			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the deployment object")
+
+			// Kubebuilder suggests that in a testing environment like this, to check for the existence of the AppliedWork object
+			// OwnerReference in the Namespace object (https://book.kubebuilder.io/reference/envtest.html#testing-considerations).
+			checkNSOwnerReferences(workName, nsName)
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.
@@ -5366,14 +6476,245 @@ var _ = Describe("switch apply strategies", func() {
 
 		AfterAll(func() {
 			// Delete the Work object and related resources.
-			cleanupWorkObject(workName)
+			deleteWorkObject(workName)
 
-			// Ensure that all applied manifests have been removed.
-			appliedWorkRemovedActual := appliedWorkRemovedActual(workName)
-			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
-
+			// Ensure applied manifest has been removed.
 			regularDeployRemovedActual := regularDeployRemovedActual(nsName, deployName)
 			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the deployment object")
+
+			// Kubebuilder suggests that in a testing environment like this, to check for the existence of the AppliedWork object
+			// OwnerReference in the Namespace object (https://book.kubebuilder.io/reference/envtest.html#testing-considerations).
+			checkNSOwnerReferences(workName, nsName)
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
+
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt so verify its deletion.
+		})
+	})
+
+	Context("falling back from CSA to SSA", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+
+		var appliedWorkOwnerRef *metav1.OwnerReference
+		var regularNS *corev1.Namespace
+		var oversizedCM *corev1.ConfigMap
+
+		BeforeAll(func() {
+			// Prepare a NS object.
+			regularNS = ns.DeepCopy()
+			regularNS.Name = nsName
+			regularNSJSON := marshalK8sObjJSON(regularNS)
+
+			// Prepare an oversized configMap object.
+
+			// Generate a large bytes array.
+			//
+			// Kubernetes will reject configMaps larger than 1048576 bytes (~1 MB);
+			// and when an object's spec size exceeds 262144 bytes, KubeFleet will not
+			// be able to use client-side apply with the object as it cannot set
+			// an last applied configuration annotation of that size. Consequently,
+			// for this test case, it prepares a configMap object of 600000 bytes so
+			// that Kubernetes will accept it but CSA cannot use it, forcing the
+			// work applier to fall back to server-side apply.
+			randomBytes := make([]byte, 600000)
+			// Note that this method never returns an error and will always fill the given
+			// slice completely.
+			_, _ = rand.Read(randomBytes)
+			// Encode the random bytes to a base64 string.
+			randomBase64Str := base64.StdEncoding.EncodeToString(randomBytes)
+			oversizedCM = &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "ConfigMap",
+					APIVersion: "v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: nsName,
+					Name:      configMapName,
+				},
+				Data: map[string]string{
+					"randomBase64Str": randomBase64Str,
+				},
+			}
+			oversizedCMJSON := marshalK8sObjJSON(oversizedCM)
+
+			// Create a new Work object with all the manifest JSONs and proper apply strategy.
+			createWorkObject(workName, nil, regularNSJSON, oversizedCMJSON)
+		})
+
+		It("should add cleanup finalizer to the Work object", func() {
+			finalizerAddedActual := workFinalizerAddedActual(workName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+		})
+
+		It("should prepare an AppliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
+
+			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
+		})
+
+		It("should apply the manifests", func() {
+			// Ensure that the NS object has been applied as expected.
+			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
+
+			// Ensure that the oversized ConfigMap object has been applied as expected via SSA.
+			Eventually(func() error {
+				gotConfigMap := &corev1.ConfigMap{}
+				if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, gotConfigMap); err != nil {
+					return fmt.Errorf("failed to retrieve the ConfigMap object: %w", err)
+				}
+
+				wantConfigMap := oversizedCM.DeepCopy()
+				wantConfigMap.TypeMeta = metav1.TypeMeta{}
+				wantConfigMap.OwnerReferences = []metav1.OwnerReference{
+					*appliedWorkOwnerRef,
+				}
+
+				rebuiltConfigMap := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:       gotConfigMap.Namespace,
+						Name:            gotConfigMap.Name,
+						OwnerReferences: gotConfigMap.OwnerReferences,
+					},
+					Data: gotConfigMap.Data,
+				}
+				if diff := cmp.Diff(rebuiltConfigMap, wantConfigMap); diff != "" {
+					return fmt.Errorf("configMap diff (-got +want):\n%s", diff)
+				}
+
+				// Perform additional checks to ensure that the work applier has fallen back
+				// from CSA to SSA.
+				lastAppliedConf, foundAnnotation := gotConfigMap.Annotations[fleetv1beta1.LastAppliedConfigAnnotation]
+				if foundAnnotation && len(lastAppliedConf) > 0 {
+					return fmt.Errorf("the configMap object has annotation %s (value: %s) in presence when SSA should be used", fleetv1beta1.LastAppliedConfigAnnotation, lastAppliedConf)
+				}
+
+				foundFieldMgr := false
+				fieldMgrs := gotConfigMap.GetManagedFields()
+				for _, fieldMgr := range fieldMgrs {
+					// For simplicity reasons, here the test case verifies only against the field
+					// manager name.
+					if fieldMgr.Manager == workFieldManagerName {
+						foundFieldMgr = true
+					}
+				}
+				if !foundFieldMgr {
+					return fmt.Errorf("the configMap object does not list the KubeFleet member agent as a field manager (%s) when SSA should be used", workFieldManagerName)
+				}
+
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the oversized configMap object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, oversizedCM)).To(Succeed(), "Failed to retrieve the ConfigMap object")
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: WorkAllManifestsAppliedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionTrue,
+					Reason: WorkAllManifestsAvailableReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "",
+						Version:   "v1",
+						Kind:      "ConfigMap",
+						Resource:  "configmaps",
+						Name:      configMapName,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		AfterAll(func() {
+			// Delete the Work object and related resources.
+			deleteWorkObject(workName)
+
+			// Ensure that all applied manifests have been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			Eventually(func() error {
+				// Retrieve the ConfigMap object.
+				cm := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: nsName,
+						Name:      configMapName,
+					},
+				}
+				if err := memberClient.Delete(ctx, cm); err != nil && !errors.IsNotFound(err) {
+					return fmt.Errorf("failed to delete the ConfigMap object: %w", err)
+				}
+
+				if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: configMapName}, cm); !errors.IsNotFound(err) {
+					return fmt.Errorf("the ConfigMap object still exists or an unexpected error occurred: %w", err)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the oversized configMap object")
 
 			// The environment prepared by the envtest package does not support namespace
 			// deletion; consequently this test suite would not attempt so verify its deletion.

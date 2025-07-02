@@ -606,14 +606,14 @@ func (r *Reconciler) calculateRealTarget(crp *fleetv1beta1.ClusterResourcePlacem
 	targetNumber := 0
 
 	// note that if the policy will be overwritten if it is nil in this controller.
-	switch {
-	case crp.Spec.Policy.PlacementType == fleetv1beta1.PickAllPlacementType:
+	switch crp.Spec.Policy.PlacementType {
+	case fleetv1beta1.PickAllPlacementType:
 		// we use the scheduler picked bindings as the target number since there is no target in the CRP
 		targetNumber = len(schedulerTargetedBinds)
-	case crp.Spec.Policy.PlacementType == fleetv1beta1.PickFixedPlacementType:
+	case fleetv1beta1.PickFixedPlacementType:
 		// we use the length of the given cluster names are targets
 		targetNumber = len(crp.Spec.Policy.ClusterNames)
-	case crp.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType:
+	case fleetv1beta1.PickNPlacementType:
 		// we use the given number as the target
 		targetNumber = int(*crp.Spec.Policy.NumberOfClusters)
 	default:

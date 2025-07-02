@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/karpenter-provider-azure/pkg/providers/pricing"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
@@ -51,6 +52,8 @@ const (
 	nodeSKU2 = "Standard_2"
 	nodeSKU3 = "Standard_3"
 	nodeSKU4 = "Standard_4"
+
+	nodeKnownMissingSKU = "Standard_Missing"
 )
 
 var (
@@ -70,6 +73,8 @@ func (d *dummyPricingProvider) OnDemandPrice(instanceType string) (float64, bool
 		return 5.0, true
 	case nodeSKU3:
 		return 10.0, true
+	case nodeKnownMissingSKU:
+		return pricing.MissingPrice, true
 	default:
 		return 0.0, false
 	}
@@ -77,6 +82,31 @@ func (d *dummyPricingProvider) OnDemandPrice(instanceType string) (float64, bool
 
 func (d *dummyPricingProvider) LastUpdated() time.Time {
 	return currentTime
+}
+
+// dummyPricingProviderWithStaleData is a mock implementation that simulates stale pricing data.
+type dummyPricingProviderWithStaleData struct{}
+
+var _ PricingProvider = &dummyPricingProviderWithStaleData{}
+
+func (d *dummyPricingProviderWithStaleData) OnDemandPrice(instanceType string) (float64, bool) {
+	switch instanceType {
+	case nodeSKU1:
+		return 1.0, true
+	case nodeSKU2:
+		return 5.0, true
+	case nodeSKU3:
+		return 10.0, true
+	case nodeKnownMissingSKU:
+		return pricing.MissingPrice, true
+	default:
+		return 0.0, false
+	}
+}
+
+func (d *dummyPricingProviderWithStaleData) LastUpdated() time.Time {
+	// Simulate a case where the pricing data is updated 2 days ago.
+	return currentTime.Add(-time.Hour * 48)
 }
 
 var (
@@ -157,6 +187,7 @@ func TestCalculateCosts(t *testing.T) {
 		nt                   *NodeTracker
 		wantPerCPUCoreCost   float64
 		wantPerGBMemoryCost  float64
+		wantWarnings         []string
 		wantCostErrStrPrefix string
 	}{
 		{
@@ -203,7 +234,7 @@ func TestCalculateCosts(t *testing.T) {
 			wantPerGBMemoryCost: 0.708,
 		},
 		{
-			name: "unsupported SKU",
+			name: "multiple SKUs, but some do not have pricing data",
 			nt: &NodeTracker{
 				totalCapacity: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("12"),
@@ -224,14 +255,96 @@ func TestCalculateCosts(t *testing.T) {
 				pricingProvider: &dummyPricingProvider{},
 				costs:           &costInfo{},
 			},
-			wantPerCPUCoreCost:  0.583,
-			wantPerGBMemoryCost: 0.292,
+			wantCostErrStrPrefix: "no pricing data is available for one or more of the node SKUs",
+		},
+		{
+			name: "multiple SKUs, but some are known to be missing from the pricing API",
+			nt: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("12"),
+					corev1.ResourceMemory: resource.MustParse("24Gi"),
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+						nodeName2: true,
+					},
+					nodeSKU2: {
+						nodeName3: true,
+					},
+					nodeKnownMissingSKU: {
+						nodeName4: true,
+					},
+				},
+				pricingProvider: &dummyPricingProvider{},
+				costs:           &costInfo{},
+			},
+			wantCostErrStrPrefix: "no pricing data is available for one or more of the node SKUs",
+		},
+		{
+			name: "some nodes have empty SKUs",
+			nt: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("12"),
+					corev1.ResourceMemory: resource.MustParse("24Gi"),
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+						nodeName2: true,
+					},
+					nodeSKU2: {
+						nodeName3: true,
+					},
+					"": {
+						nodeName4: true,
+					},
+				},
+				pricingProvider: &dummyPricingProvider{},
+				costs:           &costInfo{},
+			},
+			wantCostErrStrPrefix: "no pricing data is available for one or more of the node SKUs",
+		},
+		{
+			name: "no SKUs with pricing data",
+			nt: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("12"),
+					corev1.ResourceMemory: resource.MustParse("24Gi"),
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU4: {
+						nodeName4: true,
+					},
+				},
+				pricingProvider: &dummyPricingProvider{},
+				costs:           &costInfo{},
+			},
+			wantCostErrStrPrefix: "nodes are present, but no pricing data is available for any node SKUs",
+			wantPerCPUCoreCost:   0.0,
+			wantPerGBMemoryCost:  0.0,
+		},
+		{
+			name: "empty cluster (no nodes)",
+			nt: &NodeTracker{
+				totalCapacity:   corev1.ResourceList{},
+				nodeSetBySKU:    map[string]NodeSet{},
+				pricingProvider: &dummyPricingProvider{},
+				costs:           &costInfo{},
+			},
+			wantPerCPUCoreCost:  0.0,
+			wantPerGBMemoryCost: 0.0,
 		},
 		{
 			name: "invalid CPU capacity (zero)",
 			nt: &NodeTracker{
 				totalCapacity: corev1.ResourceList{
 					corev1.ResourceMemory: resource.MustParse("24Gi"),
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+					},
 				},
 				pricingProvider: &dummyPricingProvider{},
 				costs:           &costInfo{},
@@ -244,10 +357,36 @@ func TestCalculateCosts(t *testing.T) {
 				totalCapacity: corev1.ResourceList{
 					corev1.ResourceCPU: resource.MustParse("12"),
 				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+					},
+				},
 				pricingProvider: &dummyPricingProvider{},
 				costs:           &costInfo{},
 			},
 			wantCostErrStrPrefix: "failed to calculate costs",
+		},
+		{
+			name: "stale pricing data",
+			nt: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("12"),
+					corev1.ResourceMemory: resource.MustParse("2Gi"),
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+					},
+				},
+				pricingProvider: &dummyPricingProviderWithStaleData{},
+				costs:           &costInfo{},
+			},
+			wantPerCPUCoreCost:  0.083,
+			wantPerGBMemoryCost: 0.5,
+			wantWarnings: []string{
+				fmt.Sprintf("the pricing data is stale (last updated at %v); the system might have issues connecting to the Azure Retail Prices API, or the current region is unsupported", currentTime.Add(-time.Hour*48)),
+			},
 		},
 	}
 
@@ -261,6 +400,7 @@ func TestCalculateCosts(t *testing.T) {
 			if tc.wantCostErrStrPrefix != "" {
 				if tc.nt.costs.err == nil {
 					t.Errorf("calculateCosts() costErr = nil, want error with prefix %s", tc.wantCostErrStrPrefix)
+					return
 				}
 				if !strings.HasPrefix(tc.nt.costs.err.Error(), tc.wantCostErrStrPrefix) {
 					t.Errorf("calculateCosts() costErr = %s, want error with prefix %s", tc.nt.costs.err.Error(), tc.wantCostErrStrPrefix)
@@ -270,6 +410,10 @@ func TestCalculateCosts(t *testing.T) {
 
 			if tc.nt.costs.err != nil {
 				t.Errorf("calculateCosts() costErr = %s, want no error", tc.nt.costs.err.Error())
+			}
+
+			if diff := cmp.Diff(tc.nt.costs.warnings, tc.wantWarnings, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("calculateCosts() warnings diff (-got, +want):\n%s", diff)
 			}
 
 			// Account for possible decision issues in float calculations.
@@ -1562,6 +1706,7 @@ func TestNodeTrackerAddOrUpdateNode(t *testing.T) {
 				cmp.AllowUnexported(costInfo{}),
 				cmpopts.EquateApprox(0.0, 0.01),
 				cmpopts.EquateErrors(),
+				cmpopts.EquateEmpty(),
 			); diff != "" {
 				t.Fatalf("AddOrUpdateNode(), node tracker diff (-got, +want): \n%s", diff)
 			}
@@ -1755,9 +1900,7 @@ func TestNodeTrackerRemoveNode(t *testing.T) {
 				allocatableByNode: map[string]corev1.ResourceList{},
 				nodeSetBySKU:      map[string]NodeSet{},
 				skuByNode:         map[string]string{},
-				costs: &costInfo{
-					err: cmpopts.AnyError,
-				},
+				costs:             &costInfo{},
 			},
 		},
 		{
@@ -1850,6 +1993,7 @@ func TestNodeTrackerRemoveNode(t *testing.T) {
 				cmp.AllowUnexported(costInfo{}),
 				cmpopts.EquateApprox(0.0, 0.01),
 				cmpopts.EquateErrors(),
+				cmpopts.EquateEmpty(),
 			); diff != "" {
 				t.Fatalf("RemoveNode(), node tracker diff (-got, +want): \n%s", diff)
 			}

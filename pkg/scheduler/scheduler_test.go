@@ -207,7 +207,7 @@ func TestCleanUpAllBindingsFor(t *testing.T) {
 						Name:      bindingName,
 						Namespace: "test-namespace",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: "test-namespace/test-rp",
+							fleetv1beta1.CRPTrackingLabel: "test-rp",
 						},
 					},
 				},
@@ -233,7 +233,7 @@ func TestCleanUpAllBindingsFor(t *testing.T) {
 						Name:      "tobeDeletedBinding",
 						Namespace: "test-namespace",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: "test-namespace/test-rp",
+							fleetv1beta1.CRPTrackingLabel: "test-rp",
 						},
 						Finalizers: []string{fleetv1beta1.SchedulerCRBCleanupFinalizer},
 					},
@@ -253,7 +253,7 @@ func TestCleanUpAllBindingsFor(t *testing.T) {
 						Name:      "remainingBinding2",
 						Namespace: "another-namespace",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: "another-namespace/test-rp",
+							fleetv1beta1.CRPTrackingLabel: "test-rp",
 						},
 						Finalizers: []string{fleetv1beta1.SchedulerCRBCleanupFinalizer},
 					},
@@ -276,7 +276,7 @@ func TestCleanUpAllBindingsFor(t *testing.T) {
 						Name:      "remainingBinding2",
 						Namespace: "another-namespace",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: "another-namespace/test-rp",
+							fleetv1beta1.CRPTrackingLabel: "test-rp",
 						},
 						Finalizers: []string{fleetv1beta1.SchedulerCRBCleanupFinalizer},
 					},
@@ -399,7 +399,7 @@ func TestLookupLatestPolicySnapshot(t *testing.T) {
 						Name:      policySnapshotName,
 						Namespace: "test-namespace",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel:      "test-namespace/test-rp",
+							fleetv1beta1.CRPTrackingLabel:      "test-rp",
 							fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
 						},
 					},
@@ -409,7 +409,7 @@ func TestLookupLatestPolicySnapshot(t *testing.T) {
 						Name:      "other-policy-snapshot",
 						Namespace: "test-namespace",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel:      "test-namespace/other-rp",
+							fleetv1beta1.CRPTrackingLabel:      "other-rp",
 							fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
 						},
 					},
@@ -420,7 +420,7 @@ func TestLookupLatestPolicySnapshot(t *testing.T) {
 					Name:      policySnapshotName,
 					Namespace: "test-namespace",
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel:      "test-namespace/test-rp",
+						fleetv1beta1.CRPTrackingLabel:      "test-rp",
 						fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
 					},
 				},
@@ -442,7 +442,7 @@ func TestLookupLatestPolicySnapshot(t *testing.T) {
 						Name:      policySnapshotName,
 						Namespace: "test-namespace",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel:      "test-namespace/test-rp",
+							fleetv1beta1.CRPTrackingLabel:      "test-rp",
 							fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
 						},
 					},
@@ -452,7 +452,7 @@ func TestLookupLatestPolicySnapshot(t *testing.T) {
 						Name:      policySnapshotName,
 						Namespace: "other-namespace",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel:      "test-namespace/test-rp",
+							fleetv1beta1.CRPTrackingLabel:      "test-rp",
 							fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
 						},
 					},
@@ -463,7 +463,7 @@ func TestLookupLatestPolicySnapshot(t *testing.T) {
 					Name:      policySnapshotName,
 					Namespace: "test-namespace",
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel:      "test-namespace/test-rp",
+						fleetv1beta1.CRPTrackingLabel:      "test-rp",
 						fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
 					},
 				},

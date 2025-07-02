@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,10 +42,8 @@ func TestResolvePlacementFromKey(t *testing.T) {
 		name          string
 		placementKey  queue.PlacementKey
 		objects       []client.Object
-		expectedType  string
-		expectedName  string
-		expectedNS    string
-		expectCluster bool
+		wantPlacement fleetv1beta1.PlacementObj
+		wantErr       bool
 		expectedErr   error
 	}{
 		{
@@ -57,11 +56,12 @@ func TestResolvePlacementFromKey(t *testing.T) {
 					},
 				},
 			},
-			expectedType:  "*v1beta1.ClusterResourcePlacement",
-			expectedName:  "test-crp",
-			expectedNS:    "",
-			expectCluster: true,
-			expectedErr:   nil,
+			wantPlacement: &fleetv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+			},
+			wantErr: false,
 		},
 		{
 			name:         "namespaced resource placement",
@@ -74,23 +74,43 @@ func TestResolvePlacementFromKey(t *testing.T) {
 					},
 				},
 			},
-			expectedType:  "*v1beta1.ResourcePlacement",
-			expectedName:  "test-rp",
-			expectedNS:    "test-ns",
-			expectCluster: false,
-			expectedErr:   nil,
+			wantPlacement: &fleetv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-rp",
+					Namespace: "test-ns",
+				},
+			},
+			wantErr: false,
 		},
 		{
-			name:         "empty placement key",
-			placementKey: queue.PlacementKey(""),
-			objects:      []client.Object{},
-			expectedErr:  ErrUnexpectedBehavior,
+			name:          "empty placement key",
+			placementKey:  queue.PlacementKey(""),
+			objects:       []client.Object{},
+			wantPlacement: nil,
+			wantErr:       true,
+			expectedErr:   ErrUnexpectedBehavior,
 		},
 		{
-			name:         "invalid placement key with multiple '/'",
-			placementKey: queue.PlacementKey("test-ns/test-rp/extra"),
-			objects:      []client.Object{},
-			expectedErr:  ErrUnexpectedBehavior,
+			name:          "invalid placement key with multiple '/'",
+			placementKey:  queue.PlacementKey("test-ns/test-rp/extra"),
+			objects:       []client.Object{},
+			wantPlacement: nil,
+			wantErr:       true,
+			expectedErr:   ErrUnexpectedBehavior,
+		},
+		{
+			name:          "cluster resource placement not found",
+			placementKey:  queue.PlacementKey("nonexistent-crp"),
+			objects:       []client.Object{},
+			wantPlacement: nil,
+			wantErr:       true,
+		},
+		{
+			name:          "namespaced resource placement not found",
+			placementKey:  queue.PlacementKey("test-ns/nonexistent-rp"),
+			objects:       []client.Object{},
+			wantPlacement: nil,
+			wantErr:       true,
 		},
 	}
 
@@ -103,52 +123,44 @@ func TestResolvePlacementFromKey(t *testing.T) {
 
 			placement, err := FetchPlacementFromKey(context.Background(), fakeClient, tt.placementKey)
 
-			if tt.expectedErr != nil {
+			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("Expected error but got nil")
 				}
-				if !errors.Is(err, tt.expectedErr) {
+				if tt.expectedErr != nil && !errors.Is(err, tt.expectedErr) {
 					t.Fatalf("Expected error: %v, but got: %v", tt.expectedErr, err)
 				}
-				return
-			}
-
-			if tt.expectedErr != nil {
 				if placement != nil {
 					t.Fatalf("Expected nil placement but got: %v", placement)
 				}
 				return
 			}
 
+			if err != nil {
+				t.Fatalf("Expected no error but got: %v", err)
+			}
+
 			if placement == nil {
 				t.Fatalf("Expected placement but got nil")
 			}
 
-			// Determine if this is a cluster-scoped placement based on namespace
-			isCluster := placement.GetNamespace() == ""
-			if isCluster != tt.expectCluster {
-				t.Errorf("Expected cluster-scoped: %v, got: %v", tt.expectCluster, isCluster)
+			// Use cmp.Diff to compare the actual result with expected placement
+			// Ignore resource version field for consistent comparison
+			if diff := cmp.Diff(placement, tt.wantPlacement,
+				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")); diff != "" {
+				t.Errorf("FetchPlacementFromKey() diff (-got +want):\n%s", diff)
 			}
 
-			if diff := cmp.Diff(tt.expectedName, placement.GetName()); diff != "" {
-				t.Errorf("Name mismatch (-want +got):\n%s", diff)
-			}
-			if diff := cmp.Diff(tt.expectedNS, placement.GetNamespace()); diff != "" {
-				t.Errorf("Namespace mismatch (-want +got):\n%s", diff)
-			}
-
-			// Check the concrete type
-			switch tt.expectedType {
-			case "*v1beta1.ClusterResourcePlacement":
+			// Verify the concrete type matches expected
+			switch tt.wantPlacement.(type) {
+			case *fleetv1beta1.ClusterResourcePlacement:
 				if _, ok := placement.(*fleetv1beta1.ClusterResourcePlacement); !ok {
 					t.Errorf("Expected type ClusterResourcePlacement, but got: %T", placement)
 				}
-			case "*v1beta1.ResourcePlacement":
+			case *fleetv1beta1.ResourcePlacement:
 				if _, ok := placement.(*fleetv1beta1.ResourcePlacement); !ok {
 					t.Errorf("Expected type ResourcePlacement, but got: %T", placement)
 				}
-			default:
-				t.Errorf("Unexpected expectedType: %s", tt.expectedType)
 			}
 		})
 	}
@@ -185,6 +197,83 @@ func TestGetPlacementKeyFromObj(t *testing.T) {
 			key := GetPlacementKeyFromObj(tt.placement)
 			if key != tt.wantKey {
 				t.Errorf("GetPlacementKeyFromObj() = %v, want %v", key, tt.wantKey)
+			}
+		})
+	}
+}
+func TestGetPlacementNameFromKey(t *testing.T) {
+	tests := []struct {
+		name              string
+		placementKey      queue.PlacementKey
+		expectedNamespace string
+		expectedName      string
+		expectedErr       error
+	}{
+		{
+			name:              "cluster resource placement",
+			placementKey:      queue.PlacementKey("test-crp"),
+			expectedNamespace: "",
+			expectedName:      "test-crp",
+			expectedErr:       nil,
+		},
+		{
+			name:              "namespaced resource placement",
+			placementKey:      queue.PlacementKey("test-ns/test-rp"),
+			expectedNamespace: "test-ns",
+			expectedName:      "test-rp",
+			expectedErr:       nil,
+		},
+		{
+			name:         "empty placement key",
+			placementKey: queue.PlacementKey(""),
+			expectedErr:  ErrUnexpectedBehavior,
+		},
+		{
+			name:         "invalid placement key with multiple separators",
+			placementKey: queue.PlacementKey("test-ns/test-rp/extra"),
+			expectedErr:  ErrUnexpectedBehavior,
+		},
+		{
+			name:         "invalid placement key with only separator",
+			placementKey: queue.PlacementKey("/"),
+			expectedErr:  ErrUnexpectedBehavior,
+		},
+		{
+			name:         "invalid placement key starting with separator",
+			placementKey: queue.PlacementKey("/test-rp"),
+			expectedErr:  ErrUnexpectedBehavior,
+		},
+		{
+			name:         "invalid placement key ending with separator",
+			placementKey: queue.PlacementKey("test-ns/"),
+			expectedErr:  ErrUnexpectedBehavior,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			namespace, name, err := ExtractNamespaceNameFromKey(tt.placementKey)
+
+			if tt.expectedErr != nil {
+				if err == nil {
+					t.Fatalf("Expected error but got nil")
+				}
+				if !errors.Is(err, tt.expectedErr) {
+					t.Fatalf("Expected error: %v, but got: %v", tt.expectedErr, err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if namespace != tt.expectedNamespace {
+				t.Errorf("Expected namespace: %s, got: %s", tt.expectedNamespace, namespace)
+			}
+
+			if name != tt.expectedName {
+				t.Errorf("Expected name: %s, got: %s", tt.expectedName, name)
 			}
 		})
 	}

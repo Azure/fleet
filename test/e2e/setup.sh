@@ -27,6 +27,9 @@ export REFRESH_TOKEN_IMAGE="${REFRESH_TOKEN_IMAGE:-refresh-token}"
 export CRD_INSTALLER_IMAGE="${CRD_INSTALLER_IMAGE:-crd-installer}"
 export PROPERTY_PROVIDER="${PROPERTY_PROVIDER:-azure}"
 export USE_PREDEFINED_REGIONS="${USE_PREDEFINED_REGIONS:-false}"
+export RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL="${RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL:-0m}"
+export RESOURCE_CHANGES_COLLECTION_DURATION="${RESOURCE_CHANGES_COLLECTION_DURATION:-0m}"
+
 # The pre-defined regions; if the AKS property provider is used.
 #
 # Note that for a specific cluster, if a predefined region is not set, the node region must
@@ -131,7 +134,9 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set webhookClientConnectionType=service \
     --set forceDeleteWaitTime="1m0s" \
     --set clusterUnhealthyThreshold="3m0s" \
-    --set logFileMaxSize=1000000
+    --set logFileMaxSize=1000000 \
+    --set resourceSnapshotCreationMinimumInterval=$RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL \
+    --set resourceChangesCollectionDuration=$RESOURCE_CHANGES_COLLECTION_DURATION
 
 # Download CRDs from Fleet networking repo
 export ENDPOINT_SLICE_EXPORT_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.2.7/config/crd/bases/networking.fleet.azure.com_endpointsliceexports.yaml

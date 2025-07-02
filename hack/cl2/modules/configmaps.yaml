@@ -1,0 +1,14 @@
+{{$namespaces := .namespaceCount}}
+{{$count := .configmapCount}}
+
+steps:
+- name: Create ConfigMaps
+  phases:
+  - namespaceRange:
+      min: 1
+      max: {{$namespaces}}
+    replicasPerNamespace: {{$count}}
+    tuningSet: SteppedLoad
+    objectBundle:
+    - basename: test-configmap 
+      objectTemplatePath: "manifests/test-configmap.yaml"

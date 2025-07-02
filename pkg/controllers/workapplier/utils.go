@@ -20,12 +20,10 @@ import (
 	"fmt"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils/condition"
 )
 
 // formatWRIString returns a string representation of a work resource identifier.
@@ -49,12 +47,6 @@ func formatWRIString(wri *fleetv1beta1.WorkResourceIdentifier) (string, error) {
 func isManifestObjectApplied(appliedResTyp manifestProcessingAppliedResultType) bool {
 	return appliedResTyp == ManifestProcessingApplyResultTypeApplied ||
 		appliedResTyp == ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetection
-}
-
-// isWorkObjectAvailable checks if a Work object is available.
-func isWorkObjectAvailable(work *fleetv1beta1.Work) bool {
-	availableCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
-	return condition.IsConditionStatusTrue(availableCond, work.Generation)
 }
 
 // isPlacedByFleetInDuplicate checks if the object has already been placed by Fleet via another

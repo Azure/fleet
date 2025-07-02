@@ -153,14 +153,16 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 
 	// Set up  a custom controller to reconcile cluster resource placement
 	crpc := &clusterresourceplacement.Reconciler{
-		Client:            mgr.GetClient(),
-		Recorder:          mgr.GetEventRecorderFor(crpControllerName),
-		RestMapper:        mgr.GetRESTMapper(),
-		InformerManager:   dynamicInformerManager,
-		ResourceConfig:    resourceConfig,
-		SkippedNamespaces: skippedNamespaces,
-		Scheme:            mgr.GetScheme(),
-		UncachedReader:    mgr.GetAPIReader(),
+		Client:                                  mgr.GetClient(),
+		Recorder:                                mgr.GetEventRecorderFor(crpControllerName),
+		RestMapper:                              mgr.GetRESTMapper(),
+		InformerManager:                         dynamicInformerManager,
+		ResourceConfig:                          resourceConfig,
+		SkippedNamespaces:                       skippedNamespaces,
+		Scheme:                                  mgr.GetScheme(),
+		UncachedReader:                          mgr.GetAPIReader(),
+		ResourceSnapshotCreationMinimumInterval: opts.ResourceSnapshotCreationMinimumInterval,
+		ResourceChangesCollectionDuration:       opts.ResourceChangesCollectionDuration,
 	}
 
 	rateLimiter := options.DefaultControllerRateLimiter(opts.RateLimiterOpts)

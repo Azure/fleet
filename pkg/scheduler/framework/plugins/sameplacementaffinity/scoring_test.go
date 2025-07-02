@@ -26,6 +26,7 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 func TestScore(t *testing.T) {
@@ -72,7 +73,7 @@ func TestScore(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			p := New()
-			state := framework.NewCycleState(nil, tc.obsoleteBindings)
+			state := framework.NewCycleState(nil, controller.ConvertCRBArrayToBindingObjs(tc.obsoleteBindings))
 			cluster := clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,

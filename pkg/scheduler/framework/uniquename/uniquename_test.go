@@ -65,7 +65,7 @@ func TestClusterResourceBindingUniqueName(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			name, err := NewClusterResourceBindingName(tc.crpName, tc.clusterName)
+			name, err := NewBindingName(tc.crpName, tc.clusterName)
 
 			if tc.expectedToFail {
 				if err == nil {
