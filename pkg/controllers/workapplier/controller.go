@@ -54,8 +54,6 @@ import (
 
 const (
 	patchDetailPerObjLimit = 100
-
-	minRequestAfterDuration = time.Second * 5
 )
 
 const (
@@ -181,6 +179,41 @@ func (h *PriorityQueueEventHandler) Generic(ctx context.Context, evt event.Typed
 	h.AddToPriorityQueue(ctx, evt.Object, false)
 }
 
+var defaultRequeueRateLimiter *RequeueMultiStageWithExponentialBackoffRateLimiter = NewRequeueMultiStageWithExponentialBackoffRateLimiter(
+	// Allow 1 attempt of fixed delay; this helps give objects a bit of headroom to get available (or have
+	// diffs reported).
+	1,
+	// Use a fixed delay of 5 seconds for the first two attempts.
+	//
+	// Important (chenyu1): before the introduction of the requeue rate limiter, the work
+	// applier uses static requeue intervals, specifically 5 seconds (if the work object is unavailable),
+	// and 15 seconds (if the work object is available). There are a number of test cases that
+	// implicitly assume this behavior (e.g., a test case might expect that the availability check completes
+	// w/in 10 seconds), which is why the rate limiter uses the 5 seconds fast requeue delay by default.
+	// If you need to change this value and see that some test cases begin to fail, update the test
+	// cases accordingly.
+	5,
+	// Then switch to slow exponential backoff with a base of 1.2 with an initial delay of 2 seconds
+	// and a cap of 15 seconds (12 requeues in total, ~90 seconds in total).
+	// This is to allow fast checkups in cases where objects are not yet available or have not yet reported diffs.
+	1.2,
+	2,
+	15,
+	// Eventually, switch to a fast exponential backoff with a base of 1.5 with an initial delay of 15 seconds
+	// and a cap of 15 minutes (10 requeues in total, ~42 minutes in total).
+	1.5,
+	900,
+	// Allow skipping to the fast exponential backoff stage if the Work object becomes available
+	// or has reported diffs.
+	true,
+	// When the Work object spec does not change and the processing result remains the same (unavailable or failed
+	// to report diffs), the requeue pattern is essentially:
+	// * 1 attempt of requeue with fixed delays (5 seconds); then
+	// * 12 attempts of requeues with slow exponential backoff (factor of 1.2, ~90 seconds in total); then
+	// * 10 attempts of requeues with fast exponential backoff (factor of 1.5, ~42 minutes in total);
+	// * afterwards, requeue with a delay of 15 minutes indefinitely.
+)
+
 // Reconciler reconciles a Work object.
 type Reconciler struct {
 	hubClient                    client.Client
@@ -192,53 +225,45 @@ type Reconciler struct {
 	concurrentReconciles         int
 	watchWorkWithPriorityQueue   bool
 	watchWorkReconcileAgeMinutes int
+	deletionWaitTime             time.Duration
 	joined                       *atomic.Bool
 	parallelizer                 *parallelizer.Parallerlizer
-
-	availabilityCheckRequeueAfter time.Duration
-	driftCheckRequeueAfter        time.Duration
-	deletionWaitTime              time.Duration
+	requeueRateLimiter           *RequeueMultiStageWithExponentialBackoffRateLimiter
 }
 
+// NewReconciler returns a new Work object reconciler for the work applier.
+//
+// TO-DO (chenyu1): evaluate if KubeFleet needs to expose the requeue rate limiter
+// parameters as command-line arguments for user-side configuration.
 func NewReconciler(
 	hubClient client.Client, workNameSpace string,
 	spokeDynamicClient dynamic.Interface, spokeClient client.Client, restMapper meta.RESTMapper,
 	recorder record.EventRecorder,
 	concurrentReconciles int,
 	workerCount int,
-	availabilityCheckRequestAfter time.Duration,
-	driftCheckRequestAfter time.Duration,
 	deletionWaitTime time.Duration,
 	watchWorkWithPriorityQueue bool,
 	watchWorkReconcileAgeMinutes int,
+	requeueRateLimiter *RequeueMultiStageWithExponentialBackoffRateLimiter,
 ) *Reconciler {
-	acRequestAfter := availabilityCheckRequestAfter
-	if acRequestAfter < minRequestAfterDuration {
-		klog.V(2).InfoS("Availability check requeue after duration is too short; set to the longer default", "availabilityCheckRequestAfter", acRequestAfter)
-		acRequestAfter = minRequestAfterDuration
-	}
-
-	dcRequestAfter := driftCheckRequestAfter
-	if dcRequestAfter < minRequestAfterDuration {
-		klog.V(2).InfoS("Drift check requeue after duration is too short; set to the longer default", "driftCheckRequestAfter", dcRequestAfter)
-		dcRequestAfter = minRequestAfterDuration
+	if requeueRateLimiter == nil {
+		requeueRateLimiter = defaultRequeueRateLimiter
 	}
 
 	return &Reconciler{
-		hubClient:                     hubClient,
-		spokeDynamicClient:            spokeDynamicClient,
-		spokeClient:                   spokeClient,
-		restMapper:                    restMapper,
-		recorder:                      recorder,
-		concurrentReconciles:          concurrentReconciles,
-		parallelizer:                  parallelizer.NewParallelizer(workerCount),
-		watchWorkWithPriorityQueue:    watchWorkWithPriorityQueue,
-		watchWorkReconcileAgeMinutes:  watchWorkReconcileAgeMinutes,
-		workNameSpace:                 workNameSpace,
-		joined:                        atomic.NewBool(false),
-		availabilityCheckRequeueAfter: acRequestAfter,
-		driftCheckRequeueAfter:        dcRequestAfter,
-		deletionWaitTime:              deletionWaitTime,
+		hubClient:                    hubClient,
+		spokeDynamicClient:           spokeDynamicClient,
+		spokeClient:                  spokeClient,
+		restMapper:                   restMapper,
+		recorder:                     recorder,
+		concurrentReconciles:         concurrentReconciles,
+		parallelizer:                 parallelizer.NewParallelizer(workerCount),
+		watchWorkWithPriorityQueue:   watchWorkWithPriorityQueue,
+		watchWorkReconcileAgeMinutes: watchWorkReconcileAgeMinutes,
+		workNameSpace:                workNameSpace,
+		joined:                       atomic.NewBool(false),
+		deletionWaitTime:             deletionWaitTime,
+		requeueRateLimiter:           requeueRateLimiter,
 	}
 }
 
@@ -463,14 +488,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	trackWorkAndManifestProcessingRequestMetrics(work)
 
-	// If the Work object is not yet available, reconcile again.
-	if !isWorkObjectAvailable(work) {
-		klog.V(2).InfoS("Work object is not yet in an available state; requeue to monitor its availability", "work", workRef)
-		return ctrl.Result{RequeueAfter: r.availabilityCheckRequeueAfter}, nil
-	}
-	// Otherwise, reconcile again for drift detection purposes.
-	klog.V(2).InfoS("Work object is available; requeue to check for drifts", "work", workRef)
-	return ctrl.Result{RequeueAfter: r.driftCheckRequeueAfter}, nil
+	// Requeue the Work object with a delay based on the requeue rate limiter.
+	requeueDelay := r.requeueRateLimiter.When(work, bundles)
+	klog.V(2).InfoS("Requeue the Work object for re-processing", "work", workRef, "delaySeconds", requeueDelay.Seconds())
+	return ctrl.Result{RequeueAfter: requeueDelay}, nil
 }
 
 func (r *Reconciler) garbageCollectAppliedWork(ctx context.Context, work *fleetv1beta1.Work) (ctrl.Result, error) {
@@ -485,7 +506,7 @@ func (r *Reconciler) garbageCollectAppliedWork(ctx context.Context, work *fleetv
 	if err := r.spokeClient.Get(ctx, types.NamespacedName{Name: work.Name}, appliedWork); err != nil {
 		if apierrors.IsNotFound(err) {
 			klog.V(2).InfoS("The appliedWork is already deleted, removing the finalizer from the work", "appliedWork", work.Name)
-			return r.removeWorkFinalizer(ctx, work)
+			return r.forgetWorkAndRemoveFinalizer(ctx, work)
 		}
 		klog.ErrorS(err, "Failed to get AppliedWork", "appliedWork", work.Name)
 		return ctrl.Result{}, controller.NewAPIServerError(false, err)
@@ -504,7 +525,7 @@ func (r *Reconciler) garbageCollectAppliedWork(ctx context.Context, work *fleetv
 	if err := r.spokeClient.Delete(ctx, appliedWork, &client.DeleteOptions{PropagationPolicy: &deletePolicy}); err != nil {
 		if apierrors.IsNotFound(err) {
 			klog.V(2).InfoS("AppliedWork already deleted", "appliedWork", work.Name)
-			return r.removeWorkFinalizer(ctx, work)
+			return r.forgetWorkAndRemoveFinalizer(ctx, work)
 		}
 		klog.V(2).ErrorS(err, "Failed to delete the appliedWork", "appliedWork", work.Name)
 		return ctrl.Result{}, controller.NewAPIServerError(false, err)
@@ -576,8 +597,11 @@ func (r *Reconciler) updateOwnerReference(ctx context.Context, work *fleetv1beta
 	return nil
 }
 
-// removeWorkFinalizer removes the finalizer from the work and updates it in the hub.
-func (r *Reconciler) removeWorkFinalizer(ctx context.Context, work *fleetv1beta1.Work) (ctrl.Result, error) {
+// forgetWorkAndRemoveFinalizer untracks the Work object in the requeue rate limiter and removes
+// the finalizer from the Work object.
+func (r *Reconciler) forgetWorkAndRemoveFinalizer(ctx context.Context, work *fleetv1beta1.Work) (ctrl.Result, error) {
+	r.requeueRateLimiter.Forget(work)
+
 	controllerutil.RemoveFinalizer(work, fleetv1beta1.WorkFinalizer)
 	if err := r.hubClient.Update(ctx, work, &client.UpdateOptions{}); err != nil {
 		klog.ErrorS(err, "Failed to remove the finalizer from the work", "work", klog.KObj(work))
