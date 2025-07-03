@@ -6,6 +6,7 @@ import (
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacementdisruptionbudget"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacementeviction"
 	"go.goms.io/fleet/pkg/webhook/fleetresourcehandler"
+	"go.goms.io/fleet/pkg/webhook/managedresource"
 	"go.goms.io/fleet/pkg/webhook/membercluster"
 	"go.goms.io/fleet/pkg/webhook/pod"
 	"go.goms.io/fleet/pkg/webhook/replicaset"
@@ -15,6 +16,8 @@ import (
 func init() {
 	// AddToManagerFleetResourceValidator is a function to register fleet guard rail resource validator to the webhook server
 	AddToManagerFleetResourceValidator = fleetresourcehandler.Add
+	// AddtoManagerManagedResource is a function to register managed resource validator to the webhook server
+	AddtoManagerManagedResource = managedresource.Add
 	// AddToManagerFuncs is a list of functions to register webhook validators to the webhook server
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacement.AddV1Alpha1)
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacement.Add)
