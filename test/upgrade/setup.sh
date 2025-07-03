@@ -27,6 +27,7 @@ export OUTPUT_TYPE="${OUTPUT_TYPE:-type=docker}"
 export HUB_AGENT_IMAGE="${HUB_AGENT_IMAGE:-hub-agent}"
 export MEMBER_AGENT_IMAGE="${MEMBER_AGENT_IMAGE:-member-agent}"
 export REFRESH_TOKEN_IMAGE="${REFRESH_TOKEN_IMAGE:-refresh-token}"
+export CRD_INSTALLER_IMAGE="${CRD_INSTALLER_IMAGE:-crd-installer}"
 
 # Build the Fleet agent images.
 echo "Building and the Fleet agent images..."
@@ -34,6 +35,7 @@ echo "Building and the Fleet agent images..."
 TAG=$IMAGE_TAG make docker-build-hub-agent
 TAG=$IMAGE_TAG make docker-build-member-agent
 TAG=$IMAGE_TAG make docker-build-refresh-token
+TAG=$IMAGE_TAG make docker-build-crd-installer
 
 # Create the kind clusters.
 echo "Creating the kind clusters..."
@@ -51,11 +53,13 @@ done
 
 # Load the hub agent image into the hub cluster.
 kind load docker-image --name $HUB_CLUSTER $REGISTRY/$HUB_AGENT_IMAGE:$IMAGE_TAG
+kind load docker-image --name $HUB_CLUSTER $REGISTRY/$CRD_INSTALLER_IMAGE:$IMAGE_TAG
 
 # Load the member agent image and the refresh token image into the member clusters.
 for i in "${MEMBER_CLUSTERS[@]}"
 do
 	kind load docker-image --name "$i" $REGISTRY/$MEMBER_AGENT_IMAGE:$IMAGE_TAG
+    kind load docker-image --name "$i" $REGISTRY/$CRD_INSTALLER_IMAGE:$IMAGE_TAG
     kind load docker-image --name "$i" $REGISTRY/$REFRESH_TOKEN_IMAGE:$IMAGE_TAG
 done
 
@@ -67,6 +71,10 @@ helm install hub-agent charts/hub-agent/ \
     --set image.pullPolicy=Never \
     --set image.repository=$REGISTRY/$HUB_AGENT_IMAGE \
     --set image.tag=$IMAGE_TAG \
+    --set crdInstaller.enabled=true \
+    --set crdInstaller.image.repository=$REGISTRY/$CRD_INSTALLER_IMAGE \
+    --set crdInstaller.image.tag=$IMAGE_TAG  \
+    --set crdInstaller.image.pullPolicy=Never \
     --set namespace=fleet-system \
     --set logVerbosity=5 \
     --set enableWebhook=false \
@@ -119,6 +127,10 @@ do
         --set config.hubURL=$HUB_SERVER_URL \
         --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
         --set image.tag=$IMAGE_TAG \
+        --set crdInstaller.enabled=true \
+        --set crdInstaller.image.repository=$REGISTRY/$CRD_INSTALLER_IMAGE \
+        --set crdInstaller.image.tag=$IMAGE_TAG  \
+        --set crdInstaller.image.pullPolicy=Never \
         --set refreshtoken.repository=$REGISTRY/$REFRESH_TOKEN_IMAGE \
         --set refreshtoken.tag=$IMAGE_TAG \
         --set image.pullPolicy=Never \
