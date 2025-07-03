@@ -11,7 +11,7 @@ import (
 	"net/http"
 
 	admissionv1 "k8s.io/api/admission/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -51,29 +51,41 @@ type managedResourceValidator struct {
 // Handle denies the resource admission if the request target object has a label or annotation key "fleet.azure.com".
 func (v *managedResourceValidator) Handle(_ context.Context, req admission.Request) admission.Response {
 	namespacedName := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
+	klog.V(1).InfoS("handling resource", "operation", req.Operation, "subResource", req.SubResource, "namespacedName", namespacedName)
+
+	var objs []runtime.RawExtension
 	switch req.Operation {
-	case admissionv1.Create, admissionv1.Update, admissionv1.Delete:
-		klog.V(1).InfoS("handling resource", "operation", req.Operation, "subResource", req.SubResource, "namespacedName", namespacedName)
-		for _, obj := range []runtime.Object{req.OldObject.Object, req.Object.Object} {
-			labels, annotations, err := getLabelsAndAnnotations(obj)
-			if err != nil {
-				return admission.Errored(http.StatusInternalServerError, err)
-			}
-			if (managedByArm(labels) || managedByArm(annotations)) && !validation.IsAdminGroupUserOrWhiteListedUser(v.whiteListedUsers, req.UserInfo) {
-				klog.V(2).InfoS(deniedResource, "user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
-				return admission.Denied(fmt.Sprintf(resourceDeniedFormat, req.Kind, req.Name, req.Namespace))
-			}
+	case admissionv1.Create:
+		objs = append(objs, req.Object)
+	case admissionv1.Update:
+		objs = append(objs, req.Object, req.OldObject)
+	case admissionv1.Delete:
+		objs = append(objs, req.OldObject)
+	}
+	for _, obj := range objs {
+		labels, annotations, err := getLabelsAndAnnotations(obj)
+		if err != nil {
+			return admission.Errored(http.StatusInternalServerError, err)
+		}
+		if (managedByArm(labels) || managedByArm(annotations)) && !validation.IsAdminGroupUserOrWhiteListedUser(v.whiteListedUsers, req.UserInfo) {
+			klog.V(2).InfoS(deniedResource, "user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
+			return admission.Denied(fmt.Sprintf(resourceDeniedFormat, req.Kind, req.Name, req.Namespace))
 		}
 	}
 	return admission.Allowed("")
 }
 
-func getLabelsAndAnnotations(obj runtime.Object) (map[string]string, map[string]string, error) {
-	accessor, err := meta.Accessor(obj)
+func getLabelsAndAnnotations(raw runtime.RawExtension) (map[string]string, map[string]string, error) {
+	var obj runtime.Object
+	if err := runtime.Convert_runtime_RawExtension_To_runtime_Object(&raw, &obj, nil); err != nil {
+		return nil, nil, err
+	}
+	o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 	if err != nil {
 		return nil, nil, err
 	}
-	return accessor.GetLabels(), accessor.GetAnnotations(), nil
+	u := unstructured.Unstructured{Object: o}
+	return u.GetLabels(), u.GetAnnotations(), nil
 }
 
 func managedByArm(m map[string]string) bool {

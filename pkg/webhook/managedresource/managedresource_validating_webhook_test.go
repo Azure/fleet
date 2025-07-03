@@ -20,7 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-func Test_managedResourceValidzaator_Handle(t *testing.T) {
+func Test_managedResourceValidator_Handle(t *testing.T) {
 	const fleet1p = "fleet1p"
 	validator := &managedResourceValidator{
 		whiteListedUsers: []string{fleet1p},
@@ -49,9 +49,9 @@ func Test_managedResourceValidzaator_Handle(t *testing.T) {
 		{
 			name:         "denied - error on getLabelsAndAnnotations failure",
 			operation:    admissionv1.Create,
-			expectedResp: admission.Errored(http.StatusInternalServerError, fmt.Errorf("object does not implement the Object interfaces")),
+			expectedResp: admission.Errored(http.StatusInternalServerError, fmt.Errorf("error decoding string from json: unexpected trailing data at offset 9")),
 			modReq: func(req *admission.Request) {
-				req.Object = runtime.RawExtension{Object: nil}
+				req.Object = runtime.RawExtension{Raw: []byte(`"invalid"}`)} // Invalid object without labels or annotations
 			},
 		},
 		{
@@ -125,24 +125,19 @@ func Test_managedResourceValidzaator_Handle(t *testing.T) {
 func Test_getLabelsAndAnnotations(t *testing.T) {
 	tests := []struct {
 		name            string
-		obj             runtime.Object
+		obj             runtime.RawExtension
 		wantLabels      map[string]string
 		wantAnnotations map[string]string
 		expectError     bool
 	}{
 		{
-			name:            "nil object - error",
-			obj:             nil,
-			wantLabels:      nil,
-			wantAnnotations: nil,
-			expectError:     true,
-		},
-		{
 			name: "object with labels and annotations",
-			obj: &metav1.PartialObjectMetadata{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels:      map[string]string{"foo": "bar"},
-					Annotations: map[string]string{"baz": "qux"},
+			obj: runtime.RawExtension{
+				Object: &metav1.PartialObjectMetadata{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels:      map[string]string{"foo": "bar"},
+						Annotations: map[string]string{"baz": "qux"},
+					},
 				},
 			},
 			wantLabels:      map[string]string{"foo": "bar"},
@@ -151,8 +146,10 @@ func Test_getLabelsAndAnnotations(t *testing.T) {
 		},
 		{
 			name: "object with no labels or annotations",
-			obj: &metav1.PartialObjectMetadata{
-				ObjectMeta: metav1.ObjectMeta{},
+			obj: runtime.RawExtension{
+				Object: &metav1.PartialObjectMetadata{
+					ObjectMeta: metav1.ObjectMeta{},
+				},
 			},
 			wantLabels:      nil,
 			wantAnnotations: nil,

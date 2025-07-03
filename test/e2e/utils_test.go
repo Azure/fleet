@@ -709,8 +709,8 @@ func cleanupWorkResources() {
 	cleanWorkResourcesOnCluster(hubCluster)
 }
 
-func createManagedNamespace() corev1.Namespace {
-	ns := corev1.Namespace{
+func managedNamespace() corev1.Namespace {
+	return corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(managedNamespaceTemplate, GinkgoParallelProcess()),
 			Labels: map[string]string{
@@ -718,9 +718,11 @@ func createManagedNamespace() corev1.Namespace {
 			},
 		},
 	}
+}
 
+func createManagedNamespace() {
+	ns := managedNamespace()
 	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
-	return ns
 }
 
 func cleanWorkResourcesOnCluster(cluster *framework.Cluster) {
@@ -833,6 +835,7 @@ func checkIfRemovedWorkResourcesFromMemberClustersConsistently(clusters []*frame
 		Consistently(workResourcesRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s consistently", memberCluster.ClusterName)
 	}
 }
+
 func checkNamespaceExistsWithOwnerRefOnMemberCluster(nsName, crpName string) {
 	Consistently(func() error {
 		ns := &corev1.Namespace{}
