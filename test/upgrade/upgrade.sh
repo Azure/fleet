@@ -62,7 +62,9 @@ if [ -n "$UPGRADE_HUB_SIDE" ]; then
         --set webhookClientConnectionType=service \
         --set forceDeleteWaitTime="1m0s" \
         --set clusterUnhealthyThreshold="3m0s" \
-        --set logFileMaxSize=1000000
+        --set logFileMaxSize=1000000 \
+        --set resourceSnapshotCreationMinimumInterval=0m \
+        --set resourceChangesCollectionDuration=0m
 fi
 
 # Query the URL of the hub cluster API server.
