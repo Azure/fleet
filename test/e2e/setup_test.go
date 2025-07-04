@@ -81,7 +81,7 @@ const (
 	fleetClusterResourceIDAnnotationKey = "fleet.azure.com/cluster-resource-id"
 	fleetLocationAnnotationKey          = "fleet.azure.com/location"
 
-	memberClusterHeartbeatPeriodSeconds = 60
+	memberClusterHeartbeatPeriodSeconds = 15
 )
 
 const (

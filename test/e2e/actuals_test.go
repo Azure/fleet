@@ -1425,3 +1425,35 @@ func updateRunStrategyRemovedActual(strategyName string) func() error {
 		return nil
 	}
 }
+
+func bindingStateActual(
+	crpName string,
+	targetClusterName string,
+	wantState placementv1beta1.BindingState,
+) func() error {
+	return func() error {
+		matchingLabels := client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName}
+
+		var foundBinding *placementv1beta1.ClusterResourceBinding
+		bindingList := &placementv1beta1.ClusterResourceBindingList{}
+		if err := hubClient.List(ctx, bindingList, matchingLabels); err != nil {
+			return err
+		}
+		for i := range bindingList.Items {
+			binding := bindingList.Items[i]
+			if binding.Spec.TargetCluster == targetClusterName {
+				if foundBinding != nil {
+					return fmt.Errorf("multiple bindings found targeting cluster %s for CRP %s", targetClusterName, crpName)
+				}
+				foundBinding = &binding
+			}
+		}
+		if foundBinding == nil {
+			return fmt.Errorf("no binding found targeting cluster %s for CRP %s", targetClusterName, crpName)
+		}
+		if foundBinding.Spec.State != wantState {
+			return fmt.Errorf("binding state for cluster %s is %s, want %s", targetClusterName, foundBinding.Spec.State, wantState)
+		}
+		return nil
+	}
+}

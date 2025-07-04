@@ -218,7 +218,7 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
-		It("Valdiating if the resources are still on all member clusters", func() {
+		It("Validating if the resources are still on all member clusters", func() {
 			for idx := range allMemberClusters {
 				memberCluster := allMemberClusters[idx]
 				workResourcesPlacedActual := checkAllResourcesPlacement(memberCluster)
