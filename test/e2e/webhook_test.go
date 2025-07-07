@@ -1304,33 +1304,27 @@ var _ = Describe("webhook tests for operations on ARM managed resources", Ordere
 		By("deleting the managed namespace")
 		ns := managedNamespace()
 		Expect(hubClient.Delete(ctx, &ns)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete the managed namespace")
-		Eventually(
-			func() error {
-				if err := hubClient.Get(ctx, types.NamespacedName{Name: ns.Name}, &corev1.Namespace{}); !k8sErrors.IsNotFound(err) {
-					return fmt.Errorf("The managed namespace still exists or an unexpected error occurred: %w", err)
-				}
-				return nil
-			}, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the managed namespace %s", ns.Name)
+		Eventually(func() error {
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: ns.Name}, &corev1.Namespace{}); !k8sErrors.IsNotFound(err) {
+				return fmt.Errorf("The managed namespace still exists or an unexpected error occurred: %w", err)
+			}
+			return nil
+		}, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the managed namespace %s", ns.Name)
 	})
 
 	It("should deny create a managed resource namespace", func() {
-		Eventually(func(g Gomega) error {
-			createNs := managedNamespace()
-			createNs.Name = "this-will-be-denied"
-			err := impersonateHubClient.Create(ctx, &createNs)
-			if k8sErrors.IsConflict(err) {
-				return err
-			}
-			var statusErr *k8sErrors.StatusError
-			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create managed namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(".*the operation on the managed resource type .* is not allowed"))
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		createNs := managedNamespace()
+		createNs.Name = "this-will-be-denied"
+		err := impersonateHubClient.Create(ctx, &createNs)
+		var statusErr *k8sErrors.StatusError
+		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create managed namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+		Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(".*the operation on the managed resource type .* is not allowed"))
 	})
 
 	It("should deny update a managed resource namespace", func() {
 		Eventually(func(g Gomega) error {
 			updateNamespace := managedNamespace()
+			g.Expect(impersonateHubClient.Get(ctx, types.NamespacedName{Name: updateNamespace.Name}, &updateNamespace)).To(BeNil(), "Failed to get the created unmanaged namespace")
 			updateNamespace.Labels["foo"] = "NotManaged"
 			err := impersonateHubClient.Update(ctx, &updateNamespace)
 			if k8sErrors.IsConflict(err) {
@@ -1344,29 +1338,23 @@ var _ = Describe("webhook tests for operations on ARM managed resources", Ordere
 	})
 
 	It("should deny delete a managed resource namespace", func() {
-		Eventually(func(g Gomega) error {
-			created := managedNamespace()
-			err := impersonateHubClient.Delete(ctx, &created)
-			if k8sErrors.IsConflict(err) {
-				return err
-			}
-			var statusErr *k8sErrors.StatusError
-			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete managed namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(".*the operation on the managed resource type .* is not allowed"))
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		created := managedNamespace()
+		err := impersonateHubClient.Delete(ctx, &created)
+		var statusErr *k8sErrors.StatusError
+		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete managed namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+		Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(".*the operation on the managed resource type .* is not allowed"))
 	})
 
 	It("should allow create/update/delete an unmanaged resource namespace", func() {
+		unmanaged := managedNamespace()
+		unmanaged.Name = "this-should-be-allowed"
+		delete(unmanaged.Labels, managedresource.ManagedByArmKey)
+		Expect(impersonateHubClient.Create(ctx, &unmanaged)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to create the unmanaged namespace")
 		Eventually(func(g Gomega) error {
-			unmanaged := managedNamespace()
-			unmanaged.Name = "this-should-be-allowed"
-			delete(unmanaged.Labels, managedresource.ManagedByArmKey)
-			g.Expect(impersonateHubClient.Create(ctx, &unmanaged)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to create the unmanaged namespace")
+			g.Expect(impersonateHubClient.Get(ctx, types.NamespacedName{Name: unmanaged.Name}, &unmanaged)).To(BeNil(), "Failed to get the created unmanaged namespace")
 			unmanaged.Labels["foo"] = "NotManaged"
-			g.Expect(impersonateHubClient.Update(ctx, &unmanaged)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to update the unmanaged namespace")
-			g.Expect(impersonateHubClient.Delete(ctx, &unmanaged)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete the unmanaged namespace")
-			return nil
+			return impersonateHubClient.Update(ctx, &unmanaged)
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		Expect(impersonateHubClient.Delete(ctx, &unmanaged)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete the unmanaged namespace")
 	})
 })
