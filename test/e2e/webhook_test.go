@@ -1294,13 +1294,13 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 	})
 })
 
-var _ = Describe("webhook tests for operations on ARM managed resources", Ordered, func() {
-	BeforeAll(func() {
+var _ = Describe("webhook tests for operations on ARM managed resources", func() {
+	BeforeEach(func() {
 		By("creating a managed namespace")
 		createManagedNamespace()
 	})
 
-	AfterAll(func() {
+	AfterEach(func() {
 		By("deleting the managed namespace")
 		ns := managedNamespace()
 		Expect(hubClient.Delete(ctx, &ns)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete the managed namespace")
@@ -1309,7 +1309,7 @@ var _ = Describe("webhook tests for operations on ARM managed resources", Ordere
 				return fmt.Errorf("The managed namespace still exists or an unexpected error occurred: %w", err)
 			}
 			return nil
-		}, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the managed namespace %s", ns.Name)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to remove the managed namespace %s", ns.Name)
 	})
 
 	It("should deny create a managed resource namespace", func() {
@@ -1349,7 +1349,7 @@ var _ = Describe("webhook tests for operations on ARM managed resources", Ordere
 		unmanaged := managedNamespace()
 		unmanaged.Name = "this-should-be-allowed"
 		delete(unmanaged.Labels, managedresource.ManagedByArmKey)
-		Expect(impersonateHubClient.Create(ctx, &unmanaged)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to create the unmanaged namespace")
+		Expect(impersonateHubClient.Create(ctx, &unmanaged)).Should(SatisfyAny(Succeed()), "Failed to create the unmanaged namespace")
 		Eventually(func(g Gomega) error {
 			g.Expect(impersonateHubClient.Get(ctx, types.NamespacedName{Name: unmanaged.Name}, &unmanaged)).To(BeNil(), "Failed to get the created unmanaged namespace")
 			unmanaged.Labels["foo"] = "NotManaged"
