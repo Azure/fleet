@@ -483,15 +483,16 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 		}
 		var simpleManifests []fleetv1beta1.Manifest
 		var newWork []*fleetv1beta1.Work
-		for j := range snapshot.Spec.SelectedResources {
-			selectedResource := snapshot.Spec.SelectedResources[j].DeepCopy()
+		selectedRes := snapshot.GetResourceSnapshotSpec().SelectedResources
+		for j := range selectedRes {
+			selectedResource := selectedRes[j].DeepCopy()
 			// TODO: apply the override rules on the envelope resources by applying them on the work instead of the selected resource
 			resourceDeleted, overrideErr := r.applyOverrides(selectedResource, cluster, croMap, roMap)
 			if overrideErr != nil {
 				return false, false, overrideErr
 			}
 			if resourceDeleted {
-				klog.V(2).InfoS("The resource is deleted by the override rules", "snapshot", klog.KObj(snapshot), "selectedResource", snapshot.Spec.SelectedResources[j])
+				klog.V(2).InfoS("The resource is deleted by the override rules", "snapshot", klog.KObj(snapshot), "selectedResource", selectedRes[j])
 				continue
 			}
 
@@ -573,8 +574,8 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 func (r *Reconciler) processOneSelectedResource(
 	ctx context.Context,
 	selectedResource *fleetv1beta1.ResourceContent,
-	resourceBinding *fleetv1beta1.ClusterResourceBinding,
-	snapshot *fleetv1beta1.ClusterResourceSnapshot,
+	resourceBinding fleetv1beta1.BindingObj,
+	snapshot fleetv1beta1.ResourceSnapshotObj,
 	workNamePrefix, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash string,
 	activeWork map[string]*fleetv1beta1.Work,
 	newWork []*fleetv1beta1.Work,
@@ -682,8 +683,9 @@ func areAllWorkSynced(existingWorks map[string]*fleetv1beta1.Work, resourceBindi
 }
 
 // fetchAllResourceSnapshots gathers all the resource snapshots for the resource binding.
-func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding) (map[string]*fleetv1beta1.ClusterResourceSnapshot, error) {
+func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding) (map[string]fleetv1beta1.ResourceSnapshotObj, error) {
 	// fetch the master snapshot first
+	// TODO: handle resourceBinding too
 	masterResourceSnapshot := fleetv1beta1.ClusterResourceSnapshot{}
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: resourceBinding.Spec.ResourceSnapshotName}, &masterResourceSnapshot); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -698,28 +700,28 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 }
 
 // generateSnapshotWorkObj generates the work object for the corresponding snapshot
-func generateSnapshotWorkObj(workName string, resourceBinding *fleetv1beta1.ClusterResourceBinding, resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot,
+func generateSnapshotWorkObj(workName string, resourceBinding fleetv1beta1.BindingObj, resourceSnapshot fleetv1beta1.ResourceSnapshotObj,
 	manifest []fleetv1beta1.Manifest, resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash string) *fleetv1beta1.Work {
 	return &fleetv1beta1.Work{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workName,
-			Namespace: fmt.Sprintf(utils.NamespaceNameFormat, resourceBinding.Spec.TargetCluster),
+			Namespace: fmt.Sprintf(utils.NamespaceNameFormat, resourceBinding.GetBindingSpec().TargetCluster),
 			Labels: map[string]string{
-				fleetv1beta1.ParentBindingLabel:               resourceBinding.Name,
-				fleetv1beta1.CRPTrackingLabel:                 resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel],
-				fleetv1beta1.ParentResourceSnapshotIndexLabel: resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel],
+				fleetv1beta1.ParentBindingLabel:               resourceBinding.GetName(),
+				fleetv1beta1.CRPTrackingLabel:                 resourceBinding.GetLabels()[fleetv1beta1.CRPTrackingLabel],
+				fleetv1beta1.ParentResourceSnapshotIndexLabel: resourceSnapshot.GetLabels()[fleetv1beta1.ResourceIndexLabel],
 			},
 			Annotations: map[string]string{
-				fleetv1beta1.ParentResourceSnapshotNameAnnotation:                resourceBinding.Spec.ResourceSnapshotName,
+				fleetv1beta1.ParentResourceSnapshotNameAnnotation:                resourceBinding.GetBindingSpec().ResourceSnapshotName,
 				fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        resourceOverrideSnapshotHash,
 				fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: clusterResourceOverrideSnapshotHash,
 			},
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion:         fleetv1beta1.GroupVersion.String(),
-					Kind:               resourceBinding.Kind,
-					Name:               resourceBinding.Name,
-					UID:                resourceBinding.UID,
+					Kind:               resourceBinding.GetObjectKind().GroupVersionKind().Kind,
+					Name:               resourceBinding.GetName(),
+					UID:                resourceBinding.GetUID(),
 					BlockOwnerDeletion: ptr.To(true), // make sure that the k8s will call work delete when the binding is deleted
 				},
 			},
@@ -728,14 +730,14 @@ func generateSnapshotWorkObj(workName string, resourceBinding *fleetv1beta1.Clus
 			Workload: fleetv1beta1.WorkloadTemplate{
 				Manifests: manifest,
 			},
-			ApplyStrategy: resourceBinding.Spec.ApplyStrategy,
+			ApplyStrategy: resourceBinding.GetBindingSpec().ApplyStrategy,
 		},
 	}
 }
 
 // upsertWork creates or updates the new work for the corresponding resource snapshot.
 // it returns if any change is made to the existing work and the possible error code.
-func (r *Reconciler) upsertWork(ctx context.Context, newWork, existingWork *fleetv1beta1.Work, resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (bool, error) {
+func (r *Reconciler) upsertWork(ctx context.Context, newWork, existingWork *fleetv1beta1.Work, resourceSnapshot fleetv1beta1.ResourceSnapshotObj) (bool, error) {
 	workObj := klog.KObj(newWork)
 	resourceSnapshotObj := klog.KObj(resourceSnapshot)
 	if existingWork == nil {
@@ -792,21 +794,21 @@ func (r *Reconciler) upsertWork(ctx context.Context, newWork, existingWork *flee
 // The corresponding work name prefix is the CRP name + sub-index if there is a sub-index. Otherwise, it is the CRP name +"-work".
 // For example, if the resource snapshot name is "crp-1-0", the corresponding work name is "crp-0".
 // If the resource snapshot name is "crp-1", the corresponding work name is "crp-work".
-func getWorkNamePrefixFromSnapshotName(resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (string, error) {
+func getWorkNamePrefixFromSnapshotName(resourceSnapshot fleetv1beta1.ResourceSnapshotObj) (string, error) {
 	// The validation webhook should make sure the label and annotation are valid on all resource snapshot.
 	// We are just being defensive here.
-	crpName, exist := resourceSnapshot.Labels[fleetv1beta1.CRPTrackingLabel]
+	crpName, exist := resourceSnapshot.GetLabels()[fleetv1beta1.CRPTrackingLabel]
 	if !exist {
-		return "", controller.NewUnexpectedBehaviorError(fmt.Errorf("resource snapshot %s has an invalid CRP tracking label", resourceSnapshot.Name))
+		return "", controller.NewUnexpectedBehaviorError(fmt.Errorf("resource snapshot %s has an invalid CRP tracking label", resourceSnapshot.GetName()))
 	}
-	subIndex, exist := resourceSnapshot.Annotations[fleetv1beta1.SubindexOfResourceSnapshotAnnotation]
+	subIndex, exist := resourceSnapshot.GetAnnotations()[fleetv1beta1.SubindexOfResourceSnapshotAnnotation]
 	if !exist {
 		// master snapshot doesn't have sub-index
 		return fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, crpName), nil
 	}
 	subIndexVal, err := strconv.Atoi(subIndex)
 	if err != nil || subIndexVal < 0 {
-		return "", controller.NewUnexpectedBehaviorError(fmt.Errorf("resource snapshot %s has an invalid sub-index annotation %d or err %w", resourceSnapshot.Name, subIndexVal, err))
+		return "", controller.NewUnexpectedBehaviorError(fmt.Errorf("resource snapshot %s has an invalid sub-index annotation %d or err %w", resourceSnapshot.GetName(), subIndexVal, err))
 	}
 	return fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, crpName, subIndexVal), nil
 }

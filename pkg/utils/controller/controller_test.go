@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -488,12 +490,14 @@ func TestFetchAllClusterResourceSnapshots(t *testing.T) {
 			}
 			options := []cmp.Option{
 				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
-				cmpopts.SortMaps(func(s1, s2 string) bool {
-					return s1 < s2
-				}),
 			}
-			if diff := cmp.Diff(tc.want, got, options...); diff != "" {
-				t.Errorf("FetchAllClusterResourceSnapshots() mismatch (-want, +got):\n%s", diff)
+			theSortedKeys := slices.Sorted(maps.Keys(got))
+			for i := range theSortedKeys {
+				key := theSortedKeys[i]
+				wantResourceSnapshotObj := tc.want[key]
+				if diff := cmp.Diff(wantResourceSnapshotObj, got[key], options...); diff != "" {
+					t.Errorf("FetchAllClusterResourceSnapshots() mismatch (-want, +got):\n%s", diff)
+				}
 			}
 		})
 	}

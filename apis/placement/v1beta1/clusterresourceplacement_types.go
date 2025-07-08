@@ -22,6 +22,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/kubefleet-dev/kubefleet/apis"
 )
 
 const (
@@ -58,7 +60,7 @@ type PlacementStatusGetterSetter interface {
 // PlacementObj offers the functionality to work with fleet placement object.
 // +kubebuilder:object:generate=false
 type PlacementObj interface {
-	client.Object
+	apis.ConditionedObj
 	PlacementSpecGetterSetter
 	PlacementStatusGetterSetter
 }

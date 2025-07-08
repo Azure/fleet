@@ -20,6 +20,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/kubefleet-dev/kubefleet/apis"
 )
 
 const (
@@ -57,7 +59,7 @@ type PolicySnapshotStatusGetterSetter interface {
 // A PolicySnapshotObj offers an abstract way to work with a fleet policy snapshot object.
 // +kubebuilder:object:generate=false
 type PolicySnapshotObj interface {
-	client.Object
+	apis.ConditionedObj
 	PolicySnapshotSpecGetterSetter
 	PolicySnapshotStatusGetterSetter
 }

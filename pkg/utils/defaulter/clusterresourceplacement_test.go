@@ -167,7 +167,7 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			SetDefaultsClusterResourcePlacement(tt.obj)
+			SetPlacementDefaults(tt.obj)
 			if diff := cmp.Diff(tt.wantObj, tt.obj); diff != "" {
 				t.Errorf("SetDefaultsClusterResourcePlacement() mismatch (-want +got):\n%s", diff)
 			}

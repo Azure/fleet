@@ -264,7 +264,7 @@ func TestWaitForResourcesToCleanUp(t *testing.T) {
 	for name, tt := range tests {
 		crp := &fleetv1beta1.ClusterResourcePlacement{}
 		t.Run(name, func(t *testing.T) {
-			gotWait, err := waitForResourcesToCleanUp(tt.allBindings, crp)
+			gotWait, err := waitForResourcesToCleanUp(controller.ConvertCRBArrayToBindingObjs(tt.allBindings), crp)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("waitForResourcesToCleanUp test `%s` error = %v, wantErr %v", name, err, tt.wantErr)
 				return
@@ -618,7 +618,7 @@ func TestUpdateBindings(t *testing.T) {
 				}
 				if tt.desiredBindingsSpec != nil {
 					inputs[i].desiredBinding = tt.bindings[i].DeepCopy()
-					inputs[i].desiredBinding.Spec = tt.desiredBindingsSpec[i]
+					inputs[i].desiredBinding.SetBindingSpec(tt.desiredBindingsSpec[i])
 				}
 			}
 			err := r.updateBindings(ctx, inputs)
@@ -2172,7 +2172,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 					Name: tt.latestResourceSnapshotName,
 				},
 			}
-			gotUpdatedBindings, gotStaleUnselectedBindings, gotUpToDateBoundBindings, gotNeedRoll, gotWaitTime, err := r.pickBindingsToRoll(context.Background(), tt.allBindings, resourceSnapshot, tt.crp, tt.matchedCROs, tt.matchedROs)
+			gotUpdatedBindings, gotStaleUnselectedBindings, gotUpToDateBoundBindings, gotNeedRoll, gotWaitTime, err := r.pickBindingsToRoll(context.Background(), controller.ConvertCRBArrayToBindingObjs(tt.allBindings), resourceSnapshot, tt.crp, tt.matchedCROs, tt.matchedROs)
 			if (err != nil) != (tt.wantErr != nil) || err != nil && !errors.Is(err, tt.wantErr) {
 				t.Fatalf("pickBindingsToRoll() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -2183,10 +2183,11 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantTobeUpdatedBindings := make([]toBeUpdatedBinding, len(tt.wantTobeUpdatedBindings))
 			for i, index := range tt.wantTobeUpdatedBindings {
 				// Unscheduled bindings are only removed in a single rollout cycle.
-				if tt.allBindings[index].Spec.State != fleetv1beta1.BindingStateUnscheduled {
+				bindingSpec := tt.allBindings[index].GetBindingSpec()
+				if bindingSpec.State != fleetv1beta1.BindingStateUnscheduled {
 					wantTobeUpdatedBindings[i].currentBinding = tt.allBindings[index]
 					wantTobeUpdatedBindings[i].desiredBinding = tt.allBindings[index].DeepCopy()
-					wantTobeUpdatedBindings[i].desiredBinding.Spec = tt.wantDesiredBindingsSpec[index]
+					wantTobeUpdatedBindings[i].desiredBinding.SetBindingSpec(tt.wantDesiredBindingsSpec[index])
 				} else {
 					wantTobeUpdatedBindings[i].currentBinding = tt.allBindings[index]
 				}
@@ -2194,10 +2195,11 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantStaleUnselectedBindings := make([]toBeUpdatedBinding, len(tt.wantStaleUnselectedBindings))
 			for i, index := range tt.wantStaleUnselectedBindings {
 				// Unscheduled bindings are only removed in a single rollout cycle.
-				if tt.allBindings[index].Spec.State != fleetv1beta1.BindingStateUnscheduled {
+				bindingSpec := tt.allBindings[index].GetBindingSpec()
+				if bindingSpec.State != fleetv1beta1.BindingStateUnscheduled {
 					wantStaleUnselectedBindings[i].currentBinding = tt.allBindings[index]
 					wantStaleUnselectedBindings[i].desiredBinding = tt.allBindings[index].DeepCopy()
-					wantStaleUnselectedBindings[i].desiredBinding.Spec = tt.wantDesiredBindingsSpec[index]
+					wantStaleUnselectedBindings[i].desiredBinding.SetBindingSpec(tt.wantDesiredBindingsSpec[index])
 				} else {
 					wantStaleUnselectedBindings[i].currentBinding = tt.allBindings[index]
 				}
@@ -2892,7 +2894,7 @@ func TestCheckAndUpdateStaleBindingsStatus(t *testing.T) {
 				Client: fakeClient,
 			}
 			ctx := context.Background()
-			if err := r.checkAndUpdateStaleBindingsStatus(ctx, tt.bindings); err != nil {
+			if err := r.checkAndUpdateStaleBindingsStatus(ctx, controller.ConvertCRBArrayToBindingObjs(tt.bindings)); err != nil {
 				t.Fatalf("checkAndUpdateStaleBindingsStatus() got error %v, want no err", err)
 			}
 			bindingList := &fleetv1beta1.ClusterResourceBindingList{}
@@ -3168,7 +3170,7 @@ func TestProcessApplyStrategyUpdates(t *testing.T) {
 				Client: fakeClient,
 			}
 
-			applyStrategyUpdated, err := r.processApplyStrategyUpdates(ctx, tc.crp, tc.allBindings)
+			applyStrategyUpdated, err := r.processApplyStrategyUpdates(ctx, tc.crp, controller.ConvertCRBArrayToBindingObjs(tc.allBindings))
 			if err != nil {
 				t.Errorf("processApplyStrategyUpdates() error = %v, want no error", err)
 			}

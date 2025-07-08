@@ -46,8 +46,8 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 	ctx context.Context,
 	c client.Client,
 	manager informer.Manager,
-	crp string,
-	masterResourceSnapshot *placementv1beta1.ClusterResourceSnapshot,
+	placementKey string,
+	masterResourceSnapshot placementv1beta1.ResourceSnapshotObj,
 ) ([]*placementv1alpha1.ClusterResourceOverrideSnapshot, []*placementv1alpha1.ResourceOverrideSnapshot, error) {
 	// fetch the cro and ro snapshot list first before finding the matched ones.
 	latestSnapshotLabelMatcher := client.MatchingLabels{
@@ -68,7 +68,7 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 		return nil, nil, nil // no overrides and nothing to do
 	}
 
-	resourceSnapshots, err := controller.FetchAllClusterResourceSnapshots(ctx, c, crp, masterResourceSnapshot)
+	resourceSnapshots, err := controller.FetchAllClusterResourceSnapshots(ctx, c, placementKey, masterResourceSnapshot)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -77,7 +77,7 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 	possibleROs := make(map[placementv1beta1.ResourceIdentifier]bool)
 	// List all the possible CROs and ROs based on the selected resources.
 	for _, snapshot := range resourceSnapshots {
-		for _, res := range snapshot.Spec.SelectedResources {
+		for _, res := range snapshot.GetResourceSnapshotSpec().SelectedResources {
 			var uResource unstructured.Unstructured
 			if err := uResource.UnmarshalJSON(res.Raw); err != nil {
 				klog.ErrorS(err, "Resource has invalid content", "snapshot", klog.KObj(snapshot), "selectedResource", res.Raw)
@@ -117,8 +117,8 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 	filteredRO := make([]*placementv1alpha1.ResourceOverrideSnapshot, 0, len(roList.Items))
 	for i := range croList.Items {
 		placementInOverride := croList.Items[i].Spec.OverrideSpec.Placement
-		if placementInOverride != nil && placementInOverride.Name != crp {
-			klog.V(2).InfoS("Skipping this override which was created for another placement", "clusterResourceOverride", klog.KObj(&croList.Items[i]), "placementInOverride", placementInOverride.Name, "clusterResourcePlacement", crp)
+		if placementInOverride != nil && placementInOverride.Name != placementKey {
+			klog.V(2).InfoS("Skipping this override which was created for another placement", "clusterResourceOverride", klog.KObj(&croList.Items[i]), "placementInOverride", placementInOverride.Name, "clusterResourcePlacement", placementKey)
 			continue
 		}
 
@@ -137,8 +137,8 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 	}
 	for i := range roList.Items {
 		placementInOverride := roList.Items[i].Spec.OverrideSpec.Placement
-		if placementInOverride != nil && placementInOverride.Name != crp {
-			klog.V(2).InfoS("Skipping this override which was created for another placement", "resourceOverride", klog.KObj(&roList.Items[i]), "placementInOverride", placementInOverride.Name, "clusterResourcePlacement", crp)
+		if placementInOverride != nil && placementInOverride.Name != placementKey {
+			klog.V(2).InfoS("Skipping this override which was created for another placement", "resourceOverride", klog.KObj(&roList.Items[i]), "placementInOverride", placementInOverride.Name, "clusterResourcePlacement", placementKey)
 			continue
 		}
 
@@ -162,7 +162,7 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 // PickFromResourceMatchedOverridesForTargetCluster filter the overrides that are matched with resources to the target cluster.
 func PickFromResourceMatchedOverridesForTargetCluster(
 	ctx context.Context,
-	c client.Client,
+	c client.Reader,
 	targetCluster string,
 	croList []*placementv1alpha1.ClusterResourceOverrideSnapshot,
 	roList []*placementv1alpha1.ResourceOverrideSnapshot,

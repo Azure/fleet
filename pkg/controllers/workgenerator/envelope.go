@@ -39,8 +39,8 @@ func (r *Reconciler) createOrUpdateEnvelopeCRWorkObj(
 	ctx context.Context,
 	envelopeReader fleetv1beta1.EnvelopeReader,
 	workNamePrefix string,
-	resourceBinding *fleetv1beta1.ClusterResourceBinding,
-	resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot,
+	resourceBinding fleetv1beta1.BindingObj,
+	resourceSnapshot fleetv1beta1.ResourceSnapshotObj,
 	resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash string,
 ) (*fleetv1beta1.Work, error) {
 	manifests, err := extractManifestsFromEnvelopeCR(envelopeReader)
@@ -59,8 +59,8 @@ func (r *Reconciler) createOrUpdateEnvelopeCRWorkObj(
 
 	// Check to see if a corresponding work object has been created for the envelope.
 	labelMatcher := client.MatchingLabels{
-		fleetv1beta1.ParentBindingLabel:     resourceBinding.Name,
-		fleetv1beta1.CRPTrackingLabel:       resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel],
+		fleetv1beta1.ParentBindingLabel:     resourceBinding.GetName(),
+		fleetv1beta1.CRPTrackingLabel:       resourceBinding.GetLabels()[fleetv1beta1.CRPTrackingLabel],
 		fleetv1beta1.EnvelopeTypeLabel:      envelopeReader.GetEnvelopeType(),
 		fleetv1beta1.EnvelopeNameLabel:      envelopeReader.GetName(),
 		fleetv1beta1.EnvelopeNamespaceLabel: envelopeReader.GetNamespace(),
@@ -155,60 +155,60 @@ func extractManifestsFromEnvelopeCR(envelopeReader fleetv1beta1.EnvelopeReader) 
 
 func refreshWorkForEnvelopeCR(
 	work *fleetv1beta1.Work,
-	resourceBinding *fleetv1beta1.ClusterResourceBinding,
-	resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot,
+	resourceBinding fleetv1beta1.BindingObj,
+	resourceSnapshot fleetv1beta1.ResourceSnapshotObj,
 	manifests []fleetv1beta1.Manifest,
 	resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash string,
 ) {
 	// Update the parent resource snapshot index label.
-	work.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel] = resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel]
+	work.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel] = resourceSnapshot.GetLabels()[fleetv1beta1.ResourceIndexLabel]
 
 	// Update the annotations.
 	if work.Annotations == nil {
 		work.Annotations = make(map[string]string)
 	}
-	work.Annotations[fleetv1beta1.ParentResourceSnapshotNameAnnotation] = resourceBinding.Spec.ResourceSnapshotName
+	work.Annotations[fleetv1beta1.ParentResourceSnapshotNameAnnotation] = resourceBinding.GetBindingSpec().ResourceSnapshotName
 	work.Annotations[fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation] = resourceOverrideSnapshotHash
 	work.Annotations[fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation] = clusterResourceOverrideSnapshotHash
 	// Update the work spec (the manifests and the apply strategy).
 	work.Spec.Workload.Manifests = manifests
-	work.Spec.ApplyStrategy = resourceBinding.Spec.ApplyStrategy
+	work.Spec.ApplyStrategy = resourceBinding.GetBindingSpec().ApplyStrategy
 }
 
 func buildNewWorkForEnvelopeCR(
 	workNamePrefix string,
-	resourceBinding *fleetv1beta1.ClusterResourceBinding,
-	resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot,
+	resourceBinding fleetv1beta1.BindingObj,
+	resourceSnapshot fleetv1beta1.ResourceSnapshotObj,
 	envelopeReader fleetv1beta1.EnvelopeReader,
 	manifests []fleetv1beta1.Manifest,
 	resourceOverrideSnapshotHash, clusterResourceOverrideSnapshotHash string,
 ) *fleetv1beta1.Work {
 	workName := fmt.Sprintf(fleetv1beta1.WorkNameWithEnvelopeCRFmt, workNamePrefix, uuid.NewUUID())
-	workNamespace := fmt.Sprintf(utils.NamespaceNameFormat, resourceBinding.Spec.TargetCluster)
+	workNamespace := fmt.Sprintf(utils.NamespaceNameFormat, resourceBinding.GetBindingSpec().TargetCluster)
 
 	return &fleetv1beta1.Work{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workName,
 			Namespace: workNamespace,
 			Labels: map[string]string{
-				fleetv1beta1.ParentBindingLabel:               resourceBinding.Name,
-				fleetv1beta1.CRPTrackingLabel:                 resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel],
-				fleetv1beta1.ParentResourceSnapshotIndexLabel: resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel],
+				fleetv1beta1.ParentBindingLabel:               resourceBinding.GetName(),
+				fleetv1beta1.CRPTrackingLabel:                 resourceBinding.GetLabels()[fleetv1beta1.CRPTrackingLabel],
+				fleetv1beta1.ParentResourceSnapshotIndexLabel: resourceSnapshot.GetLabels()[fleetv1beta1.ResourceIndexLabel],
 				fleetv1beta1.EnvelopeTypeLabel:                envelopeReader.GetEnvelopeType(),
 				fleetv1beta1.EnvelopeNameLabel:                envelopeReader.GetName(),
 				fleetv1beta1.EnvelopeNamespaceLabel:           envelopeReader.GetNamespace(),
 			},
 			Annotations: map[string]string{
-				fleetv1beta1.ParentResourceSnapshotNameAnnotation:                resourceBinding.Spec.ResourceSnapshotName,
+				fleetv1beta1.ParentResourceSnapshotNameAnnotation:                resourceBinding.GetBindingSpec().ResourceSnapshotName,
 				fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        resourceOverrideSnapshotHash,
 				fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: clusterResourceOverrideSnapshotHash,
 			},
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: fleetv1beta1.GroupVersion.String(),
-					Kind:       resourceBinding.Kind,
-					Name:       resourceBinding.Name,
-					UID:        resourceBinding.UID,
+					Kind:       resourceBinding.GetObjectKind().GroupVersionKind().Kind,
+					Name:       resourceBinding.GetName(),
+					UID:        resourceBinding.GetUID(),
 					// Make sure that the resource binding can only be deleted after
 					// all of its managed work objects have been deleted.
 					BlockOwnerDeletion: ptr.To(true),
@@ -219,7 +219,7 @@ func buildNewWorkForEnvelopeCR(
 			Workload: fleetv1beta1.WorkloadTemplate{
 				Manifests: manifests,
 			},
-			ApplyStrategy: resourceBinding.Spec.ApplyStrategy,
+			ApplyStrategy: resourceBinding.GetBindingSpec().ApplyStrategy,
 		},
 	}
 }
