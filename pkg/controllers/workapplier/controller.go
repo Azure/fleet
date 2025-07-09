@@ -45,7 +45,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/controllers/work"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/defaulter"
@@ -266,37 +265,6 @@ func NewReconciler(
 		requeueRateLimiter:           requeueRateLimiter,
 	}
 }
-
-var (
-	// Some exported reasons for Work object conditions. Currently only the untrackable reason is being actively used.
-
-	// This is a new reason for the Availability condition when the manifests are not
-	// trackable for availability. This value is currently unused.
-	//
-	// TO-DO (chenyu1): switch to the new reason after proper rollout.
-	WorkNotAllManifestsTrackableReasonNew = "SomeManifestsAreNotAvailabilityTrackable"
-	// This reason uses the exact same value as the one kept in the old work applier for
-	// compatibility reasons. It helps guard the case where the member agent is upgraded
-	// before the hub agent.
-	//
-	// TO-DO (chenyu1): switch off the old reason after proper rollout.
-	WorkNotAllManifestsTrackableReason    = work.WorkNotTrackableReason
-	WorkAllManifestsAppliedReason         = "AllManifestsApplied"
-	WorkAllManifestsAvailableReason       = "AllManifestsAvailable"
-	WorkAllManifestsDiffReportedReason    = "AllManifestsDiffReported"
-	WorkNotAllManifestsAppliedReason      = "SomeManifestsAreNotApplied"
-	WorkNotAllManifestsAvailableReason    = "SomeManifestsAreNotAvailable"
-	WorkNotAllManifestsDiffReportedReason = "SomeManifestsHaveNotReportedDiff"
-
-	// Some condition messages for Work object conditions.
-	allManifestsAppliedMessage           = "All the specified manifests have been applied"
-	allManifestsHaveReportedDiffMessage  = "All the specified manifests have reported diff"
-	allAppliedObjectAvailableMessage     = "All of the applied manifests are available"
-	someAppliedObjectUntrackableMessage  = "Some of the applied manifests cannot be tracked for availability"
-	notAllManifestsAppliedMessage        = "Failed to apply all manifests (%d of %d manifests are applied)"
-	notAllAppliedObjectsAvailableMessage = "Some manifests are not available (%d of %d manifests are available)"
-	notAllManifestsHaveReportedDiff      = "Failed to report diff on all manifests (%d of %d manifests have reported diff)"
-)
 
 type manifestProcessingAppliedResultType string
 

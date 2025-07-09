@@ -51,7 +51,6 @@ import (
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
@@ -1154,7 +1153,7 @@ func setAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding *
 	for _, w := range works {
 		availableCond := meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 		switch {
-		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()) && availableCond.Reason == workapplier.WorkNotAllManifestsTrackableReasonNew:
+		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()) && availableCond.Reason == condition.WorkNotAllManifestsTrackableReasonNew:
 			// The Work object has completed the availability check successfully, due to the
 			// resources being untrackable.
 			//
@@ -1163,7 +1162,7 @@ func setAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding *
 			if firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes == nil {
 				firstWorkWithSuccessfulAvailabilityCheckDueToUntrackableRes = w
 			}
-		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()) && availableCond.Reason == workapplier.WorkNotAllManifestsTrackableReason:
+		case condition.IsConditionStatusTrue(availableCond, w.GetGeneration()) && availableCond.Reason == condition.WorkNotAllManifestsTrackableReason:
 			// The Work object has completed the availability check successfully, due to the
 			// resources being untrackable. This is the same branch as the one above but checks
 			// for the old reason string; it is kept for compatibility reasons.

@@ -40,8 +40,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	testv1alpha1 "github.com/kubefleet-dev/kubefleet/test/apis/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
 	"github.com/kubefleet-dev/kubefleet/test/utils/controller"
@@ -139,13 +139,13 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 							{
 								Type:               placementv1beta1.WorkConditionTypeApplied,
 								Status:             metav1.ConditionTrue,
-								Reason:             workapplier.WorkAllManifestsAppliedReason,
+								Reason:             condition.WorkAllManifestsAppliedReason,
 								ObservedGeneration: 1,
 							},
 							{
 								Type:               placementv1beta1.WorkConditionTypeAvailable,
 								Status:             metav1.ConditionTrue,
-								Reason:             workapplier.WorkAllManifestsAvailableReason,
+								Reason:             condition.WorkAllManifestsAvailableReason,
 								ObservedGeneration: 1,
 							},
 						}

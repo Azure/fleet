@@ -41,7 +41,6 @@ import (
 
 	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
 	bindingutils "github.com/kubefleet-dev/kubefleet/pkg/utils/binding"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
@@ -616,7 +615,7 @@ func isBindingReady(binding fleetv1beta1.BindingObj, readyTimeCutOff time.Time) 
 		// TO-DO (chenyu1): currently it checks for both the new and the old reason
 		// (as set previously by the work generator) to avoid compatibility issues.
 		// the check for the old reason can be removed once the rollout completes successfully.
-		if availableCondition.Reason != condition.WorkNotAvailabilityTrackableReason && availableCondition.Reason != workapplier.WorkNotAllManifestsTrackableReason {
+		if availableCondition.Reason != condition.WorkNotAvailabilityTrackableReason && availableCondition.Reason != condition.WorkNotAllManifestsTrackableReason {
 			return 0, true
 		}
 

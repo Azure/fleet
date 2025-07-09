@@ -10,7 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/controllers/clusterresourceplacement"
 	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
 	scheduler "github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
@@ -73,7 +72,7 @@ func resourcePlacementScheduleFailedConditions(generation int64) []metav1.Condit
 			Type:               string(placementv1beta1.ResourceScheduledConditionType),
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: generation,
-			Reason:             clusterresourceplacement.ResourceScheduleFailedReason,
+			Reason:             condition.ResourceScheduleFailedReason,
 		},
 	}
 }

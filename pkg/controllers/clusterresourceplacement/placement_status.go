@@ -32,30 +32,6 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
-// ClusterResourcePlacementStatus condition reasons
-const (
-	// InvalidResourceSelectorsReason is the reason string of placement condition when the selected resources are invalid
-	// or forbidden.
-	InvalidResourceSelectorsReason = "InvalidResourceSelectors"
-	// SchedulingUnknownReason is the reason string of placement condition when the schedule status is unknown.
-	SchedulingUnknownReason = "SchedulePending"
-
-	// ApplyFailedReason is the reason string of placement condition when the selected resources fail to apply.
-	ApplyFailedReason = "ApplyFailed"
-	// ApplyPendingReason is the reason string of placement condition when the selected resources are pending to apply.
-	ApplyPendingReason = "ApplyPending"
-	// ApplySucceededReason is the reason string of placement condition when the selected resources are applied successfully.
-	ApplySucceededReason = "ApplySucceeded"
-)
-
-// ResourcePlacementStatus condition reasons and message formats
-const (
-	// ResourceScheduleSucceededReason is the reason string of placement condition when the selected resources are scheduled.
-	ResourceScheduleSucceededReason = "ScheduleSucceeded"
-	// ResourceScheduleFailedReason is the reason string of placement condition when the scheduler failed to schedule the selected resources.
-	ResourceScheduleFailedReason = "ScheduleFailed"
-)
-
 // calculateFailedToScheduleClusterCount calculates the count of failed to schedule clusters based on the scheduling policy.
 func calculateFailedToScheduleClusterCount(crp *fleetv1beta1.ClusterResourcePlacement, selected, unselected []*fleetv1beta1.ClusterDecision) int {
 	failedToScheduleClusterCount := 0
@@ -106,7 +82,7 @@ func appendFailedToScheduleResourcePlacementStatuses(
 		failedToScheduleCond := metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-			Reason:             ResourceScheduleFailedReason,
+			Reason:             condition.ResourceScheduleFailedReason,
 			Message:            unselected[i].Reason,
 			ObservedGeneration: crp.Generation,
 		}

@@ -34,6 +34,7 @@ import (
 	"k8s.io/klog/v2"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/parallelizer"
 )
 
@@ -466,7 +467,7 @@ func TestPrepareManifestCondForWA(t *testing.T) {
 			wantManifestCondForWA: &fleetv1beta1.ManifestCondition{
 				Identifier: *deployWRI(1, nsName, deployName),
 				Conditions: []metav1.Condition{
-					manifestAppliedCond(workGeneration, metav1.ConditionFalse, ManifestAppliedCondPreparingToProcessReason, ManifestAppliedCondPreparingToProcessMessage),
+					manifestAppliedCond(workGeneration, metav1.ConditionFalse, condition.ManifestAppliedCondPreparingToProcessReason, condition.ManifestAppliedCondPreparingToProcessMessage),
 				},
 			},
 		},
@@ -507,7 +508,7 @@ func TestFindLeftOverManifests(t *testing.T) {
 				{
 					Identifier: *nsWRI(0, nsName0),
 					Conditions: []metav1.Condition{
-						manifestAppliedCond(workGeneration1, metav1.ConditionFalse, ManifestAppliedCondPreparingToProcessReason, ManifestAppliedCondPreparingToProcessMessage),
+						manifestAppliedCond(workGeneration1, metav1.ConditionFalse, condition.ManifestAppliedCondPreparingToProcessReason, condition.ManifestAppliedCondPreparingToProcessMessage),
 					},
 				},
 				// Existing manifest.
@@ -550,7 +551,7 @@ func TestFindLeftOverManifests(t *testing.T) {
 				{
 					Identifier: *nsWRI(4, nsName4),
 					Conditions: []metav1.Condition{
-						manifestAppliedCond(workGeneration0, metav1.ConditionFalse, ManifestAppliedCondPreparingToProcessReason, ManifestAppliedCondPreparingToProcessMessage),
+						manifestAppliedCond(workGeneration0, metav1.ConditionFalse, condition.ManifestAppliedCondPreparingToProcessReason, condition.ManifestAppliedCondPreparingToProcessMessage),
 					},
 				},
 			},

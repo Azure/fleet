@@ -360,7 +360,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					{
 						Status:             metav1.ConditionUnknown,
 						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
-						Reason:             SchedulingUnknownReason,
+						Reason:             condition.SchedulingUnknownReason,
 						ObservedGeneration: crpGeneration,
 						LastTransitionTime: metav1.NewTime(currentTime),
 					},
@@ -419,7 +419,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					{
 						Status:             metav1.ConditionUnknown,
 						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
-						Reason:             SchedulingUnknownReason,
+						Reason:             condition.SchedulingUnknownReason,
 						ObservedGeneration: crpGeneration,
 						LastTransitionTime: metav1.NewTime(currentTime),
 					},
@@ -478,7 +478,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					{
 						Status:             metav1.ConditionUnknown,
 						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
-						Reason:             SchedulingUnknownReason,
+						Reason:             condition.SchedulingUnknownReason,
 						ObservedGeneration: crpGeneration,
 						LastTransitionTime: metav1.NewTime(currentTime),
 					},
@@ -537,7 +537,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					{
 						Status:             metav1.ConditionUnknown,
 						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
-						Reason:             SchedulingUnknownReason,
+						Reason:             condition.SchedulingUnknownReason,
 						ObservedGeneration: crpGeneration,
 						LastTransitionTime: metav1.NewTime(currentTime),
 					},
@@ -941,7 +941,7 @@ func TestSetPlacementStatus(t *testing.T) {
 							{
 								Status:             metav1.ConditionFalse,
 								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-								Reason:             ResourceScheduleFailedReason,
+								Reason:             condition.ResourceScheduleFailedReason,
 								ObservedGeneration: crpGeneration,
 								LastTransitionTime: metav1.NewTime(currentTime),
 							},
@@ -953,7 +953,7 @@ func TestSetPlacementStatus(t *testing.T) {
 							{
 								Status:             metav1.ConditionFalse,
 								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-								Reason:             ResourceScheduleFailedReason,
+								Reason:             condition.ResourceScheduleFailedReason,
 								ObservedGeneration: crpGeneration,
 								LastTransitionTime: metav1.NewTime(currentTime),
 							},
@@ -3065,7 +3065,7 @@ func TestSetPlacementStatus(t *testing.T) {
 							{
 								Status:             metav1.ConditionFalse,
 								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-								Reason:             ResourceScheduleFailedReason,
+								Reason:             condition.ResourceScheduleFailedReason,
 								ObservedGeneration: crpGeneration,
 								LastTransitionTime: metav1.NewTime(currentTime),
 							},
@@ -3174,7 +3174,7 @@ func TestSetPlacementStatus(t *testing.T) {
 							{
 								Status:             metav1.ConditionFalse,
 								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-								Reason:             ResourceScheduleFailedReason,
+								Reason:             condition.ResourceScheduleFailedReason,
 								ObservedGeneration: crpGeneration,
 								LastTransitionTime: metav1.NewTime(currentTime),
 							},
@@ -3381,7 +3381,7 @@ func TestSetPlacementStatus(t *testing.T) {
 							{
 								Status:             metav1.ConditionFalse,
 								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-								Reason:             ResourceScheduleFailedReason,
+								Reason:             condition.ResourceScheduleFailedReason,
 								ObservedGeneration: crpGeneration,
 								LastTransitionTime: metav1.NewTime(currentTime),
 							},

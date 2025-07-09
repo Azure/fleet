@@ -33,9 +33,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/controllers/clusterresourceplacement"
 	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
 )
 
@@ -656,7 +656,7 @@ var _ = Describe("validating CRP when selecting a reserved resource", Ordered, f
 					{
 						Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 						Status:             metav1.ConditionFalse,
-						Reason:             clusterresourceplacement.InvalidResourceSelectorsReason,
+						Reason:             condition.InvalidResourceSelectorsReason,
 						ObservedGeneration: crp.Generation,
 					},
 				},
@@ -738,7 +738,7 @@ var _ = Describe("When creating a pickN ClusterResourcePlacement with duplicated
 					{
 						Status:             metav1.ConditionFalse,
 						Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-						Reason:             clusterresourceplacement.InvalidResourceSelectorsReason,
+						Reason:             condition.InvalidResourceSelectorsReason,
 						ObservedGeneration: 1,
 					},
 				},

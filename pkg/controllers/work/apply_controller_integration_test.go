@@ -50,6 +50,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	testv1alpha1 "github.com/kubefleet-dev/kubefleet/test/apis/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/test/utils/controller"
 )
@@ -101,7 +102,7 @@ var _ = Describe("Work Controller", func() {
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionTrue,
-					Reason: ManifestAlreadyUpToDateReason,
+					Reason: condition.ManifestAlreadyUpToDateReason,
 				},
 				{
 					Type:   fleetv1beta1.WorkConditionTypeAvailable,
@@ -114,12 +115,12 @@ var _ = Describe("Work Controller", func() {
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionTrue,
-					Reason: workAppliedCompletedReason,
+					Reason: condition.WorkAppliedCompletedReason,
 				},
 				{
 					Type:   fleetv1beta1.WorkConditionTypeAvailable,
 					Status: metav1.ConditionTrue,
-					Reason: WorkAvailableReason,
+					Reason: condition.WorkAvailableReason,
 				},
 			}
 			Expect(controller.CompareConditions(expected, resultWork.Status.Conditions)).Should(BeEmpty())

@@ -40,9 +40,9 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
-	"github.com/kubefleet-dev/kubefleet/pkg/controllers/clusterresourceplacement"
 	workv1alpha1controller "github.com/kubefleet-dev/kubefleet/pkg/controllers/workv1alpha1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	testv1alpha1 "github.com/kubefleet-dev/kubefleet/test/apis/v1alpha1"
 )
 
@@ -169,7 +169,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
 			verifyPlacementScheduleStatus(crp, 2, 2, metav1.ConditionTrue)
-			verifyPlacementApplyStatus(crp, metav1.ConditionUnknown, clusterresourceplacement.ApplyPendingReason)
+			verifyPlacementApplyStatus(crp, metav1.ConditionUnknown, condition.ApplyPendingReason)
 
 			By("Mimic work apply succeeded")
 			markWorkAppliedStatusSuccess(crp, &clusterA)
@@ -177,7 +177,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			waitForPlacementScheduleStopped(crp.Name)
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
-			verifyPlacementApplyStatus(crp, metav1.ConditionTrue, clusterresourceplacement.ApplySucceededReason)
+			verifyPlacementApplyStatus(crp, metav1.ConditionTrue, condition.ApplySucceededReason)
 		})
 
 		It("Test select the resources by name not found", func() {
@@ -260,7 +260,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
 			verifyPlacementScheduleStatus(crp, 2, 2, metav1.ConditionTrue)
-			verifyPlacementApplyStatus(crp, metav1.ConditionUnknown, clusterresourceplacement.ApplyPendingReason)
+			verifyPlacementApplyStatus(crp, metav1.ConditionUnknown, condition.ApplyPendingReason)
 
 			By("Mimic work apply succeeded")
 			markWorkAppliedStatusSuccess(crp, &clusterA)
@@ -268,7 +268,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			waitForPlacementScheduleStopped(crp.Name)
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
-			verifyPlacementApplyStatus(crp, metav1.ConditionTrue, clusterresourceplacement.ApplySucceededReason)
+			verifyPlacementApplyStatus(crp, metav1.ConditionTrue, condition.ApplySucceededReason)
 		})
 
 		It("Test select all the resources in a namespace", func() {
@@ -934,7 +934,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			verifyWorkObjects(crp, namespacedResource, []*fleetv1alpha1.MemberCluster{&clusterB})
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
 			verifyPlacementScheduleStatus(crp, len(namespacedResource), 1, metav1.ConditionTrue)
-			verifyPlacementApplyStatus(crp, metav1.ConditionUnknown, clusterresourceplacement.ApplyPendingReason)
+			verifyPlacementApplyStatus(crp, metav1.ConditionUnknown, condition.ApplyPendingReason)
 
 			By("Verify that work is not created in cluster A")
 			var clusterWork workv1alpha1.Work
@@ -1109,7 +1109,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 						Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
 						Status:             metav1.ConditionUnknown,
 						ObservedGeneration: 1,
-						Reason:             clusterresourceplacement.ApplyPendingReason,
+						Reason:             condition.ApplyPendingReason,
 					},
 				},
 				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier},
@@ -1161,7 +1161,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 						Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
 						Status:             metav1.ConditionUnknown,
 						ObservedGeneration: 1,
-						Reason:             clusterresourceplacement.ApplyPendingReason,
+						Reason:             condition.ApplyPendingReason,
 					},
 				},
 			}
@@ -1587,7 +1587,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 						Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
 						Status:             metav1.ConditionFalse,
 						ObservedGeneration: 1,
-						Reason:             clusterresourceplacement.ApplyFailedReason,
+						Reason:             condition.ApplyFailedReason,
 					},
 				},
 				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier},
@@ -1750,7 +1750,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 						Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
 						Status:             metav1.ConditionFalse,
 						ObservedGeneration: 1,
-						Reason:             clusterresourceplacement.ApplyFailedReason,
+						Reason:             condition.ApplyFailedReason,
 					},
 				},
 				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier2, fleetResourceIdentifier1},
@@ -1855,7 +1855,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 						Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
 						Status:             metav1.ConditionTrue,
 						ObservedGeneration: 2,
-						Reason:             clusterresourceplacement.ApplySucceededReason,
+						Reason:             condition.ApplySucceededReason,
 					},
 				},
 				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier3, fleetResourceIdentifier2, fleetResourceIdentifier1},

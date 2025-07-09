@@ -29,14 +29,9 @@ import (
 	"k8s.io/klog/v2"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/defaulter"
-)
-
-const (
-	// A list of condition related values.
-	ManifestAppliedCondPreparingToProcessReason  = "PreparingToProcess"
-	ManifestAppliedCondPreparingToProcessMessage = "The manifest is being prepared for processing."
 )
 
 // preProcessManifests pre-processes manifests for the later ops.
@@ -333,8 +328,8 @@ func prepareManifestCondForWriteAhead(
 				Type:               fleetv1beta1.WorkConditionTypeApplied,
 				Status:             metav1.ConditionFalse,
 				ObservedGeneration: workGeneration,
-				Reason:             ManifestAppliedCondPreparingToProcessReason,
-				Message:            ManifestAppliedCondPreparingToProcessMessage,
+				Reason:             condition.ManifestAppliedCondPreparingToProcessReason,
+				Message:            condition.ManifestAppliedCondPreparingToProcessMessage,
 				LastTransitionTime: metav1.Now(),
 			},
 		},
@@ -384,7 +379,7 @@ func findLeftOverManifests(
 			// Verify if the manifest condition indicates that the manifest could have been
 			// applied.
 			applied := meta.FindStatusCondition(existingManifestCond.Conditions, fleetv1beta1.WorkConditionTypeApplied)
-			if applied.Status == metav1.ConditionTrue || applied.Reason == ManifestAppliedCondPreparingToProcessReason {
+			if applied.Status == metav1.ConditionTrue || applied.Reason == condition.ManifestAppliedCondPreparingToProcessReason {
 				// Fleet assumes that the manifest has been applied if:
 				// a) it has an applied condition set to the True status; or
 				// b) it has an applied condition which signals that the object is preparing to be processed.

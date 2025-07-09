@@ -38,7 +38,6 @@ import (
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
@@ -726,7 +725,7 @@ func TestIsBindingReady(t *testing.T) {
 							LastTransitionTime: metav1.Time{
 								Time: now.Add(time.Millisecond),
 							},
-							Reason: workapplier.WorkNotAllManifestsTrackableReason,
+							Reason: condition.WorkNotAllManifestsTrackableReason,
 						},
 					},
 				},
@@ -839,7 +838,7 @@ func TestIsBindingReady(t *testing.T) {
 							Type:               string(fleetv1beta1.ResourceBindingAvailable),
 							Status:             metav1.ConditionTrue,
 							LastTransitionTime: metav1.NewTime(now.Add(-5 * time.Second)),
-							Reason:             workapplier.WorkAllManifestsAvailableReason,
+							Reason:             condition.WorkAllManifestsAvailableReason,
 							ObservedGeneration: 10,
 						},
 						{
@@ -2312,7 +2311,7 @@ func generateReadyClusterResourceBinding(state fleetv1beta1.BindingState, resour
 		{
 			Type:   string(fleetv1beta1.ResourceBindingAvailable),
 			Status: metav1.ConditionTrue,
-			Reason: workapplier.WorkAllManifestsAvailableReason, // Make it ready
+			Reason: condition.WorkAllManifestsAvailableReason, // Make it ready
 		},
 	}
 	return binding
