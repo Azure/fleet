@@ -40,8 +40,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
 	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
 	"go.goms.io/fleet/test/e2e/framework"
 	"go.goms.io/fleet/test/utils/controller"
@@ -139,13 +139,13 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 							{
 								Type:               placementv1beta1.WorkConditionTypeApplied,
 								Status:             metav1.ConditionTrue,
-								Reason:             workapplier.WorkAllManifestsAppliedReason,
+								Reason:             condition.WorkAllManifestsAppliedReason,
 								ObservedGeneration: 1,
 							},
 							{
 								Type:               placementv1beta1.WorkConditionTypeAvailable,
 								Status:             metav1.ConditionTrue,
-								Reason:             workapplier.WorkAllManifestsAvailableReason,
+								Reason:             condition.WorkAllManifestsAvailableReason,
 								ObservedGeneration: 1,
 							},
 						}

@@ -25,6 +25,7 @@ import (
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/metrics"
+	"go.goms.io/fleet/pkg/utils/condition"
 )
 
 func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
@@ -56,12 +57,12 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 					Conditions: []metav1.Condition{
 						{
 							Type:   placementv1beta1.WorkConditionTypeApplied,
-							Reason: WorkAllManifestsAppliedReason,
+							Reason: condition.WorkAllManifestsAppliedReason,
 							Status: metav1.ConditionTrue,
 						},
 						{
 							Type:   placementv1beta1.WorkConditionTypeAvailable,
-							Reason: WorkAllManifestsAvailableReason,
+							Reason: condition.WorkAllManifestsAvailableReason,
 							Status: metav1.ConditionTrue,
 						},
 					},
@@ -102,7 +103,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 					Conditions: []metav1.Condition{
 						{
 							Type:   placementv1beta1.WorkConditionTypeApplied,
-							Reason: WorkNotAllManifestsAppliedReason,
+							Reason: condition.WorkNotAllManifestsAppliedReason,
 							Status: metav1.ConditionFalse,
 						},
 					},
@@ -140,12 +141,12 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 					Conditions: []metav1.Condition{
 						{
 							Type:   placementv1beta1.WorkConditionTypeApplied,
-							Reason: WorkNotAllManifestsAppliedReason,
+							Reason: condition.WorkNotAllManifestsAppliedReason,
 							Status: metav1.ConditionTrue,
 						},
 						{
 							Type:   placementv1beta1.WorkConditionTypeAvailable,
-							Reason: WorkNotAllManifestsAvailableReason,
+							Reason: condition.WorkNotAllManifestsAvailableReason,
 							Status: metav1.ConditionFalse,
 						},
 					},
@@ -190,7 +191,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 					Conditions: []metav1.Condition{
 						{
 							Type:   placementv1beta1.WorkConditionTypeDiffReported,
-							Reason: WorkAllManifestsDiffReportedReason,
+							Reason: condition.WorkAllManifestsDiffReportedReason,
 							Status: metav1.ConditionTrue,
 						},
 					},
@@ -232,7 +233,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 					Conditions: []metav1.Condition{
 						{
 							Type:   placementv1beta1.WorkConditionTypeDiffReported,
-							Reason: WorkNotAllManifestsDiffReportedReason,
+							Reason: condition.WorkNotAllManifestsDiffReportedReason,
 							Status: metav1.ConditionFalse,
 						},
 					},
@@ -276,7 +277,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 					Conditions: []metav1.Condition{
 						{
 							Type:   placementv1beta1.WorkConditionTypeApplied,
-							Reason: WorkNotAllManifestsAppliedReason,
+							Reason: condition.WorkNotAllManifestsAppliedReason,
 							Status: metav1.ConditionFalse,
 						},
 					},
@@ -336,7 +337,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 					Conditions: []metav1.Condition{
 						{
 							Type:   placementv1beta1.WorkConditionTypeDiffReported,
-							Reason: WorkNotAllManifestsDiffReportedReason,
+							Reason: condition.WorkNotAllManifestsDiffReportedReason,
 							Status: metav1.ConditionTrue,
 						},
 					},

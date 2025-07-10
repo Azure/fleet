@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/condition"
 	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
 	"go.goms.io/fleet/test/utils/controller"
 )
@@ -95,12 +96,12 @@ var _ = Describe("Work Controller", func() {
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionTrue,
-					Reason: WorkAllManifestsAppliedReason,
+					Reason: condition.WorkAllManifestsAppliedReason,
 				},
 				{
 					Type:   fleetv1beta1.WorkConditionTypeAvailable,
 					Status: metav1.ConditionTrue,
-					Reason: WorkAllManifestsAvailableReason,
+					Reason: condition.WorkAllManifestsAvailableReason,
 				},
 			}
 			Expect(controller.CompareConditions(expected, resultWork.Status.Conditions)).Should(BeEmpty())

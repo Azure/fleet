@@ -74,33 +74,6 @@ const (
 	workFieldManagerName = "work-api-agent"
 )
 
-// WorkCondition condition reasons
-const (
-	workAppliedFailedReason       = "WorkAppliedFailed"
-	workAppliedCompletedReason    = "WorkAppliedCompleted"
-	workNotAvailableYetReason     = "WorkNotAvailableYet"
-	workAvailabilityUnknownReason = "WorkAvailabilityUnknown"
-	// WorkAvailableReason is the reason string of condition when the manifest is available.
-	WorkAvailableReason = "WorkAvailable"
-	// WorkNotTrackableReason is the reason string of condition when the manifest is already up to date but we don't have
-	// a way to track its availabilities.
-	WorkNotTrackableReason = "WorkNotTrackable"
-	// ManifestApplyFailedReason is the reason string of condition when it failed to apply manifest.
-	ManifestApplyFailedReason = "ManifestApplyFailed"
-	// ApplyConflictBetweenPlacementsReason is the reason string of condition when the manifest is owned by multiple placements,
-	// and they have conflicts.
-	ApplyConflictBetweenPlacementsReason = "ApplyConflictBetweenPlacements"
-	// ManifestsAlreadyOwnedByOthersReason is the reason string of condition when the manifest is already owned by other
-	// non-fleet appliers.
-	ManifestsAlreadyOwnedByOthersReason = "ManifestsAlreadyOwnedByOthers"
-	// ManifestAlreadyUpToDateReason is the reason string of condition when the manifest is already up to date.
-	ManifestAlreadyUpToDateReason  = "ManifestAlreadyUpToDate"
-	manifestAlreadyUpToDateMessage = "Manifest is already up to date"
-	// ManifestNeedsUpdateReason is the reason string of condition when the manifest needs to be updated.
-	ManifestNeedsUpdateReason  = "ManifestNeedsUpdate"
-	manifestNeedsUpdateMessage = "Manifest has just been updated and in the processing of checking its availability"
-)
-
 // ApplyWorkReconciler reconciles a Work object
 type ApplyWorkReconciler struct {
 	client             client.Client
@@ -819,16 +792,16 @@ func buildManifestCondition(err error, action ApplyAction, observedGeneration in
 		applyCondition.Status = metav1.ConditionFalse
 		switch action {
 		case applyConflictBetweenPlacements:
-			applyCondition.Reason = ApplyConflictBetweenPlacementsReason
+			applyCondition.Reason = condition.ApplyConflictBetweenPlacementsReason
 		case manifestAlreadyOwnedByOthers:
-			applyCondition.Reason = ManifestsAlreadyOwnedByOthersReason
+			applyCondition.Reason = condition.ManifestsAlreadyOwnedByOthersReason
 		default:
-			applyCondition.Reason = ManifestApplyFailedReason
+			applyCondition.Reason = condition.ManifestApplyFailedReason
 		}
 		// TODO: handle the max length (32768) of the message field
 		applyCondition.Message = fmt.Sprintf("Failed to apply manifest: %v", err)
 		availableCondition.Status = metav1.ConditionUnknown
-		availableCondition.Reason = ManifestApplyFailedReason
+		availableCondition.Reason = condition.ManifestApplyFailedReason
 		availableCondition.Message = "Manifest is not applied yet"
 	} else {
 		applyCondition.Status = metav1.ConditionTrue
@@ -839,41 +812,41 @@ func buildManifestCondition(err error, action ApplyAction, observedGeneration in
 			applyCondition.Reason = string(manifestCreatedAction)
 			applyCondition.Message = "Manifest is created successfully"
 			availableCondition.Status = metav1.ConditionUnknown
-			availableCondition.Reason = ManifestNeedsUpdateReason
-			availableCondition.Message = manifestNeedsUpdateMessage
+			availableCondition.Reason = condition.ManifestNeedsUpdateReason
+			availableCondition.Message = condition.ManifestNeedsUpdateMessage
 
 		case manifestThreeWayMergePatchAction:
 			applyCondition.Reason = string(manifestThreeWayMergePatchAction)
 			applyCondition.Message = "Manifest is patched successfully"
 			availableCondition.Status = metav1.ConditionUnknown
-			availableCondition.Reason = ManifestNeedsUpdateReason
-			availableCondition.Message = manifestNeedsUpdateMessage
+			availableCondition.Reason = condition.ManifestNeedsUpdateReason
+			availableCondition.Message = condition.ManifestNeedsUpdateMessage
 
 		case manifestServerSideAppliedAction:
 			applyCondition.Reason = string(manifestServerSideAppliedAction)
 			applyCondition.Message = "Manifest is patched successfully"
 			availableCondition.Status = metav1.ConditionUnknown
-			availableCondition.Reason = ManifestNeedsUpdateReason
-			availableCondition.Message = manifestNeedsUpdateMessage
+			availableCondition.Reason = condition.ManifestNeedsUpdateReason
+			availableCondition.Message = condition.ManifestNeedsUpdateMessage
 
 		case manifestAvailableAction:
-			applyCondition.Reason = ManifestAlreadyUpToDateReason
-			applyCondition.Message = manifestAlreadyUpToDateMessage
+			applyCondition.Reason = condition.ManifestAlreadyUpToDateReason
+			applyCondition.Message = condition.ManifestAlreadyUpToDateMessage
 			availableCondition.Status = metav1.ConditionTrue
 			availableCondition.Reason = string(manifestAvailableAction)
 			availableCondition.Message = "Manifest is trackable and available now"
 
 		case manifestNotAvailableYetAction:
-			applyCondition.Reason = ManifestAlreadyUpToDateReason
-			applyCondition.Message = manifestAlreadyUpToDateMessage
+			applyCondition.Reason = condition.ManifestAlreadyUpToDateReason
+			applyCondition.Message = condition.ManifestAlreadyUpToDateMessage
 			availableCondition.Status = metav1.ConditionFalse
 			availableCondition.Reason = string(manifestNotAvailableYetAction)
 			availableCondition.Message = "Manifest is trackable but not available yet"
 
 		// we cannot stuck at unknown so we have to mark it as true
 		case manifestNotTrackableAction:
-			applyCondition.Reason = ManifestAlreadyUpToDateReason
-			applyCondition.Message = manifestAlreadyUpToDateMessage
+			applyCondition.Reason = condition.ManifestAlreadyUpToDateReason
+			applyCondition.Message = condition.ManifestAlreadyUpToDateMessage
 			availableCondition.Status = metav1.ConditionTrue
 			availableCondition.Reason = string(manifestNotTrackableAction)
 			availableCondition.Message = "Manifest is not trackable"
@@ -907,22 +880,22 @@ func buildWorkCondition(manifestConditions []fleetv1beta1.ManifestCondition, obs
 		if meta.IsStatusConditionFalse(manifestCond.Conditions, fleetv1beta1.WorkConditionTypeApplied) {
 			// we mark the entire work applied condition to false if one of the manifests is applied failed
 			applyCondition.Status = metav1.ConditionFalse
-			applyCondition.Reason = workAppliedFailedReason
+			applyCondition.Reason = condition.WorkAppliedFailedReason
 			applyCondition.Message = fmt.Sprintf("Apply manifest %+v failed", manifestCond.Identifier)
 			availableCondition.Status = metav1.ConditionUnknown
-			availableCondition.Reason = workAppliedFailedReason
+			availableCondition.Reason = condition.WorkAppliedFailedReason
 			return []metav1.Condition{applyCondition, availableCondition}
 		}
 	}
 	applyCondition.Status = metav1.ConditionTrue
-	applyCondition.Reason = workAppliedCompletedReason
+	applyCondition.Reason = condition.WorkAppliedCompletedReason
 	applyCondition.Message = "Work is applied successfully"
 	// we mark the entire work available condition to unknown if one of the manifests is not known yet
 	for _, manifestCond := range manifestConditions {
 		cond := meta.FindStatusCondition(manifestCond.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 		if cond.Status == metav1.ConditionUnknown {
 			availableCondition.Status = metav1.ConditionUnknown
-			availableCondition.Reason = workAvailabilityUnknownReason
+			availableCondition.Reason = condition.WorkAvailabilityUnknownReason
 			availableCondition.Message = fmt.Sprintf("Manifest %+v availability is not known yet", manifestCond.Identifier)
 			return []metav1.Condition{applyCondition, availableCondition}
 		}
@@ -932,7 +905,7 @@ func buildWorkCondition(manifestConditions []fleetv1beta1.ManifestCondition, obs
 		cond := meta.FindStatusCondition(manifestCond.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 		if cond.Status == metav1.ConditionFalse {
 			availableCondition.Status = metav1.ConditionFalse
-			availableCondition.Reason = workNotAvailableYetReason
+			availableCondition.Reason = condition.WorkNotAvailableYetReason
 			availableCondition.Message = fmt.Sprintf("Manifest %+v is not available yet", manifestCond.Identifier)
 			return []metav1.Condition{applyCondition, availableCondition}
 		}
@@ -948,10 +921,10 @@ func buildWorkCondition(manifestConditions []fleetv1beta1.ManifestCondition, obs
 	}
 	availableCondition.Status = metav1.ConditionTrue
 	if trackable {
-		availableCondition.Reason = WorkAvailableReason
+		availableCondition.Reason = condition.WorkAvailableReason
 		availableCondition.Message = "Work is available now"
 	} else {
-		availableCondition.Reason = WorkNotTrackableReason
+		availableCondition.Reason = condition.WorkNotTrackableReason
 		availableCondition.Message = "Work's availability is not trackable"
 	}
 	return []metav1.Condition{applyCondition, availableCondition}

@@ -30,7 +30,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/controllers/workapplier"
 	scheduler "go.goms.io/fleet/pkg/scheduler/framework"
 	"go.goms.io/fleet/pkg/utils/condition"
@@ -596,7 +595,7 @@ func resourcePlacementScheduleFailedConditions(generation int64) []metav1.Condit
 			Type:               string(placementv1beta1.ResourceScheduledConditionType),
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: generation,
-			Reason:             clusterresourceplacement.ResourceScheduleFailedReason,
+			Reason:             condition.ResourceScheduleFailedReason,
 		},
 	}
 }
@@ -1421,6 +1420,38 @@ func updateRunStrategyRemovedActual(strategyName string) func() error {
 	return func() error {
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: strategyName}, &placementv1beta1.ClusterStagedUpdateStrategy{}); !errors.IsNotFound(err) {
 			return fmt.Errorf("ClusterStagedUpdateStrategy still exists or an unexpected error occurred: %w", err)
+		}
+		return nil
+	}
+}
+
+func bindingStateActual(
+	crpName string,
+	targetClusterName string,
+	wantState placementv1beta1.BindingState,
+) func() error {
+	return func() error {
+		matchingLabels := client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName}
+
+		var foundBinding *placementv1beta1.ClusterResourceBinding
+		bindingList := &placementv1beta1.ClusterResourceBindingList{}
+		if err := hubClient.List(ctx, bindingList, matchingLabels); err != nil {
+			return err
+		}
+		for i := range bindingList.Items {
+			binding := bindingList.Items[i]
+			if binding.Spec.TargetCluster == targetClusterName {
+				if foundBinding != nil {
+					return fmt.Errorf("multiple bindings found targeting cluster %s for CRP %s", targetClusterName, crpName)
+				}
+				foundBinding = &binding
+			}
+		}
+		if foundBinding == nil {
+			return fmt.Errorf("no binding found targeting cluster %s for CRP %s", targetClusterName, crpName)
+		}
+		if foundBinding.Spec.State != wantState {
+			return fmt.Errorf("binding state for cluster %s is %s, want %s", targetClusterName, foundBinding.Spec.State, wantState)
 		}
 		return nil
 	}

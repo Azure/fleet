@@ -35,6 +35,7 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
 )
@@ -316,7 +317,7 @@ func (r *Reconciler) updatePlacementAppliedCondition(placement *fleetv1alpha1.Cl
 		placement.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
-			Reason:             ApplySucceededReason,
+			Reason:             condition.ApplySucceededReason,
 			Message:            "Successfully applied resources to member clusters",
 			ObservedGeneration: placement.Generation,
 		})
@@ -329,7 +330,7 @@ func (r *Reconciler) updatePlacementAppliedCondition(placement *fleetv1alpha1.Cl
 		placement.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionUnknown,
 			Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
-			Reason:             ApplyPendingReason,
+			Reason:             condition.ApplyPendingReason,
 			Message:            applyErr.Error(),
 			ObservedGeneration: placement.Generation,
 		})
@@ -342,7 +343,7 @@ func (r *Reconciler) updatePlacementAppliedCondition(placement *fleetv1alpha1.Cl
 		placement.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
-			Reason:             ApplyFailedReason,
+			Reason:             condition.ApplyFailedReason,
 			Message:            applyErr.Error(),
 			ObservedGeneration: placement.Generation,
 		})

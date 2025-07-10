@@ -33,9 +33,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
@@ -656,7 +656,7 @@ var _ = Describe("validating CRP when selecting a reserved resource", Ordered, f
 					{
 						Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 						Status:             metav1.ConditionFalse,
-						Reason:             clusterresourceplacement.InvalidResourceSelectorsReason,
+						Reason:             condition.InvalidResourceSelectorsReason,
 						ObservedGeneration: crp.Generation,
 					},
 				},
@@ -738,7 +738,7 @@ var _ = Describe("When creating a pickN ClusterResourcePlacement with duplicated
 					{
 						Status:             metav1.ConditionFalse,
 						Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-						Reason:             clusterresourceplacement.InvalidResourceSelectorsReason,
+						Reason:             condition.InvalidResourceSelectorsReason,
 						ObservedGeneration: 1,
 					},
 				},

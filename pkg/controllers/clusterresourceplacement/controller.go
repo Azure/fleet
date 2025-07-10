@@ -185,7 +185,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		scheduleCondition := metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
-			Reason:             InvalidResourceSelectorsReason,
+			Reason:             condition.InvalidResourceSelectorsReason,
 			Message:            fmt.Sprintf("The resource selectors are invalid: %v", err),
 			ObservedGeneration: crp.Generation,
 		}
@@ -1194,7 +1194,7 @@ func buildScheduledCondition(crp *fleetv1beta1.ClusterResourcePlacement, latestS
 		return metav1.Condition{
 			Status:             metav1.ConditionUnknown,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
-			Reason:             SchedulingUnknownReason,
+			Reason:             condition.SchedulingUnknownReason,
 			Message:            "Scheduling has not completed",
 			ObservedGeneration: crp.Generation,
 		}

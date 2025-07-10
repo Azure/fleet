@@ -126,28 +126,6 @@ func TestGenerateBinding(t *testing.T) {
 					t.Errorf("expected empty namespace for ClusterResourceBinding, got %s", crb.Namespace)
 				}
 
-				// Verify name pattern: placement-cluster-uuid (8 chars)
-				nameParts := strings.Split(crb.Name, "-")
-				if len(nameParts) < 3 {
-					t.Errorf("expected binding name to have at least 3 parts separated by '-', got %s", crb.Name)
-				} else {
-					// Last part should be 8-character UUID
-					uuidPart := nameParts[len(nameParts)-1]
-					if len(uuidPart) != 8 {
-						t.Errorf("expected UUID part to be 8 characters, got %d characters: %s", len(uuidPart), uuidPart)
-					}
-				}
-
-				// Verify labels
-				if crb.Labels[placementv1beta1.CRPTrackingLabel] != tt.expectedLabel {
-					t.Errorf("expected CRPTrackingLabel %s, got %s", tt.expectedLabel, crb.Labels[placementv1beta1.CRPTrackingLabel])
-				}
-
-				// Verify finalizers
-				if len(crb.Finalizers) != 1 || crb.Finalizers[0] != placementv1beta1.SchedulerCRBCleanupFinalizer {
-					t.Errorf("expected finalizer %s, got %v", placementv1beta1.SchedulerCRBCleanupFinalizer, crb.Finalizers)
-				}
-
 			case "ResourceBinding":
 				rb, ok := binding.(*placementv1beta1.ResourceBinding)
 				if !ok {
@@ -158,30 +136,31 @@ func TestGenerateBinding(t *testing.T) {
 					t.Errorf("expected namespace %s, got %s", tt.expectedNamespace, rb.Namespace)
 				}
 
-				// Verify name pattern: placement-cluster-uuid (8 chars)
-				nameParts := strings.Split(rb.Name, "-")
-				if len(nameParts) < 3 {
-					t.Errorf("expected binding name to have at least 3 parts separated by '-', got %s", rb.Name)
-				} else {
-					// Last part should be 8-character UUID
-					uuidPart := nameParts[len(nameParts)-1]
-					if len(uuidPart) != 8 {
-						t.Errorf("expected UUID part to be 8 characters, got %d characters: %s", len(uuidPart), uuidPart)
-					}
-				}
-
-				// Verify labels
-				if rb.Labels[placementv1beta1.CRPTrackingLabel] != tt.expectedLabel {
-					t.Errorf("expected CRPTrackingLabel %s, got %s", tt.expectedLabel, rb.Labels[placementv1beta1.CRPTrackingLabel])
-				}
-
-				// Verify finalizers
-				if len(rb.Finalizers) != 1 || rb.Finalizers[0] != placementv1beta1.SchedulerCRBCleanupFinalizer {
-					t.Errorf("expected finalizer %s, got %v", placementv1beta1.SchedulerCRBCleanupFinalizer, rb.Finalizers)
-				}
-
 			default:
 				t.Errorf("unexpected expected type: %s", tt.expectedType)
+			}
+
+			// Verify name pattern: placement-cluster-uuid (8 chars), the placement and cluster name part are already validated
+			// in NewBindingName UT.
+			nameParts := strings.Split(binding.GetName(), "-")
+			if len(nameParts) < 3 {
+				t.Errorf("expected binding name to have at least 3 parts separated by '-', got %s", binding.GetName())
+			} else {
+				// Last part should be 8-character UUID
+				uuidPart := nameParts[len(nameParts)-1]
+				if len(uuidPart) != 8 {
+					t.Errorf("expected UUID part to be 8 characters, got %d characters: %s", len(uuidPart), uuidPart)
+				}
+			}
+
+			// Verify labels
+			if binding.GetLabels()[placementv1beta1.CRPTrackingLabel] != tt.expectedLabel {
+				t.Errorf("expected CRPTrackingLabel %s, got %s", tt.expectedLabel, binding.GetLabels()[placementv1beta1.CRPTrackingLabel])
+			}
+
+			// Verify finalizers
+			if len(binding.GetFinalizers()) != 1 || binding.GetFinalizers()[0] != placementv1beta1.SchedulerCRBCleanupFinalizer {
+				t.Errorf("expected finalizer %s, got %v", placementv1beta1.SchedulerCRBCleanupFinalizer, binding.GetFinalizers())
 			}
 		})
 	}
