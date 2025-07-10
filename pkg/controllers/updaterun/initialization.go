@@ -432,7 +432,7 @@ func (r *Reconciler) recordOverrideSnapshots(ctx context.Context, placementName 
 		// no more retries here.
 		return fmt.Errorf("%w: %s", errInitializedFailed, err.Error())
 	}
-
+	// TODO: use the lib to fetch the master resource snapshot using interface instead of concrete type
 	var masterResourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 	labelMatcher := client.MatchingLabels{
 		placementv1beta1.CRPTrackingLabel:   placementName,

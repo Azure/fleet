@@ -36,21 +36,18 @@ func ListBindingsFromKey(ctx context.Context, c client.Reader, placementKey queu
 	if err != nil {
 		return nil, fmt.Errorf("failed to list binding for a placement: %w", err)
 	}
-	var listOptions []client.ListOption
 	var bindingList placementv1beta1.BindingObjList
+	var listOptions []client.ListOption
+	listOptions = append(listOptions, client.MatchingLabels{
+		placementv1beta1.CRPTrackingLabel: name,
+	})
 	// Check if the key contains a namespace separator
 	if namespace != "" {
 		// This is a namespaced ResourcePlacement
 		bindingList = &placementv1beta1.ResourceBindingList{}
 		listOptions = append(listOptions, client.InNamespace(namespace))
-		listOptions = append(listOptions, client.MatchingLabels{
-			placementv1beta1.CRPTrackingLabel: name,
-		})
 	} else {
 		bindingList = &placementv1beta1.ClusterResourceBindingList{}
-		listOptions = append(listOptions, client.MatchingLabels{
-			placementv1beta1.CRPTrackingLabel: name,
-		})
 	}
 	if err := c.List(ctx, bindingList, listOptions...); err != nil {
 		return nil, NewAPIServerError(false, err)
@@ -61,14 +58,14 @@ func ListBindingsFromKey(ctx context.Context, c client.Reader, placementKey queu
 
 // ConvertCRBObjsToBindingObjs converts a slice of ClusterResourceBinding items to BindingObj array.
 // This helper is needed when working with List.Items which are value types, not pointers.
-func ConvertCRBObjsToBindingObjs(items []placementv1beta1.ClusterResourceBinding) []placementv1beta1.BindingObj {
-	if len(items) == 0 {
+func ConvertCRBObjsToBindingObjs(bindings []placementv1beta1.ClusterResourceBinding) []placementv1beta1.BindingObj {
+	if len(bindings) == 0 {
 		return nil
 	}
 
-	result := make([]placementv1beta1.BindingObj, len(items))
-	for i := range items {
-		result[i] = &items[i]
+	result := make([]placementv1beta1.BindingObj, len(bindings))
+	for i := range bindings {
+		result[i] = &bindings[i]
 	}
 	return result
 }

@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/condition"
 )
 
 // TestRefreshWorkStatus tests the refreshWorkStatus method.
@@ -103,13 +104,13 @@ func TestRefreshWorkStatus(t *testing.T) {
 					{
 						Type:               fleetv1beta1.WorkConditionTypeApplied,
 						Status:             metav1.ConditionTrue,
-						Reason:             WorkAllManifestsAppliedReason,
+						Reason:             condition.WorkAllManifestsAppliedReason,
 						ObservedGeneration: 1,
 					},
 					{
 						Type:               fleetv1beta1.WorkConditionTypeAvailable,
 						Status:             metav1.ConditionTrue,
-						Reason:             WorkAllManifestsAvailableReason,
+						Reason:             condition.WorkAllManifestsAvailableReason,
 						ObservedGeneration: 1,
 					},
 				},
@@ -188,7 +189,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					{
 						Type:               fleetv1beta1.WorkConditionTypeApplied,
 						Status:             metav1.ConditionFalse,
-						Reason:             WorkNotAllManifestsAppliedReason,
+						Reason:             condition.WorkNotAllManifestsAppliedReason,
 						ObservedGeneration: 2,
 					},
 				},
@@ -292,12 +293,12 @@ func TestRefreshWorkStatus(t *testing.T) {
 					{
 						Type:   fleetv1beta1.WorkConditionTypeApplied,
 						Status: metav1.ConditionTrue,
-						Reason: WorkAllManifestsAppliedReason,
+						Reason: condition.WorkAllManifestsAppliedReason,
 					},
 					{
 						Type:   fleetv1beta1.WorkConditionTypeAvailable,
 						Status: metav1.ConditionFalse,
-						Reason: WorkNotAllManifestsAvailableReason,
+						Reason: condition.WorkNotAllManifestsAvailableReason,
 					},
 				},
 				ManifestConditions: []fleetv1beta1.ManifestCondition{
@@ -386,7 +387,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             WorkNotAllManifestsAppliedReason,
+							Reason:             condition.WorkNotAllManifestsAppliedReason,
 							ObservedGeneration: 1,
 						},
 					},
@@ -487,7 +488,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					{
 						Type:               fleetv1beta1.WorkConditionTypeApplied,
 						Status:             metav1.ConditionFalse,
-						Reason:             WorkNotAllManifestsAppliedReason,
+						Reason:             condition.WorkNotAllManifestsAppliedReason,
 						ObservedGeneration: 2,
 					},
 				},
@@ -569,7 +570,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             WorkNotAllManifestsAppliedReason,
+							Reason:             condition.WorkNotAllManifestsAppliedReason,
 							ObservedGeneration: 1,
 						},
 					},
@@ -626,7 +627,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					{
 						Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 						Status:             metav1.ConditionTrue,
-						Reason:             WorkAllManifestsDiffReportedReason,
+						Reason:             condition.WorkAllManifestsDiffReportedReason,
 						ObservedGeneration: 2,
 					},
 				},
@@ -680,7 +681,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             WorkAllManifestsAppliedReason,
+							Reason:             condition.WorkAllManifestsAppliedReason,
 							ObservedGeneration: 1,
 						},
 					},
@@ -734,7 +735,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					{
 						Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 						Status:             metav1.ConditionTrue,
-						Reason:             WorkAllManifestsDiffReportedReason,
+						Reason:             condition.WorkAllManifestsDiffReportedReason,
 						ObservedGeneration: 2,
 					},
 				},
@@ -779,7 +780,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             WorkNotAllManifestsAppliedReason,
+							Reason:             condition.WorkNotAllManifestsAppliedReason,
 							ObservedGeneration: 1,
 						},
 					},
@@ -872,7 +873,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					{
 						Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 						Status:             metav1.ConditionTrue,
-						Reason:             WorkAllManifestsDiffReportedReason,
+						Reason:             condition.WorkAllManifestsDiffReportedReason,
 						ObservedGeneration: 2,
 					},
 				},
@@ -943,7 +944,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             WorkNotAllManifestsAppliedReason,
+							Reason:             condition.WorkNotAllManifestsAppliedReason,
 							ObservedGeneration: 1,
 						},
 					},
@@ -1030,7 +1031,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					{
 						Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 						Status:             metav1.ConditionFalse,
-						Reason:             WorkNotAllManifestsDiffReportedReason,
+						Reason:             condition.WorkNotAllManifestsDiffReportedReason,
 						ObservedGeneration: 2,
 					},
 				},
@@ -1617,7 +1618,7 @@ func TestSetWorkAppliedCondition(t *testing.T) {
 				{
 					Type:               fleetv1beta1.WorkConditionTypeApplied,
 					Status:             metav1.ConditionTrue,
-					Reason:             WorkAllManifestsAppliedReason,
+					Reason:             condition.WorkAllManifestsAppliedReason,
 					ObservedGeneration: 1,
 				},
 			},
@@ -1639,7 +1640,7 @@ func TestSetWorkAppliedCondition(t *testing.T) {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             WorkAllManifestsAppliedReason,
+							Reason:             condition.WorkAllManifestsAppliedReason,
 							ObservedGeneration: 1,
 						},
 					},
@@ -1651,7 +1652,7 @@ func TestSetWorkAppliedCondition(t *testing.T) {
 				{
 					Type:               fleetv1beta1.WorkConditionTypeApplied,
 					Status:             metav1.ConditionFalse,
-					Reason:             WorkNotAllManifestsAppliedReason,
+					Reason:             condition.WorkNotAllManifestsAppliedReason,
 					ObservedGeneration: 2,
 				},
 			},
@@ -1710,7 +1711,7 @@ func TestSetWorkAvailableCondition(t *testing.T) {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             WorkAllManifestsAppliedReason,
+							Reason:             condition.WorkAllManifestsAppliedReason,
 							ObservedGeneration: 1,
 						},
 					},
@@ -1723,13 +1724,13 @@ func TestSetWorkAvailableCondition(t *testing.T) {
 				{
 					Type:               fleetv1beta1.WorkConditionTypeApplied,
 					Status:             metav1.ConditionTrue,
-					Reason:             WorkAllManifestsAppliedReason,
+					Reason:             condition.WorkAllManifestsAppliedReason,
 					ObservedGeneration: 1,
 				},
 				{
 					Type:               fleetv1beta1.WorkConditionTypeAvailable,
 					Status:             metav1.ConditionTrue,
-					Reason:             WorkAllManifestsAvailableReason,
+					Reason:             condition.WorkAllManifestsAvailableReason,
 					ObservedGeneration: 1,
 				},
 			},
@@ -1746,7 +1747,7 @@ func TestSetWorkAvailableCondition(t *testing.T) {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             WorkAllManifestsAppliedReason,
+							Reason:             condition.WorkAllManifestsAppliedReason,
 							ObservedGeneration: 1,
 						},
 					},
@@ -1759,13 +1760,13 @@ func TestSetWorkAvailableCondition(t *testing.T) {
 				{
 					Type:               fleetv1beta1.WorkConditionTypeApplied,
 					Status:             metav1.ConditionTrue,
-					Reason:             WorkAllManifestsAppliedReason,
+					Reason:             condition.WorkAllManifestsAppliedReason,
 					ObservedGeneration: 1,
 				},
 				{
 					Type:               fleetv1beta1.WorkConditionTypeAvailable,
 					Status:             metav1.ConditionTrue,
-					Reason:             WorkNotAllManifestsTrackableReason,
+					Reason:             condition.WorkNotAllManifestsTrackableReason,
 					ObservedGeneration: 1,
 				},
 			},
@@ -1782,7 +1783,7 @@ func TestSetWorkAvailableCondition(t *testing.T) {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             WorkAllManifestsAppliedReason,
+							Reason:             condition.WorkAllManifestsAppliedReason,
 							ObservedGeneration: 1,
 						},
 					},
@@ -1795,13 +1796,13 @@ func TestSetWorkAvailableCondition(t *testing.T) {
 				{
 					Type:               fleetv1beta1.WorkConditionTypeApplied,
 					Status:             metav1.ConditionTrue,
-					Reason:             WorkAllManifestsAppliedReason,
+					Reason:             condition.WorkAllManifestsAppliedReason,
 					ObservedGeneration: 1,
 				},
 				{
 					Type:               fleetv1beta1.WorkConditionTypeAvailable,
 					Status:             metav1.ConditionFalse,
-					Reason:             WorkNotAllManifestsAvailableReason,
+					Reason:             condition.WorkNotAllManifestsAvailableReason,
 					ObservedGeneration: 1,
 				},
 			},
@@ -1818,13 +1819,13 @@ func TestSetWorkAvailableCondition(t *testing.T) {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             WorkNotAllManifestsAppliedReason,
+							Reason:             condition.WorkNotAllManifestsAppliedReason,
 							ObservedGeneration: 2,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             WorkAllManifestsAvailableReason,
+							Reason:             condition.WorkAllManifestsAvailableReason,
 							ObservedGeneration: 1,
 						},
 					},
@@ -1837,7 +1838,7 @@ func TestSetWorkAvailableCondition(t *testing.T) {
 				{
 					Type:               fleetv1beta1.WorkConditionTypeApplied,
 					Status:             metav1.ConditionFalse,
-					Reason:             WorkNotAllManifestsAppliedReason,
+					Reason:             condition.WorkNotAllManifestsAppliedReason,
 					ObservedGeneration: 2,
 				},
 			},
@@ -1878,7 +1879,7 @@ func TestSetWorkDiffReportedCondition(t *testing.T) {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 							Status:             metav1.ConditionTrue,
-							Reason:             WorkAllManifestsDiffReportedReason,
+							Reason:             condition.WorkAllManifestsDiffReportedReason,
 							ObservedGeneration: 1,
 						},
 					},
@@ -1905,7 +1906,7 @@ func TestSetWorkDiffReportedCondition(t *testing.T) {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 							Status:             metav1.ConditionTrue,
-							Reason:             WorkAllManifestsDiffReportedReason,
+							Reason:             condition.WorkAllManifestsDiffReportedReason,
 							ObservedGeneration: 1,
 						},
 					},
@@ -1934,7 +1935,7 @@ func TestSetWorkDiffReportedCondition(t *testing.T) {
 				{
 					Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 					Status:             metav1.ConditionTrue,
-					Reason:             WorkAllManifestsDiffReportedReason,
+					Reason:             condition.WorkAllManifestsDiffReportedReason,
 					ObservedGeneration: 1,
 				},
 			},
@@ -1958,7 +1959,7 @@ func TestSetWorkDiffReportedCondition(t *testing.T) {
 				{
 					Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 					Status:             metav1.ConditionFalse,
-					Reason:             WorkNotAllManifestsDiffReportedReason,
+					Reason:             condition.WorkNotAllManifestsDiffReportedReason,
 					ObservedGeneration: 1,
 				},
 			},

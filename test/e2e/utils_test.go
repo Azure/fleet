@@ -201,11 +201,16 @@ func markMemberClusterAsLeft(name string) {
 	Expect(hubClient.Delete(ctx, mcObj)).To(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete member cluster")
 }
 
+// setMemberClusterToJoin creates a MemberCluster object for a specific member cluster.
+func setMemberClusterToJoin(memberCluster *framework.Cluster) {
+	createMemberCluster(memberCluster.ClusterName, memberCluster.PresentingServiceAccountInHubClusterName, labelsByClusterName[memberCluster.ClusterName], annotationsByClusterName[memberCluster.ClusterName])
+}
+
 // setAllMemberClustersToJoin creates a MemberCluster object for each member cluster.
 func setAllMemberClustersToJoin() {
 	for idx := range allMemberClusters {
 		memberCluster := allMemberClusters[idx]
-		createMemberCluster(memberCluster.ClusterName, memberCluster.PresentingServiceAccountInHubClusterName, labelsByClusterName[memberCluster.ClusterName], annotationsByClusterName[memberCluster.ClusterName])
+		setMemberClusterToJoin(memberCluster)
 	}
 }
 
@@ -733,17 +738,20 @@ func cleanWorkResourcesOnCluster(cluster *framework.Cluster) {
 	Eventually(workResourcesRemovedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from %s cluster", cluster.ClusterName)
 }
 
+// setMemberClusterToLeave sets a specific member cluster to leave the fleet.
+func setMemberClusterToLeave(memberCluster *framework.Cluster) {
+	mcObj := &clusterv1beta1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: memberCluster.ClusterName,
+		},
+	}
+	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, mcObj))).To(Succeed(), "Failed to set member cluster %s to leave state", memberCluster.ClusterName)
+}
+
 // setAllMemberClustersToLeave sets all member clusters to leave the fleet.
 func setAllMemberClustersToLeave() {
 	for idx := range allMemberClusters {
-		memberCluster := allMemberClusters[idx]
-
-		mcObj := &clusterv1beta1.MemberCluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: memberCluster.ClusterName,
-			},
-		}
-		Expect(client.IgnoreNotFound(hubClient.Delete(ctx, mcObj))).To(Succeed(), "Failed to set member cluster to leave state")
+		setMemberClusterToLeave(allMemberClusters[idx])
 	}
 }
 
@@ -777,18 +785,20 @@ func cleanupAnotherValidOwnerReference(nsName string) {
 	Expect(allMemberClusters[0].KubeClient.Delete(ctx, ns)).Should(Succeed(), "Failed to create namespace %s", nsName)
 }
 
+// checkIfMemberClusterHasLeft verifies if the specified member cluster has left.
+func checkIfMemberClusterHasLeft(memberCluster *framework.Cluster) {
+	Eventually(func() error {
+		mcObj := &clusterv1beta1.MemberCluster{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster.ClusterName}, mcObj); !k8serrors.IsNotFound(err) {
+			return fmt.Errorf("member cluster %s still exists or an unexpected error occurred: %w", memberCluster.ClusterName, err)
+		}
+		return nil
+	}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete member cluster %s", memberCluster.ClusterName)
+}
+
 func checkIfAllMemberClustersHaveLeft() {
 	for idx := range allMemberClusters {
-		memberCluster := allMemberClusters[idx]
-
-		Eventually(func() error {
-			mcObj := &clusterv1beta1.MemberCluster{}
-			if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster.ClusterName}, mcObj); !k8serrors.IsNotFound(err) {
-				return fmt.Errorf("member cluster still exists or an unexpected error occurred: %w", err)
-			}
-
-			return nil
-		}, longEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete member cluster")
+		checkIfMemberClusterHasLeft(allMemberClusters[idx])
 	}
 }
 

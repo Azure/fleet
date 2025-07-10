@@ -23,12 +23,12 @@ import (
 	"go.goms.io/fleet/pkg/utils/condition"
 )
 
-// HasBindingFailed checks if ClusterResourceBinding has failed based on its conditions.
-func HasBindingFailed(binding *placementv1beta1.ClusterResourceBinding) bool {
+// HasBindingFailed checks if BindingObj has failed based on its conditions.
+func HasBindingFailed(binding placementv1beta1.BindingObj) bool {
 	for i := condition.OverriddenCondition; i <= condition.AvailableCondition; i++ {
-		if condition.IsConditionStatusFalse(binding.GetCondition(string(i.ResourceBindingConditionType())), binding.Generation) {
+		if condition.IsConditionStatusFalse(binding.GetCondition(string(i.ResourceBindingConditionType())), binding.GetGeneration()) {
 			// TODO: parse the reason of the condition to see if the failure is recoverable/retriable or not
-			klog.V(2).Infof("binding %s has condition %s with status false", binding.Name, string(i.ResourceBindingConditionType()))
+			klog.V(2).Infof("binding %s has condition %s with status false", binding.GetName(), string(i.ResourceBindingConditionType()))
 			return true
 		}
 	}
@@ -36,7 +36,7 @@ func HasBindingFailed(binding *placementv1beta1.ClusterResourceBinding) bool {
 }
 
 // IsBindingDiffReported checks if the binding is in diffReported state.
-func IsBindingDiffReported(binding *placementv1beta1.ClusterResourceBinding) bool {
+func IsBindingDiffReported(binding placementv1beta1.BindingObj) bool {
 	diffReportCondition := binding.GetCondition(string(placementv1beta1.ResourceBindingDiffReported))
-	return diffReportCondition != nil && diffReportCondition.ObservedGeneration == binding.Generation
+	return diffReportCondition != nil && diffReportCondition.ObservedGeneration == binding.GetGeneration()
 }

@@ -37,7 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -820,7 +819,7 @@ func TestSetAllWorkAvailableCondition(t *testing.T) {
 						Conditions: []metav1.Condition{
 							{
 								Type:   fleetv1beta1.WorkConditionTypeAvailable,
-								Reason: workapplier.WorkNotAllManifestsTrackableReason,
+								Reason: condition.WorkNotAllManifestsTrackableReason,
 								Status: metav1.ConditionTrue,
 							},
 						},
@@ -873,7 +872,7 @@ func TestSetAllWorkAvailableCondition(t *testing.T) {
 						Conditions: []metav1.Condition{
 							{
 								Type:   fleetv1beta1.WorkConditionTypeAvailable,
-								Reason: workapplier.WorkNotAllManifestsTrackableReasonNew,
+								Reason: condition.WorkNotAllManifestsTrackableReasonNew,
 								Status: metav1.ConditionTrue,
 							},
 						},

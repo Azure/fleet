@@ -20,6 +20,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"go.goms.io/fleet/apis"
 )
 
 const (
@@ -52,7 +54,7 @@ type BindingStatusGetterSetter interface {
 // A BindingObj offers an abstract way to work with fleet binding objects.
 // +kubebuilder:object:generate=false
 type BindingObj interface {
-	client.Object
+	apis.ConditionedObj
 	BindingSpecGetterSetter
 	BindingStatusGetterSetter
 }

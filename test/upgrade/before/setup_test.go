@@ -44,7 +44,6 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -136,7 +135,7 @@ var (
 	// Note that the aforementioned change is hub side exclusive and is for informational purposes only.
 	availableDueToUntrackableResCondAcyclicTransformer = cmpopts.AcyclicTransformer("AvailableDueToUntrackableResCond", func(cond metav1.Condition) metav1.Condition {
 		transformedCond := cond.DeepCopy()
-		if cond.Type == string(placementv1beta1.ResourcesAvailableConditionType) && cond.Reason == work.WorkNotTrackableReason {
+		if cond.Type == string(placementv1beta1.ResourcesAvailableConditionType) && cond.Reason == condition.WorkNotTrackableReason {
 			transformedCond.Reason = condition.WorkNotAvailabilityTrackableReason
 		}
 		return *transformedCond

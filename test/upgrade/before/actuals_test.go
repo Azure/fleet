@@ -10,7 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/controllers/workapplier"
 	scheduler "go.goms.io/fleet/pkg/scheduler/framework"
 	"go.goms.io/fleet/pkg/utils/condition"
@@ -73,7 +72,7 @@ func resourcePlacementScheduleFailedConditions(generation int64) []metav1.Condit
 			Type:               string(placementv1beta1.ResourceScheduledConditionType),
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: generation,
-			Reason:             clusterresourceplacement.ResourceScheduleFailedReason,
+			Reason:             condition.ResourceScheduleFailedReason,
 		},
 	}
 }

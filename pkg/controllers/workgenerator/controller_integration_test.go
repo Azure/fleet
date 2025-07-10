@@ -3020,7 +3020,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				// actually handles resources; ConfigMap objects are considered to be
 				// trackable (available immediately after placement). Here it is set
 				// to NotTrackable for testing purposes.
-				Reason:             workapplier.WorkNotAllManifestsTrackableReason,
+				Reason:             condition.WorkNotAllManifestsTrackableReason,
 				ObservedGeneration: work.GetGeneration(),
 			}
 

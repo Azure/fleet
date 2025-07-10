@@ -118,7 +118,7 @@ func (r *Reconciler) validateEviction(ctx context.Context, eviction *placementv1
 	}
 
 	// set default values for CRP.
-	defaulter.SetDefaultsClusterResourcePlacement(&crp)
+	defaulter.SetPlacementDefaults(&crp)
 
 	if crp.DeletionTimestamp != nil {
 		klog.V(2).InfoS(condition.EvictionInvalidDeletingCRPMessage, "clusterResourcePlacementEviction", eviction.Name, "clusterResourcePlacement", eviction.Spec.PlacementName)

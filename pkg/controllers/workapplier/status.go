@@ -449,8 +449,8 @@ func setWorkAppliedCondition(
 			Type:   fleetv1beta1.WorkConditionTypeApplied,
 			Status: metav1.ConditionTrue,
 			// Here Fleet reuses the same reason for individual manifests.
-			Reason:             WorkAllManifestsAppliedReason,
-			Message:            allManifestsAppliedMessage,
+			Reason:             condition.WorkAllManifestsAppliedReason,
+			Message:            condition.AllManifestsAppliedMessage,
 			ObservedGeneration: work.Generation,
 		}
 	default:
@@ -458,8 +458,8 @@ func setWorkAppliedCondition(
 		appliedCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeApplied,
 			Status:             metav1.ConditionFalse,
-			Reason:             WorkNotAllManifestsAppliedReason,
-			Message:            fmt.Sprintf(notAllManifestsAppliedMessage, appliedManifestCount, manifestCount),
+			Reason:             condition.WorkNotAllManifestsAppliedReason,
+			Message:            fmt.Sprintf(condition.NotAllManifestsAppliedMessage, appliedManifestCount, manifestCount),
 			ObservedGeneration: work.Generation,
 		}
 	}
@@ -499,8 +499,8 @@ func setWorkAvailableCondition(
 		availableCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeAvailable,
 			Status:             metav1.ConditionTrue,
-			Reason:             WorkAllManifestsAvailableReason,
-			Message:            allAppliedObjectAvailableMessage,
+			Reason:             condition.WorkAllManifestsAvailableReason,
+			Message:            condition.AllAppliedObjectAvailableMessage,
 			ObservedGeneration: work.Generation,
 		}
 	case availableManifestCount == manifestCount:
@@ -508,8 +508,8 @@ func setWorkAvailableCondition(
 		availableCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeAvailable,
 			Status:             metav1.ConditionTrue,
-			Reason:             WorkNotAllManifestsTrackableReason,
-			Message:            someAppliedObjectUntrackableMessage,
+			Reason:             condition.WorkNotAllManifestsTrackableReason,
+			Message:            condition.SomeAppliedObjectUntrackableMessage,
 			ObservedGeneration: work.Generation,
 		}
 	default:
@@ -517,8 +517,8 @@ func setWorkAvailableCondition(
 		availableCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeAvailable,
 			Status:             metav1.ConditionFalse,
-			Reason:             WorkNotAllManifestsAvailableReason,
-			Message:            fmt.Sprintf(notAllAppliedObjectsAvailableMessage, availableManifestCount, manifestCount),
+			Reason:             condition.WorkNotAllManifestsAvailableReason,
+			Message:            fmt.Sprintf(condition.NotAllAppliedObjectsAvailableMessage, availableManifestCount, manifestCount),
 			ObservedGeneration: work.Generation,
 		}
 	}
@@ -554,8 +554,8 @@ func setWorkDiffReportedCondition(
 		diffReportedCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 			Status:             metav1.ConditionTrue,
-			Reason:             WorkAllManifestsDiffReportedReason,
-			Message:            allManifestsHaveReportedDiffMessage,
+			Reason:             condition.WorkAllManifestsDiffReportedReason,
+			Message:            condition.AllManifestsHaveReportedDiffMessage,
 			ObservedGeneration: work.Generation,
 		}
 	default:
@@ -563,8 +563,8 @@ func setWorkDiffReportedCondition(
 		diffReportedCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 			Status:             metav1.ConditionFalse,
-			Reason:             WorkNotAllManifestsDiffReportedReason,
-			Message:            fmt.Sprintf(notAllManifestsHaveReportedDiff, diffReportedObjectsCount, manifestCount),
+			Reason:             condition.WorkNotAllManifestsDiffReportedReason,
+			Message:            fmt.Sprintf(condition.NotAllManifestsHaveReportedDiff, diffReportedObjectsCount, manifestCount),
 			ObservedGeneration: work.Generation,
 		}
 	}

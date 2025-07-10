@@ -333,9 +333,9 @@ func checkClusterResourceSnapshot() *placementv1beta1.ClusterResourceSnapshot {
 }
 
 func updateClusterSchedulingPolicySnapshotStatus(status metav1.ConditionStatus, clustersSelected bool) *placementv1beta1.ClusterSchedulingPolicySnapshot {
-	reason := ResourceScheduleSucceededReason
+	reason := condition.ResourceScheduleSucceededReason
 	if status == metav1.ConditionFalse {
-		reason = ResourceScheduleFailedReason
+		reason = condition.ResourceScheduleFailedReason
 	}
 
 	// Update scheduling condition
@@ -422,7 +422,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionUnknown,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: SchedulingUnknownReason,
+							Reason: condition.SchedulingUnknownReason,
 						},
 					},
 				},
@@ -461,7 +461,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: ResourceScheduleSucceededReason,
+							Reason: condition.ResourceScheduleSucceededReason,
 						},
 					},
 				},
@@ -479,7 +479,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
 						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-						{Name: ptr.To("reason"), Value: ptr.To(SchedulingUnknownReason)},
+						{Name: ptr.To("reason"), Value: ptr.To(condition.SchedulingUnknownReason)},
 					},
 					Gauge: &prometheusclientmodel.Gauge{
 						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -518,7 +518,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionFalse,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: ResourceScheduleFailedReason,
+							Reason: condition.ResourceScheduleFailedReason,
 						},
 					},
 				},
@@ -535,7 +535,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
 						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-						{Name: ptr.To("reason"), Value: ptr.To(SchedulingUnknownReason)},
+						{Name: ptr.To("reason"), Value: ptr.To(condition.SchedulingUnknownReason)},
 					},
 					Gauge: &prometheusclientmodel.Gauge{
 						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -547,7 +547,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
 						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionFalse))},
-						{Name: ptr.To("reason"), Value: ptr.To(ResourceScheduleFailedReason)},
+						{Name: ptr.To("reason"), Value: ptr.To(condition.ResourceScheduleFailedReason)},
 					},
 					Gauge: &prometheusclientmodel.Gauge{
 						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -577,7 +577,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: ResourceScheduleSucceededReason,
+							Reason: condition.ResourceScheduleSucceededReason,
 						},
 						{
 							Status: metav1.ConditionUnknown,
@@ -643,7 +643,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
 						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-						{Name: ptr.To("reason"), Value: ptr.To(SchedulingUnknownReason)},
+						{Name: ptr.To("reason"), Value: ptr.To(condition.SchedulingUnknownReason)},
 					},
 					Gauge: &prometheusclientmodel.Gauge{
 						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -672,7 +672,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				{
 					Status: metav1.ConditionTrue,
 					Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-					Reason: ResourceScheduleSucceededReason,
+					Reason: condition.ResourceScheduleSucceededReason,
 				},
 				{
 					Status: metav1.ConditionTrue,
@@ -787,7 +787,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: ResourceScheduleSucceededReason,
+							Reason: condition.ResourceScheduleSucceededReason,
 						},
 						{
 							Status: metav1.ConditionUnknown,
@@ -851,7 +851,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
 						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-						{Name: ptr.To("reason"), Value: ptr.To(SchedulingUnknownReason)},
+						{Name: ptr.To("reason"), Value: ptr.To(condition.SchedulingUnknownReason)},
 					},
 					Gauge: &prometheusclientmodel.Gauge{
 						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -880,7 +880,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				{
 					Status: metav1.ConditionTrue,
 					Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-					Reason: ResourceScheduleSucceededReason,
+					Reason: condition.ResourceScheduleSucceededReason,
 				},
 				{
 					Status: metav1.ConditionTrue,
@@ -993,7 +993,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				{
 					Status:             metav1.ConditionUnknown,
 					Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-					Reason:             SchedulingUnknownReason,
+					Reason:             condition.SchedulingUnknownReason,
 					ObservedGeneration: 2,
 				},
 				{
@@ -1028,7 +1028,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 					{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
 					{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-					{Name: ptr.To("reason"), Value: ptr.To(SchedulingUnknownReason)},
+					{Name: ptr.To("reason"), Value: ptr.To(condition.SchedulingUnknownReason)},
 				},
 				Gauge: &prometheusclientmodel.Gauge{
 					Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -1047,7 +1047,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				{
 					Status:             metav1.ConditionTrue,
 					Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-					Reason:             ResourceScheduleSucceededReason,
+					Reason:             condition.ResourceScheduleSucceededReason,
 					ObservedGeneration: 2,
 				},
 				{
@@ -1181,7 +1181,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: ResourceScheduleSucceededReason,
+							Reason: condition.ResourceScheduleSucceededReason,
 						},
 						{
 							Status: metav1.ConditionTrue,
@@ -1270,7 +1270,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
 						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-						{Name: ptr.To("reason"), Value: ptr.To(SchedulingUnknownReason)},
+						{Name: ptr.To("reason"), Value: ptr.To(condition.SchedulingUnknownReason)},
 					},
 					Gauge: &prometheusclientmodel.Gauge{
 						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -1439,7 +1439,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionUnknown,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: SchedulingUnknownReason,
+							Reason: condition.SchedulingUnknownReason,
 						},
 					},
 				},
@@ -1480,7 +1480,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: ResourceScheduleSucceededReason,
+							Reason: condition.ResourceScheduleSucceededReason,
 						},
 						{
 							Status: metav1.ConditionTrue,
@@ -1564,7 +1564,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
 						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-						{Name: ptr.To("reason"), Value: ptr.To(SchedulingUnknownReason)},
+						{Name: ptr.To("reason"), Value: ptr.To(condition.SchedulingUnknownReason)},
 					},
 					Gauge: &prometheusclientmodel.Gauge{
 						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -1663,7 +1663,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: ResourceScheduleSucceededReason,
+							Reason: condition.ResourceScheduleSucceededReason,
 						},
 						{
 							Status: metav1.ConditionTrue,
@@ -1747,7 +1747,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
 						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-						{Name: ptr.To("reason"), Value: ptr.To(SchedulingUnknownReason)},
+						{Name: ptr.To("reason"), Value: ptr.To(condition.SchedulingUnknownReason)},
 					},
 					Gauge: &prometheusclientmodel.Gauge{
 						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -1791,7 +1791,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				{
 					Status: metav1.ConditionTrue,
 					Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-					Reason: ResourceScheduleSucceededReason,
+					Reason: condition.ResourceScheduleSucceededReason,
 				},
 				{
 					Status: metav1.ConditionTrue,
@@ -1943,7 +1943,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionFalse,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: InvalidResourceSelectorsReason,
+							Reason: condition.InvalidResourceSelectorsReason,
 						},
 					},
 				},
@@ -1958,7 +1958,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
 						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionFalse))},
-						{Name: ptr.To("reason"), Value: ptr.To(InvalidResourceSelectorsReason)},
+						{Name: ptr.To("reason"), Value: ptr.To(condition.InvalidResourceSelectorsReason)},
 					},
 					Gauge: &prometheusclientmodel.Gauge{
 						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -2017,7 +2017,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionUnknown,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: SchedulingUnknownReason,
+							Reason: condition.SchedulingUnknownReason,
 						},
 					},
 				},
@@ -2040,7 +2040,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
 						{Name: ptr.To("status"), Value: ptr.To(string(corev1.ConditionUnknown))},
-						{Name: ptr.To("reason"), Value: ptr.To(SchedulingUnknownReason)},
+						{Name: ptr.To("reason"), Value: ptr.To(condition.SchedulingUnknownReason)},
 					},
 					Gauge: &prometheusclientmodel.Gauge{
 						Value: ptr.To(float64(time.Now().UnixNano()) / 1e9),
@@ -2064,7 +2064,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: ResourceScheduleSucceededReason,
+							Reason: condition.ResourceScheduleSucceededReason,
 						},
 						{
 							Status: metav1.ConditionUnknown,

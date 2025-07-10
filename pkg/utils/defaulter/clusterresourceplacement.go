@@ -42,34 +42,35 @@ const (
 	DefaultRevisionHistoryLimitValue = 10
 )
 
-// SetDefaultsClusterResourcePlacement sets the default values for ClusterResourcePlacement.
-func SetDefaultsClusterResourcePlacement(obj *fleetv1beta1.ClusterResourcePlacement) {
-	if obj.Spec.Policy == nil {
-		obj.Spec.Policy = &fleetv1beta1.PlacementPolicy{
+// SetPlacementDefaults sets the default values for placement.
+func SetPlacementDefaults(obj fleetv1beta1.PlacementObj) {
+	spec := obj.GetPlacementSpec()
+	if spec.Policy == nil {
+		spec.Policy = &fleetv1beta1.PlacementPolicy{
 			PlacementType: fleetv1beta1.PickAllPlacementType,
 		}
 	}
 
-	if obj.Spec.Policy.TopologySpreadConstraints != nil {
-		for i := range obj.Spec.Policy.TopologySpreadConstraints {
-			if obj.Spec.Policy.TopologySpreadConstraints[i].MaxSkew == nil {
-				obj.Spec.Policy.TopologySpreadConstraints[i].MaxSkew = ptr.To(int32(DefaultMaxSkewValue))
+	if spec.Policy.TopologySpreadConstraints != nil {
+		for i := range spec.Policy.TopologySpreadConstraints {
+			if spec.Policy.TopologySpreadConstraints[i].MaxSkew == nil {
+				spec.Policy.TopologySpreadConstraints[i].MaxSkew = ptr.To(int32(DefaultMaxSkewValue))
 			}
-			if obj.Spec.Policy.TopologySpreadConstraints[i].WhenUnsatisfiable == "" {
-				obj.Spec.Policy.TopologySpreadConstraints[i].WhenUnsatisfiable = fleetv1beta1.DoNotSchedule
-			}
-		}
-	}
-
-	if obj.Spec.Policy.Tolerations != nil {
-		for i := range obj.Spec.Policy.Tolerations {
-			if obj.Spec.Policy.Tolerations[i].Operator == "" {
-				obj.Spec.Policy.Tolerations[i].Operator = corev1.TolerationOpEqual
+			if spec.Policy.TopologySpreadConstraints[i].WhenUnsatisfiable == "" {
+				spec.Policy.TopologySpreadConstraints[i].WhenUnsatisfiable = fleetv1beta1.DoNotSchedule
 			}
 		}
 	}
 
-	strategy := &obj.Spec.Strategy
+	if spec.Policy.Tolerations != nil {
+		for i := range spec.Policy.Tolerations {
+			if spec.Policy.Tolerations[i].Operator == "" {
+				spec.Policy.Tolerations[i].Operator = corev1.TolerationOpEqual
+			}
+		}
+	}
+
+	strategy := &spec.Strategy
 	if strategy.Type == "" {
 		strategy.Type = fleetv1beta1.RollingUpdateRolloutStrategyType
 	}
@@ -88,13 +89,13 @@ func SetDefaultsClusterResourcePlacement(obj *fleetv1beta1.ClusterResourcePlacem
 		}
 	}
 
-	if obj.Spec.Strategy.ApplyStrategy == nil {
-		obj.Spec.Strategy.ApplyStrategy = &fleetv1beta1.ApplyStrategy{}
+	if spec.Strategy.ApplyStrategy == nil {
+		spec.Strategy.ApplyStrategy = &fleetv1beta1.ApplyStrategy{}
 	}
-	SetDefaultsApplyStrategy(obj.Spec.Strategy.ApplyStrategy)
+	SetDefaultsApplyStrategy(spec.Strategy.ApplyStrategy)
 
-	if obj.Spec.RevisionHistoryLimit == nil {
-		obj.Spec.RevisionHistoryLimit = ptr.To(int32(DefaultRevisionHistoryLimitValue))
+	if spec.RevisionHistoryLimit == nil {
+		spec.RevisionHistoryLimit = ptr.To(int32(DefaultRevisionHistoryLimitValue))
 	}
 }
 

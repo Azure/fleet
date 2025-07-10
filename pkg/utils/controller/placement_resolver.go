@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -73,6 +74,17 @@ func GetPlacementKeyFromObj(obj fleetv1beta1.PlacementObj) queue.PlacementKey {
 	} else {
 		// Namespaced placement
 		return queue.PlacementKey(obj.GetNamespace() + namespaceSeparator + obj.GetName())
+	}
+}
+
+// GetPlacementKeyFromObj generates a PlacementKey from a placement object.
+func GetPlacementKeyFromRequest(req ctrl.Request) queue.PlacementKey {
+	if req.Namespace == "" {
+		// Cluster-scoped placement
+		return queue.PlacementKey(req.Name)
+	} else {
+		// Namespaced placement
+		return queue.PlacementKey(req.Namespace + namespaceSeparator + req.Name)
 	}
 }
 
