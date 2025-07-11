@@ -20,11 +20,44 @@ import (
 	"context"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/queue"
 )
+
+// FetchBindingFromKey resolves a bindingKey to a concrete binding object that implements BindingObj.
+func FetchBindingFromKey(ctx context.Context, c client.Reader, bindingKey queue.PlacementKey) (placementv1beta1.BindingObj, error) {
+	// Extract namespace and name from the placement key
+	namespace, name, err := ExtractNamespaceNameFromKey(bindingKey)
+	if err != nil {
+		return nil, err
+	}
+	// Check if the key contains a namespace separator
+	if namespace != "" {
+		// This is a namespaced ResourceBinding
+		rb := &placementv1beta1.ResourceBinding{}
+		key := types.NamespacedName{
+			Namespace: namespace,
+			Name:      name,
+		}
+		if err := c.Get(ctx, key, rb); err != nil {
+			return nil, err
+		}
+		return rb, nil
+	} else {
+		// This is a cluster-scoped ClusterResourceBinding
+		crb := &placementv1beta1.ClusterResourceBinding{}
+		key := types.NamespacedName{
+			Name: name,
+		}
+		if err := c.Get(ctx, key, crb); err != nil {
+			return nil, err
+		}
+		return crb, nil
+	}
+}
 
 // ListBindingsFromKey returns all bindings (either ClusterResourceBinding and ResourceBinding)
 // that belong to the specified placement key.
@@ -43,7 +76,7 @@ func ListBindingsFromKey(ctx context.Context, c client.Reader, placementKey queu
 	})
 	// Check if the key contains a namespace separator
 	if namespace != "" {
-		// This is a namespaced ResourcePlacement
+		// This is a namespaced binding
 		bindingList = &placementv1beta1.ResourceBindingList{}
 		listOptions = append(listOptions, client.InNamespace(namespace))
 	} else {

@@ -210,7 +210,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 	// Note that the scheduler will enter this cycle as long as the placement is active and an active
 	// policy snapshot has been produced.
 	cycleStartTime := time.Now()
-	res, err := s.framework.RunSchedulingCycleFor(ctx, controller.GetPlacementKeyFromObj(placement), latestPolicySnapshot)
+	res, err := s.framework.RunSchedulingCycleFor(ctx, controller.GetObjectKeyFromObj(placement), latestPolicySnapshot)
 	if err != nil {
 		if errors.Is(err, controller.ErrUnexpectedBehavior) {
 			// The placement is in an unexpected state; this is a scheduler-side error, and
@@ -299,7 +299,7 @@ func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, placement fleetv1
 	placementRef := klog.KObj(placement)
 
 	// Get the placement key which handles both cluster-scoped and namespaced placements
-	placementKey := controller.GetPlacementKeyFromObj(placement)
+	placementKey := controller.GetObjectKeyFromObj(placement)
 
 	// List all bindings derived from the placement.
 	//

@@ -57,6 +57,7 @@ type BindingObj interface {
 	apis.ConditionedObj
 	BindingSpecGetterSetter
 	BindingStatusGetterSetter
+	RemoveCondition(string)
 }
 
 // A BindingListItemGetter offers a method to get binding objects from a list.

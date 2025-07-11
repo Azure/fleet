@@ -322,8 +322,8 @@ var (
 	errResourceNotFullyCreated = errors.New("not all resource snapshot in the same index group are created")
 )
 
-// FetchAllClusterResourceSnapshots fetches the group of clusterResourceSnapshots using master clusterResourceSnapshot.
-func FetchAllClusterResourceSnapshots(ctx context.Context, k8Client client.Reader, placementKey string, masterResourceSnapshot fleetv1beta1.ResourceSnapshotObj) (map[string]fleetv1beta1.ResourceSnapshotObj, error) {
+// FetchAllResourceSnapshots fetches the group of clusterResourceSnapshots or resourceSnapshots using the latest master resourceSnapshot.
+func FetchAllResourceSnapshots(ctx context.Context, k8Client client.Reader, placementKey string, masterResourceSnapshot fleetv1beta1.ResourceSnapshotObj) (map[string]fleetv1beta1.ResourceSnapshotObj, error) {
 	resourceSnapshots := make(map[string]fleetv1beta1.ResourceSnapshotObj)
 	resourceSnapshots[masterResourceSnapshot.GetName()] = masterResourceSnapshot
 
@@ -384,9 +384,10 @@ func FetchAllClusterResourceSnapshots(ctx context.Context, k8Client client.Reade
 	return resourceSnapshots, nil
 }
 
-// CollectResourceIdentifiersFromClusterResourceSnapshot collects the resource identifiers selected by a series of clusterResourceSnapshot.
-// Given the index of the clusterResourceSnapshot, it collects resources from all of the master snapshots as well as
-func CollectResourceIdentifiersFromClusterResourceSnapshot(
+// CollectResourceIdentifiersFromResourceSnapshot collects the resource identifiers selected by a series of resourceSnapshots.
+// Given the index of the resourceSnapshot, it collects resources from all of the master snapshots as well as the resourceSnapshots in the same index group.
+// It uses the master resourceSnapshot to collect the resource identifiers from all the resourceSnapshots in the same index group.
+func CollectResourceIdentifiersFromResourceSnapshot(
 	ctx context.Context,
 	k8Client client.Reader,
 	placementKey string,
@@ -422,8 +423,8 @@ func CollectResourceIdentifiersFromClusterResourceSnapshot(
 			"resourceSnapshotIndex", resourceSnapshotIndex, "clusterResourcePlacement", placementKey)
 		return nil, nil
 	}
-
-	// Look for the master clusterResourceSnapshot.
+	// TODO: extract the resource identifier directly
+	// Look for the master resourceSnapshot.
 	var masterResourceSnapshot fleetv1beta1.ResourceSnapshotObj
 	for i, resourceSnapshot := range items {
 		anno := resourceSnapshot.GetAnnotations()
@@ -439,20 +440,20 @@ func CollectResourceIdentifiersFromClusterResourceSnapshot(
 		return nil, err
 	}
 
-	return CollectResourceIdentifiersUsingMasterClusterResourceSnapshot(ctx, k8Client, placementKey, masterResourceSnapshot, resourceSnapshotIndex)
+	return CollectResourceIdentifiersUsingMasterResourceSnapshot(ctx, k8Client, placementKey, masterResourceSnapshot, resourceSnapshotIndex)
 }
 
-// CollectResourceIdentifiersUsingMasterClusterResourceSnapshot collects the resource identifiers selected by a series of clusterResourceSnapshot.
-// It uses the master clusterResourceSnapshot to collect the resource identifiers from all the clusterResourceSnapshots in the same index group.
-// The order of the resource identifiers is preserved by the order of the clusterResourceSnapshots.
-func CollectResourceIdentifiersUsingMasterClusterResourceSnapshot(
+// CollectResourceIdentifiersUsingMasterResourceSnapshot collects the resource identifiers selected by a series of resourceSnapshot.
+// It uses the master resourceSnapshot to collect the resource identifiers from all the resourceSnapshots in the same index group.
+// The order of the resource identifiers is preserved by the order of the resourceSnapshots.
+func CollectResourceIdentifiersUsingMasterResourceSnapshot(
 	ctx context.Context,
 	k8Client client.Reader,
 	placementKey string,
 	masterResourceSnapshot fleetv1beta1.ResourceSnapshotObj,
 	resourceSnapshotIndex string,
 ) ([]fleetv1beta1.ResourceIdentifier, error) {
-	allResourceSnapshots, err := FetchAllClusterResourceSnapshots(ctx, k8Client, placementKey, masterResourceSnapshot)
+	allResourceSnapshots, err := FetchAllResourceSnapshots(ctx, k8Client, placementKey, masterResourceSnapshot)
 	if err != nil {
 		klog.ErrorS(err, "Failed to fetch all the clusterResourceSnapshots", "resourceSnapshotIndex", resourceSnapshotIndex, "clusterResourcePlacement", placementKey)
 		return nil, err

@@ -36,23 +36,24 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/overrider"
 )
 
-func (r *Reconciler) fetchClusterResourceOverrideSnapshots(ctx context.Context, resourceBinding *placementv1beta1.ClusterResourceBinding) (map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot, error) {
+// TODO: combine the following two functions into one, as they are very similar.
+func (r *Reconciler) fetchClusterResourceOverrideSnapshots(ctx context.Context, resourceBinding placementv1beta1.BindingObj) (map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot, error) {
 	croMap := make(map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot)
 
 	// For now, we get the snapshots sequentially. We can optimize this by getting them in parallel, but we need to reorder
 	// the snapshot lists saved in the map.
-	for _, name := range resourceBinding.Spec.ClusterResourceOverrideSnapshots {
+	for _, name := range resourceBinding.GetBindingSpec().ClusterResourceOverrideSnapshots {
 		snapshot := &placementv1alpha1.ClusterResourceOverrideSnapshot{}
 		if err := r.Client.Get(ctx, types.NamespacedName{Name: name}, snapshot); err != nil {
 			if errors.IsNotFound(err) {
-				klog.ErrorS(err, "The clusterResourceOverrideSnapshot is deleted", "resourceBinding", klog.KObj(resourceBinding), "clusterResourceOverrideSnapshot", name)
+				klog.ErrorS(err, "The clusterResourceOverrideSnapshot is deleted", "binding", klog.KObj(resourceBinding), "clusterResourceOverrideSnapshot", name)
 				// It could be caused by that the user updates the override too frequently and the snapshot has been replaced
 				// by the new one.
 				// TODO: support customized revision history limit
-				return nil, controller.NewUserError(fmt.Errorf("clusterResourceSnapshot %s is not found", name))
+				return nil, controller.NewUserError(fmt.Errorf("clusterResourceOverrideSnapshot %s is not found", name))
 			}
 			klog.ErrorS(err, "Failed to get the clusterResourceOverrideSnapshot",
-				"resourceBinding", klog.KObj(resourceBinding), "clusterResourceOverrideSnapshot", name)
+				"binding", klog.KObj(resourceBinding), "clusterResourceOverrideSnapshot", name)
 			return nil, controller.NewAPIServerError(true, err)
 		}
 		for _, selector := range snapshot.Spec.OverrideSpec.ClusterResourceSelectors {
@@ -70,23 +71,23 @@ func (r *Reconciler) fetchClusterResourceOverrideSnapshots(ctx context.Context, 
 	return croMap, nil
 }
 
-func (r *Reconciler) fetchResourceOverrideSnapshots(ctx context.Context, resourceBinding *placementv1beta1.ClusterResourceBinding) (map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot, error) {
+func (r *Reconciler) fetchResourceOverrideSnapshots(ctx context.Context, resourceBinding placementv1beta1.BindingObj) (map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot, error) {
 	roMap := make(map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot)
 
 	// For now, we get the snapshots sequentially. We can optimize this by getting them in parallel, but we need to reorder
 	// the snapshot lists saved in the map.
-	for _, namespacedName := range resourceBinding.Spec.ResourceOverrideSnapshots {
+	for _, namespacedName := range resourceBinding.GetBindingSpec().ResourceOverrideSnapshots {
 		snapshot := &placementv1alpha1.ResourceOverrideSnapshot{}
 		if err := r.Client.Get(ctx, types.NamespacedName{Name: namespacedName.Name, Namespace: namespacedName.Namespace}, snapshot); err != nil {
 			if errors.IsNotFound(err) {
 				// It could be caused by that the user updates the override too frequently and the snapshot has been replaced
 				// by the new one.
 				// TODO: support customized revision history limit
-				klog.ErrorS(err, "The resourceOverrideSnapshot is deleted", "resourceBinding", klog.KObj(resourceBinding), "resourceOverrideSnapshot", namespacedName)
-				return nil, controller.NewUserError(fmt.Errorf("resourceSnapshot %s is not found", namespacedName))
+				klog.ErrorS(err, "The resourceOverrideSnapshot is deleted", "binding", klog.KObj(resourceBinding), "resourceOverrideSnapshot", namespacedName)
+				return nil, controller.NewUserError(fmt.Errorf("resourceOverrideSnapshot %s is not found", namespacedName))
 			}
 			klog.ErrorS(err, "Failed to get the resourceOverrideSnapshot",
-				"resourceBinding", klog.KObj(resourceBinding), "resourceOverrideSnapshot", namespacedName)
+				"binding", klog.KObj(resourceBinding), "resourceOverrideSnapshot", namespacedName)
 			return nil, controller.NewAPIServerError(true, err)
 		}
 		for _, selector := range snapshot.Spec.OverrideSpec.ResourceSelectors {

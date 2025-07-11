@@ -64,7 +64,7 @@ type Reconciler struct {
 // Reconcile triggers a single binding reconcile round.
 func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtime.Result, error) {
 	startTime := time.Now()
-	placementKey := controller.GetPlacementKeyFromRequest(req)
+	placementKey := controller.GetObjectKeyFromRequest(req)
 	klog.V(2).InfoS("Start to rollout the bindings", "placementKey", placementKey)
 
 	// add latency log
@@ -146,7 +146,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	}
 
 	// find the master resourceSnapshot.
-	masterResourceSnapshot, err := controller.FetchMasterResourceSnapshot(ctx, r.UncachedReader, string(placementKey))
+	masterResourceSnapshot, err := controller.FetchLatestMasterResourceSnapshot(ctx, r.UncachedReader, string(placementKey))
 	if err != nil {
 		klog.ErrorS(err, "Failed to find the masterResourceSnapshot for the placement",
 			"placement", placementObjRef)

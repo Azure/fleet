@@ -220,7 +220,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 			klog.ErrorS(err, "Failed to extract the resource index from the clusterResourceSnapshot", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", latestResourceSnapshotKObj)
 			return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
 		}
-		selectedResourceIDs, err = controller.CollectResourceIdentifiersUsingMasterClusterResourceSnapshot(ctx, r.Client, crp.Name, latestResourceSnapshot, strconv.Itoa(latestResourceSnapshotIndex))
+		selectedResourceIDs, err = controller.CollectResourceIdentifiersUsingMasterResourceSnapshot(ctx, r.Client, crp.Name, latestResourceSnapshot, strconv.Itoa(latestResourceSnapshotIndex))
 		if err != nil {
 			klog.ErrorS(err, "Failed to collect resource identifiers from the clusterResourceSnapshot", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", latestResourceSnapshotKObj)
 			return ctrl.Result{}, err
@@ -1149,7 +1149,7 @@ func (r *Reconciler) determineRolloutStateForCRPWithExternalRolloutStrategy(
 		crp.Status.SelectedResources = selectedResourceIDs
 	} else {
 		crp.Status.ObservedResourceIndex = observedResourceIndex
-		selectedResources, err := controller.CollectResourceIdentifiersFromClusterResourceSnapshot(ctx, r.Client, crp.Name, observedResourceIndex)
+		selectedResources, err := controller.CollectResourceIdentifiersFromResourceSnapshot(ctx, r.Client, crp.Name, observedResourceIndex)
 		if err != nil {
 			klog.ErrorS(err, "Failed to collect resource identifiers from clusterResourceSnapshot", "clusterResourcePlacement", klog.KObj(crp), "resourceSnapshotIndex", observedResourceIndex)
 			return false, err

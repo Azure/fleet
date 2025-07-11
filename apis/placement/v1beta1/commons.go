@@ -78,6 +78,9 @@ const (
 	// The name of the first work is {crpName}-{subindex}.
 	WorkNameWithSubindexFmt = "%s-%d"
 
+	// WorkNameBaseFmt is the format of the base name of the work. It's formatted as {namespace}.{placementName}.
+	WorkNameBaseFmt = "%s.%s"
+
 	// WorkNameWithConfigEnvelopeFmt is the format of the name of a work generated with a config envelope.
 	// The format is {workPrefix}-configMap-uuid.
 	WorkNameWithConfigEnvelopeFmt = "%s-configmap-%s"
@@ -100,6 +103,9 @@ const (
 
 	// ParentBindingLabel is the label applied to work that contains the name of the binding that generates the work.
 	ParentBindingLabel = fleetPrefix + "parent-resource-binding"
+
+	// ParentNamespaceLabel is the label applied to work that contains the namespace of the binding that generates the work.
+	ParentNamespaceLabel = fleetPrefix + "parent-placement-namespace"
 
 	// CRPGenerationAnnotation indicates the generation of the CRP from which an object is derived or last updated.
 	CRPGenerationAnnotation = fleetPrefix + "CRP-generation"

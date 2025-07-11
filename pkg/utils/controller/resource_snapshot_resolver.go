@@ -27,8 +27,8 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/queue"
 )
 
-// FetchMasterResourceSnapshot fetches the master ResourceSnapshot for a given placement key.
-func FetchMasterResourceSnapshot(ctx context.Context, k8Client client.Reader, placementKey string) (fleetv1beta1.ResourceSnapshotObj, error) {
+// FetchLatestMasterResourceSnapshot fetches the master ResourceSnapshot for a given placement key.
+func FetchLatestMasterResourceSnapshot(ctx context.Context, k8Client client.Reader, placementKey string) (fleetv1beta1.ResourceSnapshotObj, error) {
 	// Extract namespace and name from the placement key
 	namespace, name, err := ExtractNamespaceNameFromKey(queue.PlacementKey(placementKey))
 	if err != nil {

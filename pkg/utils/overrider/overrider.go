@@ -68,7 +68,7 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 		return nil, nil, nil // no overrides and nothing to do
 	}
 
-	resourceSnapshots, err := controller.FetchAllClusterResourceSnapshots(ctx, c, placementKey, masterResourceSnapshot)
+	resourceSnapshots, err := controller.FetchAllResourceSnapshots(ctx, c, placementKey, masterResourceSnapshot)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -481,7 +481,7 @@ func TestFetchAllClusterResourceSnapshots(t *testing.T) {
 				WithScheme(scheme).
 				WithObjects(objects...).
 				Build()
-			got, err := FetchAllClusterResourceSnapshots(context.Background(), fakeClient, crpName, tc.master)
+			got, err := FetchAllResourceSnapshots(context.Background(), fakeClient, crpName, tc.master)
 			if gotErr, wantErr := err != nil, tc.wantErr != nil; gotErr != wantErr || !errors.Is(err, tc.wantErr) {
 				t.Fatalf("FetchAllClusterResourceSnapshots() got error %v, want error %v", err, tc.wantErr)
 			}
@@ -778,7 +778,7 @@ func TestCollectResourceIdentifiersFromClusterResourceSnapshot(t *testing.T) {
 				WithScheme(scheme).
 				WithObjects(objects...).
 				Build()
-			got, err := CollectResourceIdentifiersFromClusterResourceSnapshot(context.Background(), fakeClient, crpName, tc.resourceSnapshotIndex)
+			got, err := CollectResourceIdentifiersFromResourceSnapshot(context.Background(), fakeClient, crpName, tc.resourceSnapshotIndex)
 			if gotErr, wantErr := err != nil, tc.wantErr != nil; gotErr != wantErr || !errors.Is(err, tc.wantErr) {
 				t.Fatalf("CollectResourceIdentifiersFromClusterResourceSnapshot() got error %v, want error %v", err, tc.wantErr)
 			}
@@ -1107,7 +1107,7 @@ func TestCollectResourceIdentifiersUsingMasterClusterResourceSnapshot(t *testing
 				WithScheme(scheme).
 				WithObjects(objects...).
 				Build()
-			got, err := CollectResourceIdentifiersUsingMasterClusterResourceSnapshot(context.Background(), fakeClient, crpName, tc.masterResourceSnapshot, tc.resourceSnapshotIndex)
+			got, err := CollectResourceIdentifiersUsingMasterResourceSnapshot(context.Background(), fakeClient, crpName, tc.masterResourceSnapshot, tc.resourceSnapshotIndex)
 			if gotErr, wantErr := err != nil, tc.wantErr != nil; gotErr != wantErr || !errors.Is(err, tc.wantErr) {
 				t.Fatalf("CollectResourceIdentifiersFromClusterResourceSnapshot() got error %v, want error %v", err, tc.wantErr)
 			}
