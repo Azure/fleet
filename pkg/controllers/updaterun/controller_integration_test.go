@@ -448,7 +448,7 @@ func generateTestClusterResourceBinding(policySnapshotName, targetCluster string
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "binding-" + testResourceSnapshotName + "-" + targetCluster,
 			Labels: map[string]string{
-				placementv1beta1.CRPTrackingLabel: testCRPName,
+				placementv1beta1.PlacementTrackingLabel: testCRPName,
 			},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
@@ -571,9 +571,9 @@ func generateTestClusterResourceSnapshot() *placementv1beta1.ClusterResourceSnap
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testResourceSnapshotName,
 			Labels: map[string]string{
-				placementv1beta1.CRPTrackingLabel:      testCRPName,
-				placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
-				placementv1beta1.ResourceIndexLabel:    testResourceSnapshotIndex,
+				placementv1beta1.PlacementTrackingLabel: testCRPName,
+				placementv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
+				placementv1beta1.ResourceIndexLabel:     testResourceSnapshotIndex,
 			},
 			Annotations: map[string]string{
 				placementv1beta1.ResourceGroupHashAnnotation:         "hash",

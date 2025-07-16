@@ -108,7 +108,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 			crb := placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   crbName,
-					Labels: map[string]string{placementv1beta1.CRPTrackingLabel: crpName},
+					Labels: map[string]string{placementv1beta1.PlacementTrackingLabel: crpName},
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
 					State:                        placementv1beta1.BindingStateBound,
@@ -187,7 +187,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 			crb := placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   crbName,
-					Labels: map[string]string{placementv1beta1.CRPTrackingLabel: crpName},
+					Labels: map[string]string{placementv1beta1.PlacementTrackingLabel: crpName},
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
 					State:                        placementv1beta1.BindingStateBound,
@@ -287,7 +287,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 			crb := placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   crbName,
-					Labels: map[string]string{placementv1beta1.CRPTrackingLabel: crpName},
+					Labels: map[string]string{placementv1beta1.PlacementTrackingLabel: crpName},
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
 					State:                        placementv1beta1.BindingStateBound,
@@ -367,7 +367,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 			crb := placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   crbName,
-					Labels: map[string]string{placementv1beta1.CRPTrackingLabel: crpName},
+					Labels: map[string]string{placementv1beta1.PlacementTrackingLabel: crpName},
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
 					State:                        placementv1beta1.BindingStateBound,
@@ -386,7 +386,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 			anotherCRB := placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   anotherCRBName,
-					Labels: map[string]string{placementv1beta1.CRPTrackingLabel: crpName},
+					Labels: map[string]string{placementv1beta1.PlacementTrackingLabel: crpName},
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
 					State:                        placementv1beta1.BindingStateBound,
@@ -557,7 +557,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 				crb := placementv1beta1.ClusterResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:   crbName,
-						Labels: map[string]string{placementv1beta1.CRPTrackingLabel: crpName},
+						Labels: map[string]string{placementv1beta1.PlacementTrackingLabel: crpName},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateBound,
@@ -805,7 +805,7 @@ func ensureCRBRemoved(name string) {
 func ensureAllBindingsAreRemoved(crpName string) {
 	// List all bindings associated with the given CRP.
 	bindingList := &placementv1beta1.ClusterResourceBindingList{}
-	labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
+	labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.PlacementTrackingLabel: crpName})
 	listOptions := &client.ListOptions{LabelSelector: labelSelector}
 	Expect(k8sClient.List(ctx, bindingList, listOptions)).Should(Succeed())
 

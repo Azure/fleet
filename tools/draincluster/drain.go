@@ -171,7 +171,7 @@ func (h *helper) fetchClusterResourcePlacementNamesToEvict(ctx context.Context) 
 	for i := range crbList.Items {
 		crb := crbList.Items[i]
 		if crb.Spec.TargetCluster == h.clusterName && crb.DeletionTimestamp == nil {
-			crpName, ok := crb.GetLabels()[placementv1beta1.CRPTrackingLabel]
+			crpName, ok := crb.GetLabels()[placementv1beta1.PlacementTrackingLabel]
 			if !ok {
 				return map[string]bool{}, fmt.Errorf("failed to get CRP name from binding %s", crb.Name)
 			}

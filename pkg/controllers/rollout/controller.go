@@ -64,7 +64,7 @@ type Reconciler struct {
 // Reconcile triggers a single binding reconcile round.
 func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtime.Result, error) {
 	startTime := time.Now()
-	placementKey := controller.GetObjectKeyFromRequest(req)
+	placementKey := req.NamespacedName
 	klog.V(2).InfoS("Start to rollout the bindings", "placementKey", placementKey)
 
 	// add latency log
@@ -73,7 +73,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	}()
 
 	// Get the placement object (either ClusterResourcePlacement or ResourcePlacement)
-	placementObj, err := controller.FetchPlacementFromKey(ctx, r.Client, placementKey)
+	placementObj, err := controller.FetchPlacementFromKey(ctx, r.Client, controller.GetObjectKeyFromRequest(req))
 	if err != nil {
 		if errors.IsNotFound(err) {
 			klog.V(4).InfoS("Ignoring NotFound placement", "placementKey", placementKey)
@@ -146,7 +146,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	}
 
 	// find the master resourceSnapshot.
-	masterResourceSnapshot, err := controller.FetchLatestMasterResourceSnapshot(ctx, r.UncachedReader, string(placementKey))
+	masterResourceSnapshot, err := controller.FetchLatestMasterResourceSnapshot(ctx, r.UncachedReader, placementKey)
 	if err != nil {
 		klog.ErrorS(err, "Failed to find the masterResourceSnapshot for the placement",
 			"placement", placementObjRef)
@@ -158,7 +158,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	// This will result in one of the override is removed by the rollout controller so the first instance of the updated cluster can experience
 	// a complete removal of the override effect following by applying the new override effect.
 	// TODO: detect this situation in the FetchAllMatchingOverridesForResourceSnapshot and retry here
-	matchedCRO, matchedRO, err := overrider.FetchAllMatchingOverridesForResourceSnapshot(ctx, r.Client, r.InformerManager, string(placementKey), masterResourceSnapshot)
+	matchedCRO, matchedRO, err := overrider.FetchAllMatchingOverridesForResourceSnapshot(ctx, r.Client, r.InformerManager, string(controller.GetObjectKeyFromRequest(req)), masterResourceSnapshot)
 	if err != nil {
 		klog.ErrorS(err, "Failed to find all matching overrides for the placement", "placement", placementObjRef)
 		return runtime.Result{}, err
@@ -865,7 +865,7 @@ func handleResourceSnapshot(snapshot client.Object, q workqueue.TypedRateLimitin
 		return
 	}
 	// get the placement name from the label
-	placementName := snapshot.GetLabels()[fleetv1beta1.CRPTrackingLabel]
+	placementName := snapshot.GetLabels()[fleetv1beta1.PlacementTrackingLabel]
 	if len(placementName) == 0 {
 		// should never happen, we might be able to alert on this error
 		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("cannot find CRPTrackingLabel label value")),
@@ -882,7 +882,7 @@ func handleResourceSnapshot(snapshot client.Object, q workqueue.TypedRateLimitin
 func enqueueResourceBinding(binding client.Object, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	bindingRef := klog.KObj(binding)
 	// get the placement name from the label
-	placementName := binding.GetLabels()[fleetv1beta1.CRPTrackingLabel]
+	placementName := binding.GetLabels()[fleetv1beta1.PlacementTrackingLabel]
 	if len(placementName) == 0 {
 		// should never happen
 		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("cannot find CRPTrackingLabel label value")),

@@ -166,7 +166,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		It("Should create a new latest resource snapshot", func() {
 			crsList := &placementv1beta1.ClusterResourceSnapshotList{}
 			Eventually(func() error {
-				if err := hubClient.List(ctx, crsList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName, placementv1beta1.IsLatestSnapshotLabel: "true"}); err != nil {
+				if err := hubClient.List(ctx, crsList, client.MatchingLabels{placementv1beta1.PlacementTrackingLabel: crpName, placementv1beta1.IsLatestSnapshotLabel: "true"}); err != nil {
 					return fmt.Errorf("failed to list the resourcesnapshot: %w", err)
 				}
 				if len(crsList.Items) != 1 {
@@ -1031,7 +1031,7 @@ var _ = Describe("Test member cluster join and leave flow with updateRun", Order
 		It("Should verify cluster member 1 binding is deleted but resources are kept on member cluster 1", func() {
 			Eventually(func() error {
 				bindingList := &placementv1beta1.ClusterResourceBindingList{}
-				matchingLabels := client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName}
+				matchingLabels := client.MatchingLabels{placementv1beta1.PlacementTrackingLabel: crpName}
 				if err := hubClient.List(ctx, bindingList, matchingLabels); err != nil {
 					return fmt.Errorf("failed to list bindings: %w", err)
 				}
@@ -1257,8 +1257,8 @@ func validateLatestPolicySnapshot(crpName, wantPolicySnapshotIndex string, wantS
 	Eventually(func() (string, error) {
 		var policySnapshotList placementv1beta1.ClusterSchedulingPolicySnapshotList
 		if err := hubClient.List(ctx, &policySnapshotList, client.MatchingLabels{
-			placementv1beta1.CRPTrackingLabel:      crpName,
-			placementv1beta1.IsLatestSnapshotLabel: "true",
+			placementv1beta1.PlacementTrackingLabel: crpName,
+			placementv1beta1.IsLatestSnapshotLabel:  "true",
 		}); err != nil {
 			return "", fmt.Errorf("failed to list the latest scheduling policy snapshot: %w", err)
 		}
@@ -1287,8 +1287,8 @@ func validateLatestResourceSnapshot(crpName, wantResourceSnapshotIndex string) {
 	Eventually(func() (string, error) {
 		crsList := &placementv1beta1.ClusterResourceSnapshotList{}
 		if err := hubClient.List(ctx, crsList, client.MatchingLabels{
-			placementv1beta1.CRPTrackingLabel:      crpName,
-			placementv1beta1.IsLatestSnapshotLabel: "true",
+			placementv1beta1.PlacementTrackingLabel: crpName,
+			placementv1beta1.IsLatestSnapshotLabel:  "true",
 		}); err != nil {
 			return "", fmt.Errorf("failed to list the latestresourcesnapshot: %w", err)
 		}

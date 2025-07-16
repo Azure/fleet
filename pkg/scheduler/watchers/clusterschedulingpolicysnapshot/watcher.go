@@ -97,7 +97,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Retrieve the owner CRP.
-	crpName, ok := policySnapshot.Labels[fleetv1beta1.CRPTrackingLabel]
+	crpName, ok := policySnapshot.Labels[fleetv1beta1.PlacementTrackingLabel]
 	if !ok {
 		// The CRPTracking label is not present; normally this should never occur.
 		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("CRPTrackingLabel is missing")),

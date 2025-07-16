@@ -148,9 +148,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+							fleetv1beta1.PolicyIndexLabel:       "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: "another-crp",
 						},
 					},
 				},
@@ -160,9 +160,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+							fleetv1beta1.PolicyIndexLabel:       "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: "another-crp",
 						},
 					},
 				},
@@ -171,9 +171,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -204,9 +204,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+							fleetv1beta1.PolicyIndexLabel:       "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: "another-crp",
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.CRPGenerationAnnotation: "1",
@@ -219,9 +219,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+							fleetv1beta1.PolicyIndexLabel:       "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: "another-crp",
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.CRPGenerationAnnotation: "1",
@@ -233,9 +233,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -266,9 +266,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -295,9 +295,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -332,9 +332,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 3),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "3",
-							fleetv1beta1.IsLatestSnapshotLabel: "false",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "3",
+							fleetv1beta1.IsLatestSnapshotLabel:  "false",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -355,9 +355,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "false",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "false",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -380,9 +380,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 3),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "3",
-							fleetv1beta1.IsLatestSnapshotLabel: "false",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "3",
+							fleetv1beta1.IsLatestSnapshotLabel:  "false",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -403,9 +403,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 4),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "4",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "4",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -438,9 +438,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -463,9 +463,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -497,9 +497,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "false",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "false",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -523,8 +523,8 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel: "1",
-							fleetv1beta1.CRPTrackingLabel: testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "1",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -551,9 +551,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "false",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "false",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -577,9 +577,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -613,9 +613,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "false",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "false",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -639,9 +639,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "1",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.PolicyIndexLabel:       "1",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -668,9 +668,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "false",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "false",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -694,9 +694,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -786,8 +786,8 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -808,9 +808,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "0bc",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "0bc",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -831,8 +831,8 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel: "abc",
-							fleetv1beta1.CRPTrackingLabel: testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "abc",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -847,8 +847,8 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel: "abc",
-							fleetv1beta1.CRPTrackingLabel: testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "abc",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -869,9 +869,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "0",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.PolicyIndexLabel:       "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -886,9 +886,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "1",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.PolicyIndexLabel:       "1",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -909,8 +909,8 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel: "-1",
-							fleetv1beta1.CRPTrackingLabel: testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "-1",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -931,9 +931,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -963,8 +963,8 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel: "1",
-							fleetv1beta1.CRPTrackingLabel: testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "1",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -994,9 +994,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1098,9 +1098,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: "another-crp",
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
@@ -1114,9 +1114,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: "another-crp",
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
@@ -1129,9 +1129,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1162,9 +1162,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1188,9 +1188,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1223,8 +1223,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1246,8 +1246,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1268,8 +1268,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1290,8 +1290,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "1",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1317,9 +1317,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 2),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "2",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "2",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1351,9 +1351,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1376,8 +1376,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1398,8 +1398,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1422,9 +1422,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1448,8 +1448,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1470,8 +1470,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1502,9 +1502,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1528,8 +1528,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1550,8 +1550,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1574,8 +1574,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1596,8 +1596,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1618,9 +1618,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
-							fleetv1beta1.IsLatestSnapshotLabel: "false",
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
+							fleetv1beta1.IsLatestSnapshotLabel:  "false",
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1644,9 +1644,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1676,8 +1676,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1701,8 +1701,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1725,8 +1725,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1747,9 +1747,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1780,9 +1780,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1805,8 +1805,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1835,9 +1835,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1863,9 +1863,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1888,8 +1888,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1910,8 +1910,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1941,9 +1941,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1968,8 +1968,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -1990,8 +1990,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2014,9 +2014,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2039,8 +2039,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 1, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "1",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2070,9 +2070,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2096,8 +2096,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2118,8 +2118,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2142,9 +2142,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2169,8 +2169,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2191,8 +2191,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2223,9 +2223,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2250,8 +2250,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2274,9 +2274,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2308,9 +2308,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2337,9 +2337,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "false",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "false",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2363,9 +2363,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 2),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "2",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "2",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2388,8 +2388,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 2, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "2",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "2",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2419,9 +2419,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2445,8 +2445,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 1, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "1",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2469,9 +2469,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2494,8 +2494,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 1, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "1",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2525,9 +2525,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "false",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "false",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2551,9 +2551,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "false",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "false",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2576,8 +2576,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 1, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "1",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2600,9 +2600,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "false",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "false",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2625,9 +2625,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2650,8 +2650,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 1, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "1",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2769,8 +2769,8 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
@@ -2787,9 +2787,9 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
-							fleetv1beta1.ResourceIndexLabel:    "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
 						},
 					},
 				},
@@ -2803,8 +2803,8 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
-							fleetv1beta1.ResourceIndexLabel: "abc",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "abc",
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
@@ -2821,8 +2821,8 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
-							fleetv1beta1.ResourceIndexLabel: "abc",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "abc",
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
@@ -2833,8 +2833,8 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
-							fleetv1beta1.ResourceIndexLabel: "abc",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "abc",
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
@@ -2851,8 +2851,8 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
-							fleetv1beta1.ResourceIndexLabel: "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation:         "0",
@@ -2864,8 +2864,8 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2885,8 +2885,8 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
-							fleetv1beta1.ResourceIndexLabel: "1",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
@@ -2898,8 +2898,8 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 1, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2925,8 +2925,8 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
-							fleetv1beta1.ResourceIndexLabel: "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation:         "0",
@@ -2938,8 +2938,8 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 0, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2959,8 +2959,8 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
-							fleetv1beta1.ResourceIndexLabel: "1",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
@@ -2972,8 +2972,8 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 1, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -2999,9 +2999,9 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -3022,9 +3022,9 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -3051,8 +3051,8 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "-12",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "-12",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -3182,9 +3182,9 @@ func TestHandleDelete(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+							fleetv1beta1.PolicyIndexLabel:       "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: "another-crp",
 						},
 					},
 				},
@@ -3192,9 +3192,9 @@ func TestHandleDelete(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -3216,9 +3216,9 @@ func TestHandleDelete(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: "another-crp",
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
@@ -3229,9 +3229,9 @@ func TestHandleDelete(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -3250,9 +3250,9 @@ func TestHandleDelete(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+							fleetv1beta1.PolicyIndexLabel:       "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: "another-crp",
 						},
 					},
 				},
@@ -3262,9 +3262,9 @@ func TestHandleDelete(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: "another-crp",
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
@@ -3280,8 +3280,8 @@ func TestHandleDelete(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel: testCRPName,
+							fleetv1beta1.PolicyIndexLabel:       "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -3303,8 +3303,8 @@ func TestHandleDelete(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "0",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -3328,9 +3328,9 @@ func TestHandleDelete(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+							fleetv1beta1.PolicyIndexLabel:       "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: "another-crp",
 						},
 					},
 				},
@@ -3340,9 +3340,9 @@ func TestHandleDelete(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: "another-crp",
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
@@ -3355,9 +3355,9 @@ func TestHandleDelete(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
 						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+							fleetv1beta1.PolicyIndexLabel:       "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: "another-crp",
 						},
 					},
 				},
@@ -3367,9 +3367,9 @@ func TestHandleDelete(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel:    "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+							fleetv1beta1.ResourceIndexLabel:     "1",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+							fleetv1beta1.PlacementTrackingLabel: "another-crp",
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
@@ -4006,8 +4006,8 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 2, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "2",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "2",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
@@ -4060,8 +4060,8 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 2),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "2",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "2",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
@@ -4127,8 +4127,8 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 2),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "2",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "2",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
@@ -4202,8 +4202,8 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 2),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "2",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "2",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
@@ -4220,8 +4220,8 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 2, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "2",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "2",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
@@ -4346,8 +4346,8 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 2),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "2",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "2",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
@@ -4364,8 +4364,8 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, 2, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "2",
-							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ResourceIndexLabel:     "2",
+							fleetv1beta1.PlacementTrackingLabel: testCRPName,
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",

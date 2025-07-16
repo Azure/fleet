@@ -27,6 +27,7 @@ import (
 
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
@@ -103,7 +104,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 	// Retrieve the next item (name of a placement) from the work queue.
 	//
 	// Note that this will block if no item is available.
-	placementName, closed := s.queue.NextPlacementKey()
+	placementKey, closed := s.queue.NextPlacementKey()
 	if closed {
 		// End the run immediately if the work queue has been closed.
 		klog.InfoS("Work queue has been closed")
@@ -115,7 +116,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 		//
 		// Note that this will happen even if an error occurs. Should the key get requeued by Add()
 		// during the call, it will be added to the queue after this call returns.
-		s.queue.Done(placementName)
+		s.queue.Done(placementKey)
 	}()
 
 	// keep track of the number of active scheduling loop
@@ -123,7 +124,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 	defer metrics.SchedulerActiveWorkers.WithLabelValues().Add(-1)
 
 	startTime := time.Now()
-	placementRef := klog.KRef("", string(placementName))
+	placementRef := klog.KRef("", string(placementKey))
 	klog.V(2).InfoS("Schedule once started", "placement", placementRef, "worker", worker)
 	defer func() {
 		// Note that the time spent on pulling keys from the work queue (and the time spent on waiting
@@ -134,7 +135,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 	}()
 
 	// Retrieve the placement object (either ClusterResourcePlacement or ResourcePlacement).
-	placement, err := controller.FetchPlacementFromKey(ctx, s.client, placementName)
+	placement, err := controller.FetchPlacementFromKey(ctx, s.client, placementKey)
 	if err != nil {
 		if apiErrors.IsNotFound(err) {
 			// The placement has been gone before the scheduler gets a chance to
@@ -156,7 +157,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 		klog.ErrorS(controller.NewAPIServerError(true, err), "Failed to get placement", "placement", placementRef)
 
 		// Requeue for later processing.
-		s.queue.AddRateLimited(placementName)
+		s.queue.AddRateLimited(placementKey)
 		return
 	}
 
@@ -171,7 +172,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 					return
 				}
 				// Requeue for later processing.
-				s.queue.AddRateLimited(placementName)
+				s.queue.AddRateLimited(placementKey)
 				return
 			}
 		}
@@ -179,7 +180,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 		// additional handling is needed.
 
 		// Untrack the key from the rate limiter.
-		s.queue.Forget(placementName)
+		s.queue.Forget(placementKey)
 		return
 	}
 
@@ -193,7 +194,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 		// snapshot is created.
 
 		// Untrack the key for quicker reprocessing.
-		s.queue.Forget(placementName)
+		s.queue.Forget(placementKey)
 		return
 	}
 
@@ -201,7 +202,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 	if err := s.addSchedulerCleanUpFinalizer(ctx, placement); err != nil {
 		klog.ErrorS(err, "Failed to add scheduler cleanup finalizer", "placement", placementRef)
 		// Requeue for later processing.
-		s.queue.AddRateLimited(placementName)
+		s.queue.AddRateLimited(placementKey)
 		return
 	}
 
@@ -222,7 +223,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 		}
 		// Requeue for later processing.
 		klog.ErrorS(err, "Failed to run scheduling cycle", "placement", placementRef)
-		s.queue.AddRateLimited(placementName)
+		s.queue.AddRateLimited(placementKey)
 		observeSchedulingCycleMetrics(cycleStartTime, true, true)
 		return
 	}
@@ -230,12 +231,12 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 	// Requeue if the scheduling cycle suggests so.
 	if res.Requeue {
 		if res.RequeueAfter > 0 {
-			s.queue.AddAfter(placementName, res.RequeueAfter)
+			s.queue.AddAfter(placementKey, res.RequeueAfter)
 			observeSchedulingCycleMetrics(cycleStartTime, false, true)
 			return
 		}
 		// Untrack the key from the rate limiter.
-		s.queue.Forget(placementName)
+		s.queue.Forget(placementKey)
 		// Requeue for later processing.
 		//
 		// Note that the key is added directly to the queue without having to wait for any rate limiter's
@@ -244,11 +245,11 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 		// one cycle (e.g., a plugin sets up a per-cycle batch limit, and consequently the scheduler must
 		// finish the scheduling in multiple cycles); in such cases, rate limiter should not add
 		// any delay to the requeues.
-		s.queue.Add(placementName)
+		s.queue.Add(placementKey)
 		observeSchedulingCycleMetrics(cycleStartTime, false, true)
 	} else {
 		// no more failure, the following queue don't need to be rate limited
-		s.queue.Forget(placementName)
+		s.queue.Forget(placementKey)
 		observeSchedulingCycleMetrics(cycleStartTime, false, false)
 	}
 }
@@ -298,15 +299,12 @@ func (s *Scheduler) Run(ctx context.Context) {
 func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, placement fleetv1beta1.PlacementObj) error {
 	placementRef := klog.KObj(placement)
 
-	// Get the placement key which handles both cluster-scoped and namespaced placements
-	placementKey := controller.GetObjectKeyFromObj(placement)
-
 	// List all bindings derived from the placement.
 	//
 	// Note that the listing is performed using the uncached client; this is to ensure that all related
 	// bindings can be found, even if they have not been synced to the cache yet.
 	// TO-DO (chenyu1): this is a very expensive op; explore options for optimization.
-	bindings, err := controller.ListBindingsFromKey(ctx, s.uncachedReader, placementKey)
+	bindings, err := controller.ListBindingsFromKey(ctx, s.uncachedReader, types.NamespacedName{Namespace: placement.GetNamespace(), Name: placement.GetName()})
 	if err != nil {
 		klog.ErrorS(err, "Failed to list all bindings", "placement", placementRef)
 		return err
@@ -322,7 +320,7 @@ func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, placement fleetv1
 	// run the deletion.
 	for idx := range bindings {
 		binding := bindings[idx]
-		controllerutil.RemoveFinalizer(binding, fleetv1beta1.SchedulerCRBCleanupFinalizer)
+		controllerutil.RemoveFinalizer(binding, fleetv1beta1.SchedulerBindingCleanupFinalizer)
 		if err := s.client.Update(ctx, binding); err != nil {
 			klog.ErrorS(err, "Failed to remove scheduler reconcile finalizer from binding", "binding", klog.KObj(binding))
 			return controller.NewUpdateIgnoreConflictError(err)
@@ -354,8 +352,8 @@ func (s *Scheduler) lookupLatestPolicySnapshot(ctx context.Context, placement fl
 	// Prepare the list options to filter policy snapshots by the placement name and the latest snapshot label.
 	var listOptions []client.ListOption
 	labelSelector := labels.SelectorFromSet(labels.Set{
-		fleetv1beta1.CRPTrackingLabel:      placement.GetName(),
-		fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+		fleetv1beta1.PlacementTrackingLabel: placement.GetName(),
+		fleetv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
 	})
 	listOptions = append(listOptions, &client.ListOptions{LabelSelector: labelSelector})
 	// Find out the latest policy snapshot associated with the placement.

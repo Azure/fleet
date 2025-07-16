@@ -59,10 +59,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Check if the CRB has been deleted and has the scheduler CRB cleanup finalizer.
-	if crb.DeletionTimestamp != nil && controllerutil.ContainsFinalizer(crb, fleetv1beta1.SchedulerCRBCleanupFinalizer) {
+	if crb.DeletionTimestamp != nil && controllerutil.ContainsFinalizer(crb, fleetv1beta1.SchedulerBindingCleanupFinalizer) {
 		// The CRB has been deleted and still has the scheduler CRB cleanup finalizer; enqueue it's corresponding CRP
 		// for the scheduler to process.
-		crpName, exist := crb.GetLabels()[fleetv1beta1.CRPTrackingLabel]
+		crpName, exist := crb.GetLabels()[fleetv1beta1.PlacementTrackingLabel]
 		if !exist {
 			err := controller.NewUnexpectedBehaviorError(fmt.Errorf("clusterResourceBinding %s doesn't have CRP tracking label", crb.Name))
 			klog.ErrorS(err, "Failed to enqueue CRP name for CRB")

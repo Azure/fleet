@@ -746,7 +746,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 		It("Should fail to initialize if the specified resource snapshot is not found - no CRP label found", func() {
 			By("Creating a new resource snapshot associated with another CRP")
-			resourceSnapshot.Labels[placementv1beta1.CRPTrackingLabel] = "not-exist-crp"
+			resourceSnapshot.Labels[placementv1beta1.PlacementTrackingLabel] = "not-exist-crp"
 			Expect(k8sClient.Create(ctx, resourceSnapshot)).To(Succeed())
 
 			By("Creating a new clusterStagedUpdateRun")

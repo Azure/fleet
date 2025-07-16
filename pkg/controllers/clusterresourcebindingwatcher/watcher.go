@@ -69,7 +69,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Fetch the CRP name from the CRPTrackingLabel on ClusterResourceBinding.
-	crpName := binding.Labels[fleetv1beta1.CRPTrackingLabel]
+	crpName := binding.Labels[fleetv1beta1.PlacementTrackingLabel]
 	if len(crpName) == 0 {
 		// The CRPTrackingLabel label is not present; normally this should never occur.
 		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("CRPTrackingLabel is missing or value is empty")),

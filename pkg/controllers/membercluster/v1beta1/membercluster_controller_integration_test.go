@@ -234,7 +234,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 						Namespace: namespaceName,
 						Labels: map[string]string{
 							placementv1beta1.ParentBindingLabel:               "resourceBindingName",
-							placementv1beta1.CRPTrackingLabel:                 "parentCRP",
+							placementv1beta1.PlacementTrackingLabel:           "parentCRP",
 							placementv1beta1.ParentResourceSnapshotIndexLabel: "resourceIndexLabel",
 						},
 						Finalizers: []string{placementv1beta1.WorkFinalizer},

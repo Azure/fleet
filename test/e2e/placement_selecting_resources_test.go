@@ -1434,8 +1434,8 @@ func multipleResourceSnapshotsCreatedActual(wantTotalNumberOfResourceSnapshots, 
 	return func() error {
 		var resourceSnapshotList placementv1beta1.ClusterResourceSnapshotList
 		masterResourceSnapshotLabels := client.MatchingLabels{
-			placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
-			placementv1beta1.CRPTrackingLabel:      crpName,
+			placementv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
+			placementv1beta1.PlacementTrackingLabel: crpName,
 		}
 		if err := hubClient.List(ctx, &resourceSnapshotList, masterResourceSnapshotLabels); err != nil {
 			return err
@@ -1446,7 +1446,7 @@ func multipleResourceSnapshotsCreatedActual(wantTotalNumberOfResourceSnapshots, 
 		}
 		masterResourceSnapshot := resourceSnapshotList.Items[0]
 		// labels to list all existing cluster resource snapshots.
-		resourceSnapshotListLabels := client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName}
+		resourceSnapshotListLabels := client.MatchingLabels{placementv1beta1.PlacementTrackingLabel: crpName}
 		if err := hubClient.List(ctx, &resourceSnapshotList, resourceSnapshotListLabels); err != nil {
 			return err
 		}
@@ -1464,8 +1464,8 @@ func multipleResourceSnapshotsCreatedActual(wantTotalNumberOfResourceSnapshots, 
 		}
 		// labels to list all cluster resource snapshots with master resource index.
 		resourceSnapshotListLabels = client.MatchingLabels{
-			placementv1beta1.ResourceIndexLabel: masterResourceIndex,
-			placementv1beta1.CRPTrackingLabel:   crpName,
+			placementv1beta1.ResourceIndexLabel:     masterResourceIndex,
+			placementv1beta1.PlacementTrackingLabel: crpName,
 		}
 		if err := hubClient.List(ctx, &resourceSnapshotList, resourceSnapshotListLabels); err != nil {
 			return err

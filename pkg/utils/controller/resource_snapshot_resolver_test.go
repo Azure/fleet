@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -49,23 +50,26 @@ func TestFetchMasterResourceSnapshot(t *testing.T) {
 
 	tests := []struct {
 		name             string
-		placementKey     string
+		placementKey     types.NamespacedName
 		objects          []client.Object
 		expectedResult   fleetv1beta1.ResourceSnapshotObj
 		expectedError    string
 		setupClientError bool
 	}{
 		{
-			name:         "successfully fetch master resource snapshot - namespaced",
-			placementKey: "test-namespace/test-crp",
+			name: "successfully fetch master resource snapshot - namespaced",
+			placementKey: types.NamespacedName{
+				Namespace: "test-namespace",
+				Name:      "test-crp",
+			},
 			objects: []client.Object{
 				&fleetv1beta1.ResourceSnapshot{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-snapshot-1",
 						Namespace: "test-namespace",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel:      "test-crp",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.PlacementTrackingLabel: "test-crp",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation: "hash123",
@@ -77,8 +81,8 @@ func TestFetchMasterResourceSnapshot(t *testing.T) {
 						Name:      "test-snapshot-2",
 						Namespace: "test-namespace",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel:      "test-crp",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.PlacementTrackingLabel: "test-crp",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
 						},
 					},
 				},
@@ -88,8 +92,8 @@ func TestFetchMasterResourceSnapshot(t *testing.T) {
 					Name:      "test-snapshot-1",
 					Namespace: "test-namespace",
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel:      "test-crp",
-						fleetv1beta1.IsLatestSnapshotLabel: "true",
+						fleetv1beta1.PlacementTrackingLabel: "test-crp",
+						fleetv1beta1.IsLatestSnapshotLabel:  "true",
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.ResourceGroupHashAnnotation: "hash123",
@@ -98,15 +102,17 @@ func TestFetchMasterResourceSnapshot(t *testing.T) {
 			},
 		},
 		{
-			name:         "successfully fetch master resource snapshot - cluster-scoped",
-			placementKey: "test-crp",
+			name: "successfully fetch master resource snapshot - cluster-scoped",
+			placementKey: types.NamespacedName{
+				Name: "test-crp",
+			},
 			objects: []client.Object{
 				&fleetv1beta1.ClusterResourceSnapshot{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-cluster-snapshot-1",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel:      "test-crp",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.PlacementTrackingLabel: "test-crp",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation: "hash456",
@@ -118,8 +124,8 @@ func TestFetchMasterResourceSnapshot(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-cluster-snapshot-1",
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel:      "test-crp",
-						fleetv1beta1.IsLatestSnapshotLabel: "true",
+						fleetv1beta1.PlacementTrackingLabel: "test-crp",
+						fleetv1beta1.IsLatestSnapshotLabel:  "true",
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.ResourceGroupHashAnnotation: "hash456",
@@ -128,21 +134,27 @@ func TestFetchMasterResourceSnapshot(t *testing.T) {
 			},
 		},
 		{
-			name:         "no resource snapshots found",
-			placementKey: "test-namespace/test-crp",
-			objects:      []client.Object{},
+			name: "no resource snapshots found",
+			placementKey: types.NamespacedName{
+				Namespace: "test-namespace",
+				Name:      "test-crp",
+			},
+			objects: []client.Object{},
 		},
 		{
-			name:         "no master resource snapshot found",
-			placementKey: "test-namespace/test-crp",
+			name: "no master resource snapshot found",
+			placementKey: types.NamespacedName{
+				Namespace: "test-namespace",
+				Name:      "test-crp",
+			},
 			objects: []client.Object{
 				&fleetv1beta1.ResourceSnapshot{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-snapshot-1",
 						Namespace: "test-namespace",
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel:      "test-crp",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.PlacementTrackingLabel: "test-crp",
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
 						},
 					},
 				},
@@ -150,14 +162,11 @@ func TestFetchMasterResourceSnapshot(t *testing.T) {
 			expectedError: "no masterResourceSnapshot found for the placement test-namespace/test-crp",
 		},
 		{
-			name:          "invalid placement key",
-			placementKey:  "invalid//key",
-			objects:       []client.Object{},
-			expectedError: "invalid placement key format",
-		},
-		{
-			name:             "client list error",
-			placementKey:     "test-namespace/test-crp",
+			name: "client list error",
+			placementKey: types.NamespacedName{
+				Namespace: "test-namespace",
+				Name:      "test-crp",
+			},
 			objects:          []client.Object{},
 			setupClientError: true,
 			expectedError:    "failed to list",

@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/types"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/queue"
 )
 
 func TestListBindingsFromKey(t *testing.T) {
@@ -38,27 +39,27 @@ func TestListBindingsFromKey(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		placementKey queue.PlacementKey
+		placementKey types.NamespacedName
 		objects      []client.Object
 		wantErr      bool
 		wantBindings []placementv1beta1.BindingObj
 	}{
 		{
 			name:         "cluster-scoped placement key - no bindings found",
-			placementKey: queue.PlacementKey("test-placement"),
+			placementKey: types.NamespacedName{Name: "test-placement"},
 			objects:      []client.Object{},
 			wantErr:      false,
 			wantBindings: []placementv1beta1.BindingObj{},
 		},
 		{
 			name:         "cluster-scoped placement key - single binding found",
-			placementKey: queue.PlacementKey("test-placement"),
+			placementKey: types.NamespacedName{Name: "test-placement"},
 			objects: []client.Object{
 				&placementv1beta1.ClusterResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-binding-1",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -72,7 +73,7 @@ func TestListBindingsFromKey(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-binding-1",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -83,13 +84,13 @@ func TestListBindingsFromKey(t *testing.T) {
 		},
 		{
 			name:         "cluster-scoped placement key - multiple bindings found",
-			placementKey: queue.PlacementKey("test-placement"),
+			placementKey: types.NamespacedName{Name: "test-placement"},
 			objects: []client.Object{
 				&placementv1beta1.ClusterResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-binding-1",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -100,7 +101,7 @@ func TestListBindingsFromKey(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-binding-2",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -114,7 +115,7 @@ func TestListBindingsFromKey(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-binding-1",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -125,7 +126,7 @@ func TestListBindingsFromKey(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-binding-2",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -136,13 +137,13 @@ func TestListBindingsFromKey(t *testing.T) {
 		},
 		{
 			name:         "cluster-scoped placement key - excludes non-matching bindings",
-			placementKey: queue.PlacementKey("test-placement"),
+			placementKey: types.NamespacedName{Name: "test-placement"},
 			objects: []client.Object{
 				&placementv1beta1.ClusterResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-binding-1",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -153,7 +154,7 @@ func TestListBindingsFromKey(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "other-binding",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "other-placement",
+							placementv1beta1.PlacementTrackingLabel: "other-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -167,7 +168,7 @@ func TestListBindingsFromKey(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-binding-1",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -178,14 +179,14 @@ func TestListBindingsFromKey(t *testing.T) {
 		},
 		{
 			name:         "namespaced placement key - single binding found",
-			placementKey: queue.PlacementKey("test-namespace/test-placement"),
+			placementKey: types.NamespacedName{Namespace: "test-namespace", Name: "test-placement"},
 			objects: []client.Object{
 				&placementv1beta1.ResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-binding-1",
 						Namespace: "test-namespace",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -200,7 +201,7 @@ func TestListBindingsFromKey(t *testing.T) {
 						Name:      "test-binding-1",
 						Namespace: "test-namespace",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -211,14 +212,14 @@ func TestListBindingsFromKey(t *testing.T) {
 		},
 		{
 			name:         "namespaced placement key - excludes wrong namespace",
-			placementKey: queue.PlacementKey("test-namespace/test-placement"),
+			placementKey: types.NamespacedName{Namespace: "test-namespace", Name: "test-placement"},
 			objects: []client.Object{
 				&placementv1beta1.ResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-binding-1",
 						Namespace: "test-namespace",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -230,7 +231,7 @@ func TestListBindingsFromKey(t *testing.T) {
 						Name:      "other-binding",
 						Namespace: "other-namespace",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -245,7 +246,7 @@ func TestListBindingsFromKey(t *testing.T) {
 						Name:      "test-binding-1",
 						Namespace: "test-namespace",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -253,20 +254,6 @@ func TestListBindingsFromKey(t *testing.T) {
 					},
 				},
 			},
-		},
-		{
-			name:         "invalid placement key format - too many separators",
-			placementKey: queue.PlacementKey("namespace/placement/extra"),
-			objects:      []client.Object{},
-			wantErr:      true,
-			wantBindings: nil,
-		},
-		{
-			name:         "invalid placement key format - empty parts",
-			placementKey: queue.PlacementKey("namespace/"),
-			objects:      []client.Object{},
-			wantErr:      true,
-			wantBindings: nil,
 		},
 	}
 
@@ -321,7 +308,7 @@ func TestListBindingsFromKey_ClientError(t *testing.T) {
 		Client: fake.NewClientBuilder().WithScheme(scheme).Build(),
 	}
 
-	_, err := ListBindingsFromKey(ctx, fakeClient, queue.PlacementKey("test-placement"))
+	_, err := ListBindingsFromKey(ctx, fakeClient, types.NamespacedName{Name: "test-placement"})
 
 	if err == nil {
 		t.Fatalf("Expected error but got nil")
@@ -337,14 +324,14 @@ func TestFetchBindingFromKey(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		placementKey queue.PlacementKey
+		placementKey types.NamespacedName
 		objects      []client.Object
 		wantErr      bool
 		wantBinding  placementv1beta1.BindingObj
 	}{
 		{
 			name:         "cluster-scoped placement key - ClusterResourceBinding found",
-			placementKey: queue.PlacementKey("test-placement"),
+			placementKey: types.NamespacedName{Name: "test-placement"},
 			objects: []client.Object{
 				&placementv1beta1.ClusterResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
@@ -367,13 +354,13 @@ func TestFetchBindingFromKey(t *testing.T) {
 		},
 		{
 			name:         "cluster-scoped placement key - ClusterResourceBinding not found",
-			placementKey: queue.PlacementKey("test-placement"),
+			placementKey: types.NamespacedName{Name: "test-placement"},
 			objects: []client.Object{
 				&placementv1beta1.ClusterResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-binding-1",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -384,7 +371,7 @@ func TestFetchBindingFromKey(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "other-binding",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "other-placement",
+							placementv1beta1.PlacementTrackingLabel: "other-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -397,7 +384,7 @@ func TestFetchBindingFromKey(t *testing.T) {
 		},
 		{
 			name:         "namespaced placement key - ResourceBinding found",
-			placementKey: queue.PlacementKey("test-namespace/test-placement"),
+			placementKey: types.NamespacedName{Namespace: "test-namespace", Name: "test-placement"},
 			objects: []client.Object{
 				&placementv1beta1.ResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
@@ -440,7 +427,7 @@ func TestFetchBindingFromKey(t *testing.T) {
 		},
 		{
 			name:         "namespaced placement key - ResourceBinding not found",
-			placementKey: queue.PlacementKey("test-namespace/test-placement"),
+			placementKey: types.NamespacedName{Namespace: "test-namespace", Name: "test-placement"},
 			objects: []client.Object{
 				&placementv1beta1.ResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
@@ -463,20 +450,6 @@ func TestFetchBindingFromKey(t *testing.T) {
 			},
 			wantErr:     true,
 			wantBinding: nil,
-		},
-		{
-			name:         "invalid placement key format - too many separators",
-			placementKey: queue.PlacementKey("namespace/placement/extra"),
-			objects:      []client.Object{},
-			wantErr:      true,
-			wantBinding:  nil,
-		},
-		{
-			name:         "invalid placement key format - empty parts",
-			placementKey: queue.PlacementKey("namespace/"),
-			objects:      []client.Object{},
-			wantErr:      true,
-			wantBinding:  nil,
 		},
 	}
 

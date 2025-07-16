@@ -257,7 +257,7 @@ func (r *Reconciler) buildClusterResourceBindings(ctx context.Context, crp *flee
 	// List all bindings derived from the CRP.
 	bindingList := &fleetv1beta1.ClusterResourceBindingList{}
 	listOptions := client.MatchingLabels{
-		fleetv1beta1.CRPTrackingLabel: crp.Name,
+		fleetv1beta1.PlacementTrackingLabel: crp.Name,
 	}
 	crpKObj := klog.KObj(crp)
 	if err := r.Client.List(ctx, bindingList, listOptions); err != nil {

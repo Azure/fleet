@@ -51,7 +51,7 @@ func TestFetchClusterResourcePlacementNamesToEvict(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-crb1",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-crp1",
+							placementv1beta1.PlacementTrackingLabel: "test-crp1",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -62,7 +62,7 @@ func TestFetchClusterResourcePlacementNamesToEvict(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-crb2",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-crp1",
+							placementv1beta1.PlacementTrackingLabel: "test-crp1",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -73,7 +73,7 @@ func TestFetchClusterResourcePlacementNamesToEvict(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-crb3",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-crp2",
+							placementv1beta1.PlacementTrackingLabel: "test-crp2",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -95,7 +95,7 @@ func TestFetchClusterResourcePlacementNamesToEvict(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-crb1",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-crp1",
+							placementv1beta1.PlacementTrackingLabel: "test-crp1",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -130,7 +130,7 @@ func TestFetchClusterResourcePlacementNamesToEvict(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-crb1",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-crp1",
+							placementv1beta1.PlacementTrackingLabel: "test-crp1",
 						},
 						DeletionTimestamp: &metav1.Time{Time: time.Now()},
 						Finalizers:        []string{"test-finalizer"},

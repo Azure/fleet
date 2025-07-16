@@ -20,25 +20,23 @@ import (
 	"context"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/queue"
 )
 
 // FetchLatestMasterResourceSnapshot fetches the master ResourceSnapshot for a given placement key.
-func FetchLatestMasterResourceSnapshot(ctx context.Context, k8Client client.Reader, placementKey string) (fleetv1beta1.ResourceSnapshotObj, error) {
+func FetchLatestMasterResourceSnapshot(ctx context.Context, k8Client client.Reader, placementKey types.NamespacedName) (fleetv1beta1.ResourceSnapshotObj, error) {
 	// Extract namespace and name from the placement key
-	namespace, name, err := ExtractNamespaceNameFromKey(queue.PlacementKey(placementKey))
-	if err != nil {
-		return nil, err
-	}
+	namespace := placementKey.Namespace
+	name := placementKey.Name
 	var resourceSnapshotList fleetv1beta1.ResourceSnapshotObjList
 	var listOptions []client.ListOption
 	listOptions = append(listOptions, client.MatchingLabels{
-		fleetv1beta1.CRPTrackingLabel:      name,
-		fleetv1beta1.IsLatestSnapshotLabel: "true",
+		fleetv1beta1.PlacementTrackingLabel: name,
+		fleetv1beta1.IsLatestSnapshotLabel:  "true",
 	})
 	// Check if the key contains a namespace separator
 	if namespace != "" {
@@ -70,7 +68,7 @@ func FetchLatestMasterResourceSnapshot(ctx context.Context, k8Client client.Read
 	}
 	// It is possible that no master resourceSnapshot is found, e.g., when the new resourceSnapshot is created but not yet marked as the latest.
 	if masterResourceSnapshot == nil {
-		return nil, fmt.Errorf("no masterResourceSnapshot found for the placement %s", placementKey)
+		return nil, fmt.Errorf("no masterResourceSnapshot found for the placement %v", placementKey)
 	}
 	klog.V(2).InfoS("Found the latest associated masterResourceSnapshot", "placement", placementKey, "masterResourceSnapshot", klog.KObj(masterResourceSnapshot))
 	return masterResourceSnapshot, nil

@@ -63,7 +63,7 @@ func TestGetWorkNamePrefixFromSnapshotName(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "placement-2",
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: "placement",
+						fleetv1beta1.PlacementTrackingLabel: "placement",
 					},
 				},
 			},
@@ -76,7 +76,7 @@ func TestGetWorkNamePrefixFromSnapshotName(t *testing.T) {
 					Name:      "placement-2",
 					Namespace: "test-namespace",
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: "placement",
+						fleetv1beta1.PlacementTrackingLabel: "placement",
 					},
 				},
 			},
@@ -88,7 +88,7 @@ func TestGetWorkNamePrefixFromSnapshotName(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "placement-1-2",
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: "placement",
+						fleetv1beta1.PlacementTrackingLabel: "placement",
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "-1",
@@ -103,7 +103,7 @@ func TestGetWorkNamePrefixFromSnapshotName(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "placement-1-2",
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: "placement",
+						fleetv1beta1.PlacementTrackingLabel: "placement",
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
@@ -119,7 +119,7 @@ func TestGetWorkNamePrefixFromSnapshotName(t *testing.T) {
 					Name:      "placement-1-2",
 					Namespace: "test-namespace",
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: "placement",
+						fleetv1beta1.PlacementTrackingLabel: "placement",
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
@@ -134,7 +134,7 @@ func TestGetWorkNamePrefixFromSnapshotName(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "placement-1-2",
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: "placement",
+						fleetv1beta1.PlacementTrackingLabel: "placement",
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "2",
@@ -149,7 +149,7 @@ func TestGetWorkNamePrefixFromSnapshotName(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "placement-1-2",
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: "placement",
+						fleetv1beta1.PlacementTrackingLabel: "placement",
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "what?",

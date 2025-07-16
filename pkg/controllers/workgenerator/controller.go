@@ -94,8 +94,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 	}()
 
 	// Get the binding using the utility function
-	placementKey := controller.GetObjectKeyFromRequest(req)
-	resourceBinding, err := controller.FetchBindingFromKey(ctx, r.Client, placementKey)
+	bindingKey := types.NamespacedName{Namespace: req.Namespace, Name: req.Name}
+	resourceBinding, err := controller.FetchBindingFromKey(ctx, r.Client, bindingKey)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return controllerruntime.Result{}, nil
@@ -279,8 +279,8 @@ func (r *Reconciler) updateBindingStatusWithRetry(ctx context.Context, resourceB
 		klog.ErrorS(err, "Failed to update the binding status, will retry", "binding", bindingRef, "bindingStatus", resourceBinding.GetBindingStatus())
 		errAfterRetries := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 			// Get the latest binding object using the utility function
-			placementKey := controller.GetObjectKeyFromObj(resourceBinding)
-			latestBinding, err := controller.FetchBindingFromKey(ctx, r.Client, placementKey)
+			bindingKey := types.NamespacedName{Namespace: resourceBinding.GetNamespace(), Name: resourceBinding.GetName()}
+			latestBinding, err := controller.FetchBindingFromKey(ctx, r.Client, bindingKey)
 			if err != nil {
 				return err
 			}
@@ -682,7 +682,7 @@ func areAllWorkSynced(existingWorks map[string]*fleetv1beta1.Work, resourceBindi
 		if !exist {
 			// TODO: remove this block after all the work has the ParentResourceSnapshotNameAnnotation
 			// the parent resource snapshot name is not recorded in the work, we need to construct it from the labels
-			crpName := resourceBinding.GetLabels()[fleetv1beta1.CRPTrackingLabel]
+			crpName := resourceBinding.GetLabels()[fleetv1beta1.PlacementTrackingLabel]
 			index, _ := labels.ExtractResourceSnapshotIndexFromWork(work)
 			recordedName = fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, crpName, index)
 		}
@@ -719,7 +719,7 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 		return nil, controller.NewAPIServerError(true, err)
 	}
 	// get the placement key from the resource binding
-	placemenKey := controller.GetObjectKeyFromNamespaceName(resourceBinding.GetNamespace(), resourceBinding.GetLabels()[fleetv1beta1.CRPTrackingLabel])
+	placemenKey := controller.GetObjectKeyFromNamespaceName(resourceBinding.GetNamespace(), resourceBinding.GetLabels()[fleetv1beta1.PlacementTrackingLabel])
 	return controller.FetchAllResourceSnapshots(ctx, r.Client, placemenKey, masterResourceSnapshot)
 }
 
@@ -729,7 +729,7 @@ func generateSnapshotWorkObj(workName string, resourceBinding fleetv1beta1.Bindi
 	// Create the labels map
 	labels := map[string]string{
 		fleetv1beta1.ParentBindingLabel:               resourceBinding.GetName(),
-		fleetv1beta1.CRPTrackingLabel:                 resourceBinding.GetLabels()[fleetv1beta1.CRPTrackingLabel],
+		fleetv1beta1.PlacementTrackingLabel:           resourceBinding.GetLabels()[fleetv1beta1.PlacementTrackingLabel],
 		fleetv1beta1.ParentResourceSnapshotIndexLabel: resourceSnapshot.GetLabels()[fleetv1beta1.ResourceIndexLabel],
 	}
 	// Add ParentNamespaceLabel if the binding is namespaced
@@ -830,7 +830,7 @@ func (r *Reconciler) upsertWork(ctx context.Context, newWork, existingWork *flee
 func getWorkNamePrefixFromSnapshotName(resourceSnapshot fleetv1beta1.ResourceSnapshotObj) (string, error) {
 	// The validation webhook should make sure the label and annotation are valid on all resource snapshot.
 	// We are just being defensive here.
-	placementName, exist := resourceSnapshot.GetLabels()[fleetv1beta1.CRPTrackingLabel]
+	placementName, exist := resourceSnapshot.GetLabels()[fleetv1beta1.PlacementTrackingLabel]
 	if !exist {
 		return "", controller.NewUnexpectedBehaviorError(fmt.Errorf("resource snapshot %s has an invalid CRP tracking label", controller.GetObjectKeyFromObj(resourceSnapshot)))
 	}

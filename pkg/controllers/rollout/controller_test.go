@@ -104,8 +104,8 @@ func TestReconcilerHandleResourceSnapshot(t *testing.T) {
 			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel:      "placement",
-						fleetv1beta1.IsLatestSnapshotLabel: "true",
+						fleetv1beta1.PlacementTrackingLabel: "placement",
+						fleetv1beta1.IsLatestSnapshotLabel:  "true",
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.ResourceGroupHashAnnotation: "hash",
@@ -118,8 +118,8 @@ func TestReconcilerHandleResourceSnapshot(t *testing.T) {
 			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel:      "placement",
-						fleetv1beta1.IsLatestSnapshotLabel: "true",
+						fleetv1beta1.PlacementTrackingLabel: "placement",
+						fleetv1beta1.IsLatestSnapshotLabel:  "true",
 					},
 				},
 			},
@@ -129,7 +129,7 @@ func TestReconcilerHandleResourceSnapshot(t *testing.T) {
 			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: "placement",
+						fleetv1beta1.PlacementTrackingLabel: "placement",
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.ResourceGroupHashAnnotation: "1",
@@ -142,7 +142,7 @@ func TestReconcilerHandleResourceSnapshot(t *testing.T) {
 			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: "placement",
+						fleetv1beta1.PlacementTrackingLabel: "placement",
 					},
 				},
 			},
@@ -185,7 +185,7 @@ func TestReconcilerHandleResourceBinding(t *testing.T) {
 			resourceBinding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: "placement",
+						fleetv1beta1.PlacementTrackingLabel: "placement",
 					},
 				},
 			},

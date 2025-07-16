@@ -93,8 +93,8 @@ var _ = Describe("cluster scheduling policy snapshot scheduler source controller
 			ObjectMeta: metav1.ObjectMeta{
 				Name: policySnapshotName1,
 				Labels: map[string]string{
-					fleetv1beta1.IsLatestSnapshotLabel: "true",
-					fleetv1beta1.CRPTrackingLabel:      crpName,
+					fleetv1beta1.IsLatestSnapshotLabel:  "true",
+					fleetv1beta1.PlacementTrackingLabel: crpName,
 				},
 				Annotations: map[string]string{
 					fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(int(numOfClusters)),
@@ -179,8 +179,8 @@ var _ = Describe("cluster scheduling policy snapshot scheduler source controller
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policySnapshotName2,
 					Labels: map[string]string{
-						fleetv1beta1.IsLatestSnapshotLabel: "true",
-						fleetv1beta1.CRPTrackingLabel:      crpName,
+						fleetv1beta1.IsLatestSnapshotLabel:  "true",
+						fleetv1beta1.PlacementTrackingLabel: crpName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(int(numOfClusters)),

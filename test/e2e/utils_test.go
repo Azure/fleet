@@ -1071,7 +1071,7 @@ func verifyWorkPropagationAndMarkAsAvailable(memberClusterName, crpName string, 
 	Eventually(func() error {
 		workList = placementv1beta1.WorkList{}
 		matchLabelOptions := client.MatchingLabels{
-			placementv1beta1.CRPTrackingLabel: crpName,
+			placementv1beta1.PlacementTrackingLabel: crpName,
 		}
 		if err := hubClient.List(ctx, &workList, client.InNamespace(memberClusterReservedNS), matchLabelOptions); err != nil {
 			return err

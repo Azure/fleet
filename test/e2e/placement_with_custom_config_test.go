@@ -114,7 +114,7 @@ var _ = Describe("validating CRP when using customized resourceSnapshotCreationM
 	It("validating the clusterResourceSnapshots are created", func() {
 		var resourceSnapshotList placementv1beta1.ClusterResourceSnapshotList
 		masterResourceSnapshotLabels := client.MatchingLabels{
-			placementv1beta1.CRPTrackingLabel: crpName,
+			placementv1beta1.PlacementTrackingLabel: crpName,
 		}
 		Expect(hubClient.List(ctx, &resourceSnapshotList, masterResourceSnapshotLabels)).Should(Succeed(), "Failed to list ClusterResourceSnapshots for CRP %s", crpName)
 		Expect(len(resourceSnapshotList.Items)).Should(Equal(2), "Expected 2 ClusterResourceSnapshots for CRP %s, got %d", crpName, len(resourceSnapshotList.Items))
@@ -197,7 +197,7 @@ var _ = Describe("validating that CRP status can be updated after updating the r
 		Eventually(func() error {
 			var resourceSnapshotList placementv1beta1.ClusterResourceSnapshotList
 			masterResourceSnapshotLabels := client.MatchingLabels{
-				placementv1beta1.CRPTrackingLabel: crpName,
+				placementv1beta1.PlacementTrackingLabel: crpName,
 			}
 			if err := hubClient.List(ctx, &resourceSnapshotList, masterResourceSnapshotLabels); err != nil {
 				return fmt.Errorf("failed to list ClusterResourceSnapshots for CRP %s: %w", crpName, err)
@@ -234,7 +234,7 @@ var _ = Describe("validating that CRP status can be updated after updating the r
 	It("validating the clusterResourceSnapshots are created", func() {
 		var resourceSnapshotList placementv1beta1.ClusterResourceSnapshotList
 		masterResourceSnapshotLabels := client.MatchingLabels{
-			placementv1beta1.CRPTrackingLabel: crpName,
+			placementv1beta1.PlacementTrackingLabel: crpName,
 		}
 		Expect(hubClient.List(ctx, &resourceSnapshotList, masterResourceSnapshotLabels)).Should(Succeed(), "Failed to list ClusterResourceSnapshots for CRP %s", crpName)
 		Expect(len(resourceSnapshotList.Items)).Should(Equal(2), "Expected 2 ClusterResourceSnapshots for CRP %s, got %d", crpName, len(resourceSnapshotList.Items))

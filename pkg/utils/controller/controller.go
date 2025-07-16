@@ -351,8 +351,8 @@ func FetchAllResourceSnapshots(ctx context.Context, k8Client client.Reader, plac
 		var resourceSnapshotList fleetv1beta1.ResourceSnapshotObjList
 		var listOptions []client.ListOption
 		listOptions = append(listOptions, client.MatchingLabels{
-			fleetv1beta1.CRPTrackingLabel:   name,
-			fleetv1beta1.ResourceIndexLabel: strconv.Itoa(index),
+			fleetv1beta1.PlacementTrackingLabel: name,
+			fleetv1beta1.ResourceIndexLabel:     strconv.Itoa(index),
 		})
 		// Check if the key contains a namespace separator
 		if namespace != "" {
@@ -401,8 +401,8 @@ func CollectResourceIdentifiersFromResourceSnapshot(
 	var resourceSnapshotList fleetv1beta1.ResourceSnapshotObjList
 	var listOptions []client.ListOption
 	listOptions = append(listOptions, client.MatchingLabels{
-		fleetv1beta1.CRPTrackingLabel:   name,
-		fleetv1beta1.ResourceIndexLabel: resourceSnapshotIndex,
+		fleetv1beta1.PlacementTrackingLabel: name,
+		fleetv1beta1.ResourceIndexLabel:     resourceSnapshotIndex,
 	})
 	// Check if the key contains a namespace separator
 	if namespace != "" {

@@ -60,7 +60,7 @@ func (r *Reconciler) createOrUpdateEnvelopeCRWorkObj(
 	// Check to see if a corresponding work object has been created for the envelope.
 	labelMatcher := client.MatchingLabels{
 		fleetv1beta1.ParentBindingLabel:     binding.GetName(),
-		fleetv1beta1.CRPTrackingLabel:       binding.GetLabels()[fleetv1beta1.CRPTrackingLabel],
+		fleetv1beta1.PlacementTrackingLabel: binding.GetLabels()[fleetv1beta1.PlacementTrackingLabel],
 		fleetv1beta1.EnvelopeTypeLabel:      envelopeReader.GetEnvelopeType(),
 		fleetv1beta1.EnvelopeNameLabel:      envelopeReader.GetName(),
 		fleetv1beta1.EnvelopeNamespaceLabel: envelopeReader.GetNamespace(),
@@ -193,7 +193,7 @@ func buildNewWorkForEnvelopeCR(
 	// Create the labels map
 	labels := map[string]string{
 		fleetv1beta1.ParentBindingLabel:               resourceBinding.GetName(),
-		fleetv1beta1.CRPTrackingLabel:                 resourceBinding.GetLabels()[fleetv1beta1.CRPTrackingLabel],
+		fleetv1beta1.PlacementTrackingLabel:           resourceBinding.GetLabels()[fleetv1beta1.PlacementTrackingLabel],
 		fleetv1beta1.ParentResourceSnapshotIndexLabel: resourceSnapshot.GetLabels()[fleetv1beta1.ResourceIndexLabel],
 		fleetv1beta1.EnvelopeTypeLabel:                envelopeReader.GetEnvelopeType(),
 		fleetv1beta1.EnvelopeNameLabel:                envelopeReader.GetName(),

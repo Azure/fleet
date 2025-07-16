@@ -29,6 +29,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
@@ -253,6 +254,12 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, placementKey queu
 	}()
 
 	// TO-DO (chenyu1): add metrics.
+	// Convert placement key to NamespacedName for the updated ListBindingsFromKey function
+	namespace, name, err := controller.ExtractNamespaceNameFromKey(placementKey)
+	if err != nil {
+		klog.ErrorS(err, "Failed to extract namespace and name from placement key", "clusterSchedulingPolicySnapshot", policyRef)
+		return ctrl.Result{}, err
+	}
 
 	// Collect all clusters.
 	//
@@ -278,7 +285,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, placementKey queu
 	// overloading). In the long run we might still want to resort to a cached situation.
 	//
 	// TO-DO (chenyu1): explore the possibilities of using a mutation cache for better performance.
-	bindings, err := controller.ListBindingsFromKey(ctx, f.uncachedReader, placementKey)
+	bindings, err := controller.ListBindingsFromKey(ctx, f.uncachedReader, types.NamespacedName{Namespace: namespace, Name: name})
 	if err != nil {
 		klog.ErrorS(err, "Failed to collect bindings", "clusterSchedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, err
@@ -374,7 +381,7 @@ var markUnscheduledForAndUpdate = func(ctx context.Context, hubClient client.Cli
 
 // removeFinalizerAndUpdate removes scheduler CRB cleanup finalizer from binding and updates it.
 var removeFinalizerAndUpdate = func(ctx context.Context, hubClient client.Client, binding placementv1beta1.BindingObj) error {
-	controllerutil.RemoveFinalizer(binding, placementv1beta1.SchedulerCRBCleanupFinalizer)
+	controllerutil.RemoveFinalizer(binding, placementv1beta1.SchedulerBindingCleanupFinalizer)
 	err := hubClient.Update(ctx, binding, &client.UpdateOptions{})
 	if err == nil {
 		klog.V(2).InfoS("Removed scheduler CRB cleanup finalizer", "binding", klog.KObj(binding))

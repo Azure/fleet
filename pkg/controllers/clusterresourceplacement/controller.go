@@ -125,7 +125,7 @@ func (r *Reconciler) handleDelete(ctx context.Context, crp *fleetv1beta1.Cluster
 func (r *Reconciler) deleteClusterSchedulingPolicySnapshots(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) error {
 	snapshotList := &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
 	crpKObj := klog.KObj(crp)
-	if err := r.UncachedReader.List(ctx, snapshotList, client.MatchingLabels{fleetv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
+	if err := r.UncachedReader.List(ctx, snapshotList, client.MatchingLabels{fleetv1beta1.PlacementTrackingLabel: crp.Name}); err != nil {
 		klog.ErrorS(err, "Failed to list all clusterSchedulingPolicySnapshots", "clusterResourcePlacement", crpKObj)
 		return controller.NewAPIServerError(false, err)
 	}
@@ -142,7 +142,7 @@ func (r *Reconciler) deleteClusterSchedulingPolicySnapshots(ctx context.Context,
 func (r *Reconciler) deleteClusterResourceSnapshots(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) error {
 	snapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
 	crpKObj := klog.KObj(crp)
-	if err := r.UncachedReader.List(ctx, snapshotList, client.MatchingLabels{fleetv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
+	if err := r.UncachedReader.List(ctx, snapshotList, client.MatchingLabels{fleetv1beta1.PlacementTrackingLabel: crp.Name}); err != nil {
 		klog.ErrorS(err, "Failed to list all clusterResourceSnapshots", "clusterResourcePlacement", crpKObj)
 		return controller.NewAPIServerError(false, err)
 	}
@@ -349,9 +349,9 @@ func (r *Reconciler) getOrCreateClusterSchedulingPolicySnapshot(ctx context.Cont
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, crp.Name, latestPolicySnapshotIndex),
 			Labels: map[string]string{
-				fleetv1beta1.CRPTrackingLabel:      crp.Name,
-				fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
-				fleetv1beta1.PolicyIndexLabel:      strconv.Itoa(latestPolicySnapshotIndex),
+				fleetv1beta1.PlacementTrackingLabel: crp.Name,
+				fleetv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
+				fleetv1beta1.PolicyIndexLabel:       strconv.Itoa(latestPolicySnapshotIndex),
 			},
 			Annotations: map[string]string{
 				fleetv1beta1.CRPGenerationAnnotation: strconv.FormatInt(crp.Generation, 10),
@@ -506,8 +506,8 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 		}
 		// check to see all that the master cluster resource snapshot and sub-indexed snapshots belonging to the same group index exists.
 		latestGroupResourceLabelMatcher := client.MatchingLabels{
-			fleetv1beta1.ResourceIndexLabel: latestResourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel],
-			fleetv1beta1.CRPTrackingLabel:   crp.Name,
+			fleetv1beta1.ResourceIndexLabel:     latestResourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel],
+			fleetv1beta1.PlacementTrackingLabel: crp.Name,
 		}
 		resourceSnapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
 		if err := r.Client.List(ctx, resourceSnapshotList, latestGroupResourceLabelMatcher); err != nil {
@@ -629,9 +629,9 @@ func buildMasterClusterResourceSnapshot(latestResourceSnapshotIndex, resourceSna
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, crpName, latestResourceSnapshotIndex),
 			Labels: map[string]string{
-				fleetv1beta1.CRPTrackingLabel:      crpName,
-				fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
-				fleetv1beta1.ResourceIndexLabel:    strconv.Itoa(latestResourceSnapshotIndex),
+				fleetv1beta1.PlacementTrackingLabel: crpName,
+				fleetv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
+				fleetv1beta1.ResourceIndexLabel:     strconv.Itoa(latestResourceSnapshotIndex),
 			},
 			Annotations: map[string]string{
 				fleetv1beta1.ResourceGroupHashAnnotation:         resourceHash,
@@ -651,8 +651,8 @@ func buildSubIndexResourceSnapshot(latestResourceSnapshotIndex, resourceSnapshot
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, crpName, latestResourceSnapshotIndex, resourceSnapshotSubIndex),
 			Labels: map[string]string{
-				fleetv1beta1.CRPTrackingLabel:   crpName,
-				fleetv1beta1.ResourceIndexLabel: strconv.Itoa(latestResourceSnapshotIndex),
+				fleetv1beta1.PlacementTrackingLabel: crpName,
+				fleetv1beta1.ResourceIndexLabel:     strconv.Itoa(latestResourceSnapshotIndex),
 			},
 			Annotations: map[string]string{
 				fleetv1beta1.SubindexOfResourceSnapshotAnnotation: strconv.Itoa(resourceSnapshotSubIndex),
@@ -786,8 +786,8 @@ func (r *Reconciler) ensureLatestResourceSnapshot(ctx context.Context, latest *f
 func (r *Reconciler) lookupLatestClusterSchedulingPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (*fleetv1beta1.ClusterSchedulingPolicySnapshot, int, error) {
 	snapshotList := &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
 	latestSnapshotLabelMatcher := client.MatchingLabels{
-		fleetv1beta1.CRPTrackingLabel:      crp.Name,
-		fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+		fleetv1beta1.PlacementTrackingLabel: crp.Name,
+		fleetv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
 	}
 	crpKObj := klog.KObj(crp)
 	if err := r.Client.List(ctx, snapshotList, latestSnapshotLabelMatcher); err != nil {
@@ -833,7 +833,7 @@ func (r *Reconciler) lookupLatestClusterSchedulingPolicySnapshot(ctx context.Con
 func (r *Reconciler) listSortedClusterSchedulingPolicySnapshots(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (*fleetv1beta1.ClusterSchedulingPolicySnapshotList, error) {
 	snapshotList := &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
 	crpKObj := klog.KObj(crp)
-	if err := r.Client.List(ctx, snapshotList, client.MatchingLabels{fleetv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
+	if err := r.Client.List(ctx, snapshotList, client.MatchingLabels{fleetv1beta1.PlacementTrackingLabel: crp.Name}); err != nil {
 		klog.ErrorS(err, "Failed to list all clusterSchedulingPolicySnapshots", "clusterResourcePlacement", crpKObj)
 		// CRP controller needs a scheduling policy snapshot watcher to enqueue the CRP request.
 		// So the snapshots should be read from cache.
@@ -872,8 +872,8 @@ func (r *Reconciler) listSortedClusterSchedulingPolicySnapshots(ctx context.Cont
 func (r *Reconciler) lookupLatestResourceSnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (*fleetv1beta1.ClusterResourceSnapshot, int, error) {
 	snapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
 	latestSnapshotLabelMatcher := client.MatchingLabels{
-		fleetv1beta1.CRPTrackingLabel:      crp.Name,
-		fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+		fleetv1beta1.PlacementTrackingLabel: crp.Name,
+		fleetv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
 	}
 	crpKObj := klog.KObj(crp)
 	if err := r.Client.List(ctx, snapshotList, latestSnapshotLabelMatcher); err != nil {
@@ -919,7 +919,7 @@ func (r *Reconciler) lookupLatestResourceSnapshot(ctx context.Context, crp *flee
 func (r *Reconciler) listSortedResourceSnapshots(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (*fleetv1beta1.ClusterResourceSnapshotList, error) {
 	snapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
 	crpKObj := klog.KObj(crp)
-	if err := r.Client.List(ctx, snapshotList, client.MatchingLabels{fleetv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
+	if err := r.Client.List(ctx, snapshotList, client.MatchingLabels{fleetv1beta1.PlacementTrackingLabel: crp.Name}); err != nil {
 		klog.ErrorS(err, "Failed to list all clusterResourceSnapshots", "clusterResourcePlacement", crpKObj)
 		return nil, controller.NewAPIServerError(true, err)
 	}

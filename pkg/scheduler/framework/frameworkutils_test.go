@@ -154,13 +154,13 @@ func TestGenerateBinding(t *testing.T) {
 			}
 
 			// Verify labels
-			if binding.GetLabels()[placementv1beta1.CRPTrackingLabel] != tt.expectedLabel {
-				t.Errorf("expected CRPTrackingLabel %s, got %s", tt.expectedLabel, binding.GetLabels()[placementv1beta1.CRPTrackingLabel])
+			if binding.GetLabels()[placementv1beta1.PlacementTrackingLabel] != tt.expectedLabel {
+				t.Errorf("expected CRPTrackingLabel %s, got %s", tt.expectedLabel, binding.GetLabels()[placementv1beta1.PlacementTrackingLabel])
 			}
 
 			// Verify finalizers
-			if len(binding.GetFinalizers()) != 1 || binding.GetFinalizers()[0] != placementv1beta1.SchedulerCRBCleanupFinalizer {
-				t.Errorf("expected finalizer %s, got %v", placementv1beta1.SchedulerCRBCleanupFinalizer, binding.GetFinalizers())
+			if len(binding.GetFinalizers()) != 1 || binding.GetFinalizers()[0] != placementv1beta1.SchedulerBindingCleanupFinalizer {
+				t.Errorf("expected finalizer %s, got %v", placementv1beta1.SchedulerBindingCleanupFinalizer, binding.GetFinalizers())
 			}
 		})
 	}

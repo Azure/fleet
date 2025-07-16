@@ -39,9 +39,9 @@ func policySnapshot() *fleetv1beta1.ClusterSchedulingPolicySnapshot {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testSnapshotName,
 			Labels: map[string]string{
-				fleetv1beta1.PolicyIndexLabel:      "1",
-				fleetv1beta1.IsLatestSnapshotLabel: "true",
-				fleetv1beta1.CRPTrackingLabel:      testCRPName,
+				fleetv1beta1.PolicyIndexLabel:       "1",
+				fleetv1beta1.IsLatestSnapshotLabel:  "true",
+				fleetv1beta1.PlacementTrackingLabel: testCRPName,
 			},
 		},
 		Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
