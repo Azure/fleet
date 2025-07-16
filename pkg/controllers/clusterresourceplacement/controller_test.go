@@ -2720,13 +2720,6 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					t.Fatalf("getOrCreateClusterResourceSnapshot() got RequeueAfter %v, want greater than zero value", res.RequeueAfter)
 				}
 			}
-			if diff := cmp.Diff(tc.wantResourceSnapshots[tc.wantLatestSnapshotIndex], *got, options...); diff != "" {
-				t.Errorf("getOrCreateClusterResourceSnapshot() mismatch (-want, +got):\n%s", diff)
-			}
-			clusterResourceSnapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
-			if err := fakeClient.List(ctx, clusterResourceSnapshotList); err != nil {
-				t.Fatalf("clusterResourceSnapshot List() got error %v, want no error", err)
-			}
 			annotationOption := cmp.Transformer("NormalizeAnnotations", func(m map[string]string) map[string]string {
 				normalized := map[string]string{}
 				for k, v := range m {
@@ -2743,6 +2736,13 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 				return normalized
 			})
 			options = append(options, sortClusterResourceSnapshotOption, annotationOption)
+			if diff := cmp.Diff(tc.wantResourceSnapshots[tc.wantLatestSnapshotIndex], *got, options...); diff != "" {
+				t.Errorf("getOrCreateClusterResourceSnapshot() mismatch (-want, +got):\n%s", diff)
+			}
+			clusterResourceSnapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
+			if err := fakeClient.List(ctx, clusterResourceSnapshotList); err != nil {
+				t.Fatalf("clusterResourceSnapshot List() got error %v, want no error", err)
+			}
 			if diff := cmp.Diff(tc.wantResourceSnapshots, clusterResourceSnapshotList.Items, options...); diff != "" {
 				t.Errorf("clusterResourceSnapshot List() mismatch (-want, +got):\n%s", diff)
 			}
