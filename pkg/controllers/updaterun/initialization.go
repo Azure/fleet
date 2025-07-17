@@ -107,8 +107,8 @@ func (r *Reconciler) determinePolicySnapshot(
 	// Get the latest policy snapshot.
 	var policySnapshotList placementv1beta1.ClusterSchedulingPolicySnapshotList
 	latestPolicyMatcher := client.MatchingLabels{
-		placementv1beta1.CRPTrackingLabel:      placementName,
-		placementv1beta1.IsLatestSnapshotLabel: "true",
+		placementv1beta1.PlacementTrackingLabel: placementName,
+		placementv1beta1.IsLatestSnapshotLabel:  "true",
 	}
 	if err := r.Client.List(ctx, &policySnapshotList, latestPolicyMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list the latest policy snapshots", "clusterResourcePlacement", placementName, "clusterStagedUpdateRun", updateRunRef)
@@ -180,7 +180,7 @@ func (r *Reconciler) collectScheduledClusters(
 	// List all the bindings according to the ClusterResourcePlacement.
 	var bindingList placementv1beta1.ClusterResourceBindingList
 	resourceBindingMatcher := client.MatchingLabels{
-		placementv1beta1.CRPTrackingLabel: placementName,
+		placementv1beta1.PlacementTrackingLabel: placementName,
 	}
 	if err := r.Client.List(ctx, &bindingList, resourceBindingMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list clusterResourceBindings", "clusterResourcePlacement", placementName, "latestPolicySnapshot", latestPolicySnapshot.Name, "clusterStagedUpdateRun", updateRunRef)
@@ -435,8 +435,8 @@ func (r *Reconciler) recordOverrideSnapshots(ctx context.Context, placementName 
 	// TODO: use the lib to fetch the master resource snapshot using interface instead of concrete type
 	var masterResourceSnapshot *placementv1beta1.ClusterResourceSnapshot
 	labelMatcher := client.MatchingLabels{
-		placementv1beta1.CRPTrackingLabel:   placementName,
-		placementv1beta1.ResourceIndexLabel: updateRun.Spec.ResourceSnapshotIndex,
+		placementv1beta1.PlacementTrackingLabel: placementName,
+		placementv1beta1.ResourceIndexLabel:     updateRun.Spec.ResourceSnapshotIndex,
 	}
 	resourceSnapshotList := &placementv1beta1.ClusterResourceSnapshotList{}
 	if err := r.Client.List(ctx, resourceSnapshotList, labelMatcher); err != nil {

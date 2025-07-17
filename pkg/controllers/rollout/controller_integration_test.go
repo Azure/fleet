@@ -491,8 +491,8 @@ var _ = Describe("Test the rollout Controller", func() {
 		}
 		// mark the master snapshot as not latest
 		masterSnapshot.SetLabels(map[string]string{
-			fleetv1beta1.CRPTrackingLabel:      testCRPName,
-			fleetv1beta1.IsLatestSnapshotLabel: "false"},
+			fleetv1beta1.PlacementTrackingLabel: testCRPName,
+			fleetv1beta1.IsLatestSnapshotLabel:  "false"},
 		)
 		Expect(k8sClient.Update(ctx, masterSnapshot)).Should(Succeed())
 		// create a new master resource snapshot
@@ -649,8 +649,8 @@ var _ = Describe("Test the rollout Controller", func() {
 		}
 		// mark the master snapshot as not latest
 		masterSnapshot.SetLabels(map[string]string{
-			fleetv1beta1.CRPTrackingLabel:      testCRPName,
-			fleetv1beta1.IsLatestSnapshotLabel: "false"},
+			fleetv1beta1.PlacementTrackingLabel: testCRPName,
+			fleetv1beta1.IsLatestSnapshotLabel:  "false"},
 		)
 		Expect(k8sClient.Update(ctx, masterSnapshot)).Should(Succeed())
 		// create a new master resource snapshot
@@ -710,8 +710,8 @@ var _ = Describe("Test the rollout Controller", func() {
 		}
 		// mark the master snapshot as not latest
 		masterSnapshot.SetLabels(map[string]string{
-			fleetv1beta1.CRPTrackingLabel:      testCRPName,
-			fleetv1beta1.IsLatestSnapshotLabel: "false"},
+			fleetv1beta1.PlacementTrackingLabel: testCRPName,
+			fleetv1beta1.IsLatestSnapshotLabel:  "false"},
 		)
 		Expect(k8sClient.Update(ctx, masterSnapshot)).Should(Succeed())
 		// create a new master resource snapshot
@@ -1031,8 +1031,8 @@ var _ = Describe("Test the rollout Controller", func() {
 		By("Creating a new master resource snapshot")
 		// Mark the master snapshot as not latest.
 		masterSnapshot.SetLabels(map[string]string{
-			fleetv1beta1.CRPTrackingLabel:      testCRPName,
-			fleetv1beta1.IsLatestSnapshotLabel: "false"},
+			fleetv1beta1.PlacementTrackingLabel: testCRPName,
+			fleetv1beta1.IsLatestSnapshotLabel:  "false"},
 		)
 		Expect(k8sClient.Update(ctx, masterSnapshot)).Should(Succeed())
 		// Create a new master resource snapshot.
@@ -1161,7 +1161,7 @@ func generateClusterResourceBinding(state fleetv1beta1.BindingState, resourceSna
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "binding-" + resourceSnapshotName + "-" + targetCluster,
 			Labels: map[string]string{
-				fleetv1beta1.CRPTrackingLabel: testCRPName,
+				fleetv1beta1.PlacementTrackingLabel: testCRPName,
 			},
 		},
 		Spec: fleetv1beta1.ResourceBindingSpec{
@@ -1180,8 +1180,8 @@ func generateResourceSnapshot(testCRPName string, resourceIndex int, isLatest bo
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, resourceIndex),
 			Labels: map[string]string{
-				fleetv1beta1.CRPTrackingLabel:      testCRPName,
-				fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(isLatest),
+				fleetv1beta1.PlacementTrackingLabel: testCRPName,
+				fleetv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(isLatest),
 			},
 			Annotations: map[string]string{
 				fleetv1beta1.ResourceGroupHashAnnotation: "hash",

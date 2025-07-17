@@ -261,7 +261,7 @@ func TestCreateOrUpdateEnvelopeCRWorkObj(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-snapshot",
 			Labels: map[string]string{
-				fleetv1beta1.CRPTrackingLabel: "test-crp",
+				fleetv1beta1.PlacementTrackingLabel: "test-crp",
 			},
 		},
 		Spec: fleetv1beta1.ClusterResourceSnapshot{}.Spec,
@@ -270,7 +270,7 @@ func TestCreateOrUpdateEnvelopeCRWorkObj(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-binding",
 			Labels: map[string]string{
-				fleetv1beta1.CRPTrackingLabel: "test-crp",
+				fleetv1beta1.PlacementTrackingLabel: "test-crp",
 			},
 		},
 		Spec: fleetv1beta1.ResourceBindingSpec{
@@ -310,7 +310,7 @@ func TestCreateOrUpdateEnvelopeCRWorkObj(t *testing.T) {
 			Namespace: "test-app",
 			Labels: map[string]string{
 				fleetv1beta1.ParentBindingLabel:     resourceBinding.Name,
-				fleetv1beta1.CRPTrackingLabel:       resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel],
+				fleetv1beta1.PlacementTrackingLabel: resourceBinding.Labels[fleetv1beta1.PlacementTrackingLabel],
 				fleetv1beta1.EnvelopeTypeLabel:      string(fleetv1beta1.ResourceEnvelopeType),
 				fleetv1beta1.EnvelopeNameLabel:      resourceEnvelope.Name,
 				fleetv1beta1.EnvelopeNamespaceLabel: resourceEnvelope.Namespace,
@@ -349,7 +349,7 @@ func TestCreateOrUpdateEnvelopeCRWorkObj(t *testing.T) {
 					Namespace: fmt.Sprintf(utils.NamespaceNameFormat, resourceBinding.Spec.TargetCluster),
 					Labels: map[string]string{
 						fleetv1beta1.ParentBindingLabel:               resourceBinding.Name,
-						fleetv1beta1.CRPTrackingLabel:                 resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel],
+						fleetv1beta1.PlacementTrackingLabel:           resourceBinding.Labels[fleetv1beta1.PlacementTrackingLabel],
 						fleetv1beta1.ParentResourceSnapshotIndexLabel: resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel],
 						fleetv1beta1.EnvelopeTypeLabel:                string(fleetv1beta1.ResourceEnvelopeType),
 						fleetv1beta1.EnvelopeNameLabel:                resourceEnvelope.Name,
@@ -384,7 +384,7 @@ func TestCreateOrUpdateEnvelopeCRWorkObj(t *testing.T) {
 					Namespace: fmt.Sprintf(utils.NamespaceNameFormat, resourceBinding.Spec.TargetCluster),
 					Labels: map[string]string{
 						fleetv1beta1.ParentBindingLabel:               resourceBinding.Name,
-						fleetv1beta1.CRPTrackingLabel:                 resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel],
+						fleetv1beta1.PlacementTrackingLabel:           resourceBinding.Labels[fleetv1beta1.PlacementTrackingLabel],
 						fleetv1beta1.ParentResourceSnapshotIndexLabel: resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel],
 						fleetv1beta1.EnvelopeTypeLabel:                string(fleetv1beta1.ClusterResourceEnvelopeType),
 						fleetv1beta1.EnvelopeNameLabel:                clusterResourceEnvelope.Name,
@@ -419,7 +419,7 @@ func TestCreateOrUpdateEnvelopeCRWorkObj(t *testing.T) {
 					Namespace: "test-app", //copy from the existing work
 					Labels: map[string]string{
 						fleetv1beta1.ParentBindingLabel:               resourceBinding.Name,
-						fleetv1beta1.CRPTrackingLabel:                 resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel],
+						fleetv1beta1.PlacementTrackingLabel:           resourceBinding.Labels[fleetv1beta1.PlacementTrackingLabel],
 						fleetv1beta1.ParentResourceSnapshotIndexLabel: resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel],
 						fleetv1beta1.EnvelopeTypeLabel:                string(fleetv1beta1.ResourceEnvelopeType),
 						fleetv1beta1.EnvelopeNameLabel:                resourceEnvelope.Name,
@@ -526,7 +526,7 @@ func TestProcessOneSelectedResource(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-binding",
 			Labels: map[string]string{
-				fleetv1beta1.CRPTrackingLabel: "test-crp",
+				fleetv1beta1.PlacementTrackingLabel: "test-crp",
 			},
 		},
 		Spec: fleetv1beta1.ResourceBindingSpec{

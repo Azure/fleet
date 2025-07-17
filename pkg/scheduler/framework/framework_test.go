@@ -537,7 +537,7 @@ func TestUpdateBindingRemoveFinalizerAndUpdate(t *testing.T) {
 	boundBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       bindingName,
-			Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+			Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
 			State: placementv1beta1.BindingStateBound,
@@ -546,7 +546,7 @@ func TestUpdateBindingRemoveFinalizerAndUpdate(t *testing.T) {
 	scheduledBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       altBindingName,
-			Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+			Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
 			State: placementv1beta1.BindingStateScheduled,
@@ -555,7 +555,7 @@ func TestUpdateBindingRemoveFinalizerAndUpdate(t *testing.T) {
 	unScheduledBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       anotherBindingName,
-			Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+			Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
 			State: placementv1beta1.BindingStateUnscheduled,
@@ -1440,9 +1440,9 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: crpName,
+							placementv1beta1.PlacementTrackingLabel: crpName,
 						},
-						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1463,9 +1463,9 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: crpName,
+							placementv1beta1.PlacementTrackingLabel: crpName,
 						},
-						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1486,9 +1486,9 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: crpName,
+							placementv1beta1.PlacementTrackingLabel: crpName,
 						},
-						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1679,9 +1679,9 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: crpName,
+							placementv1beta1.PlacementTrackingLabel: crpName,
 						},
-						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1789,9 +1789,9 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: crpName,
+							placementv1beta1.PlacementTrackingLabel: crpName,
 						},
-						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1812,9 +1812,9 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: crpName,
+							placementv1beta1.PlacementTrackingLabel: crpName,
 						},
-						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1835,9 +1835,9 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: crpName,
+							placementv1beta1.PlacementTrackingLabel: crpName,
 						},
-						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1879,9 +1879,9 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: crpName,
+							placementv1beta1.PlacementTrackingLabel: crpName,
 						},
-						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1902,9 +1902,9 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: crpName,
+							placementv1beta1.PlacementTrackingLabel: crpName,
 						},
-						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,
@@ -1988,9 +1988,9 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: crpName,
+							placementv1beta1.PlacementTrackingLabel: crpName,
 						},
-						Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
 						State:                        placementv1beta1.BindingStateScheduled,

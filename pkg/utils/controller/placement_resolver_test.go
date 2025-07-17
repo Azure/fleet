@@ -194,7 +194,7 @@ func TestGetPlacementKeyFromObj(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			key := GetPlacementKeyFromObj(tt.placement)
+			key := GetObjectKeyFromObj(tt.placement)
 			if key != tt.wantKey {
 				t.Errorf("GetPlacementKeyFromObj() = %v, want %v", key, tt.wantKey)
 			}
@@ -231,6 +231,11 @@ func TestGetPlacementNameFromKey(t *testing.T) {
 		{
 			name:         "invalid placement key with multiple separators",
 			placementKey: queue.PlacementKey("test-ns/test-rp/extra"),
+			expectedErr:  ErrUnexpectedBehavior,
+		},
+		{
+			name:         "invalid placement key with two separators together",
+			placementKey: queue.PlacementKey("test-ns//extra"),
 			expectedErr:  ErrUnexpectedBehavior,
 		},
 		{

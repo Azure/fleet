@@ -39,7 +39,7 @@ func noBindingsCreatedForCRPActual(crpName string) func() error {
 	return func() error {
 		// List all bindings associated with the given CRP.
 		bindingList := &placementv1beta1.ClusterResourceBindingList{}
-		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
+		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.PlacementTrackingLabel: crpName})
 		listOptions := &client.ListOptions{LabelSelector: labelSelector}
 		if err := hubClient.List(ctx, bindingList, listOptions); err != nil {
 			return err
@@ -92,7 +92,7 @@ func scheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, score
 	return func() error {
 		// List all bindings.
 		bindingList := &placementv1beta1.ClusterResourceBindingList{}
-		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
+		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.PlacementTrackingLabel: crpName})
 		listOptions := &client.ListOptions{LabelSelector: labelSelector}
 		if err := hubClient.List(ctx, bindingList, listOptions); err != nil {
 			return err
@@ -118,9 +118,9 @@ func scheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, score
 				ObjectMeta: metav1.ObjectMeta{
 					Name: bindingNamePlaceholder,
 					Labels: map[string]string{
-						placementv1beta1.CRPTrackingLabel: crpName,
+						placementv1beta1.PlacementTrackingLabel: crpName,
 					},
-					Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+					Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
 					State:                        placementv1beta1.BindingStateScheduled,
@@ -155,7 +155,7 @@ func scheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, score
 func boundBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCluster map[string]*placementv1beta1.ClusterScore, crpName, policySnapshotName string) func() error {
 	return func() error {
 		bindingList := &placementv1beta1.ClusterResourceBindingList{}
-		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
+		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.PlacementTrackingLabel: crpName})
 		listOptions := &client.ListOptions{LabelSelector: labelSelector}
 		if err := hubClient.List(ctx, bindingList, listOptions); err != nil {
 			return err
@@ -179,9 +179,9 @@ func boundBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCl
 				ObjectMeta: metav1.ObjectMeta{
 					Name: bindingNamePlaceholder,
 					Labels: map[string]string{
-						placementv1beta1.CRPTrackingLabel: crpName,
+						placementv1beta1.PlacementTrackingLabel: crpName,
 					},
-					Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+					Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
 					State:                        placementv1beta1.BindingStateBound,
@@ -216,7 +216,7 @@ func boundBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCl
 func unscheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCluster map[string]*placementv1beta1.ClusterScore, crpName string, policySnapshotName string) func() error {
 	return func() error {
 		bindingList := &placementv1beta1.ClusterResourceBindingList{}
-		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
+		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.PlacementTrackingLabel: crpName})
 		listOptions := &client.ListOptions{LabelSelector: labelSelector}
 		if err := hubClient.List(ctx, bindingList, listOptions); err != nil {
 			return err
@@ -240,9 +240,9 @@ func unscheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, sco
 				ObjectMeta: metav1.ObjectMeta{
 					Name: bindingNamePlaceholder,
 					Labels: map[string]string{
-						placementv1beta1.CRPTrackingLabel: crpName,
+						placementv1beta1.PlacementTrackingLabel: crpName,
 					},
-					Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+					Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 				},
 				Spec: placementv1beta1.ResourceBindingSpec{
 					State:                        placementv1beta1.BindingStateUnscheduled,
@@ -283,7 +283,7 @@ func noBindingsCreatedForClustersActual(clusters []string, crpName string) func(
 
 	return func() error {
 		bindingList := &placementv1beta1.ClusterResourceBindingList{}
-		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
+		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.PlacementTrackingLabel: crpName})
 		listOptions := &client.ListOptions{LabelSelector: labelSelector}
 		if err := hubClient.List(ctx, bindingList, listOptions); err != nil {
 			return err
@@ -413,7 +413,7 @@ func hasNScheduledOrBoundBindingsPresentActual(crpName string, clusters []string
 
 	return func() error {
 		bindingList := &placementv1beta1.ClusterResourceBindingList{}
-		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
+		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.PlacementTrackingLabel: crpName})
 		listOptions := &client.ListOptions{LabelSelector: labelSelector}
 		if err := hubClient.List(ctx, bindingList, listOptions); err != nil {
 			return err

@@ -54,7 +54,7 @@ var statusCmpOptions = []cmp.Option{
 
 func TestGetWorkNamePrefixFromSnapshotName(t *testing.T) {
 	tests := map[string]struct {
-		resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot
+		resourceSnapshot fleetv1beta1.ResourceSnapshotObj
 		wantErr          error
 		wantedName       string
 	}{
@@ -63,19 +63,32 @@ func TestGetWorkNamePrefixFromSnapshotName(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "placement-2",
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: "placement",
+						fleetv1beta1.PlacementTrackingLabel: "placement",
 					},
 				},
 			},
 			wantErr:    nil,
 			wantedName: "placement-work",
 		},
+		"namespaced resource snapshot work name includes namespace": {
+			resourceSnapshot: &fleetv1beta1.ResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "placement-2",
+					Namespace: "test-namespace",
+					Labels: map[string]string{
+						fleetv1beta1.PlacementTrackingLabel: "placement",
+					},
+				},
+			},
+			wantErr:    nil,
+			wantedName: "test-namespace.placement-work",
+		},
 		"should return error if the resource snapshot has negative subindex": {
 			resourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "placement-1-2",
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: "placement",
+						fleetv1beta1.PlacementTrackingLabel: "placement",
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "-1",
@@ -90,7 +103,7 @@ func TestGetWorkNamePrefixFromSnapshotName(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "placement-1-2",
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: "placement",
+						fleetv1beta1.PlacementTrackingLabel: "placement",
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
@@ -100,12 +113,28 @@ func TestGetWorkNamePrefixFromSnapshotName(t *testing.T) {
 			wantErr:    nil,
 			wantedName: "placement-0",
 		},
+		"namespaced resource snapshot with subindex includes namespace": {
+			resourceSnapshot: &fleetv1beta1.ResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "placement-1-2",
+					Namespace: "test-namespace",
+					Labels: map[string]string{
+						fleetv1beta1.PlacementTrackingLabel: "placement",
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
+					},
+				},
+			},
+			wantErr:    nil,
+			wantedName: "test-namespace.placement-0",
+		},
 		"the work name is the concatenation of the crp name and subindex": {
 			resourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "placement-1-2",
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: "placement",
+						fleetv1beta1.PlacementTrackingLabel: "placement",
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "2",
@@ -120,7 +149,7 @@ func TestGetWorkNamePrefixFromSnapshotName(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "placement-1-2",
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: "placement",
+						fleetv1beta1.PlacementTrackingLabel: "placement",
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "what?",

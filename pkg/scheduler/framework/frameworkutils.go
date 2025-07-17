@@ -237,9 +237,9 @@ func generateBinding(placementKey queue.PlacementKey, clusterName string) (place
 			ObjectMeta: metav1.ObjectMeta{
 				Name: bindingName,
 				Labels: map[string]string{
-					placementv1beta1.CRPTrackingLabel: placementName,
+					placementv1beta1.PlacementTrackingLabel: placementName,
 				},
-				Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+				Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 			},
 		}
 	} else {
@@ -249,9 +249,9 @@ func generateBinding(placementKey queue.PlacementKey, clusterName string) (place
 				Name:      bindingName,
 				Namespace: placementNamespace,
 				Labels: map[string]string{
-					placementv1beta1.CRPTrackingLabel: placementName,
+					placementv1beta1.PlacementTrackingLabel: placementName,
 				},
-				Finalizers: []string{placementv1beta1.SchedulerCRBCleanupFinalizer},
+				Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 			},
 		}
 	}
