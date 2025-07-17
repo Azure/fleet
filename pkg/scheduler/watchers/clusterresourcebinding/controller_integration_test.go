@@ -75,9 +75,9 @@ var _ = Describe("scheduler - cluster resource binding watcher", Ordered, func()
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crbName,
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: crpName,
+						fleetv1beta1.PlacementTrackingLabel: crpName,
 					},
-					Finalizers: []string{fleetv1beta1.SchedulerCRBCleanupFinalizer},
+					Finalizers: []string{fleetv1beta1.SchedulerBindingCleanupFinalizer},
 				},
 				Spec: fleetv1beta1.ResourceBindingSpec{
 					State: fleetv1beta1.BindingStateScheduled,

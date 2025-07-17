@@ -1230,7 +1230,7 @@ func crpDisruptionBudgetRemovedActual(crpDisruptionBudgetName string) func() err
 }
 
 func validateCRPSnapshotRevisions(crpName string, wantPolicySnapshotRevision, wantResourceSnapshotRevision int) error {
-	matchingLabels := client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName}
+	matchingLabels := client.MatchingLabels{placementv1beta1.PlacementTrackingLabel: crpName}
 
 	snapshotList := &placementv1beta1.ClusterSchedulingPolicySnapshotList{}
 	if err := hubClient.List(ctx, snapshotList, matchingLabels); err != nil {
@@ -1431,7 +1431,7 @@ func bindingStateActual(
 	wantState placementv1beta1.BindingState,
 ) func() error {
 	return func() error {
-		matchingLabels := client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName}
+		matchingLabels := client.MatchingLabels{placementv1beta1.PlacementTrackingLabel: crpName}
 
 		var foundBinding *placementv1beta1.ClusterResourceBinding
 		bindingList := &placementv1beta1.ClusterResourceBindingList{}

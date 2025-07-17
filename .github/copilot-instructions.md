@@ -107,15 +107,58 @@ A breadcrumb is a collaborative scratch pad that allow the user and agent to get
 2. Create the breadcrumb file in the `${REPO}/.github/.copilot/breadcrumbs` folder using the format: `yyyy-mm-dd-HHMM-{title}.md` (*year-month-date-current_time_in-24hr_format-{title}.md* using UTC timezone)
 
 3. Structure the breadcrumb file with these required sections:
-   - **Requirements**: Clear list of what needs to be implemented.
-   - **Additional comments from user**: Any additional input from the user during the conversation.
-   - **Plan**: Strategy and technical plan before implementation.
-   - **Decisions**: Why specific implementation choices were made.
-   - **Implementation Details**: Code snippets with explanations for key files.
-   - **Changes Made**: Summary of files modified and how they changed.
-   - **Before/After Comparison**: Highlighting the improvements.
-   - **References**: List of referred material like domain knowledge files, specification files, URLs and summary of what is was used for. If there is a version in the domain knowledge or in the specifications, record the version in the breadcrumb.
+ ```xml
+<coding_workflow>
+  <phase name="understand_problem">
+    <description>Analyze and comprehend the task requirements</description>
+    <tasks>
+      <task>Read relevant parts of the codebase</task>
+      <task>Browse public API documentation for up-to-date information</task>
+      <task>Propose 2-3 implementation options with pros and cons</task>
+      <task>Ask clarifying questions about product requirements</task>
+      <task>Write a plan to PRP/projectplan-&lt;feature-name&gt;.md</task>
+    </tasks>
+  </phase>
 
+  <phase name="plan_format">
+    <description>Structure the project plan document</description>
+    <requirements>
+      <requirement>Include a checklist of TODO items to track progress</requirement>
+    </requirements>
+  </phase>
+
+  <phase name="checkpoint">
+    <description>Validation before implementation begins</description>
+    <action>Check in with user before starting implementation</action>
+    <blocking>true</blocking>
+  </phase>
+
+  <phase name="implement">
+    <description>Execute the plan step-by-step</description>
+    <methodology>
+      <step>Complete TODO items incrementally</step>
+      <step>Test each change for correctness</step>
+      <step>Log a high-level explanation after each step</step>
+    </methodology>
+  </phase>
+
+  <constraints>
+    <constraint name="minimal_changes">
+      <description>Make tasks and commits as small and simple as possible</description>
+      <guideline>Avoid large or complex changes</guideline>
+    </constraint>
+  </constraints>
+
+  <phase name="plan_updates">
+    <description>Maintain plan accuracy throughout development</description>
+    <action>Revise the project plan file if the plan changes</action>
+  </phase>
+
+  <phase name="final_summary">
+    <description>Document completion and changes</description>
+    <deliverable>Summarize all changes in the project plan file</deliverable>
+  </phase>
+</coding_workflow>
 4. Workflow rules:
    - Update the breadcrumb **BEFORE** making any code changes.
    - **Get explicit approval** on the plan before implementation.

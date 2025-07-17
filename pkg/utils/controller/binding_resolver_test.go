@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/types"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/scheduler/queue"
 )
 
 func TestListBindingsFromKey(t *testing.T) {
@@ -38,27 +39,27 @@ func TestListBindingsFromKey(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		placementKey queue.PlacementKey
+		placementKey types.NamespacedName
 		objects      []client.Object
 		wantErr      bool
 		wantBindings []placementv1beta1.BindingObj
 	}{
 		{
 			name:         "cluster-scoped placement key - no bindings found",
-			placementKey: queue.PlacementKey("test-placement"),
+			placementKey: types.NamespacedName{Name: "test-placement"},
 			objects:      []client.Object{},
 			wantErr:      false,
 			wantBindings: []placementv1beta1.BindingObj{},
 		},
 		{
 			name:         "cluster-scoped placement key - single binding found",
-			placementKey: queue.PlacementKey("test-placement"),
+			placementKey: types.NamespacedName{Name: "test-placement"},
 			objects: []client.Object{
 				&placementv1beta1.ClusterResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-binding-1",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -72,7 +73,7 @@ func TestListBindingsFromKey(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-binding-1",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -83,13 +84,13 @@ func TestListBindingsFromKey(t *testing.T) {
 		},
 		{
 			name:         "cluster-scoped placement key - multiple bindings found",
-			placementKey: queue.PlacementKey("test-placement"),
+			placementKey: types.NamespacedName{Name: "test-placement"},
 			objects: []client.Object{
 				&placementv1beta1.ClusterResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-binding-1",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -100,7 +101,7 @@ func TestListBindingsFromKey(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-binding-2",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -114,7 +115,7 @@ func TestListBindingsFromKey(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-binding-1",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -125,7 +126,7 @@ func TestListBindingsFromKey(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-binding-2",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -136,13 +137,13 @@ func TestListBindingsFromKey(t *testing.T) {
 		},
 		{
 			name:         "cluster-scoped placement key - excludes non-matching bindings",
-			placementKey: queue.PlacementKey("test-placement"),
+			placementKey: types.NamespacedName{Name: "test-placement"},
 			objects: []client.Object{
 				&placementv1beta1.ClusterResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-binding-1",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -153,7 +154,7 @@ func TestListBindingsFromKey(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "other-binding",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "other-placement",
+							placementv1beta1.PlacementTrackingLabel: "other-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -167,7 +168,7 @@ func TestListBindingsFromKey(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-binding-1",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -178,14 +179,14 @@ func TestListBindingsFromKey(t *testing.T) {
 		},
 		{
 			name:         "namespaced placement key - single binding found",
-			placementKey: queue.PlacementKey("test-namespace/test-placement"),
+			placementKey: types.NamespacedName{Namespace: "test-namespace", Name: "test-placement"},
 			objects: []client.Object{
 				&placementv1beta1.ResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-binding-1",
 						Namespace: "test-namespace",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -200,7 +201,7 @@ func TestListBindingsFromKey(t *testing.T) {
 						Name:      "test-binding-1",
 						Namespace: "test-namespace",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -211,14 +212,14 @@ func TestListBindingsFromKey(t *testing.T) {
 		},
 		{
 			name:         "namespaced placement key - excludes wrong namespace",
-			placementKey: queue.PlacementKey("test-namespace/test-placement"),
+			placementKey: types.NamespacedName{Namespace: "test-namespace", Name: "test-placement"},
 			objects: []client.Object{
 				&placementv1beta1.ResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-binding-1",
 						Namespace: "test-namespace",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -230,7 +231,7 @@ func TestListBindingsFromKey(t *testing.T) {
 						Name:      "other-binding",
 						Namespace: "other-namespace",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -245,7 +246,7 @@ func TestListBindingsFromKey(t *testing.T) {
 						Name:      "test-binding-1",
 						Namespace: "test-namespace",
 						Labels: map[string]string{
-							placementv1beta1.CRPTrackingLabel: "test-placement",
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
 						},
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
@@ -253,20 +254,6 @@ func TestListBindingsFromKey(t *testing.T) {
 					},
 				},
 			},
-		},
-		{
-			name:         "invalid placement key format - too many separators",
-			placementKey: queue.PlacementKey("namespace/placement/extra"),
-			objects:      []client.Object{},
-			wantErr:      true,
-			wantBindings: nil,
-		},
-		{
-			name:         "invalid placement key format - empty parts",
-			placementKey: queue.PlacementKey("namespace/"),
-			objects:      []client.Object{},
-			wantErr:      true,
-			wantBindings: nil,
 		},
 	}
 
@@ -321,7 +308,7 @@ func TestListBindingsFromKey_ClientError(t *testing.T) {
 		Client: fake.NewClientBuilder().WithScheme(scheme).Build(),
 	}
 
-	_, err := ListBindingsFromKey(ctx, fakeClient, queue.PlacementKey("test-placement"))
+	_, err := ListBindingsFromKey(ctx, fakeClient, types.NamespacedName{Name: "test-placement"})
 
 	if err == nil {
 		t.Fatalf("Expected error but got nil")
@@ -329,6 +316,502 @@ func TestListBindingsFromKey_ClientError(t *testing.T) {
 
 	if !errors.Is(err, ErrAPIServerError) {
 		t.Errorf("Expected ErrAPIServerError but got: %v", err)
+	}
+}
+
+func TestFetchBindingFromKey(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name         string
+		placementKey types.NamespacedName
+		objects      []client.Object
+		wantErr      bool
+		wantBinding  placementv1beta1.BindingObj
+	}{
+		{
+			name:         "cluster-scoped placement key - ClusterResourceBinding found",
+			placementKey: types.NamespacedName{Name: "test-placement"},
+			objects: []client.Object{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-placement",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+			},
+			wantErr: false,
+			wantBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-placement",
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					TargetCluster: "cluster-1",
+				},
+			},
+		},
+		{
+			name:         "cluster-scoped placement key - ClusterResourceBinding not found",
+			placementKey: types.NamespacedName{Name: "test-placement"},
+			objects: []client.Object{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-binding-1",
+						Labels: map[string]string{
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "other-binding",
+						Labels: map[string]string{
+							placementv1beta1.PlacementTrackingLabel: "other-placement",
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-2",
+					},
+				},
+			},
+			wantErr:     true,
+			wantBinding: nil,
+		},
+		{
+			name:         "namespaced placement key - ResourceBinding found",
+			placementKey: types.NamespacedName{Namespace: "test-namespace", Name: "test-placement"},
+			objects: []client.Object{
+				&placementv1beta1.ResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-placement",
+						Namespace: "test-namespace",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+				&placementv1beta1.ResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-placement",
+						Namespace: "other-namespace",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+				&placementv1beta1.ResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "other-placement",
+						Namespace: "test-namespace",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+			},
+			wantErr: false,
+			wantBinding: &placementv1beta1.ResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-placement",
+					Namespace: "test-namespace",
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					TargetCluster: "cluster-1",
+				},
+			},
+		},
+		{
+			name:         "namespaced placement key - ResourceBinding not found",
+			placementKey: types.NamespacedName{Namespace: "test-namespace", Name: "test-placement"},
+			objects: []client.Object{
+				&placementv1beta1.ResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-placement",
+						Namespace: "other-namespace",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+				&placementv1beta1.ResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "other-placement",
+						Namespace: "test-namespace",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+			},
+			wantErr:     true,
+			wantBinding: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			_ = placementv1beta1.AddToScheme(scheme)
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(tt.objects...).
+				Build()
+
+			got, err := FetchBindingFromKey(ctx, fakeClient, tt.placementKey)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("Expected error but got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Expected no error but got: %v", err)
+			}
+
+			// Use cmp.Diff to compare the actual result with expected binding
+			if diff := cmp.Diff(got, tt.wantBinding,
+				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")); diff != "" {
+				t.Errorf("FetchBindingFromKey() diff (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestConvertCRBObjsToBindingObjs(t *testing.T) {
+	tests := []struct {
+		name     string
+		bindings []placementv1beta1.ClusterResourceBinding
+		want     []placementv1beta1.BindingObj
+	}{
+		{
+			name:     "empty slice",
+			bindings: []placementv1beta1.ClusterResourceBinding{},
+			want:     nil,
+		},
+		{
+			name:     "nil slice",
+			bindings: nil,
+			want:     nil,
+		},
+		{
+			name: "single binding",
+			bindings: []placementv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-binding-1",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+			},
+			want: []placementv1beta1.BindingObj{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-binding-1",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+			},
+		},
+		{
+			name: "multiple bindings",
+			bindings: []placementv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-binding-1",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-binding-2",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-2",
+					},
+				},
+			},
+			want: []placementv1beta1.BindingObj{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-binding-1",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-binding-2",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-2",
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ConvertCRBObjsToBindingObjs(tt.bindings)
+
+			if diff := cmp.Diff(got, tt.want); diff != "" {
+				t.Errorf("ConvertCRBObjsToBindingObjs() diff (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestConvertCRBArrayToBindingObjs(t *testing.T) {
+	tests := []struct {
+		name     string
+		bindings []*placementv1beta1.ClusterResourceBinding
+		want     []placementv1beta1.BindingObj
+	}{
+		{
+			name:     "empty slice",
+			bindings: []*placementv1beta1.ClusterResourceBinding{},
+			want:     nil,
+		},
+		{
+			name:     "nil slice",
+			bindings: nil,
+			want:     nil,
+		},
+		{
+			name: "single binding",
+			bindings: []*placementv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-binding-1",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+			},
+			want: []placementv1beta1.BindingObj{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-binding-1",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+			},
+		},
+		{
+			name: "multiple bindings",
+			bindings: []*placementv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-binding-1",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-binding-2",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-2",
+					},
+				},
+			},
+			want: []placementv1beta1.BindingObj{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-binding-1",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-binding-2",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-2",
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ConvertCRBArrayToBindingObjs(tt.bindings)
+
+			if diff := cmp.Diff(got, tt.want); diff != "" {
+				t.Errorf("ConvertCRBArrayToBindingObjs() diff (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestConvertCRB2DArrayToBindingObjs(t *testing.T) {
+	tests := []struct {
+		name        string
+		bindingSets [][]*placementv1beta1.ClusterResourceBinding
+		want        [][]placementv1beta1.BindingObj
+	}{
+		{
+			name:        "empty slice",
+			bindingSets: [][]*placementv1beta1.ClusterResourceBinding{},
+			want:        nil,
+		},
+		{
+			name:        "nil slice",
+			bindingSets: nil,
+			want:        nil,
+		},
+		{
+			name: "single set with single binding",
+			bindingSets: [][]*placementv1beta1.ClusterResourceBinding{
+				{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-binding-1",
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							TargetCluster: "cluster-1",
+						},
+					},
+				},
+			},
+			want: [][]placementv1beta1.BindingObj{
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-binding-1",
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							TargetCluster: "cluster-1",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "multiple sets with multiple bindings",
+			bindingSets: [][]*placementv1beta1.ClusterResourceBinding{
+				{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-binding-1",
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							TargetCluster: "cluster-1",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-binding-2",
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							TargetCluster: "cluster-2",
+						},
+					},
+				},
+				{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-binding-3",
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							TargetCluster: "cluster-3",
+						},
+					},
+				},
+			},
+			want: [][]placementv1beta1.BindingObj{
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-binding-1",
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							TargetCluster: "cluster-1",
+						},
+					},
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-binding-2",
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							TargetCluster: "cluster-2",
+						},
+					},
+				},
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-binding-3",
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							TargetCluster: "cluster-3",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "sets with empty bindings",
+			bindingSets: [][]*placementv1beta1.ClusterResourceBinding{
+				{},
+				{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-binding-1",
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							TargetCluster: "cluster-1",
+						},
+					},
+				},
+			},
+			want: [][]placementv1beta1.BindingObj{
+				nil,
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-binding-1",
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							TargetCluster: "cluster-1",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ConvertCRB2DArrayToBindingObjs(tt.bindingSets)
+
+			if diff := cmp.Diff(got, tt.want); diff != "" {
+				t.Errorf("ConvertCRB2DArrayToBindingObjs() diff (-got +want):\n%s", diff)
+			}
+		})
 	}
 }
 

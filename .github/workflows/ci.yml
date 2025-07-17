@@ -147,4 +147,19 @@ jobs:
           PROPERTY_PROVIDER: 'azure'
           RESOURCE_SNAPSHOT_CREATION_MINIMUM_INTERVAL: ${{ matrix.resource-snapshot-creation-minimum-interval }}
           RESOURCE_CHANGES_COLLECTION_DURATION: ${{ matrix.resource-changes-collection-duration }}
-
+      
+      - name: Collect logs
+        if: always()
+        run: |
+          make collect-e2e-logs
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'
+          LOG_DIR: 'logs-${{ matrix.customized-settings }}'
+      
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs-${{ matrix.customized-settings }}
+          path: test/e2e/logs-${{ matrix.customized-settings }}/
+          retention-days: 3

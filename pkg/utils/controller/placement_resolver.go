@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -66,8 +67,8 @@ func FetchPlacementFromKey(ctx context.Context, c client.Reader, placementKey qu
 	}
 }
 
-// GetPlacementKeyFromObj generates a PlacementKey from a placement object.
-func GetPlacementKeyFromObj(obj fleetv1beta1.PlacementObj) queue.PlacementKey {
+// GetObjectKeyFromObj generates a object Key from a meta object.
+func GetObjectKeyFromObj(obj metav1.Object) queue.PlacementKey {
 	if obj.GetNamespace() == "" {
 		// Cluster-scoped placement
 		return queue.PlacementKey(obj.GetName())
@@ -77,8 +78,8 @@ func GetPlacementKeyFromObj(obj fleetv1beta1.PlacementObj) queue.PlacementKey {
 	}
 }
 
-// GetPlacementKeyFromObj generates a PlacementKey from a placement object.
-func GetPlacementKeyFromRequest(req ctrl.Request) queue.PlacementKey {
+// GetObjectKeyFromRequest generates an object key from a controller runtime request.
+func GetObjectKeyFromRequest(req ctrl.Request) queue.PlacementKey {
 	if req.Namespace == "" {
 		// Cluster-scoped placement
 		return queue.PlacementKey(req.Name)
@@ -88,9 +89,20 @@ func GetPlacementKeyFromRequest(req ctrl.Request) queue.PlacementKey {
 	}
 }
 
+// GetObjectKeyFromNamespaceName generates a PlacementKey from a namespace and name.
+func GetObjectKeyFromNamespaceName(namespace, name string) string {
+	if namespace == "" {
+		// Cluster-scoped placement
+		return name
+	} else {
+		// Namespaced placement
+		return namespace + namespaceSeparator + name
+	}
+}
+
 // ExtractNamespaceNameFromKey resolves a PlacementKey to a (namespace, name) tuple of the placement object.
-func ExtractNamespaceNameFromKey(placementKey queue.PlacementKey) (string, string, error) {
-	keyStr := string(placementKey)
+func ExtractNamespaceNameFromKey(key queue.PlacementKey) (string, string, error) {
+	keyStr := string(key)
 	// Check if the key contains a namespace separator
 	if strings.Contains(keyStr, namespaceSeparator) {
 		// This is a namespaced ResourcePlacement

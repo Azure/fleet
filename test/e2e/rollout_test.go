@@ -126,7 +126,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 					// This test spec runs in parallel with other suites; there might be unrelated
 					// Work objects in the namespace.
 					client.MatchingLabels{
-						placementv1beta1.CRPTrackingLabel: crpName,
+						placementv1beta1.PlacementTrackingLabel: crpName,
 					},
 				}
 				Eventually(func() string {
@@ -593,7 +593,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("change the image name in deployment, to roll over the resourcesnapshot", func() {
 			crsList := &placementv1beta1.ClusterResourceSnapshotList{}
-			Expect(hubClient.List(ctx, crsList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName})).Should(Succeed(), "Failed to list the resourcesnapshot")
+			Expect(hubClient.List(ctx, crsList, client.MatchingLabels{placementv1beta1.PlacementTrackingLabel: crpName})).Should(Succeed(), "Failed to list the resourcesnapshot")
 			Expect(len(crsList.Items) == 1).Should(BeTrue())
 			oldCRS := crsList.Items[0].Name
 			Expect(hubClient.Get(ctx, types.NamespacedName{Name: testDeployment.Name, Namespace: testDeployment.Namespace}, &testDeployment)).Should(Succeed(), "Failed to get deployment")
@@ -601,7 +601,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			Expect(hubClient.Update(ctx, &testDeployment)).Should(Succeed(), "Failed to change the image name in deployment")
 			// wait for the new resourcesnapshot to be created
 			Eventually(func() bool {
-				Expect(hubClient.List(ctx, crsList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName})).Should(Succeed(), "Failed to list the resourcesnapshot")
+				Expect(hubClient.List(ctx, crsList, client.MatchingLabels{placementv1beta1.PlacementTrackingLabel: crpName})).Should(Succeed(), "Failed to list the resourcesnapshot")
 				Expect(len(crsList.Items) == 1).Should(BeTrue())
 				return crsList.Items[0].Name != oldCRS
 			}, eventuallyDuration, eventuallyInterval).Should(BeTrue(), "Failed to remove the old resourcensnapshot")

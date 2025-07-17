@@ -84,7 +84,7 @@ func TestValidateEviction(t *testing.T) {
 	testBinding1 := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "test-binding-1",
-			Labels: map[string]string{placementv1beta1.CRPTrackingLabel: testCRPName},
+			Labels: map[string]string{placementv1beta1.PlacementTrackingLabel: testCRPName},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
 			State:         placementv1beta1.BindingStateUnscheduled,
@@ -94,7 +94,7 @@ func TestValidateEviction(t *testing.T) {
 	testBinding2 := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "test-binding-2",
-			Labels: map[string]string{placementv1beta1.CRPTrackingLabel: testCRPName},
+			Labels: map[string]string{placementv1beta1.PlacementTrackingLabel: testCRPName},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
 			State:         placementv1beta1.BindingStateScheduled,
@@ -671,7 +671,7 @@ func TestIsEvictionAllowed(t *testing.T) {
 	scheduledUnavailableBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "scheduled-binding",
-			Labels: map[string]string{placementv1beta1.CRPTrackingLabel: testCRPName},
+			Labels: map[string]string{placementv1beta1.PlacementTrackingLabel: testCRPName},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
 			State:         placementv1beta1.BindingStateScheduled,
@@ -681,7 +681,7 @@ func TestIsEvictionAllowed(t *testing.T) {
 	boundAvailableBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "bound-available-binding",
-			Labels: map[string]string{placementv1beta1.CRPTrackingLabel: testCRPName},
+			Labels: map[string]string{placementv1beta1.PlacementTrackingLabel: testCRPName},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
 			State:         placementv1beta1.BindingStateBound,
@@ -694,7 +694,7 @@ func TestIsEvictionAllowed(t *testing.T) {
 	anotherBoundAvailableBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "another-bound-available-binding",
-			Labels: map[string]string{placementv1beta1.CRPTrackingLabel: testCRPName},
+			Labels: map[string]string{placementv1beta1.PlacementTrackingLabel: testCRPName},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
 			State:         placementv1beta1.BindingStateBound,
@@ -707,7 +707,7 @@ func TestIsEvictionAllowed(t *testing.T) {
 	boundUnavailableBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "bound-unavailable-binding",
-			Labels: map[string]string{placementv1beta1.CRPTrackingLabel: testCRPName},
+			Labels: map[string]string{placementv1beta1.PlacementTrackingLabel: testCRPName},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
 			State:         placementv1beta1.BindingStateBound,
@@ -717,7 +717,7 @@ func TestIsEvictionAllowed(t *testing.T) {
 	unScheduledAvailableBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "unscheduled-available-binding",
-			Labels: map[string]string{placementv1beta1.CRPTrackingLabel: testCRPName},
+			Labels: map[string]string{placementv1beta1.PlacementTrackingLabel: testCRPName},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
 			State:         placementv1beta1.BindingStateUnscheduled,

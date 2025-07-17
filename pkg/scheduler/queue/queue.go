@@ -29,6 +29,7 @@ import (
 // ClusterResourcePlacement's name in the form of "name".
 // If the Placement is a NamespaceResourcePlacement, the PlacementKey is the
 // NamespaceResourcePlacement's name in the form of "namespace/name".
+// TODO: rename this to be ObjectKey or something similar, as it is not specific to Placement.
 type PlacementKey string
 
 // PlacementSchedulingQueueWriter is an interface which allows sources, such as controllers, to add

@@ -62,9 +62,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		klog.ErrorS(err, "Failed to get clusterSchedulingPolicySnapshot", "clusterSchedulingPolicySnapshot", snapshotKRef)
 		return ctrl.Result{}, controller.NewAPIServerError(true, err)
 	}
-	crp := snapshot.Labels[fleetv1beta1.CRPTrackingLabel]
+	crp := snapshot.Labels[fleetv1beta1.PlacementTrackingLabel]
 	if len(crp) == 0 {
-		err := fmt.Errorf("invalid label value %s", fleetv1beta1.CRPTrackingLabel)
+		err := fmt.Errorf("invalid label value %s", fleetv1beta1.PlacementTrackingLabel)
 		klog.ErrorS(err, "Invalid clusterSchedulingPolicySnapshot", "clusterSchedulingPolicySnapshot", snapshotKRef)
 		return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
 	}

@@ -93,8 +93,8 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crpName, 0),
 					Labels: map[string]string{
-						placementv1beta1.ResourceIndexLabel: "0",
-						placementv1beta1.CRPTrackingLabel:   crpName,
+						placementv1beta1.ResourceIndexLabel:     "0",
+						placementv1beta1.PlacementTrackingLabel: crpName,
 					},
 					Annotations: map[string]string{
 						placementv1beta1.ResourceGroupHashAnnotation:         "abc",
@@ -122,8 +122,8 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crpName, 0),
 					Labels: map[string]string{
-						placementv1beta1.ResourceIndexLabel: "0",
-						placementv1beta1.CRPTrackingLabel:   crpName,
+						placementv1beta1.ResourceIndexLabel:     "0",
+						placementv1beta1.PlacementTrackingLabel: crpName,
 					},
 					Annotations: map[string]string{
 						placementv1beta1.ResourceGroupHashAnnotation:         "abc",
@@ -189,8 +189,8 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crpName, 0),
 					Labels: map[string]string{
-						placementv1beta1.ResourceIndexLabel: "0",
-						placementv1beta1.CRPTrackingLabel:   crpName,
+						placementv1beta1.ResourceIndexLabel:     "0",
+						placementv1beta1.PlacementTrackingLabel: crpName,
 					},
 					Annotations: map[string]string{
 						placementv1beta1.ResourceGroupHashAnnotation:         "abc",
@@ -300,8 +300,8 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crpName, 0),
 					Labels: map[string]string{
-						placementv1beta1.ResourceIndexLabel: "0",
-						placementv1beta1.CRPTrackingLabel:   crpName,
+						placementv1beta1.ResourceIndexLabel:     "0",
+						placementv1beta1.PlacementTrackingLabel: crpName,
 					},
 					Annotations: map[string]string{
 						placementv1beta1.ResourceGroupHashAnnotation:         "abc",
@@ -362,8 +362,8 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crpName, 0),
 					Labels: map[string]string{
-						placementv1beta1.ResourceIndexLabel: "0",
-						placementv1beta1.CRPTrackingLabel:   crpName,
+						placementv1beta1.ResourceIndexLabel:     "0",
+						placementv1beta1.PlacementTrackingLabel: crpName,
 					},
 					Annotations: map[string]string{
 						placementv1beta1.ResourceGroupHashAnnotation:         "abc",
@@ -382,8 +382,8 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameWithSubindexFmt, crpName, 0, 0),
 						Labels: map[string]string{
-							placementv1beta1.ResourceIndexLabel: "0",
-							placementv1beta1.CRPTrackingLabel:   crpName,
+							placementv1beta1.ResourceIndexLabel:     "0",
+							placementv1beta1.PlacementTrackingLabel: crpName,
 						},
 						Annotations: map[string]string{
 							placementv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
@@ -399,8 +399,8 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameWithSubindexFmt, crpName, 0, 1),
 						Labels: map[string]string{
-							placementv1beta1.ResourceIndexLabel: "0",
-							placementv1beta1.CRPTrackingLabel:   crpName,
+							placementv1beta1.ResourceIndexLabel:     "0",
+							placementv1beta1.PlacementTrackingLabel: crpName,
 						},
 						Annotations: map[string]string{
 							placementv1beta1.SubindexOfResourceSnapshotAnnotation: "1",
@@ -584,8 +584,8 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crpName, 0),
 					Labels: map[string]string{
-						placementv1beta1.ResourceIndexLabel: "0",
-						placementv1beta1.CRPTrackingLabel:   crpName,
+						placementv1beta1.ResourceIndexLabel:     "0",
+						placementv1beta1.PlacementTrackingLabel: crpName,
 					},
 					Annotations: map[string]string{
 						placementv1beta1.ResourceGroupHashAnnotation:         "abc",
@@ -604,8 +604,8 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameWithSubindexFmt, crpName, 0, 0),
 						Labels: map[string]string{
-							placementv1beta1.ResourceIndexLabel: "0",
-							placementv1beta1.CRPTrackingLabel:   crpName,
+							placementv1beta1.ResourceIndexLabel:     "0",
+							placementv1beta1.PlacementTrackingLabel: crpName,
 						},
 						Annotations: map[string]string{
 							placementv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
@@ -621,8 +621,8 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameWithSubindexFmt, crpName, 0, 1),
 						Labels: map[string]string{
-							placementv1beta1.ResourceIndexLabel: "0",
-							placementv1beta1.CRPTrackingLabel:   crpName,
+							placementv1beta1.ResourceIndexLabel:     "0",
+							placementv1beta1.PlacementTrackingLabel: crpName,
 						},
 						Annotations: map[string]string{
 							placementv1beta1.SubindexOfResourceSnapshotAnnotation: "1",
@@ -816,8 +816,8 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crpName, 0),
 					Labels: map[string]string{
-						placementv1beta1.ResourceIndexLabel: "0",
-						placementv1beta1.CRPTrackingLabel:   crpName,
+						placementv1beta1.ResourceIndexLabel:     "0",
+						placementv1beta1.PlacementTrackingLabel: crpName,
 					},
 					Annotations: map[string]string{
 						placementv1beta1.ResourceGroupHashAnnotation:         "abc",
@@ -1009,8 +1009,8 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crpName, 0),
 					Labels: map[string]string{
-						placementv1beta1.ResourceIndexLabel: "0",
-						placementv1beta1.CRPTrackingLabel:   crpName,
+						placementv1beta1.ResourceIndexLabel:     "0",
+						placementv1beta1.PlacementTrackingLabel: crpName,
 					},
 					Annotations: map[string]string{
 						placementv1beta1.ResourceGroupHashAnnotation:         "abc",
@@ -1029,8 +1029,8 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameWithSubindexFmt, crpName, 0, 0),
 						Labels: map[string]string{
-							placementv1beta1.ResourceIndexLabel: "0",
-							placementv1beta1.CRPTrackingLabel:   crpName,
+							placementv1beta1.ResourceIndexLabel:     "0",
+							placementv1beta1.PlacementTrackingLabel: crpName,
 						},
 						Annotations: map[string]string{
 							placementv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
@@ -1046,8 +1046,8 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameWithSubindexFmt, crpName, 0, 1),
 						Labels: map[string]string{
-							placementv1beta1.ResourceIndexLabel: "0",
-							placementv1beta1.CRPTrackingLabel:   crpName,
+							placementv1beta1.ResourceIndexLabel:     "0",
+							placementv1beta1.PlacementTrackingLabel: crpName,
 						},
 						Annotations: map[string]string{
 							placementv1beta1.SubindexOfResourceSnapshotAnnotation: "1",

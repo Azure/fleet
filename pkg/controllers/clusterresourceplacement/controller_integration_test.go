@@ -98,7 +98,7 @@ var (
 func retrieveAndValidatePolicySnapshot(crp *placementv1beta1.ClusterResourcePlacement, want *placementv1beta1.ClusterSchedulingPolicySnapshot) *placementv1beta1.ClusterSchedulingPolicySnapshot {
 	policySnapshotList := &placementv1beta1.ClusterSchedulingPolicySnapshotList{}
 	Eventually(func() error {
-		if err := k8sClient.List(ctx, policySnapshotList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
+		if err := k8sClient.List(ctx, policySnapshotList, client.MatchingLabels{placementv1beta1.PlacementTrackingLabel: crp.Name}); err != nil {
 			return err
 		}
 		if len(policySnapshotList.Items) != 1 {
@@ -115,7 +115,7 @@ func retrieveAndValidatePolicySnapshot(crp *placementv1beta1.ClusterResourcePlac
 func retrieveAndValidateResourceSnapshot(crp *placementv1beta1.ClusterResourcePlacement, want *placementv1beta1.ClusterResourceSnapshot) *placementv1beta1.ClusterResourceSnapshot {
 	resourceSnapshotList := &placementv1beta1.ClusterResourceSnapshotList{}
 	Eventually(func() error {
-		if err := k8sClient.List(ctx, resourceSnapshotList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
+		if err := k8sClient.List(ctx, resourceSnapshotList, client.MatchingLabels{placementv1beta1.PlacementTrackingLabel: crp.Name}); err != nil {
 			return err
 		}
 		if len(resourceSnapshotList.Items) != 1 {
@@ -148,7 +148,7 @@ func retrieveAndValidateCRPDeletion(crp *placementv1beta1.ClusterResourcePlaceme
 	By("Checking the policy snapshots")
 	policySnapshotList := &placementv1beta1.ClusterSchedulingPolicySnapshotList{}
 	Eventually(func() error {
-		if err := k8sClient.List(ctx, policySnapshotList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
+		if err := k8sClient.List(ctx, policySnapshotList, client.MatchingLabels{placementv1beta1.PlacementTrackingLabel: crp.Name}); err != nil {
 			return err
 		}
 		if len(policySnapshotList.Items) != 0 {
@@ -160,7 +160,7 @@ func retrieveAndValidateCRPDeletion(crp *placementv1beta1.ClusterResourcePlaceme
 	By("Checking the resource snapshots")
 	resourceSnapshotList := &placementv1beta1.ClusterResourceSnapshotList{}
 	Eventually(func() error {
-		if err := k8sClient.List(ctx, resourceSnapshotList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
+		if err := k8sClient.List(ctx, resourceSnapshotList, client.MatchingLabels{placementv1beta1.PlacementTrackingLabel: crp.Name}); err != nil {
 			return err
 		}
 		if len(resourceSnapshotList.Items) != 0 {
@@ -183,7 +183,7 @@ func createOverriddenClusterResourceBinding(cluster string, policySnapshot *plac
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "binding-" + cluster,
 			Labels: map[string]string{
-				placementv1beta1.CRPTrackingLabel: resourceSnapshot.Labels[placementv1beta1.CRPTrackingLabel],
+				placementv1beta1.PlacementTrackingLabel: resourceSnapshot.Labels[placementv1beta1.PlacementTrackingLabel],
 			},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
@@ -283,9 +283,9 @@ func checkClusterSchedulingPolicySnapshot() *placementv1beta1.ClusterSchedulingP
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(placementv1beta1.PolicySnapshotNameFmt, crp.Name, 0),
 			Labels: map[string]string{
-				placementv1beta1.CRPTrackingLabel:      crp.Name,
-				placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
-				placementv1beta1.PolicyIndexLabel:      strconv.Itoa(0),
+				placementv1beta1.PlacementTrackingLabel: crp.Name,
+				placementv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
+				placementv1beta1.PolicyIndexLabel:       strconv.Itoa(0),
 			},
 			Annotations: map[string]string{
 				placementv1beta1.CRPGenerationAnnotation: strconv.Itoa(int(crp.Generation)),
@@ -312,9 +312,9 @@ func checkClusterResourceSnapshot() *placementv1beta1.ClusterResourceSnapshot {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crp.Name, 0),
 			Labels: map[string]string{
-				placementv1beta1.CRPTrackingLabel:      crp.Name,
-				placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
-				placementv1beta1.ResourceIndexLabel:    strconv.Itoa(0),
+				placementv1beta1.PlacementTrackingLabel: crp.Name,
+				placementv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
+				placementv1beta1.ResourceIndexLabel:     strconv.Itoa(0),
 			},
 			Annotations: map[string]string{
 				placementv1beta1.NumberOfResourceSnapshotsAnnotation: strconv.Itoa(1),

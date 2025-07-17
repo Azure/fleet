@@ -226,6 +226,10 @@ e2e-tests-custom: setup-clusters
 setup-clusters:
 	cd ./test/e2e && chmod +x ./setup.sh && ./setup.sh $(MEMBER_CLUSTER_COUNT)
 
+.PHONY: collect-e2e-logs
+collect-e2e-logs: ## Collect logs from hub and member agent pods after e2e tests
+	cd ./test/e2e && chmod +x ./collect-logs.sh && ./collect-logs.sh $(MEMBER_CLUSTER_COUNT)
+
 ## reviewable
 .PHONY: reviewable
 reviewable: fmt vet lint staticcheck
