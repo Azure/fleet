@@ -542,8 +542,8 @@ spec:
                         managed by Fleet (i.e., specified in the hub cluster manifest). This is the default
                         option.
 
-                        Note that this option would revert any ad-hoc changes made on the member cluster side in
-                        the managed fields; if you would like to make temporary edits on the member cluster side
+                        Note that this option would revert any ad-hoc changes made on the member cluster side in the
+                        managed fields; if you would like to make temporary edits on the member cluster side
                         in the managed fields, switch to IfNotDrifted option. Note that changes in unmanaged
                         fields will be left alone; if you use the FullDiff compare option, such changes will
                         be reported as drifts.
