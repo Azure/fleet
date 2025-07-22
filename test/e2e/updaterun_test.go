@@ -1144,7 +1144,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 })
 
 // Note that this container cannot run in parallel with other containers.
-var _ = Describe("Test member cluster join and leave flow with updateRun", Ordered, Serial, func() {
+var _ = Describe("Test member cluster join and leave flow with updateRun", Label("joinleave"), Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	strategyName := fmt.Sprintf(updateRunStrategyNameTemplate, GinkgoParallelProcess())
 	var strategy *placementv1beta1.ClusterStagedUpdateStrategy
@@ -1245,7 +1245,7 @@ var _ = Describe("Test member cluster join and leave flow with updateRun", Order
 		ensureUpdateRunStrategyDeletion(strategyName)
 	})
 
-	Context("UpdateRun should delete the binding of a left cluster but resources are kept", Ordered, Serial, func() {
+	Context("UpdateRun should delete the binding of a left cluster but resources are kept", Label("joinleave"), Ordered, Serial, func() {
 		It("Should validate binding for member cluster 1 is set to Unscheduled", func() {
 			bindingUnscheduledActual := bindingStateActual(crpName, allMemberClusterNames[0], placementv1beta1.BindingStateUnscheduled)
 			Eventually(bindingUnscheduledActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to mark binding for member cluster %s as unscheduled", allMemberClusterNames[0])
@@ -1293,7 +1293,7 @@ var _ = Describe("Test member cluster join and leave flow with updateRun", Order
 		})
 	})
 
-	Context("Rejoin a member cluster when resources are not changed", Ordered, Serial, func() {
+	Context("Rejoin a member cluster when resources are not changed", Label("joinleave"), Ordered, Serial, func() {
 		It("Should be able to rejoin member cluster 1", func() {
 			setMemberClusterToJoin(allMemberClusters[0])
 			checkIfMemberClusterHasJoined(allMemberClusters[0])
@@ -1321,7 +1321,7 @@ var _ = Describe("Test member cluster join and leave flow with updateRun", Order
 		})
 	})
 
-	Context("Rejoin a member cluster when resources are changed", Ordered, Serial, func() {
+	Context("Rejoin a member cluster when resources are changed", Label("joinleave"), Ordered, Serial, func() {
 		var newConfigMap corev1.ConfigMap
 
 		It("Generate a new configMap", func() {
@@ -1371,7 +1371,7 @@ var _ = Describe("Test member cluster join and leave flow with updateRun", Order
 		})
 	})
 
-	Context("Rejoin a member cluster after orphaned resources are deleted on the member cluster", Ordered, Serial, func() {
+	Context("Rejoin a member cluster after orphaned resources are deleted on the member cluster", Label("joinleave"), Ordered, Serial, func() {
 		It("Should delete the orphaned resources on member cluster 1", func() {
 			cleanWorkResourcesOnCluster(allMemberClusters[0])
 		})
@@ -1403,7 +1403,7 @@ var _ = Describe("Test member cluster join and leave flow with updateRun", Order
 		})
 	})
 
-	Context("Rejoin a member cluster and change to rollout CRP with rollingUpdate", Ordered, Serial, func() {
+	Context("Rejoin a member cluster and change to rollout CRP with rollingUpdate", Label("joinleave"), Ordered, Serial, func() {
 		It("Should be able to rejoin member cluster 1", func() {
 			setMemberClusterToJoin(allMemberClusters[0])
 			checkIfMemberClusterHasJoined(allMemberClusters[0])
