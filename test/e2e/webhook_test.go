@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	testutils "github.com/kubefleet-dev/kubefleet/test/e2e/v1alpha1/utils"
 )
@@ -440,8 +439,8 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations", 
 		Version: "v1",
 		Name:    fmt.Sprintf("test-clusterrole-%d", GinkgoParallelProcess()),
 	}
-	policy := &placementv1alpha1.OverridePolicy{
-		OverrideRules: []placementv1alpha1.OverrideRule{
+	policy := &placementv1beta1.OverridePolicy{
+		OverrideRules: []placementv1beta1.OverrideRule{
 			{
 				ClusterSelector: &placementv1beta1.ClusterSelector{
 					ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -461,9 +460,9 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations", 
 						},
 					},
 				},
-				JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+				JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 					{
-						Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+						Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 						Path:     "/meta/labels/test-key",
 					},
 				},
@@ -487,11 +486,11 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations", 
 				Version: "v1",
 			}
 			// Create the CRO.
-			cro := &placementv1alpha1.ClusterResourceOverride{
+			cro := &placementv1beta1.ClusterResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: croName,
 				},
-				Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+				Spec: placementv1beta1.ClusterResourceOverrideSpec{
 					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 						invalidSelector, selector, selector, invalidSelector1,
 					},
@@ -525,11 +524,11 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operation lim
 
 	It("should deny create CRO with 100 existing CROs", func() {
 		Consistently(func(g Gomega) error {
-			cro101 := &placementv1alpha1.ClusterResourceOverride{
+			cro101 := &placementv1beta1.ClusterResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-cro-101",
 				},
-				Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+				Spec: placementv1beta1.ClusterResourceOverrideSpec{
 					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 						{
 							Group:   "rbac.authorization.k8s.io/v1",
@@ -538,8 +537,8 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operation lim
 							Name:    "test-cluster-role-101",
 						},
 					},
-					Policy: &placementv1alpha1.OverridePolicy{
-						OverrideRules: []placementv1alpha1.OverrideRule{
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
 							{
 								ClusterSelector: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -559,9 +558,9 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operation lim
 										},
 									},
 								},
-								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+								JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+										Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 										Path:     "/meta/labels/test-key",
 									},
 								},
@@ -590,16 +589,16 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations re
 	}
 	BeforeAll(func() {
 		By("create clusterResourceOverride")
-		cro := &placementv1alpha1.ClusterResourceOverride{
+		cro := &placementv1beta1.ClusterResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: croName,
 			},
-			Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+			Spec: placementv1beta1.ClusterResourceOverrideSpec{
 				ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					selector,
 				},
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -619,9 +618,9 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations re
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+									Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 									Path:     "/meta/labels/test-key",
 								},
 							},
@@ -640,16 +639,16 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations re
 
 	It("should deny create for invalid cluster resource override", func() {
 		Consistently(func(g Gomega) error {
-			cro1 := &placementv1alpha1.ClusterResourceOverride{
+			cro1 := &placementv1beta1.ClusterResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf("test-cro-%d", GinkgoParallelProcess()),
 				},
-				Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+				Spec: placementv1beta1.ClusterResourceOverrideSpec{
 					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 						selector,
 					},
-					Policy: &placementv1alpha1.OverridePolicy{
-						OverrideRules: []placementv1alpha1.OverrideRule{
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
 							{
 								ClusterSelector: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -666,23 +665,23 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations re
 										},
 									},
 								},
-								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+								JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+										Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 										Path:     "/meta/labels/test-key",
 									},
 									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+										Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 										Path:     "/meta/annotations/test-key",
 										Value:    apiextensionsv1.JSON{Raw: []byte(`"test-value"`)},
 									},
 									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+										Operator: placementv1beta1.JSONPatchOverrideOpReplace,
 										Path:     "/kind",
 										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-kind"`)},
 									},
 									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+										Operator: placementv1beta1.JSONPatchOverrideOpReplace,
 										Path:     "////",
 										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-kind"`)},
 									},
@@ -709,11 +708,11 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations re
 var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 	cro1Name := fmt.Sprintf("test-cro-%d", GinkgoParallelProcess())
-	cro := &placementv1alpha1.ClusterResourceOverride{
+	cro := &placementv1beta1.ClusterResourceOverride{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: croName,
 		},
-		Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+		Spec: placementv1beta1.ClusterResourceOverrideSpec{
 			ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 				{
 					Group:   "rbac.authorization.k8s.io/v1",
@@ -722,15 +721,15 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 					Name:    fmt.Sprintf("test-clusterrole-%d", GinkgoParallelProcess()),
 				},
 			},
-			Policy: &placementv1alpha1.OverridePolicy{
-				OverrideRules: []placementv1alpha1.OverrideRule{
+			Policy: &placementv1beta1.OverridePolicy{
+				OverrideRules: []placementv1beta1.OverrideRule{
 					{
 						ClusterSelector: &placementv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
 						},
-						JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+						JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 							{
-								Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+								Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 								Path:     "/meta/labels/test-key",
 							},
 						},
@@ -753,7 +752,7 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 
 	It("should deny update CRO with invalid cluster resource selections", func() {
 		Eventually(func(g Gomega) error {
-			var cro placementv1alpha1.ClusterResourceOverride
+			var cro placementv1beta1.ClusterResourceOverride
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: croName}, &cro)).Should(Succeed())
 			invalidSelector := placementv1beta1.ClusterResourceSelector{
 				Group:   "rbac.authorization.k8s.io/v1",
@@ -788,11 +787,11 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 
 	It("should deny update CRO for invalid cluster resource override", func() {
 		Eventually(func(g Gomega) error {
-			cro1 := &placementv1alpha1.ClusterResourceOverride{
+			cro1 := &placementv1beta1.ClusterResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: cro1Name,
 				},
-				Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+				Spec: placementv1beta1.ClusterResourceOverrideSpec{
 					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 						{
 							Group:   "rbac.authorization.k8s.io/v1",
@@ -801,15 +800,15 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 							Name:    "test-clusterrole",
 						},
 					},
-					Policy: &placementv1alpha1.OverridePolicy{
-						OverrideRules: []placementv1alpha1.OverrideRule{
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
 							{
 								ClusterSelector: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
 								},
-								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+								JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+										Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 										Path:     "/meta/labels/test-key",
 									},
 								},
@@ -819,7 +818,7 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 				},
 			}
 			Expect(hubClient.Create(ctx, cro1)).To(Succeed(), "Failed to create CRO %s", cro1.Name)
-			var cro placementv1alpha1.ClusterResourceOverride
+			var cro placementv1beta1.ClusterResourceOverride
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: croName}, &cro)).Should(Succeed())
 			selector := placementv1beta1.ClusterResourceSelector{
 				Group:   "rbac.authorization.k8s.io/v1",
@@ -840,12 +839,12 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 				},
 			}
 			cro.Spec.Policy.OverrideRules[0].ClusterSelector.ClusterSelectorTerms = append(cro.Spec.Policy.OverrideRules[0].ClusterSelector.ClusterSelectorTerms, clusterSelectorTerm)
-			cro.Spec.Policy.OverrideRules[0].JSONPatchOverrides = append(cro.Spec.Policy.OverrideRules[0].JSONPatchOverrides, placementv1alpha1.JSONPatchOverride{
-				Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+			cro.Spec.Policy.OverrideRules[0].JSONPatchOverrides = append(cro.Spec.Policy.OverrideRules[0].JSONPatchOverrides, placementv1beta1.JSONPatchOverride{
+				Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 				Path:     "/kind",
 			})
-			cro.Spec.Policy.OverrideRules[0].JSONPatchOverrides = append(cro.Spec.Policy.OverrideRules[0].JSONPatchOverrides, placementv1alpha1.JSONPatchOverride{
-				Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+			cro.Spec.Policy.OverrideRules[0].JSONPatchOverrides = append(cro.Spec.Policy.OverrideRules[0].JSONPatchOverrides, placementv1beta1.JSONPatchOverride{
+				Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 				Path:     "",
 				Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
 			})
@@ -868,14 +867,14 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 var _ = Describe("webhook tests for ResourceOverride CREATE operations", func() {
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-	selector := placementv1alpha1.ResourceSelector{
+	selector := placementv1beta1.ResourceSelector{
 		Group:   "apps",
 		Kind:    "Deployment",
 		Version: "v1",
 		Name:    fmt.Sprintf("deployment-test-%d", GinkgoParallelProcess()),
 	}
-	policy := &placementv1alpha1.OverridePolicy{
-		OverrideRules: []placementv1alpha1.OverrideRule{
+	policy := &placementv1beta1.OverridePolicy{
+		OverrideRules: []placementv1beta1.OverrideRule{
 			{
 				ClusterSelector: &placementv1beta1.ClusterSelector{
 					ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -895,9 +894,9 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operations", func() 
 						},
 					},
 				},
-				JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+				JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 					{
-						Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+						Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 						Path:     "/meta/labels/test-key",
 					},
 				},
@@ -917,13 +916,13 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operations", func() 
 
 	It("should deny create RO with invalid resource selection", func() {
 		Consistently(func(g Gomega) error {
-			ro := &placementv1alpha1.ResourceOverride{
+			ro := &placementv1beta1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      roName,
 					Namespace: roNamespace,
 				},
-				Spec: placementv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []placementv1alpha1.ResourceSelector{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
 						selector, selector,
 					},
 					Policy: policy,
@@ -962,13 +961,13 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operation limitation
 	It("should deny create RO with 100 existing ROs", func() {
 		Consistently(func(g Gomega) error {
 			By("Try to create the 101st ResourceOverride")
-			ro101 := &placementv1alpha1.ResourceOverride{
+			ro101 := &placementv1beta1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-ro-101",
 					Namespace: roNamespace,
 				},
-				Spec: placementv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []placementv1alpha1.ResourceSelector{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
 						{
 							Group:   "apps",
 							Kind:    "Deployment",
@@ -976,8 +975,8 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operation limitation
 							Name:    "test-deployment-101",
 						},
 					},
-					Policy: &placementv1alpha1.OverridePolicy{
-						OverrideRules: []placementv1alpha1.OverrideRule{
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
 							{
 								ClusterSelector: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -997,9 +996,9 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operation limitation
 										},
 									},
 								},
-								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+								JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+										Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 										Path:     "/meta/labels/test-key",
 									},
 								},
@@ -1020,14 +1019,14 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operation limitation
 var _ = Describe("webhook tests for ResourceOverride CREATE operations resource selection limitations", Ordered, Serial, func() {
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-	selector := placementv1alpha1.ResourceSelector{
+	selector := placementv1beta1.ResourceSelector{
 		Group:   "apps",
 		Kind:    "Deployment",
 		Version: "v1",
 		Name:    fmt.Sprintf("deployment-test-%d", GinkgoParallelProcess()),
 	}
-	policy := &placementv1alpha1.OverridePolicy{
-		OverrideRules: []placementv1alpha1.OverrideRule{
+	policy := &placementv1beta1.OverridePolicy{
+		OverrideRules: []placementv1beta1.OverrideRule{
 			{
 				ClusterSelector: &placementv1beta1.ClusterSelector{
 					ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -1047,9 +1046,9 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operations resource 
 						},
 					},
 				},
-				JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+				JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 					{
-						Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+						Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 						Path:     "/meta/labels/test-key",
 					},
 				},
@@ -1062,13 +1061,13 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operations resource 
 		createWorkResources()
 
 		By("create resourceOverride")
-		ro := &placementv1alpha1.ResourceOverride{
+		ro := &placementv1beta1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      roName,
 				Namespace: roNamespace,
 			},
-			Spec: placementv1alpha1.ResourceOverrideSpec{
-				ResourceSelectors: []placementv1alpha1.ResourceSelector{
+			Spec: placementv1beta1.ResourceOverrideSpec{
+				ResourceSelectors: []placementv1beta1.ResourceSelector{
 					selector,
 				},
 				Policy: policy,
@@ -1088,32 +1087,32 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operations resource 
 	It("should deny create RO with invalid resource override", func() {
 		Consistently(func(g Gomega) error {
 			By("create 2nd resourceOverride with same resource selection")
-			ro1 := &placementv1alpha1.ResourceOverride{
+			ro1 := &placementv1beta1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      fmt.Sprintf("test-ro-%d", GinkgoParallelProcess()),
 					Namespace: roNamespace,
 				},
-				Spec: placementv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []placementv1alpha1.ResourceSelector{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
 						selector,
 					},
-					Policy: &placementv1alpha1.OverridePolicy{
-						OverrideRules: []placementv1alpha1.OverrideRule{
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
 							{
 								ClusterSelector: nil,
-								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+								JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+										Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 										Path:     "/meta/labels/test-key",
 										Value:    apiextensionsv1.JSON{Raw: []byte(`"test-value"`)},
 									},
 									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+										Operator: placementv1beta1.JSONPatchOverrideOpReplace,
 										Path:     "/kind",
 										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-kind"`)},
 									},
 									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+										Operator: placementv1beta1.JSONPatchOverrideOpReplace,
 										Path:     "////",
 										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-kind"`)},
 									},
@@ -1139,7 +1138,7 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
 	ro1Name := fmt.Sprintf("test-ro-%d", GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-	selector := placementv1alpha1.ResourceSelector{
+	selector := placementv1beta1.ResourceSelector{
 		Group:   "apps",
 		Kind:    "Deployment",
 		Version: "v1",
@@ -1151,24 +1150,24 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 		createWorkResources()
 
 		By("creating ResourceOverride")
-		ro := &placementv1alpha1.ResourceOverride{
+		ro := &placementv1beta1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      roName,
 				Namespace: roNamespace,
 			},
-			Spec: placementv1alpha1.ResourceOverrideSpec{
-				ResourceSelectors: []placementv1alpha1.ResourceSelector{
+			Spec: placementv1beta1.ResourceOverrideSpec{
+				ResourceSelectors: []placementv1beta1.ResourceSelector{
 					selector,
 				},
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+									Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 									Path:     "/meta/labels/test-key",
 								},
 							},
@@ -1191,7 +1190,7 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 
 	It("should deny update RO with invalid resource selection", func() {
 		Eventually(func(g Gomega) error {
-			var ro placementv1alpha1.ResourceOverride
+			var ro placementv1beta1.ResourceOverride
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: roName, Namespace: roNamespace}, &ro)).Should(Succeed())
 			ro.Spec.ResourceSelectors = append(ro.Spec.ResourceSelectors, selector)
 			ro.Spec.ResourceSelectors = append(ro.Spec.ResourceSelectors, selector)
@@ -1208,25 +1207,25 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 	})
 
 	It("should deny update RO with invalid resource override", func() {
-		newSelector := placementv1alpha1.ResourceSelector{
+		newSelector := placementv1beta1.ResourceSelector{
 			Group:   "apps",
 			Kind:    "Deployment",
 			Version: "v1",
 			Name:    "test-deployment-x",
 		}
-		ro1 := &placementv1alpha1.ResourceOverride{
+		ro1 := &placementv1beta1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      fmt.Sprintf("test-ro-%d", GinkgoParallelProcess()),
 				Namespace: roNamespace,
 			},
-			Spec: placementv1alpha1.ResourceOverrideSpec{
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+			Spec: placementv1beta1.ResourceOverrideSpec{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: nil,
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+									Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 									Path:     "/meta/labels/test-key",
 								},
 							},
@@ -1239,7 +1238,7 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 		By("creating a new resource override")
 		Expect(hubClient.Create(ctx, ro1)).To(Succeed(), "Failed to create RO %s", ro1.Name)
 		Eventually(func(g Gomega) error {
-			var ro placementv1alpha1.ResourceOverride
+			var ro placementv1beta1.ResourceOverride
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: roName, Namespace: roNamespace}, &ro)).Should(Succeed())
 			ro.Spec.ResourceSelectors = append(ro.Spec.ResourceSelectors, newSelector)
 			clusterSelectorTerm := placementv1beta1.ClusterSelectorTerm{
@@ -1254,22 +1253,22 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 				},
 			}
 			ro.Spec.Policy.OverrideRules[0].ClusterSelector.ClusterSelectorTerms = append(ro.Spec.Policy.OverrideRules[0].ClusterSelector.ClusterSelectorTerms, clusterSelectorTerm)
-			ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides = append(ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides, placementv1alpha1.JSONPatchOverride{
-				Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+			ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides = append(ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides, placementv1beta1.JSONPatchOverride{
+				Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 				Path:     "/status/conditions/0",
 				Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
 			})
-			ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides = append(ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides, placementv1alpha1.JSONPatchOverride{
-				Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+			ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides = append(ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides, placementv1beta1.JSONPatchOverride{
+				Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 				Path:     "/status/conditions/0",
 			})
-			ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides = append(ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides, placementv1alpha1.JSONPatchOverride{
-				Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+			ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides = append(ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides, placementv1beta1.JSONPatchOverride{
+				Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 				Path:     "////kind",
 				Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
 			})
-			ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides = append(ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides, placementv1alpha1.JSONPatchOverride{
-				Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+			ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides = append(ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides, placementv1beta1.JSONPatchOverride{
+				Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 				Path:     "/metadata/finalizers/0",
 				Value:    apiextensionsv1.JSON{Raw: []byte(`"new-finalizer"`)},
 			})

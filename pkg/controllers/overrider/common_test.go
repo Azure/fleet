@@ -33,8 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
-	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/labels"
@@ -49,7 +48,7 @@ const (
 )
 
 var _ = Describe("Test ClusterResourceOverride common logic", func() {
-	var cro *fleetv1alpha1.ClusterResourceOverride
+	var cro *placementv1beta1.ClusterResourceOverride
 	croNameBase := "test-cro-common"
 	var testCROName string
 
@@ -79,7 +78,7 @@ var _ = Describe("Test ClusterResourceOverride common logic", func() {
 
 		It("Should not fail if there is no snapshots associated with the cro yet", func() {
 			By("Adding the overrideFinalizer")
-			controllerutil.AddFinalizer(cro, fleetv1alpha1.OverrideFinalizer)
+			controllerutil.AddFinalizer(cro, placementv1beta1.OverrideFinalizer)
 
 			By("verifying that it handles no snapshot cases")
 			cro.Name = "another-cro" //there is no snapshot associated with this CRO
@@ -96,7 +95,7 @@ var _ = Describe("Test ClusterResourceOverride common logic", func() {
 
 		It("Should delete all the snapshots if there is finalizer", func() {
 			By("Adding the overrideFinalizer")
-			controllerutil.AddFinalizer(cro, fleetv1alpha1.OverrideFinalizer)
+			controllerutil.AddFinalizer(cro, placementv1beta1.OverrideFinalizer)
 			By("verifying that all snapshots are deleted")
 			// we cannot apply the CRO to the cluster as it will trigger the real reconcile loop so the update can only return APIServerError
 			Expect(errors.Is(commonReconciler.handleOverrideDeleting(context.Background(), getClusterResourceOverrideSnapshot(testCROName, 0), cro), controller.ErrAPIServerError)).Should(BeTrue())
@@ -118,7 +117,7 @@ var _ = Describe("Test ClusterResourceOverride common logic", func() {
 			index := -1
 			for i := 0; i < 5; i++ {
 				snapshot := snapshotList.Items[i]
-				newIndex, err := labels.ExtractIndex(&snapshot, fleetv1alpha1.OverrideIndexLabel)
+				newIndex, err := labels.ExtractIndex(&snapshot, placementv1beta1.OverrideIndexLabel)
 				Expect(err).Should(Succeed())
 				Expect(newIndex == index+1).Should(BeTrue())
 				index = newIndex
@@ -199,9 +198,9 @@ var _ = Describe("Test ClusterResourceOverride common logic", func() {
 			Expect(commonReconciler.ensureSnapshotLatest(ctx, snapshot)).Should(Succeed())
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.GetName()}, snapshot)).Should(Succeed())
 			diff := cmp.Diff(map[string]string{
-				fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(0),
-				fleetv1beta1.IsLatestSnapshotLabel:  "true",
-				fleetv1alpha1.OverrideTrackingLabel: testCROName,
+				placementv1beta1.OverrideIndexLabel:    strconv.Itoa(0),
+				placementv1beta1.IsLatestSnapshotLabel: "true",
+				placementv1beta1.OverrideTrackingLabel: testCROName,
 			}, snapshot.GetLabels())
 			Expect(diff).Should(BeEmpty(), diff)
 		})
@@ -211,17 +210,17 @@ var _ = Describe("Test ClusterResourceOverride common logic", func() {
 			snapshot := getClusterResourceOverrideSnapshot(testCROName, 0)
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.GetName()}, snapshot)).Should(Succeed())
 			snapshot.SetLabels(map[string]string{
-				fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(0),
-				fleetv1beta1.IsLatestSnapshotLabel:  "false",
-				fleetv1alpha1.OverrideTrackingLabel: testCROName,
+				placementv1beta1.OverrideIndexLabel:    strconv.Itoa(0),
+				placementv1beta1.IsLatestSnapshotLabel: "false",
+				placementv1beta1.OverrideTrackingLabel: testCROName,
 			})
 			Expect(k8sClient.Update(ctx, snapshot)).Should(Succeed())
 			Expect(commonReconciler.ensureSnapshotLatest(ctx, snapshot)).Should(Succeed())
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.GetName()}, snapshot)).Should(Succeed())
 			diff := cmp.Diff(map[string]string{
-				fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(0),
-				fleetv1beta1.IsLatestSnapshotLabel:  "true",
-				fleetv1alpha1.OverrideTrackingLabel: testCROName,
+				placementv1beta1.OverrideIndexLabel:    strconv.Itoa(0),
+				placementv1beta1.IsLatestSnapshotLabel: "true",
+				placementv1beta1.OverrideTrackingLabel: testCROName,
 			}, snapshot.GetLabels())
 			Expect(diff).Should(BeEmpty(), diff)
 		})
@@ -229,7 +228,7 @@ var _ = Describe("Test ClusterResourceOverride common logic", func() {
 })
 
 var _ = Describe("Test ResourceOverride common logic", func() {
-	var ro *fleetv1alpha1.ResourceOverride
+	var ro *placementv1beta1.ResourceOverride
 	totalSnapshots := 7
 	testROName := "test-ro-common"
 	var namespaceName string
@@ -273,7 +272,7 @@ var _ = Describe("Test ResourceOverride common logic", func() {
 
 		It("Should not fail if there is no snapshots associated with the ro yet", func() {
 			By("Adding the overrideFinalizer")
-			controllerutil.AddFinalizer(ro, fleetv1alpha1.OverrideFinalizer)
+			controllerutil.AddFinalizer(ro, placementv1beta1.OverrideFinalizer)
 
 			By("verifying that it handles no snapshot cases")
 			ro.Name = "another-ro" //there is no snapshot associated with this RO
@@ -290,7 +289,7 @@ var _ = Describe("Test ResourceOverride common logic", func() {
 
 		It("Should delete all the snapshots if there is finalizer", func() {
 			By("Adding the overrideFinalizer")
-			controllerutil.AddFinalizer(ro, fleetv1alpha1.OverrideFinalizer)
+			controllerutil.AddFinalizer(ro, placementv1beta1.OverrideFinalizer)
 			By("verifying that all snapshots are deleted")
 			// we cannot apply the RO to the cluster as it will trigger the real reconcile loop so the update can only return APIServerError
 			Expect(errors.Is(commonReconciler.handleOverrideDeleting(context.Background(), getResourceOverrideSnapshot(testROName, namespaceName, 0), ro), controller.ErrAPIServerError)).Should(BeTrue())
@@ -312,7 +311,7 @@ var _ = Describe("Test ResourceOverride common logic", func() {
 			index := -1
 			for i := 0; i < totalSnapshots; i++ {
 				snapshot := snapshotList.Items[i]
-				newIndex, err := labels.ExtractIndex(&snapshot, fleetv1alpha1.OverrideIndexLabel)
+				newIndex, err := labels.ExtractIndex(&snapshot, placementv1beta1.OverrideIndexLabel)
 				Expect(err).Should(Succeed())
 				Expect(newIndex == index+1).Should(BeTrue())
 				index = newIndex
@@ -393,9 +392,9 @@ var _ = Describe("Test ResourceOverride common logic", func() {
 			Expect(commonReconciler.ensureSnapshotLatest(ctx, snapshot)).Should(Succeed())
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.GetName(), Namespace: snapshot.Namespace}, snapshot)).Should(Succeed())
 			diff := cmp.Diff(map[string]string{
-				fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(0),
-				fleetv1beta1.IsLatestSnapshotLabel:  "true",
-				fleetv1alpha1.OverrideTrackingLabel: testROName,
+				placementv1beta1.OverrideIndexLabel:    strconv.Itoa(0),
+				placementv1beta1.IsLatestSnapshotLabel: "true",
+				placementv1beta1.OverrideTrackingLabel: testROName,
 			}, snapshot.GetLabels())
 			Expect(diff).Should(BeEmpty(), diff)
 		})
@@ -405,17 +404,17 @@ var _ = Describe("Test ResourceOverride common logic", func() {
 			snapshot := getResourceOverrideSnapshot(testROName, ro.Namespace, 0)
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.GetName(), Namespace: snapshot.Namespace}, snapshot)).Should(Succeed())
 			snapshot.SetLabels(map[string]string{
-				fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(0),
-				fleetv1beta1.IsLatestSnapshotLabel:  "false",
-				fleetv1alpha1.OverrideTrackingLabel: testROName,
+				placementv1beta1.OverrideIndexLabel:    strconv.Itoa(0),
+				placementv1beta1.IsLatestSnapshotLabel: "false",
+				placementv1beta1.OverrideTrackingLabel: testROName,
 			})
 			Expect(k8sClient.Update(ctx, snapshot)).Should(Succeed())
 			Expect(commonReconciler.ensureSnapshotLatest(ctx, snapshot)).Should(Succeed())
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.GetName(), Namespace: snapshot.Namespace}, snapshot)).Should(Succeed())
 			diff := cmp.Diff(map[string]string{
-				fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(0),
-				fleetv1beta1.IsLatestSnapshotLabel:  "true",
-				fleetv1alpha1.OverrideTrackingLabel: testROName,
+				placementv1beta1.OverrideIndexLabel:    strconv.Itoa(0),
+				placementv1beta1.IsLatestSnapshotLabel: "true",
+				placementv1beta1.OverrideTrackingLabel: testROName,
 			}, snapshot.GetLabels())
 			Expect(diff).Should(BeEmpty(), diff)
 		})

@@ -29,7 +29,6 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
@@ -649,14 +648,14 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 			createWorkResources()
 
 			// Create the cro before crp so that the observed resource index is predictable.
-			cro := &placementv1alpha1.ClusterResourceOverride{
+			cro := &placementv1beta1.ClusterResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: croName,
 				},
-				Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+				Spec: placementv1beta1.ClusterResourceOverrideSpec{
 					ClusterResourceSelectors: workResourceSelector(),
-					Policy: &placementv1alpha1.OverridePolicy{
-						OverrideRules: []placementv1alpha1.OverrideRule{
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
 							{
 								ClusterSelector: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -667,9 +666,9 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 										},
 									},
 								},
-								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+								JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+										Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 										Path:     "/metadata/annotations",
 										Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s-0"}`, croTestAnnotationKey, croTestAnnotationValue))},
 									},
@@ -682,15 +681,15 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 			Expect(hubClient.Create(ctx, cro)).To(Succeed(), "Failed to create clusterResourceOverride %s", croName)
 
 			// Create the ro before crp so that the observed resource index is predictable.
-			ro := &placementv1alpha1.ResourceOverride{
+			ro := &placementv1beta1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      roName,
 					Namespace: roNamespace,
 				},
-				Spec: placementv1alpha1.ResourceOverrideSpec{
+				Spec: placementv1beta1.ResourceOverrideSpec{
 					ResourceSelectors: configMapSelector(),
-					Policy: &placementv1alpha1.OverridePolicy{
-						OverrideRules: []placementv1alpha1.OverrideRule{
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
 							{
 								ClusterSelector: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -701,9 +700,9 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 										},
 									},
 								},
-								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+								JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+										Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 										Path:     "/metadata/annotations",
 										Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s-1"}`, roTestAnnotationKey, roTestAnnotationValue))},
 									},

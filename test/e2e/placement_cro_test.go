@@ -26,7 +26,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
 
@@ -37,28 +36,28 @@ import (
 var _ = Context("creating clusterResourceOverride (selecting all clusters) to override all resources under the namespace", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
-	croSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)
+	croSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, croName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
 		createWorkResources()
 
 		// Create the cro before crp so that the observed resource index is predictable.
-		cro := &placementv1alpha1.ClusterResourceOverride{
+		cro := &placementv1beta1.ClusterResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: croName,
 			},
-			Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+			Spec: placementv1beta1.ClusterResourceOverrideSpec{
 				ClusterResourceSelectors: workResourceSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s"}`, croTestAnnotationKey, croTestAnnotationValue))},
 								},
@@ -72,7 +71,7 @@ var _ = Context("creating clusterResourceOverride (selecting all clusters) to ov
 		Expect(hubClient.Create(ctx, cro)).To(Succeed(), "Failed to create clusterResourceOverride %s", croName)
 		//this is to make sure the cro snapshot is created before the CRP
 		Eventually(func() error {
-			croSnap := &placementv1alpha1.ClusterResourceOverrideSnapshot{}
+			croSnap := &placementv1beta1.ClusterResourceOverrideSnapshot{}
 			return hubClient.Get(ctx, types.NamespacedName{Name: croSnapShotName}, croSnap)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 
@@ -104,24 +103,24 @@ var _ = Context("creating clusterResourceOverride (selecting all clusters) to ov
 
 	It("update cro attached to this CRP only and change annotation value", func() {
 		Eventually(func() error {
-			cro := &placementv1alpha1.ClusterResourceOverride{}
+			cro := &placementv1beta1.ClusterResourceOverride{}
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: croName}, cro); err != nil {
 				return err
 			}
-			cro.Spec = placementv1alpha1.ClusterResourceOverrideSpec{
-				Placement: &placementv1alpha1.PlacementRef{
+			cro.Spec = placementv1beta1.ClusterResourceOverrideSpec{
+				Placement: &placementv1beta1.PlacementRef{
 					Name: crpName, // assigned CRP name
 				},
 				ClusterResourceSelectors: workResourceSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									// changed the annotation value to croTestAnnotationValue1
 									Value: apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s"}`, croTestAnnotationKey, croTestAnnotationValue1))},
@@ -136,7 +135,7 @@ var _ = Context("creating clusterResourceOverride (selecting all clusters) to ov
 	})
 
 	It("should refresh the CRP status even as there is no change on the resources", func() {
-		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 1)}
+		wantCRONames := []string{fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, croName, 1)}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
@@ -151,11 +150,11 @@ var _ = Context("creating clusterResourceOverride (selecting all clusters) to ov
 
 	It("update cro attached to this CRP only and no updates on the namespace", func() {
 		Eventually(func() error {
-			cro := &placementv1alpha1.ClusterResourceOverride{}
+			cro := &placementv1beta1.ClusterResourceOverride{}
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: croName}, cro); err != nil {
 				return err
 			}
-			cro.Spec.Policy.OverrideRules = append(cro.Spec.Policy.OverrideRules, placementv1alpha1.OverrideRule{
+			cro.Spec.Policy.OverrideRules = append(cro.Spec.Policy.OverrideRules, placementv1beta1.OverrideRule{
 				ClusterSelector: &placementv1beta1.ClusterSelector{
 					ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 						{
@@ -167,14 +166,14 @@ var _ = Context("creating clusterResourceOverride (selecting all clusters) to ov
 						},
 					},
 				},
-				OverrideType: placementv1alpha1.DeleteOverrideType,
+				OverrideType: placementv1beta1.DeleteOverrideType,
 			})
 			return hubClient.Update(ctx, cro)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cro as expected", crpName)
 	})
 
 	It("should update CRP status on demand as expected", func() {
-		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 2)}
+		wantCRONames := []string{fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, croName, 2)}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
@@ -207,33 +206,33 @@ var _ = Context("creating clusterResourceOverride (selecting all clusters) to ov
 var _ = Context("creating clusterResourceOverride with multiple jsonPatchOverrides", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
-	croSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)
+	croSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, croName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
 		createWorkResources()
 
 		// Create the cro before crp so that the observed resource index is predictable.
-		cro := &placementv1alpha1.ClusterResourceOverride{
+		cro := &placementv1beta1.ClusterResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: croName,
 			},
-			Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+			Spec: placementv1beta1.ClusterResourceOverrideSpec{
 				ClusterResourceSelectors: workResourceSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s"}`, croTestAnnotationKey, croTestAnnotationValue))},
 								},
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     fmt.Sprintf("/metadata/annotations/%s", croTestAnnotationKey1),
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s"`, croTestAnnotationValue1))},
 								},
@@ -248,7 +247,7 @@ var _ = Context("creating clusterResourceOverride with multiple jsonPatchOverrid
 
 		//this is to make sure the cro snapshot is created before the CRP
 		Eventually(func() error {
-			croSnap := &placementv1alpha1.ClusterResourceOverrideSnapshot{}
+			croSnap := &placementv1beta1.ClusterResourceOverrideSnapshot{}
 			return hubClient.Get(ctx, types.NamespacedName{Name: croSnapShotName}, croSnap)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 
@@ -280,11 +279,11 @@ var _ = Context("creating clusterResourceOverride with multiple jsonPatchOverrid
 
 	It("update cro attached to an invalid CRP", func() {
 		Eventually(func() error {
-			cro := &placementv1alpha1.ClusterResourceOverride{}
+			cro := &placementv1beta1.ClusterResourceOverride{}
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: croName}, cro); err != nil {
 				return err
 			}
-			cro.Spec.Placement = &placementv1alpha1.PlacementRef{
+			cro.Spec.Placement = &placementv1beta1.PlacementRef{
 				Name: "invalid-crp", // assigned CRP name
 			}
 			return hubClient.Update(ctx, cro)
@@ -292,7 +291,7 @@ var _ = Context("creating clusterResourceOverride with multiple jsonPatchOverrid
 	})
 
 	It("CRP status should not be changed", func() {
-		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)}
+		wantCRONames := []string{fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, croName, 0)}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
 		Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "CRP %s status has been changed", crpName)
 	})
@@ -301,21 +300,21 @@ var _ = Context("creating clusterResourceOverride with multiple jsonPatchOverrid
 var _ = Context("creating clusterResourceOverride with different rules for each cluster", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
-	croSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)
+	croSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, croName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
 		createWorkResources()
 
 		// Create the cro before crp so that the observed resource index is predictable.
-		cro := &placementv1alpha1.ClusterResourceOverride{
+		cro := &placementv1beta1.ClusterResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: croName,
 			},
-			Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+			Spec: placementv1beta1.ClusterResourceOverrideSpec{
 				ClusterResourceSelectors: workResourceSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -326,9 +325,9 @@ var _ = Context("creating clusterResourceOverride with different rules for each 
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s-0"}`, croTestAnnotationKey, croTestAnnotationValue))},
 								},
@@ -344,9 +343,9 @@ var _ = Context("creating clusterResourceOverride with different rules for each 
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s-1"}`, croTestAnnotationKey, croTestAnnotationValue))},
 								},
@@ -362,9 +361,9 @@ var _ = Context("creating clusterResourceOverride with different rules for each 
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s-2"}`, croTestAnnotationKey, croTestAnnotationValue))},
 								},
@@ -379,7 +378,7 @@ var _ = Context("creating clusterResourceOverride with different rules for each 
 
 		//this is to make sure the cro snapshot is created before the CRP
 		Eventually(func() error {
-			croSnap := &placementv1alpha1.ClusterResourceOverrideSnapshot{}
+			croSnap := &placementv1beta1.ClusterResourceOverrideSnapshot{}
 			return hubClient.Get(ctx, types.NamespacedName{Name: croSnapShotName}, croSnap)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 
@@ -421,17 +420,17 @@ var _ = Context("creating clusterResourceOverride with different rules for each 
 		By("creating work resources")
 		createWorkResources()
 		createCRP(crpName)
-		cro := &placementv1alpha1.ClusterResourceOverride{
+		cro := &placementv1beta1.ClusterResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: croName,
 			},
-			Spec: placementv1alpha1.ClusterResourceOverrideSpec{
-				Placement: &placementv1alpha1.PlacementRef{
+			Spec: placementv1beta1.ClusterResourceOverrideSpec{
+				Placement: &placementv1beta1.PlacementRef{
 					Name: crpName, // assigned CRP name
 				},
 				ClusterResourceSelectors: workResourceSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -447,11 +446,11 @@ var _ = Context("creating clusterResourceOverride with different rules for each 
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
-									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "test-%s"}`, croTestAnnotationKey, placementv1alpha1.OverrideClusterNameVariable))},
+									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "test-%s"}`, croTestAnnotationKey, placementv1beta1.OverrideClusterNameVariable))},
 								},
 							},
 						},
@@ -472,7 +471,7 @@ var _ = Context("creating clusterResourceOverride with different rules for each 
 	})
 
 	It("should update CRP status as expected", func() {
-		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)}
+		wantCRONames := []string{fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, croName, 0)}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
@@ -491,28 +490,28 @@ var _ = Context("creating clusterResourceOverride with different rules for each 
 var _ = Context("creating clusterResourceOverride with incorrect path", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
-	croSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)
+	croSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, croName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
 		createWorkResources()
 
 		// Create the cro before crp so that the observed resource index is predictable.
-		cro := &placementv1alpha1.ClusterResourceOverride{
+		cro := &placementv1beta1.ClusterResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: croName,
 			},
-			Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+			Spec: placementv1beta1.ClusterResourceOverrideSpec{
 				ClusterResourceSelectors: workResourceSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     fmt.Sprintf("/metadata/annotations/%s", croTestAnnotationKey),
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s"`, croTestAnnotationValue))},
 								},
@@ -527,7 +526,7 @@ var _ = Context("creating clusterResourceOverride with incorrect path", Ordered,
 
 		//this is to make sure the cro snapshot is created before the CRP
 		Eventually(func() error {
-			croSnap := &placementv1alpha1.ClusterResourceOverrideSnapshot{}
+			croSnap := &placementv1beta1.ClusterResourceOverrideSnapshot{}
 			return hubClient.Get(ctx, types.NamespacedName{Name: croSnapShotName}, croSnap)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 
@@ -556,28 +555,28 @@ var _ = Context("creating clusterResourceOverride with incorrect path", Ordered,
 var _ = Context("creating clusterResourceOverride with and resource becomes invalid after override", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
-	croSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)
+	croSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, croName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
 		createWorkResources()
 
 		// Create the cro before crp so that the observed resource index is predictable.
-		cro := &placementv1alpha1.ClusterResourceOverride{
+		cro := &placementv1beta1.ClusterResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: croName,
 			},
-			Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+			Spec: placementv1beta1.ClusterResourceOverrideSpec{
 				ClusterResourceSelectors: workResourceSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s"`, croTestAnnotationValue))},
 								},
@@ -592,7 +591,7 @@ var _ = Context("creating clusterResourceOverride with and resource becomes inva
 
 		//this is to make sure the cro snapshot is created before the CRP
 		Eventually(func() error {
-			croSnap := &placementv1alpha1.ClusterResourceOverrideSnapshot{}
+			croSnap := &placementv1beta1.ClusterResourceOverrideSnapshot{}
 			return hubClient.Get(ctx, types.NamespacedName{Name: croSnapShotName}, croSnap)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 
@@ -627,17 +626,17 @@ var _ = Context("creating clusterResourceOverride with delete rules for one clus
 		createWorkResources()
 
 		// Create the cro before crp so that the observed resource index is predictable.
-		cro := &placementv1alpha1.ClusterResourceOverride{
+		cro := &placementv1beta1.ClusterResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: croName,
 			},
-			Spec: placementv1alpha1.ClusterResourceOverrideSpec{
-				Placement: &placementv1alpha1.PlacementRef{
+			Spec: placementv1beta1.ClusterResourceOverrideSpec{
+				Placement: &placementv1beta1.PlacementRef{
 					Name: crpName, // assigned CRP name
 				},
 				ClusterResourceSelectors: workResourceSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -648,9 +647,9 @@ var _ = Context("creating clusterResourceOverride with delete rules for one clus
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s"}`, croTestAnnotationKey1, croTestAnnotationValue1))},
 								},
@@ -667,7 +666,7 @@ var _ = Context("creating clusterResourceOverride with delete rules for one clus
 									},
 								},
 							},
-							OverrideType: placementv1alpha1.DeleteOverrideType,
+							OverrideType: placementv1beta1.DeleteOverrideType,
 						},
 					},
 				},
@@ -689,7 +688,7 @@ var _ = Context("creating clusterResourceOverride with delete rules for one clus
 	})
 
 	It("should update CRP status as expected", func() {
-		wantCRONames := []string{fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)}
+		wantCRONames := []string{fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, croName, 0)}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})

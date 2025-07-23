@@ -25,18 +25,17 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/klog/v2/textlogger"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
 
 var (
@@ -75,7 +74,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).Should(Succeed())
 	Expect(cfg).NotTo(BeNil())
 
-	err = placementv1alpha1.AddToScheme(scheme.Scheme)
+	err = placementv1beta1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:scheme

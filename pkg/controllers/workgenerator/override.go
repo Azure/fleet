@@ -29,7 +29,6 @@ import (
 	"k8s.io/klog/v2"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
@@ -37,13 +36,13 @@ import (
 )
 
 // TODO: combine the following two functions into one, as they are very similar.
-func (r *Reconciler) fetchClusterResourceOverrideSnapshots(ctx context.Context, resourceBinding placementv1beta1.BindingObj) (map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot, error) {
-	croMap := make(map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot)
+func (r *Reconciler) fetchClusterResourceOverrideSnapshots(ctx context.Context, resourceBinding placementv1beta1.BindingObj) (map[placementv1beta1.ResourceIdentifier][]*placementv1beta1.ClusterResourceOverrideSnapshot, error) {
+	croMap := make(map[placementv1beta1.ResourceIdentifier][]*placementv1beta1.ClusterResourceOverrideSnapshot)
 
 	// For now, we get the snapshots sequentially. We can optimize this by getting them in parallel, but we need to reorder
 	// the snapshot lists saved in the map.
 	for _, name := range resourceBinding.GetBindingSpec().ClusterResourceOverrideSnapshots {
-		snapshot := &placementv1alpha1.ClusterResourceOverrideSnapshot{}
+		snapshot := &placementv1beta1.ClusterResourceOverrideSnapshot{}
 		if err := r.Client.Get(ctx, types.NamespacedName{Name: name}, snapshot); err != nil {
 			if errors.IsNotFound(err) {
 				klog.ErrorS(err, "The clusterResourceOverrideSnapshot is deleted", "binding", klog.KObj(resourceBinding), "clusterResourceOverrideSnapshot", name)
@@ -71,13 +70,13 @@ func (r *Reconciler) fetchClusterResourceOverrideSnapshots(ctx context.Context, 
 	return croMap, nil
 }
 
-func (r *Reconciler) fetchResourceOverrideSnapshots(ctx context.Context, resourceBinding placementv1beta1.BindingObj) (map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot, error) {
-	roMap := make(map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot)
+func (r *Reconciler) fetchResourceOverrideSnapshots(ctx context.Context, resourceBinding placementv1beta1.BindingObj) (map[placementv1beta1.ResourceIdentifier][]*placementv1beta1.ResourceOverrideSnapshot, error) {
+	roMap := make(map[placementv1beta1.ResourceIdentifier][]*placementv1beta1.ResourceOverrideSnapshot)
 
 	// For now, we get the snapshots sequentially. We can optimize this by getting them in parallel, but we need to reorder
 	// the snapshot lists saved in the map.
 	for _, namespacedName := range resourceBinding.GetBindingSpec().ResourceOverrideSnapshots {
-		snapshot := &placementv1alpha1.ResourceOverrideSnapshot{}
+		snapshot := &placementv1beta1.ResourceOverrideSnapshot{}
 		if err := r.Client.Get(ctx, types.NamespacedName{Name: namespacedName.Name, Namespace: namespacedName.Namespace}, snapshot); err != nil {
 			if errors.IsNotFound(err) {
 				// It could be caused by that the user updates the override too frequently and the snapshot has been replaced
@@ -111,7 +110,7 @@ func (r *Reconciler) fetchResourceOverrideSnapshots(ctx context.Context, resourc
 //   - true if the resource is deleted by the overrides.
 //   - an error if the override rules are invalid.
 func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, cluster *clusterv1beta1.MemberCluster,
-	croMap map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot, roMap map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot) (bool, error) {
+	croMap map[placementv1beta1.ResourceIdentifier][]*placementv1beta1.ClusterResourceOverrideSnapshot, roMap map[placementv1beta1.ResourceIdentifier][]*placementv1beta1.ResourceOverrideSnapshot) (bool, error) {
 	if len(croMap) == 0 && len(roMap) == 0 {
 		return false, nil
 	}
@@ -181,7 +180,7 @@ func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, 
 	return resource.Raw == nil, nil
 }
 
-func applyOverrideRules(resource *placementv1beta1.ResourceContent, cluster *clusterv1beta1.MemberCluster, rules []placementv1alpha1.OverrideRule) error {
+func applyOverrideRules(resource *placementv1beta1.ResourceContent, cluster *clusterv1beta1.MemberCluster, rules []placementv1beta1.OverrideRule) error {
 	for _, rule := range rules {
 		matched, err := overrider.IsClusterMatched(cluster, rule)
 		if err != nil {
@@ -191,7 +190,7 @@ func applyOverrideRules(resource *placementv1beta1.ResourceContent, cluster *clu
 		if !matched {
 			continue
 		}
-		if rule.OverrideType == placementv1alpha1.DeleteOverrideType {
+		if rule.OverrideType == placementv1beta1.DeleteOverrideType {
 			// Delete the resource
 			resource.Raw = nil
 			return nil
@@ -206,7 +205,7 @@ func applyOverrideRules(resource *placementv1beta1.ResourceContent, cluster *clu
 }
 
 // applyJSONPatchOverride applies a JSON patch on the selected resources following [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
-func applyJSONPatchOverride(resourceContent *placementv1beta1.ResourceContent, cluster *clusterv1beta1.MemberCluster, overrides []placementv1alpha1.JSONPatchOverride) error {
+func applyJSONPatchOverride(resourceContent *placementv1beta1.ResourceContent, cluster *clusterv1beta1.MemberCluster, overrides []placementv1beta1.JSONPatchOverride) error {
 	var err error
 	if len(overrides) == 0 { // do nothing
 		return nil
@@ -217,7 +216,7 @@ func applyJSONPatchOverride(resourceContent *placementv1beta1.ResourceContent, c
 		// Process the JSON string to replace variables
 		jsonStr := string(overrides[i].Value.Raw)
 		// Replace the built-in ${MEMBER-CLUSTER-NAME} variable with the actual cluster name
-		jsonStr = strings.ReplaceAll(jsonStr, placementv1alpha1.OverrideClusterNameVariable, cluster.Name)
+		jsonStr = strings.ReplaceAll(jsonStr, placementv1beta1.OverrideClusterNameVariable, cluster.Name)
 		// Replace label key variables with actual label values
 		jsonStr, err = replaceClusterLabelKeyVariables(jsonStr, cluster)
 		if err != nil {
@@ -253,11 +252,11 @@ func applyJSONPatchOverride(resourceContent *placementv1beta1.ResourceContent, c
 // the corresponding label values from the cluster.
 // If a label with the specified key doesn't exist, it returns an error.
 func replaceClusterLabelKeyVariables(input string, cluster *clusterv1beta1.MemberCluster) (string, error) {
-	prefixLen := len(placementv1alpha1.OverrideClusterLabelKeyVariablePrefix)
+	prefixLen := len(placementv1beta1.OverrideClusterLabelKeyVariablePrefix)
 	result := input
 
 	for {
-		startIdx := strings.Index(result, placementv1alpha1.OverrideClusterLabelKeyVariablePrefix)
+		startIdx := strings.Index(result, placementv1beta1.OverrideClusterLabelKeyVariablePrefix)
 		if startIdx == -1 {
 			break
 		}

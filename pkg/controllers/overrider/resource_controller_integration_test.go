@@ -31,26 +31,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
-	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 )
 
-func getResourceOverrideSpec() fleetv1alpha1.ResourceOverrideSpec {
-	return fleetv1alpha1.ResourceOverrideSpec{
-		ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+func getResourceOverrideSpec() placementv1beta1.ResourceOverrideSpec {
+	return placementv1beta1.ResourceOverrideSpec{
+		ResourceSelectors: []placementv1beta1.ResourceSelector{
 			{
 				Group:   "",
 				Version: "v1",
 				Kind:    "Pod",
 			},
 		},
-		Policy: &fleetv1alpha1.OverridePolicy{
-			OverrideRules: []fleetv1alpha1.OverrideRule{
+		Policy: &placementv1beta1.OverridePolicy{
+			OverrideRules: []placementv1beta1.OverrideRule{
 				{
-					JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+					JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 						{
-							Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+							Operator: placementv1beta1.JSONPatchOverrideOpReplace,
 							Path:     "spec.replica",
 							Value:    apiextensionsv1.JSON{Raw: []byte("3")},
 						},
@@ -61,11 +60,11 @@ func getResourceOverrideSpec() fleetv1alpha1.ResourceOverrideSpec {
 	}
 }
 
-func getResourceOverride(testOverrideName, namespaceName string) *fleetv1alpha1.ResourceOverride {
-	return &fleetv1alpha1.ResourceOverride{
+func getResourceOverride(testOverrideName, namespaceName string) *placementv1beta1.ResourceOverride {
+	return &placementv1beta1.ResourceOverride{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: fleetv1alpha1.GroupVersion.String(),
-			Kind:       fleetv1alpha1.ResourceOverrideKind,
+			APIVersion: placementv1beta1.GroupVersion.String(),
+			Kind:       placementv1beta1.ResourceOverrideKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      testOverrideName,
@@ -75,18 +74,18 @@ func getResourceOverride(testOverrideName, namespaceName string) *fleetv1alpha1.
 	}
 }
 
-func getResourceOverrideSnapshot(testOverrideName, namespaceName string, index int) *fleetv1alpha1.ResourceOverrideSnapshot {
-	return &fleetv1alpha1.ResourceOverrideSnapshot{
+func getResourceOverrideSnapshot(testOverrideName, namespaceName string, index int) *placementv1beta1.ResourceOverrideSnapshot {
+	return &placementv1beta1.ResourceOverrideSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf(fleetv1alpha1.OverrideSnapshotNameFmt, testOverrideName, index),
+			Name:      fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, testOverrideName, index),
 			Namespace: namespaceName,
 			Labels: map[string]string{
-				fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(index),
-				fleetv1beta1.IsLatestSnapshotLabel:  "true",
-				fleetv1alpha1.OverrideTrackingLabel: testOverrideName,
+				placementv1beta1.OverrideIndexLabel:    strconv.Itoa(index),
+				placementv1beta1.IsLatestSnapshotLabel: "true",
+				placementv1beta1.OverrideTrackingLabel: testOverrideName,
 			},
 		},
-		Spec: fleetv1alpha1.ResourceOverrideSnapshotSpec{
+		Spec: placementv1beta1.ResourceOverrideSnapshotSpec{
 			OverrideHash: []byte("hash"),
 			OverrideSpec: getResourceOverrideSpec(),
 		},
@@ -94,7 +93,7 @@ func getResourceOverrideSnapshot(testOverrideName, namespaceName string, index i
 }
 
 var _ = Describe("Test ResourceOverride controller logic", func() {
-	var ro *fleetv1alpha1.ResourceOverride
+	var ro *placementv1beta1.ResourceOverride
 	var testROName string
 	var namespaceName string
 
@@ -130,7 +129,7 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 			if err := k8sClient.Get(ctx, types.NamespacedName{Name: ro.Name, Namespace: ro.Namespace}, ro); err != nil {
 				return err
 			}
-			if !controllerutil.ContainsFinalizer(ro, fleetv1alpha1.OverrideFinalizer) {
+			if !controllerutil.ContainsFinalizer(ro, placementv1beta1.OverrideFinalizer) {
 				return fmt.Errorf("finalizer not added")
 			}
 			return nil
@@ -143,9 +142,9 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
 		By("Checking if the label is correct")
 		diff := cmp.Diff(map[string]string{
-			fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(0),
-			fleetv1beta1.IsLatestSnapshotLabel:  "true",
-			fleetv1alpha1.OverrideTrackingLabel: testROName,
+			placementv1beta1.OverrideIndexLabel:    strconv.Itoa(0),
+			placementv1beta1.IsLatestSnapshotLabel: "true",
+			placementv1beta1.OverrideTrackingLabel: testROName,
 		}, snapshot.GetLabels())
 		Expect(diff).Should(BeEmpty(), "Snapshot label mismatch (-want, +got)")
 		By("Checking if the spec is correct")
@@ -170,12 +169,12 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 
 		By("Updating an existing RO")
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ro.Name, Namespace: ro.Namespace}, ro)).Should(Succeed())
-		ro.Spec.Policy = &fleetv1alpha1.OverridePolicy{
-			OverrideRules: []fleetv1alpha1.OverrideRule{
+		ro.Spec.Policy = &placementv1beta1.OverridePolicy{
+			OverrideRules: []placementv1beta1.OverrideRule{
 				{
-					JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+					JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 						{
-							Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
+							Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 							Path:     "spec.replica",
 						},
 					},
@@ -190,9 +189,9 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
 		By("Checking if the label is correct")
 		diff := cmp.Diff(map[string]string{
-			fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(1),
-			fleetv1beta1.IsLatestSnapshotLabel:  "true",
-			fleetv1alpha1.OverrideTrackingLabel: testROName,
+			placementv1beta1.OverrideIndexLabel:    strconv.Itoa(1),
+			placementv1beta1.IsLatestSnapshotLabel: "true",
+			placementv1beta1.OverrideTrackingLabel: testROName,
 		}, snapshot.GetLabels())
 		Expect(diff).Should(BeEmpty(), diff, "Snapshot label mismatch (-want, +got)")
 		By("Checking if the spec is correct")
@@ -203,9 +202,9 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name, Namespace: snapshot.Namespace}, snapshot)).Should(Succeed())
 		By("Make sure the old snapshot is correctly marked as not latest")
 		diff = cmp.Diff(map[string]string{
-			fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(0),
-			fleetv1beta1.IsLatestSnapshotLabel:  "false",
-			fleetv1alpha1.OverrideTrackingLabel: testROName,
+			placementv1beta1.OverrideIndexLabel:    strconv.Itoa(0),
+			placementv1beta1.IsLatestSnapshotLabel: "false",
+			placementv1beta1.OverrideTrackingLabel: testROName,
 		}, snapshot.GetLabels())
 		Expect(diff).Should(BeEmpty(), diff, "Snapshot label mismatch (-want, +got)")
 		By("Make sure the old snapshot spec is not the same as the current RO")
@@ -223,12 +222,12 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
 		By("Updating an existing RO")
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ro.Name, Namespace: ro.Namespace}, ro)).Should(Succeed())
-		ro.Spec.Policy = &fleetv1alpha1.OverridePolicy{
-			OverrideRules: []fleetv1alpha1.OverrideRule{
+		ro.Spec.Policy = &placementv1beta1.OverridePolicy{
+			OverrideRules: []placementv1beta1.OverrideRule{
 				{
-					JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+					JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 						{
-							Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
+							Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 							Path:     "spec.replica",
 						},
 					},
@@ -249,8 +248,8 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 		}, eventuallyTimeout, interval).Should(BeTrue(), "ro should be deleted")
 		By("Make sure all snapshots are deleted")
 		Consistently(func() bool {
-			snapshots := &fleetv1alpha1.ResourceOverrideSnapshotList{}
-			err := k8sClient.List(ctx, snapshots, client.InNamespace(snapshot.Namespace), client.MatchingLabels{fleetv1alpha1.OverrideTrackingLabel: testROName})
+			snapshots := &placementv1beta1.ResourceOverrideSnapshotList{}
+			err := k8sClient.List(ctx, snapshots, client.InNamespace(snapshot.Namespace), client.MatchingLabels{placementv1beta1.OverrideTrackingLabel: testROName})
 			return err == nil && len(snapshots.Items) == 0
 		}, consistentlyDuration, interval).Should(BeTrue(), "snapshot should be deleted")
 	})

@@ -42,7 +42,6 @@ import (
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
@@ -592,16 +591,16 @@ func generateTestClusterResourceSnapshot() *placementv1beta1.ClusterResourceSnap
 	return clusterResourceSnapshot
 }
 
-func generateTestClusterResourceOverride() *placementv1alpha1.ClusterResourceOverrideSnapshot {
-	return &placementv1alpha1.ClusterResourceOverrideSnapshot{
+func generateTestClusterResourceOverride() *placementv1beta1.ClusterResourceOverrideSnapshot {
+	return &placementv1beta1.ClusterResourceOverrideSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testCROName,
 			Labels: map[string]string{
 				placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
 			},
 		},
-		Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
-			OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+		Spec: placementv1beta1.ClusterResourceOverrideSnapshotSpec{
+			OverrideSpec: placementv1beta1.ClusterResourceOverrideSpec{
 				ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					{
 						Group:   "",
@@ -610,8 +609,8 @@ func generateTestClusterResourceOverride() *placementv1alpha1.ClusterResourceOve
 						Name:    "test-namespace",
 					},
 				},
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -624,9 +623,9 @@ func generateTestClusterResourceOverride() *placementv1alpha1.ClusterResourceOve
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/labels/test",
 									Value:    apiextensionsv1.JSON{Raw: []byte(`"test"`)},
 								},

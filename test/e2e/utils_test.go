@@ -43,7 +43,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	imcv1beta1 "github.com/kubefleet-dev/kubefleet/pkg/controllers/internalmembercluster/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/controllers/workapplier"
@@ -905,13 +904,13 @@ func cleanupCRP(name string) {
 // createResourceOverrides creates a number of resource overrides.
 func createResourceOverrides(namespace string, number int) {
 	for i := 0; i < number; i++ {
-		ro := &placementv1alpha1.ResourceOverride{
+		ro := &placementv1beta1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      fmt.Sprintf(roNameTemplate, i),
 				Namespace: namespace,
 			},
-			Spec: placementv1alpha1.ResourceOverrideSpec{
-				ResourceSelectors: []placementv1alpha1.ResourceSelector{
+			Spec: placementv1beta1.ResourceOverrideSpec{
+				ResourceSelectors: []placementv1beta1.ResourceSelector{
 					{
 						Group:   "apps",
 						Kind:    "Deployment",
@@ -919,8 +918,8 @@ func createResourceOverrides(namespace string, number int) {
 						Name:    fmt.Sprintf("test-deployment-%d", i),
 					},
 				},
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -940,9 +939,9 @@ func createResourceOverrides(namespace string, number int) {
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+									Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 									Path:     "/meta/labels/test-key",
 								},
 							},
@@ -958,11 +957,11 @@ func createResourceOverrides(namespace string, number int) {
 // createClusterResourceOverrides creates a number of cluster resource overrides.
 func createClusterResourceOverrides(number int) {
 	for i := 0; i < number; i++ {
-		cro := &placementv1alpha1.ClusterResourceOverride{
+		cro := &placementv1beta1.ClusterResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: fmt.Sprintf(croNameTemplate, i),
 			},
-			Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+			Spec: placementv1beta1.ClusterResourceOverrideSpec{
 				ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					{
 						Group:   "rbac.authorization.k8s.io/v1",
@@ -971,8 +970,8 @@ func createClusterResourceOverrides(number int) {
 						Name:    fmt.Sprintf("test-cluster-role-%d", i),
 					},
 				},
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -992,9 +991,9 @@ func createClusterResourceOverrides(number int) {
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+									Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 									Path:     "/meta/labels/test-key",
 								},
 							},
@@ -1231,14 +1230,14 @@ func updateCRPWithTolerations(tolerations []placementv1beta1.Toleration) {
 }
 
 func cleanupClusterResourceOverride(name string) {
-	cro := &placementv1alpha1.ClusterResourceOverride{
+	cro := &placementv1beta1.ClusterResourceOverride{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
 	}
 	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, cro))).To(Succeed(), "Failed to delete clusterResourceOverride %s", name)
 	Eventually(func() error {
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &placementv1alpha1.ClusterResourceOverride{}); !k8serrors.IsNotFound(err) {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &placementv1beta1.ClusterResourceOverride{}); !k8serrors.IsNotFound(err) {
 			return fmt.Errorf("clusterResourceOverride %s still exists or an unexpected error occurred: %w", name, err)
 		}
 		return nil
@@ -1246,7 +1245,7 @@ func cleanupClusterResourceOverride(name string) {
 }
 
 func cleanupResourceOverride(name string, namespace string) {
-	ro := &placementv1alpha1.ResourceOverride{
+	ro := &placementv1beta1.ResourceOverride{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
@@ -1254,7 +1253,7 @@ func cleanupResourceOverride(name string, namespace string) {
 	}
 	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, ro))).To(Succeed(), "Failed to delete resourceOverride %s", name)
 	Eventually(func() error {
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, &placementv1alpha1.ResourceOverride{}); !k8serrors.IsNotFound(err) {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, &placementv1beta1.ResourceOverride{}); !k8serrors.IsNotFound(err) {
 			return fmt.Errorf("resourceOverride %s still exists or an unexpected error occurred: %w", name, err)
 		}
 		return nil

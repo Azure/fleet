@@ -1807,8 +1807,8 @@ spec:
                             managed by Fleet (i.e., specified in the hub cluster manifest). This is the default
                             option.
 
-                            Note that this option would revert any ad-hoc changes made on the member cluster side in
-                            the managed fields; if you would like to make temporary edits on the member cluster side
+                            Note that this option would revert any ad-hoc changes made on the member cluster side in the
+                            managed fields; if you would like to make temporary edits on the member cluster side
                             in the managed fields, switch to IfNotDrifted option. Note that changes in unmanaged
                             fields will be left alone; if you use the FullDiff compare option, such changes will
                             be reported as drifts.
@@ -1912,16 +1912,15 @@ spec:
                       propagationPolicy:
                         default: Delete
                         description: |-
-                          PropagationPolicy controls how the deletion is propagated to placed resources.
-                          Defaults to "Delete".
+                          PropagationPolicy controls whether to delete placed resources when placement is deleted.
 
                           Available options:
 
-                          * Delete: all placed resources on member clusters will be deleted when the
-                            ClusterResourcePlacement is deleted. This is the default behavior.
+                          * Delete: all placed resources on member clusters will be deleted when
+                            the placement is deleted. This is the default behavior.
 
                           * Abandon: all placed resources on member clusters will be left intact (abandoned)
-                            when the ClusterResourcePlacement is deleted.
+                            when the placement is deleted.
                         enum:
                         - Abandon
                         - Delete

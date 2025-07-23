@@ -30,7 +30,6 @@ import (
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
 
@@ -66,8 +65,8 @@ func workResourceSelector() []placementv1beta1.ClusterResourceSelector {
 	}
 }
 
-func configMapSelector() []placementv1alpha1.ResourceSelector {
-	return []placementv1alpha1.ResourceSelector{
+func configMapSelector() []placementv1beta1.ResourceSelector {
+	return []placementv1beta1.ResourceSelector{
 		{
 			Group:   "",
 			Kind:    "ConfigMap",

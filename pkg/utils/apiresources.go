@@ -27,7 +27,6 @@ import (
 	metricsV1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
 )
@@ -112,23 +111,23 @@ var (
 	}
 
 	ClusterResourceOverrideGK = schema.GroupKind{
-		Group: placementv1alpha1.GroupVersion.Group,
-		Kind:  placementv1alpha1.ClusterResourceOverrideKind,
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.ClusterResourceOverrideKind,
 	}
 
 	ClusterResourceOverrideSnapshotGK = schema.GroupKind{
-		Group: placementv1alpha1.GroupVersion.Group,
-		Kind:  placementv1alpha1.ClusterResourceOverrideSnapshotKind,
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.ClusterResourceOverrideSnapshotKind,
 	}
 
 	ResourceOverrideGK = schema.GroupKind{
-		Group: placementv1alpha1.GroupVersion.Group,
-		Kind:  placementv1alpha1.ResourceOverrideKind,
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.ResourceOverrideKind,
 	}
 
 	ResourceOverrideSnapshotGK = schema.GroupKind{
-		Group: placementv1alpha1.GroupVersion.Group,
-		Kind:  placementv1alpha1.ResourceOverrideSnapshotKind,
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.ResourceOverrideSnapshotKind,
 	}
 
 	// we use `;` to separate the different api groups

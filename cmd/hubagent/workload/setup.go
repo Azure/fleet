@@ -32,7 +32,6 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/cmd/hubagent/options"
@@ -91,10 +90,10 @@ var (
 		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ClusterResourceSnapshotKind),
 		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ClusterSchedulingPolicySnapshotKind),
 		placementv1beta1.GroupVersion.WithKind(placementv1beta1.WorkKind),
-		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ClusterResourceOverrideKind),
-		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ClusterResourceOverrideSnapshotKind),
-		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ResourceOverrideKind),
-		placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ResourceOverrideSnapshotKind),
+		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ClusterResourceOverrideKind),
+		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ClusterResourceOverrideSnapshotKind),
+		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ResourceOverrideKind),
+		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ResourceOverrideSnapshotKind),
 	}
 
 	clusterStagedUpdateRunGVKs = []schema.GroupVersionKind{

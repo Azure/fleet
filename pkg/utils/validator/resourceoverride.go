@@ -24,11 +24,11 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/util/errors"
 
-	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
 
 // ValidateResourceOverride validates resource override fields and returns error.
-func ValidateResourceOverride(ro fleetv1alpha1.ResourceOverride, roList *fleetv1alpha1.ResourceOverrideList) error {
+func ValidateResourceOverride(ro placementv1beta1.ResourceOverride, roList *placementv1beta1.ResourceOverrideList) error {
 	allErr := make([]error, 0)
 
 	// Check if the resource is being selected by resource name.
@@ -52,8 +52,8 @@ func ValidateResourceOverride(ro fleetv1alpha1.ResourceOverride, roList *fleetv1
 }
 
 // validateResourceSelectors checks if override is selecting a unique resource.
-func validateResourceSelectors(ro fleetv1alpha1.ResourceOverride) error {
-	selectorMap := make(map[fleetv1alpha1.ResourceSelector]bool)
+func validateResourceSelectors(ro placementv1beta1.ResourceOverride) error {
+	selectorMap := make(map[placementv1beta1.ResourceSelector]bool)
 	allErr := make([]error, 0)
 	for _, selector := range ro.Spec.ResourceSelectors {
 		// Check if there are any duplicate selectors.
@@ -67,12 +67,12 @@ func validateResourceSelectors(ro fleetv1alpha1.ResourceOverride) error {
 
 // validateResourceOverrideResourceLimit checks if there is only 1 resource override per resource,
 // assuming the resource will be selected by the name only.
-func validateResourceOverrideResourceLimit(ro fleetv1alpha1.ResourceOverride, roList *fleetv1alpha1.ResourceOverrideList) error {
+func validateResourceOverrideResourceLimit(ro placementv1beta1.ResourceOverride, roList *placementv1beta1.ResourceOverrideList) error {
 	// Check if roList is nil or empty, no need to check for resource limit.
 	if roList == nil || len(roList.Items) == 0 {
 		return nil
 	}
-	overrideMap := make(map[fleetv1alpha1.ResourceSelector]string)
+	overrideMap := make(map[placementv1beta1.ResourceSelector]string)
 	// Add overrides and its selectors to the map.
 	for _, override := range roList.Items {
 		selectors := override.Spec.ResourceSelectors
@@ -96,7 +96,7 @@ func validateResourceOverrideResourceLimit(ro fleetv1alpha1.ResourceOverride, ro
 }
 
 // validateOverridePolicy checks if override rule is selecting resource by name.
-func validateOverridePolicy(policy *fleetv1alpha1.OverridePolicy) error {
+func validateOverridePolicy(policy *placementv1beta1.OverridePolicy) error {
 	allErr := make([]error, 0)
 	for _, rule := range policy.OverrideRules {
 		if rule.ClusterSelector != nil {
@@ -114,12 +114,12 @@ func validateOverridePolicy(policy *fleetv1alpha1.OverridePolicy) error {
 			}
 		}
 		switch rule.OverrideType {
-		case fleetv1alpha1.DeleteOverrideType:
+		case placementv1beta1.DeleteOverrideType:
 			if len(rule.JSONPatchOverrides) != 0 {
 				return errors.New("invalid JSONPatchOverrides: JSONPatchOverrides cannot be set when the override type is Delete")
 			}
 
-		case fleetv1alpha1.JSONPatchOverrideType:
+		case placementv1beta1.JSONPatchOverrideType:
 			if err := validateJSONPatchOverride(rule.JSONPatchOverrides); err != nil {
 				allErr = append(allErr, err)
 			}
@@ -129,7 +129,7 @@ func validateOverridePolicy(policy *fleetv1alpha1.OverridePolicy) error {
 }
 
 // validateJSONPatchOverride checks if JSON patch override is valid.
-func validateJSONPatchOverride(jsonPatchOverrides []fleetv1alpha1.JSONPatchOverride) error {
+func validateJSONPatchOverride(jsonPatchOverrides []placementv1beta1.JSONPatchOverride) error {
 	if len(jsonPatchOverrides) == 0 {
 		return errors.New("invalid JSONPatchOverrides: JSONPatchOverrides cannot be empty")
 	}
@@ -140,7 +140,7 @@ func validateJSONPatchOverride(jsonPatchOverrides []fleetv1alpha1.JSONPatchOverr
 			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: %w", patch, err))
 		}
 
-		if patch.Operator == fleetv1alpha1.JSONPatchOverrideOpRemove && len(patch.Value.Raw) != 0 {
+		if patch.Operator == placementv1beta1.JSONPatchOverrideOpRemove && len(patch.Value.Raw) != 0 {
 			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: remove operation cannot have value", patch))
 		}
 	}

@@ -38,8 +38,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
-	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
 
 var (
@@ -83,9 +83,9 @@ var _ = BeforeSuite(func() {
 
 	//+kubebuilder:scaffold:scheme
 	By("Set all the customized scheme")
-	Expect(fleetv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
+	Expect(placementv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(clusterv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
-	Expect(fleetv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
+	Expect(placementv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 
 	By("starting the controller manager")
 	klog.InitFlags(flag.CommandLine)

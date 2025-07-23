@@ -53,7 +53,6 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
-	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/cmd/hubagent/options"
@@ -344,7 +343,7 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 						admv1.Create,
 						admv1.Update,
 					},
-					Rule: createRule([]string{placementv1alpha1.GroupVersion.Group}, []string{placementv1alpha1.GroupVersion.Version}, []string{clusterResourceOverrideName}, &clusterScope),
+					Rule: createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{clusterResourceOverrideName}, &clusterScope),
 				},
 			},
 			TimeoutSeconds: longWebhookTimeout,
@@ -361,7 +360,7 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 						admv1.Create,
 						admv1.Update,
 					},
-					Rule: createRule([]string{placementv1alpha1.GroupVersion.Group}, []string{placementv1alpha1.GroupVersion.Version}, []string{resourceOverrideName}, &namespacedScope),
+					Rule: createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{resourceOverrideName}, &namespacedScope),
 				},
 			},
 			TimeoutSeconds: longWebhookTimeout,
