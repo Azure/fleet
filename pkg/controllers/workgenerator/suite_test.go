@@ -44,7 +44,6 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/utils/informer"
@@ -98,7 +97,6 @@ var _ = BeforeSuite(func() {
 	Expect(placementv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(workv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(clusterv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
-	Expect(placementv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 
 	By("starting the controller manager")
 	klog.InitFlags(flag.CommandLine)
@@ -163,15 +161,15 @@ func createOverrides() {
 	Expect(k8sClient.Create(ctx, &appNamespace)).Should(Succeed(), "Failed to create the application namespace")
 	By(fmt.Sprintf("Application namespace %s created", appNamespaceName))
 
-	validClusterResourceOverrideSnapshot = placementv1alpha1.ClusterResourceOverrideSnapshot{
+	validClusterResourceOverrideSnapshot = placementv1beta1.ClusterResourceOverrideSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: validClusterResourceOverrideSnapshotName,
 			Labels: map[string]string{
 				placementv1beta1.IsLatestSnapshotLabel: "true",
 			},
 		},
-		Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
-			OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+		Spec: placementv1beta1.ClusterResourceOverrideSnapshotSpec{
+			OverrideSpec: placementv1beta1.ClusterResourceOverrideSpec{
 				ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					{
 						Group:   utils.NamespaceGVK.Group,
@@ -180,8 +178,8 @@ func createOverrides() {
 						Name:    appNamespaceName,
 					},
 				},
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -194,9 +192,9 @@ func createOverrides() {
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/labels/new-label",
 									Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
 								},
@@ -211,7 +209,7 @@ func createOverrides() {
 	Expect(k8sClient.Create(ctx, &validClusterResourceOverrideSnapshot)).Should(Succeed(), "Failed to create the cro-1")
 	By(fmt.Sprintf("Cluster resource override snapshot %s created", validClusterResourceOverrideSnapshotName))
 
-	validResourceOverrideSnapshot = placementv1alpha1.ResourceOverrideSnapshot{
+	validResourceOverrideSnapshot = placementv1beta1.ResourceOverrideSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      validResourceOverrideSnapshotName,
 			Namespace: appNamespaceName,
@@ -219,9 +217,9 @@ func createOverrides() {
 				placementv1beta1.IsLatestSnapshotLabel: "true",
 			},
 		},
-		Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
-			OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
-				ResourceSelectors: []placementv1alpha1.ResourceSelector{
+		Spec: placementv1beta1.ResourceOverrideSnapshotSpec{
+			OverrideSpec: placementv1beta1.ResourceOverrideSpec{
+				ResourceSelectors: []placementv1beta1.ResourceSelector{
 					{
 						Group:   "test.kubernetes-fleet.io",
 						Version: "v1alpha1",
@@ -229,15 +227,15 @@ func createOverrides() {
 						Name:    "random-test-resource",
 					},
 				},
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{}, // select all members
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+									Operator: placementv1beta1.JSONPatchOverrideOpReplace,
 									Path:     "/spec/foo",
 									Value:    apiextensionsv1.JSON{Raw: []byte(`"foo2"`)},
 								},
@@ -252,15 +250,15 @@ func createOverrides() {
 	Expect(k8sClient.Create(ctx, &validResourceOverrideSnapshot)).Should(Succeed(), "Failed to create the ro-1")
 	By(fmt.Sprintf("Resource override snapshot %s created", validResourceOverrideSnapshotName))
 
-	invalidClusterResourceOverrideSnapshot = placementv1alpha1.ClusterResourceOverrideSnapshot{
+	invalidClusterResourceOverrideSnapshot = placementv1beta1.ClusterResourceOverrideSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: invalidClusterResourceOverrideSnapshotName,
 			Labels: map[string]string{
 				placementv1beta1.IsLatestSnapshotLabel: "true",
 			},
 		},
-		Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
-			OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+		Spec: placementv1beta1.ClusterResourceOverrideSnapshotSpec{
+			OverrideSpec: placementv1beta1.ClusterResourceOverrideSpec{
 				ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					{
 						Group:   utils.NamespaceGVK.Group,
@@ -269,8 +267,8 @@ func createOverrides() {
 						Name:    appNamespaceName,
 					},
 				},
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -283,9 +281,9 @@ func createOverrides() {
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/invalid/path",
 									Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
 								},

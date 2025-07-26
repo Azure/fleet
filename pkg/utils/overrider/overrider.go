@@ -33,7 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -48,17 +47,17 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 	manager informer.Manager,
 	placementKey string,
 	masterResourceSnapshot placementv1beta1.ResourceSnapshotObj,
-) ([]*placementv1alpha1.ClusterResourceOverrideSnapshot, []*placementv1alpha1.ResourceOverrideSnapshot, error) {
+) ([]*placementv1beta1.ClusterResourceOverrideSnapshot, []*placementv1beta1.ResourceOverrideSnapshot, error) {
 	// fetch the cro and ro snapshot list first before finding the matched ones.
 	latestSnapshotLabelMatcher := client.MatchingLabels{
 		placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
 	}
-	croList := &placementv1alpha1.ClusterResourceOverrideSnapshotList{}
+	croList := &placementv1beta1.ClusterResourceOverrideSnapshotList{}
 	if err := c.List(ctx, croList, latestSnapshotLabelMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list all the clusterResourceOverrideSnapshots")
 		return nil, nil, err
 	}
-	roList := &placementv1alpha1.ResourceOverrideSnapshotList{}
+	roList := &placementv1beta1.ResourceOverrideSnapshotList{}
 	if err := c.List(ctx, roList, latestSnapshotLabelMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list all the resourceOverrideSnapshots")
 		return nil, nil, err
@@ -113,8 +112,8 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 		}
 	}
 
-	filteredCRO := make([]*placementv1alpha1.ClusterResourceOverrideSnapshot, 0, len(croList.Items))
-	filteredRO := make([]*placementv1alpha1.ResourceOverrideSnapshot, 0, len(roList.Items))
+	filteredCRO := make([]*placementv1beta1.ClusterResourceOverrideSnapshot, 0, len(croList.Items))
+	filteredRO := make([]*placementv1beta1.ResourceOverrideSnapshot, 0, len(roList.Items))
 	for i := range croList.Items {
 		placementInOverride := croList.Items[i].Spec.OverrideSpec.Placement
 		if placementInOverride != nil && placementInOverride.Name != placementKey {
@@ -164,8 +163,8 @@ func PickFromResourceMatchedOverridesForTargetCluster(
 	ctx context.Context,
 	c client.Reader,
 	targetCluster string,
-	croList []*placementv1alpha1.ClusterResourceOverrideSnapshot,
-	roList []*placementv1alpha1.ResourceOverrideSnapshot,
+	croList []*placementv1beta1.ClusterResourceOverrideSnapshot,
+	roList []*placementv1beta1.ResourceOverrideSnapshot,
 ) ([]string, []placementv1beta1.NamespacedName, error) {
 	if len(croList) == 0 && len(roList) == 0 {
 		return nil, nil, nil
@@ -181,7 +180,7 @@ func PickFromResourceMatchedOverridesForTargetCluster(
 		return nil, nil, controller.NewAPIServerError(true, err)
 	}
 
-	croFiltered := make([]*placementv1alpha1.ClusterResourceOverrideSnapshot, 0, len(croList))
+	croFiltered := make([]*placementv1beta1.ClusterResourceOverrideSnapshot, 0, len(croList))
 	for i, cro := range croList {
 		matched, err := isClusterMatched(&cluster, cro.Spec.OverrideSpec.Policy)
 		if err != nil {
@@ -197,7 +196,7 @@ func PickFromResourceMatchedOverridesForTargetCluster(
 		return croFiltered[i].Name < croFiltered[j].Name
 	})
 
-	roFiltered := make([]*placementv1alpha1.ResourceOverrideSnapshot, 0, len(roList))
+	roFiltered := make([]*placementv1beta1.ResourceOverrideSnapshot, 0, len(roList))
 	for i, ro := range roList {
 		matched, err := isClusterMatched(&cluster, ro.Spec.OverrideSpec.Policy)
 		if err != nil {
@@ -227,7 +226,7 @@ func PickFromResourceMatchedOverridesForTargetCluster(
 	return croNames, roNames, nil
 }
 
-func isClusterMatched(cluster *clusterv1beta1.MemberCluster, policy *placementv1alpha1.OverridePolicy) (bool, error) {
+func isClusterMatched(cluster *clusterv1beta1.MemberCluster, policy *placementv1beta1.OverridePolicy) (bool, error) {
 	if policy == nil {
 		return false, errors.New("policy is nil")
 	}
@@ -244,7 +243,7 @@ func isClusterMatched(cluster *clusterv1beta1.MemberCluster, policy *placementv1
 }
 
 // IsClusterMatched checks if the cluster is matched with the override rules.
-func IsClusterMatched(cluster *clusterv1beta1.MemberCluster, rule placementv1alpha1.OverrideRule) (bool, error) {
+func IsClusterMatched(cluster *clusterv1beta1.MemberCluster, rule placementv1beta1.OverrideRule) (bool, error) {
 	if rule.ClusterSelector == nil { // it means matching no member clusters
 		return false, nil
 	}

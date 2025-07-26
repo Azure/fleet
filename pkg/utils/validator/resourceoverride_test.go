@@ -10,19 +10,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apierrors "k8s.io/apimachinery/pkg/util/errors"
 
-	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 func TestValidateResourceSelectors(t *testing.T) {
 	tests := map[string]struct {
-		ro         fleetv1alpha1.ResourceOverride
+		ro         placementv1beta1.ResourceOverride
 		wantErrMsg error
 	}{
 		"duplicate resources selected": {
-			ro: fleetv1alpha1.ResourceOverride{
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+			ro: placementv1beta1.ResourceOverride{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
 						{
 							Group:   "group",
 							Version: "v1",
@@ -39,12 +38,12 @@ func TestValidateResourceSelectors(t *testing.T) {
 				},
 			},
 			wantErrMsg: fmt.Errorf("resource selector %+v already exists, and must be unique",
-				fleetv1alpha1.ResourceSelector{Group: "group", Version: "v1", Kind: "Kind", Name: "example"}),
+				placementv1beta1.ResourceSelector{Group: "group", Version: "v1", Kind: "Kind", Name: "example"}),
 		},
 		"resource selected by name": {
-			ro: fleetv1alpha1.ResourceOverride{
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+			ro: placementv1beta1.ResourceOverride{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
 						{
 							Group:   "rbac.authorization.k8s.io",
 							Version: "v1",
@@ -73,17 +72,17 @@ func TestValidateResourceSelectors(t *testing.T) {
 
 func TestValidateResourceOverrideResourceLimit(t *testing.T) {
 	tests := map[string]struct {
-		ro            fleetv1alpha1.ResourceOverride
+		ro            placementv1beta1.ResourceOverride
 		overrideCount int
 		wantErrMsg    error
 	}{
 		"create one resource override for resource foo": {
-			ro: fleetv1alpha1.ResourceOverride{
+			ro: placementv1beta1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "override-1",
 				},
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
 						{
 							Group:   "rbac.authorization.k8s.io",
 							Version: "v1",
@@ -97,12 +96,12 @@ func TestValidateResourceOverrideResourceLimit(t *testing.T) {
 			wantErrMsg:    nil,
 		},
 		"one override, selecting the same resource by other override already": {
-			ro: fleetv1alpha1.ResourceOverride{
+			ro: placementv1beta1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "override-2",
 				},
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
 						{
 							Group:   "group",
 							Version: "v1",
@@ -120,15 +119,15 @@ func TestValidateResourceOverrideResourceLimit(t *testing.T) {
 			},
 			overrideCount: 1,
 			wantErrMsg: fmt.Errorf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported",
-				fleetv1alpha1.ResourceSelector{Group: "group", Version: "v1", Kind: "kind", Name: "example-0"}, "override-2", "override-0"),
+				placementv1beta1.ResourceSelector{Group: "group", Version: "v1", Kind: "kind", Name: "example-0"}, "override-2", "override-0"),
 		},
 		"one override, which exists": {
-			ro: fleetv1alpha1.ResourceOverride{
+			ro: placementv1beta1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "override-1",
 				},
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
 						{
 							Group:   "rbac.authorization.k8s.io",
 							Version: "v1",
@@ -142,12 +141,12 @@ func TestValidateResourceOverrideResourceLimit(t *testing.T) {
 			wantErrMsg:    nil,
 		},
 		"roList is empty": {
-			ro: fleetv1alpha1.ResourceOverride{
+			ro: placementv1beta1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "override-2",
 				},
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
 						{
 							Group:   "rbac.authorization.k8s.io",
 							Version: "v1",
@@ -163,14 +162,14 @@ func TestValidateResourceOverrideResourceLimit(t *testing.T) {
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			roList := &fleetv1alpha1.ResourceOverrideList{}
+			roList := &placementv1beta1.ResourceOverrideList{}
 			for i := 0; i < tt.overrideCount; i++ {
-				ro := fleetv1alpha1.ResourceOverride{
+				ro := placementv1beta1.ResourceOverride{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf("override-%d", i),
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+					Spec: placementv1beta1.ResourceOverrideSpec{
+						ResourceSelectors: []placementv1beta1.ResourceSelector{
 							{
 								Group:   "group",
 								Version: "v1",
@@ -195,8 +194,8 @@ func TestValidateResourceOverrideResourceLimit(t *testing.T) {
 }
 
 func TestValidateResourceOverride(t *testing.T) {
-	validClusterSelector := &fleetv1beta1.ClusterSelector{
-		ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+	validClusterSelector := &placementv1beta1.ClusterSelector{
+		ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 			{
 				LabelSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{
@@ -214,16 +213,16 @@ func TestValidateResourceOverride(t *testing.T) {
 		},
 	}
 
-	validJSONPatchOverrides := []fleetv1alpha1.JSONPatchOverride{
+	validJSONPatchOverrides := []placementv1beta1.JSONPatchOverride{
 		{
-			Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
+			Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 			Path:     "/metadata/labels/new-label",
 			Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
 		},
 	}
 
-	validPolicy := &fleetv1alpha1.OverridePolicy{
-		OverrideRules: []fleetv1alpha1.OverrideRule{
+	validPolicy := &placementv1beta1.OverridePolicy{
+		OverrideRules: []placementv1beta1.OverrideRule{
 			{
 				ClusterSelector:    validClusterSelector,
 				JSONPatchOverrides: validJSONPatchOverrides,
@@ -232,14 +231,14 @@ func TestValidateResourceOverride(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		ro         fleetv1alpha1.ResourceOverride
-		roList     *fleetv1alpha1.ResourceOverrideList
+		ro         placementv1beta1.ResourceOverride
+		roList     *placementv1beta1.ResourceOverrideList
 		wantErrMsg error
 	}{
 		"valid resource override": {
-			ro: fleetv1alpha1.ResourceOverride{
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+			ro: placementv1beta1.ResourceOverride{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
 						{
 							Group:   "rbac.authorization.k8s.io",
 							Version: "v1",
@@ -250,13 +249,13 @@ func TestValidateResourceOverride(t *testing.T) {
 					Policy: validPolicy,
 				},
 			},
-			roList:     &fleetv1alpha1.ResourceOverrideList{},
+			roList:     &placementv1beta1.ResourceOverrideList{},
 			wantErrMsg: nil,
 		},
 		"invalid resource override - fail validateResourceSelector": {
-			ro: fleetv1alpha1.ResourceOverride{
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+			ro: placementv1beta1.ResourceOverride{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
 						{
 							Group:   "group",
 							Version: "v1",
@@ -273,17 +272,17 @@ func TestValidateResourceOverride(t *testing.T) {
 					Policy: validPolicy,
 				},
 			},
-			roList: &fleetv1alpha1.ResourceOverrideList{},
+			roList: &placementv1beta1.ResourceOverrideList{},
 			wantErrMsg: fmt.Errorf("resource selector %+v already exists, and must be unique",
-				fleetv1alpha1.ResourceSelector{Group: "group", Version: "v1", Kind: "kind", Name: "example"}),
+				placementv1beta1.ResourceSelector{Group: "group", Version: "v1", Kind: "kind", Name: "example"}),
 		},
 		"invalid resource override - fail ValidateResourceOverrideResourceLimit": {
-			ro: fleetv1alpha1.ResourceOverride{
+			ro: placementv1beta1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "override-1",
 				},
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
 						{
 							Group:   "group",
 							Version: "v1",
@@ -294,12 +293,12 @@ func TestValidateResourceOverride(t *testing.T) {
 					Policy: validPolicy,
 				},
 			},
-			roList: &fleetv1alpha1.ResourceOverrideList{
-				Items: []fleetv1alpha1.ResourceOverride{
+			roList: &placementv1beta1.ResourceOverrideList{
+				Items: []placementv1beta1.ResourceOverride{
 					{
 						ObjectMeta: metav1.ObjectMeta{Name: "override-0"},
-						Spec: fleetv1alpha1.ResourceOverrideSpec{
-							ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+						Spec: placementv1beta1.ResourceOverrideSpec{
+							ResourceSelectors: []placementv1beta1.ResourceSelector{
 								{
 									Group:   "group",
 									Version: "v1",
@@ -312,12 +311,12 @@ func TestValidateResourceOverride(t *testing.T) {
 				},
 			},
 			wantErrMsg: fmt.Errorf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported",
-				fleetv1alpha1.ResourceSelector{Group: "group", Version: "v1", Kind: "kind", Name: "duplicate-example"}, "override-1", "override-0"),
+				placementv1beta1.ResourceSelector{Group: "group", Version: "v1", Kind: "kind", Name: "duplicate-example"}, "override-1", "override-0"),
 		},
 		"valid resource override - empty roList": {
-			ro: fleetv1alpha1.ResourceOverride{
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+			ro: placementv1beta1.ResourceOverride{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
 						{
 							Group:   "rbac.authorization.k8s.io",
 							Version: "v1",
@@ -328,13 +327,13 @@ func TestValidateResourceOverride(t *testing.T) {
 					Policy: validPolicy,
 				},
 			},
-			roList:     &fleetv1alpha1.ResourceOverrideList{},
+			roList:     &placementv1beta1.ResourceOverrideList{},
 			wantErrMsg: nil,
 		},
 		"valid resource override - roList nil": {
-			ro: fleetv1alpha1.ResourceOverride{
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+			ro: placementv1beta1.ResourceOverride{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
 						{
 							Group:   "rbac.authorization.k8s.io",
 							Version: "v1",
@@ -349,9 +348,9 @@ func TestValidateResourceOverride(t *testing.T) {
 			wantErrMsg: nil,
 		},
 		"valid resource override - delete nil": {
-			ro: fleetv1alpha1.ResourceOverride{
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+			ro: placementv1beta1.ResourceOverride{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
 						{
 							Group:   "rbac.authorization.k8s.io",
 							Version: "v1",
@@ -359,11 +358,11 @@ func TestValidateResourceOverride(t *testing.T) {
 							Name:    "test-cluster-role",
 						},
 					},
-					Policy: &fleetv1alpha1.OverridePolicy{
-						OverrideRules: []fleetv1alpha1.OverrideRule{
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
 							{
 								ClusterSelector: validClusterSelector,
-								OverrideType:    fleetv1alpha1.DeleteOverrideType,
+								OverrideType:    placementv1beta1.DeleteOverrideType,
 							},
 						},
 					},
@@ -373,19 +372,19 @@ func TestValidateResourceOverride(t *testing.T) {
 			wantErrMsg: nil,
 		},
 		"invalid resource override - fail validateResourceOverridePolicy with unsupported type ": {
-			ro: fleetv1alpha1.ResourceOverride{
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					Policy: &fleetv1alpha1.OverridePolicy{
-						OverrideRules: []fleetv1alpha1.OverrideRule{
+			ro: placementv1beta1.ResourceOverride{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
 							{
-								ClusterSelector: &fleetv1beta1.ClusterSelector{
-									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+								ClusterSelector: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											PropertySelector: &fleetv1beta1.PropertySelector{
-												MatchExpressions: []fleetv1beta1.PropertySelectorRequirement{
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 													{
 														Name:     "example",
-														Operator: fleetv1beta1.PropertySelectorGreaterThanOrEqualTo,
+														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
 														Values:   []string{"1"},
 													},
 												},
@@ -398,17 +397,17 @@ func TestValidateResourceOverride(t *testing.T) {
 					},
 				},
 			},
-			roList:     &fleetv1alpha1.ResourceOverrideList{},
+			roList:     &placementv1beta1.ResourceOverrideList{},
 			wantErrMsg: fmt.Errorf("only labelSelector is supported"),
 		},
 		"invalid resource override - fail validateResourceOverridePolicy with nil label selector": {
-			ro: fleetv1alpha1.ResourceOverride{
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					Policy: &fleetv1alpha1.OverridePolicy{
-						OverrideRules: []fleetv1alpha1.OverrideRule{
+			ro: placementv1beta1.ResourceOverride{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
 							{
-								ClusterSelector: &fleetv1beta1.ClusterSelector{
-									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+								ClusterSelector: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
 											LabelSelector: nil,
 										},
@@ -422,13 +421,13 @@ func TestValidateResourceOverride(t *testing.T) {
 			wantErrMsg: errors.New("labelSelector is required"),
 		},
 		"valid resource override - empty cluster selector": {
-			ro: fleetv1alpha1.ResourceOverride{
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					Policy: &fleetv1alpha1.OverridePolicy{
-						OverrideRules: []fleetv1alpha1.OverrideRule{
+			ro: placementv1beta1.ResourceOverride{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
 							{
-								ClusterSelector:    &fleetv1beta1.ClusterSelector{},
-								OverrideType:       fleetv1alpha1.JSONPatchOverrideType,
+								ClusterSelector:    &placementv1beta1.ClusterSelector{},
+								OverrideType:       placementv1beta1.JSONPatchOverrideType,
 								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 						},
@@ -438,15 +437,15 @@ func TestValidateResourceOverride(t *testing.T) {
 			wantErrMsg: nil,
 		},
 		"valid resource override - cluster selector with empty terms": {
-			ro: fleetv1alpha1.ResourceOverride{
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					Policy: &fleetv1alpha1.OverridePolicy{
-						OverrideRules: []fleetv1alpha1.OverrideRule{
+			ro: placementv1beta1.ResourceOverride{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
 							{
-								ClusterSelector: &fleetv1beta1.ClusterSelector{
-									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{},
+								ClusterSelector: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
 								},
-								OverrideType:       fleetv1alpha1.JSONPatchOverrideType,
+								OverrideType:       placementv1beta1.JSONPatchOverrideType,
 								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 						},
@@ -456,30 +455,30 @@ func TestValidateResourceOverride(t *testing.T) {
 			wantErrMsg: nil,
 		},
 		"valid resource override - empty match labels & match expressions": {
-			ro: fleetv1alpha1.ResourceOverride{
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					Policy: &fleetv1alpha1.OverridePolicy{
-						OverrideRules: []fleetv1alpha1.OverrideRule{
+			ro: placementv1beta1.ResourceOverride{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
 							{
-								ClusterSelector: &fleetv1beta1.ClusterSelector{
-									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+								ClusterSelector: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
 											LabelSelector: &metav1.LabelSelector{MatchLabels: nil},
 										},
 									},
 								},
-								OverrideType:       fleetv1alpha1.JSONPatchOverrideType,
+								OverrideType:       placementv1beta1.JSONPatchOverrideType,
 								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 							{
-								ClusterSelector: &fleetv1beta1.ClusterSelector{
-									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+								ClusterSelector: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
 											LabelSelector: &metav1.LabelSelector{MatchExpressions: nil},
 										},
 									},
 								},
-								OverrideType:       fleetv1alpha1.JSONPatchOverrideType,
+								OverrideType:       placementv1beta1.JSONPatchOverrideType,
 								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 						},
@@ -489,21 +488,21 @@ func TestValidateResourceOverride(t *testing.T) {
 			wantErrMsg: nil,
 		},
 		"valid resource override - no policy": {
-			ro: fleetv1alpha1.ResourceOverride{
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
+			ro: placementv1beta1.ResourceOverride{
+				Spec: placementv1beta1.ResourceOverrideSpec{
 					Policy: nil,
 				},
 			},
 			wantErrMsg: nil,
 		},
 		"invalid resource override - multiple invalid override paths": {
-			ro: fleetv1alpha1.ResourceOverride{
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					Policy: &fleetv1alpha1.OverridePolicy{
-						OverrideRules: []fleetv1alpha1.OverrideRule{
+			ro: placementv1beta1.ResourceOverride{
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
 							{
-								ClusterSelector: &fleetv1beta1.ClusterSelector{
-									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+								ClusterSelector: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
 											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
@@ -513,24 +512,24 @@ func TestValidateResourceOverride(t *testing.T) {
 										},
 									},
 								},
-								OverrideType: fleetv1alpha1.JSONPatchOverrideType,
-								JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+								OverrideType: placementv1beta1.JSONPatchOverrideType,
+								JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 									{
-										Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
+										Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 										Path:     "/apiVersion",
 									},
 									{
-										Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
+										Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 										Path:     "/metadata/annotations/0",
 										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
 									},
 									{
-										Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+										Operator: placementv1beta1.JSONPatchOverrideOpReplace,
 										Path:     "/status/conditions/0/reason",
 										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-reason"`)},
 									},
 									{
-										Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+										Operator: placementv1beta1.JSONPatchOverrideOpReplace,
 										Path:     "/////kind///",
 										Value:    apiextensionsv1.JSON{Raw: []byte(`"value"`)},
 									},
@@ -541,11 +540,11 @@ func TestValidateResourceOverride(t *testing.T) {
 				},
 			},
 			wantErrMsg: apierrors.NewAggregate([]error{fmt.Errorf("invalid JSONPatchOverride %s: cannot override typeMeta fields",
-				fleetv1alpha1.JSONPatchOverride{Operator: fleetv1alpha1.JSONPatchOverrideOpRemove, Path: "/apiVersion"}),
+				placementv1beta1.JSONPatchOverride{Operator: placementv1beta1.JSONPatchOverrideOpRemove, Path: "/apiVersion"}),
 				fmt.Errorf("invalid JSONPatchOverride %s: cannot override status fields",
-					fleetv1alpha1.JSONPatchOverride{Operator: fleetv1alpha1.JSONPatchOverrideOpReplace, Path: "/status/conditions/0/reason", Value: apiextensionsv1.JSON{Raw: []byte(`"new-reason"`)}}),
+					placementv1beta1.JSONPatchOverride{Operator: placementv1beta1.JSONPatchOverrideOpReplace, Path: "/status/conditions/0/reason", Value: apiextensionsv1.JSON{Raw: []byte(`"new-reason"`)}}),
 				fmt.Errorf("invalid JSONPatchOverride %s: path cannot contain empty string",
-					fleetv1alpha1.JSONPatchOverride{Operator: fleetv1alpha1.JSONPatchOverrideOpReplace, Path: "/////kind///", Value: apiextensionsv1.JSON{Raw: []byte(`"value"`)}}),
+					placementv1beta1.JSONPatchOverride{Operator: placementv1beta1.JSONPatchOverrideOpReplace, Path: "/////kind///", Value: apiextensionsv1.JSON{Raw: []byte(`"value"`)}}),
 			}),
 		},
 	}
@@ -564,24 +563,24 @@ func TestValidateResourceOverride(t *testing.T) {
 }
 
 func TestValidateOverridePolicy(t *testing.T) {
-	validJSONPatchOverrides := []fleetv1alpha1.JSONPatchOverride{
+	validJSONPatchOverrides := []placementv1beta1.JSONPatchOverride{
 		{
-			Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
+			Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 			Path:     "/metadata/labels/new-label",
 			Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
 		},
 	}
 
 	tests := map[string]struct {
-		policy     *fleetv1alpha1.OverridePolicy
+		policy     *placementv1beta1.OverridePolicy
 		wantErrMsg error
 	}{
 		"all label selectors": {
-			policy: &fleetv1alpha1.OverridePolicy{
-				OverrideRules: []fleetv1alpha1.OverrideRule{
+			policy: &placementv1beta1.OverridePolicy{
+				OverrideRules: []placementv1beta1.OverrideRule{
 					{
-						ClusterSelector: &fleetv1beta1.ClusterSelector{
-							ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+						ClusterSelector: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
 									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
@@ -601,8 +600,8 @@ func TestValidateOverridePolicy(t *testing.T) {
 						JSONPatchOverrides: validJSONPatchOverrides,
 					},
 					{
-						ClusterSelector: &fleetv1beta1.ClusterSelector{
-							ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+						ClusterSelector: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
 									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
@@ -626,17 +625,17 @@ func TestValidateOverridePolicy(t *testing.T) {
 			wantErrMsg: nil,
 		},
 		"unsupported selector type - property selector": {
-			policy: &fleetv1alpha1.OverridePolicy{
-				OverrideRules: []fleetv1alpha1.OverrideRule{
+			policy: &placementv1beta1.OverridePolicy{
+				OverrideRules: []placementv1beta1.OverrideRule{
 					{
-						ClusterSelector: &fleetv1beta1.ClusterSelector{
-							ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+						ClusterSelector: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
-									PropertySelector: &fleetv1beta1.PropertySelector{
-										MatchExpressions: []fleetv1beta1.PropertySelectorRequirement{
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
 											{
 												Name:     "example",
-												Operator: fleetv1beta1.PropertySelectorGreaterThanOrEqualTo,
+												Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
 												Values:   []string{"1"},
 											},
 										},
@@ -650,8 +649,8 @@ func TestValidateOverridePolicy(t *testing.T) {
 			wantErrMsg: fmt.Errorf("only labelSelector is supported"),
 		},
 		"no cluster selector": {
-			policy: &fleetv1alpha1.OverridePolicy{
-				OverrideRules: []fleetv1alpha1.OverrideRule{
+			policy: &placementv1beta1.OverridePolicy{
+				OverrideRules: []placementv1beta1.OverrideRule{
 					{
 						JSONPatchOverrides: validJSONPatchOverrides,
 					},
@@ -660,10 +659,10 @@ func TestValidateOverridePolicy(t *testing.T) {
 			wantErrMsg: nil,
 		},
 		"empty cluster selector": {
-			policy: &fleetv1alpha1.OverridePolicy{
-				OverrideRules: []fleetv1alpha1.OverrideRule{
+			policy: &placementv1beta1.OverridePolicy{
+				OverrideRules: []placementv1beta1.OverrideRule{
 					{
-						ClusterSelector:    &fleetv1beta1.ClusterSelector{},
+						ClusterSelector:    &placementv1beta1.ClusterSelector{},
 						JSONPatchOverrides: validJSONPatchOverrides,
 					},
 				},
@@ -671,11 +670,11 @@ func TestValidateOverridePolicy(t *testing.T) {
 			wantErrMsg: nil,
 		},
 		"nil label selector": {
-			policy: &fleetv1alpha1.OverridePolicy{
-				OverrideRules: []fleetv1alpha1.OverrideRule{
+			policy: &placementv1beta1.OverridePolicy{
+				OverrideRules: []placementv1beta1.OverrideRule{
 					{
-						ClusterSelector: &fleetv1beta1.ClusterSelector{
-							ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+						ClusterSelector: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{},
 							},
 						},
@@ -685,11 +684,11 @@ func TestValidateOverridePolicy(t *testing.T) {
 			wantErrMsg: errors.New("labelSelector is required"),
 		},
 		"nil JSONPatchOverride": {
-			policy: &fleetv1alpha1.OverridePolicy{
-				OverrideRules: []fleetv1alpha1.OverrideRule{
+			policy: &placementv1beta1.OverridePolicy{
+				OverrideRules: []placementv1beta1.OverrideRule{
 					{
-						ClusterSelector: &fleetv1beta1.ClusterSelector{
-							ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+						ClusterSelector: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
 									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
@@ -699,7 +698,7 @@ func TestValidateOverridePolicy(t *testing.T) {
 								},
 							},
 						},
-						OverrideType:       fleetv1alpha1.JSONPatchOverrideType,
+						OverrideType:       placementv1beta1.JSONPatchOverrideType,
 						JSONPatchOverrides: nil,
 					},
 				},
@@ -707,11 +706,11 @@ func TestValidateOverridePolicy(t *testing.T) {
 			wantErrMsg: errors.New("JSONPatchOverrides cannot be empty"),
 		},
 		"empty JSONPatchOverrides with jsonPatch override type": {
-			policy: &fleetv1alpha1.OverridePolicy{
-				OverrideRules: []fleetv1alpha1.OverrideRule{
+			policy: &placementv1beta1.OverridePolicy{
+				OverrideRules: []placementv1beta1.OverrideRule{
 					{
-						ClusterSelector: &fleetv1beta1.ClusterSelector{
-							ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+						ClusterSelector: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
 									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
@@ -721,19 +720,19 @@ func TestValidateOverridePolicy(t *testing.T) {
 								},
 							},
 						},
-						OverrideType:       fleetv1alpha1.JSONPatchOverrideType,
-						JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{},
+						OverrideType:       placementv1beta1.JSONPatchOverrideType,
+						JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{},
 					},
 				},
 			},
 			wantErrMsg: errors.New("JSONPatchOverrides cannot be empty"),
 		},
 		"JSONPatchOverrides with delete override type": {
-			policy: &fleetv1alpha1.OverridePolicy{
-				OverrideRules: []fleetv1alpha1.OverrideRule{
+			policy: &placementv1beta1.OverridePolicy{
+				OverrideRules: []placementv1beta1.OverrideRule{
 					{
-						ClusterSelector: &fleetv1beta1.ClusterSelector{
-							ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+						ClusterSelector: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
 									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
@@ -743,7 +742,7 @@ func TestValidateOverridePolicy(t *testing.T) {
 								},
 							},
 						},
-						OverrideType:       fleetv1alpha1.DeleteOverrideType,
+						OverrideType:       placementv1beta1.DeleteOverrideType,
 						JSONPatchOverrides: validJSONPatchOverrides,
 					},
 				},
@@ -751,14 +750,14 @@ func TestValidateOverridePolicy(t *testing.T) {
 			wantErrMsg: errors.New("JSONPatchOverrides cannot be set when the override type is Delete"),
 		},
 		"invalid JSONPatchOverridesPath": {
-			policy: &fleetv1alpha1.OverridePolicy{
-				OverrideRules: []fleetv1alpha1.OverrideRule{
+			policy: &placementv1beta1.OverridePolicy{
+				OverrideRules: []placementv1beta1.OverrideRule{
 					{
-						ClusterSelector: &fleetv1beta1.ClusterSelector{},
-						OverrideType:    fleetv1alpha1.JSONPatchOverrideType,
-						JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+						ClusterSelector: &placementv1beta1.ClusterSelector{},
+						OverrideType:    placementv1beta1.JSONPatchOverrideType,
+						JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 							{
-								Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+								Operator: placementv1beta1.JSONPatchOverrideOpReplace,
 								Path:     "/metadata/finalizers",
 								Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
 							},
@@ -769,14 +768,14 @@ func TestValidateOverridePolicy(t *testing.T) {
 			wantErrMsg: errors.New("cannot override metadata fields except annotations and labels"),
 		},
 		"invalid JSONPatchOverride": {
-			policy: &fleetv1alpha1.OverridePolicy{
-				OverrideRules: []fleetv1alpha1.OverrideRule{
+			policy: &placementv1beta1.OverridePolicy{
+				OverrideRules: []placementv1beta1.OverrideRule{
 					{
-						ClusterSelector: &fleetv1beta1.ClusterSelector{},
-						OverrideType:    fleetv1alpha1.JSONPatchOverrideType,
-						JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+						ClusterSelector: &placementv1beta1.ClusterSelector{},
+						OverrideType:    placementv1beta1.JSONPatchOverrideType,
+						JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 							{
-								Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
+								Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 								Path:     "/apiVersionabc",
 								Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
 							},
@@ -803,13 +802,13 @@ func TestValidateOverridePolicy(t *testing.T) {
 
 func TestValidateJSONPatchOverride(t *testing.T) {
 	tests := map[string]struct {
-		jsonPatchOverrides []fleetv1alpha1.JSONPatchOverride
+		jsonPatchOverrides []placementv1beta1.JSONPatchOverride
 		wantErrMsg         error
 	}{
 		"valid json patch override": {
-			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+			jsonPatchOverrides: []placementv1beta1.JSONPatchOverride{
 				{
-					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+					Operator: placementv1beta1.JSONPatchOverrideOpReplace,
 					Path:     "/spec/clusterResourceSelector/kind",
 					Value:    apiextensionsv1.JSON{Raw: []byte(`"ClusterRole"`)},
 				},
@@ -817,9 +816,9 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 			wantErrMsg: nil,
 		},
 		"invalid json patch override - invalid remove operation": {
-			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+			jsonPatchOverrides: []placementv1beta1.JSONPatchOverride{
 				{
-					Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
+					Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 					Path:     "/spec/clusterResourceSelector/kind",
 					Value:    apiextensionsv1.JSON{Raw: []byte(`"ClusterRole"`)},
 				},
@@ -831,13 +830,13 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 			wantErrMsg:         errors.New("JSONPatchOverrides cannot be empty"),
 		},
 		"invalid json patch override - empty jsonPatchOverrides": {
-			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{},
+			jsonPatchOverrides: []placementv1beta1.JSONPatchOverride{},
 			wantErrMsg:         errors.New("JSONPatchOverrides cannot be empty"),
 		},
 		"invalid json patch override - invalid path": {
-			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+			jsonPatchOverrides: []placementv1beta1.JSONPatchOverride{
 				{
-					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+					Operator: placementv1beta1.JSONPatchOverrideOpReplace,
 					Path:     "/status/conditions/0/reason",
 					Value:    apiextensionsv1.JSON{Raw: []byte(`"new-reason"`)},
 				},

@@ -22,12 +22,11 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/errors"
 
-	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 // ValidateClusterResourceOverride validates cluster resource override fields and returns error.
-func ValidateClusterResourceOverride(cro fleetv1alpha1.ClusterResourceOverride, croList *fleetv1alpha1.ClusterResourceOverrideList) error {
+func ValidateClusterResourceOverride(cro placementv1beta1.ClusterResourceOverride, croList *placementv1beta1.ClusterResourceOverrideList) error {
 	allErr := make([]error, 0)
 
 	// Check if the resource is being selected by resource name
@@ -51,8 +50,8 @@ func ValidateClusterResourceOverride(cro fleetv1alpha1.ClusterResourceOverride, 
 }
 
 // validateClusterResourceSelectors checks if override is selecting resource by name.
-func validateClusterResourceSelectors(cro fleetv1alpha1.ClusterResourceOverride) error {
-	selectorMap := make(map[fleetv1beta1.ClusterResourceSelector]bool)
+func validateClusterResourceSelectors(cro placementv1beta1.ClusterResourceOverride) error {
+	selectorMap := make(map[placementv1beta1.ClusterResourceSelector]bool)
 	allErr := make([]error, 0)
 	for _, selector := range cro.Spec.ClusterResourceSelectors {
 		// Check if the resource is not being selected by label selector
@@ -75,12 +74,12 @@ func validateClusterResourceSelectors(cro fleetv1alpha1.ClusterResourceOverride)
 
 // validateClusterResourceOverrideResourceLimit checks if there is only 1 cluster resource override per resource,
 // assuming the resource will be selected by the name only.
-func validateClusterResourceOverrideResourceLimit(cro fleetv1alpha1.ClusterResourceOverride, croList *fleetv1alpha1.ClusterResourceOverrideList) error {
+func validateClusterResourceOverrideResourceLimit(cro placementv1beta1.ClusterResourceOverride, croList *placementv1beta1.ClusterResourceOverrideList) error {
 	// Check if croList is nil or empty, no need to check for resource limit
 	if croList == nil || len(croList.Items) == 0 {
 		return nil
 	}
-	overrideMap := make(map[fleetv1beta1.ClusterResourceSelector]string)
+	overrideMap := make(map[placementv1beta1.ClusterResourceSelector]string)
 	// Add overrides and its selectors to the map
 	for _, override := range croList.Items {
 		selectors := override.Spec.ClusterResourceSelectors

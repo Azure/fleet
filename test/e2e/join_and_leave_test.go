@@ -43,7 +43,7 @@ const (
 )
 
 // Note that this container cannot run in parallel with other containers.
-var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, func() {
+var _ = Describe("Test member cluster join and leave flow", Label("joinleave"), Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 	internalServiceExportName := fmt.Sprintf("internal-service-export-%d", GinkgoParallelProcess())
@@ -79,7 +79,7 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 		}
 	})
 
-	Context("Test cluster join and leave flow with CRP not deleted", Ordered, Serial, func() {
+	Context("Test cluster join and leave flow with CRP not deleted", Label("joinleave"), Ordered, Serial, func() {
 		It("Create the test resources in the namespace", createWrappedResourcesForEnvelopTest)
 
 		It("Create the CRP that select the name space and place it to all clusters", func() {
@@ -245,8 +245,8 @@ var _ = Describe("Test member cluster join and leave flow", Ordered, Serial, fun
 	})
 })
 
-var _ = Describe("Test member cluster force delete flow", Ordered, Serial, func() {
-	Context("Test cluster join and leave flow with member agent down and force delete member cluster", Ordered, Serial, func() {
+var _ = Describe("Test member cluster force delete flow", Label("joinleave"), Ordered, Serial, func() {
+	Context("Test cluster join and leave flow with member agent down and force delete member cluster", Label("joinleave"), Ordered, Serial, func() {
 		It("Simulate the member agent going down in member cluster", func() {
 			updateMemberAgentDeploymentReplicas(memberCluster3WestProdClient, 0)
 		})

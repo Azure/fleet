@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 )
@@ -59,7 +58,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 	var targetClusters []*clusterv1beta1.MemberCluster
 	var unscheduledClusters []*clusterv1beta1.MemberCluster
 	var resourceSnapshot *placementv1beta1.ClusterResourceSnapshot
-	var clusterResourceOverride *placementv1alpha1.ClusterResourceOverrideSnapshot
+	var clusterResourceOverride *placementv1beta1.ClusterResourceOverrideSnapshot
 
 	BeforeEach(func() {
 		testUpdateRunName = "updaterun-" + utils.RandStr()
@@ -835,7 +834,7 @@ func generateSucceededInitializationStatus(
 	updateRun *placementv1beta1.ClusterStagedUpdateRun,
 	policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot,
 	updateStrategy *placementv1beta1.ClusterStagedUpdateStrategy,
-	clusterResourceOverride *placementv1alpha1.ClusterResourceOverrideSnapshot,
+	clusterResourceOverride *placementv1beta1.ClusterResourceOverrideSnapshot,
 ) *placementv1beta1.StagedUpdateRunStatus {
 	status := &placementv1beta1.StagedUpdateRunStatus{
 		PolicySnapshotIndexUsed:      policySnapshot.Labels[placementv1beta1.PolicyIndexLabel],

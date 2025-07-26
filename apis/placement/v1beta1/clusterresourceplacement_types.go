@@ -488,6 +488,10 @@ type RolloutStrategy struct {
 	// ApplyStrategy describes when and how to apply the selected resources to the target cluster.
 	// +kubebuilder:validation:Optional
 	ApplyStrategy *ApplyStrategy `json:"applyStrategy,omitempty"`
+
+	// DeleteStrategy configures the deletion behavior when the ClusterResourcePlacement is deleted.
+	// +kubebuilder:validation:Optional
+	DeleteStrategy *DeleteStrategy `json:"deleteStrategy,omitempty"`
 }
 
 // ApplyStrategy describes when and how to apply the selected resource to the target cluster.
@@ -1317,6 +1321,38 @@ const (
 
 	// PickFixedPlacementType picks a fixed set of clusters.
 	PickFixedPlacementType PlacementType = "PickFixed"
+)
+
+// DeleteStrategy configures the deletion behavior when a placement is deleted.
+type DeleteStrategy struct {
+	// PropagationPolicy controls whether to delete placed resources when placement is deleted.
+	//
+	// Available options:
+	//
+	// * Delete: all placed resources on member clusters will be deleted when
+	//   the placement is deleted. This is the default behavior.
+	//
+	// * Abandon: all placed resources on member clusters will be left intact (abandoned)
+	//   when the placement is deleted.
+	//
+	// +kubebuilder:validation:Enum=Abandon;Delete
+	// +kubebuilder:default=Delete
+	// +kubebuilder:validation:Optional
+	PropagationPolicy DeletePropagationPolicy `json:"propagationPolicy,omitempty"`
+}
+
+// DeletePropagationPolicy identifies the propagation policy when a placement is deleted.
+// +enum
+type DeletePropagationPolicy string
+
+const (
+	// DeletePropagationPolicyAbandon instructs Fleet to leave (abandon) all placed resources on member
+	// clusters when the placement is deleted.
+	DeletePropagationPolicyAbandon DeletePropagationPolicy = "Abandon"
+
+	// DeletePropagationPolicyDelete instructs Fleet to delete all placed resources on member clusters
+	// when the placement is deleted. This is the default behavior.
+	DeletePropagationPolicyDelete DeletePropagationPolicy = "Delete"
 )
 
 // ClusterResourcePlacementList contains a list of ClusterResourcePlacement.

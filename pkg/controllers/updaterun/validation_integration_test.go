@@ -31,7 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 )
@@ -45,7 +44,7 @@ var _ = Describe("UpdateRun validation tests", func() {
 	var targetClusters []*clusterv1beta1.MemberCluster
 	var unscheduledClusters []*clusterv1beta1.MemberCluster
 	var resourceSnapshot *placementv1beta1.ClusterResourceSnapshot
-	var clusterResourceOverride *placementv1alpha1.ClusterResourceOverrideSnapshot
+	var clusterResourceOverride *placementv1beta1.ClusterResourceOverrideSnapshot
 	var wantStatus *placementv1beta1.StagedUpdateRunStatus
 
 	BeforeEach(func() {

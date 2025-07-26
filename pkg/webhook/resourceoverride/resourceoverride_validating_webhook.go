@@ -29,14 +29,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/validator"
 )
 
 var (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating resourceoverride resources.
-	ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, fleetv1alpha1.GroupVersion.Group, fleetv1alpha1.GroupVersion.Version, "resourceoverride")
+	ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, placementv1beta1.GroupVersion.Group, placementv1beta1.GroupVersion.Version, "resourceoverride")
 )
 
 type resourceOverrideValidator struct {
@@ -53,7 +53,7 @@ func Add(mgr manager.Manager) error {
 
 // Handle resourceOverrideValidator checks to see if resource override is valid.
 func (v *resourceOverrideValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
-	var ro fleetv1alpha1.ResourceOverride
+	var ro placementv1beta1.ResourceOverride
 	klog.V(2).InfoS("Validating webhook handling resource override", "operation", req.Operation)
 	if err := v.decoder.Decode(req, &ro); err != nil {
 		klog.ErrorS(err, "Failed to decode resource override object for validating fields", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
@@ -61,7 +61,7 @@ func (v *resourceOverrideValidator) Handle(ctx context.Context, req admission.Re
 	}
 
 	// List all the resource overrides in the same namespace
-	roList := &fleetv1alpha1.ResourceOverrideList{}
+	roList := &placementv1beta1.ResourceOverrideList{}
 	if err := v.client.List(ctx, roList, client.InNamespace(ro.Namespace)); err != nil {
 		klog.ErrorS(err, "Failed to list resourceOverrides when validating")
 		return admission.Errored(http.StatusInternalServerError, fmt.Errorf("failed to list resourceOverrides, please retry the request: %w", err))

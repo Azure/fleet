@@ -30,7 +30,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -46,18 +45,18 @@ type Reconciler struct {
 // handleOverrideDeleting handles the delete event of an override object. We need to delete all the related override Snapshot.
 func (r *Reconciler) handleOverrideDeleting(ctx context.Context, overrideSnapshotObj, parentOverrideObj client.Object) error {
 	overrideRef := klog.KObj(parentOverrideObj)
-	if !controllerutil.ContainsFinalizer(parentOverrideObj, placementv1alpha1.OverrideFinalizer) {
+	if !controllerutil.ContainsFinalizer(parentOverrideObj, placementv1beta1.OverrideFinalizer) {
 		klog.V(2).InfoS("No need to do anything for the deleting override without a finalizer", "override", overrideRef)
 		return nil
 	}
 	// delete all the associated snapshots
-	if err := r.Client.DeleteAllOf(ctx, overrideSnapshotObj, client.InNamespace(parentOverrideObj.GetNamespace()), client.MatchingLabels{placementv1alpha1.OverrideTrackingLabel: parentOverrideObj.GetName()}); err != nil {
+	if err := r.Client.DeleteAllOf(ctx, overrideSnapshotObj, client.InNamespace(parentOverrideObj.GetNamespace()), client.MatchingLabels{placementv1beta1.OverrideTrackingLabel: parentOverrideObj.GetName()}); err != nil {
 		klog.ErrorS(err, "Failed to delete all associated overrideSnapshot", "override", overrideRef)
 		return controller.NewAPIServerError(false, err)
 	}
 	klog.V(2).InfoS("Deleted all overrideSnapshot associated with the override", "overrideSnapshot", klog.KObj(overrideSnapshotObj), "override", overrideRef)
 
-	controllerutil.RemoveFinalizer(parentOverrideObj, placementv1alpha1.OverrideFinalizer)
+	controllerutil.RemoveFinalizer(parentOverrideObj, placementv1beta1.OverrideFinalizer)
 	if err := r.Client.Update(ctx, parentOverrideObj); err != nil {
 		klog.ErrorS(err, "Failed to remove crp finalizer", "override", overrideRef)
 		return controller.NewUpdateIgnoreConflictError(err)
@@ -67,9 +66,9 @@ func (r *Reconciler) handleOverrideDeleting(ctx context.Context, overrideSnapsho
 
 // ensureFinalizer ensures that the finalizer is added to the override object.
 func (r *Reconciler) ensureFinalizer(ctx context.Context, parentOverrideObj client.Object) error {
-	if !controllerutil.ContainsFinalizer(parentOverrideObj, placementv1alpha1.OverrideFinalizer) {
+	if !controllerutil.ContainsFinalizer(parentOverrideObj, placementv1beta1.OverrideFinalizer) {
 		klog.V(4).InfoS("add the override finalizer", "override", klog.KObj(parentOverrideObj))
-		controllerutil.AddFinalizer(parentOverrideObj, placementv1alpha1.OverrideFinalizer)
+		controllerutil.AddFinalizer(parentOverrideObj, placementv1beta1.OverrideFinalizer)
 		return controller.NewUpdateIgnoreConflictError(r.Update(ctx, parentOverrideObj, client.FieldOwner(utils.OverrideControllerFieldManagerName)))
 	}
 	return nil
@@ -80,24 +79,24 @@ func (r *Reconciler) listSortedOverrideSnapshots(ctx context.Context, parentOver
 	parentOverrideRef := klog.KObj(parentOverrideObj)
 	snapshotList := &unstructured.UnstructuredList{}
 	var snapshotListGVK schema.GroupVersionKind
-	if parentOverrideObj.GetObjectKind().GroupVersionKind().Kind == placementv1alpha1.ClusterResourceOverrideKind {
+	if parentOverrideObj.GetObjectKind().GroupVersionKind().Kind == placementv1beta1.ClusterResourceOverrideKind {
 		snapshotListGVK = utils.ClusterResourceOverrideSnapshotKind
 	} else {
 		snapshotListGVK = utils.ResourceOverrideSnapshotKind
 	}
 	snapshotList.SetGroupVersionKind(snapshotListGVK)
-	if err := r.Client.List(ctx, snapshotList, client.InNamespace(parentOverrideObj.GetNamespace()), client.MatchingLabels{placementv1alpha1.OverrideTrackingLabel: parentOverrideObj.GetName()}); err != nil {
+	if err := r.Client.List(ctx, snapshotList, client.InNamespace(parentOverrideObj.GetNamespace()), client.MatchingLabels{placementv1beta1.OverrideTrackingLabel: parentOverrideObj.GetName()}); err != nil {
 		klog.ErrorS(err, "Failed to list all overrideSnapshot", "snapshotListGVK", snapshotListGVK, "parentOverride", parentOverrideRef)
 		return nil, controller.NewAPIServerError(false, err)
 	}
 	var errs []error
 	sort.Slice(snapshotList.Items, func(i, j int) bool {
-		ii, err := labels.ExtractIndex(&snapshotList.Items[i], placementv1alpha1.OverrideIndexLabel)
+		ii, err := labels.ExtractIndex(&snapshotList.Items[i], placementv1beta1.OverrideIndexLabel)
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse the override index label", "snapshotListGVK", snapshotListGVK, "parentOverride", parentOverrideRef, "overrideSnapshot", klog.KObj(&snapshotList.Items[i]))
 			errs = append(errs, err)
 		}
-		ji, err := labels.ExtractIndex(&snapshotList.Items[j], placementv1alpha1.OverrideIndexLabel)
+		ji, err := labels.ExtractIndex(&snapshotList.Items[j], placementv1beta1.OverrideIndexLabel)
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse the override index label", "snapshotListGVK", snapshotListGVK, "parentOverride", parentOverrideRef, "overrideSnapshot", klog.KObj(&snapshotList.Items[j]))
 			errs = append(errs, err)
