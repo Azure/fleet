@@ -60,6 +60,8 @@ make setup-clusters
 
 # Run E2E tests with custom cluster count
 make setup-clusters MEMBER_CLUSTER_COUNT=5
+
+# Run parallel E2E tests (default - excludes custom tests)
 make e2e-tests
 
 # Clean up test clusters

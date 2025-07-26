@@ -48,7 +48,6 @@ import (
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils/condition"
@@ -406,15 +405,15 @@ var (
 	}
 
 	ClusterResourceOverrideSnapshotKind = schema.GroupVersionKind{
-		Group:   placementv1alpha1.GroupVersion.Group,
-		Version: placementv1alpha1.GroupVersion.Version,
-		Kind:    placementv1alpha1.ClusterResourceOverrideSnapshotKind,
+		Group:   placementv1beta1.GroupVersion.Group,
+		Version: placementv1beta1.GroupVersion.Version,
+		Kind:    placementv1beta1.ClusterResourceOverrideSnapshotKind,
 	}
 
 	ResourceOverrideSnapshotKind = schema.GroupVersionKind{
-		Group:   placementv1alpha1.GroupVersion.Group,
-		Version: placementv1alpha1.GroupVersion.Version,
-		Kind:    placementv1alpha1.ResourceOverrideSnapshotKind,
+		Group:   placementv1beta1.GroupVersion.Group,
+		Version: placementv1beta1.GroupVersion.Version,
+		Kind:    placementv1beta1.ResourceOverrideSnapshotKind,
 	}
 
 	DeploymentGVR = schema.GroupVersionResource{

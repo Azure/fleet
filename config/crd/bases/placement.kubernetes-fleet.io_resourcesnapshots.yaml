@@ -40,6 +40,8 @@ spec:
           Each snapshot MUST have the following labels:
             - `CRPTrackingLabel` which points to its owner resource placement.
             - `ResourceIndexLabel` which is the index  of the snapshot group.
+
+          The first snapshot of the index group MAY have the following labels:
             - `IsLatestSnapshotLabel` which indicates whether the snapshot is the latest one.
 
           All the snapshots within the same index group must have the same ResourceIndexLabel.

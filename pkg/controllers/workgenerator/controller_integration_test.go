@@ -38,7 +38,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/workapplier"
 	"go.goms.io/fleet/pkg/utils"
@@ -57,9 +56,9 @@ var (
 	validResourceOverrideSnapshotName          = "ro-1"
 	invalidClusterResourceOverrideSnapshotName = "cro-2" // the overridden manifest is invalid
 
-	validClusterResourceOverrideSnapshot   placementv1alpha1.ClusterResourceOverrideSnapshot
-	validResourceOverrideSnapshot          placementv1alpha1.ResourceOverrideSnapshot
-	invalidClusterResourceOverrideSnapshot placementv1alpha1.ClusterResourceOverrideSnapshot
+	validClusterResourceOverrideSnapshot   placementv1beta1.ClusterResourceOverrideSnapshot
+	validResourceOverrideSnapshot          placementv1beta1.ResourceOverrideSnapshot
+	invalidClusterResourceOverrideSnapshot placementv1beta1.ClusterResourceOverrideSnapshot
 
 	bindingStatusCmpOpts = cmp.Options{
 		cmpopts.SortSlices(utils.LessFuncConditionByType),

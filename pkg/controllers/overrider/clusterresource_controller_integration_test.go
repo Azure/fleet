@@ -29,26 +29,25 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 )
 
-func getClusterResourceOverrideSpec() fleetv1alpha1.ClusterResourceOverrideSpec {
-	return fleetv1alpha1.ClusterResourceOverrideSpec{
-		ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
+func getClusterResourceOverrideSpec() placementv1beta1.ClusterResourceOverrideSpec {
+	return placementv1beta1.ClusterResourceOverrideSpec{
+		ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 			{
 				Group:   "",
 				Version: "v1",
 				Kind:    "Namespace",
 			},
 		},
-		Policy: &fleetv1alpha1.OverridePolicy{
-			OverrideRules: []fleetv1alpha1.OverrideRule{
+		Policy: &placementv1beta1.OverridePolicy{
+			OverrideRules: []placementv1beta1.OverrideRule{
 				{
-					JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+					JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 						{
-							Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+							Operator: placementv1beta1.JSONPatchOverrideOpReplace,
 							Path:     "spec.replica",
 							Value:    apiextensionsv1.JSON{Raw: []byte("3")},
 						},
@@ -59,11 +58,11 @@ func getClusterResourceOverrideSpec() fleetv1alpha1.ClusterResourceOverrideSpec 
 	}
 }
 
-func getClusterResourceOverride(testOverrideName string) *fleetv1alpha1.ClusterResourceOverride {
-	return &fleetv1alpha1.ClusterResourceOverride{
+func getClusterResourceOverride(testOverrideName string) *placementv1beta1.ClusterResourceOverride {
+	return &placementv1beta1.ClusterResourceOverride{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: fleetv1alpha1.GroupVersion.String(),
-			Kind:       fleetv1alpha1.ClusterResourceOverrideKind,
+			APIVersion: placementv1beta1.GroupVersion.String(),
+			Kind:       placementv1beta1.ClusterResourceOverrideKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testOverrideName,
@@ -72,17 +71,17 @@ func getClusterResourceOverride(testOverrideName string) *fleetv1alpha1.ClusterR
 	}
 }
 
-func getClusterResourceOverrideSnapshot(testOverrideName string, index int) *fleetv1alpha1.ClusterResourceOverrideSnapshot {
-	return &fleetv1alpha1.ClusterResourceOverrideSnapshot{
+func getClusterResourceOverrideSnapshot(testOverrideName string, index int) *placementv1beta1.ClusterResourceOverrideSnapshot {
+	return &placementv1beta1.ClusterResourceOverrideSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf(fleetv1alpha1.OverrideSnapshotNameFmt, testOverrideName, index),
+			Name: fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, testOverrideName, index),
 			Labels: map[string]string{
-				fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(index),
-				fleetv1beta1.IsLatestSnapshotLabel:  "true",
-				fleetv1alpha1.OverrideTrackingLabel: testOverrideName,
+				placementv1beta1.OverrideIndexLabel:    strconv.Itoa(index),
+				placementv1beta1.IsLatestSnapshotLabel: "true",
+				placementv1beta1.OverrideTrackingLabel: testOverrideName,
 			},
 		},
-		Spec: fleetv1alpha1.ClusterResourceOverrideSnapshotSpec{
+		Spec: placementv1beta1.ClusterResourceOverrideSnapshotSpec{
 			OverrideHash: []byte("hash"),
 			OverrideSpec: getClusterResourceOverrideSpec(),
 		},
@@ -90,7 +89,7 @@ func getClusterResourceOverrideSnapshot(testOverrideName string, index int) *fle
 }
 
 var _ = Describe("Test ClusterResourceOverride controller logic", func() {
-	var cro *fleetv1alpha1.ClusterResourceOverride
+	var cro *placementv1beta1.ClusterResourceOverride
 	var testCROName string
 
 	BeforeEach(func() {
@@ -112,7 +111,7 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 			if err != nil {
 				return err
 			}
-			if !controllerutil.ContainsFinalizer(cro, fleetv1alpha1.OverrideFinalizer) {
+			if !controllerutil.ContainsFinalizer(cro, placementv1beta1.OverrideFinalizer) {
 				return fmt.Errorf("finalizer not added")
 			}
 			return nil
@@ -125,9 +124,9 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
 		By("Checking if the label is correct")
 		diff := cmp.Diff(map[string]string{
-			fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(0),
-			fleetv1beta1.IsLatestSnapshotLabel:  "true",
-			fleetv1alpha1.OverrideTrackingLabel: testCROName,
+			placementv1beta1.OverrideIndexLabel:    strconv.Itoa(0),
+			placementv1beta1.IsLatestSnapshotLabel: "true",
+			placementv1beta1.OverrideTrackingLabel: testCROName,
 		}, snapshot.GetLabels())
 		Expect(diff).Should(BeEmpty(), "Snapshot label mismatch (-want, +got)")
 		By("Checking if the spec is correct")
@@ -152,12 +151,12 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 
 		By("Updating an existing CRO")
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cro.Name}, cro)).Should(Succeed())
-		cro.Spec.Policy = &fleetv1alpha1.OverridePolicy{
-			OverrideRules: []fleetv1alpha1.OverrideRule{
+		cro.Spec.Policy = &placementv1beta1.OverridePolicy{
+			OverrideRules: []placementv1beta1.OverrideRule{
 				{
-					JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+					JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 						{
-							Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
+							Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 							Path:     "spec.replica",
 						},
 					},
@@ -172,9 +171,9 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
 		By("Checking if the label is correct")
 		diff := cmp.Diff(map[string]string{
-			fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(1),
-			fleetv1beta1.IsLatestSnapshotLabel:  "true",
-			fleetv1alpha1.OverrideTrackingLabel: testCROName,
+			placementv1beta1.OverrideIndexLabel:    strconv.Itoa(1),
+			placementv1beta1.IsLatestSnapshotLabel: "true",
+			placementv1beta1.OverrideTrackingLabel: testCROName,
 		}, snapshot.GetLabels())
 		Expect(diff).Should(BeEmpty(), diff, "Snapshot label mismatch (-want, +got)")
 		By("Checking if the spec is correct")
@@ -185,9 +184,9 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name}, snapshot)).Should(Succeed())
 		By("Make sure the old snapshot is correctly marked as not latest")
 		diff = cmp.Diff(map[string]string{
-			fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(0),
-			fleetv1beta1.IsLatestSnapshotLabel:  "false",
-			fleetv1alpha1.OverrideTrackingLabel: testCROName,
+			placementv1beta1.OverrideIndexLabel:    strconv.Itoa(0),
+			placementv1beta1.IsLatestSnapshotLabel: "false",
+			placementv1beta1.OverrideTrackingLabel: testCROName,
 		}, snapshot.GetLabels())
 		Expect(diff).Should(BeEmpty(), diff, "Snapshot label mismatch (-want, +got)")
 		By("Make sure the old snapshot spec is not the same as the current CRO")
@@ -205,12 +204,12 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
 		By("Updating an existing CRO")
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cro.Name}, cro)).Should(Succeed())
-		cro.Spec.Policy = &fleetv1alpha1.OverridePolicy{
-			OverrideRules: []fleetv1alpha1.OverrideRule{
+		cro.Spec.Policy = &placementv1beta1.OverridePolicy{
+			OverrideRules: []placementv1beta1.OverrideRule{
 				{
-					JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+					JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 						{
-							Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
+							Operator: placementv1beta1.JSONPatchOverrideOpRemove,
 							Path:     "spec.replica",
 						},
 					},

@@ -40,6 +40,11 @@ test suites, follow the steps below:
    ginkgo --label-filter="custom" -v -p .
    ```
 
+   or run tests involving member cluster join/leave scenarios with the following command (serially)
+   ```sh
+   ginkgo --label-filter="joinleave" -v .
+   ```
+
    or create a launch.json in your vscode workspace.
    ```yaml
    {

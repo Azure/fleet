@@ -11,6 +11,7 @@ The main idea is that we are creating a multi-cluster application management sol
 - Follow the [Uber Go Style Guide](https://github.com/uber-go/guide/blob/master/style.md) if possible.
 - Favor using the standard library over third-party libraries.
 - Run "make reviewable" before submitting a pull request to ensure the code is formatted correctly and all dependencies are up to date.
+- The title of a PR must use one of the following prefixes:  "[WIP] ", "feat: ", "test: ", "fix: ", "docs: ", "style: ", "interface: ", "util: ", "chore: ", "ci: ", "perf: ", "refactor: ", "revert: ". Please pick one that matches the PR content the most.
 
 ## Terminology
 - **Fleet**: A conceptual term referring to a collection of clusters.

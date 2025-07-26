@@ -27,7 +27,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	scheduler "go.goms.io/fleet/pkg/scheduler/framework"
 	"go.goms.io/fleet/pkg/utils/condition"
@@ -45,25 +44,25 @@ var _ = Context("creating resourceOverride (selecting all clusters) to override 
 		// Create the CRP.
 		createCRP(crpName)
 		// Create the ro.
-		ro := &placementv1alpha1.ResourceOverride{
+		ro := &placementv1beta1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      roName,
 				Namespace: roNamespace,
 			},
-			Spec: placementv1alpha1.ResourceOverrideSpec{
-				Placement: &placementv1alpha1.PlacementRef{
+			Spec: placementv1beta1.ResourceOverrideSpec{
+				Placement: &placementv1beta1.PlacementRef{
 					Name: crpName, // assigned CRP name
 				},
 				ResourceSelectors: configMapSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s"}`, roTestAnnotationKey, roTestAnnotationValue))},
 								},
@@ -96,7 +95,7 @@ var _ = Context("creating resourceOverride (selecting all clusters) to override 
 
 	It("should update CRP status as expected", func() {
 		wantRONames := []placementv1beta1.NamespacedName{
-			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)},
+			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)},
 		}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, wantRONames)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
@@ -112,24 +111,24 @@ var _ = Context("creating resourceOverride (selecting all clusters) to override 
 
 	It("update ro attached to this CRP only and change annotation value", func() {
 		Eventually(func() error {
-			ro := &placementv1alpha1.ResourceOverride{}
+			ro := &placementv1beta1.ResourceOverride{}
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: roName, Namespace: roNamespace}, ro); err != nil {
 				return err
 			}
-			ro.Spec = placementv1alpha1.ResourceOverrideSpec{
-				Placement: &placementv1alpha1.PlacementRef{
+			ro.Spec = placementv1beta1.ResourceOverrideSpec{
+				Placement: &placementv1beta1.PlacementRef{
 					Name: crpName,
 				},
 				ResourceSelectors: configMapSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s"}`, roTestAnnotationKey, roTestAnnotationValue1))},
 								},
@@ -144,7 +143,7 @@ var _ = Context("creating resourceOverride (selecting all clusters) to override 
 
 	It("should update CRP status as expected", func() {
 		wantRONames := []placementv1beta1.NamespacedName{
-			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 1)},
+			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 1)},
 		}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, wantRONames)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
@@ -160,11 +159,11 @@ var _ = Context("creating resourceOverride (selecting all clusters) to override 
 
 	It("update ro attached to this CRP only and no update on the configmap itself", func() {
 		Eventually(func() error {
-			ro := &placementv1alpha1.ResourceOverride{}
+			ro := &placementv1beta1.ResourceOverride{}
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: roName, Namespace: roNamespace}, ro); err != nil {
 				return err
 			}
-			ro.Spec.Policy.OverrideRules = append(ro.Spec.Policy.OverrideRules, placementv1alpha1.OverrideRule{
+			ro.Spec.Policy.OverrideRules = append(ro.Spec.Policy.OverrideRules, placementv1beta1.OverrideRule{
 				ClusterSelector: &placementv1beta1.ClusterSelector{
 					ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 						{
@@ -176,7 +175,7 @@ var _ = Context("creating resourceOverride (selecting all clusters) to override 
 						},
 					},
 				},
-				OverrideType: placementv1alpha1.DeleteOverrideType,
+				OverrideType: placementv1beta1.DeleteOverrideType,
 			})
 			return hubClient.Update(ctx, ro)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
@@ -184,7 +183,7 @@ var _ = Context("creating resourceOverride (selecting all clusters) to override 
 
 	It("should refresh the CRP status even as there is no change on the resources", func() {
 		wantRONames := []placementv1beta1.NamespacedName{
-			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 2)},
+			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 2)},
 		}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, wantRONames)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
@@ -203,33 +202,33 @@ var _ = Context("creating resourceOverride with multiple jsonPatchOverrides to o
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-	roSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)
+	roSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
 		createWorkResources()
 
-		ro := &placementv1alpha1.ResourceOverride{
+		ro := &placementv1beta1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      roName,
 				Namespace: roNamespace,
 			},
-			Spec: placementv1alpha1.ResourceOverrideSpec{
+			Spec: placementv1beta1.ResourceOverrideSpec{
 				ResourceSelectors: configMapSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s"}`, roTestAnnotationKey, roTestAnnotationValue))},
 								},
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     fmt.Sprintf("/metadata/annotations/%s", roTestAnnotationKey1),
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s"`, roTestAnnotationValue1))},
 								},
@@ -243,7 +242,7 @@ var _ = Context("creating resourceOverride with multiple jsonPatchOverrides to o
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
 		// wait until the snapshot is created so that the observed resource index is predictable.
 		Eventually(func() error {
-			roSnap := &placementv1alpha1.ResourceOverrideSnapshot{}
+			roSnap := &placementv1beta1.ResourceOverrideSnapshot{}
 			return hubClient.Get(ctx, types.NamespacedName{Name: roSnapShotName, Namespace: roNamespace}, roSnap)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 
@@ -277,11 +276,11 @@ var _ = Context("creating resourceOverride with multiple jsonPatchOverrides to o
 
 	It("update ro attached to an invalid CRP", func() {
 		Eventually(func() error {
-			ro := &placementv1alpha1.ResourceOverride{}
+			ro := &placementv1beta1.ResourceOverride{}
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: roName, Namespace: roNamespace}, ro); err != nil {
 				return err
 			}
-			ro.Spec.Placement = &placementv1alpha1.PlacementRef{
+			ro.Spec.Placement = &placementv1beta1.PlacementRef{
 				Name: "invalid-crp", // assigned CRP name
 			}
 			return hubClient.Update(ctx, ro)
@@ -290,7 +289,7 @@ var _ = Context("creating resourceOverride with multiple jsonPatchOverrides to o
 
 	It("CRP status should not be changed", func() {
 		wantRONames := []placementv1beta1.NamespacedName{
-			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)},
+			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)},
 		}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, wantRONames)
 		Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "CRP %s status has been changed", crpName)
@@ -309,18 +308,18 @@ var _ = Context("creating resourceOverride with different rules for each cluster
 		// Create the CRP.
 		createCRP(crpName)
 		// Create the ro.
-		ro := &placementv1alpha1.ResourceOverride{
+		ro := &placementv1beta1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      roName,
 				Namespace: roNamespace,
 			},
-			Spec: placementv1alpha1.ResourceOverrideSpec{
-				Placement: &placementv1alpha1.PlacementRef{
+			Spec: placementv1beta1.ResourceOverrideSpec{
+				Placement: &placementv1beta1.PlacementRef{
 					Name: crpName, // assigned CRP name
 				},
 				ResourceSelectors: configMapSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -331,9 +330,9 @@ var _ = Context("creating resourceOverride with different rules for each cluster
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s-0"}`, roTestAnnotationKey, roTestAnnotationValue))},
 								},
@@ -349,9 +348,9 @@ var _ = Context("creating resourceOverride with different rules for each cluster
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s-1"}`, roTestAnnotationKey, roTestAnnotationValue))},
 								},
@@ -367,9 +366,9 @@ var _ = Context("creating resourceOverride with different rules for each cluster
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s-2"}`, roTestAnnotationKey, roTestAnnotationValue))},
 								},
@@ -393,7 +392,7 @@ var _ = Context("creating resourceOverride with different rules for each cluster
 
 	It("should update CRP status as expected", func() {
 		wantRONames := []placementv1beta1.NamespacedName{
-			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)},
+			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)},
 		}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, wantRONames)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
@@ -415,27 +414,27 @@ var _ = Context("creating resourceOverride and clusterResourceOverride, resource
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-	roSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)
-	croSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, croName, 0)
+	roSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)
+	croSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, croName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
 		createWorkResources()
-		cro := &placementv1alpha1.ClusterResourceOverride{
+		cro := &placementv1beta1.ClusterResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: croName,
 			},
-			Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+			Spec: placementv1beta1.ClusterResourceOverrideSpec{
 				ClusterResourceSelectors: workResourceSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s"}`, croTestAnnotationKey, croTestAnnotationValue))},
 								},
@@ -447,22 +446,22 @@ var _ = Context("creating resourceOverride and clusterResourceOverride, resource
 		}
 		By(fmt.Sprintf("creating clusterResourceOverride %s", croName))
 		Expect(hubClient.Create(ctx, cro)).To(Succeed(), "Failed to create clusterResourceOverride %s", croName)
-		ro := &placementv1alpha1.ResourceOverride{
+		ro := &placementv1beta1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      roName,
 				Namespace: roNamespace,
 			},
-			Spec: placementv1alpha1.ResourceOverrideSpec{
+			Spec: placementv1beta1.ResourceOverrideSpec{
 				ResourceSelectors: configMapSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s"}`, roTestAnnotationKey, roTestAnnotationValue))},
 								},
@@ -476,11 +475,11 @@ var _ = Context("creating resourceOverride and clusterResourceOverride, resource
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
 		// wait until the snapshot is created so that the observed resource index is predictable.
 		Eventually(func() error {
-			roSnap := &placementv1alpha1.ResourceOverrideSnapshot{}
+			roSnap := &placementv1beta1.ResourceOverrideSnapshot{}
 			return hubClient.Get(ctx, types.NamespacedName{Name: roSnapShotName, Namespace: roNamespace}, roSnap)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 		Eventually(func() error {
-			croSnap := &placementv1alpha1.ClusterResourceOverrideSnapshot{}
+			croSnap := &placementv1beta1.ClusterResourceOverrideSnapshot{}
 			return hubClient.Get(ctx, types.NamespacedName{Name: croSnapShotName}, croSnap)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 
@@ -529,31 +528,31 @@ var _ = Context("creating resourceOverride with incorrect path", Ordered, func()
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-	roSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)
+	roSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
 		createWorkResources()
 		// Create the bad ro.
-		ro := &placementv1alpha1.ResourceOverride{
+		ro := &placementv1beta1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      roName,
 				Namespace: roNamespace,
 			},
-			Spec: placementv1alpha1.ResourceOverrideSpec{
-				Placement: &placementv1alpha1.PlacementRef{
+			Spec: placementv1beta1.ResourceOverrideSpec{
+				Placement: &placementv1beta1.PlacementRef{
 					Name: crpName, // assigned CRP name
 				},
 				ResourceSelectors: configMapSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     fmt.Sprintf("/metadata/annotations/%s", roTestAnnotationKey),
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s"`, roTestAnnotationValue))},
 								},
@@ -567,7 +566,7 @@ var _ = Context("creating resourceOverride with incorrect path", Ordered, func()
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
 		// wait until the snapshot is created so that failed override won't block the rollout
 		Eventually(func() error {
-			roSnap := &placementv1alpha1.ResourceOverrideSnapshot{}
+			roSnap := &placementv1beta1.ResourceOverrideSnapshot{}
 			return hubClient.Get(ctx, types.NamespacedName{Name: roSnapShotName, Namespace: roNamespace}, roSnap)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 
@@ -606,25 +605,25 @@ var _ = Context("creating resourceOverride and resource becomes invalid after ov
 		// Create the CRP.
 		createCRP(crpName)
 		// Create the ro.
-		ro := &placementv1alpha1.ResourceOverride{
+		ro := &placementv1beta1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      roName,
 				Namespace: roNamespace,
 			},
-			Spec: placementv1alpha1.ResourceOverrideSpec{
-				Placement: &placementv1alpha1.PlacementRef{
+			Spec: placementv1beta1.ResourceOverrideSpec{
+				Placement: &placementv1beta1.PlacementRef{
 					Name: crpName, // assigned CRP name
 				},
 				ResourceSelectors: configMapSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s"`, roTestAnnotationValue))},
 								},
@@ -648,7 +647,7 @@ var _ = Context("creating resourceOverride and resource becomes invalid after ov
 
 	It("should update CRP status as expected", func() {
 		wantRONames := []placementv1beta1.NamespacedName{
-			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)},
+			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)},
 		}
 		crpStatusUpdatedActual := crpStatusWithWorkSynchronizedUpdatedFailedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, wantRONames)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
@@ -662,22 +661,22 @@ var _ = Context("creating resourceOverride with a templated rules with cluster n
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-	roSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)
+	roSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
 		createWorkResources()
 
 		// Create the ro before crp so that the observed resource index is predictable.
-		ro := &placementv1alpha1.ResourceOverride{
+		ro := &placementv1beta1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      roName,
 				Namespace: roNamespace,
 			},
-			Spec: placementv1alpha1.ResourceOverrideSpec{
+			Spec: placementv1beta1.ResourceOverrideSpec{
 				ResourceSelectors: configMapSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -693,16 +692,16 @@ var _ = Context("creating resourceOverride with a templated rules with cluster n
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+									Operator: placementv1beta1.JSONPatchOverrideOpReplace,
 									Path:     "/data/data",
-									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s"`, placementv1alpha1.OverrideClusterNameVariable))},
+									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s"`, placementv1beta1.OverrideClusterNameVariable))},
 								},
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/data/newField",
-									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"new-%s"`, placementv1alpha1.OverrideClusterNameVariable))},
+									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"new-%s"`, placementv1beta1.OverrideClusterNameVariable))},
 								},
 							},
 						},
@@ -713,7 +712,7 @@ var _ = Context("creating resourceOverride with a templated rules with cluster n
 		By(fmt.Sprintf("creating resourceOverride %s", roName))
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
 		Eventually(func() error {
-			roSnap := &placementv1alpha1.ResourceOverrideSnapshot{}
+			roSnap := &placementv1beta1.ResourceOverrideSnapshot{}
 			return hubClient.Get(ctx, types.NamespacedName{Name: roSnapShotName, Namespace: roNamespace}, roSnap)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 
@@ -761,22 +760,22 @@ var _ = Context("creating resourceOverride with delete configMap", Ordered, func
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-	roSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)
+	roSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
 		createWorkResources()
 
 		// Create the ro before crp so that the observed resource index is predictable.
-		ro := &placementv1alpha1.ResourceOverride{
+		ro := &placementv1beta1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      roName,
 				Namespace: roNamespace,
 			},
-			Spec: placementv1alpha1.ResourceOverrideSpec{
+			Spec: placementv1beta1.ResourceOverrideSpec{
 				ResourceSelectors: configMapSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -787,9 +786,9 @@ var _ = Context("creating resourceOverride with delete configMap", Ordered, func
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/metadata/annotations",
 									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s"}`, roTestAnnotationKey, roTestAnnotationValue))},
 								},
@@ -805,7 +804,7 @@ var _ = Context("creating resourceOverride with delete configMap", Ordered, func
 									},
 								},
 							},
-							OverrideType: placementv1alpha1.DeleteOverrideType,
+							OverrideType: placementv1beta1.DeleteOverrideType,
 						},
 					},
 				},
@@ -814,7 +813,7 @@ var _ = Context("creating resourceOverride with delete configMap", Ordered, func
 		By(fmt.Sprintf("creating resourceOverride %s", roName))
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
 		Eventually(func() error {
-			roSnap := &placementv1alpha1.ResourceOverrideSnapshot{}
+			roSnap := &placementv1beta1.ResourceOverrideSnapshot{}
 			return hubClient.Get(ctx, types.NamespacedName{Name: roSnapShotName, Namespace: roNamespace}, roSnap)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 
@@ -885,18 +884,18 @@ var _ = Context("creating resourceOverride with a templated rules with cluster l
 		createWorkResources()
 
 		// Create the ro before crp so that the observed resource index is predictable.
-		ro := &placementv1alpha1.ResourceOverride{
+		ro := &placementv1beta1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      roName,
 				Namespace: roNamespace,
 			},
-			Spec: placementv1alpha1.ResourceOverrideSpec{
-				Placement: &placementv1alpha1.PlacementRef{
+			Spec: placementv1beta1.ResourceOverrideSpec{
+				Placement: &placementv1beta1.PlacementRef{
 					Name: crpName, // assigned CRP name
 				},
 				ResourceSelectors: configMapSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -916,16 +915,16 @@ var _ = Context("creating resourceOverride with a templated rules with cluster l
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/data/region",
-									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s%s}"`, placementv1alpha1.OverrideClusterLabelKeyVariablePrefix, regionLabelName))},
+									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s%s}"`, placementv1beta1.OverrideClusterLabelKeyVariablePrefix, regionLabelName))},
 								},
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+									Operator: placementv1beta1.JSONPatchOverrideOpReplace,
 									Path:     "/data/data",
-									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"newdata-%s%s}"`, placementv1alpha1.OverrideClusterLabelKeyVariablePrefix, envLabelName))},
+									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"newdata-%s%s}"`, placementv1beta1.OverrideClusterLabelKeyVariablePrefix, envLabelName))},
 								},
 							},
 						},
@@ -950,7 +949,7 @@ var _ = Context("creating resourceOverride with a templated rules with cluster l
 
 	It("should update CRP status as expected", func() {
 		wantRONames := []placementv1beta1.NamespacedName{
-			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)},
+			{Namespace: roNamespace, Name: fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)},
 		}
 		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, wantRONames)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
@@ -978,11 +977,11 @@ var _ = Context("creating resourceOverride with a templated rules with cluster l
 	It("should handle non-existent cluster label key gracefully", func() {
 		By("Update the ResourceOverride to use a non-existent label key")
 		Eventually(func() error {
-			ro := &placementv1alpha1.ResourceOverride{}
+			ro := &placementv1beta1.ResourceOverride{}
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: roName, Namespace: roNamespace}, ro); err != nil {
 				return err
 			}
-			ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides[0].Value = apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%snon-existent-label}"`, placementv1alpha1.OverrideClusterLabelKeyVariablePrefix))}
+			ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides[0].Value = apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%snon-existent-label}"`, placementv1beta1.OverrideClusterLabelKeyVariablePrefix))}
 			return hubClient.Update(ctx, ro)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update resourceOverride %s with non-existent label key", roName)
 
@@ -1036,24 +1035,24 @@ var _ = Context("creating resourceOverride with non-exist label", Ordered, func(
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	roName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-	roSnapShotName := fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, roName, 0)
+	roSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)
 
 	BeforeAll(func() {
 		By("creating work resources")
 		createWorkResources()
 		// Create the bad ro.
-		ro := &placementv1alpha1.ResourceOverride{
+		ro := &placementv1beta1.ResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      roName,
 				Namespace: roNamespace,
 			},
-			Spec: placementv1alpha1.ResourceOverrideSpec{
-				Placement: &placementv1alpha1.PlacementRef{
+			Spec: placementv1beta1.ResourceOverrideSpec{
+				Placement: &placementv1beta1.PlacementRef{
 					Name: crpName, // assigned CRP name
 				},
 				ResourceSelectors: configMapSelector(),
-				Policy: &placementv1alpha1.OverridePolicy{
-					OverrideRules: []placementv1alpha1.OverrideRule{
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
 						{
 							ClusterSelector: &placementv1beta1.ClusterSelector{
 								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -1073,16 +1072,16 @@ var _ = Context("creating resourceOverride with non-exist label", Ordered, func(
 									},
 								},
 							},
-							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
 									Path:     "/data/region",
-									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s%s}"`, placementv1alpha1.OverrideClusterLabelKeyVariablePrefix, "non-existent-label"))},
+									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"%s%s}"`, placementv1beta1.OverrideClusterLabelKeyVariablePrefix, "non-existent-label"))},
 								},
 								{
-									Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+									Operator: placementv1beta1.JSONPatchOverrideOpReplace,
 									Path:     "/data/data",
-									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"newdata-%s%s}"`, placementv1alpha1.OverrideClusterLabelKeyVariablePrefix, envLabelName))},
+									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`"newdata-%s%s}"`, placementv1beta1.OverrideClusterLabelKeyVariablePrefix, envLabelName))},
 								},
 							},
 						},
@@ -1093,7 +1092,7 @@ var _ = Context("creating resourceOverride with non-exist label", Ordered, func(
 		By(fmt.Sprintf("creating the bad resourceOverride %s", roName))
 		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
 		Eventually(func() error {
-			roSnap := &placementv1alpha1.ResourceOverrideSnapshot{}
+			roSnap := &placementv1beta1.ResourceOverrideSnapshot{}
 			return hubClient.Get(ctx, types.NamespacedName{Name: roSnapShotName, Namespace: roNamespace}, roSnap)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", crpName)
 

@@ -31,7 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/labels"
@@ -46,7 +45,7 @@ type ResourceReconciler struct {
 // Reconcile triggers a single  reconcile round when scheduling policy has changed.
 func (r *ResourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	name := req.NamespacedName
-	resourceOverride := placementv1alpha1.ResourceOverride{}
+	resourceOverride := placementv1beta1.ResourceOverride{}
 	overrideRef := klog.KRef(name.Namespace, name.Name)
 
 	startTime := time.Now()
@@ -68,7 +67,7 @@ func (r *ResourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// Check if the resourceOverride is being deleted
 	if resourceOverride.DeletionTimestamp != nil {
 		klog.V(4).InfoS("The resourceOverride is being deleted", "resourceOverride", overrideRef)
-		return ctrl.Result{}, r.handleOverrideDeleting(ctx, &placementv1alpha1.ResourceOverrideSnapshot{}, &resourceOverride)
+		return ctrl.Result{}, r.handleOverrideDeleting(ctx, &placementv1beta1.ResourceOverrideSnapshot{}, &resourceOverride)
 	}
 
 	// Ensure that we have the finalizer so we can delete all the related snapshots on cleanup
@@ -82,7 +81,7 @@ func (r *ResourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	return ctrl.Result{}, r.ensureResourceOverrideSnapshot(ctx, &resourceOverride, 10)
 }
 
-func (r *ResourceReconciler) ensureResourceOverrideSnapshot(ctx context.Context, ro *placementv1alpha1.ResourceOverride, revisionHistoryLimit int) error {
+func (r *ResourceReconciler) ensureResourceOverrideSnapshot(ctx context.Context, ro *placementv1beta1.ResourceOverride, revisionHistoryLimit int) error {
 	croKObj := klog.KObj(ro)
 	overridePolicy := ro.Spec
 	overrideSpecHash, err := resource.HashOf(overridePolicy)
@@ -103,7 +102,7 @@ func (r *ResourceReconciler) ensureResourceOverrideSnapshot(ctx context.Context,
 	latestSnapshotIndex := -1
 	if len(snapshotList.Items) != 0 {
 		// convert the last unstructured snapshot to the typed object
-		latestSnapshot := &placementv1alpha1.ResourceOverrideSnapshot{}
+		latestSnapshot := &placementv1beta1.ResourceOverrideSnapshot{}
 		if err = runtime.DefaultUnstructuredConverter.FromUnstructured(snapshotList.Items[len(snapshotList.Items)-1].Object, latestSnapshot); err != nil {
 			klog.ErrorS(err, "Invalid overrideSnapshot", "ResourceOverride", croKObj, "overrideSnapshot", klog.KObj(&snapshotList.Items[len(snapshotList.Items)-1]))
 			return controller.NewUnexpectedBehaviorError(err)
@@ -123,7 +122,7 @@ func (r *ResourceReconciler) ensureResourceOverrideSnapshot(ctx context.Context,
 			klog.V(2).InfoS("Marked the latest overrideSnapshot as inactive", "ResourceOverride", croKObj, "overrideSnapshot", klog.KObj(latestSnapshot))
 		}
 		// we need to figure out the last snapshot index.
-		latestSnapshotIndex, err = labels.ExtractIndex(latestSnapshot, placementv1alpha1.OverrideIndexLabel)
+		latestSnapshotIndex, err = labels.ExtractIndex(latestSnapshot, placementv1beta1.OverrideIndexLabel)
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse the override index label", "ResourceOverride", croKObj, "overrideSnapshot", klog.KObj(latestSnapshot))
 			return controller.NewUnexpectedBehaviorError(err)
@@ -132,20 +131,20 @@ func (r *ResourceReconciler) ensureResourceOverrideSnapshot(ctx context.Context,
 
 	// Need to create new snapshot when 1) there is no snapshots or 2) the latest snapshot hash != current one.
 	latestSnapshotIndex++
-	newSnapshot := &placementv1alpha1.ResourceOverrideSnapshot{
+	newSnapshot := &placementv1beta1.ResourceOverrideSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, ro.Name, latestSnapshotIndex),
+			Name:      fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, ro.Name, latestSnapshotIndex),
 			Namespace: ro.Namespace,
 			Labels: map[string]string{
-				placementv1alpha1.OverrideTrackingLabel: ro.Name,
-				placementv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
-				placementv1alpha1.OverrideIndexLabel:    strconv.Itoa(latestSnapshotIndex),
+				placementv1beta1.OverrideTrackingLabel: ro.Name,
+				placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+				placementv1beta1.OverrideIndexLabel:    strconv.Itoa(latestSnapshotIndex),
 			},
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(ro, placementv1alpha1.GroupVersion.WithKind(placementv1alpha1.ResourceOverrideKind)),
+				*metav1.NewControllerRef(ro, placementv1beta1.GroupVersion.WithKind(placementv1beta1.ResourceOverrideKind)),
 			},
 		},
-		Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+		Spec: placementv1beta1.ResourceOverrideSnapshotSpec{
 			OverrideSpec: overridePolicy,
 			OverrideHash: []byte(overrideSpecHash),
 		},
@@ -162,6 +161,6 @@ func (r *ResourceReconciler) ensureResourceOverrideSnapshot(ctx context.Context,
 func (r *ResourceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("resourceoverride-controller").
-		For(&placementv1alpha1.ResourceOverride{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		For(&placementv1beta1.ResourceOverride{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Complete(r)
 }

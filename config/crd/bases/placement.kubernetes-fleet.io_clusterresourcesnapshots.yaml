@@ -40,6 +40,8 @@ spec:
           Each snapshot MUST have the following labels:
             - `CRPTrackingLabel` which points to its owner CRP.
             - `ResourceIndexLabel` which is the index  of the snapshot group.
+
+          The first snapshot of the index group MAY have the following labels:
             - `IsLatestSnapshotLabel` which indicates whether the snapshot is the latest one.
 
           All the snapshots within the same index group must have the same ResourceIndexLabel.
@@ -50,6 +52,9 @@ spec:
 
           Each snapshot (excluding the first snapshot) MUST have the following annotations:
             - `SubindexOfResourceSnapshotAnnotation` to store the subindex of resource snapshot in the group.
+
+          Snapshot may have the following annotations to indicate the time of next resourceSnapshot candidate detected by the controller:
+            - `NextResourceSnapshotCandidateDetectionTimeAnnotation` to store the time of next resourceSnapshot candidate detected by the controller.
         properties:
           apiVersion:
             description: |-
@@ -186,6 +191,9 @@ spec:
 
           Each snapshot (excluding the first snapshot) MUST have the following annotations:
             - `SubindexOfResourceSnapshotAnnotation` to store the subindex of resource snapshot in the group.
+
+          Snapshot may have the following annotations to indicate the time of next resourceSnapshot candidate detected by the controller:
+            - `NextResourceSnapshotCandidateDetectionTimeAnnotation` to store the time of next resourceSnapshot candidate detected by the controller.
         properties:
           apiVersion:
             description: |-
