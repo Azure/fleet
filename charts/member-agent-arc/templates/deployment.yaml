@@ -1,0 +1,370 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fleet-member-agent
+  namespace: fleet-system
+  labels:
+    app.kubernetes.io/name: fleet-member-agent
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fleet-member-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fleet-member-agent
+    spec:
+      serviceAccountName: fleet-member-agent-sa
+      containers:
+        - name: addon-token-adapter
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: TOKEN_NAMESPACE    
+            value: "fleet-system"         
+{{-  .Values.Azure.Identity.MSIAdapterYaml | nindent 10 }}
+        - name: refresh-token
+          image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
+          imagePullPolicy: IfNotPresent
+          args:
+            - azure
+            - --clientid=any-client-id
+            - --scope={{ .Values.config.scope }}
+          resources:
+            limits:
+              cpu: 50m
+              memory: 128Mi
+            requests:
+              cpu: 1m
+              memory: 16Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: provider-token
+              mountPath: /config
+        - name: fleet-member-agent
+          image: "{{ .Values.memberagent.repository }}:{{ .Values.memberagent.tag }}"
+          imagePullPolicy: IfNotPresent
+          args:
+            - --leader-elect=true
+            - --v={{ .Values.logVerbosity }}
+            - -add_dir_header
+            - --enable-v1alpha1-apis={{ .Values.enableV1Alpha1APIs }}
+            - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
+            {{- if .Values.propertyProvider }}
+            - --property-provider={{ .Values.propertyProvider }}
+            {{- end }}
+          env:
+            - name: HUB_SERVER_URL
+              value: {{ .Values.config.hubURL | quote }}
+            - name: CONFIG_PATH
+              value: /config/token
+            - name: MEMBER_CLUSTER_NAME
+              value: {{ .Values.config.memberClusterName | quote }}
+            - name: HUB_CERTIFICATE_AUTHORITY
+              value: {{ .Values.config.hubCA | quote }}
+            {{- if .Values.Azure.proxySettings.isProxyEnabled }}
+            - name: HTTPS_PROXY
+              value: {{ .Values.Azure.proxySettings.httpProxy | quote }}
+            - name: NO_PROXY
+              value: {{ .Values.Azure.proxySettings.noProxy | quote }}
+            {{- end }}
+            {{- if and .Values.Azure.proxySettings.isProxyEnabled .Values.Azure.proxySettings.proxyCert }}
+            - name: SSL_CERT_FILE
+              value: /usr/local/share/ca-certificates/azure-proxy-cert.crt
+            {{- end }}
+          ports:
+            - containerPort: 8080
+              name: hubmetrics
+              protocol: TCP
+            - containerPort: 8081
+              name: hubhealthz
+              protocol: TCP
+            - containerPort: 8090
+              name: membermetrics
+              protocol: TCP
+            - containerPort: 8091
+              name: memberhealthz
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: hubhealthz
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: hubhealthz
+          resources:
+            limits:
+              cpu: 1
+              memory: 2Gi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+          - name: provider-token 
+            mountPath: /config
+          {{- if and .Values.Azure.proxySettings.isProxyEnabled .Values.Azure.proxySettings.proxyCert }}
+          - name: azure-proxy-cert-store
+            mountPath: /usr/local/share/ca-certificates/azure-proxy-cert.crt
+            subPath: azure-proxy-cert.crt
+            readOnly: true
+          {{- end }}
+      volumes:
+      - name: provider-token
+        emptyDir: { }
+      {{- if and .Values.Azure.proxySettings.isProxyEnabled .Values.Azure.proxySettings.proxyCert }}
+      - name: azure-proxy-cert-store
+        secret:
+          secretName: azure-proxy-cert
+      {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fleet-mcs-controller-manager
+  namespace: fleet-system
+  labels:
+    app.kubernetes.io/name: fleet-mcs-controller-manager
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fleet-mcs-controller-manager
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fleet-mcs-controller-manager
+    spec:
+      serviceAccountName: fleet-member-agent-sa
+      containers:
+        - name: addon-token-adapter
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: TOKEN_NAMESPACE    
+            value: "fleet-system"         
+{{-  .Values.Azure.Identity.MSIAdapterYaml | nindent 10 }}
+        - name: refresh-token
+          image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
+          imagePullPolicy: IfNotPresent
+          args:
+            - azure
+            - --clientid=any-client-id
+            - --scope={{ .Values.config.scope }}
+          resources:
+            limits:
+              cpu: 50m
+              memory: 128Mi
+            requests:
+              cpu: 1m
+              memory: 16Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: provider-token
+              mountPath: /config
+        - name: fleet-mcs-controller-manager
+          image: "{{ .Values.mcscontrollermanager.repository }}:{{ .Values.mcscontrollermanager.tag }}"
+          imagePullPolicy: IfNotPresent
+          args:
+            - --v={{ .Values.logVerbosity }}
+            - --add_dir_header
+            - --enable-v1alpha1-apis={{ .Values.enableV1Alpha1APIs }}
+            - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          ports:
+          - containerPort: 8080
+            name: hubmetrics
+            protocol: TCP
+          - containerPort: 8081
+            name: hubhealthz
+            protocol: TCP
+          - containerPort: 8090
+            name: membermetrics
+            protocol: TCP
+          - containerPort: 8091
+            name: memberhealthz
+            protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: hubhealthz
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: hubhealthz
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1Gi
+            requests:
+              cpu: 5m
+              memory: 32Mi
+          env:
+            - name: HUB_SERVER_URL
+              value: {{ .Values.config.hubURL | quote }}
+            - name: CONFIG_PATH
+              value: /config/token
+            - name: MEMBER_CLUSTER_NAME
+              value: {{ .Values.config.memberClusterName | quote }}
+            - name: HUB_CERTIFICATE_AUTHORITY
+              value: {{ .Values.config.hubCA | quote }}
+            {{- if .Values.Azure.proxySettings.isProxyEnabled }}
+            - name: HTTPS_PROXY
+              value: {{ .Values.Azure.proxySettings.httpProxy | quote }}
+            - name: NO_PROXY
+              value: {{ .Values.Azure.proxySettings.noProxy | quote }}
+            {{- end }}
+            {{- if and .Values.Azure.proxySettings.isProxyEnabled .Values.Azure.proxySettings.proxyCert }}
+            - name: SSL_CERT_FILE
+              value: /usr/local/share/ca-certificates/azure-proxy-cert.crt
+            {{- end }}
+          volumeMounts:
+            - name: provider-token
+              mountPath: /config
+            {{- if and (or .Values.Azure.proxySettings.isCustomCert .Values.Azure.proxySettings.isProxyEnabled) (.Values.Azure.proxySettings.proxyCert) }}
+             - name: azure-proxy-cert-store
+              mountPath: /etc/ssl/certs/azure-proxy-cert.crt
+              subPath: azure-proxy-cert.crt
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: provider-token
+          emptyDir: { }
+        {{- if and .Values.Azure.proxySettings.isProxyEnabled .Values.Azure.proxySettings.proxyCert }}
+        - name: azure-proxy-cert-store
+          secret:
+            secretName: azure-proxy-cert
+        {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fleet-member-net-controller-manager
+  namespace: fleet-system
+  labels:
+    app.kubernetes.io/name: fleet-member-net-controller-manager
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fleet-member-net-controller-manager
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fleet-member-net-controller-manager
+    spec:
+      serviceAccountName: fleet-member-agent-sa
+      containers:
+        - name: addon-token-adapter
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: TOKEN_NAMESPACE    
+            value: "fleet-system"         
+{{-  .Values.Azure.Identity.MSIAdapterYaml | nindent 10 }}
+        - name: refresh-token
+          image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
+          imagePullPolicy: IfNotPresent
+          args:
+            - azure
+            - --clientid=any-client-id
+            - --scope={{ .Values.config.scope }}
+          resources:
+            limits:
+              cpu: 50m
+              memory: 128Mi
+            requests:
+              cpu: 1m
+              memory: 16Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: provider-token
+              mountPath: /config
+        - name: fleet-member-net-controller-manager
+          image: "{{ .Values.membernetcontrollermanager.repository }}:{{ .Values.membernetcontrollermanager.tag }}"
+          imagePullPolicy: IfNotPresent
+          args:
+            - --v={{ .Values.logVerbosity }}
+            - --add_dir_header
+            - --enable-v1alpha1-apis={{ .Values.enableV1Alpha1APIs }}
+            - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
+            - --enable-traffic-manager-feature={{ .Values.enableTrafficManagerFeature }}
+          ports:
+          - containerPort: 8080
+            name: hubmetrics
+            protocol: TCP
+          - containerPort: 8081
+            name: hubhealthz
+            protocol: TCP
+          - containerPort: 8090
+            name: membermetrics
+            protocol: TCP
+          - containerPort: 8091
+            name: memberhealthz
+            protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: hubhealthz
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: hubhealthz
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1Gi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+          env:
+            - name: HUB_SERVER_URL
+              value: {{ .Values.config.hubURL | quote }}
+            - name: CONFIG_PATH
+              value: /config/token
+            - name: MEMBER_CLUSTER_NAME
+              value: {{ .Values.config.memberClusterName | quote }}
+            - name: HUB_CERTIFICATE_AUTHORITY
+              value: {{ .Values.config.hubCA | quote }}
+            {{- if .Values.Azure.proxySettings.isProxyEnabled }}
+            - name: HTTPS_PROXY
+              value: {{ .Values.Azure.proxySettings.httpProxy | quote }}
+            - name: NO_PROXY
+              value: {{ .Values.Azure.proxySettings.noProxy | quote }}
+            {{- end }}
+            {{- if and .Values.Azure.proxySettings.isProxyEnabled .Values.Azure.proxySettings.proxyCert }}
+            - name: SSL_CERT_FILE
+              value: /usr/local/share/ca-certificates/azure-proxy-cert.crt
+            {{- end }}
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: provider-token
+              mountPath: /config
+            {{- if and .Values.Azure.proxySettings.isProxyEnabled .Values.Azure.proxySettings.proxyCert }}
+            - name: azure-proxy-cert-store
+              mountPath: /etc/ssl/certs/azure-proxy-cert.crt
+              subPath: azure-proxy-cert.crt
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: provider-token
+          emptyDir: { }
+        {{- if and .Values.Azure.proxySettings.isProxyEnabled .Values.Azure.proxySettings.proxyCert }}
+        - name: azure-proxy-cert-store
+          secret:
+            secretName: azure-proxy-cert
+        {{- end }}

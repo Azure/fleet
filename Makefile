@@ -12,6 +12,7 @@ HUB_AGENT_IMAGE_NAME ?= hub-agent
 MEMBER_AGENT_IMAGE_NAME ?= member-agent
 REFRESH_TOKEN_IMAGE_NAME ?= refresh-token
 CRD_INSTALLER_IMAGE_NAME ?= crd-installer
+ARC_MEMBER_AGENT_IMAGE_NAME = microsoft.fleetmember
 
 KUBECONFIG ?= $(HOME)/.kube/config
 HUB_SERVER_URL ?= https://172.19.0.2:6443
@@ -335,6 +336,17 @@ docker-build-crd-installer: docker-buildx-builder
 		--platform="linux/amd64" \
 		--pull \
 		--tag $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION) .
+
+.PHONY: helm-package-arc-member-agent
+helm-package-arc-member-agent:
+	helm package charts/member-agent-arc/ \
+		--version $(ARC_MEMBER_AGENT_IMAGE_VERSION) \
+		--set memberagent.tag=$(MEMBER_AGENT_IMAGE_VERSION) \
+		--set mcscontrollermanager.tag=$(MCS_CONTROLLER_IMAGE_VERSION) \
+		--set membernetcontrollermanager.tag=$(MEMBER_NET_CONTROLLER_IMAGE_VERSION) \
+		--set refreshtoken.tag=$(REFRESH_TOKEN_IMAGE_VERSION)
+
+	helm push member-agent-$(ARC_MEMBER_AGENT_IMAGE_VERSION).tgz oci://$(REGISTRY)/$(ARC_MEMBER_AGENT_IMAGE_NAME)
 
 ## -----------------------------------
 ## Cleanup

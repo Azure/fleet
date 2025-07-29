@@ -8,6 +8,10 @@ on:
       releaseTag:
         description: 'Release tag to publish images, defaults to the latest one'
         type: string
+      arcExtensionVersion:
+        description: 'Version of the Arc extension to be used in the helm chart'
+        type: string
+        required: true
 
 permissions:
   id-token: write
@@ -16,12 +20,14 @@ permissions:
 env:
   # `public` indicates images to MCR wil be publicly available, and will be removed in the final MCR images
   REGISTRY_REPO: public/aks/fleet
+  ARC_REGISTRY_REPO: public/microsoft.fleetmember
 
 jobs:
   prepare-variables:
     runs-on: ubuntu-latest
     outputs:
       release_tag: ${{ steps.vars.outputs.release_tag }}
+      fleet_networking_version: ${{ steps.vars.outputs.fleet_networking_version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,6 +42,11 @@ jobs:
             echo "The user input release tag is empty, will use the latest tag $RELEASE_TAG."
           fi
           echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+
+          # Fetch the latest fleet-networking version
+          FLEET_NETWORKING_VERSION="${FLEET_NETWORKING_VERSION:-$(curl "https://api.github.com/repos/Azure/fleet-networking/tags" | jq -r '.[0].name')}"
+          echo "fleet_networking_version=$FLEET_NETWORKING_VERSION" >> $GITHUB_OUTPUT
+          echo "Using Fleet Networking version: $FLEET_NETWORKING_VERSION"
 
           # NOTE: As exporting a variable from a secret is not possible, the shared variable registry obtained
           # from AZURE_REGISTRY secret is not exported from here.
@@ -76,3 +87,13 @@ jobs:
         env:
           CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
           REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
+      - name: Build and publish ARC member agent helm chart
+        run: |
+          make helm-package-arc-member-agent
+        env:
+          ARC_MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.fleet_networking_version }}
+          MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          MCS_CONTROLLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.fleet_networking_version }}
+          MEMBER_NET_CONTROLLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.fleet_networking_version }}
+          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.ARC_REGISTRY_REPO}}
