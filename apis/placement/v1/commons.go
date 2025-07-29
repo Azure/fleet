@@ -16,6 +16,13 @@ limitations under the License.
 
 package v1
 
+const (
+	// fleetPrefix is the prefix used for official fleet labels/annotations.
+	// Unprefixed labels/annotations are reserved for end-users
+	// See https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#label-selector-and-annotation-conventions
+	fleetPrefix = "kubernetes-fleet.io/"
+)
+
 // NamespacedName comprises a resource name, with a mandatory namespace.
 type NamespacedName struct {
 	// Name is the name of the namespaced scope resource.
