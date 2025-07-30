@@ -12,7 +12,7 @@ HUB_AGENT_IMAGE_NAME ?= hub-agent
 MEMBER_AGENT_IMAGE_NAME ?= member-agent
 REFRESH_TOKEN_IMAGE_NAME ?= refresh-token
 CRD_INSTALLER_IMAGE_NAME ?= crd-installer
-ARC_MEMBER_AGENT_IMAGE_NAME = microsoft.fleetmember
+ARC_MEMBER_AGENT_IMAGE_NAME = arc-member-cluster-agents-helm-chart
 
 KUBECONFIG ?= $(HOME)/.kube/config
 HUB_SERVER_URL ?= https://172.19.0.2:6443
