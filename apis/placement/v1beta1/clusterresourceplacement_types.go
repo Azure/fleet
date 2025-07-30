@@ -1515,12 +1515,21 @@ type ManagedNamespacePlacement struct {
 
 // ManagedNamespacePlacementStatus represents the status of a ManagedNamespacePlacement.
 type ManagedNamespacePlacementStatus struct {
-	
 	// ResourcePlacements contains the placement statuses for the namespace.
 	// +kubebuilder:validation:Optional
 	ResourcePlacements []ResourcePlacementStatus `json:"resourcePlacements,omitempty"`
 }
 
+// ManagedNamespacePlacementList contains a list of ManagedNamespacePlacement.
+// +kubebuilder:resource:scope="Namespaced"
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type ManagedNamespacePlacementList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []ManagedNamespacePlacement `json:"items"`
+}
+
+
 func init() {
-	SchemeBuilder.Register(&ClusterResourcePlacement{}, &ClusterResourcePlacementList{}, &ResourcePlacement{}, &ResourcePlacementList{}, &ManagedNamespacePlacement{})
+	SchemeBuilder.Register(&ClusterResourcePlacement{}, &ClusterResourcePlacementList{}, &ResourcePlacement{}, &ResourcePlacementList{}, &ManagedNamespacePlacement{}, &ManagedNamespacePlacementList{})
 }
