@@ -343,13 +343,16 @@ docker-build-crd-installer: docker-buildx-builder
 
 .PHONY: helm-package-arc-member-agent
 helm-package-arc-member-agent:
-	helm package charts/member-agent-arc/ \
-		--version $(ARC_MEMBER_AGENT_IMAGE_VERSION) \
-		--set memberagent.tag=$(MEMBER_AGENT_IMAGE_VERSION) \
-		--set mcscontrollermanager.tag=$(MCS_CONTROLLER_IMAGE_VERSION) \
-		--set membernetcontrollermanager.tag=$(MEMBER_NET_CONTROLLER_IMAGE_VERSION) \
-		--set refreshtoken.tag=$(REFRESH_TOKEN_IMAGE_VERSION)
-
+	# Export environment variables and use envsubst to substitute values
+	export MEMBER_AGENT_TAG=$(MEMBER_AGENT_IMAGE_VERSION) && \
+	export MCS_CONTROLLER_TAG=$(MCS_CONTROLLER_IMAGE_VERSION) && \
+	export MEMBER_NET_CONTROLLER_TAG=$(MEMBER_NET_CONTROLLER_IMAGE_VERSION) && \
+	export REFRESH_TOKEN_TAG=$(REFRESH_TOKEN_IMAGE_VERSION) && \
+	cp charts/member-agent-arc/values.yaml charts/member-agent-arc/values.yaml.bak && \
+	envsubst < charts/member-agent-arc/values.yaml.bak > charts/member-agent-arc/values.yaml && \
+	helm package charts/member-agent-arc/ --version $(ARC_MEMBER_AGENT_IMAGE_VERSION) && \
+	mv charts/member-agent-arc/values.yaml.bak charts/member-agent-arc/values.yaml
+	# Push to registry
 	helm push member-agent-$(ARC_MEMBER_AGENT_IMAGE_VERSION).tgz oci://$(REGISTRY)/$(ARC_MEMBER_AGENT_IMAGE_NAME)
 
 ## -----------------------------------
