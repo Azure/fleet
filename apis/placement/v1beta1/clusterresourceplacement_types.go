@@ -1495,6 +1495,14 @@ func (rpl *ResourcePlacementList) GetPlacementObjs() []PlacementObj {
 	return objs
 }
 
+// ManagedNamespacePlacement is used to represent which clusters the namespace has been placed on to.
+type ManagedNamespacePlacement struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Status []ResourcePlacementStatus `json:"status,omitempty"`
+}
+
 func init() {
-	SchemeBuilder.Register(&ClusterResourcePlacement{}, &ClusterResourcePlacementList{}, &ResourcePlacement{}, &ResourcePlacementList{})
+	SchemeBuilder.Register(&ClusterResourcePlacement{}, &ClusterResourcePlacementList{}, &ResourcePlacement{}, &ResourcePlacementList{}, &ManagedNamespacePlacement{})
 }

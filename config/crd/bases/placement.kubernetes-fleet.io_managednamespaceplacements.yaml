@@ -1,0 +1,495 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.0
+  name: managednamespaceplacements.placement.kubernetes-fleet.io
+spec:
+  group: placement.kubernetes-fleet.io
+  names:
+    kind: ManagedNamespacePlacement
+    listKind: ManagedNamespacePlacementList
+    plural: managednamespaceplacements
+    singular: managednamespaceplacement
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: ManagedNamespacePlacement is used to represent which clusters
+          the namespace has been placed on to.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          status:
+            items:
+              description: ResourcePlacementStatus represents the placement status
+                of selected resources for one target cluster.
+              properties:
+                applicableClusterResourceOverrides:
+                  description: |-
+                    ApplicableClusterResourceOverrides contains a list of applicable ClusterResourceOverride snapshots associated with
+                    the selected resources.
+
+                    This field is alpha-level and is for the override policy feature.
+                  items:
+                    type: string
+                  type: array
+                applicableResourceOverrides:
+                  description: |-
+                    ApplicableResourceOverrides contains a list of applicable ResourceOverride snapshots associated with the selected
+                    resources.
+
+                    This field is alpha-level and is for the override policy feature.
+                  items:
+                    description: NamespacedName comprises a resource name, with a
+                      mandatory namespace.
+                    properties:
+                      name:
+                        description: Name is the name of the namespaced scope resource.
+                        type: string
+                      namespace:
+                        description: Namespace is namespace of the namespaced scope
+                          resource.
+                        type: string
+                    required:
+                    - name
+                    - namespace
+                    type: object
+                  type: array
+                clusterName:
+                  description: |-
+                    ClusterName is the name of the cluster this resource is assigned to.
+                    If it is not empty, its value should be unique cross all placement decisions for the Placement.
+                  type: string
+                conditions:
+                  description: |-
+                    Conditions is an array of current observed conditions on the cluster.
+                    Each condition corresponds to the resource snapshot at the index specified by `ObservedResourceIndex`.
+                    For example, the condition of type `RolloutStarted` is observing the rollout status of the resource snapshot with index `ObservedResourceIndex`.
+                  items:
+                    description: Condition contains details for one aspect of the
+                      current state of this API Resource.
+                    properties:
+                      lastTransitionTime:
+                        description: |-
+                          lastTransitionTime is the last time the condition transitioned from one status to another.
+                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                        format: date-time
+                        type: string
+                      message:
+                        description: |-
+                          message is a human readable message indicating details about the transition.
+                          This may be an empty string.
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        description: |-
+                          observedGeneration represents the .metadata.generation that the condition was set based upon.
+                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                          with respect to the current state of the instance.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        description: |-
+                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                          Producers of specific condition types may define expected values and meanings for this field,
+                          and whether the values are considered a guaranteed API.
+                          The value should be a CamelCase string.
+                          This field may not be empty.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        description: status of the condition, one of True, False,
+                          Unknown.
+                        enum:
+                        - "True"
+                        - "False"
+                        - Unknown
+                        type: string
+                      type:
+                        description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                    - lastTransitionTime
+                    - message
+                    - reason
+                    - status
+                    - type
+                    type: object
+                  type: array
+                diffedPlacements:
+                  description: |-
+                    DiffedPlacements is a list of resources that have configuration differences from their
+                    corresponding hub cluster manifests. Fleet will report such differences when:
+
+                    * The CRP uses the ReportDiff apply strategy, which instructs Fleet to compare the hub
+                      cluster manifests against the live resources without actually performing any apply op; or
+                    * Fleet finds a pre-existing resource on the member cluster side that does not match its
+                      hub cluster counterpart, and the CRP has been configured to only take over a resource if
+                      no configuration differences are found.
+
+                    To control the object size, only the first 100 diffed resources will be included.
+                    This field is only meaningful if the `ClusterName` is not empty.
+                  items:
+                    description: DiffedResourcePlacement contains the details of a
+                      resource with configuration differences.
+                    properties:
+                      envelope:
+                        description: Envelope identifies the envelope object that
+                          contains this resource.
+                        properties:
+                          name:
+                            description: Name of the envelope object.
+                            type: string
+                          namespace:
+                            description: Namespace is the namespace of the envelope
+                              object. Empty if the envelope object is cluster scoped.
+                            type: string
+                          type:
+                            default: ConfigMap
+                            description: Type of the envelope object.
+                            enum:
+                            - ConfigMap
+                            - ClusterResourceEnvelope
+                            - ResourceEnvelope
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      firstDiffedObservedTime:
+                        description: |-
+                          FirstDiffedObservedTime is the first time the resource on the target cluster is
+                          observed to have configuration differences.
+                        format: date-time
+                        type: string
+                      group:
+                        description: Group is the group name of the selected resource.
+                        type: string
+                      kind:
+                        description: Kind represents the Kind of the selected resources.
+                        type: string
+                      name:
+                        description: Name of the target resource.
+                        type: string
+                      namespace:
+                        description: Namespace is the namespace of the resource. Empty
+                          if the resource is cluster scoped.
+                        type: string
+                      observationTime:
+                        description: ObservationTime is the time when we observe the
+                          configuration differences for the resource.
+                        format: date-time
+                        type: string
+                      observedDiffs:
+                        description: |-
+                          ObservedDiffs are the details about the found configuration differences. Note that
+                          Fleet might truncate the details as appropriate to control the object size.
+
+                          Each detail entry specifies how the live state (the state on the member
+                          cluster side) compares against the desired state (the state kept in the hub cluster manifest).
+
+                          An event about the details will be emitted as well.
+                        items:
+                          description: |-
+                            PatchDetail describes a patch that explains an observed configuration drift or
+                            difference.
+
+                            A patch detail can be transcribed as a JSON patch operation, as specified in RFC 6902.
+                          properties:
+                            path:
+                              description: The JSON path that points to a field that
+                                has drifted or has configuration differences.
+                              type: string
+                            valueInHub:
+                              description: |-
+                                The value at the JSON path from the hub cluster side.
+
+                                This field can be empty if the JSON path does not exist on the hub cluster side; i.e.,
+                                applying the manifest from the hub cluster side would remove the field.
+                              type: string
+                            valueInMember:
+                              description: |-
+                                The value at the JSON path from the member cluster side.
+
+                                This field can be empty if the JSON path does not exist on the member cluster side; i.e.,
+                                applying the manifest from the hub cluster side would add a new field.
+                              type: string
+                          required:
+                          - path
+                          type: object
+                        type: array
+                      targetClusterObservedGeneration:
+                        description: |-
+                          TargetClusterObservedGeneration is the generation of the resource on the target cluster
+                          that contains the configuration differences.
+
+                          This might be nil if the resource has not been created yet on the target cluster.
+                        format: int64
+                        type: integer
+                      version:
+                        description: Version is the version of the selected resource.
+                        type: string
+                    required:
+                    - firstDiffedObservedTime
+                    - kind
+                    - name
+                    - observationTime
+                    - version
+                    type: object
+                  maxItems: 100
+                  type: array
+                driftedPlacements:
+                  description: |-
+                    DriftedPlacements is a list of resources that have drifted from their desired states
+                    kept in the hub cluster, as found by Fleet using the drift detection mechanism.
+
+                    To control the object size, only the first 100 drifted resources will be included.
+                    This field is only meaningful if the `ClusterName` is not empty.
+                  items:
+                    description: DriftedResourcePlacement contains the details of
+                      a resource with configuration drifts.
+                    properties:
+                      envelope:
+                        description: Envelope identifies the envelope object that
+                          contains this resource.
+                        properties:
+                          name:
+                            description: Name of the envelope object.
+                            type: string
+                          namespace:
+                            description: Namespace is the namespace of the envelope
+                              object. Empty if the envelope object is cluster scoped.
+                            type: string
+                          type:
+                            default: ConfigMap
+                            description: Type of the envelope object.
+                            enum:
+                            - ConfigMap
+                            - ClusterResourceEnvelope
+                            - ResourceEnvelope
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      firstDriftedObservedTime:
+                        description: |-
+                          FirstDriftedObservedTime is the first time the resource on the target cluster is
+                          observed to have configuration drifts.
+                        format: date-time
+                        type: string
+                      group:
+                        description: Group is the group name of the selected resource.
+                        type: string
+                      kind:
+                        description: Kind represents the Kind of the selected resources.
+                        type: string
+                      name:
+                        description: Name of the target resource.
+                        type: string
+                      namespace:
+                        description: Namespace is the namespace of the resource. Empty
+                          if the resource is cluster scoped.
+                        type: string
+                      observationTime:
+                        description: ObservationTime is the time when we observe the
+                          configuration drifts for the resource.
+                        format: date-time
+                        type: string
+                      observedDrifts:
+                        description: |-
+                          ObservedDrifts are the details about the found configuration drifts. Note that
+                          Fleet might truncate the details as appropriate to control the object size.
+
+                          Each detail entry specifies how the live state (the state on the member
+                          cluster side) compares against the desired state (the state kept in the hub cluster manifest).
+
+                          An event about the details will be emitted as well.
+                        items:
+                          description: |-
+                            PatchDetail describes a patch that explains an observed configuration drift or
+                            difference.
+
+                            A patch detail can be transcribed as a JSON patch operation, as specified in RFC 6902.
+                          properties:
+                            path:
+                              description: The JSON path that points to a field that
+                                has drifted or has configuration differences.
+                              type: string
+                            valueInHub:
+                              description: |-
+                                The value at the JSON path from the hub cluster side.
+
+                                This field can be empty if the JSON path does not exist on the hub cluster side; i.e.,
+                                applying the manifest from the hub cluster side would remove the field.
+                              type: string
+                            valueInMember:
+                              description: |-
+                                The value at the JSON path from the member cluster side.
+
+                                This field can be empty if the JSON path does not exist on the member cluster side; i.e.,
+                                applying the manifest from the hub cluster side would add a new field.
+                              type: string
+                          required:
+                          - path
+                          type: object
+                        type: array
+                      targetClusterObservedGeneration:
+                        description: |-
+                          TargetClusterObservedGeneration is the generation of the resource on the target cluster
+                          that contains the configuration drifts.
+                        format: int64
+                        type: integer
+                      version:
+                        description: Version is the version of the selected resource.
+                        type: string
+                    required:
+                    - firstDriftedObservedTime
+                    - kind
+                    - name
+                    - observationTime
+                    - targetClusterObservedGeneration
+                    - version
+                    type: object
+                  maxItems: 100
+                  type: array
+                failedPlacements:
+                  description: |-
+                    FailedPlacements is a list of all the resources failed to be placed to the given cluster or the resource is unavailable.
+                    Note that we only include 100 failed resource placements even if there are more than 100.
+                    This field is only meaningful if the `ClusterName` is not empty.
+                  items:
+                    description: FailedResourcePlacement contains the failure details
+                      of a failed resource placement.
+                    properties:
+                      condition:
+                        description: The failed condition status.
+                        properties:
+                          lastTransitionTime:
+                            description: |-
+                              lastTransitionTime is the last time the condition transitioned from one status to another.
+                              This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                            format: date-time
+                            type: string
+                          message:
+                            description: |-
+                              message is a human readable message indicating details about the transition.
+                              This may be an empty string.
+                            maxLength: 32768
+                            type: string
+                          observedGeneration:
+                            description: |-
+                              observedGeneration represents the .metadata.generation that the condition was set based upon.
+                              For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                              with respect to the current state of the instance.
+                            format: int64
+                            minimum: 0
+                            type: integer
+                          reason:
+                            description: |-
+                              reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                              Producers of specific condition types may define expected values and meanings for this field,
+                              and whether the values are considered a guaranteed API.
+                              The value should be a CamelCase string.
+                              This field may not be empty.
+                            maxLength: 1024
+                            minLength: 1
+                            pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                            type: string
+                          status:
+                            description: status of the condition, one of True, False,
+                              Unknown.
+                            enum:
+                            - "True"
+                            - "False"
+                            - Unknown
+                            type: string
+                          type:
+                            description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                            maxLength: 316
+                            pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                            type: string
+                        required:
+                        - lastTransitionTime
+                        - message
+                        - reason
+                        - status
+                        - type
+                        type: object
+                      envelope:
+                        description: Envelope identifies the envelope object that
+                          contains this resource.
+                        properties:
+                          name:
+                            description: Name of the envelope object.
+                            type: string
+                          namespace:
+                            description: Namespace is the namespace of the envelope
+                              object. Empty if the envelope object is cluster scoped.
+                            type: string
+                          type:
+                            default: ConfigMap
+                            description: Type of the envelope object.
+                            enum:
+                            - ConfigMap
+                            - ClusterResourceEnvelope
+                            - ResourceEnvelope
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      group:
+                        description: Group is the group name of the selected resource.
+                        type: string
+                      kind:
+                        description: Kind represents the Kind of the selected resources.
+                        type: string
+                      name:
+                        description: Name of the target resource.
+                        type: string
+                      namespace:
+                        description: Namespace is the namespace of the resource. Empty
+                          if the resource is cluster scoped.
+                        type: string
+                      version:
+                        description: Version is the version of the selected resource.
+                        type: string
+                    required:
+                    - condition
+                    - kind
+                    - name
+                    - version
+                    type: object
+                  maxItems: 100
+                  type: array
+                observedResourceIndex:
+                  description: |-
+                    ObservedResourceIndex is the index of the resource snapshot that is currently being rolled out to the given cluster.
+                    This field is only meaningful if the `ClusterName` is not empty.
+                  type: string
+              type: object
+            type: array
+        type: object
+    served: true
+    storage: true
