@@ -353,7 +353,7 @@ helm-package-arc-member-agent:
 	helm package charts/member-agent-arc/ --version $(ARC_MEMBER_AGENT_IMAGE_VERSION) && \
 	mv charts/member-agent-arc/values.yaml.bak charts/member-agent-arc/values.yaml
 	# Push to registry
-	helm push member-agent-$(ARC_MEMBER_AGENT_IMAGE_VERSION).tgz oci://$(REGISTRY)/$(ARC_MEMBER_AGENT_IMAGE_NAME)
+	helm push $(ARC_MEMBER_AGENT_IMAGE_NAME)-$(ARC_MEMBER_AGENT_IMAGE_VERSION).tgz oci://$(REGISTRY)
 
 ## -----------------------------------
 ## Cleanup
