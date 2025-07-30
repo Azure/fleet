@@ -9,7 +9,7 @@ on:
         description: 'Release tag to publish images, defaults to the latest one'
         type: string
       arcExtensionVersion:
-        description: 'Version of the Arc extension to be used in the helm chart'
+        description: 'Release version of the Arc extension.'
         type: string
         required: true
 
