@@ -58,7 +58,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.prepare-variables.outputs.release_tag }}
+          fetch-depth: 0
       - name: 'Login the ACR'
         run: |
           az login --identity 
