@@ -1495,12 +1495,30 @@ func (rpl *ResourcePlacementList) GetPlacementObjs() []PlacementObj {
 	return objs
 }
 
+// +genclient
+// +genclient:Namespaced
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:scope="Namespaced"
+// +kubebuilder:subresource:status
+// +kubebuilder:storageversion
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // ManagedNamespacePlacement is used to represent which clusters the namespace has been placed on to.
 type ManagedNamespacePlacement struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Status []ResourcePlacementStatus `json:"status,omitempty"`
+	// The observed status of the ManagedNamespacePlacement.
+	// +kubebuilder:validation:Optional
+	Status ManagedNamespacePlacementStatus `json:"status,omitempty"`
+}
+
+// ManagedNamespacePlacementStatus represents the status of a ManagedNamespacePlacement.
+type ManagedNamespacePlacementStatus struct {
+	
+	// ResourcePlacements contains the placement statuses for the namespace.
+	// +kubebuilder:validation:Optional
+	ResourcePlacements []ResourcePlacementStatus `json:"resourcePlacements,omitempty"`
 }
 
 func init() {
