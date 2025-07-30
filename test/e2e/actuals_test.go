@@ -1391,7 +1391,7 @@ func updateRunStatusSucceededActual(
 		wantStatus.DeletionStageStatus = deleteStageStatus
 		wantStatus.Conditions = updateRunSucceedConditions(updateRun.Generation)
 		if diff := cmp.Diff(updateRun.Status, wantStatus, updateRunStatusCmpOption...); diff != "" {
-			return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
+			return fmt.Errorf("UpdateRun status diff (-got, +want): %s", diff)
 		}
 		return nil
 	}

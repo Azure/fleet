@@ -174,7 +174,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 		})
 	})
 
-	Context("Test determinePolicySnapshot", func() {
+	Context("Test determinePolicySnapshot for PickN", func() {
 		BeforeEach(func() {
 			By("Creating a new clusterResourcePlacement")
 			Expect(k8sClient.Create(ctx, crp)).To(Succeed())
@@ -278,11 +278,28 @@ var _ = Describe("Updaterun initialization tests", func() {
 				return nil
 			}, timeout, interval).Should(Succeed(), "failed to update the updateRun status with policy snapshot details")
 		})
+	})
 
+	Context("Test deleterminePolicySnapshot for PickFixed", func() {
+		BeforeEach(func() {
+			By("Creating a new clusterResourcePlacement")
+			crp.Spec.Policy = &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickFixedPlacementType,
+				ClusterNames:  []string{"cluster-0", "cluster-1"},
+			}
+			Expect(k8sClient.Create(ctx, crp)).To(Succeed())
+		})
+
+		AfterEach(func() {
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(generateInitializationFailedMetric(updateRun))
+		})
 		It("Should copy the latest policy snapshot details to the updateRun status -- pickFixed policy", func() {
 			By("Creating scheduling policy snapshot with pickFixed policy")
-			policySnapshot.Spec.Policy.PlacementType = placementv1beta1.PickFixedPlacementType
-			policySnapshot.Spec.Policy.ClusterNames = []string{"cluster-0", "cluster-1"}
+			policySnapshot.Spec.Policy = &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickFixedPlacementType,
+				ClusterNames:  []string{"cluster-0", "cluster-1"},
+			}
 			Expect(k8sClient.Create(ctx, policySnapshot)).To(Succeed())
 
 			By("Setting the latest policy snapshot condition as fully scheduled")
@@ -311,10 +328,26 @@ var _ = Describe("Updaterun initialization tests", func() {
 				return nil
 			}, timeout, interval).Should(Succeed(), "failed to update the updateRun status with policy snapshot details")
 		})
+	})
+
+	Context("Test determinePolicySnapshot for PickAll", func() {
+		BeforeEach(func() {
+			By("Creating a new clusterResourcePlacement")
+			crp.Spec.Policy = &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+			}
+			Expect(k8sClient.Create(ctx, crp)).To(Succeed())
+		})
+		AfterEach(func() {
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(generateInitializationFailedMetric(updateRun))
+		})
 
 		It("Should copy the latest policy snapshot details to the updateRun status -- pickAll policy", func() {
 			By("Creating scheduling policy snapshot with pickAll policy")
-			policySnapshot.Spec.Policy.PlacementType = placementv1beta1.PickAllPlacementType
+			policySnapshot.Spec.Policy = &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+			}
 			Expect(k8sClient.Create(ctx, policySnapshot)).To(Succeed())
 
 			By("Setting the latest policy snapshot condition as fully scheduled")
@@ -345,7 +378,7 @@ var _ = Describe("Updaterun initialization tests", func() {
 		})
 	})
 
-	Context("Test collectScheduledClusters", func() {
+	Context("Test collectScheduledClusters for PickN", func() {
 		BeforeEach(func() {
 			By("Creating a new clusterResourcePlacement")
 			Expect(k8sClient.Create(ctx, crp)).To(Succeed())
@@ -367,37 +400,12 @@ var _ = Describe("Updaterun initialization tests", func() {
 			By("Checking update run status metrics are emitted")
 			validateUpdateRunMetricsEmitted(generateInitializationFailedMetric(updateRun))
 		})
-
 		It("Should fail to initialize if there is no selected or to-be-deleted cluster", func() {
 			By("Creating a new clusterStagedUpdateRun")
 			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
 
 			By("Validating the initialization failed")
 			validateFailedInitCondition(ctx, updateRun, "no scheduled or to-be-deleted clusterResourceBindings found")
-		})
-
-		It("Should not report error if there are only to-be-deleted clusters", func() {
-			By("Updating the policy snapshot to use pickAll policy to avoid binding count check")
-			policySnapshot.Spec.Policy.PlacementType = placementv1beta1.PickAllPlacementType
-			Expect(k8sClient.Update(ctx, policySnapshot)).To(Succeed())
-			meta.SetStatusCondition(&policySnapshot.Status.Conditions, metav1.Condition{
-				Type:               string(placementv1beta1.PolicySnapshotScheduled),
-				Status:             metav1.ConditionTrue,
-				ObservedGeneration: policySnapshot.Generation,
-				Reason:             "scheduled",
-			})
-			Expect(k8sClient.Status().Update(ctx, policySnapshot)).Should(Succeed())
-
-			By("Creating a to-be-deleted clusterResourceBinding")
-			binding := generateTestClusterResourceBinding(policySnapshot.Name+"a", "cluster-0", placementv1beta1.BindingStateUnscheduled)
-			Expect(k8sClient.Create(ctx, binding)).To(Succeed())
-
-			By("Creating a new clusterStagedUpdateRun")
-			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
-
-			By("Validating the initialization not failed due to no selected cluster")
-			// it should fail due to strategy not found
-			validateFailedInitCondition(ctx, updateRun, "referenced clusterStagedUpdateStrategy not found")
 		})
 
 		It("Should fail to initialize if the number of selected bindings does not match the observed cluster count", func() {
@@ -409,32 +417,6 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Validating the initialization failed")
 			validateFailedInitCondition(ctx, updateRun, "the number of selected bindings 1 is not equal to the observed cluster count 10")
-		})
-
-		It("Should update the ObservedClusterCount to the number of scheduled bindings if it's pickAll policy", func() {
-			By("Updating the policy snapshot to use pickAll policy")
-			policySnapshot.Spec.Policy.PlacementType = placementv1beta1.PickAllPlacementType
-			Expect(k8sClient.Update(ctx, policySnapshot)).To(Succeed())
-			meta.SetStatusCondition(&policySnapshot.Status.Conditions, metav1.Condition{
-				Type:               string(placementv1beta1.PolicySnapshotScheduled),
-				Status:             metav1.ConditionTrue,
-				ObservedGeneration: policySnapshot.Generation,
-				Reason:             "scheduled",
-			})
-			Expect(k8sClient.Status().Update(ctx, policySnapshot)).Should(Succeed())
-
-			By("Creating only one scheduled cluterResourceBinding")
-			Expect(k8sClient.Create(ctx, resourceBindings[0])).To(Succeed())
-
-			By("Creating a new clusterStagedUpdateRun")
-			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
-
-			By("Validating the initialization not failed due to no selected cluster")
-			// it should fail due to strategy not found
-			validateFailedInitCondition(ctx, updateRun, "referenced clusterStagedUpdateStrategy not found")
-
-			By("Validating the ObservedClusterCount is updated")
-			Expect(updateRun.Status.PolicyObservedClusterCount).To(Equal(1), "failed to update the updateRun PolicyObservedClusterCount status")
 		})
 
 		It("Should not fail to initialize if the bindings with latest policy snapshots are in Unscheduled state", func() {
@@ -481,6 +463,64 @@ var _ = Describe("Updaterun initialization tests", func() {
 
 			By("Deleting the clusterResourceBinding")
 			Expect(k8sClient.Delete(ctx, binding)).Should(Succeed())
+		})
+	})
+
+	Context("Test collectScheduledClusters for PickAll", func() {
+		BeforeEach(func() {
+			By("Creating a new clusterResourcePlacement")
+			crp.Spec.Policy = &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+			}
+			Expect(k8sClient.Create(ctx, crp)).To(Succeed())
+
+			By("Creating scheduling policy snapshot")
+			policySnapshot.Spec.Policy = &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+			}
+			Expect(k8sClient.Create(ctx, policySnapshot)).To(Succeed())
+
+			By("Setting the latest policy snapshot condition as fully scheduled")
+			meta.SetStatusCondition(&policySnapshot.Status.Conditions, metav1.Condition{
+				Type:               string(placementv1beta1.PolicySnapshotScheduled),
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: policySnapshot.Generation,
+				Reason:             "scheduled",
+			})
+			Expect(k8sClient.Status().Update(ctx, policySnapshot)).Should(Succeed(), "failed to update the policy snapshot condition")
+		})
+
+		AfterEach(func() {
+			By("Checking update run status metrics are emitted")
+			validateUpdateRunMetricsEmitted(generateInitializationFailedMetric(updateRun))
+		})
+
+		It("Should not report error if there are only to-be-deleted clusters", func() {
+			By("Creating a to-be-deleted clusterResourceBinding")
+			binding := generateTestClusterResourceBinding(policySnapshot.Name+"a", "cluster-0", placementv1beta1.BindingStateUnscheduled)
+			Expect(k8sClient.Create(ctx, binding)).To(Succeed())
+
+			By("Creating a new clusterStagedUpdateRun")
+			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
+
+			By("Validating the initialization not failed due to no selected cluster")
+			// it should fail due to strategy not found
+			validateFailedInitCondition(ctx, updateRun, "referenced clusterStagedUpdateStrategy not found")
+		})
+
+		It("Should update the ObservedClusterCount to the number of scheduled bindings if it's pickAll policy", func() {
+			By("Creating only one scheduled cluterResourceBinding")
+			Expect(k8sClient.Create(ctx, resourceBindings[0])).To(Succeed())
+
+			By("Creating a new clusterStagedUpdateRun")
+			Expect(k8sClient.Create(ctx, updateRun)).To(Succeed())
+
+			By("Validating the initialization not failed due to no selected cluster")
+			// it should fail due to strategy not found
+			validateFailedInitCondition(ctx, updateRun, "referenced clusterStagedUpdateStrategy not found")
+
+			By("Validating the ObservedClusterCount is updated")
+			Expect(updateRun.Status.PolicyObservedClusterCount).To(Equal(1), "failed to update the updateRun PolicyObservedClusterCount status")
 		})
 	})
 

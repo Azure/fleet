@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
@@ -39,9 +40,60 @@ const (
 	updateRunStageNameTemplate        = "stage%d%d"
 	invalidupdateRunStageNameTemplate = "stage012345678901234567890123456789012345678901234567890123456789%d%d"
 	approveRequestNameTemplate        = "test-approve-request-%d"
+	crpNameTemplate                   = "test-crp-%d"
 )
 
 var _ = Describe("Test placement v1beta1 API validation", func() {
+	Context("Test ClusterResourcePlacement API validation - invalid cases", func() {
+		var crp placementv1beta1.ClusterResourcePlacement
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+		BeforeEach(func() {
+			crp = placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "Namespace",
+							Name:    "test-ns",
+						},
+					},
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+						ClusterNames:  []string{"cluster1", "cluster2"},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &crp)).Should(Succeed())
+		})
+
+		AfterEach(func() {
+			Expect(hubClient.Delete(ctx, &crp)).Should(Succeed())
+		})
+
+		It("should deny update of ClusterResourcePlacement with nil policy", func() {
+			Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &crp)).Should(Succeed(), "Get CRP call failed")
+			crp.Spec.Policy = nil
+			err := hubClient.Update(ctx, &crp)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("placement type is immutable"))
+		})
+
+		It("should deny update of ClusterResourcePlacement with different placement type", func() {
+			Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &crp)).Should(Succeed(), "Get CRP call failed")
+			crp.Spec.Policy.PlacementType = placementv1beta1.PickAllPlacementType
+			err := hubClient.Update(ctx, &crp)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("placement type is immutable"))
+		})
+	})
+
 	Context("Test ClusterPlacementDisruptionBudget API validation - valid cases", func() {
 		It("should allow creation of ClusterPlacementDisruptionBudget with valid maxUnavailable - int", func() {
 			crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
