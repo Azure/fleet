@@ -33,7 +33,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
-// Reconciler reconciles the deletion of a ClusterResourceBinding.
+// Reconciler reconciles the deletion of a binding.
 type Reconciler struct {
 	// Client is the client the controller uses to access the hub cluster.
 	client.Client
@@ -41,44 +41,57 @@ type Reconciler struct {
 	SchedulerWorkQueue queue.PlacementSchedulingQueueWriter
 }
 
-// Reconcile reconciles the CRB.
+// Reconcile reconciles the binding.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	crbRef := klog.KRef("", req.Name)
+	bindingRef := klog.KRef(req.Namespace, req.Name)
 	startTime := time.Now()
-	klog.V(2).InfoS("Scheduler source reconciliation starts", "clusterResourceBinding", crbRef)
+	klog.V(2).InfoS("Scheduler source reconciliation starts", "binding", bindingRef)
 	defer func() {
 		latency := time.Since(startTime).Milliseconds()
-		klog.V(2).InfoS("Scheduler source reconciliation ends", "clusterResourceBinding", crbRef, "latency", latency)
+		klog.V(2).InfoS("Scheduler source reconciliation ends", "binding", bindingRef, "latency", latency)
 	}()
 
-	// Retrieve the CRB.
-	crb := &fleetv1beta1.ClusterResourceBinding{}
-	if err := r.Client.Get(ctx, req.NamespacedName, crb); err != nil {
-		klog.ErrorS(err, "Failed to get cluster resource binding", "clusterResourceBinding", crbRef)
-		return ctrl.Result{}, controller.NewAPIServerError(true, client.IgnoreNotFound(err))
+	var binding fleetv1beta1.BindingObj
+	var err error
+	if req.Namespace == "" {
+		// ClusterResourceBinding (cluster-scoped)
+		var clusterResourceBinding fleetv1beta1.ClusterResourceBinding
+		if err = r.Client.Get(ctx, req.NamespacedName, &clusterResourceBinding); err != nil {
+			klog.ErrorS(err, "Failed to get cluster resource binding", "binding", bindingRef)
+			return ctrl.Result{}, controller.NewAPIServerError(true, client.IgnoreNotFound(err))
+		}
+		binding = &clusterResourceBinding
+	} else {
+		// ResourceBinding (namespaced)
+		var resourceBinding fleetv1beta1.ResourceBinding
+		if err = r.Client.Get(ctx, req.NamespacedName, &resourceBinding); err != nil {
+			klog.ErrorS(err, "Failed to get resource binding", "binding", bindingRef)
+			return ctrl.Result{}, controller.NewAPIServerError(true, client.IgnoreNotFound(err))
+		}
+		binding = &resourceBinding
 	}
 
-	// Check if the CRB has been deleted and has the scheduler CRB cleanup finalizer.
-	if crb.DeletionTimestamp != nil && controllerutil.ContainsFinalizer(crb, fleetv1beta1.SchedulerBindingCleanupFinalizer) {
-		// The CRB has been deleted and still has the scheduler CRB cleanup finalizer; enqueue it's corresponding CRP
+	// Check if the binding has been deleted and has the scheduler binding cleanup finalizer.
+	if binding.GetDeletionTimestamp() != nil && controllerutil.ContainsFinalizer(binding, fleetv1beta1.SchedulerBindingCleanupFinalizer) {
+		// The binding has been deleted and still has the scheduler binding cleanup finalizer; enqueue it's corresponding placement
 		// for the scheduler to process.
-		crpName, exist := crb.GetLabels()[fleetv1beta1.PlacementTrackingLabel]
+		placementName, exist := binding.GetLabels()[fleetv1beta1.PlacementTrackingLabel]
 		if !exist {
-			err := controller.NewUnexpectedBehaviorError(fmt.Errorf("clusterResourceBinding %s doesn't have CRP tracking label", crb.Name))
-			klog.ErrorS(err, "Failed to enqueue CRP name for CRB")
+			err := controller.NewUnexpectedBehaviorError(fmt.Errorf("binding %s doesn't have placement tracking label", binding.GetName()))
+			klog.ErrorS(err, "Failed to enqueue placement name for binding")
 			// error cannot be retried.
 			return ctrl.Result{}, nil
 		}
-		r.SchedulerWorkQueue.AddRateLimited(queue.PlacementKey(crpName))
+		r.SchedulerWorkQueue.AddRateLimited(queue.PlacementKey(controller.GetObjectKeyFromNamespaceName(binding.GetNamespace(), placementName)))
 	}
 
 	// No action is needed for the scheduler to take in other cases.
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager sets up the controller with the manager.
-func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	customPredicate := predicate.Funcs{
+// buildCustomPredicate creates a predicate that only triggers on deletion timestamp changes.
+func buildCustomPredicate() predicate.Predicate {
+	return predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
 			// Ignore creation events.
 			return false
@@ -106,9 +119,20 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return false
 		},
 	}
+}
 
+// SetupWithManagerForClusterResourceBinding sets up the controller with the manager.
+func (r *Reconciler) SetupWithManagerForClusterResourceBinding(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).Named("clusterresourcebinding-scheduler-watcher").
 		For(&fleetv1beta1.ClusterResourceBinding{}).
-		WithEventFilter(customPredicate).
+		WithEventFilter(buildCustomPredicate()).
+		Complete(r)
+}
+
+// SetupWithManagerForResourceBinding sets up the controller with the manager.
+func (r *Reconciler) SetupWithManagerForResourceBinding(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).Named("resourcebinding-scheduler-watcher").
+		For(&fleetv1beta1.ResourceBinding{}).
+		WithEventFilter(buildCustomPredicate()).
 		Complete(r)
 }

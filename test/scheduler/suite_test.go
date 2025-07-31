@@ -601,7 +601,7 @@ func beforeSuiteForProcess1() []byte {
 		Client:             hubClient,
 		SchedulerWorkQueue: schedulerWorkQueue,
 	}
-	err = clusterResourceBindingWatcher.SetupWithManager(ctrlMgr)
+	err = clusterResourceBindingWatcher.SetupWithManagerForClusterResourceBinding(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred(), "Failed to set up cluster resource binding watcher with controller manager")
 
 	// Set up the scheduler.
