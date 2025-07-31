@@ -7,10 +7,6 @@ HUB_AGENT_IMAGE_VERSION ?= $(TAG)
 MEMBER_AGENT_IMAGE_VERSION ?= $(TAG)
 REFRESH_TOKEN_IMAGE_VERSION ?= $(TAG)
 CRD_INSTALLER_IMAGE_VERSION ?= $(TAG)
-# ARC and networking component versions - set via environment variables
-ARC_MEMBER_AGENT_IMAGE_VERSION ?=
-MCS_CONTROLLER_IMAGE_VERSION ?=
-MEMBER_NET_CONTROLLER_IMAGE_VERSION ?=
 
 HUB_AGENT_IMAGE_NAME ?= hub-agent
 MEMBER_AGENT_IMAGE_NAME ?= member-agent
@@ -341,18 +337,11 @@ docker-build-crd-installer: docker-buildx-builder
 		--pull \
 		--tag $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION) .
 
+# we package the helm charts and push to MCR for Arc Extension
 .PHONY: helm-package-arc-member-agent
 helm-package-arc-member-agent:
-	# Export environment variables and use envsubst to substitute values
-	export MEMBER_AGENT_TAG=$(MEMBER_AGENT_IMAGE_VERSION) && \
-	export MCS_CONTROLLER_TAG=$(MCS_CONTROLLER_IMAGE_VERSION) && \
-	export MEMBER_NET_CONTROLLER_TAG=$(MEMBER_NET_CONTROLLER_IMAGE_VERSION) && \
-	export REFRESH_TOKEN_TAG=$(REFRESH_TOKEN_IMAGE_VERSION) && \
-	cp charts/member-agent-arc/values.yaml charts/member-agent-arc/values.yaml.bak && \
-	envsubst < charts/member-agent-arc/values.yaml.bak > charts/member-agent-arc/values.yaml && \
-	helm package charts/member-agent-arc/ --version $(ARC_MEMBER_AGENT_IMAGE_VERSION) && \
-	mv charts/member-agent-arc/values.yaml.bak charts/member-agent-arc/values.yaml
-	# Push to registry
+	envsubst -i charts/member-agent-arc/values.yaml && \
+	helm package charts/member-agent-arc/ --version $(ARC_MEMBER_AGENT_IMAGE_VERSION)
 	helm push $(ARC_MEMBER_AGENT_IMAGE_NAME)-$(ARC_MEMBER_AGENT_IMAGE_VERSION).tgz oci://$(REGISTRY)
 
 ## -----------------------------------
