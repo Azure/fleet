@@ -489,6 +489,17 @@ spec:
                   name:
                     description: Name is the reference to the name of placement.
                     type: string
+                  scope:
+                    default: Cluster
+                    description: |-
+                      Scope defines the scope of the placement.
+                      A clusterResourceOverride can only reference a clusterResourcePlacement (cluster-scoped),
+                      and a resourceOverride can reference either a clusterResourcePlacement or resourcePlacement (namespaced).
+                      The referenced resourcePlacement must be in the same namespace as the resourceOverride.
+                    enum:
+                    - Cluster
+                    - Namespaced
+                    type: string
                 required:
                 - name
                 type: object
@@ -838,6 +849,17 @@ spec:
                 properties:
                   name:
                     description: Name is the reference to the name of placement.
+                    type: string
+                  scope:
+                    default: Cluster
+                    description: |-
+                      Scope defines the scope of the placement.
+                      A clusterResourceOverride can only reference a clusterResourcePlacement (cluster-scoped),
+                      and a resourceOverride can reference either a clusterResourcePlacement or resourcePlacement (namespaced).
+                      The referenced resourcePlacement must be in the same namespace as the resourceOverride.
+                    enum:
+                    - Cluster
+                    - Namespaced
                     type: string
                 required:
                 - name

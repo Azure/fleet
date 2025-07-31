@@ -68,12 +68,32 @@ type ClusterResourceOverrideSpec struct {
 	Policy *OverridePolicy `json:"policy"`
 }
 
+// ResourceScope defines the scope of placement reference.
+type ResourceScope string
+
+const (
+	// ClusterScoped indicates placement is cluster-scoped.
+	ClusterScoped ResourceScope = "Cluster"
+
+	// NamespaceScoped indicates placement is namespace-scoped.
+	NamespaceScoped ResourceScope = "Namespaced"
+)
+
 // PlacementRef is the reference to a placement.
 // For now, we only support ClusterResourcePlacement.
 type PlacementRef struct {
 	// Name is the reference to the name of placement.
 	// +required
 	Name string `json:"name"`
+
+	// Scope defines the scope of the placement.
+	// A clusterResourceOverride can only reference a clusterResourcePlacement (cluster-scoped),
+	// and a resourceOverride can reference either a clusterResourcePlacement or resourcePlacement (namespaced).
+	// The referenced resourcePlacement must be in the same namespace as the resourceOverride.
+	// +kubebuilder:validation:Enum=Cluster;Namespaced
+	// +kubebuilder:default=Cluster
+	// +optional
+	Scope ResourceScope `json:"scope,omitempty"`
 }
 
 // OverridePolicy defines how to override the selected resources on the target clusters.
