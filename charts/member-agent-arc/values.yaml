@@ -1,18 +1,18 @@
 memberagent:
   repository: mcr.microsoft.com/aks/fleet/member-agent
-  tag: ""
+  tag: "${MEMBER_AGENT_IMAGE_VERSION}"
 
 mcscontrollermanager:
   repository: mcr.microsoft.com/aks/fleet/mcs-controller-manager
-  tag: ""
+  tag: "${MCS_CONTROLLER_IMAGE_VERSION}"
 
 membernetcontrollermanager:
   repository: mcr.microsoft.com/aks/fleet/member-net-controller-manager
-  tag: ""
+  tag: "${MEMBER_NET_CONTROLLER_IMAGE_VERSION}"
 
 refreshtoken:
   repository: mcr.microsoft.com/aks/fleet/refresh-token
-  tag: ""
+  tag: "${REFRESH_TOKEN_IMAGE_VERSION}"
 
 logVerbosity: 5
 

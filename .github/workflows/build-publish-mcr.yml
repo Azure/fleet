@@ -9,7 +9,7 @@ on:
         description: 'Release tag to publish images, defaults to the latest one'
         type: string
       arcExtensionVersion:
-        description: 'Version of the Arc extension to be used in the helm chart'
+        description: 'Release version of the Arc extension.'
         type: string
         required: true
 
@@ -91,7 +91,7 @@ jobs:
         run: |
           make helm-package-arc-member-agent
         env:
-          ARC_MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.fleet_networking_version }}
+          ARC_MEMBER_AGENT_IMAGE_VERSION: ${{ inputs.arcExtensionVersion }}
           MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
           REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
           MCS_CONTROLLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.fleet_networking_version }}

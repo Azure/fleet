@@ -337,16 +337,14 @@ docker-build-crd-installer: docker-buildx-builder
 		--pull \
 		--tag $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION) .
 
+# Fleet Agents and Networking Agents are packaged and pushed to MCR for Arc Extension.
 .PHONY: helm-package-arc-member-agent
 helm-package-arc-member-agent:
-	helm package charts/member-agent-arc/ \
-		--version $(ARC_MEMBER_AGENT_IMAGE_VERSION) \
-		--set memberagent.tag=$(MEMBER_AGENT_IMAGE_VERSION) \
-		--set mcscontrollermanager.tag=$(MCS_CONTROLLER_IMAGE_VERSION) \
-		--set membernetcontrollermanager.tag=$(MEMBER_NET_CONTROLLER_IMAGE_VERSION) \
-		--set refreshtoken.tag=$(REFRESH_TOKEN_IMAGE_VERSION)
-
-	helm push member-agent-$(ARC_MEMBER_AGENT_IMAGE_VERSION).tgz oci://$(REGISTRY)/$(ARC_MEMBER_AGENT_IMAGE_NAME)
+	envsubst < charts/member-agent-arc/values.yaml > charts/member-agent-arc/values.yaml.tmp && \
+	mv charts/member-agent-arc/values.yaml.tmp charts/member-agent-arc/values.yaml && \
+	helm package charts/member-agent-arc/ --version $(ARC_MEMBER_AGENT_IMAGE_VERSION)
+	
+	helm push $(ARC_MEMBER_AGENT_IMAGE_NAME)-$(ARC_MEMBER_AGENT_IMAGE_VERSION).tgz oci://$(REGISTRY)
 
 ## -----------------------------------
 ## Cleanup
