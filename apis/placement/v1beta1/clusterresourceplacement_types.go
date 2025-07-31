@@ -1529,7 +1529,6 @@ type ManagedNamespacePlacementList struct {
 	Items           []ManagedNamespacePlacement `json:"items"`
 }
 
-
 func init() {
 	SchemeBuilder.Register(&ClusterResourcePlacement{}, &ClusterResourcePlacementList{}, &ResourcePlacement{}, &ResourcePlacementList{}, &ManagedNamespacePlacement{}, &ManagedNamespacePlacementList{})
 }
