@@ -340,8 +340,10 @@ docker-build-crd-installer: docker-buildx-builder
 # we package the helm charts and push to MCR for Arc Extension
 .PHONY: helm-package-arc-member-agent
 helm-package-arc-member-agent:
-	envsubst -i charts/member-agent-arc/values.yaml && \
+	envsubst < charts/member-agent-arc/values.yaml > charts/member-agent-arc/values.yaml.tmp && \
+	mv charts/member-agent-arc/values.yaml.tmp charts/member-agent-arc/values.yaml && \
 	helm package charts/member-agent-arc/ --version $(ARC_MEMBER_AGENT_IMAGE_VERSION)
+	
 	helm push $(ARC_MEMBER_AGENT_IMAGE_NAME)-$(ARC_MEMBER_AGENT_IMAGE_VERSION).tgz oci://$(REGISTRY)
 
 ## -----------------------------------
