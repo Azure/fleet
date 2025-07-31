@@ -55,6 +55,7 @@ func runTest(t *testing.T, crdPath string) {
 			name: "hub mode v1beta1 with actual directory",
 			mode: "hub",
 			wantedCRDNames: []string{
+				"managednamespaceplacements.placement.kubernetes-fleet.io",
 				"memberclusters.cluster.kubernetes-fleet.io",
 				"internalmemberclusters.cluster.kubernetes-fleet.io",
 				"clusterapprovalrequests.placement.kubernetes-fleet.io",
