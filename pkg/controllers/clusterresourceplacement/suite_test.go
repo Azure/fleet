@@ -141,7 +141,7 @@ var _ = BeforeSuite(func() {
 
 	err = (&clusterresourceplacementwatcher.Reconciler{
 		PlacementController: crpController,
-	}).SetupWithManager(mgr)
+	}).SetupWithManagerForClusterResourcePlacement(mgr)
 	Expect(err).Should(Succeed(), "failed to create clusterResourcePlacement watcher")
 
 	err = (&clusterresourcebindingwatcher.Reconciler{

@@ -26,10 +26,17 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
 const (
-	testCRPName = "my-crp"
+	testCRPName   = "my-crp"
+	testRPName    = "my-rp"
+	testNamespace = "test-namespace"
+
+	eventuallyTimeout    = time.Second * 10
+	consistentlyDuration = time.Second * 10
+	interval             = time.Millisecond * 250
 )
 
 func clusterResourcePlacementForTest() *fleetv1beta1.ClusterResourcePlacement {
@@ -53,14 +60,30 @@ func clusterResourcePlacementForTest() *fleetv1beta1.ClusterResourcePlacement {
 	}
 }
 
+func resourcePlacementForTest() *fleetv1beta1.ResourcePlacement {
+	return &fleetv1beta1.ResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      testRPName,
+			Namespace: testNamespace,
+		},
+		Spec: fleetv1beta1.PlacementSpec{
+			ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
+				{
+					Group:   corev1.GroupName,
+					Version: "v1",
+					Kind:    "ConfigMap",
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"env": "test"},
+					},
+				},
+			},
+			Policy: &fleetv1beta1.PlacementPolicy{},
+		},
+	}
+}
+
 // This container cannot be run in parallel with other ITs because it uses a shared fakePlacementController.
 var _ = Describe("Test ClusterResourcePlacement Watcher", Serial, func() {
-	const (
-		eventuallyTimeout    = time.Second * 10
-		consistentlyDuration = time.Second * 10
-		interval             = time.Millisecond * 250
-	)
-
 	var (
 		createdCRP = &fleetv1beta1.ClusterResourcePlacement{}
 	)
@@ -148,6 +171,55 @@ var _ = Describe("Test ClusterResourcePlacement Watcher", Serial, func() {
 			Eventually(func() bool {
 				return fakePlacementController.Key() == testCRPName
 			}, eventuallyTimeout, interval).Should(BeTrue(), "placementController should receive the CRP name")
+		})
+	})
+})
+
+var _ = Describe("Test ResourcePlacement Watcher", Serial, func() {
+	var (
+		createdRP = &fleetv1beta1.ResourcePlacement{}
+		key       = controller.GetObjectKeyFromNamespaceName(testNamespace, testRPName)
+	)
+
+	BeforeEach(func() {
+		fakePlacementController.ResetQueue()
+
+		By("By creating a new resourcePlacement")
+		createdRP = resourcePlacementForTest()
+		Expect(k8sClient.Create(ctx, createdRP)).Should(Succeed())
+
+		By("By checking the placement queue before resetting")
+		// The event could arrive after the resetting, which causes the flakiness.
+		// It makes sure the queue is clear before proceed.
+		Eventually(func() bool {
+			return fakePlacementController.Key() == key
+		}, eventuallyTimeout, interval).Should(BeTrue(), "placementController should receive the RP namespaced name when creating RP")
+
+		By("By resetting the placement queue")
+		// Reset the queue to avoid the multiple create events triggered.
+		Consistently(func() error {
+			if fakePlacementController.Key() == key {
+				By("By finding the key and resetting the placement queue")
+				fakePlacementController.ResetQueue()
+			}
+			return nil
+		}, consistentlyDuration, interval).Should(Succeed(), "placementController queue should be stable empty after resetting")
+	})
+
+	Context("When deleting resourcePlacement", func() {
+		It("Should enqueue the event", func() {
+			By("By deleting rp")
+			Expect(k8sClient.Delete(ctx, createdRP)).Should(Succeed())
+
+			By("By checking rp")
+			Eventually(func() bool {
+				return errors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: testRPName, Namespace: testNamespace}, createdRP))
+			}, eventuallyTimeout, interval).Should(BeTrue(), "rp should be deleted")
+
+			By("By checking placement controller queue")
+			Eventually(func() bool {
+				return fakePlacementController.Key() == key
+			}, eventuallyTimeout, interval).Should(BeTrue(), "placementController should receive the RP namespaced name")
 		})
 	})
 })

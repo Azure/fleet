@@ -16,6 +16,10 @@ KubeFleet is a CNCF sandbox project that provides multi-cluster application mana
 # Build all binaries
 make build
 
+# Run specific agent binaries directly
+make run-hubagent
+make run-memberagent
+
 # Run all tests (unit + integration)
 make test
 
@@ -27,6 +31,9 @@ make integration-test
 
 # Run E2E tests
 make e2e-tests
+
+# Run custom E2E tests with labels
+make e2e-tests-custom
 ```
 
 ### Code Quality
@@ -34,11 +41,17 @@ make e2e-tests
 # Run linting (required before commits)
 make lint
 
+# Run full linting (slower but more thorough)
+make lint-full
+
 # Run static analysis
 make staticcheck
 
 # Format code
 make fmt
+
+# Run go vet
+make vet
 
 # Run all quality checks
 make reviewable
@@ -64,8 +77,22 @@ make setup-clusters MEMBER_CLUSTER_COUNT=5
 # Run parallel E2E tests (default - excludes custom tests)
 make e2e-tests
 
+# Collect logs after E2E tests
+make collect-e2e-logs
+
 # Clean up test clusters
 make clean-e2e-tests
+```
+
+### Docker and Images
+```bash
+# Build and push all images
+make push
+
+# Build individual images
+make docker-build-hub-agent
+make docker-build-member-agent
+make docker-build-refresh-token
 ```
 
 ## Architecture Overview
@@ -75,12 +102,17 @@ make clean-e2e-tests
 - **MemberCluster**: Represents a member cluster with identity and heartbeat settings  
 - **ClusterResourceBinding**: Represents scheduling decisions binding resources to clusters
 - **Work**: Contains manifests to be applied on member clusters
+- **ClusterResourceSnapshot**: Immutable snapshots of resources to be placed
+- **ClusterSchedulingPolicySnapshot**: Immutable snapshots of scheduling policies
 
 ### Key Controllers
 - **ClusterResourcePlacement Controller** (`pkg/controllers/clusterresourceplacement/`): Manages CRP lifecycle
 - **Scheduler** (`pkg/scheduler/`): Makes placement decisions using pluggable framework
 - **WorkGenerator** (`pkg/controllers/workgenerator/`): Generates Work objects from bindings
 - **WorkApplier** (`pkg/controllers/workapplier/`): Applies Work manifests on member clusters
+- **Resource Placement Watchers**: Monitor and react to changes in placement decisions
+- **ClusterResourceBinding Watcher** (`pkg/controllers/clusterresourcebindingwatcher/`): Watches binding changes
+- **ClusterResourcePlacement Watcher** (`pkg/controllers/clusterresourceplacementwatcher/`): Watches placement changes
 
 ### Scheduler Framework
 The scheduler uses a pluggable architecture similar to Kubernetes scheduler:
@@ -107,23 +139,39 @@ cmd/hubagent/           # Hub agent main and setup
 cmd/memberagent/        # Member agent main and setup
 ```
 
-## Testing Guidelines
+## Development Notes
+
+- Always run `make reviewable` before submitting PRs
+- Follow [Uber Go Style Guide](https://github.com/uber-go/guide/blob/master/style.md) when possible
+- Favor standard library over third-party libraries
+- Controllers should be thoroughly tested with integration tests
+- New scheduler plugins should implement both Filter and Score interfaces
+- Use existing patterns from similar controllers when adding new functionality
+- Property providers should implement the `PropertyProvider` interface
+- PR titles must use prefixes: `feat:`, `fix:`, `docs:`, `test:`, `chore:`, `ci:`, `perf:`, `refactor:`, `revert:`
+
+## Testing Patterns
 
 ### Unit Tests
 - Use `testify` for assertions
 - Controllers use `envtest` for integration testing with real etcd
 - Mock external dependencies with `gomock`
+- Unit test files: `<go_file>_test.go` in same directory
+- Table-driven test style preferred
 
-### E2E Tests  
-- Located in `test/e2e/`
+### Integration Tests  
+- Located in `test/integration/` and `test/scheduler/`
 - Use Ginkgo/Gomega framework
 - Tests run against real Kind clusters
+- Files named: `<go_file>_integration_test.go`
 - Separate test suites for different placement strategies
 
-### Integration Tests
-- Located in `test/integration/`
+### E2E Tests
+- Located in `test/e2e/`
+- Use Ginkgo/Gomega framework  
 - Test cross-controller interactions
 - Use shared test manifests in `test/integration/manifests/`
+- Run with `make e2e-tests` against 3 Kind clusters
 
 ## Key Patterns
 
@@ -148,10 +196,7 @@ All controllers follow standard Kubernetes controller patterns:
 - v1beta1 APIs are current stable version
 - Feature flags control API version enablement
 
-## Development Notes
-
-- Always run `make reviewable` before submitting PRs
-- Controllers should be thoroughly tested with integration tests
-- New scheduler plugins should implement both Filter and Score interfaces
-- Use existing patterns from similar controllers when adding new functionality
-- Property providers should implement the `PropertyProvider` interface
+### Watcher Pattern
+- Resource placement watchers monitor CRP and binding changes
+- Event-driven architecture for responsive placement decisions
+- Separate watchers for different resource types to enable focused reconciliation

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package clusterresourceplacementwatcher features a controller to watch the clusterResourcePlacement changes.
+// Package clusterresourceplacementwatcher features a controller to watch the clusterResourcePlacement and resourcePlacement changes.
 package clusterresourceplacementwatcher
 
 import (
@@ -29,30 +29,38 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
-// Reconciler reconciles a clusterResourcePlacement object.
+// Reconciler reconciles both ClusterResourcePlacement and ResourcePlacement objects.
 type Reconciler struct {
 	// PlacementController maintains a rate limited queue which used to store
-	// the name of the clusterResourcePlacement and a reconcile function to consume the items in queue.
+	// the name of the placement objects and a reconcile function to consume the items in queue.
 	PlacementController controller.Controller
 }
 
-// Reconcile triggers a single CRP reconcile round if CRP has changed.
+// Reconcile triggers a single placement reconcile round if placement has changed.
 func (r *Reconciler) Reconcile(_ context.Context, req ctrl.Request) (ctrl.Result, error) {
 	startTime := time.Now()
-	klog.V(2).InfoS("ClusterResourcePlacementWatcher reconciliation starts", "clusterResourcePlacement", req.Name)
+	klog.V(2).InfoS("PlacementWatcher reconciliation starts", "placement", req.NamespacedName)
 	defer func() {
 		latency := time.Since(startTime).Milliseconds()
-		klog.V(2).InfoS("ClusterResourcePlacementWatcher reconciliation ends", "clusterResourcePlacement", req.Name, "latency", latency)
+		klog.V(2).InfoS("PlacementWatcher reconciliation ends", "placement", req.NamespacedName, "latency", latency)
 	}()
 
-	r.PlacementController.Enqueue(req.Name)
+	r.PlacementController.Enqueue(string(controller.GetObjectKeyFromRequest(req)))
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
-func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+// SetupWithManagerForClusterResourcePlacement sets up the controller with the Manager.
+func (r *Reconciler) SetupWithManagerForClusterResourcePlacement(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).Named("clusterresourceplacement-watcher").
 		For(&fleetv1beta1.ClusterResourcePlacement{}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		Complete(r)
+}
+
+// SetupWithManagerForResourcePlacement sets up the controller with the Manager.
+func (r *Reconciler) SetupWithManagerForResourcePlacement(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).Named("resourceplacement-watcher").
+		For(&fleetv1beta1.ResourcePlacement{}).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }
