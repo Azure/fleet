@@ -18,6 +18,7 @@ package azure
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
@@ -29,7 +30,8 @@ import (
 )
 
 const (
-	aksScope = "6dae42f8-4368-4678-94ff-3960e28e3630"
+	aksScope            = "6dae42f8-4368-4678-94ff-3960e28e3630"
+	aksScopeEnvVarName  = "AKS_SCOPE" // Environment variable to configure the AKS scope
 )
 
 type AuthTokenProvider struct {
@@ -37,9 +39,21 @@ type AuthTokenProvider struct {
 	Scope    string
 }
 
+// GetDefaultAKSScope returns the default AKS scope value
+// This is useful for testing purposes
+func GetDefaultAKSScope() string {
+	return aksScope
+}
+
 func New(clientID, scope string) authtoken.Provider {
 	if scope == "" {
-		scope = aksScope
+		// Check environment variable first
+		envScope := os.Getenv(aksScopeEnvVarName)
+		if envScope != "" {
+			scope = envScope
+		} else {
+			scope = aksScope
+		}
 	}
 	return &AuthTokenProvider{
 		ClientID: clientID,
