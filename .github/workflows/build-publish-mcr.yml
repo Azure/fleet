@@ -44,6 +44,7 @@ jobs:
           echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
 
           # Fetch the latest fleet-networking version
+          # NOTE: The fleet-networking image must be cut and pushed to MCR first before retrieving this version
           FLEET_NETWORKING_VERSION="${FLEET_NETWORKING_VERSION:-$(curl "https://api.github.com/repos/Azure/fleet-networking/tags" | jq -r '.[0].name')}"
           echo "fleet_networking_version=$FLEET_NETWORKING_VERSION" >> $GITHUB_OUTPUT
           echo "Using Fleet Networking version: $FLEET_NETWORKING_VERSION"
