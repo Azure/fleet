@@ -1,0 +1,37 @@
+memberagent:
+  repository: mcr.microsoft.com/aks/fleet/member-agent
+  tag: "${MEMBER_AGENT_IMAGE_VERSION}"
+
+mcscontrollermanager:
+  repository: mcr.microsoft.com/aks/fleet/mcs-controller-manager
+  tag: "${MCS_CONTROLLER_IMAGE_VERSION}"
+
+membernetcontrollermanager:
+  repository: mcr.microsoft.com/aks/fleet/member-net-controller-manager
+  tag: "${MEMBER_NET_CONTROLLER_IMAGE_VERSION}"
+
+refreshtoken:
+  repository: mcr.microsoft.com/aks/fleet/refresh-token
+  tag: "${REFRESH_TOKEN_IMAGE_VERSION}"
+
+logVerbosity: 5
+
+namespace: fleet-system
+
+config:
+  scope: ""
+  hubURL : ""
+  memberClusterName: ""
+  hubCA: ""
+
+enableV1Alpha1APIs: false
+enableV1Beta1APIs: true
+enableTrafficManagerFeature: false
+
+Azure:
+  proxySettings:
+    isProxyEnabled: "false"
+    httpProxy: ""
+    httpsProxy: ""
+    noProxy: ""
+    proxyCert: ""
