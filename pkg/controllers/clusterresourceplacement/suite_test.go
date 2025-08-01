@@ -136,7 +136,7 @@ var _ = BeforeSuite(func() {
 	err = (&clusterschedulingpolicysnapshot.Reconciler{
 		Client:              mgr.GetClient(),
 		PlacementController: crpController,
-	}).SetupWithManager(mgr)
+	}).SetupWithManagerForClusterSchedulingPolicySnapshot(mgr)
 	Expect(err).Should(Succeed(), "failed to create clusterSchedulingPolicySnapshot watcher")
 
 	err = (&clusterresourceplacementwatcher.Reconciler{
