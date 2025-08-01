@@ -305,7 +305,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		if err := (&schedulercrpwatcher.Reconciler{
 			Client:             mgr.GetClient(),
 			SchedulerWorkQueue: defaultSchedulingQueue,
-		}).SetupWithManager(mgr); err != nil {
+		}).SetupWithManagerForClusterResourcePlacement(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up clusterResourcePlacement watcher for scheduler")
 			return err
 		}

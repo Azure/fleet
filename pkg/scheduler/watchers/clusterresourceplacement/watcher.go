@@ -14,8 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package clusterresourceplacement features a controller that enqueues CRPs for the
-// scheduler to process where the CRP is marked for deletion.
+// Package clusterresourceplacement features a controller that enqueues placement objects for the
+// scheduler to process where the placement object is marked for deletion.
 package clusterresourceplacement
 
 import (
@@ -35,7 +35,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
-// Reconciler reconciles the deletion of a CRP.
+// Reconciler reconciles the deletion of a placement object.
 type Reconciler struct {
 	// Client is the client the controller uses to access the hub cluster.
 	client.Client
@@ -43,37 +43,37 @@ type Reconciler struct {
 	SchedulerWorkQueue queue.PlacementSchedulingQueueWriter
 }
 
-// Reconcile reconciles the CRP.
+// Reconcile reconciles the placement object.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	crpRef := klog.KRef("", req.Name)
+	placementRef := klog.KRef(req.Namespace, req.Name)
 	startTime := time.Now()
-	klog.V(2).InfoS("Scheduler source reconciliation starts", "clusterResourcePlacement", crpRef)
+	klog.V(2).InfoS("Scheduler source reconciliation starts", "placement", placementRef)
 	defer func() {
 		latency := time.Since(startTime).Milliseconds()
-		klog.V(2).InfoS("Scheduler source reconciliation ends", "clusterResourcePlacement", crpRef, "latency", latency)
+		klog.V(2).InfoS("Scheduler source reconciliation ends", "placement", placementRef, "latency", latency)
 	}()
 
-	// Retrieve the CRP.
-	crp := &fleetv1beta1.ClusterResourcePlacement{}
-	if err := r.Client.Get(ctx, req.NamespacedName, crp); err != nil {
-		klog.ErrorS(err, "Failed to get cluster resource placement", "clusterResourcePlacement", crpRef)
+	// Retrieve the placement object (either ClusterResourcePlacement or ResourcePlacement).
+	placementKey := controller.GetObjectKeyFromRequest(req)
+	placement, err := controller.FetchPlacementFromKey(ctx, r.Client, placementKey)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get placement", "placement", placementRef)
 		return ctrl.Result{}, controller.NewAPIServerError(true, client.IgnoreNotFound(err))
 	}
 
-	// Check if the CRP has been deleted and has the scheduler finalizer.
-	if crp.DeletionTimestamp != nil && controllerutil.ContainsFinalizer(crp, fleetv1beta1.SchedulerCleanupFinalizer) {
-		// The CRP has been deleted and still has the scheduler finalizer;
+	// Check if the placement has been deleted and has the scheduler finalizer.
+	if placement.GetDeletionTimestamp() != nil && controllerutil.ContainsFinalizer(placement, fleetv1beta1.SchedulerCleanupFinalizer) {
+		// The placement has been deleted and still has the scheduler finalizer;
 		// enqueue it for the scheduler to process.
-		r.SchedulerWorkQueue.AddRateLimited(queue.PlacementKey(crp.Name))
+		r.SchedulerWorkQueue.AddRateLimited(placementKey)
 	}
 
 	// No action is needed for the scheduler to take in other cases.
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager sets up the controller with the manager.
-func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	customPredicate := predicate.Funcs{
+func buildCustomPredicate() predicate.Predicate {
+	return predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
 			// Ignore creation events.
 			return false
@@ -101,9 +101,20 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return false
 		},
 	}
+}
 
+// SetupWithManagerForClusterResourcePlacement sets up the controller with the manager for ClusterResourcePlacement.
+func (r *Reconciler) SetupWithManagerForClusterResourcePlacement(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).Named("clusterresourceplacement-scheduler-watcher").
 		For(&fleetv1beta1.ClusterResourcePlacement{}).
-		WithEventFilter(customPredicate).
+		WithEventFilter(buildCustomPredicate()).
+		Complete(r)
+}
+
+// SetupWithManagerForResourcePlacement sets up the controller with the manager for ResourcePlacement.
+func (r *Reconciler) SetupWithManagerForResourcePlacement(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).Named("resourceplacement-scheduler-watcher").
+		For(&fleetv1beta1.ResourcePlacement{}).
+		WithEventFilter(buildCustomPredicate()).
 		Complete(r)
 }

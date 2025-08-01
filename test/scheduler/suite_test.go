@@ -579,7 +579,7 @@ func beforeSuiteForProcess1() []byte {
 		Client:             hubClient,
 		SchedulerWorkQueue: schedulerWorkQueue,
 	}
-	err = crpReconciler.SetupWithManager(ctrlMgr)
+	err = crpReconciler.SetupWithManagerForClusterResourcePlacement(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred(), "Failed to set up CRP watcher with controller manager")
 
 	policySnapshotWatcher := clusterschedulingpolicysnapshot.Reconciler{

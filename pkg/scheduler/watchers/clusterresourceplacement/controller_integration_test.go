@@ -42,6 +42,9 @@ const (
 const (
 	crpName        = "crp-1"
 	noFinalizerCRP = "crp-2"
+	rpName         = "rp-1"
+	noFinalizerRP  = "rp-2"
+	testNamespace  = "test-ns"
 )
 
 var (
@@ -57,15 +60,12 @@ var (
 
 var (
 	expectedKeySetEnqueuedActual = func() error {
-		if isAllPresent, absentKeys := keyCollector.IsPresent(crpName); !isAllPresent {
-			return fmt.Errorf("expected key(s) %v is not found", absentKeys)
-		}
+		return isKeyPresent(crpName)
+	}
 
-		if queueLen := keyCollector.Len(); queueLen != 1 {
-			return fmt.Errorf("more than one key is enqueued: current len %d, want 1", queueLen)
-		}
-
-		return nil
+	expectedRPKeySetEnqueuedActual = func() error {
+		key := testNamespace + "/" + rpName
+		return isKeyPresent(key)
 	}
 
 	noKeyEnqueuedActual = func() error {
@@ -75,6 +75,18 @@ var (
 		return nil
 	}
 )
+
+func isKeyPresent(key string) error {
+	if isAllPresent, absentKeys := keyCollector.IsPresent(key); !isAllPresent {
+		return fmt.Errorf("expected key(s) %v is not found", absentKeys)
+	}
+
+	if queueLen := keyCollector.Len(); queueLen != 1 {
+		return fmt.Errorf("more than one key is enqueued: current len %d, want 1", queueLen)
+	}
+
+	return nil
+}
 
 func TestMain(m *testing.M) {
 	// Add custom APIs to the runtime scheme.
@@ -230,6 +242,157 @@ var _ = Describe("scheduler cluster resource placement source controller", Seria
 		})
 
 		It("should enqueue the CRP when crp with finalizer is deleted", func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+		})
+
+		AfterEach(func() {
+			keyCollector.Reset()
+		})
+	})
+})
+
+var _ = Describe("scheduler resource placement source controller", Serial, Ordered, func() {
+	Context("rp created", func() {
+		BeforeAll(func() {
+			rp := &fleetv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      rpName,
+					Namespace: testNamespace,
+				},
+				Spec: fleetv1beta1.PlacementSpec{
+					ResourceSelectors: resourceSelectors,
+				},
+			}
+			Expect(hubClient.Create(ctx, rp)).Should(Succeed(), "Failed to create resource placement")
+		})
+
+		It("should not enqueue the RP when it is created", func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+		})
+
+		AfterAll(func() {
+			keyCollector.Reset()
+		})
+	})
+
+	Context("rp updated", func() {
+		BeforeAll(func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+
+			rp := &fleetv1beta1.ResourcePlacement{}
+			Expect(hubClient.Get(ctx, client.ObjectKey{Name: rpName, Namespace: testNamespace}, rp)).Should(Succeed(), "Failed to get resource placement")
+
+			rp.Spec.Policy = &fleetv1beta1.PlacementPolicy{
+				PlacementType: fleetv1beta1.PickAllPlacementType,
+				Affinity: &fleetv1beta1.Affinity{
+					ClusterAffinity: &fleetv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"foo": "bar",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(hubClient.Update(ctx, rp)).Should(Succeed(), "Failed to update resource placement")
+		})
+
+		It("should not enqueue the RP when it is updated", func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+		})
+
+		AfterEach(func() {
+			keyCollector.Reset()
+		})
+	})
+
+	Context("rp scheduler cleanup finalizer added", func() {
+		BeforeAll(func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+
+			rp := &fleetv1beta1.ResourcePlacement{}
+			Expect(hubClient.Get(ctx, client.ObjectKey{Name: rpName, Namespace: testNamespace}, rp)).Should(Succeed(), "Failed to get resource placement")
+
+			rp.Finalizers = append(rp.Finalizers, fleetv1beta1.SchedulerCleanupFinalizer)
+			Expect(hubClient.Update(ctx, rp)).Should(Succeed(), "Failed to update resource placement")
+		})
+
+		It("should not enqueue the RP when scheduler cleanup finalizer is added", func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+		})
+
+		AfterEach(func() {
+			keyCollector.Reset()
+		})
+	})
+
+	Context("rp with finalizer is deleted", func() {
+		BeforeAll(func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+
+			rp := &fleetv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      rpName,
+					Namespace: testNamespace,
+				},
+			}
+			Expect(hubClient.Delete(ctx, rp)).Should(Succeed(), "Failed to delete resource placement")
+		})
+
+		It("should enqueue the RP when rp with finalizer is deleted", func() {
+			Eventually(expectedRPKeySetEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Workqueue is empty")
+			Consistently(expectedRPKeySetEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is empty")
+		})
+
+		AfterEach(func() {
+			keyCollector.Reset()
+		})
+	})
+
+	Context("deleted rp has finalizer removed", func() {
+		BeforeAll(func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+
+			rp := &fleetv1beta1.ResourcePlacement{}
+			Expect(hubClient.Get(ctx, client.ObjectKey{Name: rpName, Namespace: testNamespace}, rp)).Should(Succeed(), "Failed to get resource placement")
+
+			rp.Finalizers = []string{}
+			Expect(hubClient.Update(ctx, rp)).Should(Succeed(), "Failed to update resource placement")
+		})
+
+		It("should not enqueue the RP when finalizer is removed from deleted rp", func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+		})
+
+		AfterEach(func() {
+			keyCollector.Reset()
+		})
+	})
+
+	Context("rp without finalizer is deleted", func() {
+		BeforeAll(func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+
+			rp := &fleetv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      noFinalizerRP,
+					Namespace: testNamespace,
+				},
+				Spec: fleetv1beta1.PlacementSpec{
+					ResourceSelectors: resourceSelectors,
+				},
+			}
+			Expect(hubClient.Create(ctx, rp)).Should(Succeed(), "Failed to create resource placement")
+			Expect(hubClient.Delete(ctx, rp)).Should(Succeed(), "Failed to delete resource placement")
+		})
+
+		It("should not enqueue the RP when rp without finalizer is deleted", func() {
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 		})
 
