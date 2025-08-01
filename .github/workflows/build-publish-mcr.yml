@@ -87,11 +87,16 @@ jobs:
         env:
           CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
           REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
-      - name: Build and publish ARC member agent helm chart
+      # Build Arc Extension for member clusters
+      # Arc-connected clusters can join fleets as member clusters through an Arc Extension.
+      # An Arc Extension is a packaged Helm chart that gets deployed to Arc clusters.
+      # This step packages both the fleet member agent and networking agents into a single
+      # Helm chart for Arc deployment, since Arc Extensions require all components to be bundled together.
+      - name: Build and publish ARC member cluster agents helm chart
         run: |
-          make helm-package-arc-member-agent
+          make helm-package-arc-member-cluster-agents
         env:
-          ARC_MEMBER_AGENT_IMAGE_VERSION: ${{ inputs.arcExtensionVersion }}
+          ARC_MEMBER_AGENT_HELMCHART_VERSION: ${{ inputs.arcExtensionVersion }}
           MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
           REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
           MCS_CONTROLLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.fleet_networking_version }}

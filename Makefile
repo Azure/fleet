@@ -12,7 +12,7 @@ HUB_AGENT_IMAGE_NAME ?= hub-agent
 MEMBER_AGENT_IMAGE_NAME ?= member-agent
 REFRESH_TOKEN_IMAGE_NAME ?= refresh-token
 CRD_INSTALLER_IMAGE_NAME ?= crd-installer
-ARC_MEMBER_AGENT_IMAGE_NAME = arc-member-cluster-agents-helm-chart
+ARC_MEMBER_AGENT_HELMCHART_NAME = arc-member-cluster-agents-helm-chart
 
 KUBECONFIG ?= $(HOME)/.kube/config
 HUB_SERVER_URL ?= https://172.19.0.2:6443
@@ -338,13 +338,13 @@ docker-build-crd-installer: docker-buildx-builder
 		--tag $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION) .
 
 # Fleet Agents and Networking Agents are packaged and pushed to MCR for Arc Extension.
-.PHONY: helm-package-arc-member-agent
-helm-package-arc-member-agent:
+.PHONY: helm-package-arc-member-cluster-agents
+helm-package-arc-member-cluster-agents:
 	envsubst < charts/member-agent-arc/values.yaml > charts/member-agent-arc/values.yaml.tmp && \
 	mv charts/member-agent-arc/values.yaml.tmp charts/member-agent-arc/values.yaml && \
-	helm package charts/member-agent-arc/ --version $(ARC_MEMBER_AGENT_IMAGE_VERSION)
+	helm package charts/member-agent-arc/ --version $(ARC_MEMBER_AGENT_HELMCHART_VERSION)
 	
-	helm push $(ARC_MEMBER_AGENT_IMAGE_NAME)-$(ARC_MEMBER_AGENT_IMAGE_VERSION).tgz oci://$(REGISTRY)
+	helm push $(ARC_MEMBER_AGENT_HELMCHART_NAME)-$(ARC_MEMBER_AGENT_HELMCHART_VERSION).tgz oci://$(REGISTRY)
 
 ## -----------------------------------
 ## Cleanup

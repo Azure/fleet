@@ -16,8 +16,7 @@ refreshtoken:
 
 logVerbosity: 5
 
-namespace: 
-  fleet-system
+namespace: fleet-system
 
 config:
   scope: ""
