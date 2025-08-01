@@ -109,6 +109,7 @@ const (
 	ParentNamespaceLabel = fleetPrefix + "parent-placement-namespace"
 
 	// CRPGenerationAnnotation indicates the generation of the CRP from which an object is derived or last updated.
+	// TODO: rename this variable
 	CRPGenerationAnnotation = fleetPrefix + "CRP-generation"
 
 	// EnvelopeConfigMapAnnotation indicates the configmap is an envelope configmap containing resources we need to apply to the member cluster instead of the configMap itself.

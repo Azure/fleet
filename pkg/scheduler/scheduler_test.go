@@ -97,11 +97,11 @@ func TestAddSchedulerCleanUpFinalizer(t *testing.T) {
 				return &fleetv1beta1.ClusterResourcePlacement{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       crpName,
-						Finalizers: []string{fleetv1beta1.ClusterResourcePlacementCleanupFinalizer},
+						Finalizers: []string{fleetv1beta1.PlacementCleanupFinalizer},
 					},
 				}
 			},
-			wantFinalizers: []string{fleetv1beta1.ClusterResourcePlacementCleanupFinalizer, fleetv1beta1.SchedulerCleanupFinalizer},
+			wantFinalizers: []string{fleetv1beta1.PlacementCleanupFinalizer, fleetv1beta1.SchedulerCleanupFinalizer},
 		},
 	}
 
@@ -181,12 +181,12 @@ func TestCleanUpAllBindingsFor(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:              crpName,
 						DeletionTimestamp: &now,
-						Finalizers:        []string{fleetv1beta1.SchedulerCleanupFinalizer, fleetv1beta1.ClusterResourcePlacementCleanupFinalizer},
+						Finalizers:        []string{fleetv1beta1.SchedulerCleanupFinalizer, fleetv1beta1.PlacementCleanupFinalizer},
 					},
 				}
 			},
 			existingBindings:      []fleetv1beta1.BindingObj{},
-			wantFinalizers:        []string{fleetv1beta1.ClusterResourcePlacementCleanupFinalizer},
+			wantFinalizers:        []string{fleetv1beta1.PlacementCleanupFinalizer},
 			wantRemainingBindings: []fleetv1beta1.BindingObj{},
 		},
 		{

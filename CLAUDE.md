@@ -98,9 +98,13 @@ make docker-build-refresh-token
 ## Architecture Overview
 
 ### Core API Types
-- **ClusterResourcePlacement (CRP)**: Main API for placing resources across clusters with scheduling policies
-- **MemberCluster**: Represents a member cluster with identity and heartbeat settings  
-- **ClusterResourceBinding**: Represents scheduling decisions binding resources to clusters
+- **ClusterResourcePlacement (CRP)**: Main API for placing cluster scoped resources across clusters with scheduling policies. If one namespace is selected, we will place everything in that namespace across clusters.
+- **ResourcePlacement (RP)**: Main API for placing namespaced resources across clusters with scheduling policies.
+- **MemberCluster**: Represents a member cluster with identity and heartbeat settings
+- **ClusterResourceBinding**: Represents scheduling decisions binding cluster scoped resources to clusters
+- **ResourceBinding**: Represents scheduling decisions binding resources to clusters
+- **ClusterResourceSnapshot**: Immutable snapshot of cluster resource state for rollback and history
+- **ResourceSnapshot**: Immutable snapshot of namespaced resource state for rollback and history
 - **Work**: Contains manifests to be applied on member clusters
 - **ClusterResourceSnapshot**: Immutable snapshots of resources to be placed
 - **ClusterSchedulingPolicySnapshot**: Immutable snapshots of scheduling policies
@@ -108,6 +112,7 @@ make docker-build-refresh-token
 ### Key Controllers
 - **ClusterResourcePlacement Controller** (`pkg/controllers/clusterresourceplacement/`): Manages CRP lifecycle
 - **Scheduler** (`pkg/scheduler/`): Makes placement decisions using pluggable framework
+- **Rollout Controller** (`pkg/controllers/rollout/`): Manages rollout the changes to all the clusters that a placement decision has been made for
 - **WorkGenerator** (`pkg/controllers/workgenerator/`): Generates Work objects from bindings
 - **WorkApplier** (`pkg/controllers/workapplier/`): Applies Work manifests on member clusters
 - **Resource Placement Watchers**: Monitor and react to changes in placement decisions

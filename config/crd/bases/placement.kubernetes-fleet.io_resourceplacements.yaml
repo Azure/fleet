@@ -524,7 +524,7 @@ spec:
                   You can have 1-100 selectors.
                 items:
                   description: |-
-                    ClusterResourceSelector is used to select cluster scoped resources as the target resources to be placed.
+                    ClusterResourceSelector is used to select resources as the target resources to be placed.
                     All the fields are `ANDed`. In other words, a resource must match all the fields to be selected.
                   properties:
                     group:
@@ -602,7 +602,7 @@ spec:
               revisionHistoryLimit:
                 default: 10
                 description: |-
-                  The number of old ClusterSchedulingPolicySnapshot or ClusterResourceSnapshot resources to retain to allow rollback.
+                  The number of old SchedulingPolicySnapshot or ResourceSnapshot resources to retain to allow rollback.
                   This is a pointer to distinguish between explicit zero and not specified.
                   Defaults to 10.
                 format: int32

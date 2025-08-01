@@ -436,7 +436,7 @@ spec:
                       We only support Name selector for now.
                     items:
                       description: |-
-                        ClusterResourceSelector is used to select cluster scoped resources as the target resources to be placed.
+                        ClusterResourceSelector is used to select resources as the target resources to be placed.
                         All the fields are `ANDed`. In other words, a resource must match all the fields to be selected.
                       properties:
                         group:
@@ -815,7 +815,7 @@ spec:
                       We only support Name selector for now.
                     items:
                       description: |-
-                        ClusterResourceSelector is used to select cluster scoped resources as the target resources to be placed.
+                        ClusterResourceSelector is used to select resources as the target resources to be placed.
                         All the fields are `ANDed`. In other words, a resource must match all the fields to be selected.
                       properties:
                         group:

@@ -96,7 +96,7 @@ func TestHandle(t *testing.T) {
 			DeletionTimestamp: &metav1.Time{
 				Time: time.Now().Add(10 * time.Minute),
 			},
-			Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+			Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 		},
 		Spec: placementv1beta1.PlacementSpec{
 			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{},

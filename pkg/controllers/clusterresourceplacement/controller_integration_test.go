@@ -413,7 +413,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       testCRPName,
-					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+					Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.PlacementStatus{
@@ -452,7 +452,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       testCRPName,
-					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+					Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.PlacementStatus{
@@ -509,7 +509,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       testCRPName,
-					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+					Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.PlacementStatus{
@@ -568,7 +568,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       testCRPName,
-					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+					Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.PlacementStatus{
@@ -778,7 +778,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       testCRPName,
-					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+					Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.PlacementStatus{
@@ -1172,7 +1172,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       testCRPName,
-					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+					Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.PlacementStatus{
@@ -1430,7 +1430,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       testCRPName,
-					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+					Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.PlacementStatus{
@@ -1471,7 +1471,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       testCRPName,
-					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+					Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.PlacementStatus{
@@ -1654,7 +1654,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       testCRPName,
-					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+					Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.PlacementStatus{
@@ -1935,7 +1935,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       testCRPName,
-					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+					Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.PlacementStatus{
@@ -2008,7 +2008,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       testCRPName,
-					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+					Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.PlacementStatus{
@@ -2056,7 +2056,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       testCRPName,
-					Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+					Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.PlacementStatus{

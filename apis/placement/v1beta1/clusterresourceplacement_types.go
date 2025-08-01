@@ -27,12 +27,12 @@ import (
 )
 
 const (
-	// ClusterResourcePlacementCleanupFinalizer is a finalizer added by the CRP controller to all CRPs, to make sure
-	// that the CRP controller can react to CRP deletions if necessary.
-	ClusterResourcePlacementCleanupFinalizer = fleetPrefix + "crp-cleanup"
+	// PlacementCleanupFinalizer is a finalizer added by the placement controller to all placement objects, to make sure
+	// that the placement controller can react to placement object deletions if necessary.
+	PlacementCleanupFinalizer = fleetPrefix + "crp-cleanup"
 
-	// SchedulerCleanupFinalizer is a finalizer added by the scheduler to CRPs, to make sure
-	// that all bindings derived from a CRP can be cleaned up after the CRP is deleted.
+	// SchedulerCleanupFinalizer is a finalizer added by the scheduler to placement objects, to make sure
+	// that all bindings derived from a placement object can be cleaned up after the placement object is deleted.
 	SchedulerCleanupFinalizer = fleetPrefix + "scheduler-cleanup"
 )
 
@@ -140,7 +140,7 @@ type PlacementSpec struct {
 	// +patchStrategy=retainKeys
 	Strategy RolloutStrategy `json:"strategy,omitempty"`
 
-	// The number of old ClusterSchedulingPolicySnapshot or ClusterResourceSnapshot resources to retain to allow rollback.
+	// The number of old SchedulingPolicySnapshot or ResourceSnapshot resources to retain to allow rollback.
 	// This is a pointer to distinguish between explicit zero and not specified.
 	// Defaults to 10.
 	// +kubebuilder:validation:Minimum=1
@@ -159,7 +159,8 @@ func (p *PlacementSpec) Tolerations() []Toleration {
 }
 
 // TODO: rename this to ResourceSelectorTerm
-// ClusterResourceSelector is used to select cluster scoped resources as the target resources to be placed.
+
+// ClusterResourceSelector is used to select resources as the target resources to be placed.
 // All the fields are `ANDed`. In other words, a resource must match all the fields to be selected.
 type ClusterResourceSelector struct {
 	// Group name of the cluster-scoped resource.

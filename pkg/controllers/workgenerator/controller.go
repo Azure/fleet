@@ -720,7 +720,7 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 	}
 	// get the placement key from the resource binding
 	placemenKey := controller.GetObjectKeyFromNamespaceName(resourceBinding.GetNamespace(), resourceBinding.GetLabels()[fleetv1beta1.PlacementTrackingLabel])
-	return controller.FetchAllResourceSnapshots(ctx, r.Client, placemenKey, masterResourceSnapshot)
+	return controller.FetchAllResourceSnapshotsAlongWithMaster(ctx, r.Client, placemenKey, masterResourceSnapshot)
 }
 
 // generateSnapshotWorkObj generates the work object for the corresponding snapshot
@@ -786,7 +786,7 @@ func (r *Reconciler) upsertWork(ctx context.Context, newWork, existingWork *flee
 		klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "work has invalid parent resource index", "work", workObj)
 	} else {
 		// we already checked the label in fetchAllResourceSnapShots function so no need to check again
-		resourceIndex, _ := labels.ExtractResourceIndexFromClusterResourceSnapshot(resourceSnapshot)
+		resourceIndex, _ := labels.ExtractResourceIndexFromResourceSnapshot(resourceSnapshot)
 		if workResourceIndex == resourceIndex {
 			// no need to do anything if the work is generated from the same resource/override snapshots.
 			// Note that apply strategy is updated separately beforehand.

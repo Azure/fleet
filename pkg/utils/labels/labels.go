@@ -26,8 +26,8 @@ import (
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 )
 
-// ExtractResourceIndexFromClusterResourceSnapshot extracts the resource index from the label of a clusterResourceSnapshot.
-func ExtractResourceIndexFromClusterResourceSnapshot(snapshot client.Object) (int, error) {
+// ExtractResourceIndexFromResourceSnapshot extracts the resource index from the label of a type of resourceSnapshot.
+func ExtractResourceIndexFromResourceSnapshot(snapshot client.Object) (int, error) {
 	return ExtractIndex(snapshot, fleetv1beta1.ResourceIndexLabel)
 }
 
@@ -42,6 +42,22 @@ func ExtractIndex(object client.Object, labelKey string) (int, error) {
 	v, err := strconv.Atoi(indexStr)
 	if err != nil || v < 0 {
 		return -1, fmt.Errorf("invalid resource index %q, error: %w", indexStr, err)
+	}
+	return v, nil
+}
+
+// ParsePolicyIndexFromLabel extracts and validates the policy index from a ClusterSchedulingPolicySnapshot label.
+// Works with both ClusterSchedulingPolicySnapshot and PolicySnapshot interfaces.
+func ParsePolicyIndexFromLabel(policySnapshot client.Object) (int, error) {
+	labels := policySnapshot.GetLabels()
+	if labels == nil {
+		return -1, fmt.Errorf("no labels found on policy snapshot")
+	}
+
+	indexLabel := labels[fleetv1beta1.PolicyIndexLabel]
+	v, err := strconv.Atoi(indexLabel)
+	if err != nil || v < 0 {
+		return -1, fmt.Errorf("invalid policy index %q, error: %w", indexLabel, err)
 	}
 	return v, nil
 }
