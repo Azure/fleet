@@ -173,8 +173,7 @@ var (
 )
 
 var (
-	drainBinaryPath    = filepath.Join("../../", "hack", "tools", "bin", "kubectl-draincluster")
-	uncordonBinaryPath = filepath.Join("../../", "hack", "tools", "bin", "kubectl-uncordoncluster")
+	fleetBinaryPath = filepath.Join("../../", "hack", "tools", "bin", "kubectl-fleet")
 )
 
 var (
@@ -376,11 +375,9 @@ func beforeSuiteForAllProcesses() {
 			allMemberClusterNames = append(allMemberClusterNames, allMemberClusters[i].ClusterName)
 		}
 
-		// Check if drain cluster and uncordon cluster binaries exist.
-		_, err := os.Stat(drainBinaryPath)
-		Expect(os.IsNotExist(err)).To(BeFalse(), fmt.Sprintf("drain binary not found at %s", drainBinaryPath))
-		_, err = os.Stat(uncordonBinaryPath)
-		Expect(os.IsNotExist(err)).To(BeFalse(), fmt.Sprintf("uncordon binary not found at %s", uncordonBinaryPath))
+		// Check if kubectl-fleet binary exists.
+		_, err := os.Stat(fleetBinaryPath)
+		Expect(os.IsNotExist(err)).To(BeFalse(), fmt.Sprintf("kubectl-fleet binary not found at %s", fleetBinaryPath))
 	})
 }
 

@@ -215,10 +215,6 @@ done
 # Create tools directory if it doesn't exist
 mkdir -p ../../hack/tools/bin
 
-# Build drain binary
-echo "Building drain binary..."
-go build -o ../../hack/tools/bin/kubectl-draincluster ../../tools/draincluster
-
-# Build uncordon binary
-echo "Building uncordon binary..."
-go build -o ../../hack/tools/bin/kubectl-uncordoncluster ../../tools/uncordoncluster
+# Build fleet plugin binary
+echo "Building fleet kubectl-plugin binary..."
+go build -o ../../hack/tools/bin/kubectl-fleet ../../tools/fleet

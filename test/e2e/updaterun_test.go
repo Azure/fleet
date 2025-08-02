@@ -18,6 +18,7 @@ package e2e
 
 import (
 	"fmt"
+	"os/exec"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1029,6 +1030,127 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 		It("Should update crp status as completed with new snapshot", func() {
 			crpStatusUpdatedActual := crpStatusWithExternalStrategyActual(workResourceIdentifiers(), resourceSnapshotIndex2nd, true, allMemberClusterNames,
 				[]string{resourceSnapshotIndex2nd, resourceSnapshotIndex2nd, resourceSnapshotIndex2nd}, []bool{true, true, true}, nil, nil)
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+		})
+	})
+
+	Context("Test kubectl-fleet approve plugin with cluster approval requests", Ordered, func() {
+		var strategy *placementv1beta1.ClusterStagedUpdateStrategy
+		updateRunName := fmt.Sprintf(updateRunNameWithSubIndexTemplate, GinkgoParallelProcess(), 0)
+
+		BeforeAll(func() {
+			// Create a test namespace and a configMap inside it on the hub cluster.
+			createWorkResources()
+
+			// Create the CRP with external rollout strategy.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.ExternalRolloutStrategyType,
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+
+			// Create the clusterStagedUpdateStrategy.
+			strategy = createStagedUpdateStrategySucceed(strategyName)
+		})
+
+		AfterAll(func() {
+			// Remove the custom deletion blocker finalizer from the CRP.
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+
+			// Delete the clusterStagedUpdateRun.
+			ensureUpdateRunDeletion(updateRunName)
+
+			// Delete the clusterStagedUpdateStrategy.
+			ensureUpdateRunStrategyDeletion(strategyName)
+		})
+
+		It("Should create a staged update run and verify cluster approval request is created", func() {
+			validateLatestResourceSnapshot(crpName, resourceSnapshotIndex1st)
+			validateLatestPolicySnapshot(crpName, policySnapshotIndex1st, 3)
+			createStagedUpdateRunSucceed(updateRunName, crpName, resourceSnapshotIndex1st, strategyName)
+
+			// Verify that cluster approval request is created for canary stage.
+			Eventually(func() error {
+				appReqList := &placementv1beta1.ClusterApprovalRequestList{}
+				if err := hubClient.List(ctx, appReqList, client.MatchingLabels{
+					placementv1beta1.TargetUpdatingStageNameLabel: envCanary,
+					placementv1beta1.TargetUpdateRunLabel:         updateRunName,
+				}); err != nil {
+					return fmt.Errorf("failed to list approval requests: %w", err)
+				}
+
+				if len(appReqList.Items) != 1 {
+					return fmt.Errorf("want 1 approval request, got %d", len(appReqList.Items))
+				}
+				return nil
+			}, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to find cluster approval request")
+		})
+
+		It("Should approve cluster approval request using kubectl-fleet approve plugin", func() {
+			var approvalRequestName string
+
+			// Get the cluster approval request name.
+			Eventually(func() error {
+				appReqList := &placementv1beta1.ClusterApprovalRequestList{}
+				if err := hubClient.List(ctx, appReqList, client.MatchingLabels{
+					placementv1beta1.TargetUpdatingStageNameLabel: envCanary,
+					placementv1beta1.TargetUpdateRunLabel:         updateRunName,
+				}); err != nil {
+					return fmt.Errorf("failed to list approval requests: %w", err)
+				}
+
+				if len(appReqList.Items) != 1 {
+					return fmt.Errorf("want 1 approval request, got %d", len(appReqList.Items))
+				}
+
+				approvalRequestName = appReqList.Items[0].Name
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to get approval request name")
+
+			// Use kubectl-fleet approve plugin to approve the request
+			cmd := exec.Command(fleetBinaryPath, "approve", "clusterapprovalrequest",
+				"--hubClusterContext", "kind-hub",
+				"--name", approvalRequestName)
+			output, err := cmd.CombinedOutput()
+			Expect(err).ToNot(HaveOccurred(), "kubectl-fleet approve failed: %s", string(output))
+
+			// Verify the approval request is approved
+			Eventually(func() error {
+				var appReq placementv1beta1.ClusterApprovalRequest
+				if err := hubClient.Get(ctx, client.ObjectKey{Name: approvalRequestName}, &appReq); err != nil {
+					return fmt.Errorf("failed to get approval request: %w", err)
+				}
+
+				approvedCondition := meta.FindStatusCondition(appReq.Status.Conditions, string(placementv1beta1.ApprovalRequestConditionApproved))
+				if approvedCondition == nil {
+					return fmt.Errorf("approved condition not found")
+				}
+				if approvedCondition.Status != metav1.ConditionTrue {
+					return fmt.Errorf("approved condition status is %s, want True", approvedCondition.Status)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to verify approval request is approved")
+		})
+
+		It("Should complete the staged update run after approval", func() {
+			updateRunSucceededActual := updateRunStatusSucceededActual(updateRunName, policySnapshotIndex1st, len(allMemberClusters), defaultApplyStrategy, &strategy.Spec, [][]string{{allMemberClusterNames[1]}, {allMemberClusterNames[0], allMemberClusterNames[2]}}, nil, nil, nil)
+			Eventually(updateRunSucceededActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to validate updateRun %s succeeded", updateRunName)
+			checkIfPlacedWorkResourcesOnMemberClustersInUpdateRun(allMemberClusters)
+		})
+
+		It("Should update crp status as completed", func() {
+			crpStatusUpdatedActual := crpStatusWithExternalStrategyActual(workResourceIdentifiers(), resourceSnapshotIndex1st, true, allMemberClusterNames,
+				[]string{resourceSnapshotIndex1st, resourceSnapshotIndex1st, resourceSnapshotIndex1st}, []bool{true, true, true}, nil, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 		})
 	})

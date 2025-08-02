@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package draincluster
 
 import (
 	"context"
@@ -156,7 +156,7 @@ func TestFetchClusterResourcePlacementNamesToEvict(t *testing.T) {
 				WithScheme(scheme).
 				WithObjects(objects...).
 				Build()
-			h := helper{
+			h := &drainOptions{
 				hubClient:   fakeClient,
 				clusterName: tc.targetCluster,
 			}
@@ -273,7 +273,7 @@ func TestCollectClusterScopedResourcesSelectedByCRP(t *testing.T) {
 				WithObjects(objects...).
 				Build()
 
-			h := helper{
+			h := &drainOptions{
 				hubClient: fakeClient,
 			}
 
@@ -479,7 +479,7 @@ func TestCordon(t *testing.T) {
 				WithObjects(objects...).
 				Build()
 
-			h := helper{
+			h := &drainOptions{
 				hubClient:   fakeClient,
 				clusterName: "test-cluster",
 			}
