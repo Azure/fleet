@@ -1248,11 +1248,81 @@ const (
 type ResourcePlacementConditionType string
 
 const (
+	// ResourcePlacemenScheduledConditionType indicates whether we have successfully scheduled the
+	// ResourcePlacemen.
+	// Its condition status can be one of the following:
+	// - "True" means we have successfully scheduled the resources to fully satisfy the placement requirement.
+	// - "False" means we didn't fully satisfy the placement requirement. We will fill the Reason field.
+	// - "Unknown" means we don't have a scheduling decision yet.
+	ResourcePlacemenScheduledConditionType ResourcePlacementConditionType = "ResourcePlacemenScheduled"
+
+	// ResourcePlacemenRolloutStartedConditionType indicates whether the selected resources start rolling out or
+	// not.
+	// Its condition status can be one of the following:
+	// - "True" means the selected resources successfully start rolling out in all scheduled clusters.
+	// - "False" means the selected resources have not been rolled out in all scheduled clusters yet.
+	// - "Unknown" means we don't have a rollout decision yet.
+	ResourcePlacemenRolloutStartedConditionType ResourcePlacementConditionType = "ResourcePlacemenRolloutStarted"
+
+	// ResourcePlacemenOverriddenConditionType indicates whether all the selected resources have been overridden
+	// successfully before applying to the target cluster.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are successfully overridden before applying to the target cluster or
+	// override is not needed if there is no override defined with the reason of NoOverrideSpecified.
+	// - "False" means some of them have failed.
+	// - "Unknown" means we haven't finished the override yet.
+	ResourcePlacemenOverriddenConditionType ResourcePlacementConditionType = "ResourcePlacemenOverridden"
+
+	// ResourcePlacemenWorkSynchronizedConditionType indicates whether the selected resources are created or updated
+	// under the per-cluster namespaces (i.e., fleet-member-<member-name>) on the hub cluster.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are successfully created or updated under the per-cluster namespaces
+	// (i.e., fleet-member-<member-name>) on the hub cluster.
+	// - "False" means all the selected resources have not been created or updated under the per-cluster namespaces
+	// (i.e., fleet-member-<member-name>) on the hub cluster yet.
+	// - "Unknown" means we haven't started processing the work yet.
+	ResourcePlacemenWorkSynchronizedConditionType ResourcePlacementConditionType = "ResourcePlacemenWorkSynchronized"
+
+	// ResourcePlacemenAppliedConditionType indicates whether all the selected member clusters have applied
+	// the selected resources locally.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are successfully applied to all the target clusters or apply is not needed
+	// if there are no cluster(s) selected by the scheduler.
+	// - "False" means some of them have failed. We will place some of the detailed failure in the FailedResourcePlacement array.
+	// - "Unknown" means we haven't finished the apply yet.
+	ResourcePlacemenAppliedConditionType ResourcePlacementConditionType = "ResourcePlacemenApplied"
+
+	// ResourcePlacemenAvailableConditionType indicates whether the selected resources are available on all the
+	// selected member clusters.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are available on all the selected member clusters.
+	// - "False" means some of them are not available yet. We will place some of the detailed failure in the FailedResourcePlacement
+	// array.
+	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
+	ResourcePlacemenAvailableConditionType ResourcePlacementConditionType = "ResourcePlacemenAvailable"
+
+	// ResourcePlacemenDiffReportedConditionType indicates whether Fleet has reported
+	// configuration differences between the desired states of resources as kept in the hub cluster
+	// and the current states on the all member clusters.
+	//
+	// It can have the following condition statuses:
+	// * True: Fleet has reported complete sets of configuration differences on all member clusters.
+	// * False: Fleet has not yet reported complete sets of configuration differences on some member
+	//   clusters, or an error has occurred.
+	// * Unknown: Fleet has not finished processing the diff reporting yet.
+	ResourcePlacemenDiffReportedConditionType ResourcePlacementConditionType = "ResourcePlacemenDiffReported"
+)
+
+// PlacementConditionType defines a specific condition of a resource placement.
+// +enum
+type PlacementConditionType string
+
+const (
 	// ResourceScheduledConditionType indicates whether we have successfully scheduled the selected resources.
 	// Its condition status can be one of the following:
 	// - "True" means we have successfully scheduled the resources to satisfy the placement requirement.
 	// - "False" means we didn't fully satisfy the placement requirement. We will fill the Message field.
-	ResourceScheduledConditionType ResourcePlacementConditionType = "Scheduled"
+	ResourceScheduledConditionType PlacementConditionType = "Scheduled"
 
 	// ResourceRolloutStartedConditionType indicates whether the selected resources start rolling out or
 	// not.
@@ -1261,7 +1331,7 @@ const (
 	// - "False" means the selected resources have not been rolled out in the target cluster yet to honor the rollout
 	// strategy configurations specified in the placement
 	// - "Unknown" means it is in the processing state.
-	ResourceRolloutStartedConditionType ResourcePlacementConditionType = "RolloutStarted"
+	ResourceRolloutStartedConditionType PlacementConditionType = "RolloutStarted"
 
 	// ResourceOverriddenConditionType indicates whether all the selected resources have been overridden successfully
 	// before applying to the target cluster if there is any override defined.
@@ -1270,7 +1340,7 @@ const (
 	// override is not needed if there is no override defined with the reason of NoOverrideSpecified.
 	// - "False" means some of them have failed.
 	// - "Unknown" means we haven't finished the override yet.
-	ResourceOverriddenConditionType ResourcePlacementConditionType = "Overridden"
+	ResourceOverriddenConditionType PlacementConditionType = "Overridden"
 
 	// ResourceWorkSynchronizedConditionType indicates whether we have created or updated the corresponding work object(s)
 	// under the per-cluster namespaces (i.e., fleet-member-<member-name>) which have the latest resources selected by
@@ -1281,21 +1351,21 @@ const (
 	// - "False" means we have not created the latest corresponding work(s) or updated the existing work(s) to the latest
 	// yet.
 	// - "Unknown" means we haven't finished creating work yet.
-	ResourceWorkSynchronizedConditionType ResourcePlacementConditionType = "WorkSynchronized"
+	ResourceWorkSynchronizedConditionType PlacementConditionType = "WorkSynchronized"
 
 	// ResourcesAppliedConditionType indicates whether the selected member cluster has applied the selected resources locally.
 	// Its condition status can be one of the following:
 	// - "True" means all the selected resources are successfully applied to the target cluster.
 	// - "False" means some of them have failed.
 	// - "Unknown" means we haven't finished the apply yet.
-	ResourcesAppliedConditionType ResourcePlacementConditionType = "Applied"
+	ResourcesAppliedConditionType PlacementConditionType = "Applied"
 
 	// ResourcesAvailableConditionType indicates whether the selected resources are available on the selected member cluster.
 	// Its condition status can be one of the following:
 	// - "True" means all the selected resources are available on the target cluster.
 	// - "False" means some of them are not available yet.
 	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
-	ResourcesAvailableConditionType ResourcePlacementConditionType = "Available"
+	ResourcesAvailableConditionType PlacementConditionType = "Available"
 
 	// ResourceDiffReportedConditionType indicates whether Fleet has reported configuration
 	// differences between the desired states of resources as kept in the hub cluster and the
@@ -1306,7 +1376,7 @@ const (
 	// * False: Fleet has not yet reported the complete set of configuration differences on the
 	//   member cluster, or an error has occurred.
 	// * Unknown: Fleet has not finished processing the diff reporting yet.
-	ResourcesDiffReportedConditionType ResourcePlacementConditionType = "DiffReported"
+	ResourcesDiffReportedConditionType PlacementConditionType = "DiffReported"
 )
 
 // PlacementType identifies the type of placement.

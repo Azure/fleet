@@ -127,9 +127,9 @@ func (c ResourceCondition) EventMessageForTrue() string {
 	}[c]
 }
 
-// ResourcePlacementConditionType returns the resource condition type per cluster used by cluster resource placement.
-func (c ResourceCondition) ResourcePlacementConditionType() fleetv1beta1.ResourcePlacementConditionType {
-	return []fleetv1beta1.ResourcePlacementConditionType{
+// PlacementConditionType returns the resource condition type per cluster used by a placement.
+func (c ResourceCondition) PlacementConditionType() fleetv1beta1.PlacementConditionType {
+	return []fleetv1beta1.PlacementConditionType{
 		fleetv1beta1.ResourceRolloutStartedConditionType,
 		fleetv1beta1.ResourceOverriddenConditionType,
 		fleetv1beta1.ResourceWorkSynchronizedConditionType,
