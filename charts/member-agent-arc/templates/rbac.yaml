@@ -1,0 +1,23 @@
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: fleet-member-agent-cluster-admin-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: fleet-member-agent-sa
+    namespace: fleet-system
+---
+apiVersion: clusterconfig.azure.com/v1beta1
+kind: AzureExtensionIdentity
+metadata:
+  name: {{ .Values.Azure.Extension.Name }} 
+  namespace: azure-arc # this must be azure-arc, do not change
+spec:
+  serviceAccounts: # this would the service accounts that are mounted in the extension pods which require azure identity
+  - name: fleet-member-agent-sa
+    namespace: fleet-system
+  tokenNamespace: fleet-system # namespace where Arc extension would be deployed
