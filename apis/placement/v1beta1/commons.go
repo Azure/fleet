@@ -21,6 +21,10 @@ const (
 	ClusterResourcePlacementKind = "ClusterResourcePlacement"
 	// ClusterResourcePlacementResource represents the resource name for ClusterResourcePlacement.
 	ClusterResourcePlacementResource = "clusterresourceplacements"
+	// ResourcePlacementKind represents the kind of ResourcePlacement.
+	ResourcePlacementKind = "ResourcePlacement"
+	// ResourcePlacementResource represents the resource name for ResourcePlacement.
+	ResourcePlacementResource = "resourceplacements"
 	// ClusterResourceBindingKind represents the kind of ClusterResourceBinding.
 	ClusterResourceBindingKind = "ClusterResourceBinding"
 	// ClusterResourceSnapshotKind represents the kind of ClusterResourceSnapshot.

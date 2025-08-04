@@ -165,6 +165,12 @@ var (
 		Resource: placementv1beta1.ClusterResourcePlacementResource,
 	}
 
+	ResourcePlacementGVR = schema.GroupVersionResource{
+		Group:    placementv1beta1.GroupVersion.Group,
+		Version:  placementv1beta1.GroupVersion.Version,
+		Resource: placementv1beta1.ResourcePlacementResource,
+	}
+
 	ClusterResourcePlacementMetaGVK = metav1.GroupVersionKind{
 		Group:   placementv1beta1.GroupVersion.Group,
 		Version: placementv1beta1.GroupVersion.Version,
