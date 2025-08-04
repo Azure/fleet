@@ -182,7 +182,7 @@ var _ = Describe("take over existing resources", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -196,7 +196,7 @@ var _ = Describe("take over existing resources", func() {
 										Namespace: nsName,
 									},
 									Condition: metav1.Condition{
-										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+										Type:               string(placementv1beta1.PerClusterAppliedConditionType),
 										Status:             metav1.ConditionFalse,
 										ObservedGeneration: 0,
 										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
@@ -354,7 +354,7 @@ var _ = Describe("take over existing resources", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -367,7 +367,7 @@ var _ = Describe("take over existing resources", func() {
 										Name:    nsName,
 									},
 									Condition: metav1.Condition{
-										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+										Type:               string(placementv1beta1.PerClusterAppliedConditionType),
 										Status:             metav1.ConditionFalse,
 										ObservedGeneration: 0,
 										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
@@ -381,7 +381,7 @@ var _ = Describe("take over existing resources", func() {
 										Namespace: nsName,
 									},
 									Condition: metav1.Condition{
-										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+										Type:               string(placementv1beta1.PerClusterAppliedConditionType),
 										Status:             metav1.ConditionFalse,
 										ObservedGeneration: 0,
 										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
@@ -559,7 +559,7 @@ var _ = Describe("detect drifts on placed resources", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpRolloutCompletedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -698,7 +698,7 @@ var _ = Describe("detect drifts on placed resources", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -712,7 +712,7 @@ var _ = Describe("detect drifts on placed resources", func() {
 										Namespace: nsName,
 									},
 									Condition: metav1.Condition{
-										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+										Type:               string(placementv1beta1.PerClusterAppliedConditionType),
 										Status:             metav1.ConditionFalse,
 										ObservedGeneration: 0,
 										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFoundDrifts),
@@ -882,7 +882,7 @@ var _ = Describe("detect drifts on placed resources", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -895,7 +895,7 @@ var _ = Describe("detect drifts on placed resources", func() {
 										Name:    nsName,
 									},
 									Condition: metav1.Condition{
-										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+										Type:               string(placementv1beta1.PerClusterAppliedConditionType),
 										Status:             metav1.ConditionFalse,
 										ObservedGeneration: 0,
 										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFoundDrifts),
@@ -909,7 +909,7 @@ var _ = Describe("detect drifts on placed resources", func() {
 										Namespace: nsName,
 									},
 									Condition: metav1.Condition{
-										Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+										Type:               string(placementv1beta1.PerClusterAppliedConditionType),
 										Status:             metav1.ConditionFalse,
 										ObservedGeneration: 0,
 										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFoundDrifts),
@@ -1087,7 +1087,7 @@ var _ = Describe("report diff mode", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpDiffReportedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -1296,7 +1296,7 @@ var _ = Describe("report diff mode", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpDiffReportedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -1513,7 +1513,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 						Group:     "apps",
 					},
 				},
-				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+				PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 					{
 						ClusterName:           memberCluster1EastProdName,
 						ObservedResourceIndex: "0",
@@ -1528,7 +1528,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 									Namespace: nsName,
 								},
 								Condition: metav1.Condition{
-									Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+									Type:               string(placementv1beta1.PerClusterAppliedConditionType),
 									Status:             metav1.ConditionFalse,
 									ObservedGeneration: 1,
 									Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
@@ -1569,7 +1569,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 									Namespace: nsName,
 								},
 								Condition: metav1.Condition{
-									Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+									Type:               string(placementv1beta1.PerClusterAppliedConditionType),
 									Status:             metav1.ConditionFalse,
 									ObservedGeneration: 2,
 									Reason:             string(workapplier.ManifestProcessingApplyResultTypeFoundDrifts),
@@ -1608,7 +1608,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 									Name:    nsName,
 								},
 								Condition: metav1.Condition{
-									Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+									Type:               string(placementv1beta1.PerClusterAppliedConditionType),
 									Status:             metav1.ConditionFalse,
 									ObservedGeneration: 0,
 									Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
@@ -1623,7 +1623,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 									Namespace: nsName,
 								},
 								Condition: metav1.Condition{
-									Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+									Type:               string(placementv1beta1.PerClusterAppliedConditionType),
 									Status:             metav1.ConditionFalse,
 									ObservedGeneration: 2,
 									Reason:             string(workapplier.ManifestProcessingApplyResultTypeFoundDrifts),
@@ -1760,7 +1760,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 						Namespace: nsName,
 					},
 				},
-				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+				PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 					{
 						ClusterName:           memberCluster1EastProdName,
 						ObservedResourceIndex: "0",
@@ -1775,7 +1775,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 									Namespace: nsName,
 								},
 								Condition: metav1.Condition{
-									Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+									Type:               string(placementv1beta1.PerClusterAppliedConditionType),
 									Status:             metav1.ConditionFalse,
 									ObservedGeneration: 2,
 									Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
@@ -1816,7 +1816,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 									Namespace: nsName,
 								},
 								Condition: metav1.Condition{
-									Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+									Type:               string(placementv1beta1.PerClusterAppliedConditionType),
 									Status:             metav1.ConditionFalse,
 									ObservedGeneration: 3,
 									Reason:             string(workapplier.ManifestProcessingApplyResultTypeFoundDrifts),
@@ -1855,7 +1855,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 									Name:    nsName,
 								},
 								Condition: metav1.Condition{
-									Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+									Type:               string(placementv1beta1.PerClusterAppliedConditionType),
 									Status:             metav1.ConditionFalse,
 									ObservedGeneration: 0,
 									Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
@@ -1870,7 +1870,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 									Namespace: nsName,
 								},
 								Condition: metav1.Condition{
-									Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+									Type:               string(placementv1beta1.PerClusterAppliedConditionType),
 									Status:             metav1.ConditionFalse,
 									ObservedGeneration: 2,
 									Reason:             string(workapplier.ManifestProcessingApplyResultTypeFoundDrifts),
@@ -1997,7 +1997,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 						Namespace: nsName,
 					},
 				},
-				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+				PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 					{
 						ClusterName:           memberCluster1EastProdName,
 						ObservedResourceIndex: "0",
@@ -2024,7 +2024,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 									Name:    nsName,
 								},
 								Condition: metav1.Condition{
-									Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+									Type:               string(placementv1beta1.PerClusterAppliedConditionType),
 									Status:             metav1.ConditionFalse,
 									ObservedGeneration: 0,
 									Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
@@ -2039,7 +2039,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 									Namespace: nsName,
 								},
 								Condition: metav1.Condition{
-									Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+									Type:               string(placementv1beta1.PerClusterAppliedConditionType),
 									Status:             metav1.ConditionFalse,
 									ObservedGeneration: 2,
 									Reason:             string(workapplier.ManifestProcessingApplyResultTypeFoundDrifts),
@@ -2151,7 +2151,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 						Namespace: nsName,
 					},
 				},
-				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+				PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 					{
 						ClusterName:           memberCluster1EastProdName,
 						ObservedResourceIndex: observedResourceIndex,

@@ -3584,7 +3584,7 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 	tests := []struct {
 		name                          string
 		selected                      []*fleetv1beta1.ClusterDecision
-		allRPS                        []fleetv1beta1.ResourcePlacementStatus
+		allRPS                        []fleetv1beta1.PerClusterPlacementStatus
 		resourceSnapshots             []*fleetv1beta1.ClusterResourceSnapshot
 		selectedResources             []fleetv1beta1.ResourceIdentifier
 		existingObservedResourceIndex string
@@ -3598,7 +3598,7 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 		{
 			name:               "no selected clusters", // This should not happen in normal cases.
 			selected:           []*fleetv1beta1.ClusterDecision{},
-			allRPS:             []fleetv1beta1.ResourcePlacementStatus{},
+			allRPS:             []fleetv1beta1.PerClusterPlacementStatus{},
 			resourceSnapshots:  []*fleetv1beta1.ClusterResourceSnapshot{},
 			existingConditions: []metav1.Condition{},
 			wantErr:            true,
@@ -3615,7 +3615,7 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "0",
@@ -3653,7 +3653,7 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "",
@@ -3690,7 +3690,7 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "",
@@ -3761,7 +3761,7 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "",
@@ -3803,7 +3803,7 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "",
@@ -3874,7 +3874,7 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "",
@@ -3908,13 +3908,13 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "2",
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Type:               string(fleetv1beta1.PerClusterRolloutStartedConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 1,
 						},
@@ -3940,7 +3940,7 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "2",
@@ -3983,13 +3983,13 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "2",
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Type:               string(fleetv1beta1.PerClusterRolloutStartedConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 1,
 						},
@@ -4054,13 +4054,13 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "2",
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Type:               string(fleetv1beta1.PerClusterRolloutStartedConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 1,
 						},
@@ -4118,13 +4118,13 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "2",
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Type:               string(fleetv1beta1.PerClusterRolloutStartedConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 1,
 						},
@@ -4135,7 +4135,7 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 					ObservedResourceIndex: "2",
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Type:               string(fleetv1beta1.PerClusterRolloutStartedConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 1,
 						},
@@ -4262,13 +4262,13 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "2",
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Type:               string(fleetv1beta1.PerClusterRolloutStartedConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 1,
 						},
@@ -4279,7 +4279,7 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 					ObservedResourceIndex: "2",
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Type:               string(fleetv1beta1.PerClusterRolloutStartedConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 1,
 						},
@@ -4357,13 +4357,13 @@ func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "2",
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Type:               string(fleetv1beta1.PerClusterRolloutStartedConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 1,
 						},

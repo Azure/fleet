@@ -264,7 +264,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				appConfigMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
 				wantStatus := placementv1beta1.PlacementStatus{
 					Conditions: crpAppliedFailedConditions(crp.Generation),
-					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -501,7 +501,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -514,7 +514,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 										Name:    nsName,
 									},
 									Condition: metav1.Condition{
-										Type:   string(placementv1beta1.ResourcesAppliedConditionType),
+										Type:   string(placementv1beta1.PerClusterAppliedConditionType),
 										Status: metav1.ConditionFalse,
 										Reason: string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
 									},
@@ -527,7 +527,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 										Namespace: nsName,
 									},
 									Condition: metav1.Condition{
-										Type:   string(placementv1beta1.ResourcesAppliedConditionType),
+										Type:   string(placementv1beta1.PerClusterAppliedConditionType),
 										Status: metav1.ConditionFalse,
 										Reason: string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
 									},
@@ -968,7 +968,7 @@ var _ = Describe("switching apply strategies", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -981,7 +981,7 @@ var _ = Describe("switching apply strategies", func() {
 										Name:    nsName,
 									},
 									Condition: metav1.Condition{
-										Type:   string(placementv1beta1.ResourcesAppliedConditionType),
+										Type:   string(placementv1beta1.PerClusterAppliedConditionType),
 										Status: metav1.ConditionFalse,
 										Reason: string(workapplier.ManifestProcessingApplyResultTypeNotTakenOver),
 									},
@@ -1035,7 +1035,7 @@ var _ = Describe("switching apply strategies", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpRolloutStuckConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "1",
@@ -1048,7 +1048,7 @@ var _ = Describe("switching apply strategies", func() {
 										Name:    nsName,
 									},
 									Condition: metav1.Condition{
-										Type:   string(placementv1beta1.ResourcesAppliedConditionType),
+										Type:   string(placementv1beta1.PerClusterAppliedConditionType),
 										Status: metav1.ConditionFalse,
 										Reason: string(workapplier.ManifestProcessingApplyResultTypeNotTakenOver),
 									},
@@ -1106,7 +1106,7 @@ var _ = Describe("switching apply strategies", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpDiffReportedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "1",
@@ -1217,7 +1217,7 @@ var _ = Describe("switching apply strategies", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpDiffReportedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -1329,7 +1329,7 @@ var _ = Describe("switching apply strategies", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpDiffReportedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "1",
@@ -1431,7 +1431,7 @@ var _ = Describe("switching apply strategies", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpRolloutCompletedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "1",

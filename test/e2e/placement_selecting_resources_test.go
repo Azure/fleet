@@ -827,7 +827,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 			appConfigMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
 			wantStatus := placementv1beta1.PlacementStatus{
 				Conditions: crpAppliedFailedConditions(crp.Generation),
-				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+				PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 					{
 						ClusterName:           memberCluster1EastProdName,
 						ObservedResourceIndex: "0",

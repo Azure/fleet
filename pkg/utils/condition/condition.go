@@ -127,15 +127,15 @@ func (c ResourceCondition) EventMessageForTrue() string {
 	}[c]
 }
 
-// PlacementConditionType returns the resource condition type per cluster used by a placement.
-func (c ResourceCondition) PlacementConditionType() fleetv1beta1.PlacementConditionType {
-	return []fleetv1beta1.PlacementConditionType{
-		fleetv1beta1.ResourceRolloutStartedConditionType,
-		fleetv1beta1.ResourceOverriddenConditionType,
-		fleetv1beta1.ResourceWorkSynchronizedConditionType,
-		fleetv1beta1.ResourcesAppliedConditionType,
-		fleetv1beta1.ResourcesAvailableConditionType,
-		fleetv1beta1.ResourcesDiffReportedConditionType,
+// PerClusterPlacementConditionType returns the resource condition type per cluster used by a placement.
+func (c ResourceCondition) PerClusterPlacementConditionType() fleetv1beta1.PerClusterPlacementConditionType {
+	return []fleetv1beta1.PerClusterPlacementConditionType{
+		fleetv1beta1.PerClusterRolloutStartedConditionType,
+		fleetv1beta1.PerClusterOverriddenConditionType,
+		fleetv1beta1.PerClusterWorkSynchronizedConditionType,
+		fleetv1beta1.PerClusterAppliedConditionType,
+		fleetv1beta1.PerClusterAvailableConditionType,
+		fleetv1beta1.PerClusterDiffReportedConditionType,
 	}[c]
 }
 
@@ -168,42 +168,42 @@ func (c ResourceCondition) UnknownResourceConditionPerCluster(generation int64) 
 	return []metav1.Condition{
 		{
 			Status:             metav1.ConditionUnknown,
-			Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+			Type:               string(fleetv1beta1.PerClusterRolloutStartedConditionType),
 			Reason:             RolloutStartedUnknownReason,
 			Message:            "In the process of deciding whether to roll out some version of the resources or not",
 			ObservedGeneration: generation,
 		},
 		{
 			Status:             metav1.ConditionUnknown,
-			Type:               string(fleetv1beta1.ResourceOverriddenConditionType),
+			Type:               string(fleetv1beta1.PerClusterOverriddenConditionType),
 			Reason:             OverriddenPendingReason,
 			Message:            "In the process of overriding the selected resources if there is any override defined",
 			ObservedGeneration: generation,
 		},
 		{
 			Status:             metav1.ConditionUnknown,
-			Type:               string(fleetv1beta1.ResourceWorkSynchronizedConditionType),
+			Type:               string(fleetv1beta1.PerClusterWorkSynchronizedConditionType),
 			Reason:             WorkSynchronizedUnknownReason,
 			Message:            "In the process of creating or updating the work object(s) in the hub cluster",
 			ObservedGeneration: generation,
 		},
 		{
 			Status:             metav1.ConditionUnknown,
-			Type:               string(fleetv1beta1.ResourcesAppliedConditionType),
+			Type:               string(fleetv1beta1.PerClusterAppliedConditionType),
 			Reason:             ApplyPendingReason,
 			Message:            "In the process of applying the resources on the member cluster",
 			ObservedGeneration: generation,
 		},
 		{
 			Status:             metav1.ConditionUnknown,
-			Type:               string(fleetv1beta1.ResourcesAvailableConditionType),
+			Type:               string(fleetv1beta1.PerClusterAvailableConditionType),
 			Reason:             AvailableUnknownReason,
 			Message:            "The availability of the selected resources is unknown yet ",
 			ObservedGeneration: generation,
 		},
 		{
 			Status:             metav1.ConditionUnknown,
-			Type:               string(fleetv1beta1.ResourcesDiffReportedConditionType),
+			Type:               string(fleetv1beta1.PerClusterDiffReportedConditionType),
 			Reason:             DiffReportedStatusUnknownReason,
 			Message:            "Diff reporting has just started; its status is not yet to be known",
 			ObservedGeneration: generation,

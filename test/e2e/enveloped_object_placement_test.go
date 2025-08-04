@@ -276,44 +276,44 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 				},
 			}
 			// We only expect the statefulset to not be available all the clusters
-			PlacementStatuses := make([]placementv1beta1.ResourcePlacementStatus, 0)
+			PlacementStatuses := make([]placementv1beta1.PerClusterPlacementStatus, 0)
 			for _, memberClusterName := range allMemberClusterNames {
-				unavailableResourcePlacementStatus := placementv1beta1.ResourcePlacementStatus{
+				unavailableResourcePlacementStatus := placementv1beta1.PerClusterPlacementStatus{
 					ClusterName:           memberClusterName,
 					ObservedResourceIndex: "0",
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(placementv1beta1.ResourceScheduledConditionType),
+							Type:               string(placementv1beta1.PerClusterScheduledConditionType),
 							Status:             metav1.ConditionTrue,
 							Reason:             condition.ScheduleSucceededReason,
 							ObservedGeneration: 1,
 						},
 						{
-							Type:               string(placementv1beta1.ResourceRolloutStartedConditionType),
+							Type:               string(placementv1beta1.PerClusterRolloutStartedConditionType),
 							Status:             metav1.ConditionTrue,
 							Reason:             condition.RolloutStartedReason,
 							ObservedGeneration: 1,
 						},
 						{
-							Type:               string(placementv1beta1.ResourceOverriddenConditionType),
+							Type:               string(placementv1beta1.PerClusterOverriddenConditionType),
 							Status:             metav1.ConditionTrue,
 							Reason:             condition.OverrideNotSpecifiedReason,
 							ObservedGeneration: 1,
 						},
 						{
-							Type:               string(placementv1beta1.ResourceWorkSynchronizedConditionType),
+							Type:               string(placementv1beta1.PerClusterWorkSynchronizedConditionType),
 							Status:             metav1.ConditionTrue,
 							Reason:             condition.AllWorkSyncedReason,
 							ObservedGeneration: 1,
 						},
 						{
-							Type:               string(placementv1beta1.ResourcesAppliedConditionType),
+							Type:               string(placementv1beta1.PerClusterAppliedConditionType),
 							Status:             metav1.ConditionTrue,
 							Reason:             condition.AllWorkAppliedReason,
 							ObservedGeneration: 1,
 						},
 						{
-							Type:               string(placementv1beta1.ResourcesAvailableConditionType),
+							Type:               string(placementv1beta1.PerClusterAvailableConditionType),
 							Status:             metav1.ConditionFalse,
 							Reason:             condition.WorkNotAvailableReason,
 							ObservedGeneration: 1,
@@ -323,7 +323,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 						{
 							ResourceIdentifier: failedStatefulSetResourceIdentifier,
 							Condition: metav1.Condition{
-								Type:               string(placementv1beta1.ResourcesAvailableConditionType),
+								Type:               string(placementv1beta1.PerClusterAvailableConditionType),
 								Status:             metav1.ConditionFalse,
 								Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeNotYetAvailable),
 								ObservedGeneration: 1,
@@ -470,7 +470,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 
 				wantStatus := placementv1beta1.PlacementStatus{
 					Conditions: crpWorkSynchronizedFailedConditions(crp.Generation, false),
-					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -590,7 +590,7 @@ var _ = Describe("Process objects with generate name", Ordered, func() {
 
 			wantStatus := placementv1beta1.PlacementStatus{
 				Conditions: crpAppliedFailedConditions(crp.Generation),
-				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
+				PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 					{
 						ClusterName:           memberCluster1EastProdName,
 						ObservedResourceIndex: "0",

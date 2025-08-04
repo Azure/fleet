@@ -99,10 +99,10 @@ var (
 	lessFuncConditionByType = func(a, b metav1.Condition) bool {
 		return a.Type < b.Type
 	}
-	lessFuncPlacementStatusByClusterName = func(a, b placementv1beta1.ResourcePlacementStatus) bool {
+	lessFuncPlacementStatusByClusterName = func(a, b placementv1beta1.PerClusterPlacementStatus) bool {
 		return a.ClusterName < b.ClusterName
 	}
-	lessFuncPlacementStatusByConditions = func(a, b placementv1beta1.ResourcePlacementStatus) bool {
+	lessFuncPlacementStatusByConditions = func(a, b placementv1beta1.PerClusterPlacementStatus) bool {
 		return len(a.Conditions) < len(b.Conditions)
 	}
 
@@ -115,9 +115,9 @@ var (
 	ignoreServiceStatusField               = cmpopts.IgnoreFields(corev1.Service{}, "Status")
 	ignoreServiceSpecIPAndPolicyFields     = cmpopts.IgnoreFields(corev1.ServiceSpec{}, "ClusterIP", "ClusterIPs", "ExternalIPs", "SessionAffinity", "IPFamilies", "IPFamilyPolicy", "InternalTrafficPolicy")
 	ignoreServicePortNodePortProtocolField = cmpopts.IgnoreFields(corev1.ServicePort{}, "NodePort", "Protocol")
-	ignoreRPSClusterNameField              = cmpopts.IgnoreFields(placementv1beta1.ResourcePlacementStatus{}, "ClusterName")
+	ignoreRPSClusterNameField              = cmpopts.IgnoreFields(placementv1beta1.PerClusterPlacementStatus{}, "ClusterName")
 	// TODO (wantjian): Remove this ignore option with next release.
-	ignoreRPSObservedResourceIndexField = cmpopts.IgnoreFields(placementv1beta1.ResourcePlacementStatus{}, "ObservedResourceIndex")
+	ignoreRPSObservedResourceIndexField = cmpopts.IgnoreFields(placementv1beta1.PerClusterPlacementStatus{}, "ObservedResourceIndex")
 
 	crpStatusCmpOptions = cmp.Options{
 		cmpopts.SortSlices(lessFuncConditionByType),

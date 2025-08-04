@@ -894,7 +894,7 @@ type PlacementStatus struct {
 	// In these cases, some of them may not have assigned clusters when we cannot fill the required number of clusters.
 	// TODO, For pickAll type, considering providing unselected clusters info.
 	// +kubebuilder:validation:Optional
-	PlacementStatuses []ResourcePlacementStatus `json:"placementStatuses,omitempty"`
+	PlacementStatuses []PerClusterPlacementStatus `json:"placementStatuses,omitempty"`
 
 	// +patchMergeKey=type
 	// +patchStrategy=merge
@@ -973,8 +973,8 @@ const (
 	ResourceEnvelopeType EnvelopeType = "ResourceEnvelope"
 )
 
-// ResourcePlacementStatus represents the placement status of selected resources for one target cluster.
-type ResourcePlacementStatus struct {
+// PerClusterPlacementStatus represents the placement status of selected resources for one target cluster.
+type PerClusterPlacementStatus struct {
 	// ClusterName is the name of the cluster this resource is assigned to.
 	// If it is not empty, its value should be unique cross all placement decisions for the Placement.
 	// +kubebuilder:validation:Optional
@@ -1173,7 +1173,7 @@ type Toleration struct {
 	Effect corev1.TaintEffect `json:"effect,omitempty"`
 }
 
-// ClusterResourcePlacementConditionType defines a specific condition of a cluster resource placement.
+// ClusterResourcePlacementConditionType defines a specific condition of a cluster resource placement object.
 // +enum
 type ClusterResourcePlacementConditionType string
 
@@ -1243,7 +1243,7 @@ const (
 	ClusterResourcePlacementDiffReportedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementDiffReported"
 )
 
-// ResourcePlacementConditionType defines a specific condition of a resource placement.
+// ResourcePlacementConditionType defines a specific condition of a resource placement object.
 // +enum
 type ResourcePlacementConditionType string
 
@@ -1313,37 +1313,36 @@ const (
 	ResourcePlacemenDiffReportedConditionType ResourcePlacementConditionType = "ResourcePlacemenDiffReported"
 )
 
-// PlacementConditionType defines a specific condition of a resource placement.
+// PerClusterPlacementConditionType defines a specific condition of a per cluster placement.
 // +enum
-type PlacementConditionType string
+type PerClusterPlacementConditionType string
 
 const (
-	// ResourceScheduledConditionType indicates whether we have successfully scheduled the selected resources.
+	// PerClusterScheduledConditionType indicates whether we have successfully scheduled the selected resources on a particular cluster.
 	// Its condition status can be one of the following:
 	// - "True" means we have successfully scheduled the resources to satisfy the placement requirement.
 	// - "False" means we didn't fully satisfy the placement requirement. We will fill the Message field.
-	ResourceScheduledConditionType PlacementConditionType = "Scheduled"
+	PerClusterScheduledConditionType PerClusterPlacementConditionType = "Scheduled"
 
-	// ResourceRolloutStartedConditionType indicates whether the selected resources start rolling out or
-	// not.
+	// PerClusterRolloutStartedConditionType indicates whether the selected resources start rolling out on that particular member cluster.
 	// Its condition status can be one of the following:
 	// - "True" means the selected resources successfully start rolling out in the target clusters.
 	// - "False" means the selected resources have not been rolled out in the target cluster yet to honor the rollout
 	// strategy configurations specified in the placement
 	// - "Unknown" means it is in the processing state.
-	ResourceRolloutStartedConditionType PlacementConditionType = "RolloutStarted"
+	PerClusterRolloutStartedConditionType PerClusterPlacementConditionType = "RolloutStarted"
 
-	// ResourceOverriddenConditionType indicates whether all the selected resources have been overridden successfully
+	// PerClusterOverriddenConditionType indicates whether all the selected resources have been overridden successfully
 	// before applying to the target cluster if there is any override defined.
 	// Its condition status can be one of the following:
 	// - "True" means all the selected resources are successfully overridden before applying to the target cluster or
 	// override is not needed if there is no override defined with the reason of NoOverrideSpecified.
 	// - "False" means some of them have failed.
 	// - "Unknown" means we haven't finished the override yet.
-	ResourceOverriddenConditionType PlacementConditionType = "Overridden"
+	PerClusterOverriddenConditionType PerClusterPlacementConditionType = "Overridden"
 
-	// ResourceWorkSynchronizedConditionType indicates whether we have created or updated the corresponding work object(s)
-	// under the per-cluster namespaces (i.e., fleet-member-<member-name>) which have the latest resources selected by
+	// PerClusterWorkSynchronizedConditionType indicates whether we have created or updated the corresponding work object(s)
+	// under that particular cluster namespaces (i.e., fleet-member-<member-name>) which have the latest resources selected by
 	// the placement.
 	// Its condition status can be one of the following:
 	// - "True" means we have successfully created the latest corresponding work(s) or updated the existing work(s) to
@@ -1351,21 +1350,21 @@ const (
 	// - "False" means we have not created the latest corresponding work(s) or updated the existing work(s) to the latest
 	// yet.
 	// - "Unknown" means we haven't finished creating work yet.
-	ResourceWorkSynchronizedConditionType PlacementConditionType = "WorkSynchronized"
+	PerClusterWorkSynchronizedConditionType PerClusterPlacementConditionType = "WorkSynchronized"
 
-	// ResourcesAppliedConditionType indicates whether the selected member cluster has applied the selected resources locally.
+	// PerClusterAppliedConditionType indicates whether the selected member cluster has applied the selected resources.
 	// Its condition status can be one of the following:
 	// - "True" means all the selected resources are successfully applied to the target cluster.
 	// - "False" means some of them have failed.
 	// - "Unknown" means we haven't finished the apply yet.
-	ResourcesAppliedConditionType PlacementConditionType = "Applied"
+	PerClusterAppliedConditionType PerClusterPlacementConditionType = "Applied"
 
-	// ResourcesAvailableConditionType indicates whether the selected resources are available on the selected member cluster.
+	// PerClusterAvailableConditionType indicates whether the selected resources are available on the selected member cluster.
 	// Its condition status can be one of the following:
 	// - "True" means all the selected resources are available on the target cluster.
 	// - "False" means some of them are not available yet.
 	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
-	ResourcesAvailableConditionType PlacementConditionType = "Available"
+	PerClusterAvailableConditionType PerClusterPlacementConditionType = "Available"
 
 	// ResourceDiffReportedConditionType indicates whether Fleet has reported configuration
 	// differences between the desired states of resources as kept in the hub cluster and the
@@ -1376,7 +1375,7 @@ const (
 	// * False: Fleet has not yet reported the complete set of configuration differences on the
 	//   member cluster, or an error has occurred.
 	// * Unknown: Fleet has not finished processing the diff reporting yet.
-	ResourcesDiffReportedConditionType PlacementConditionType = "DiffReported"
+	PerClusterDiffReportedConditionType PerClusterPlacementConditionType = "DiffReported"
 )
 
 // PlacementType identifies the type of placement.

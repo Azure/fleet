@@ -979,7 +979,7 @@ func (r *Reconciler) setPlacementStatus(
 		// The undeleted resources on these old clusters could lead to failed synchronized or applied condition.
 		// Today, we only track the resources progress if the same cluster is selected again.
 		klog.V(2).InfoS("Resetting the resource placement status since scheduled condition is unknown", "placement", klog.KObj(placementObj))
-		placementStatus.PlacementStatuses = []fleetv1beta1.ResourcePlacementStatus{}
+		placementStatus.PlacementStatuses = []fleetv1beta1.PerClusterPlacementStatus{}
 		return false, nil
 	}
 
@@ -991,7 +991,7 @@ func (r *Reconciler) setPlacementStatus(
 	failedToScheduleClusterCount := calculateFailedToScheduleClusterCount(placementObj, selected, unselected)
 
 	// Prepare the resource placement status (status per cluster) in the placement status.
-	allRPS := make([]fleetv1beta1.ResourcePlacementStatus, 0, len(latestSchedulingPolicySnapshot.GetPolicySnapshotStatus().ClusterDecisions))
+	allRPS := make([]fleetv1beta1.PerClusterPlacementStatus, 0, len(latestSchedulingPolicySnapshot.GetPolicySnapshotStatus().ClusterDecisions))
 
 	// For clusters that have been selected, set the resource placement status based on the
 	// respective resource binding status for each of them.
@@ -1049,7 +1049,7 @@ func (r *Reconciler) determineRolloutStateForPlacementWithExternalRolloutStrateg
 	ctx context.Context,
 	placementObj fleetv1beta1.PlacementObj,
 	selected []*fleetv1beta1.ClusterDecision,
-	allRPS []fleetv1beta1.ResourcePlacementStatus,
+	allRPS []fleetv1beta1.PerClusterPlacementStatus,
 	selectedResourceIDs []fleetv1beta1.ResourceIdentifier,
 ) (bool, error) {
 	if len(selected) == 0 {
@@ -1133,7 +1133,7 @@ func (r *Reconciler) determineRolloutStateForPlacementWithExternalRolloutStrateg
 	}
 
 	for i := range len(selected) {
-		rolloutStartedCond := meta.FindStatusCondition(allRPS[i].Conditions, string(fleetv1beta1.ResourceRolloutStartedConditionType))
+		rolloutStartedCond := meta.FindStatusCondition(allRPS[i].Conditions, string(fleetv1beta1.PerClusterRolloutStartedConditionType))
 		if !condition.IsConditionStatusTrue(rolloutStartedCond, placementObj.GetGeneration()) &&
 			!condition.IsConditionStatusFalse(rolloutStartedCond, placementObj.GetGeneration()) {
 			klog.V(2).InfoS("Placement has External rollout strategy and some cluster is in RolloutStarted Unknown state, set RolloutStarted condition to Unknown",

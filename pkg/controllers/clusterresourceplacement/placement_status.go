@@ -70,19 +70,19 @@ func calculateFailedToScheduleClusterCount(placementObj fleetv1beta1.PlacementOb
 // appendFailedToScheduleResourcePlacementStatuses appends the resource placement statuses for
 // the failed to schedule clusters to the list of all resource placement statuses.
 func appendFailedToScheduleResourcePlacementStatuses(
-	allRPS []fleetv1beta1.ResourcePlacementStatus,
+	allRPS []fleetv1beta1.PerClusterPlacementStatus,
 	unselected []*fleetv1beta1.ClusterDecision,
 	failedToScheduleClusterCount int,
 	placementObj fleetv1beta1.PlacementObj,
-) []fleetv1beta1.ResourcePlacementStatus {
+) []fleetv1beta1.PerClusterPlacementStatus {
 	// In the earlier step it has been guaranteed that failedToScheduleClusterCount is less than or equal to the
 	// total number of unselected clusters; here Fleet still performs a sanity check.
 	for i := 0; i < failedToScheduleClusterCount && i < len(unselected); i++ {
-		rps := &fleetv1beta1.ResourcePlacementStatus{}
+		rps := &fleetv1beta1.PerClusterPlacementStatus{}
 
 		failedToScheduleCond := metav1.Condition{
 			Status:             metav1.ConditionFalse,
-			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
+			Type:               string(fleetv1beta1.PerClusterScheduledConditionType),
 			Reason:             condition.ResourceScheduleFailedReason,
 			Message:            unselected[i].Reason,
 			ObservedGeneration: placementObj.GetGeneration(),
@@ -116,14 +116,14 @@ func determineExpectedPlacementAndResourcePlacementStatusCondType(placementObj f
 // it returns the updated list of resource placement statuses.
 func (r *Reconciler) appendScheduledResourcePlacementStatuses(
 	ctx context.Context,
-	allRPS []fleetv1beta1.ResourcePlacementStatus,
+	allRPS []fleetv1beta1.PerClusterPlacementStatus,
 	selected []*fleetv1beta1.ClusterDecision,
 	expectedCondTypes []condition.ResourceCondition,
 	placementObj fleetv1beta1.PlacementObj,
 	latestSchedulingPolicySnapshot fleetv1beta1.PolicySnapshotObj,
 	latestClusterResourceSnapshot fleetv1beta1.ResourceSnapshotObj,
 ) (
-	[]fleetv1beta1.ResourcePlacementStatus,
+	[]fleetv1beta1.PerClusterPlacementStatus,
 	[condition.TotalCondition][condition.TotalConditionStatus]int,
 	error,
 ) {
@@ -143,7 +143,7 @@ func (r *Reconciler) appendScheduledResourcePlacementStatuses(
 
 	for idx := range selected {
 		clusterDecision := selected[idx]
-		rps := &fleetv1beta1.ResourcePlacementStatus{}
+		rps := &fleetv1beta1.PerClusterPlacementStatus{}
 
 		// Port back the old conditions.
 		// This is necessary for Fleet to track the last transition times correctly.
@@ -154,7 +154,7 @@ func (r *Reconciler) appendScheduledResourcePlacementStatuses(
 		// Set the scheduled condition.
 		scheduledCondition := metav1.Condition{
 			Status:             metav1.ConditionTrue,
-			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
+			Type:               string(fleetv1beta1.PerClusterScheduledConditionType),
 			Reason:             condition.ScheduleSucceededReason,
 			Message:            clusterDecision.Reason,
 			ObservedGeneration: placementObj.GetGeneration(),
@@ -185,7 +185,7 @@ func (r *Reconciler) appendScheduledResourcePlacementStatuses(
 		// Fleet will reset unused conditions.
 		for i := condition.RolloutStartedCondition; i < condition.TotalCondition; i++ {
 			if _, ok := setStatusByCondType[i]; !ok {
-				meta.RemoveStatusCondition(&rps.Conditions, string(i.PlacementConditionType()))
+				meta.RemoveStatusCondition(&rps.Conditions, string(i.PerClusterPlacementConditionType()))
 			}
 		}
 		// The allRPS slice has been pre-allocated, so the append call will never produce a new
@@ -201,7 +201,7 @@ func (r *Reconciler) appendScheduledResourcePlacementStatuses(
 // setPlacementConditions currently sets the CRP conditions based on the resource placement statuses.
 func setPlacementConditions(
 	placementObj fleetv1beta1.PlacementObj,
-	allRPS []fleetv1beta1.ResourcePlacementStatus,
+	allRPS []fleetv1beta1.PerClusterPlacementStatus,
 	rpsSetCondTypeCounter [condition.TotalCondition][condition.TotalConditionStatus]int,
 	expectedCondTypes []condition.ResourceCondition,
 ) {
@@ -336,7 +336,7 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(
 	latestResourceSnapshot fleetv1beta1.ResourceSnapshotObj,
 	resourceSnapshotIndexOnBinding string,
 	binding fleetv1beta1.BindingObj,
-	status *fleetv1beta1.ResourcePlacementStatus,
+	status *fleetv1beta1.PerClusterPlacementStatus,
 	expectedCondTypes []condition.ResourceCondition,
 ) map[condition.ResourceCondition]metav1.ConditionStatus {
 	res := make(map[condition.ResourceCondition]metav1.ConditionStatus)
@@ -363,7 +363,7 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(
 		// The binding uses an out of date resource snapshot and rollout controller has reported
 		// that the rollout is being blocked (the RolloutStarted condition is of the False status).
 		cond := metav1.Condition{
-			Type:               string(condition.RolloutStartedCondition.PlacementConditionType()),
+			Type:               string(condition.RolloutStartedCondition.PerClusterPlacementConditionType()),
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: placementObj.GetGeneration(),
 			Reason:             condition.RolloutNotStartedYetReason,
@@ -391,7 +391,7 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(
 func setResourcePlacementStatusBasedOnBinding(
 	placementObj fleetv1beta1.PlacementObj,
 	binding fleetv1beta1.BindingObj,
-	status *fleetv1beta1.ResourcePlacementStatus,
+	status *fleetv1beta1.PerClusterPlacementStatus,
 	expectedCondTypes []condition.ResourceCondition,
 	setStatusByCondType map[condition.ResourceCondition]metav1.ConditionStatus,
 ) {
@@ -426,7 +426,7 @@ func setResourcePlacementStatusBasedOnBinding(
 		}
 
 		cond := metav1.Condition{
-			Type:               string(i.PlacementConditionType()),
+			Type:               string(i.PerClusterPlacementConditionType()),
 			Status:             bindingCond.Status,
 			ObservedGeneration: placementObj.GetGeneration(),
 			Reason:             bindingCond.Reason,
