@@ -1,11 +1,22 @@
 apiVersion: v1
 entries:
+  arc-member-cluster-agents-helm-chart:
+  - apiVersion: v2
+    appVersion: 1.16.0
+    created: "2025-08-04T15:58:14.194853031Z"
+    description: A Helm chart for Kubernetes
+    digest: 73360f271addeba7ba8f204da8c5b8397ccf5dc8ce4df12e369f1ad3825e3941
+    name: arc-member-cluster-agents-helm-chart
+    type: application
+    urls:
+    - https://Azure.github.io/fleet/charts/arc-member-cluster-agents-helm-chart-0.1.0.tgz
+    version: 0.1.0
   hub-agent:
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2025-07-29T22:25:36.467091067Z"
+    created: "2025-08-04T15:58:14.195459066Z"
     description: A Helm chart for hub agent
-    digest: 2956217620b5a8563d9f3d9ec52c960b61cb8ade778855fac24210ffa1619482
+    digest: d2e7c49126037610b22c0a52538e29019cfbfd1b797bb02c9913d7b51133a8b2
     name: hub-agent
     type: application
     urls:
@@ -14,12 +25,12 @@ entries:
   member-agent:
   - apiVersion: v2
     appVersion: v0.1.0
-    created: "2025-07-29T22:25:36.467616259Z"
+    created: "2025-08-04T15:58:14.195943137Z"
     description: Helm chart for member agent.
-    digest: 29d9a9318eaad486321a9e44712ac243444cc0045d0ea0d81c6216817ad05f81
+    digest: cdcdb2c5298632c4788aa1346edd4f98d28c0f3003a77b4585fb7d72a0b7d8d5
     name: member-agent
     type: application
     urls:
     - https://Azure.github.io/fleet/charts/member-agent-0.1.0.tgz
     version: 0.1.0
-generated: "2025-07-29T22:25:36.465618092Z"
+generated: "2025-08-04T15:58:14.194265471Z"
