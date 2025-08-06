@@ -115,7 +115,14 @@ func (r *Reconciler) selectResources(placement *fleetv1alpha1.ClusterResourcePla
 func convertResourceSelector(old []fleetv1alpha1.ClusterResourceSelector) []fleetv1beta1.ClusterResourceSelector {
 	res := make([]fleetv1beta1.ClusterResourceSelector, len(old))
 	for i, item := range old {
-		res[i] = fleetv1beta1.ClusterResourceSelector(item)
+		res[i] = fleetv1beta1.ClusterResourceSelector{
+			Group:          item.Group,
+			Version:        item.Version,
+			Kind:           item.Kind,
+			Name:           item.Name,
+			LabelSelector:  item.LabelSelector,
+			SelectionScope: fleetv1beta1.NamespaceWithResources,
+		}
 	}
 	return res
 }

@@ -56,7 +56,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 			err := hubClient.Create(ctx, crp)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.Status().Message).Should(ContainSubstring(fmt.Sprintf("the labelSelector and name fields are mutually exclusive in selector %+v", selector[0])))
+			Expect(statusErr.Status().Message).Should(ContainSubstring("the labelSelector and name fields are mutually exclusive in selector"))
 		})
 
 		It("should deny create on CRP with invalid placement policy for PickFixed", func() {
@@ -815,10 +815,11 @@ var _ = Describe("webhook tests for MC taints", Ordered, func() {
 var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations", func() {
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 	selector := placementv1beta1.ClusterResourceSelector{
-		Group:   "rbac.authorization.k8s.io/v1",
-		Kind:    "ClusterRole",
-		Version: "v1",
-		Name:    fmt.Sprintf("test-clusterrole-%d", GinkgoParallelProcess()),
+		Group:          "rbac.authorization.k8s.io/v1",
+		Kind:           "ClusterRole",
+		Version:        "v1",
+		Name:           fmt.Sprintf("test-clusterrole-%d", GinkgoParallelProcess()),
+		SelectionScope: placementv1beta1.NamespaceWithResources,
 	}
 	policy := &placementv1beta1.OverridePolicy{
 		OverrideRules: []placementv1beta1.OverrideRule{
@@ -860,11 +861,13 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations", 
 				LabelSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{"test-key": "test-value"},
 				},
+				SelectionScope: placementv1beta1.NamespaceWithResources,
 			}
 			invalidSelector1 := placementv1beta1.ClusterResourceSelector{
-				Group:   "rbac.authorization.k8s.io/v1",
-				Kind:    "ClusterRole",
-				Version: "v1",
+				Group:          "rbac.authorization.k8s.io/v1",
+				Kind:           "ClusterRole",
+				Version:        "v1",
+				SelectionScope: placementv1beta1.NamespaceWithResources,
 			}
 			// Create the CRO.
 			cro := &placementv1beta1.ClusterResourceOverride{
@@ -963,10 +966,11 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operation lim
 var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations resource selection limitations", Ordered, Serial, func() {
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
 	selector := placementv1beta1.ClusterResourceSelector{
-		Group:   "rbac.authorization.k8s.io/v1",
-		Kind:    "ClusterRole",
-		Version: "v1",
-		Name:    fmt.Sprintf("test-clusterrole-%d", GinkgoParallelProcess()),
+		Group:          "rbac.authorization.k8s.io/v1",
+		Kind:           "ClusterRole",
+		Version:        "v1",
+		Name:           fmt.Sprintf("test-clusterrole-%d", GinkgoParallelProcess()),
+		SelectionScope: placementv1beta1.NamespaceWithResources,
 	}
 	BeforeAll(func() {
 		By("create clusterResourceOverride")
@@ -1142,11 +1146,13 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 				LabelSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{"test-key": "test-value"},
 				},
+				SelectionScope: placementv1beta1.NamespaceWithResources,
 			}
 			invalidSelector1 := placementv1beta1.ClusterResourceSelector{
-				Group:   "rbac.authorization.k8s.io/v1",
-				Kind:    "ClusterRole",
-				Version: "v1",
+				Group:          "rbac.authorization.k8s.io/v1",
+				Kind:           "ClusterRole",
+				Version:        "v1",
+				SelectionScope: placementv1beta1.NamespaceWithResources,
 			}
 			cro.Spec.ClusterResourceSelectors = append(cro.Spec.ClusterResourceSelectors, invalidSelector)
 			cro.Spec.ClusterResourceSelectors = append(cro.Spec.ClusterResourceSelectors, cro.Spec.ClusterResourceSelectors[0])
@@ -1202,10 +1208,11 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 			var cro placementv1beta1.ClusterResourceOverride
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: croName}, &cro)).Should(Succeed())
 			selector := placementv1beta1.ClusterResourceSelector{
-				Group:   "rbac.authorization.k8s.io/v1",
-				Kind:    "ClusterRole",
-				Version: "v1",
-				Name:    "test-clusterrole",
+				Group:          "rbac.authorization.k8s.io/v1",
+				Kind:           "ClusterRole",
+				Version:        "v1",
+				Name:           "test-clusterrole",
+				SelectionScope: placementv1beta1.NamespaceWithResources,
 			}
 			cro.Spec.ClusterResourceSelectors = append(cro.Spec.ClusterResourceSelectors, selector)
 			clusterSelectorTerm := placementv1beta1.ClusterSelectorTerm{

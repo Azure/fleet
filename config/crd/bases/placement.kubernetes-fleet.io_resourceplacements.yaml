@@ -535,7 +535,7 @@ spec:
                     kind:
                       description: |-
                         Kind of the cluster-scoped resource.
-                        Note: When `Kind` is `namespace`, ALL the resources under the selected namespaces are selected.
+                        Note: When `Kind` is `namespace`, by default ALL the resources under the selected namespaces are selected.
                       type: string
                     labelSelector:
                       description: |-
@@ -587,6 +587,14 @@ spec:
                       x-kubernetes-map-type: atomic
                     name:
                       description: Name of the cluster-scoped resource.
+                      type: string
+                    selectionScope:
+                      default: NamespaceWithResources
+                      description: SelectionScope defines the scope of resource selections
+                        when the Kind is `namespace`.
+                      enum:
+                      - NamespaceOnly
+                      - NamespaceWithResources
                       type: string
                     version:
                       description: Version of the cluster-scoped resource.
