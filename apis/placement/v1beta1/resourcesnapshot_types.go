@@ -54,7 +54,7 @@ const (
 
 // make sure the ResourceSnapshotObj and ResourceSnapshotList interfaces are implemented by the
 // ClusterResourceSnapshot and ResourceSnapshot types.
-var _ ResourceSnapshotObj = &ResourceSnapshot{}
+var _ ResourceSnapshotObj = &ClusterResourceSnapshot{}
 var _ ResourceSnapshotObj = &ResourceSnapshot{}
 var _ ResourceSnapshotObjList = &ClusterResourceSnapshotList{}
 var _ ResourceSnapshotObjList = &ResourceSnapshotList{}

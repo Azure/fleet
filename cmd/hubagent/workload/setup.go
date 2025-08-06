@@ -397,12 +397,13 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		RESTMapper:      mgr.GetRESTMapper(),
 		ClusterResourcePlacementControllerV1Alpha1: clusterResourcePlacementControllerV1Alpha1,
 		ClusterResourcePlacementControllerV1Beta1:  clusterResourcePlacementControllerV1Beta1,
+		ResourcePlacementController:                nil, // TODO: need to enable the resource placement controller when ready
 		ResourceChangeController:                   resourceChangeController,
 		MemberClusterPlacementController:           memberClusterPlacementController,
 		InformerManager:                            dynamicInformerManager,
 		ResourceConfig:                             resourceConfig,
 		SkippedNamespaces:                          skippedNamespaces,
-		ConcurrentClusterPlacementWorker:           int(math.Ceil(float64(opts.MaxConcurrentClusterPlacement) / 10)),
+		ConcurrentPlacementWorker:                  int(math.Ceil(float64(opts.MaxConcurrentClusterPlacement) / 10)),
 		ConcurrentResourceChangeWorker:             opts.ConcurrentResourceChangeSyncs,
 	}
 

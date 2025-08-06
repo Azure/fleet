@@ -27,10 +27,16 @@ const (
 	ResourcePlacementResource = "resourceplacements"
 	// ClusterResourceBindingKind represents the kind of ClusterResourceBinding.
 	ClusterResourceBindingKind = "ClusterResourceBinding"
+	// ResourceBindingKind represents the kind of ResourceBinding.
+	ResourceBindingKind = "ResourceBinding"
 	// ClusterResourceSnapshotKind represents the kind of ClusterResourceSnapshot.
 	ClusterResourceSnapshotKind = "ClusterResourceSnapshot"
+	// ResourceSnapshotKind represents the kind of ResourceSnapshot.
+	ResourceSnapshotKind = "ResourceSnapshot"
 	// ClusterSchedulingPolicySnapshotKind represents the kind of ClusterSchedulingPolicySnapshot.
 	ClusterSchedulingPolicySnapshotKind = "ClusterSchedulingPolicySnapshot"
+	// SchedulingPolicySnapshotKind represents the kind of SchedulingPolicySnapshot.
+	SchedulingPolicySnapshotKind = "SchedulingPolicySnapshot"
 	// WorkKind represents the kind of Work.
 	WorkKind = "Work"
 	// AppliedWorkKind represents the kind of AppliedWork.
