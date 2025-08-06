@@ -254,6 +254,139 @@ func TestListBindingsFromKey(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:         "mixed setup - list cluster-scoped bindings only",
+			placementKey: types.NamespacedName{Name: "test-placement"},
+			objects: []client.Object{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cluster-binding-1",
+						Labels: map[string]string{
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cluster-binding-2",
+						Labels: map[string]string{
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-2",
+					},
+				},
+				&placementv1beta1.ResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "namespaced-binding-1",
+						Namespace: "test-namespace",
+						Labels: map[string]string{
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-3",
+					},
+				},
+			},
+			wantErr: false,
+			wantBindings: []placementv1beta1.BindingObj{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cluster-binding-1",
+						Labels: map[string]string{
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cluster-binding-2",
+						Labels: map[string]string{
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-2",
+					},
+				},
+			},
+		},
+		{
+			name:         "mixed setup - list namespaced bindings only",
+			placementKey: types.NamespacedName{Namespace: "test-namespace", Name: "test-placement"},
+			objects: []client.Object{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cluster-binding-1",
+						Labels: map[string]string{
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+				&placementv1beta1.ResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "namespaced-binding-1",
+						Namespace: "test-namespace",
+						Labels: map[string]string{
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-2",
+					},
+				},
+				&placementv1beta1.ResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "namespaced-binding-2",
+						Namespace: "test-namespace",
+						Labels: map[string]string{
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-3",
+					},
+				},
+			},
+			wantErr: false,
+			wantBindings: []placementv1beta1.BindingObj{
+				&placementv1beta1.ResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "namespaced-binding-1",
+						Namespace: "test-namespace",
+						Labels: map[string]string{
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-2",
+					},
+				},
+				&placementv1beta1.ResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "namespaced-binding-2",
+						Namespace: "test-namespace",
+						Labels: map[string]string{
+							placementv1beta1.PlacementTrackingLabel: "test-placement",
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-3",
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -449,6 +582,71 @@ func TestFetchBindingFromKey(t *testing.T) {
 			},
 			wantErr:     true,
 			wantBinding: nil,
+		},
+		{
+			name:         "mixed setup - fetch cluster-scoped binding",
+			placementKey: types.NamespacedName{Name: "test-placement"},
+			objects: []client.Object{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-placement",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+				&placementv1beta1.ResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-placement",
+						Namespace: "test-namespace",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-2",
+					},
+				},
+			},
+			wantErr: false,
+			wantBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-placement",
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					TargetCluster: "cluster-1",
+				},
+			},
+		},
+		{
+			name:         "mixed setup - fetch namespaced binding",
+			placementKey: types.NamespacedName{Namespace: "test-namespace", Name: "test-placement"},
+			objects: []client.Object{
+				&placementv1beta1.ClusterResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-placement",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-1",
+					},
+				},
+				&placementv1beta1.ResourceBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-placement",
+						Namespace: "test-namespace",
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: "cluster-2",
+					},
+				},
+			},
+			wantErr: false,
+			wantBinding: &placementv1beta1.ResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-placement",
+					Namespace: "test-namespace",
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					TargetCluster: "cluster-2",
+				},
+			},
 		},
 	}
 

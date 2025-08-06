@@ -180,7 +180,7 @@ var (
 	OverrideClusterNameVariable = "${MEMBER-CLUSTER-NAME}"
 
 	// OverrideClusterLabelKeyVariablePrefix is a reserved variable in the override expression.
-	// We use this variable to find the associated the key following the prefix.
+	// We use this variable to find the associated key following the prefix.
 	// The key name ends with a "}" character (but not include it).
 	// The key name must be a valid Kubernetes label name and case-sensitive.
 	// The content of the string containing this variable will be replaced by the actual label value on the member cluster.

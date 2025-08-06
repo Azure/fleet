@@ -529,6 +529,44 @@ func TestFetchLatestPolicySnapshot(t *testing.T) {
 			expectedSnapshots: 1,
 		},
 		{
+			name: "fetch latest cluster scoped policy snapshots - mixed setup",
+			placementKey: types.NamespacedName{
+				Name: placementName,
+			},
+			existingSnapshots: []client.Object{
+				&fleetv1beta1.ClusterSchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-placement-0",
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: placementName,
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+						},
+					},
+				},
+				&fleetv1beta1.ClusterSchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-placement-1",
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: placementName,
+							fleetv1beta1.IsLatestSnapshotLabel:  "false",
+						},
+					},
+				},
+				// Add namespaced snapshots to test mixed scenario
+				&fleetv1beta1.SchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-placement-0",
+						Namespace: policySnapshotNamespace,
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: placementName,
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+						},
+					},
+				},
+			},
+			expectedSnapshots: 1, // Should only return cluster-scoped ones for cluster-scoped placement
+		},
+		{
 			name: "fetch latest namespaced policy snapshots",
 			placementKey: types.NamespacedName{
 				Name:      placementName,
@@ -557,6 +595,46 @@ func TestFetchLatestPolicySnapshot(t *testing.T) {
 				},
 			},
 			expectedSnapshots: 1,
+		},
+		{
+			name: "fetch latest namespaced policy snapshots - mixed setup",
+			placementKey: types.NamespacedName{
+				Name:      placementName,
+				Namespace: policySnapshotNamespace,
+			},
+			existingSnapshots: []client.Object{
+				&fleetv1beta1.SchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-placement-0",
+						Namespace: policySnapshotNamespace,
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: placementName,
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+						},
+					},
+				},
+				&fleetv1beta1.SchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-placement-1",
+						Namespace: policySnapshotNamespace,
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: placementName,
+							fleetv1beta1.IsLatestSnapshotLabel:  "false",
+						},
+					},
+				},
+				// Add cluster-scoped snapshots to test mixed scenario
+				&fleetv1beta1.ClusterSchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-placement-0",
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: placementName,
+							fleetv1beta1.IsLatestSnapshotLabel:  "true",
+						},
+					},
+				},
+			},
+			expectedSnapshots: 1, // Should only return namespaced ones for namespaced placement
 		},
 		{
 			name: "no latest policy snapshots found",
@@ -644,6 +722,66 @@ func TestListPolicySnapshots(t *testing.T) {
 			expectedSnapshots: 2,
 		},
 		{
+			name: "list cluster scoped policy snapshots - mixed setup",
+			placementKey: types.NamespacedName{
+				Name: placementName,
+			},
+			existingSnapshots: []client.Object{
+				&fleetv1beta1.ClusterSchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-placement-0",
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: placementName,
+						},
+					},
+				},
+				&fleetv1beta1.ClusterSchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-placement-1",
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: placementName,
+						},
+					},
+				},
+				&fleetv1beta1.ClusterSchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-placement-2",
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: placementName,
+						},
+					},
+				},
+				&fleetv1beta1.ClusterSchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "other-placement-0",
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: "other-placement",
+						},
+					},
+				},
+				// Add namespaced snapshots to test mixed scenario
+				&fleetv1beta1.SchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-placement-0",
+						Namespace: policySnapshotNamespace,
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: placementName,
+						},
+					},
+				},
+				&fleetv1beta1.SchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-placement-1",
+						Namespace: policySnapshotNamespace,
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: placementName,
+						},
+					},
+				},
+			},
+			expectedSnapshots: 3, // Should only return cluster-scoped ones for cluster-scoped placement
+		},
+		{
 			name: "list namespaced policy snapshots",
 			placementKey: types.NamespacedName{
 				Name:      placementName,
@@ -679,6 +817,52 @@ func TestListPolicySnapshots(t *testing.T) {
 				},
 			},
 			expectedSnapshots: 2,
+		},
+		{
+			name: "list namespaced policy snapshots - mixed setup",
+			placementKey: types.NamespacedName{
+				Name:      placementName,
+				Namespace: policySnapshotNamespace,
+			},
+			existingSnapshots: []client.Object{
+				&fleetv1beta1.SchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-placement-0",
+						Namespace: policySnapshotNamespace,
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: placementName,
+						},
+					},
+				},
+				&fleetv1beta1.SchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-placement-1",
+						Namespace: policySnapshotNamespace,
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: placementName,
+						},
+					},
+				},
+				&fleetv1beta1.SchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "other-placement-0",
+						Namespace: "other-namespace",
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: "other-placement",
+						},
+					},
+				},
+				// Add cluster-scoped snapshots to test mixed scenario
+				&fleetv1beta1.ClusterSchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-placement-0",
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: placementName,
+						},
+					},
+				},
+			},
+			expectedSnapshots: 2, // Should only return namespaced ones for namespaced placement
 		},
 		{
 			name: "no policy snapshots found",

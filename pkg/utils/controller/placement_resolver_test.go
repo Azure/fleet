@@ -112,6 +112,100 @@ func TestResolvePlacementFromKey(t *testing.T) {
 			wantPlacement: nil,
 			wantErr:       true,
 		},
+		{
+			name:         "mixed setup - resolve cluster resource placement",
+			placementKey: queue.PlacementKey("test-crp"),
+			objects: []client.Object{
+				&fleetv1beta1.ClusterResourcePlacement{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-crp",
+					},
+				},
+				&fleetv1beta1.ResourcePlacement{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-rp",
+						Namespace: "test-ns",
+					},
+				},
+			},
+			wantPlacement: &fleetv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:         "mixed setup - resolve namespaced resource placement",
+			placementKey: queue.PlacementKey("test-ns/test-rp"),
+			objects: []client.Object{
+				&fleetv1beta1.ClusterResourcePlacement{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-crp",
+					},
+				},
+				&fleetv1beta1.ResourcePlacement{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-rp",
+						Namespace: "test-ns",
+					},
+				},
+			},
+			wantPlacement: &fleetv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-rp",
+					Namespace: "test-ns",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:         "mixed setup - same name different scopes",
+			placementKey: queue.PlacementKey("test-ns/same-name"),
+			objects: []client.Object{
+				&fleetv1beta1.ClusterResourcePlacement{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "same-name",
+					},
+				},
+				&fleetv1beta1.ResourcePlacement{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "same-name",
+						Namespace: "test-ns",
+					},
+				},
+			},
+			wantPlacement: &fleetv1beta1.ResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "same-name",
+					Namespace: "test-ns",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:         "mixed setup - same name different scopes with cluster resource placement",
+			placementKey: queue.PlacementKey("test-crp"),
+			objects: []client.Object{
+				&fleetv1beta1.ClusterResourcePlacement{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-crp",
+					},
+				},
+				&fleetv1beta1.ResourcePlacement{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-crp",
+						Namespace: "test-ns",
+					},
+				},
+			},
+			wantPlacement: &fleetv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
