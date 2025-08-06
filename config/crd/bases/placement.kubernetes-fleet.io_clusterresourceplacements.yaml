@@ -1682,6 +1682,19 @@ spec:
                 maximum: 1000
                 minimum: 1
                 type: integer
+              statusReportingScope:
+                default: ClusterScopeOnly
+                description: |-
+                  StatusReportingScope controls where ClusterResourcePlacement status information is made available.
+                  When set to "ClusterScopeOnly", status is accessible only through the cluster-scoped ClusterResourcePlacement object.
+                  When set to "NamespaceAccessible", a ClusterResourcePlacementStatus object is created in the target namespace,
+                  providing namespace-scoped access to the placement status alongside the cluster-scoped status. This option is only
+                  supported when the ClusterResourcePlacement targets exactly one namespace.
+                  Defaults to "ClusterScopeOnly".
+                enum:
+                - ClusterScopeOnly
+                - NamespaceAccessible
+                type: string
               strategy:
                 description: The rollout strategy to use to replace existing placement
                   with new ones.
