@@ -117,7 +117,7 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 	for i := range croList.Items {
 		placementInOverride := croList.Items[i].Spec.OverrideSpec.Placement
 		if placementInOverride != nil && placementInOverride.Name != placementKey {
-			klog.V(2).InfoS("Skipping this override which was created for another placement", "clusterResourceOverride", klog.KObj(&croList.Items[i]), "placementInOverride", placementInOverride.Name, "clusterResourcePlacement", placementKey)
+			klog.V(2).InfoS("Skipping this override which was created for another placement", "clusterResourceOverride", klog.KObj(&croList.Items[i]), "placementInOverride", placementInOverride.Name, "placement", placementKey)
 			continue
 		}
 
@@ -136,9 +136,15 @@ func FetchAllMatchingOverridesForResourceSnapshot(
 	}
 	for i := range roList.Items {
 		placementInOverride := roList.Items[i].Spec.OverrideSpec.Placement
-		if placementInOverride != nil && placementInOverride.Name != placementKey {
-			klog.V(2).InfoS("Skipping this override which was created for another placement", "resourceOverride", klog.KObj(&roList.Items[i]), "placementInOverride", placementInOverride.Name, "clusterResourcePlacement", placementKey)
-			continue
+		if placementInOverride != nil {
+			placementKeyInOverride := placementInOverride.Name
+			if placementInOverride.Scope == placementv1beta1.NamespaceScoped {
+				placementKeyInOverride = controller.GetObjectKeyFromNamespaceName(roList.Items[i].Namespace, placementInOverride.Name)
+			}
+			if placementKeyInOverride != placementKey {
+				klog.V(2).InfoS("Skipping this override which was created for another placement", "resourceOverride", klog.KObj(&roList.Items[i]), "placementInOverride", placementKeyInOverride, "placement", placementKey)
+				continue
+			}
 		}
 
 		for _, selector := range roList.Items[i].Spec.OverrideSpec.ResourceSelectors {

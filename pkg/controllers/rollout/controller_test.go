@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/ptr"
@@ -91,12 +92,12 @@ func serviceScheme(t *testing.T) *runtime.Scheme {
 	return scheme
 }
 
-func TestReconcilerHandleResourceSnapshot(t *testing.T) {
+func TestHandleResourceSnapshot(t *testing.T) {
 	tests := map[string]struct {
-		snapshot      client.Object
-		shouldEnqueue bool
+		snapshot        client.Object
+		wantEnqueueKeys []reconcile.Request
 	}{
-		"test enqueue a new master active resourceSnapshot": {
+		"test enqueue a new master active clusterResourceSnapshot": {
 			snapshot: &placementv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
@@ -108,9 +109,28 @@ func TestReconcilerHandleResourceSnapshot(t *testing.T) {
 					},
 				},
 			},
-			shouldEnqueue: true,
+			wantEnqueueKeys: []reconcile.Request{
+				{NamespacedName: types.NamespacedName{Name: "placement"}},
+			},
 		},
-		"test skip a none master active resourceSnapshot": {
+		"test enqueue a new master active resourceSnapshot": {
+			snapshot: &placementv1beta1.ResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-namespace",
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: "placement",
+						placementv1beta1.IsLatestSnapshotLabel:  "true",
+					},
+					Annotations: map[string]string{
+						placementv1beta1.ResourceGroupHashAnnotation: "hash",
+					},
+				},
+			},
+			wantEnqueueKeys: []reconcile.Request{
+				{NamespacedName: types.NamespacedName{Name: "placement", Namespace: "test-namespace"}},
+			},
+		},
+		"test skip a none master active clusterResourceSnapshot": {
 			snapshot: &placementv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
@@ -119,9 +139,20 @@ func TestReconcilerHandleResourceSnapshot(t *testing.T) {
 					},
 				},
 			},
-			shouldEnqueue: false,
+			wantEnqueueKeys: nil,
 		},
-		"test skip a none active master resourceSnapshot": {
+		"test skip a none master active resourceSnapshot": {
+			snapshot: &placementv1beta1.ResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: "placement",
+						placementv1beta1.IsLatestSnapshotLabel:  "true",
+					},
+				},
+			},
+			wantEnqueueKeys: nil,
+		},
+		"test skip a none active master clusterResourceSnapshot": {
 			snapshot: &placementv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
@@ -132,9 +163,9 @@ func TestReconcilerHandleResourceSnapshot(t *testing.T) {
 					},
 				},
 			},
-			shouldEnqueue: false,
+			wantEnqueueKeys: nil,
 		},
-		"test skip a none active none master resourceSnapshot": {
+		"test skip a none active none master clusterResourceSnapshot": {
 			snapshot: &placementv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
@@ -142,9 +173,9 @@ func TestReconcilerHandleResourceSnapshot(t *testing.T) {
 					},
 				},
 			},
-			shouldEnqueue: false,
+			wantEnqueueKeys: nil,
 		},
-		"test skip a malformatted active  master resourceSnapshot": {
+		"test skip a malformatted active master clusterResourceSnapshot": {
 			snapshot: &placementv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
@@ -155,29 +186,24 @@ func TestReconcilerHandleResourceSnapshot(t *testing.T) {
 					},
 				},
 			},
-			shouldEnqueue: false,
+			wantEnqueueKeys: nil,
 		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			queue := &controllertest.Queue{TypedInterface: workqueue.NewTypedRateLimitingQueue[reconcile.Request](workqueue.DefaultTypedItemBasedRateLimiter[reconcile.Request]())}
 			handleResourceSnapshot(tt.snapshot, queue)
-			if tt.shouldEnqueue && queue.Len() == 0 {
-				t.Errorf("handleResourceSnapshot test `%s` didn't queue the object when it should enqueue", name)
-			}
-			if !tt.shouldEnqueue && queue.Len() != 0 {
-				t.Errorf("handleResourceSnapshot test `%s` queue the object when it should not enqueue", name)
-			}
+			validateEnqueueBehavior(t, queue, tt.wantEnqueueKeys)
 		})
 	}
 }
 
-func TestReconcilerHandleResourceBinding(t *testing.T) {
+func TestEnqueueBinding(t *testing.T) {
 	tests := map[string]struct {
 		resourceBinding client.Object
-		shouldEnqueue   bool
+		wantEnqueueKeys []reconcile.Request
 	}{
-		"test enqueue a good resourceBinding": {
+		"test enqueue a good clusterResourceBinding": {
 			resourceBinding: &placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
@@ -185,26 +211,352 @@ func TestReconcilerHandleResourceBinding(t *testing.T) {
 					},
 				},
 			},
-			shouldEnqueue: true,
+			wantEnqueueKeys: []reconcile.Request{
+				{NamespacedName: types.NamespacedName{Name: "placement"}},
+			},
+		},
+		"test enqueue a good resourceBinding": {
+			resourceBinding: &placementv1beta1.ResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-namespace",
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: "placement",
+					},
+				},
+			},
+			wantEnqueueKeys: []reconcile.Request{
+				{NamespacedName: types.NamespacedName{Name: "placement", Namespace: "test-namespace"}},
+			},
 		},
 		"test skip a malformatted resourceBinding": {
 			resourceBinding: &placementv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{},
 			},
-			shouldEnqueue: false,
+			wantEnqueueKeys: nil,
 		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			queue := &controllertest.Queue{TypedInterface: workqueue.NewTypedRateLimitingQueue[reconcile.Request](workqueue.DefaultTypedItemBasedRateLimiter[reconcile.Request]())}
-			enqueueResourceBinding(tt.resourceBinding, queue)
-			if tt.shouldEnqueue && queue.Len() == 0 {
-				t.Errorf("enqueueResourceBinding test `%s` didn't queue the object when it should enqueue", name)
-			}
-			if !tt.shouldEnqueue && queue.Len() != 0 {
-				t.Errorf("handleResourceSnapshot test `%s` queue the object when it should not enqueue", name)
-			}
+			enqueueBinding(tt.resourceBinding, queue)
+			validateEnqueueBehavior(t, queue, tt.wantEnqueueKeys)
 		})
+	}
+}
+
+func TestHandleResourceOverrideSnapshot(t *testing.T) {
+	tests := map[string]struct {
+		snapshot        client.Object
+		enqueueCRP      bool
+		wantEnqueueKeys []reconcile.Request
+	}{
+		"test enqueue a new latest ResourceOverrideSnapshot with cluster scoped placement when enqueueCRP=true": {
+			snapshot: &placementv1beta1.ResourceOverrideSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "override-snapshot-1",
+					Namespace: "test-namespace",
+					Labels: map[string]string{
+						placementv1beta1.IsLatestSnapshotLabel: "true",
+					},
+				},
+				Spec: placementv1beta1.ResourceOverrideSnapshotSpec{
+					OverrideSpec: placementv1beta1.ResourceOverrideSpec{
+						Placement: &placementv1beta1.PlacementRef{
+							Name:  "test-placement",
+							Scope: placementv1beta1.ClusterScoped,
+						},
+					},
+				},
+			},
+			enqueueCRP: true,
+			wantEnqueueKeys: []reconcile.Request{
+				{NamespacedName: types.NamespacedName{Name: "test-placement"}},
+			},
+		},
+		"test skip a new latest ResourceOverrideSnapshot with cluster scoped placement when enqueueCRP=false": {
+			snapshot: &placementv1beta1.ResourceOverrideSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "override-snapshot-1",
+					Namespace: "test-namespace",
+					Labels: map[string]string{
+						placementv1beta1.IsLatestSnapshotLabel: "true",
+					},
+				},
+				Spec: placementv1beta1.ResourceOverrideSnapshotSpec{
+					OverrideSpec: placementv1beta1.ResourceOverrideSpec{
+						Placement: &placementv1beta1.PlacementRef{
+							Name:  "test-placement",
+							Scope: placementv1beta1.ClusterScoped,
+						},
+					},
+				},
+			},
+			enqueueCRP:      false,
+			wantEnqueueKeys: nil,
+		},
+		"test enqueue a new latest ResourceOverrideSnapshot with namespace scoped placement when enqueueCRP=false": {
+			snapshot: &placementv1beta1.ResourceOverrideSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "override-snapshot-2",
+					Namespace: "test-namespace",
+					Labels: map[string]string{
+						placementv1beta1.IsLatestSnapshotLabel: "true",
+					},
+				},
+				Spec: placementv1beta1.ResourceOverrideSnapshotSpec{
+					OverrideSpec: placementv1beta1.ResourceOverrideSpec{
+						Placement: &placementv1beta1.PlacementRef{
+							Name:  "test-placement",
+							Scope: placementv1beta1.NamespaceScoped,
+						},
+					},
+				},
+			},
+			enqueueCRP: false,
+			wantEnqueueKeys: []reconcile.Request{
+				{NamespacedName: types.NamespacedName{Namespace: "test-namespace", Name: "test-placement"}},
+			},
+		},
+		"test skip a new latest ResourceOverrideSnapshot with namespace scoped placement when enqueueCRP=true": {
+			snapshot: &placementv1beta1.ResourceOverrideSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "override-snapshot-2",
+					Namespace: "test-namespace",
+					Labels: map[string]string{
+						placementv1beta1.IsLatestSnapshotLabel: "true",
+					},
+				},
+				Spec: placementv1beta1.ResourceOverrideSnapshotSpec{
+					OverrideSpec: placementv1beta1.ResourceOverrideSpec{
+						Placement: &placementv1beta1.PlacementRef{
+							Name:  "test-placement",
+							Scope: placementv1beta1.NamespaceScoped,
+						},
+					},
+				},
+			},
+			enqueueCRP:      true,
+			wantEnqueueKeys: nil,
+		},
+		"test skip a non-latest ResourceOverrideSnapshot": {
+			snapshot: &placementv1beta1.ResourceOverrideSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "override-snapshot-3",
+					Namespace: "test-namespace",
+					Labels: map[string]string{
+						placementv1beta1.IsLatestSnapshotLabel: "false",
+					},
+				},
+				Spec: placementv1beta1.ResourceOverrideSnapshotSpec{
+					OverrideSpec: placementv1beta1.ResourceOverrideSpec{
+						Placement: &placementv1beta1.PlacementRef{
+							Name:  "test-placement",
+							Scope: placementv1beta1.ClusterScoped,
+						},
+					},
+				},
+			},
+			enqueueCRP:      true,
+			wantEnqueueKeys: nil,
+		},
+		"test skip ResourceOverrideSnapshot without latest label": {
+			snapshot: &placementv1beta1.ResourceOverrideSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "override-snapshot-4",
+					Namespace: "test-namespace",
+				},
+				Spec: placementv1beta1.ResourceOverrideSnapshotSpec{
+					OverrideSpec: placementv1beta1.ResourceOverrideSpec{
+						Placement: &placementv1beta1.PlacementRef{
+							Name:  "test-placement",
+							Scope: placementv1beta1.ClusterScoped,
+						},
+					},
+				},
+			},
+			enqueueCRP:      true,
+			wantEnqueueKeys: nil,
+		},
+		"test skip ResourceOverrideSnapshot with invalid latest label": {
+			snapshot: &placementv1beta1.ResourceOverrideSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "override-snapshot-5",
+					Namespace: "test-namespace",
+					Labels: map[string]string{
+						placementv1beta1.IsLatestSnapshotLabel: "invalid",
+					},
+				},
+				Spec: placementv1beta1.ResourceOverrideSnapshotSpec{
+					OverrideSpec: placementv1beta1.ResourceOverrideSpec{
+						Placement: &placementv1beta1.PlacementRef{
+							Name:  "test-placement",
+							Scope: placementv1beta1.ClusterScoped,
+						},
+					},
+				},
+			},
+			enqueueCRP:      true,
+			wantEnqueueKeys: nil,
+		},
+		"test skip ResourceOverrideSnapshot without placement": {
+			snapshot: &placementv1beta1.ResourceOverrideSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "override-snapshot-6",
+					Namespace: "test-namespace",
+					Labels: map[string]string{
+						placementv1beta1.IsLatestSnapshotLabel: "true",
+					},
+				},
+				Spec: placementv1beta1.ResourceOverrideSnapshotSpec{
+					OverrideSpec: placementv1beta1.ResourceOverrideSpec{
+						Placement: nil,
+					},
+				},
+			},
+			enqueueCRP:      true,
+			wantEnqueueKeys: nil,
+		},
+		"test skip a malformatted object (not ResourceOverrideSnapshot)": {
+			snapshot: &placementv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "not-resource-override-snapshot",
+				},
+			},
+			enqueueCRP:      true,
+			wantEnqueueKeys: nil,
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			queue := &controllertest.Queue{TypedInterface: workqueue.NewTypedRateLimitingQueue[reconcile.Request](workqueue.DefaultTypedItemBasedRateLimiter[reconcile.Request]())}
+			handleResourceOverrideSnapshot(tt.snapshot, queue, tt.enqueueCRP)
+			validateEnqueueBehavior(t, queue, tt.wantEnqueueKeys)
+		})
+	}
+}
+
+func TestHandleResourceOverride(t *testing.T) {
+	tests := map[string]struct {
+		resourceOverride client.Object
+		enqueueCRP       bool
+		wantEnqueueKeys  []reconcile.Request
+	}{
+		"test enqueue ResourceOverride with cluster scoped placement when enqueueCRP=true": {
+			resourceOverride: &placementv1beta1.ResourceOverride{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "resource-override-1",
+					Namespace: "test-namespace",
+				},
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					Placement: &placementv1beta1.PlacementRef{
+						Name:  "test-placement",
+						Scope: placementv1beta1.ClusterScoped,
+					},
+				},
+			},
+			enqueueCRP: true,
+			wantEnqueueKeys: []reconcile.Request{
+				{NamespacedName: types.NamespacedName{Name: "test-placement"}},
+			},
+		},
+		"test skip ResourceOverride with namespace scoped placement when enqueueCRP=true": {
+			resourceOverride: &placementv1beta1.ResourceOverride{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "resource-override-2",
+					Namespace: "test-namespace",
+				},
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					Placement: &placementv1beta1.PlacementRef{
+						Name:  "test-placement",
+						Scope: placementv1beta1.NamespaceScoped,
+					},
+				},
+			},
+			enqueueCRP:      true,
+			wantEnqueueKeys: nil,
+		},
+		"test enqueue ResourceOverride with namespace scoped placement when enqueueCRP=false": {
+			resourceOverride: &placementv1beta1.ResourceOverride{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "resource-override-3",
+					Namespace: "test-namespace",
+				},
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					Placement: &placementv1beta1.PlacementRef{
+						Name:  "test-placement",
+						Scope: placementv1beta1.NamespaceScoped,
+					},
+				},
+			},
+			enqueueCRP: false,
+			wantEnqueueKeys: []reconcile.Request{
+				{NamespacedName: types.NamespacedName{Namespace: "test-namespace", Name: "test-placement"}},
+			},
+		},
+		"test skip ResourceOverride with cluster scoped placement when enqueueCRP=false": {
+			resourceOverride: &placementv1beta1.ResourceOverride{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "resource-override-4",
+					Namespace: "test-namespace",
+				},
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					Placement: &placementv1beta1.PlacementRef{
+						Name:  "test-placement",
+						Scope: placementv1beta1.ClusterScoped,
+					},
+				},
+			},
+			enqueueCRP:      false,
+			wantEnqueueKeys: nil,
+		},
+		"test skip ResourceOverride without placement": {
+			resourceOverride: &placementv1beta1.ResourceOverride{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "resource-override-5",
+					Namespace: "test-namespace",
+				},
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					Placement: nil,
+				},
+			},
+			enqueueCRP:      true,
+			wantEnqueueKeys: nil,
+		},
+		"test skip a malformatted object (not ResourceOverride)": {
+			resourceOverride: &placementv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "not-resource-override",
+				},
+			},
+			enqueueCRP:      true,
+			wantEnqueueKeys: nil,
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			queue := &controllertest.Queue{TypedInterface: workqueue.NewTypedRateLimitingQueue[reconcile.Request](workqueue.DefaultTypedItemBasedRateLimiter[reconcile.Request]())}
+			handleResourceOverride(tt.resourceOverride, queue, tt.enqueueCRP)
+			validateEnqueueBehavior(t, queue, tt.wantEnqueueKeys)
+		})
+	}
+}
+
+// validateEnqueueBehavior is a helper function to validate queue enqueue behavior in tests
+func validateEnqueueBehavior(t *testing.T, queue *controllertest.Queue, wantEnqueueKey []reconcile.Request) {
+	var queuedKeys []reconcile.Request
+	for i := 0; i < queue.Len(); i++ {
+		item, _ := queue.Get()
+		queuedKeys = append(queuedKeys, item)
+	}
+	cmpOptions := cmp.Options{
+		cmpopts.EquateEmpty(),
+		cmpopts.IgnoreUnexported(reconcile.Request{}),
+		cmpopts.SortSlices(func(r1, r2 reconcile.Request) bool {
+			return r1.String() < r2.String()
+		}),
+	}
+	if !cmp.Equal(queuedKeys, wantEnqueueKey, cmpOptions...) {
+		t.Errorf("queued keys mismatch, want %v, got %v", wantEnqueueKey, queuedKeys)
 	}
 }
 
@@ -2899,6 +3251,598 @@ func TestCheckAndUpdateStaleBindingsStatus(t *testing.T) {
 			if diff := cmp.Diff(tt.wantBindings, bindingList.Items, cmpOptions...); diff != "" {
 				t.Errorf("checkAndUpdateStaleBindingsStatus List() mismatch (-want, +got):\n%s", diff)
 			}
+		})
+	}
+}
+
+func TestHandleBindingUpdated(t *testing.T) {
+	tests := map[string]struct {
+		oldBinding      client.Object
+		newBinding      client.Object
+		wantEnqueueKeys []reconcile.Request
+	}{
+		"test enqueue with nil old binding": {
+			oldBinding: nil,
+			newBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+			},
+			wantEnqueueKeys: nil,
+		},
+		"test enqueue with nil new binding": {
+			oldBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+			},
+			newBinding:      nil,
+			wantEnqueueKeys: nil,
+		},
+		"test enqueue with both bindings nil": {
+			oldBinding:      nil,
+			newBinding:      nil,
+			wantEnqueueKeys: nil,
+		},
+		"test enqueue with invalid old binding type": {
+			oldBinding: &placementv1beta1.ClusterResourceSnapshot{},
+			newBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+			},
+			wantEnqueueKeys: nil,
+		},
+		"test enqueue with invalid new binding type": {
+			oldBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+			},
+			newBinding:      &placementv1beta1.ClusterResourceSnapshot{},
+			wantEnqueueKeys: nil,
+		},
+		"test enqueue when generation changes": {
+			oldBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+			},
+			newBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 2,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+			},
+			wantEnqueueKeys: []reconcile.Request{
+				{NamespacedName: types.NamespacedName{Name: crpName}},
+			},
+		},
+		"test enqueue when ResourceBindingDiffReported condition changes": {
+			oldBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionFalse,
+							ObservedGeneration: 1,
+							Reason:             "TestReason",
+						},
+					},
+				},
+			},
+			newBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+							Reason:             "TestReason",
+						},
+					},
+				},
+			},
+			wantEnqueueKeys: []reconcile.Request{
+				{NamespacedName: types.NamespacedName{Name: crpName}},
+			},
+		},
+		"test enqueue when ResourceBindingAvailable condition changes": {
+			oldBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingAvailable),
+							Status:             metav1.ConditionFalse,
+							ObservedGeneration: 1,
+							Reason:             "TestReason",
+						},
+					},
+				},
+			},
+			newBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingAvailable),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+							Reason:             "TestReason",
+						},
+					},
+				},
+			},
+			wantEnqueueKeys: []reconcile.Request{
+				{NamespacedName: types.NamespacedName{Name: crpName}},
+			},
+		},
+		"test enqueue when ResourceBindingDiffReported condition status changes": {
+			oldBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+							Reason:             "TestReason",
+							Message:            "Old message",
+						},
+					},
+				},
+			},
+			newBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+							Reason:             "NewReason",
+							Message:            "New message",
+						},
+					},
+				},
+			},
+			wantEnqueueKeys: []reconcile.Request{
+				{NamespacedName: types.NamespacedName{Name: crpName}},
+			},
+		},
+		"test enqueue when ResourceBindingAvailable condition reason changes": {
+			oldBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingAvailable),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+							Reason:             "OldReason",
+						},
+					},
+				},
+			},
+			newBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingAvailable),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+							Reason:             "NewReason",
+						},
+					},
+				},
+			},
+			wantEnqueueKeys: []reconcile.Request{
+				{NamespacedName: types.NamespacedName{Name: crpName}},
+			},
+		},
+		"test skip when conditions are unchanged": {
+			oldBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+							Reason:             "TestReason",
+							Message:            "Test message",
+						},
+						{
+							Type:               string(placementv1beta1.ResourceBindingAvailable),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+							Reason:             "TestReason",
+						},
+					},
+				},
+			},
+			newBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+							Reason:             "TestReason",
+							Message:            "Test message",
+						},
+						{
+							Type:               string(placementv1beta1.ResourceBindingAvailable),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+							Reason:             "TestReason",
+						},
+					},
+				},
+			},
+			wantEnqueueKeys: nil,
+		},
+		"test skip when non-monitored condition changes": {
+			oldBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingApplied),
+							Status:             metav1.ConditionFalse,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			newBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingApplied),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			wantEnqueueKeys: nil,
+		},
+		"test ResourceBinding instead of ClusterResourceBinding when condition status change": {
+			oldBinding: &placementv1beta1.ResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Namespace:  "test-namespace",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: "test-rp",
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:         placementv1beta1.BindingStateBound,
+					TargetCluster: cluster1,
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingAvailable),
+							Status:             metav1.ConditionFalse,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			newBinding: &placementv1beta1.ResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Namespace:  "test-namespace",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: "test-rp",
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:         placementv1beta1.BindingStateBound,
+					TargetCluster: cluster1,
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingAvailable),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			wantEnqueueKeys: []reconcile.Request{
+				{NamespacedName: types.NamespacedName{Name: "test-rp", Namespace: "test-namespace"}},
+			},
+		},
+		"test enqueue when condition transitions from missing to present": {
+			oldBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				// No conditions
+			},
+			newBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			wantEnqueueKeys: []reconcile.Request{
+				{NamespacedName: types.NamespacedName{Name: crpName}},
+			},
+		},
+		"test enqueue when condition transitions from present to missing": {
+			oldBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				Status: placementv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(placementv1beta1.ResourceBindingDiffReported),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 1,
+						},
+					},
+				},
+			},
+			newBinding: &placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "binding-1",
+					Generation: 1,
+					Labels: map[string]string{
+						placementv1beta1.PlacementTrackingLabel: crpName,
+					},
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State:                placementv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-1",
+				},
+				// No conditions
+			},
+			wantEnqueueKeys: []reconcile.Request{
+				{NamespacedName: types.NamespacedName{Name: crpName}},
+			},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			queue := &controllertest.Queue{TypedInterface: workqueue.NewTypedRateLimitingQueue[reconcile.Request](workqueue.DefaultTypedItemBasedRateLimiter[reconcile.Request]())}
+			handleBindingUpdated(tt.oldBinding, tt.newBinding, queue)
+			validateEnqueueBehavior(t, queue, tt.wantEnqueueKeys)
 		})
 	}
 }

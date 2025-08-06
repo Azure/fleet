@@ -178,6 +178,9 @@ cmd/memberagent/        # Member agent main and setup
 - Use shared test manifests in `test/integration/manifests/`
 - Run with `make e2e-tests` against 3 Kind clusters
 
+### Test Coding Style
+- Use `want` or `wanted` instead of `expect` or `expected` when creating the desired state
+
 ## Key Patterns
 
 ### Controller Pattern

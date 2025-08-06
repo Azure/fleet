@@ -42,8 +42,6 @@ type Reconciler struct {
 
 // Reconcile triggers a single placement reconcile round when scheduling policy has changed.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var snapshot fleetv1beta1.PolicySnapshotObj
-	var err error
 	snapshotKRef := klog.KRef(req.Namespace, req.Name)
 
 	startTime := time.Now()
@@ -53,6 +51,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		klog.V(2).InfoS("Reconciliation ends", "policySnapshot", snapshotKRef, "latency", latency)
 	}()
 
+	var snapshot fleetv1beta1.PolicySnapshotObj
+	var err error
 	if req.Namespace == "" {
 		// ClusterSchedulingPolicySnapshot (cluster-scoped)
 		var clusterSchedulingPolicySnapshot fleetv1beta1.ClusterSchedulingPolicySnapshot
@@ -71,8 +71,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		snapshot = &schedulingPolicySnapshot
 	}
 
-	placementName, exist := snapshot.GetLabels()[fleetv1beta1.PlacementTrackingLabel]
-	if !exist || len(placementName) == 0 {
+	placementName := snapshot.GetLabels()[fleetv1beta1.PlacementTrackingLabel]
+	if len(placementName) == 0 {
 		err := fmt.Errorf("label %s is missing or has empty value", fleetv1beta1.PlacementTrackingLabel)
 		klog.ErrorS(err, "Failed to enqueue placement due to invalid schedulingPolicySnapshot", "policySnapshot", snapshotKRef)
 		return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)

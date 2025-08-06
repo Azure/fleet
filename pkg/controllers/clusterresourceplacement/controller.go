@@ -135,7 +135,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, placementObj fleetv1beta1
 
 	if placementSpec.RevisionHistoryLimit != nil {
 		if revisionLimit <= 0 {
-			err := fmt.Errorf("invalid placement %s: invalid revisionHistoryLimit %d", placementObj.GetName(), revisionLimit)
+			err := fmt.Errorf("invalid placement %s/%s: invalid revisionHistoryLimit %d", placementObj.GetNamespace(), placementObj.GetName(), revisionLimit)
 			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Invalid revisionHistoryLimit value and using default value instead", "placement", placementKObj)
 		} else {
 			revisionLimit = *placementSpec.RevisionHistoryLimit
@@ -189,7 +189,8 @@ func (r *Reconciler) handleUpdate(ctx context.Context, placementObj fleetv1beta1
 			klog.ErrorS(err, "Failed to extract the resource index from the resourceSnapshot", "placement", placementKObj, "resourceSnapshot", latestResourceSnapshotKObj)
 			return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
 		}
-		selectedResourceIDs, err = controller.CollectResourceIdentifiersUsingMasterResourceSnapshot(ctx, r.Client, placementObj.GetName(), latestResourceSnapshot, strconv.Itoa(latestResourceSnapshotIndex))
+		placementKey := controller.GetObjectKeyFromNamespaceName(placementObj.GetNamespace(), placementObj.GetName())
+		selectedResourceIDs, err = controller.CollectResourceIdentifiersUsingMasterResourceSnapshot(ctx, r.Client, placementKey, latestResourceSnapshot, strconv.Itoa(latestResourceSnapshotIndex))
 		if err != nil {
 			klog.ErrorS(err, "Failed to collect resource identifiers from the resourceSnapshot", "placement", placementKObj, "resourceSnapshot", latestResourceSnapshotKObj)
 			return ctrl.Result{}, err
@@ -459,7 +460,7 @@ func (r *Reconciler) getOrCreateResourceSnapshot(ctx context.Context, placement 
 		// check to see all that the master cluster resource snapshot and sub-indexed snapshots belonging to the same group index exists.
 		resourceSnapshotList, err := controller.ListAllResourceSnapshotWithAnIndex(ctx, r.Client, latestResourceSnapshot.GetLabels()[fleetv1beta1.ResourceIndexLabel], placement.GetName(), placement.GetNamespace())
 		if err != nil {
-			klog.ErrorS(err, "Failed to list the latest group resourceSnapshots associated with the placement", "placement", placement.GetName())
+			klog.ErrorS(err, "Failed to list the latest group resourceSnapshots associated with the placement", "placement", placementKObj)
 			return ctrl.Result{}, nil, controller.NewAPIServerError(true, err)
 		}
 		if len(resourceSnapshotList.GetResourceSnapshotObjs()) == numberOfSnapshots {
@@ -1054,7 +1055,7 @@ func (r *Reconciler) determineRolloutStateForPlacementWithExternalRolloutStrateg
 ) (bool, error) {
 	if len(selected) == 0 {
 		// This should not happen as we already checked in setPlacementStatus.
-		err := controller.NewUnexpectedBehaviorError(fmt.Errorf("selected cluster list is empty for placement %s when checking per-cluster rollout state", placementObj.GetName()))
+		err := controller.NewUnexpectedBehaviorError(fmt.Errorf("selected cluster list is empty for placement %s/%s when checking per-cluster rollout state", placementObj.GetNamespace(), placementObj.GetName()))
 		klog.ErrorS(err, "Should not happen: selected cluster list is empty in determineRolloutStateForPlacementWithExternalRolloutStrategy()")
 		return false, err
 	}
@@ -1120,10 +1121,7 @@ func (r *Reconciler) determineRolloutStateForPlacementWithExternalRolloutStrateg
 	} else {
 		placementStatus.ObservedResourceIndex = observedResourceIndex
 		// Construct placement key for the resource collection function
-		placementKey := placementObj.GetName()
-		if placementObj.GetNamespace() != "" {
-			placementKey = placementObj.GetNamespace() + "/" + placementObj.GetName()
-		}
+		placementKey := controller.GetObjectKeyFromNamespaceName(placementObj.GetNamespace(), placementObj.GetName())
 		selectedResources, err := controller.CollectResourceIdentifiersFromResourceSnapshot(ctx, r.Client, placementKey, observedResourceIndex)
 		if err != nil {
 			klog.ErrorS(err, "Failed to collect resource identifiers from resourceSnapshot", "placement", klog.KObj(placementObj), "resourceSnapshotIndex", observedResourceIndex)

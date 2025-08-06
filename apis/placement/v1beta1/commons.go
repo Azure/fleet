@@ -112,7 +112,7 @@ const (
 	// ParentNamespaceLabel is the label applied to work that contains the namespace of the binding that generates the work.
 	ParentNamespaceLabel = fleetPrefix + "parent-placement-namespace"
 
-	// CRPGenerationAnnotation indicates the generation of the CRP from which an object is derived or last updated.
+	// CRPGenerationAnnotation indicates the generation of the placement from which an object is derived or last updated.
 	// TODO: rename this variable
 	CRPGenerationAnnotation = fleetPrefix + "CRP-generation"
 

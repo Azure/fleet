@@ -104,11 +104,18 @@ var _ = BeforeSuite(func() {
 	By("set k8s client same as the controller manager")
 	k8sClient = mgr.GetClient()
 
-	// setup our main reconciler
+	// setup our cluster scoped reconciler
 	err = (&Reconciler{
 		Client:         k8sClient,
 		UncachedReader: mgr.GetAPIReader(),
-	}).SetupWithManager(mgr)
+	}).SetupWithManagerForClusterResourcePlacement(mgr)
+	Expect(err).Should(Succeed())
+
+	// setup our namespace scoped reconciler
+	err = (&Reconciler{
+		Client:         k8sClient,
+		UncachedReader: mgr.GetAPIReader(),
+	}).SetupWithManagerForResourcePlacement(mgr)
 	Expect(err).Should(Succeed())
 
 	go func() {
