@@ -314,7 +314,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		if err := (&schedulercspswatcher.Reconciler{
 			Client:             mgr.GetClient(),
 			SchedulerWorkQueue: defaultSchedulingQueue,
-		}).SetupWithManager(mgr); err != nil {
+		}).SetupWithManagerForClusterSchedulingPolicySnapshot(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up clusterSchedulingPolicySnapshot watcher for scheduler")
 			return err
 		}

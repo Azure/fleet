@@ -586,8 +586,8 @@ func beforeSuiteForProcess1() []byte {
 		Client:             hubClient,
 		SchedulerWorkQueue: schedulerWorkQueue,
 	}
-	err = policySnapshotWatcher.SetupWithManager(ctrlMgr)
-	Expect(err).NotTo(HaveOccurred(), "Failed to set up policy snapshot watcher with controller manager")
+	err = policySnapshotWatcher.SetupWithManagerForClusterSchedulingPolicySnapshot(ctrlMgr)
+	Expect(err).NotTo(HaveOccurred(), "Failed to set up cluster policy snapshot watcher with controller manager")
 
 	memberClusterWatcher := membercluster.Reconciler{
 		Client:                    hubClient,
