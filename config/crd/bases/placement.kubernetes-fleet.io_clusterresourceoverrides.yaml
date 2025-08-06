@@ -735,6 +735,9 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: clusterResourceOverride placement reference cannot be Namespaced scope
+          rule: '!has(self.spec.placement) || self.spec.placement.scope != ''Namespaced'''
     served: true
     storage: false
   - name: v1beta1
@@ -1104,5 +1107,8 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: clusterResourceOverride placement reference cannot be Namespaced scope
+          rule: '!has(self.spec.placement) || self.spec.placement.scope != ''Namespaced'''
     served: true
     storage: true

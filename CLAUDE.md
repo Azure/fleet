@@ -154,6 +154,7 @@ cmd/memberagent/        # Member agent main and setup
 - Use existing patterns from similar controllers when adding new functionality
 - Property providers should implement the `PropertyProvider` interface
 - PR titles must use prefixes: `feat:`, `fix:`, `docs:`, `test:`, `chore:`, `ci:`, `perf:`, `refactor:`, `revert:`
+- When creating new files, always add an empty line at the end
 
 ## Testing Patterns
 

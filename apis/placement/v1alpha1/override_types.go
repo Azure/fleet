@@ -27,6 +27,7 @@ import (
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope="Cluster",categories={fleet,fleet-placement}
+// +kubebuilder:validation:XValidation:rule="!has(self.spec.placement) || self.spec.placement.scope != 'Namespaced'",message="clusterResourceOverride placement reference cannot be Namespaced scope"
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ClusterResourceOverride defines a group of override policies about how to override the selected cluster scope resources

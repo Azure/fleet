@@ -24,6 +24,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -41,6 +42,9 @@ const (
 	invalidupdateRunStageNameTemplate = "stage012345678901234567890123456789012345678901234567890123456789%d%d"
 	approveRequestNameTemplate        = "test-approve-request-%d"
 	crpNameTemplate                   = "test-crp-%d"
+	croNameTemplate                   = "test-cro-%d"
+	roNameTemplate                    = "test-ro-%d"
+	testNamespace                     = "test-ns"
 )
 
 var _ = Describe("Test placement v1beta1 API validation", func() {
@@ -676,6 +680,312 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update clusterApprovalRequest call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("The spec field is immutable"))
 			Expect(hubClient.Delete(ctx, &appReq)).Should(Succeed())
+		})
+	})
+
+	Context("Test ClusterResourceOverride API validation - valid cases", func() {
+		It("should allow creation of ClusterResourceOverride without placement reference", func() {
+			cro := placementv1beta1.ClusterResourceOverride{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(croNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.ClusterResourceOverrideSpec{
+					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "ConfigMap",
+							Name:    "test-cm",
+						},
+					},
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
+							{
+								OverrideType: placementv1beta1.JSONPatchOverrideType,
+								JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
+									{
+										Operator: placementv1beta1.JSONPatchOverrideOpAdd,
+										Path:     "/metadata/labels/test",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"test-value"`)},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &cro)).Should(Succeed())
+			Expect(hubClient.Delete(ctx, &cro)).Should(Succeed())
+		})
+
+		It("should allow creation of ClusterResourceOverride with cluster-scoped placement reference", func() {
+			cro := placementv1beta1.ClusterResourceOverride{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(croNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.ClusterResourceOverrideSpec{
+					Placement: &placementv1beta1.PlacementRef{
+						Name:  "test-placement",
+						Scope: placementv1beta1.ClusterScoped,
+					},
+					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "ConfigMap",
+							Name:    "test-cm",
+						},
+					},
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
+							{
+								OverrideType: placementv1beta1.JSONPatchOverrideType,
+								JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
+									{
+										Operator: placementv1beta1.JSONPatchOverrideOpAdd,
+										Path:     "/metadata/labels/test",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"test-value"`)},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &cro)).Should(Succeed())
+			Expect(hubClient.Delete(ctx, &cro)).Should(Succeed())
+		})
+
+		It("should allow creation of ClusterResourceOverride without specifying scope in placement reference", func() {
+			cro := placementv1beta1.ClusterResourceOverride{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(croNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.ClusterResourceOverrideSpec{
+					Placement: &placementv1beta1.PlacementRef{
+						Name: "test-placement",
+					},
+					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "ConfigMap",
+							Name:    "test-cm",
+						},
+					},
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
+							{
+								OverrideType: placementv1beta1.JSONPatchOverrideType,
+								JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
+									{
+										Operator: placementv1beta1.JSONPatchOverrideOpAdd,
+										Path:     "/metadata/labels/test",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"test-value"`)},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &cro)).Should(Succeed())
+			Expect(hubClient.Delete(ctx, &cro)).Should(Succeed())
+		})
+	})
+
+	Context("Test ClusterResourceOverride API validation - invalid cases", func() {
+		It("should deny creation of ClusterResourceOverride with namespaced placement reference", func() {
+			cro := placementv1beta1.ClusterResourceOverride{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(croNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.ClusterResourceOverrideSpec{
+					Placement: &placementv1beta1.PlacementRef{
+						Name:  "test-placement",
+						Scope: placementv1beta1.NamespaceScoped,
+					},
+					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "ConfigMap",
+							Name:    "test-cm",
+						},
+					},
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
+							{
+								OverrideType: placementv1beta1.JSONPatchOverrideType,
+								JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
+									{
+										Operator: placementv1beta1.JSONPatchOverrideOpAdd,
+										Path:     "/metadata/labels/test",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"test-value"`)},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, &cro)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create ClusterResourceOverride call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("clusterResourceOverride placement reference cannot be Namespaced scope"))
+		})
+	})
+
+	Context("Test ResourceOverride API validation - valid cases", func() {
+		It("should allow creation of ResourceOverride without placement reference", func() {
+			ro := placementv1beta1.ResourceOverride{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: testNamespace,
+					Name:      fmt.Sprintf(roNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "ConfigMap",
+							Name:    "test-cm",
+						},
+					},
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
+							{
+								OverrideType: placementv1beta1.JSONPatchOverrideType,
+								JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
+									{
+										Operator: placementv1beta1.JSONPatchOverrideOpAdd,
+										Path:     "/metadata/labels/test",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"test-value"`)},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &ro)).Should(Succeed())
+			Expect(hubClient.Delete(ctx, &ro)).Should(Succeed())
+		})
+
+		It("should allow creation of ResourceOverride with cluster-scoped placement reference", func() {
+			ro := placementv1beta1.ResourceOverride{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: testNamespace,
+					Name:      fmt.Sprintf(roNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					Placement: &placementv1beta1.PlacementRef{
+						Name:  "test-placement",
+						Scope: placementv1beta1.ClusterScoped,
+					},
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "ConfigMap",
+							Name:    "test-cm",
+						},
+					},
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
+							{
+								OverrideType: placementv1beta1.JSONPatchOverrideType,
+								JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
+									{
+										Operator: placementv1beta1.JSONPatchOverrideOpAdd,
+										Path:     "/metadata/labels/test",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"test-value"`)},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &ro)).Should(Succeed())
+			Expect(hubClient.Delete(ctx, &ro)).Should(Succeed())
+		})
+
+		It("should allow creation of ResourceOverride without specifying scope in placement reference", func() {
+			ro := placementv1beta1.ResourceOverride{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: testNamespace,
+					Name:      fmt.Sprintf(roNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					Placement: &placementv1beta1.PlacementRef{
+						Name: "test-placement",
+					},
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "ConfigMap",
+							Name:    "test-cm",
+						},
+					},
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
+							{
+								OverrideType: placementv1beta1.JSONPatchOverrideType,
+								JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
+									{
+										Operator: placementv1beta1.JSONPatchOverrideOpAdd,
+										Path:     "/metadata/labels/test",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"test-value"`)},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &ro)).Should(Succeed())
+			Expect(hubClient.Delete(ctx, &ro)).Should(Succeed())
+		})
+
+		It("should allow creation of ResourceOverride with namespace-scoped placement reference", func() {
+			ro := placementv1beta1.ResourceOverride{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: testNamespace,
+					Name:      fmt.Sprintf(roNameTemplate, GinkgoParallelProcess()),
+				},
+				Spec: placementv1beta1.ResourceOverrideSpec{
+					Placement: &placementv1beta1.PlacementRef{
+						Name:  "test-placement",
+						Scope: placementv1beta1.NamespaceScoped,
+					},
+					ResourceSelectors: []placementv1beta1.ResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "ConfigMap",
+							Name:    "test-cm",
+						},
+					},
+					Policy: &placementv1beta1.OverridePolicy{
+						OverrideRules: []placementv1beta1.OverrideRule{
+							{
+								OverrideType: placementv1beta1.JSONPatchOverrideType,
+								JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
+									{
+										Operator: placementv1beta1.JSONPatchOverrideOpAdd,
+										Path:     "/metadata/labels/test",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"test-value"`)},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &ro)).Should(Succeed())
+			Expect(hubClient.Delete(ctx, &ro)).Should(Succeed())
 		})
 	})
 })
