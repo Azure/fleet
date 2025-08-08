@@ -15,8 +15,8 @@ COPY pkg/authtoken pkg/authtoken
 
 ARG TARGETARCH
 
-# Build with CGO enabled and GOEXPERIMENT=system for internal usage
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=${TARGETARCH} GOEXPERIMENT=system GO111MODULE=on go build -o refreshtoken main.go
+# Build with CGO enabled and GOEXPERIMENT=systemcrypto for internal usage
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=${TARGETARCH} GOEXPERIMENT=systemcrypto GO111MODULE=on go build -o refreshtoken main.go
 
 # Use Azure Linux distroless as minimal base image to package the refreshtoken binary
 # Refer to https://mcr.microsoft.com/en-us/artifact/mar/azurelinux/distroless/minimal/about for more details
