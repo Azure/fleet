@@ -98,6 +98,357 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 		})
 	})
 
+	Context("Test ClusterResourcePlacement StatusReportingScope validation - create, allow cases", func() {
+		var crp placementv1beta1.ClusterResourcePlacement
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+		AfterEach(func() {
+			Expect(hubClient.Delete(ctx, &crp)).Should(Succeed())
+		})
+
+		It("should allow creation of ClusterResourcePlacement with StatusReportingScope NamespaceAccessible and single namespace selector", func() {
+			crp = placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "Namespace",
+							Name:    "test-ns",
+						},
+					},
+					StatusReportingScope: placementv1beta1.NamespaceAccessible,
+				},
+			}
+			Expect(hubClient.Create(ctx, &crp)).Should(Succeed())
+		})
+
+		It("should allow creation of ClusterResourcePlacement with StatusReportingScope NamespaceAccessible and one namespace plus other cluster-scoped resources", func() {
+			crp = placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "Namespace",
+							Name:    "test-ns",
+						},
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "ClusterRole",
+							Name:    "test-cluster-role",
+						},
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "PersistentVolume",
+							Name:    "test-pv",
+						},
+					},
+					StatusReportingScope: placementv1beta1.NamespaceAccessible,
+				},
+			}
+			Expect(hubClient.Create(ctx, &crp)).Should(Succeed())
+		})
+
+		It("should allow creation of ClusterResourcePlacement with StatusReportingScope ClusterScopeOnly and multiple namespace selector plus other cluster-scoped resources", func() {
+			crp = placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "Namespace",
+							Name:    "test-ns-1",
+						},
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "Namespace",
+							Name:    "test-ns-2",
+						},
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "ClusterRole",
+							Name:    "test-cluster-role",
+						},
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "PersistentVolume",
+							Name:    "test-pv",
+						},
+					},
+					StatusReportingScope: placementv1beta1.ClusterScopeOnly,
+				},
+			}
+			Expect(hubClient.Create(ctx, &crp)).Should(Succeed())
+		})
+
+		It("should allow creation of ClusterResourcePlacement with default StatusReportingScope and multiple namespace selectors plus other cluster-scoped resources", func() {
+			crp = placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "Namespace",
+							Name:    "test-ns-1",
+						},
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "Namespace",
+							Name:    "test-ns-2",
+						},
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "ClusterRole",
+							Name:    "test-cluster-role",
+						},
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "PersistentVolume",
+							Name:    "test-pv",
+						},
+					},
+					// StatusReportingScope not specified - should default to ClusterScopeOnly
+				},
+			}
+			Expect(hubClient.Create(ctx, &crp)).Should(Succeed())
+		})
+	})
+
+	Context("Test ClusterResourcePlacement StatusReportingScope validation - create, deny cases", func() {
+		var crp placementv1beta1.ClusterResourcePlacement
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+		It("should deny creation of ClusterResourcePlacement with StatusReportingScope NamespaceAccessible and multiple namespace selectors", func() {
+			crp = placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "Namespace",
+							Name:    "test-ns-1",
+						},
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "Namespace",
+							Name:    "test-ns-2",
+						},
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "ClusterRole",
+							Name:    "test-cluster-role",
+						},
+					},
+					StatusReportingScope: placementv1beta1.NamespaceAccessible,
+				},
+			}
+			err := hubClient.Create(ctx, &crp)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("when statusReportingScope is NamespaceAccessible, exactly one resourceSelector with kind 'Namespace' is required"))
+		})
+
+		It("should deny creation of ClusterResourcePlacement with StatusReportingScope NamespaceAccessible and no namespace selector", func() {
+			crp = placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "ClusterRole",
+							Name:    "test-cluster-role",
+						},
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "PersistentVolume",
+							Name:    "test-pv",
+						},
+					},
+					StatusReportingScope: placementv1beta1.NamespaceAccessible,
+				},
+			}
+			err := hubClient.Create(ctx, &crp)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("when statusReportingScope is NamespaceAccessible, exactly one resourceSelector with kind 'Namespace' is required"))
+		})
+	})
+
+	Context("Test ClusterResourcePlacement StatusReportingScope validation - update cases", func() {
+		var crp placementv1beta1.ClusterResourcePlacement
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+		BeforeEach(func() {
+			crp = placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "Namespace",
+							Name:    "test-ns-1",
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, &crp)).Should(Succeed())
+		})
+
+		AfterEach(func() {
+			Expect(hubClient.Delete(ctx, &crp)).Should(Succeed())
+		})
+
+		It("should allow update of ClusterResourcePlacement with StatusReportingScope NamespaceAccessible, one namespace selector", func() {
+			crp.Spec.StatusReportingScope = placementv1beta1.NamespaceAccessible
+			Expect(hubClient.Update(ctx, &crp)).Should(Succeed())
+		})
+
+		It("should allow update of ClusterResourcePlacement with StatusReportingScope NamespaceAccessible, one namespace plus other cluster-scoped resources", func() {
+			crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, []placementv1beta1.ClusterResourceSelector{
+				{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "test-cluster-role",
+				},
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "PersistentVolume",
+					Name:    "test-pv",
+				},
+			}...)
+			crp.Spec.StatusReportingScope = placementv1beta1.NamespaceAccessible
+			Expect(hubClient.Update(ctx, &crp)).Should(Succeed())
+		})
+
+		It("should allow update of ClusterResourcePlacement with StatusReportingScope ClusterScopeOnly, multiple namespace selectors", func() {
+			crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, []placementv1beta1.ClusterResourceSelector{
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Namespace",
+					Name:    "test-ns-2",
+				},
+				{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "test-cluster-role",
+				},
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "PersistentVolume",
+					Name:    "test-pv",
+				},
+			}...)
+			crp.Spec.StatusReportingScope = placementv1beta1.ClusterScopeOnly
+			Expect(hubClient.Update(ctx, &crp)).Should(Succeed())
+		})
+
+		It("should allow update of ClusterResourcePlacement with default StatusReportingScope, multiple namespace selectors", func() {
+			crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, []placementv1beta1.ClusterResourceSelector{
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Namespace",
+					Name:    "test-ns-2",
+				},
+				{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "test-cluster-role",
+				},
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "PersistentVolume",
+					Name:    "test-pv",
+				},
+			}...)
+			Expect(hubClient.Update(ctx, &crp)).Should(Succeed())
+		})
+
+		It("should deny update of ClusterResourcePlacement with StatusReportingScope NamespaceAccessible and multiple namespace selectors", func() {
+			crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, []placementv1beta1.ClusterResourceSelector{
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Namespace",
+					Name:    "test-ns-2",
+				},
+				{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "test-cluster-role",
+				},
+			}...)
+			crp.Spec.StatusReportingScope = placementv1beta1.NamespaceAccessible
+			err := hubClient.Update(ctx, &crp)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("when statusReportingScope is NamespaceAccessible, exactly one resourceSelector with kind 'Namespace' is required"))
+		})
+
+		It("should deny update of ClusterResourcePlacement with StatusReportingScope NamespaceAccessible, no namespace selectors", func() {
+			crp.Spec.ResourceSelectors = []placementv1beta1.ClusterResourceSelector{
+				{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    "test-cluster-role",
+				},
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "PersistentVolume",
+					Name:    "test-pv",
+				},
+			}
+			crp.Spec.StatusReportingScope = placementv1beta1.NamespaceAccessible
+			err := hubClient.Update(ctx, &crp)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("when statusReportingScope is NamespaceAccessible, exactly one resourceSelector with kind 'Namespace' is required"))
+		})
+	})
+
 	Context("Test ClusterPlacementDisruptionBudget API validation - valid cases", func() {
 		It("should allow creation of ClusterPlacementDisruptionBudget with valid maxUnavailable - int", func() {
 			crpdb := placementv1beta1.ClusterResourcePlacementDisruptionBudget{
