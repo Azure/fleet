@@ -26,6 +26,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -57,7 +59,7 @@ var (
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "Work generator Controller Suite")
+	RunSpecs(t, "Placement Rollout Controller Suite")
 }
 
 var _ = BeforeSuite(func() {
@@ -103,6 +105,14 @@ var _ = BeforeSuite(func() {
 	// make sure the k8s client is same as the controller client, or we can have cache delay
 	By("set k8s client same as the controller manager")
 	k8sClient = mgr.GetClient()
+
+	// Create test namespace
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: testNamespace,
+		},
+	}
+	Expect(k8sClient.Create(ctx, namespace)).Should(Succeed())
 
 	// setup our cluster scoped reconciler
 	err = (&Reconciler{
