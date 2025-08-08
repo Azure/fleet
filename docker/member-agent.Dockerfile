@@ -16,12 +16,12 @@ COPY pkg/ pkg/
 
 ARG TARGETARCH
 
-# Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GO111MODULE=on go build -o memberagent main.go
+# Build with CGO enabled and GOEXPERIMENT=system for internal usage
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=${TARGETARCH} GOEXPERIMENT=system GO111MODULE=on go build -o memberagent main.go
 
-# Use distroless as minimal base image to package the memberagent binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot
+# Use Azure Linux distroless as minimal base image to package the memberagent binary
+# Refer to https://mcr.microsoft.com/en-us/artifact/mar/azurelinux/distroless/minimal/about for more details
+FROM mcr.microsoft.com/azurelinux/distroless/minimal:3.0
 WORKDIR /
 COPY --from=builder /workspace/memberagent .
 USER 65532:65532
