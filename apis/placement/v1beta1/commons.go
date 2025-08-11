@@ -21,12 +21,22 @@ const (
 	ClusterResourcePlacementKind = "ClusterResourcePlacement"
 	// ClusterResourcePlacementResource represents the resource name for ClusterResourcePlacement.
 	ClusterResourcePlacementResource = "clusterresourceplacements"
+	// ResourcePlacementKind represents the kind of ResourcePlacement.
+	ResourcePlacementKind = "ResourcePlacement"
+	// ResourcePlacementResource represents the resource name for ResourcePlacement.
+	ResourcePlacementResource = "resourceplacements"
 	// ClusterResourceBindingKind represents the kind of ClusterResourceBinding.
 	ClusterResourceBindingKind = "ClusterResourceBinding"
+	// ResourceBindingKind represents the kind of ResourceBinding.
+	ResourceBindingKind = "ResourceBinding"
 	// ClusterResourceSnapshotKind represents the kind of ClusterResourceSnapshot.
 	ClusterResourceSnapshotKind = "ClusterResourceSnapshot"
+	// ResourceSnapshotKind represents the kind of ResourceSnapshot.
+	ResourceSnapshotKind = "ResourceSnapshot"
 	// ClusterSchedulingPolicySnapshotKind represents the kind of ClusterSchedulingPolicySnapshot.
 	ClusterSchedulingPolicySnapshotKind = "ClusterSchedulingPolicySnapshot"
+	// SchedulingPolicySnapshotKind represents the kind of SchedulingPolicySnapshot.
+	SchedulingPolicySnapshotKind = "SchedulingPolicySnapshot"
 	// WorkKind represents the kind of Work.
 	WorkKind = "Work"
 	// AppliedWorkKind represents the kind of AppliedWork.
@@ -60,6 +70,10 @@ const (
 	// it generates are all deleted, or used by the work controller to make sure the work has been deleted in the member
 	// cluster.
 	WorkFinalizer = fleetPrefix + "work-cleanup"
+
+	// ClusterResourcePlacementStatusCleanupFinalizer is a finalizer added by the controller to all ClusterResourcePlacementStatus objects, to make sure
+	// that the controller can react to ClusterResourcePlacementStatus deletions if necessary.
+	ClusterResourcePlacementStatusCleanupFinalizer = fleetPrefix + "cluster-resource-placement-status-cleanup"
 
 	// PlacementTrackingLabel points to the placement that creates this resource binding.
 	// TODO: migrate the label content to "parent-placement" to work with both the PR and CRP
@@ -108,7 +122,8 @@ const (
 	// ParentNamespaceLabel is the label applied to work that contains the namespace of the binding that generates the work.
 	ParentNamespaceLabel = fleetPrefix + "parent-placement-namespace"
 
-	// CRPGenerationAnnotation indicates the generation of the CRP from which an object is derived or last updated.
+	// CRPGenerationAnnotation indicates the generation of the placement from which an object is derived or last updated.
+	// TODO: rename this variable
 	CRPGenerationAnnotation = fleetPrefix + "CRP-generation"
 
 	// EnvelopeConfigMapAnnotation indicates the configmap is an envelope configmap containing resources we need to apply to the member cluster instead of the configMap itself.
@@ -165,7 +180,7 @@ var (
 	OverrideClusterNameVariable = "${MEMBER-CLUSTER-NAME}"
 
 	// OverrideClusterLabelKeyVariablePrefix is a reserved variable in the override expression.
-	// We use this variable to find the associated the key following the prefix.
+	// We use this variable to find the associated key following the prefix.
 	// The key name ends with a "}" character (but not include it).
 	// The key name must be a valid Kubernetes label name and case-sensitive.
 	// The content of the string containing this variable will be replaced by the actual label value on the member cluster.

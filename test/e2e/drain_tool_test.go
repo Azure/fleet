@@ -359,7 +359,7 @@ var _ = Describe("Drain is allowed on one cluster, blocked on others - ClusterRe
 
 func runDrainClusterBinary(hubClusterName, memberClusterName string) {
 	By(fmt.Sprintf("draining cluster %s", memberClusterName))
-	cmd := exec.Command(drainBinaryPath,
+	cmd := exec.Command(fleetBinaryPath, "draincluster",
 		"--hubClusterContext", hubClusterName,
 		"--clusterName", memberClusterName)
 	_, err := cmd.CombinedOutput()
@@ -368,7 +368,7 @@ func runDrainClusterBinary(hubClusterName, memberClusterName string) {
 
 func runUncordonClusterBinary(hubClusterName, memberClusterName string) {
 	By(fmt.Sprintf("uncordoning cluster %s", memberClusterName))
-	cmd := exec.Command(uncordonBinaryPath,
+	cmd := exec.Command(fleetBinaryPath, "uncordoncluster",
 		"--hubClusterContext", hubClusterName,
 		"--clusterName", memberClusterName)
 	_, err := cmd.CombinedOutput()

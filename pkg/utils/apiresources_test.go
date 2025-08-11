@@ -354,6 +354,186 @@ func TestDefaultResourceConfigGroupVersionKindParse(t *testing.T) {
 			Version: "v2",
 			Kind:    "TrafficManagerBackend",
 		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ClusterResourcePlacement",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ClusterResourcePlacement",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ResourcePlacement",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ResourcePlacement",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ClusterResourceBinding",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ClusterResourceBinding",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ResourceBinding",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ResourceBinding",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ClusterResourceSnapshot",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ClusterResourceSnapshot",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ResourceSnapshot",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ResourceSnapshot",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ClusterSchedulingPolicySnapshot",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ClusterSchedulingPolicySnapshot",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "SchedulingPolicySnapshot",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "SchedulingPolicySnapshot",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "Work",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "Work",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ClusterStagedUpdateRun",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ClusterStagedUpdateRun",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ClusterStagedUpdateStrategy",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ClusterStagedUpdateStrategy",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ClusterApprovalRequest",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ClusterApprovalRequest",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ClusterResourcePlacementEviction",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ClusterResourcePlacementEviction",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ClusterResourcePlacementDisruptionBudget",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ClusterResourcePlacementDisruptionBudget",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ClusterResourceOverride",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ClusterResourceOverride",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ClusterResourceOverrideSnapshot",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ClusterResourceOverrideSnapshot",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ResourceOverride",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ResourceOverride",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1beta1",
+			Kind:    "ResourceOverrideSnapshot",
+		},
+		{
+			Group:   "placement.kubernetes-fleet.io",
+			Version: "v1",
+			Kind:    "ResourceOverrideSnapshot",
+		},
 	}
 
 	resourcesNotInDefaultResourcesList := []schema.GroupVersionKind{

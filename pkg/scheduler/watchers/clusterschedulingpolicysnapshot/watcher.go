@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package clusterschedulingpolicysnapshot features a controller that enqueues CRPs for the
+// Package clusterschedulingpolicysnapshot features a controller that enqueues placement objects for the
 // scheduler to process where there is a change in their scheduling policy snapshots.
 package clusterschedulingpolicysnapshot
 
@@ -43,38 +43,45 @@ type Reconciler struct {
 	SchedulerWorkQueue queue.PlacementSchedulingQueueWriter
 }
 
-// Reconcile reconciles the cluster scheduling policy snapshot.
+// Reconcile reconciles the policy snapshot (either ClusterSchedulingPolicySnapshot or SchedulingPolicySnapshot).
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	policySnapshotRef := klog.KRef("", req.Name)
+	policySnapshotRef := klog.KRef(req.Namespace, req.Name)
 	startTime := time.Now()
-	klog.V(2).InfoS("Scheduler source reconciliation starts", "clusterSchedulingPolicySnapshot", policySnapshotRef)
+	klog.V(2).InfoS("Scheduler source reconciliation starts", "policySnapshot", policySnapshotRef)
 	defer func() {
 		latency := time.Since(startTime).Milliseconds()
-		klog.V(2).InfoS("Scheduler source reconciliation ends", "clusterSchedulingPolicySnapshot", policySnapshotRef, "latency", latency)
+		klog.V(2).InfoS("Scheduler source reconciliation ends", "policySnapshot", policySnapshotRef, "latency", latency)
 	}()
 
-	// Retrieve the policy snapshot.
-	policySnapshot := &fleetv1beta1.ClusterSchedulingPolicySnapshot{}
+	// Determine the appropriate policy snapshot type based on namespace.
+	var policySnapshot fleetv1beta1.PolicySnapshotObj
+	if req.Namespace != "" {
+		policySnapshot = &fleetv1beta1.SchedulingPolicySnapshot{}
+	} else {
+		policySnapshot = &fleetv1beta1.ClusterSchedulingPolicySnapshot{}
+	}
+
 	if err := r.Client.Get(ctx, req.NamespacedName, policySnapshot); err != nil {
-		klog.ErrorS(err, "Failed to get cluster scheduling policy snapshot", "clusterSchedulingPolicySnapshot", policySnapshotRef)
+		klog.ErrorS(err, "Failed to get policy snapshot", "policySnapshot", policySnapshotRef)
 		return ctrl.Result{}, controller.NewAPIServerError(true, client.IgnoreNotFound(err))
 	}
 
 	// Check if the policy snapshot has been deleted.
 	//
 	// Normally this would not happen as the event filter is set to filter out all deletion events.
-	if policySnapshot.DeletionTimestamp != nil {
+	if policySnapshot.GetDeletionTimestamp() != nil {
 		// The policy snapshot has been deleted; ignore it.
 		return ctrl.Result{}, nil
 	}
 
 	// Verify if the policy snapshot is currently active.
-	isLatestVal, ok := policySnapshot.Labels[fleetv1beta1.IsLatestSnapshotLabel]
+	// TODO: create a lib to check if the policy snapshot is latest.
+	isLatestVal, ok := policySnapshot.GetLabels()[fleetv1beta1.IsLatestSnapshotLabel]
 	if !ok {
 		// The IsLatestSnapshot label is not present; normally this should never occur.
 		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("IsLatestSnapshotLabel is missing")),
 			"IsLatestSnapshot label is not present",
-			"clusterSchedulingPolicySnapshot", policySnapshotRef)
+			"policySnapshot", policySnapshotRef)
 		// This is not a situation that the controller can recover by itself. Should the label
 		// value be corrected, the controller will be triggered again.
 		return ctrl.Result{}, nil
@@ -85,7 +92,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		// occur.
 		klog.ErrorS(controller.NewUnexpectedBehaviorError(err),
 			"Failed to parse IsLatestSnapshot value",
-			"clusterSchedulingPolicySnapshot", policySnapshotRef)
+			"policySnapshot", policySnapshotRef)
 		// This is not an error that the controller can recover by itself; ignore the error.
 		// Should the label value be corrected, the controller will be triggered again.
 		return ctrl.Result{}, nil
@@ -96,28 +103,25 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
-	// Retrieve the owner CRP.
-	crpName, ok := policySnapshot.Labels[fleetv1beta1.PlacementTrackingLabel]
+	// Retrieve the owner placement name (CRP or RP).
+	placementName, ok := policySnapshot.GetLabels()[fleetv1beta1.PlacementTrackingLabel]
 	if !ok {
-		// The CRPTracking label is not present; normally this should never occur.
-		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("CRPTrackingLabel is missing")),
-			"CRPTracking label is not present",
-			"clusterSchedulingPolicySnapshot", policySnapshotRef)
+		// The PlacementTracking label is not present; normally this should never occur.
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("PlacementTrackingLabel is missing")),
+			"PlacementTracking label is not present",
+			"policySnapshot", policySnapshotRef)
 		// This is not a situation that the controller can recover by itself. Should the label
 		// value be corrected, the controller will be triggered again.
 		return ctrl.Result{}, nil
 	}
-
-	// Enqueue the CRP name for scheduler processing.
-	r.SchedulerWorkQueue.Add(queue.PlacementKey(crpName))
+	r.SchedulerWorkQueue.Add(queue.PlacementKey(controller.GetObjectKeyFromNamespaceName(policySnapshot.GetNamespace(), placementName)))
 
 	// The reconciliation loop ends.
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager SetupWithManger sets up the controller with the manager.
-func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	customPredicate := predicate.Funcs{
+func buildCustomPredicate() predicate.Predicate {
+	return predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
 			// Always process newly created policy snapshots.
 			return true
@@ -183,9 +187,20 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return false
 		},
 	}
+}
 
+// SetupWithManagerForClusterSchedulingPolicySnapshot sets up the controller with the manager for ClusterSchedulingPolicySnapshot.
+func (r *Reconciler) SetupWithManagerForClusterSchedulingPolicySnapshot(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).Named("clusterschedulingpolicysnapshot-scheduler-watcher").
 		For(&fleetv1beta1.ClusterSchedulingPolicySnapshot{}).
-		WithEventFilter(customPredicate).
+		WithEventFilter(buildCustomPredicate()).
+		Complete(r)
+}
+
+// SetupWithManagerForSchedulingPolicySnapshot sets up the controller with the manager for SchedulingPolicySnapshot.
+func (r *Reconciler) SetupWithManagerForSchedulingPolicySnapshot(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).Named("schedulingpolicysnapshot-scheduler-watcher").
+		For(&fleetv1beta1.SchedulingPolicySnapshot{}).
+		WithEventFilter(buildCustomPredicate()).
 		Complete(r)
 }

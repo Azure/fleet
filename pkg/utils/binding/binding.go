@@ -28,7 +28,7 @@ func HasBindingFailed(binding placementv1beta1.BindingObj) bool {
 	for i := condition.OverriddenCondition; i <= condition.AvailableCondition; i++ {
 		if condition.IsConditionStatusFalse(binding.GetCondition(string(i.ResourceBindingConditionType())), binding.GetGeneration()) {
 			// TODO: parse the reason of the condition to see if the failure is recoverable/retriable or not
-			klog.V(2).Infof("binding %s has condition %s with status false", binding.GetName(), string(i.ResourceBindingConditionType()))
+			klog.V(2).Infof("binding %s has condition %s with status false", klog.KObj(binding), string(i.ResourceBindingConditionType()))
 			return true
 		}
 	}

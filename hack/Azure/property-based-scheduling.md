@@ -103,7 +103,7 @@ To set up Fleet using the clusters you just created, you will need to install Fl
 First, clone the Fleet source code repository, which contains the Helm charts used for Fleet agent installation:
 
 ```sh
-git clone https://github.com/Azure/fleet.git
+git clone https://github.com/kubefleet-dev/kubefleet.git
 cd fleet
 git checkout demo
 ```
@@ -407,7 +407,7 @@ spec:
 EOF
 ```
 
-The CRP API enables great flexibility; you can set up different requirements/preferences in combination, such as finding all clusters with at least 5 nodes and 10 available CPU cores, or 4 of all the clusters with the cheapest memory cost and the most amount of available memory. [Read Fleet's API definition to learn more](https://github.com/Azure/fleet/blob/main/apis/placement/v1beta1/clusterresourceplacement_types.go).
+The CRP API enables great flexibility; you can set up different requirements/preferences in combination, such as finding all clusters with at least 5 nodes and 10 available CPU cores, or 4 of all the clusters with the cheapest memory cost and the most amount of available memory. [Read Fleet's API definition to learn more](https://github.com/kubefleet-dev/kubefleet/blob/main/apis/placement/v1beta1/clusterresourceplacement_types.go).
 
 ## Clean things up
 
@@ -421,9 +421,9 @@ All the AKS clusters in the resource group will be removed.
 
 ## What's next
 
-Congrats! We hope that property-based scheduling (preview) has improved your overall Fleet experience. If you have any questions, feedback, or concerns, please raise [a GitHub issue](https://github.com/Azure/fleet/issues).
+Congrats! We hope that property-based scheduling (preview) has improved your overall Fleet experience. If you have any questions, feedback, or concerns, please raise [a GitHub issue](https://github.com/kubefleet-dev/kubefleet/issues).
 
 Aside from property-based scheduling, Fleet offers many other scheduling features that are useful in a
-multi-cluster environment; check out the [How-to Guide: Using the Fleet `ClusterResourcePlacement` API](https://github.com/Azure/fleet/tree/main/docs/howtos/crp.md) for more information.
+multi-cluster environment; check out the [How-to Guide: Using the Fleet `ClusterResourcePlacement` API](https://kubefleet.dev/docs/how-tos/crp/) for more information.
 
-You can also review Fleet's [source code](https://github.com/Azure/fleet) or review its [documentation](https://github.com/Azure/fleet/tree/main/docs) on GitHub.
+You can also review Fleet's [source code](https://github.com/kubefleet-dev/kubefleet/) or review its [documentation](https://kubefleet.dev/docs/) on GitHub.

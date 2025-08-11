@@ -61,6 +61,12 @@ type ChangeDetector struct {
 	// watchers and does not rely on this struct to detect changes.
 	ClusterResourcePlacementControllerV1Beta1 controller.Controller
 
+	// ResourceChangeController maintains a rate limited queue which is used to store
+	// the name of the changed resourcePlacement and a reconcile function to consume the items in queue.
+	//
+	// ResourcePlacementController is only enabled as the v1beta1 controller.
+	ResourcePlacementController controller.Controller
+
 	// ClusterResourcePlacementController maintains a rate limited queue which is used to store any resources'
 	// cluster wide key and a reconcile function to consume the items in queue.
 	// This controller will be used by both v1alpha1 & v1beta1 ClusterResourcePlacementController.
@@ -81,9 +87,9 @@ type ChangeDetector struct {
 	// SkippedNamespaces contains all the namespaces that we won't select
 	SkippedNamespaces map[string]bool
 
-	// ConcurrentClusterPlacementWorker is the number of cluster `placement` reconcilers that are
+	// ConcurrentPlacementWorker is the number of `placement` reconcilers that are
 	// allowed to sync concurrently.
-	ConcurrentClusterPlacementWorker int
+	ConcurrentPlacementWorker int
 
 	// ConcurrentResourceChangeWorker is the number of resource change work that are
 	// allowed to sync concurrently.
@@ -151,12 +157,17 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 	errs, cctx := errgroup.WithContext(ctx)
 	if d.ClusterResourcePlacementControllerV1Alpha1 != nil {
 		errs.Go(func() error {
-			return d.ClusterResourcePlacementControllerV1Alpha1.Run(cctx, d.ConcurrentClusterPlacementWorker)
+			return d.ClusterResourcePlacementControllerV1Alpha1.Run(cctx, d.ConcurrentPlacementWorker)
 		})
 	}
 	if d.ClusterResourcePlacementControllerV1Beta1 != nil {
 		errs.Go(func() error {
-			return d.ClusterResourcePlacementControllerV1Beta1.Run(cctx, d.ConcurrentClusterPlacementWorker)
+			return d.ClusterResourcePlacementControllerV1Beta1.Run(cctx, d.ConcurrentPlacementWorker)
+		})
+	}
+	if d.ResourcePlacementController != nil {
+		errs.Go(func() error {
+			return d.ResourcePlacementController.Run(cctx, d.ConcurrentPlacementWorker)
 		})
 	}
 	errs.Go(func() error {

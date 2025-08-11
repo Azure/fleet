@@ -579,15 +579,15 @@ func beforeSuiteForProcess1() []byte {
 		Client:             hubClient,
 		SchedulerWorkQueue: schedulerWorkQueue,
 	}
-	err = crpReconciler.SetupWithManager(ctrlMgr)
+	err = crpReconciler.SetupWithManagerForClusterResourcePlacement(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred(), "Failed to set up CRP watcher with controller manager")
 
 	policySnapshotWatcher := clusterschedulingpolicysnapshot.Reconciler{
 		Client:             hubClient,
 		SchedulerWorkQueue: schedulerWorkQueue,
 	}
-	err = policySnapshotWatcher.SetupWithManager(ctrlMgr)
-	Expect(err).NotTo(HaveOccurred(), "Failed to set up policy snapshot watcher with controller manager")
+	err = policySnapshotWatcher.SetupWithManagerForClusterSchedulingPolicySnapshot(ctrlMgr)
+	Expect(err).NotTo(HaveOccurred(), "Failed to set up cluster policy snapshot watcher with controller manager")
 
 	memberClusterWatcher := membercluster.Reconciler{
 		Client:                    hubClient,
@@ -601,7 +601,7 @@ func beforeSuiteForProcess1() []byte {
 		Client:             hubClient,
 		SchedulerWorkQueue: schedulerWorkQueue,
 	}
-	err = clusterResourceBindingWatcher.SetupWithManager(ctrlMgr)
+	err = clusterResourceBindingWatcher.SetupWithManagerForClusterResourceBinding(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred(), "Failed to set up cluster resource binding watcher with controller manager")
 
 	// Set up the scheduler.

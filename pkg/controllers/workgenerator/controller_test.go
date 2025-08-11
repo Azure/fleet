@@ -3751,6 +3751,44 @@ func TestSyncApplyStrategy(t *testing.T) {
 	}
 }
 
+func TestShouldIgnoreWork(t *testing.T) {
+	tests := map[string]struct {
+		enqueueCRP          bool
+		parentNamespaceName string
+		want                bool
+	}{
+		"should ignore CRP work when it has parent namespace": {
+			enqueueCRP:          true,
+			parentNamespaceName: "test-namespace",
+			want:                true,
+		},
+		"should NOT ignore CRP work when it has empty parent namespace": {
+			enqueueCRP:          true,
+			parentNamespaceName: "",
+			want:                false,
+		},
+		"should ignore RP work when it has empty parent namespace": {
+			enqueueCRP:          false,
+			parentNamespaceName: "",
+			want:                true,
+		},
+		"should NOT ignore RP work when it has parent namespace": {
+			enqueueCRP:          false,
+			parentNamespaceName: "test-namespace",
+			want:                false,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := shouldIgnoreWork(tt.enqueueCRP, tt.parentNamespaceName)
+			if got != tt.want {
+				t.Errorf("shouldIgnoreWork(%v, %q) = %v, want %v", tt.enqueueCRP, tt.parentNamespaceName, got, tt.want)
+			}
+		})
+	}
+}
+
 type conflictClient struct {
 	client.Client
 	conflictCount int

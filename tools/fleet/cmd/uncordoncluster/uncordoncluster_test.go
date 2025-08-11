@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package uncordoncluster
 
 import (
 	"context"
@@ -39,8 +39,8 @@ func TestUncordon(t *testing.T) {
 		Effect: corev1.TaintEffectNoSchedule,
 	}
 	taint2 := clusterv1beta1.Taint{
-		Key:    "test-key1",
-		Value:  "test-value1",
+		Key:    "test-key2",
+		Value:  "test-value2",
 		Effect: corev1.TaintEffectNoSchedule,
 	}
 
@@ -69,6 +69,18 @@ func TestUncordon(t *testing.T) {
 			wantTaints:    []clusterv1beta1.Taint{taint1, taint2},
 			wantErr:       nil,
 		},
+		{
+			name:          "only cordon taint present",
+			initialTaints: []clusterv1beta1.Taint{toolsutils.CordonTaint},
+			wantTaints:    []clusterv1beta1.Taint{},
+			wantErr:       nil,
+		},
+		{
+			name:          "multiple cordon taints present",
+			initialTaints: []clusterv1beta1.Taint{taint1, toolsutils.CordonTaint, taint2, toolsutils.CordonTaint},
+			wantTaints:    []clusterv1beta1.Taint{taint1, taint2},
+			wantErr:       nil,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -85,14 +97,14 @@ func TestUncordon(t *testing.T) {
 			}
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithObjects(mc).Build()
 
-			// Initialize UncordonCluster
-			uncordonCluster := helper{
+			// Initialize uncordon options
+			uncordonCluster := &uncordonOptions{
 				hubClient:   fakeClient,
 				clusterName: "test-cluster",
 			}
 
-			// Call the Uncordon function
-			gotErr := uncordonCluster.Uncordon(context.Background())
+			// Call the uncordon function
+			gotErr := uncordonCluster.uncordon(context.Background())
 			if tc.wantErr == nil {
 				if gotErr != nil {
 					t.Errorf("Uncordon test %s failed, got error %v, want error %v", tc.name, gotErr, tc.wantErr)

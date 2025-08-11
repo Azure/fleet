@@ -84,7 +84,7 @@ func TestExtractResourceIndexFromClusterResourceSnapshot(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotIndex, err := ExtractResourceIndexFromClusterResourceSnapshot(tc.snapshot)
+			gotIndex, err := ExtractResourceIndexFromResourceSnapshot(tc.snapshot)
 			if tc.wantError {
 				if err == nil {
 					t.Fatalf("ExtractResourceIndexFromClusterResourceSnapshot() =  %v, want error", gotIndex)

@@ -18,7 +18,8 @@ func init() {
 	AddToManagerFleetResourceValidator = fleetresourcehandler.Add
 	// AddtoManagerManagedResource is a function to register managed resource validator to the webhook server
 	AddtoManagerManagedResource = managedresource.Add
-	// AddToManagerFuncs is a list of functions to register webhook validators to the webhook server
+	// AddToManagerFuncs is a list of functions to register webhook validators and mutators to the webhook server
+	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacement.AddMutating)
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacement.AddV1Alpha1)
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacement.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, pod.Add)
