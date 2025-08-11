@@ -51,7 +51,6 @@ import (
 	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
-	"go.goms.io/fleet/pkg/webhook/managedresource"
 	testv1alpha1 "go.goms.io/fleet/test/apis/v1alpha1"
 	"go.goms.io/fleet/test/e2e/framework"
 )
@@ -713,22 +712,6 @@ func cleanupWorkResources() {
 	cleanWorkResourcesOnCluster(hubCluster)
 }
 
-func managedNamespace() corev1.Namespace {
-	return corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf(managedNamespaceTemplate, GinkgoParallelProcess()),
-			Labels: map[string]string{
-				managedresource.ManagedByArmKey: managedresource.ManagedByArmValue,
-			},
-		},
-	}
-}
-
-func createManagedNamespace() {
-	ns := managedNamespace()
-	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
-}
-
 func cleanWorkResourcesOnCluster(cluster *framework.Cluster) {
 	ns := appNamespace()
 	Expect(client.IgnoreNotFound(cluster.KubeClient.Delete(ctx, &ns))).To(Succeed(), "Failed to delete namespace %s", ns.Name)
@@ -844,7 +827,6 @@ func checkIfRemovedWorkResourcesFromMemberClustersConsistently(clusters []*frame
 		Consistently(workResourcesRemovedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s consistently", memberCluster.ClusterName)
 	}
 }
-
 func checkNamespaceExistsWithOwnerRefOnMemberCluster(nsName, crpName string) {
 	Consistently(func() error {
 		ns := &corev1.Namespace{}
