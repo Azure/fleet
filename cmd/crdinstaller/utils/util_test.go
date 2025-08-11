@@ -61,6 +61,7 @@ func runTest(t *testing.T, crdPath string) {
 				"clusterresourcebindings.placement.kubernetes-fleet.io",
 				"clusterresourceenvelopes.placement.kubernetes-fleet.io",
 				"clusterresourceplacements.placement.kubernetes-fleet.io",
+				"clusterresourceplacementstatuses.placement.kubernetes-fleet.io",
 				"clusterresourceoverrides.placement.kubernetes-fleet.io",
 				"clusterresourceoverridesnapshots.placement.kubernetes-fleet.io",
 				"clusterresourceplacementdisruptionbudgets.placement.kubernetes-fleet.io",
