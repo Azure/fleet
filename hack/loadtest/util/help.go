@@ -196,7 +196,7 @@ func CleanupAll(hubClient client.Client) error {
 	return nil
 }
 func getFleetSize(crp v1beta1.ClusterResourcePlacement, clusterNames ClusterNames) (string, ClusterNames, error) {
-	for _, status := range crp.Status.PlacementStatuses {
+	for _, status := range crp.Status.PerClusterPlacementStatuses {
 		if err := clusterNames.Set(status.ClusterName); err != nil {
 			klog.ErrorS(err, "Failed to set clusterNames.")
 			return "", nil, err

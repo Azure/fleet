@@ -47,8 +47,8 @@ import (
 )
 
 const (
-	testCRPName   = "my-crp"
-	crpGeneration = 15
+	testCRPName         = "my-crp"
+	placementGeneration = 15
 )
 
 var (
@@ -102,7 +102,7 @@ func clusterResourcePlacementForTest() *fleetv1beta1.ClusterResourcePlacement {
 	return &fleetv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       testCRPName,
-			Generation: crpGeneration,
+			Generation: placementGeneration,
 		},
 		Spec: fleetv1beta1.PlacementSpec{
 			ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
@@ -187,7 +187,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(placementGeneration),
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
@@ -249,7 +249,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.CRPGenerationAnnotation: strconv.Itoa(crpGeneration),
+							fleetv1beta1.CRPGenerationAnnotation: strconv.Itoa(placementGeneration),
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
@@ -283,7 +283,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
-							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(placementGeneration),
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
@@ -312,7 +312,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
-							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(placementGeneration),
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
@@ -419,7 +419,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(placementGeneration),
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
@@ -479,7 +479,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(placementGeneration),
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
@@ -594,7 +594,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
-							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(placementGeneration),
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
@@ -711,7 +711,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
-							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(placementGeneration),
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{

@@ -585,7 +585,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 							Reason: condition.RolloutStartedUnknownReason,
 						},
 					},
-					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           member1Name,
 							ObservedResourceIndex: "0",
@@ -690,7 +690,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Reason: condition.WorkSynchronizedUnknownReason,
 				},
 			}
-			wantCRP.Status.PlacementStatuses = []placementv1beta1.PerClusterPlacementStatus{
+			wantCRP.Status.PerClusterPlacementStatuses = []placementv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           member1Name,
 					ObservedResourceIndex: "0",
@@ -795,7 +795,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 							Reason: condition.RolloutStartedUnknownReason,
 						},
 					},
-					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           member1Name,
 							ObservedResourceIndex: "0",
@@ -898,7 +898,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Reason: condition.WorkSynchronizedUnknownReason,
 				},
 			}
-			wantCRP.Status.PlacementStatuses = []placementv1beta1.PerClusterPlacementStatus{
+			wantCRP.Status.PerClusterPlacementStatuses = []placementv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           member1Name,
 					ObservedResourceIndex: "0",
@@ -1015,7 +1015,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					ObservedGeneration: 1,
 				},
 			}
-			wantCRP.Status.PlacementStatuses = nil
+			wantCRP.Status.PerClusterPlacementStatuses = nil
 			gotCRP = retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement status metric was emitted with different generations")
@@ -1069,7 +1069,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					ObservedGeneration: 2,
 				},
 			}
-			wantCRP.Status.PlacementStatuses = []placementv1beta1.PerClusterPlacementStatus{
+			wantCRP.Status.PerClusterPlacementStatuses = []placementv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           member1Name,
 					ObservedResourceIndex: "0",
@@ -1199,7 +1199,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 							Reason: condition.WorkSynchronizedUnknownReason,
 						},
 					},
-					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           member1Name,
 							ObservedResourceIndex: "0",
@@ -1317,8 +1317,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			}
 			meta.SetStatusCondition(&wantCRP.Status.Conditions, wantCondition)
 			wantCondition.Type = string(placementv1beta1.ResourceBindingWorkSynchronized)
-			meta.SetStatusCondition(&wantCRP.Status.PlacementStatuses[0].Conditions, wantCondition)
-			meta.SetStatusCondition(&wantCRP.Status.PlacementStatuses[1].Conditions, wantCondition)
+			meta.SetStatusCondition(&wantCRP.Status.PerClusterPlacementStatuses[0].Conditions, wantCondition)
+			meta.SetStatusCondition(&wantCRP.Status.PerClusterPlacementStatuses[1].Conditions, wantCondition)
 
 			wantCondition = metav1.Condition{
 				Status: metav1.ConditionUnknown,
@@ -1327,8 +1327,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			}
 			meta.SetStatusCondition(&wantCRP.Status.Conditions, wantCondition)
 			wantCondition.Type = string(placementv1beta1.ResourceBindingApplied)
-			meta.SetStatusCondition(&wantCRP.Status.PlacementStatuses[0].Conditions, wantCondition)
-			meta.SetStatusCondition(&wantCRP.Status.PlacementStatuses[1].Conditions, wantCondition)
+			meta.SetStatusCondition(&wantCRP.Status.PerClusterPlacementStatuses[0].Conditions, wantCondition)
+			meta.SetStatusCondition(&wantCRP.Status.PerClusterPlacementStatuses[1].Conditions, wantCondition)
 
 			By("Ensure placement status applied metric was emitted")
 			wantMetrics = append(wantMetrics, &prometheusclientmodel.Metric{
@@ -1358,8 +1358,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			}
 			meta.SetStatusCondition(&wantCRP.Status.Conditions, wantCondition)
 			wantCondition.Type = string(placementv1beta1.ResourceBindingApplied)
-			meta.SetStatusCondition(&wantCRP.Status.PlacementStatuses[0].Conditions, wantCondition)
-			meta.SetStatusCondition(&wantCRP.Status.PlacementStatuses[1].Conditions, wantCondition)
+			meta.SetStatusCondition(&wantCRP.Status.PerClusterPlacementStatuses[0].Conditions, wantCondition)
+			meta.SetStatusCondition(&wantCRP.Status.PerClusterPlacementStatuses[1].Conditions, wantCondition)
 
 			wantCondition = metav1.Condition{
 				Status: metav1.ConditionTrue,
@@ -1368,8 +1368,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			}
 			meta.SetStatusCondition(&wantCRP.Status.Conditions, wantCondition)
 			wantCondition.Type = string(placementv1beta1.ResourceBindingAvailable)
-			meta.SetStatusCondition(&wantCRP.Status.PlacementStatuses[0].Conditions, wantCondition)
-			meta.SetStatusCondition(&wantCRP.Status.PlacementStatuses[1].Conditions, wantCondition)
+			meta.SetStatusCondition(&wantCRP.Status.PerClusterPlacementStatuses[0].Conditions, wantCondition)
+			meta.SetStatusCondition(&wantCRP.Status.PerClusterPlacementStatuses[1].Conditions, wantCondition)
 			gotCRP = retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement status completed metric was emitted")
@@ -1498,7 +1498,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 							Reason: condition.WorkSynchronizedUnknownReason,
 						},
 					},
-					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           member1Name,
 							ObservedResourceIndex: "0",
@@ -1611,8 +1611,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			}
 			meta.SetStatusCondition(&wantCRP.Status.Conditions, wantCondition)
 			wantCondition.Type = string(placementv1beta1.PerClusterWorkSynchronizedConditionType)
-			meta.SetStatusCondition(&wantCRP.Status.PlacementStatuses[0].Conditions, wantCondition)
-			meta.SetStatusCondition(&wantCRP.Status.PlacementStatuses[1].Conditions, wantCondition)
+			meta.SetStatusCondition(&wantCRP.Status.PerClusterPlacementStatuses[0].Conditions, wantCondition)
+			meta.SetStatusCondition(&wantCRP.Status.PerClusterPlacementStatuses[1].Conditions, wantCondition)
 			wantCondition = metav1.Condition{
 				Status: metav1.ConditionUnknown,
 				Type:   string(placementv1beta1.ClusterResourcePlacementDiffReportedConditionType),
@@ -1620,8 +1620,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			}
 			meta.SetStatusCondition(&wantCRP.Status.Conditions, wantCondition)
 			wantCondition.Type = string(placementv1beta1.PerClusterDiffReportedConditionType)
-			meta.SetStatusCondition(&wantCRP.Status.PlacementStatuses[0].Conditions, wantCondition)
-			meta.SetStatusCondition(&wantCRP.Status.PlacementStatuses[1].Conditions, wantCondition)
+			meta.SetStatusCondition(&wantCRP.Status.PerClusterPlacementStatuses[0].Conditions, wantCondition)
+			meta.SetStatusCondition(&wantCRP.Status.PerClusterPlacementStatuses[1].Conditions, wantCondition)
 			gotCRP = retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
 
 			By("Ensure placement status metric for reportDiff was emitted")
@@ -1681,7 +1681,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 							Reason: condition.WorkSynchronizedUnknownReason,
 						},
 					},
-					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           member1Name,
 							ObservedResourceIndex: "0",
@@ -1814,7 +1814,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Reason: condition.DiffReportedStatusTrueReason,
 				},
 			}
-			wantCRP.Status.PlacementStatuses = []placementv1beta1.PerClusterPlacementStatus{
+			wantCRP.Status.PerClusterPlacementStatuses = []placementv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           member1Name,
 					ObservedResourceIndex: "0",
@@ -2072,7 +2072,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 							Reason: condition.RolloutControlledByExternalControllerReason,
 						},
 					},
-					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName: member1Name,
 							Conditions: []metav1.Condition{

@@ -212,11 +212,13 @@ func (r *Reconciler) handleUpdate(ctx context.Context, placementObj fleetv1beta1
 
 	// We skip checking the last resource condition (available) because it will be covered by checking isRolloutCompleted func.
 	for i := condition.RolloutStartedCondition; i < condition.TotalCondition-1; i++ {
-		oldCond := oldPlacement.GetCondition(string(i.ClusterResourcePlacementConditionType()))
-		newCond := placementObj.GetCondition(string(i.ClusterResourcePlacementConditionType()))
+		var oldCond, newCond *metav1.Condition
+		conditionType := getPlacementConditionType(placementObj, i)
+		oldCond = oldPlacement.GetCondition(conditionType)
+		newCond = placementObj.GetCondition(conditionType)
 		if !condition.IsConditionStatusTrue(oldCond, oldPlacement.GetGeneration()) &&
 			condition.IsConditionStatusTrue(newCond, placementObj.GetGeneration()) {
-			klog.V(2).InfoS("Placement resource condition status has been changed to true", "placement", placementKObj, "generation", placementObj.GetGeneration(), "condition", i.ClusterResourcePlacementConditionType())
+			klog.V(2).InfoS("Placement resource condition status has been changed to true", "placement", placementKObj, "generation", placementObj.GetGeneration(), "condition", conditionType)
 			r.Recorder.Event(placementObj, corev1.EventTypeNormal, i.EventReasonForTrue(), i.EventMessageForTrue())
 		}
 	}
@@ -949,6 +951,7 @@ func (r *Reconciler) listSortedResourceSnapshots(ctx context.Context, placementO
 	return snapshotList, nil
 }
 
+// TODO: further streamline the logic of setPlacementStatus
 // setPlacementStatus returns if there is a cluster scheduled by the scheduler.
 // it returns true if the cluster schedule succeeded, false otherwise.
 func (r *Reconciler) setPlacementStatus(
@@ -980,7 +983,7 @@ func (r *Reconciler) setPlacementStatus(
 		// The undeleted resources on these old clusters could lead to failed synchronized or applied condition.
 		// Today, we only track the resources progress if the same cluster is selected again.
 		klog.V(2).InfoS("Resetting the resource placement status since scheduled condition is unknown", "placement", klog.KObj(placementObj))
-		placementStatus.PlacementStatuses = []fleetv1beta1.PerClusterPlacementStatus{}
+		placementStatus.PerClusterPlacementStatuses = []fleetv1beta1.PerClusterPlacementStatus{}
 		return false, nil
 	}
 
@@ -989,24 +992,23 @@ func (r *Reconciler) setPlacementStatus(
 	selected, unselected := classifyClusterDecisions(latestSchedulingPolicySnapshot.GetPolicySnapshotStatus().ClusterDecisions)
 	// Calculate the number of clusters that should have been selected yet cannot be, due to
 	// scheduling constraints.
-	failedToScheduleClusterCount := calculateFailedToScheduleClusterCount(placementObj, selected, unselected)
-
-	// Prepare the resource placement status (status per cluster) in the placement status.
-	allRPS := make([]fleetv1beta1.PerClusterPlacementStatus, 0, len(latestSchedulingPolicySnapshot.GetPolicySnapshotStatus().ClusterDecisions))
-
-	// For clusters that have been selected, set the resource placement status based on the
-	// respective resource binding status for each of them.
-	expectedCondTypes := determineExpectedPlacementAndResourcePlacementStatusCondType(placementObj)
-	allRPS, rpsSetCondTypeCounter, err := r.appendScheduledResourcePlacementStatuses(
-		ctx, allRPS, selected, expectedCondTypes, placementObj, latestSchedulingPolicySnapshot, latestResourceSnapshot)
+	failedToScheduleClusterCount, err := calculateFailedToScheduleClusterCount(placementObj, selected, unselected)
 	if err != nil {
 		return false, err
 	}
 
-	// For clusters that failed to get scheduled, set a resource placement status with the
-	// failed to schedule condition for each of them.
-	allRPS = appendFailedToScheduleResourcePlacementStatuses(allRPS, unselected, failedToScheduleClusterCount, placementObj)
-	placementStatus.PlacementStatuses = allRPS
+	// For clusters that have been selected, set the resource placement status based on the
+	// respective resource binding status for each of them.
+	expectedCondTypes := determineExpectedPlacementAndResourcePlacementStatusCondType(placementObj)
+	perClusterStatus, perClusterCondTypeCounter, err := r.buildSelectedPerClusterPlacementStatuses(
+		ctx, selected, expectedCondTypes, placementObj, latestSchedulingPolicySnapshot, latestResourceSnapshot)
+	if err != nil {
+		return false, err
+	}
+
+	// For clusters that failed to get scheduled, set a resource placement status with the failed to schedule condition for each of them.
+	perClusterStatus = append(perClusterStatus, buildFailedToSchedulePerClusterPlacementStatuses(unselected, failedToScheduleClusterCount, placementObj)...)
+	placementStatus.PerClusterPlacementStatuses = perClusterStatus
 	klog.V(2).InfoS("Updated placement status for each individual cluster", "selectedNoCluster", len(selected), "unselectedNoCluster", len(unselected), "failedToScheduleClusterCount", failedToScheduleClusterCount, "placement", klog.KObj(placementObj))
 
 	// Prepare the conditions for the placement object itself.
@@ -1027,13 +1029,13 @@ func (r *Reconciler) setPlacementStatus(
 		// For external rollout strategy, if clusters observe different resource snapshot versions,
 		// we set RolloutStarted to Unknown without any other conditions since we do not know exactly which version is rolling out.
 		// We also need to reset ObservedResourceIndex and selectedResources.
-		rolloutStartedUnknown, err := r.determineRolloutStateForPlacementWithExternalRolloutStrategy(ctx, placementObj, selected, allRPS, selectedResourceIDs)
+		rolloutStartedUnknown, err := r.determineRolloutStateForPlacementWithExternalRolloutStrategy(ctx, placementObj, selected, perClusterStatus, selectedResourceIDs)
 		if err != nil || rolloutStartedUnknown {
 			return true, err
 		}
 	}
-	setPlacementConditions(placementObj, allRPS, rpsSetCondTypeCounter, expectedCondTypes)
-	klog.V(2).InfoS("Updated placement status for the entire placement", "numResourcePlacementStatus", len(allRPS), "placement", klog.KObj(placementObj))
+	setPlacementConditions(placementObj, perClusterStatus, perClusterCondTypeCounter, expectedCondTypes)
+	klog.V(2).InfoS("Updated placement status for the entire placement", "numResourcePlacementStatus", len(perClusterStatus), "placement", klog.KObj(placementObj))
 	return true, nil
 }
 
@@ -1085,7 +1087,7 @@ func (r *Reconciler) determineRolloutStateForPlacementWithExternalRolloutStrateg
 		})
 		// As placement status will refresh even if the spec has not changed, we reset any unused conditions to avoid confusion.
 		for i := condition.RolloutStartedCondition + 1; i < condition.TotalCondition; i++ {
-			meta.RemoveStatusCondition(&placementStatus.Conditions, string(i.ClusterResourcePlacementConditionType()))
+			meta.RemoveStatusCondition(&placementStatus.Conditions, getPlacementConditionType(placementObj, i))
 		}
 		return true, nil
 	}
@@ -1106,7 +1108,7 @@ func (r *Reconciler) determineRolloutStateForPlacementWithExternalRolloutStrateg
 		})
 		// As placement status will refresh even if the spec has not changed, we reset any unused conditions to avoid confusion.
 		for i := condition.RolloutStartedCondition + 1; i < condition.TotalCondition; i++ {
-			meta.RemoveStatusCondition(&placementStatus.Conditions, string(i.ClusterResourcePlacementConditionType()))
+			meta.RemoveStatusCondition(&placementStatus.Conditions, getPlacementConditionType(placementObj, i))
 		}
 
 		return true, nil
@@ -1153,28 +1155,6 @@ func (r *Reconciler) determineRolloutStateForPlacementWithExternalRolloutStrateg
 	return false, nil
 }
 
-// TODO: determine the actual condition type for RP
-// getPlacementScheduledConditionType returns the appropriate scheduled condition type based on the placement type.
-func getPlacementScheduledConditionType(placementObj fleetv1beta1.PlacementObj) string {
-	if placementObj.GetNamespace() == "" {
-		// Cluster-scoped placement
-		return string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType)
-	}
-	// Namespace-scoped placement
-	return string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType)
-}
-
-// TODO: determine the actual condition type for RP
-// getPlacementRolloutStartedConditionType returns the appropriate rollout started condition type based on the placement type.
-func getPlacementRolloutStartedConditionType(placementObj fleetv1beta1.PlacementObj) string {
-	if placementObj.GetNamespace() == "" {
-		// Cluster-scoped placement
-		return string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType)
-	}
-	// Namespace-scoped placement
-	return string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType)
-}
-
 func buildScheduledCondition(placementObj fleetv1beta1.PlacementObj, latestSchedulingPolicySnapshot fleetv1beta1.PolicySnapshotObj) metav1.Condition {
 	scheduledCondition := latestSchedulingPolicySnapshot.GetCondition(string(fleetv1beta1.PolicySnapshotScheduled))
 
@@ -1216,31 +1196,31 @@ func classifyClusterDecisions(decisions []fleetv1beta1.ClusterDecision) (selecte
 	return selected, unselected
 }
 
-func buildResourcePlacementStatusMap(placementObj fleetv1beta1.PlacementObj) map[string][]metav1.Condition {
-	placementStatus := placementObj.GetPlacementStatus()
-	status := placementStatus.PlacementStatuses
-	m := make(map[string][]metav1.Condition, len(status))
-	for i := range status {
-		if len(status[i].ClusterName) == 0 || len(status[i].Conditions) == 0 {
+func buildPerClusterPlacementStatusMap(placementObj fleetv1beta1.PlacementObj) map[string][]metav1.Condition {
+	perClusterStatuses := placementObj.GetPlacementStatus().PerClusterPlacementStatuses
+	m := make(map[string][]metav1.Condition, len(perClusterStatuses))
+	for i := range perClusterStatuses {
+		if len(perClusterStatuses[i].ClusterName) == 0 || len(perClusterStatuses[i].Conditions) == 0 {
 			continue
 		}
-		m[status[i].ClusterName] = status[i].Conditions
+		m[perClusterStatuses[i].ClusterName] = perClusterStatuses[i].Conditions
 	}
 	return m
 }
 
-// TODO: make this work for RP too
-// isRolloutCompleted checks if the placement rollout is completed which means:
+// isRolloutCompleted checks if the placement rollout is completed for both CRP and RP which means:
 // 1. Placement Scheduled condition is true.
 // 2. All expected placement conditions are true depends on what type of policy placementObj has.
 func isRolloutCompleted(placementObj fleetv1beta1.PlacementObj) bool {
-	if !condition.IsConditionStatusTrue(placementObj.GetCondition(string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType)), placementObj.GetGeneration()) {
+	scheduledConditionType := getPlacementScheduledConditionType(placementObj)
+	if !condition.IsConditionStatusTrue(placementObj.GetCondition(scheduledConditionType), placementObj.GetGeneration()) {
 		return false
 	}
 
 	expectedCondTypes := determineExpectedPlacementAndResourcePlacementStatusCondType(placementObj)
 	for _, i := range expectedCondTypes {
-		if !condition.IsConditionStatusTrue(placementObj.GetCondition(string(i.ClusterResourcePlacementConditionType())), placementObj.GetGeneration()) {
+		conditionType := getPlacementConditionType(placementObj, i)
+		if !condition.IsConditionStatusTrue(placementObj.GetCondition(conditionType), placementObj.GetGeneration()) {
 			return false
 		}
 	}
@@ -1251,26 +1231,28 @@ func emitPlacementStatusMetric(placementObj fleetv1beta1.PlacementObj) {
 	// Check Placement Scheduled condition.
 	status := "nil"
 	reason := "nil"
-	cond := placementObj.GetCondition(string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType))
+	scheduledConditionType := getPlacementScheduledConditionType(placementObj)
+	cond := placementObj.GetCondition(scheduledConditionType)
 	if !condition.IsConditionStatusTrue(cond, placementObj.GetGeneration()) {
 		if cond != nil && cond.ObservedGeneration == placementObj.GetGeneration() {
 			status = string(cond.Status)
 			reason = cond.Reason
 		}
-		metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(placementObj.GetName(), strconv.FormatInt(placementObj.GetGeneration(), 10), string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType), status, reason).SetToCurrentTime()
+		metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(placementObj.GetName(), strconv.FormatInt(placementObj.GetGeneration(), 10), scheduledConditionType, status, reason).SetToCurrentTime()
 		return
 	}
 
 	// Check placement expected conditions.
 	expectedCondTypes := determineExpectedPlacementAndResourcePlacementStatusCondType(placementObj)
 	for _, condType := range expectedCondTypes {
-		cond = placementObj.GetCondition(string(condType.ClusterResourcePlacementConditionType()))
+		conditionType := getPlacementConditionType(placementObj, condType)
+		cond = placementObj.GetCondition(conditionType)
 		if !condition.IsConditionStatusTrue(cond, placementObj.GetGeneration()) {
 			if cond != nil && cond.ObservedGeneration == placementObj.GetGeneration() {
 				status = string(cond.Status)
 				reason = cond.Reason
 			}
-			metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(placementObj.GetName(), strconv.FormatInt(placementObj.GetGeneration(), 10), string(condType.ClusterResourcePlacementConditionType()), status, reason).SetToCurrentTime()
+			metrics.FleetPlacementStatusLastTimeStampSeconds.WithLabelValues(placementObj.GetName(), strconv.FormatInt(placementObj.GetGeneration(), 10), conditionType, status, reason).SetToCurrentTime()
 			return
 		}
 	}

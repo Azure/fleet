@@ -515,8 +515,8 @@ var _ = Describe("CRP stuck in the rollout process (blocked by availability fail
 		// Find the clusters that have the updated Service object and those that do not.
 		clustersWithUpdatedService := map[string]struct{}{}
 		clustersWithOldService := map[string]struct{}{}
-		for idx := range crp.Status.PlacementStatuses {
-			rps := crp.Status.PlacementStatuses[idx]
+		for idx := range crp.Status.PerClusterPlacementStatuses {
+			rps := crp.Status.PerClusterPlacementStatuses[idx]
 			availableCond := meta.FindStatusCondition(rps.Conditions, string(placementv1beta1.PerClusterAvailableConditionType))
 			switch {
 			case availableCond == nil:

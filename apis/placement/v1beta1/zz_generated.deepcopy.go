@@ -21,7 +21,7 @@ limitations under the License.
 package v1beta1
 
 import (
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -1704,8 +1704,8 @@ func (in *PlacementStatus) DeepCopyInto(out *PlacementStatus) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.PlacementStatuses != nil {
-		in, out := &in.PlacementStatuses, &out.PlacementStatuses
+	if in.PerClusterPlacementStatuses != nil {
+		in, out := &in.PerClusterPlacementStatuses, &out.PerClusterPlacementStatuses
 		*out = make([]PerClusterPlacementStatus, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])

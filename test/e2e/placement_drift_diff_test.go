@@ -182,7 +182,7 @@ var _ = Describe("take over existing resources", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -354,7 +354,7 @@ var _ = Describe("take over existing resources", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -559,7 +559,7 @@ var _ = Describe("detect drifts on placed resources", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpRolloutCompletedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -698,7 +698,7 @@ var _ = Describe("detect drifts on placed resources", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -882,7 +882,7 @@ var _ = Describe("detect drifts on placed resources", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpAppliedFailedConditions(crpGeneration),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -1087,7 +1087,7 @@ var _ = Describe("report diff mode", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpDiffReportedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -1296,7 +1296,7 @@ var _ = Describe("report diff mode", func() {
 				return &placementv1beta1.PlacementStatus{
 					Conditions:        crpDiffReportedConditions(crpGeneration, false),
 					SelectedResources: workResourceIdentifiers(),
-					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -1513,7 +1513,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 						Group:     "apps",
 					},
 				},
-				PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+				PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 					{
 						ClusterName:           memberCluster1EastProdName,
 						ObservedResourceIndex: "0",
@@ -1684,7 +1684,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 			}
 
 			// Populate the timestamps.
-			for _, placementStatus := range crp.Status.PlacementStatuses {
+			for _, placementStatus := range crp.Status.PerClusterPlacementStatuses {
 				switch placementStatus.ClusterName {
 				case memberCluster1EastProdName:
 					lastDeployDiffObservedTimeOnCluster1 = placementStatus.DiffedPlacements[0].ObservationTime
@@ -1760,7 +1760,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 						Namespace: nsName,
 					},
 				},
-				PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+				PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 					{
 						ClusterName:           memberCluster1EastProdName,
 						ObservedResourceIndex: "0",
@@ -1931,7 +1931,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 			}
 
 			// Populate the timestamps.
-			for _, placementStatus := range crp.Status.PlacementStatuses {
+			for _, placementStatus := range crp.Status.PerClusterPlacementStatuses {
 				switch placementStatus.ClusterName {
 				case memberCluster1EastProdName:
 					refreshedLastDeployDiffObservedTimeOnCluster1 = placementStatus.DiffedPlacements[0].ObservationTime
@@ -1997,7 +1997,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 						Namespace: nsName,
 					},
 				},
-				PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+				PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 					{
 						ClusterName:           memberCluster1EastProdName,
 						ObservedResourceIndex: "0",
@@ -2151,7 +2151,7 @@ var _ = Describe("mixed diff and drift reportings", Ordered, func() {
 						Namespace: nsName,
 					},
 				},
-				PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+				PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 					{
 						ClusterName:           memberCluster1EastProdName,
 						ObservedResourceIndex: observedResourceIndex,

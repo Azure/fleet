@@ -348,10 +348,10 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 				},
 			}
 			wantStatus := placementv1beta1.PlacementStatus{
-				Conditions:            crpNotAvailableConditions(1, false),
-				PlacementStatuses:     PlacementStatuses,
-				SelectedResources:     wantSelectedResources,
-				ObservedResourceIndex: "0",
+				Conditions:                  crpNotAvailableConditions(1, false),
+				PerClusterPlacementStatuses: PlacementStatuses,
+				SelectedResources:           wantSelectedResources,
+				ObservedResourceIndex:       "0",
 			}
 
 			Eventually(func() error {
@@ -470,7 +470,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 
 				wantStatus := placementv1beta1.PlacementStatus{
 					Conditions: crpWorkSynchronizedFailedConditions(crp.Generation, false),
-					PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
@@ -590,7 +590,7 @@ var _ = Describe("Process objects with generate name", Ordered, func() {
 
 			wantStatus := placementv1beta1.PlacementStatus{
 				Conditions: crpAppliedFailedConditions(crp.Generation),
-				PlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+				PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 					{
 						ClusterName:           memberCluster1EastProdName,
 						ObservedResourceIndex: "0",
@@ -709,7 +709,7 @@ func checkForRolloutStuckOnOneFailedClusterStatus(wantSelectedResources []placem
 		}
 		// check the placement status has a failed placement
 		applyFailed := false
-		for _, placementStatus := range crp.Status.PlacementStatuses {
+		for _, placementStatus := range crp.Status.PerClusterPlacementStatuses {
 			if len(placementStatus.FailedPlacements) != 0 {
 				applyFailed = true
 			}
@@ -717,7 +717,7 @@ func checkForRolloutStuckOnOneFailedClusterStatus(wantSelectedResources []placem
 		if !applyFailed {
 			return fmt.Errorf("CRP status does not have failed placement")
 		}
-		for _, placementStatus := range crp.Status.PlacementStatuses {
+		for _, placementStatus := range crp.Status.PerClusterPlacementStatuses {
 			// this is the cluster that got the new enveloped resource that was malformed
 			if len(placementStatus.FailedPlacements) != 0 {
 				if diff := cmp.Diff(placementStatus.FailedPlacements, wantFailedResourcePlacement, crpStatusCmpOptions...); diff != "" {

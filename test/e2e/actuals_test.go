@@ -755,10 +755,10 @@ func crpStatusWithOverrideUpdatedActual(
 			})
 		}
 		wantStatus := placementv1beta1.PlacementStatus{
-			Conditions:            crpRolloutCompletedConditions(crp.Generation, hasOverride),
-			PlacementStatuses:     wantPlacementStatus,
-			SelectedResources:     wantSelectedResourceIdentifiers,
-			ObservedResourceIndex: wantObservedResourceIndex,
+			Conditions:                  crpRolloutCompletedConditions(crp.Generation, hasOverride),
+			PerClusterPlacementStatuses: wantPlacementStatus,
+			SelectedResources:           wantSelectedResourceIdentifiers,
+			ObservedResourceIndex:       wantObservedResourceIndex,
 		}
 		if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
 			return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
@@ -798,10 +798,10 @@ func crpStatusWithOverrideUpdatedFailedActual(
 		}
 
 		wantStatus := placementv1beta1.PlacementStatus{
-			Conditions:            crpOverrideFailedConditions(crp.Generation),
-			PlacementStatuses:     wantPlacementStatus,
-			SelectedResources:     wantSelectedResourceIdentifiers,
-			ObservedResourceIndex: wantObservedResourceIndex,
+			Conditions:                  crpOverrideFailedConditions(crp.Generation),
+			PerClusterPlacementStatuses: wantPlacementStatus,
+			SelectedResources:           wantSelectedResourceIdentifiers,
+			ObservedResourceIndex:       wantObservedResourceIndex,
 		}
 		if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
 			return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
@@ -837,10 +837,10 @@ func crpStatusWithWorkSynchronizedUpdatedFailedActual(
 		}
 
 		wantStatus := placementv1beta1.PlacementStatus{
-			Conditions:            crpWorkSynchronizedFailedConditions(crp.Generation, hasOverrides),
-			PlacementStatuses:     wantPlacementStatus,
-			SelectedResources:     wantSelectedResourceIdentifiers,
-			ObservedResourceIndex: wantObservedResourceIndex,
+			Conditions:                  crpWorkSynchronizedFailedConditions(crp.Generation, hasOverrides),
+			PerClusterPlacementStatuses: wantPlacementStatus,
+			SelectedResources:           wantSelectedResourceIdentifiers,
+			ObservedResourceIndex:       wantObservedResourceIndex,
 		}
 		if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
 			return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
@@ -938,9 +938,9 @@ func crpStatusWithExternalStrategyActual(
 		}
 
 		wantStatus := placementv1beta1.PlacementStatus{
-			PlacementStatuses:     wantPlacementStatus,
-			SelectedResources:     wantSelectedResourceIdentifiers,
-			ObservedResourceIndex: wantObservedResourceIndex,
+			PerClusterPlacementStatuses: wantPlacementStatus,
+			SelectedResources:           wantSelectedResourceIdentifiers,
+			ObservedResourceIndex:       wantObservedResourceIndex,
 		}
 		if wantCRPRolloutCompleted {
 			if reportDiff {
@@ -1013,10 +1013,10 @@ func customizedCRPStatusUpdatedActual(crpName string,
 		// * The CRP is of the PickN placement type and the required N count cannot be fulfilled; or
 		// * The CRP is of the PickFixed placement type and the list of target clusters specified cannot be fulfilled.
 		wantStatus := placementv1beta1.PlacementStatus{
-			Conditions:            wantCRPConditions,
-			PlacementStatuses:     wantPlacementStatus,
-			SelectedResources:     wantSelectedResourceIdentifiers,
-			ObservedResourceIndex: wantObservedResourceIndex,
+			Conditions:                  wantCRPConditions,
+			PerClusterPlacementStatuses: wantPlacementStatus,
+			SelectedResources:           wantSelectedResourceIdentifiers,
+			ObservedResourceIndex:       wantObservedResourceIndex,
 		}
 		if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
 			return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
@@ -1128,10 +1128,10 @@ func safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResourceIdentifiers [
 		}
 
 		wantStatus := placementv1beta1.PlacementStatus{
-			Conditions:            wantCRPConditions,
-			PlacementStatuses:     wantPlacementStatus,
-			SelectedResources:     wantSelectedResourceIdentifiers,
-			ObservedResourceIndex: wantObservedResourceIndex,
+			Conditions:                  wantCRPConditions,
+			PerClusterPlacementStatuses: wantPlacementStatus,
+			SelectedResources:           wantSelectedResourceIdentifiers,
+			ObservedResourceIndex:       wantObservedResourceIndex,
 		}
 
 		if diff := cmp.Diff(crp.Status, wantStatus, safeRolloutCRPStatusCmpOptions...); diff != "" {
