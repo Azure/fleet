@@ -26,15 +26,11 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/tools/cache"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
@@ -43,6 +39,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/keys"
+	testinformer "github.com/kubefleet-dev/kubefleet/test/utils/informer"
 )
 
 var _ controller.Controller = &fakeController{}
@@ -69,104 +66,6 @@ func (w *fakeController) Enqueue(obj interface{}) {
 		w.QueueObj = []string{}
 	}
 	w.QueueObj = append(w.QueueObj, obj.(string))
-}
-
-// fakeLister is a simple fake lister for testing
-type fakeLister struct {
-	objects []runtime.Object
-	err     error
-}
-
-func (f *fakeLister) List(_ labels.Selector) ([]runtime.Object, error) {
-	if f.err != nil {
-		return nil, f.err
-	}
-	return f.objects, nil
-}
-
-func (f *fakeLister) Get(name string) (runtime.Object, error) {
-	if f.err != nil {
-		return nil, f.err
-	}
-	for _, obj := range f.objects {
-		if obj.(*unstructured.Unstructured).GetName() == name {
-			return obj, nil
-		}
-	}
-	return nil, apierrors.NewNotFound(schema.GroupResource{Resource: "test"}, name)
-}
-
-func (f *fakeLister) ByNamespace(namespace string) cache.GenericNamespaceLister {
-	return &fakeNamespaceLister{objects: f.objects, namespace: namespace, err: f.err}
-}
-
-// fakeNamespaceLister implements cache.GenericNamespaceLister
-type fakeNamespaceLister struct {
-	objects   []runtime.Object
-	namespace string
-	err       error
-}
-
-func (f *fakeNamespaceLister) List(_ labels.Selector) ([]runtime.Object, error) {
-	if f.err != nil {
-		return nil, f.err
-	}
-	return f.objects, nil
-}
-
-func (f *fakeNamespaceLister) Get(name string) (runtime.Object, error) {
-	if f.err != nil {
-		return nil, f.err
-	}
-	for _, obj := range f.objects {
-		if obj.(*unstructured.Unstructured).GetName() == name {
-			return obj, nil
-		}
-	}
-	return nil, apierrors.NewNotFound(schema.GroupResource{Resource: "test"}, name)
-}
-
-// fakeInformerManager is a test-specific informer manager
-type fakeInformerManager struct {
-	listers map[schema.GroupVersionResource]*fakeLister
-}
-
-func (f *fakeInformerManager) AddDynamicResources(_ []informer.APIResourceMeta, _ cache.ResourceEventHandler, _ bool) {
-}
-
-func (f *fakeInformerManager) AddStaticResource(_ informer.APIResourceMeta, _ cache.ResourceEventHandler) {
-}
-
-func (f *fakeInformerManager) IsInformerSynced(_ schema.GroupVersionResource) bool {
-	return true
-}
-
-func (f *fakeInformerManager) Start() {
-}
-
-func (f *fakeInformerManager) Stop() {
-}
-
-func (f *fakeInformerManager) Lister(gvr schema.GroupVersionResource) cache.GenericLister {
-	if lister, exists := f.listers[gvr]; exists {
-		return lister
-	}
-	return &fakeLister{objects: []runtime.Object{}}
-}
-
-func (f *fakeInformerManager) GetNameSpaceScopedResources() []schema.GroupVersionResource {
-	return nil
-}
-
-func (f *fakeInformerManager) IsClusterScopedResources(_ schema.GroupVersionKind) bool {
-	return true
-}
-
-func (f *fakeInformerManager) WaitForCacheSync() {
-}
-
-func (f *fakeInformerManager) GetClient() dynamic.Interface {
-	return nil
 }
 
 func TestFindPlacementsSelectedDeletedResV1Alpha1(t *testing.T) {
@@ -1576,22 +1475,22 @@ func TestHandleUpdatedResource(t *testing.T) {
 		},
 	}
 
-	defaultFakeInformerManager := &fakeInformerManager{
-		listers: map[schema.GroupVersionResource]*fakeLister{
+	defaultFakeInformerManager := &testinformer.FakeManager{
+		Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 			{Group: "placement.kubernetes-fleet.io", Version: "v1beta1", Resource: "clusterresourceplacements"}: {
-				objects: func() []runtime.Object {
+				Objects: func() []runtime.Object {
 					uMap, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(testCRP)
 					return []runtime.Object{&unstructured.Unstructured{Object: uMap}}
 				}(),
 			},
 			{Group: "placement.kubernetes-fleet.io", Version: "v1beta1", Resource: "resourceplacements"}: {
-				objects: func() []runtime.Object {
+				Objects: func() []runtime.Object {
 					uMap, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(testRP)
 					return []runtime.Object{&unstructured.Unstructured{Object: uMap}}
 				}(),
 			},
 			{Group: "", Version: "v1", Resource: "namespaces"}: {
-				objects: func() []runtime.Object {
+				Objects: func() []runtime.Object {
 					uObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(testNamespace)
 					return []runtime.Object{&unstructured.Unstructured{Object: uObj}}
 				}(),
@@ -1684,16 +1583,16 @@ func TestHandleUpdatedResource(t *testing.T) {
 			},
 			clusterObj:      testDeployment,
 			isClusterScoped: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					{Group: "placement.kubernetes-fleet.io", Version: "v1beta1", Resource: "clusterresourceplacements"}: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 					{Group: "placement.kubernetes-fleet.io", Version: "v1beta1", Resource: "resourceplacements"}: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 					{Group: "", Version: "v1", Resource: "namespaces"}: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 				},
 			},
@@ -1714,19 +1613,19 @@ func TestHandleUpdatedResource(t *testing.T) {
 			},
 			clusterObj:      testDeployment,
 			isClusterScoped: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					{Group: "placement.kubernetes-fleet.io", Version: "v1beta1", Resource: "clusterresourceplacements"}: {
-						objects: func() []runtime.Object {
+						Objects: func() []runtime.Object {
 							uMap, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(testCRP)
 							return []runtime.Object{&unstructured.Unstructured{Object: uMap}}
 						}(),
 					},
 					{Group: "placement.kubernetes-fleet.io", Version: "v1beta1", Resource: "resourceplacements"}: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 					{Group: "", Version: "v1", Resource: "namespaces"}: {
-						objects: func() []runtime.Object {
+						Objects: func() []runtime.Object {
 							uObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(testNamespace)
 							return []runtime.Object{&unstructured.Unstructured{Object: uObj}}
 						}(),
@@ -1842,10 +1741,10 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: true,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: crpObjects,
+						Objects: crpObjects,
 					},
 				},
 			},
@@ -1862,10 +1761,10 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: true,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: crpObjects,
+						Objects: crpObjects,
 					},
 				},
 			},
@@ -1883,10 +1782,10 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ResourcePlacementGVR: {
-						objects: rpObjects,
+						Objects: rpObjects,
 					},
 				},
 			},
@@ -1904,10 +1803,10 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ResourcePlacementGVR: {
-						objects: rpObjects,
+						Objects: rpObjects,
 					},
 				},
 			},
@@ -1924,11 +1823,11 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: true,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: []runtime.Object{},
-						err:     errors.New("test lister error"),
+						Objects: []runtime.Object{},
+						Err:     errors.New("test lister error"),
 					},
 				},
 			},
@@ -1947,11 +1846,11 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ResourcePlacementGVR: {
-						objects: []runtime.Object{},
-						err:     errors.New("test lister error"),
+						Objects: []runtime.Object{},
+						Err:     errors.New("test lister error"),
 					},
 				},
 			},
@@ -1969,10 +1868,10 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: true,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 				},
 			},
@@ -1990,10 +1889,10 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ResourcePlacementGVR: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 				},
 			},
@@ -2010,10 +1909,10 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: true,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: func() []runtime.Object {
+						Objects: func() []runtime.Object {
 							// Create multiple CRPs that have selected this namespace
 							testCRP1 := &placementv1beta1.ClusterResourcePlacement{
 								ObjectMeta: metav1.ObjectMeta{
@@ -2089,10 +1988,10 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ResourcePlacementGVR: {
-						objects: func() []runtime.Object {
+						Objects: func() []runtime.Object {
 							// Create multiple ResourcePlacements that have selected this deployment
 							testRP1 := &placementv1beta1.ResourcePlacement{
 								ObjectMeta: metav1.ObjectMeta{
@@ -2275,13 +2174,13 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 				},
 			},
 			resource: testNamespace,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: crpObjects,
+						Objects: crpObjects,
 					},
 					utils.ResourcePlacementGVR: {
-						objects: rpObjects,
+						Objects: rpObjects,
 					},
 				},
 			},
@@ -2300,13 +2199,13 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 				},
 			},
 			resource: createDeploymentUnstructured(createTestDeployment()),
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 					utils.ResourcePlacementGVR: {
-						objects: rpObjects,
+						Objects: rpObjects,
 					},
 				},
 			},
@@ -2365,13 +2264,13 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 				uMap, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(nonMatchingRP)
 				rpObjects := []runtime.Object{&unstructured.Unstructured{Object: uMap}}
 
-				return &fakeInformerManager{
-					listers: map[schema.GroupVersionResource]*fakeLister{
+				return &testinformer.FakeManager{
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 						utils.ClusterResourcePlacementGVR: {
-							objects: []runtime.Object{},
+							Objects: []runtime.Object{},
 						},
 						utils.ResourcePlacementGVR: {
-							objects: rpObjects,
+							Objects: rpObjects,
 						},
 					},
 				}
@@ -2404,13 +2303,13 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 				}
 				return createNamespaceUnstructured(otherResource)
 			}(),
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 					utils.ResourcePlacementGVR: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 				},
 			},
@@ -2451,13 +2350,13 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 				}
 				uMap1, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(testClusterResourcePlacement)
 				uMap2, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(testCRP2)
-				return &fakeInformerManager{
-					listers: map[schema.GroupVersionResource]*fakeLister{
+				return &testinformer.FakeManager{
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 						utils.ClusterResourcePlacementGVR: {
-							objects: []runtime.Object{&unstructured.Unstructured{Object: uMap1}, &unstructured.Unstructured{Object: uMap2}},
+							Objects: []runtime.Object{&unstructured.Unstructured{Object: uMap1}, &unstructured.Unstructured{Object: uMap2}},
 						},
 						utils.ResourcePlacementGVR: {
-							objects: []runtime.Object{},
+							Objects: []runtime.Object{},
 						},
 					},
 				}
@@ -2478,13 +2377,13 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 				},
 			},
 			resource: testNamespace,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: crpObjects,
+						Objects: crpObjects,
 					},
 					utils.ResourcePlacementGVR: {
-						objects: rpObjects,
+						Objects: rpObjects,
 					},
 				},
 			},
@@ -2528,13 +2427,13 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 				uMap, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(crpWithNamespaceOnlySelector)
 				crpObjects := []runtime.Object{&unstructured.Unstructured{Object: uMap}}
 
-				return &fakeInformerManager{
-					listers: map[schema.GroupVersionResource]*fakeLister{
+				return &testinformer.FakeManager{
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 						utils.ClusterResourcePlacementGVR: {
-							objects: crpObjects,
+							Objects: crpObjects,
 						},
 						utils.ResourcePlacementGVR: {
-							objects: []runtime.Object{},
+							Objects: []runtime.Object{},
 						},
 					},
 				}
@@ -2643,10 +2542,10 @@ func TestHandleDeletedResource(t *testing.T) {
 				},
 			},
 			isClusterScoped: true,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: crpObjects,
+						Objects: crpObjects,
 					},
 				},
 			},
@@ -2665,10 +2564,10 @@ func TestHandleDeletedResource(t *testing.T) {
 				},
 			},
 			isClusterScoped: true,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: crpObjects,
+						Objects: crpObjects,
 					},
 				},
 			},
@@ -2688,16 +2587,16 @@ func TestHandleDeletedResource(t *testing.T) {
 				},
 			},
 			isClusterScoped: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: crpObjects,
+						Objects: crpObjects,
 					},
 					utils.ResourcePlacementGVR: {
-						objects: rpObjects,
+						Objects: rpObjects,
 					},
 					utils.NamespaceGVR: {
-						objects: []runtime.Object{testNamespace},
+						Objects: []runtime.Object{testNamespace},
 					},
 				},
 			},
@@ -2717,14 +2616,14 @@ func TestHandleDeletedResource(t *testing.T) {
 				},
 			},
 			isClusterScoped: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: []runtime.Object{},
-						err:     errors.New("CRP lister error"),
+						Objects: []runtime.Object{},
+						Err:     errors.New("CRP lister error"),
 					},
 					utils.NamespaceGVR: {
-						objects: []runtime.Object{testNamespace},
+						Objects: []runtime.Object{testNamespace},
 					},
 				},
 			},
@@ -2744,14 +2643,14 @@ func TestHandleDeletedResource(t *testing.T) {
 				},
 			},
 			isClusterScoped: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 					utils.ResourcePlacementGVR: {
-						objects: []runtime.Object{},
-						err:     errors.New("RP lister error"),
+						Objects: []runtime.Object{},
+						Err:     errors.New("RP lister error"),
 					},
 				},
 			},
@@ -2770,11 +2669,11 @@ func TestHandleDeletedResource(t *testing.T) {
 				},
 			},
 			isClusterScoped: true,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: []runtime.Object{},
-						err:     errors.New("CRP lister error"),
+						Objects: []runtime.Object{},
+						Err:     errors.New("CRP lister error"),
 					},
 				},
 			},
@@ -2813,16 +2712,16 @@ func TestHandleDeletedResource(t *testing.T) {
 				}
 				uMap, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(crpWithNamespaceOnlySelector)
 				crpObjects := []runtime.Object{&unstructured.Unstructured{Object: uMap}}
-				return &fakeInformerManager{
-					listers: map[schema.GroupVersionResource]*fakeLister{
+				return &testinformer.FakeManager{
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 						utils.ClusterResourcePlacementGVR: {
-							objects: crpObjects,
+							Objects: crpObjects,
 						},
 						utils.ResourcePlacementGVR: {
-							objects: rpObjects,
+							Objects: rpObjects,
 						},
 						utils.NamespaceGVR: {
-							objects: []runtime.Object{testNamespace},
+							Objects: []runtime.Object{testNamespace},
 						},
 					},
 				}

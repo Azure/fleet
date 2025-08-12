@@ -181,6 +181,9 @@ cmd/memberagent/        # Member agent main and setup
 
 ### Test Coding Style
 - Use `want` or `wanted` instead of `expect` or `expected` when creating the desired state
+- Comments that are complete sentences should be capitalized and punctuated like standard English sentences. (As an exception, it is okay to begin a sentence with an uncapitalized identifier name if it is otherwise clear. Such cases are probably best done only at the beginning of a paragraph.)
+- Comments that are sentence fragments have no such requirements for punctuation or capitalization.
+- Documentation comments should always be complete sentences, and as such should always be capitalized and punctuated. Simple end-of-line comments (especially for struct fields) can be simple phrases that assume the field name is the subject.
 
 ## Key Patterns
 
