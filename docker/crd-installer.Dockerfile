@@ -14,11 +14,12 @@ COPY cmd/crdinstaller/ cmd/crdinstaller/
 
 ARG TARGETARCH
 
-# Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GO111MODULE=on go build -o crdinstaller cmd/crdinstaller/main.go
+# Build with CGO enabled and GOEXPERIMENT=systemcrypto for internal usage
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=${TARGETARCH} GOEXPERIMENT=systemcrypto GO111MODULE=on go build -o crdinstaller cmd/crdinstaller/main.go
 
-# Use distroless as minimal base image to package the crdinstaller binary
-FROM gcr.io/distroless/static:nonroot
+# Use Azure Linux distroless base image to package the crdinstaller binary
+# Refer to https://mcr.microsoft.com/en-us/artifact/mar/azurelinux/distroless/base/about for more details
+FROM mcr.microsoft.com/azurelinux/distroless/base:3.0
 WORKDIR /
 COPY --from=builder /workspace/crdinstaller .
 COPY config/crd/bases/ /workspace/config/crd/bases/

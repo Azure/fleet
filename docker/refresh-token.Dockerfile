@@ -1,4 +1,4 @@
-# Build the hubagent binary
+# Build the refreshtoken binary
 FROM mcr.microsoft.com/oss/go/microsoft/golang:1.24.4 AS builder
 
 WORKDIR /workspace
@@ -15,12 +15,12 @@ COPY pkg/authtoken pkg/authtoken
 
 ARG TARGETARCH
 
-# Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GO111MODULE=on go build -o refreshtoken main.go
+# Build with CGO enabled and GOEXPERIMENT=systemcrypto for internal usage
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=${TARGETARCH} GOEXPERIMENT=systemcrypto GO111MODULE=on go build -o refreshtoken main.go
 
-# Use distroless as minimal base image to package the refreshtoken binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot
+# Use Azure Linux distroless base image to package the refreshtoken binary
+# Refer to https://mcr.microsoft.com/en-us/artifact/mar/azurelinux/distroless/base/about for more details
+FROM mcr.microsoft.com/azurelinux/distroless/base:3.0
 WORKDIR /
 COPY --from=builder /workspace/refreshtoken .
 USER 65532:65532
