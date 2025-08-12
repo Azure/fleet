@@ -65,9 +65,19 @@ var (
 		Kind:  placementv1beta1.ClusterResourcePlacementKind,
 	}
 
+	ResourcePlacementGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.ResourcePlacementKind,
+	}
+
 	ClusterResourceBindingGK = schema.GroupKind{
 		Group: placementv1beta1.GroupVersion.Group,
 		Kind:  placementv1beta1.ClusterResourceBindingKind,
+	}
+
+	ResourceBindingGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.ResourceBindingKind,
 	}
 
 	ClusterResourceSnapshotGK = schema.GroupKind{
@@ -75,9 +85,19 @@ var (
 		Kind:  placementv1beta1.ClusterResourceSnapshotKind,
 	}
 
+	ResourceSnapshotGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.ResourceSnapshotKind,
+	}
+
 	ClusterSchedulingPolicySnapshotGK = schema.GroupKind{
 		Group: placementv1beta1.GroupVersion.Group,
 		Kind:  placementv1beta1.ClusterSchedulingPolicySnapshotKind,
+	}
+
+	SchedulingPolicySnapshotGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  placementv1beta1.SchedulingPolicySnapshotKind,
 	}
 
 	WorkGK = schema.GroupKind{
@@ -177,16 +197,19 @@ func NewResourceConfig(isAllowList bool) *ResourceConfig {
 
 	// disable all fleet placement resources except for the envelope type
 	r.AddGroupKind(ClusterResourcePlacementGK)
+	r.AddGroupKind(ResourcePlacementGK)
 	r.AddGroupKind(ClusterResourceBindingGK)
+	r.AddGroupKind(ResourceBindingGK)
 	r.AddGroupKind(ClusterResourceSnapshotGK)
+	r.AddGroupKind(ResourceSnapshotGK)
 	r.AddGroupKind(ClusterSchedulingPolicySnapshotGK)
+	r.AddGroupKind(SchedulingPolicySnapshotGK)
 	r.AddGroupKind(WorkGK)
 	r.AddGroupKind(ClusterStagedUpdateRunGK)
 	r.AddGroupKind(ClusterStagedUpdateStrategyGK)
 	r.AddGroupKind(ClusterApprovalRequestGK)
 	r.AddGroupKind(ClusterResourcePlacementEvictionGK)
 	r.AddGroupKind(ClusterResourcePlacementDisruptionBudgetGK)
-	// Add v1alpha1 resources to skip to not break when we move them to v1beta1
 	r.AddGroupKind(ClusterResourceOverrideGK)
 	r.AddGroupKind(ClusterResourceOverrideSnapshotGK)
 	r.AddGroupKind(ResourceOverrideGK)

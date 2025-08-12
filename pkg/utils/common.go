@@ -64,6 +64,7 @@ const (
 	RoleNameFormat             = fleetPrefix + "role-%s"
 	RoleBindingNameFormat      = fleetPrefix + "rolebinding-%s"
 	ValidationPathFmt          = "/validate-%s-%s-%s"
+	MutatingPathFmt            = "/mutate-%s-%s-%s"
 	lessGroupsStringFormat     = "groups: %v"
 	moreGroupsStringFormat     = "groups: [%s, %s, %s,......]"
 )
@@ -162,6 +163,12 @@ var (
 		Group:    placementv1beta1.GroupVersion.Group,
 		Version:  placementv1beta1.GroupVersion.Version,
 		Resource: placementv1beta1.ClusterResourcePlacementResource,
+	}
+
+	ResourcePlacementGVR = schema.GroupVersionResource{
+		Group:    placementv1beta1.GroupVersion.Group,
+		Version:  placementv1beta1.GroupVersion.Version,
+		Resource: placementv1beta1.ResourcePlacementResource,
 	}
 
 	ClusterResourcePlacementMetaGVK = metav1.GroupVersionKind{

@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,7 +32,7 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
-// Reconciler reconciles a clusterSchedulingPolicySnapshot object.
+// Reconciler reconciles a clusterSchedulingPolicySnapshot or schedulingPolicySnapshot object.
 type Reconciler struct {
 	client.Client
 
@@ -41,44 +40,69 @@ type Reconciler struct {
 	PlacementController controller.Controller
 }
 
-// Reconcile triggers a single CRP reconcile round when scheduling policy has changed.
+// Reconcile triggers a single placement reconcile round when scheduling policy has changed.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	name := req.NamespacedName
-	snapshot := fleetv1beta1.ClusterSchedulingPolicySnapshot{}
-	snapshotKRef := klog.KRef(name.Namespace, name.Name)
+	snapshotKRef := klog.KRef(req.Namespace, req.Name)
 
 	startTime := time.Now()
-	klog.V(2).InfoS("Reconciliation starts", "clusterSchedulingPolicySnapshot", snapshotKRef)
+	klog.V(2).InfoS("Reconciliation starts", "policySnapshot", snapshotKRef)
 	defer func() {
 		latency := time.Since(startTime).Milliseconds()
-		klog.V(2).InfoS("Reconciliation ends", "clusterSchedulingPolicySnapshot", snapshotKRef, "latency", latency)
+		klog.V(2).InfoS("Reconciliation ends", "policySnapshot", snapshotKRef, "latency", latency)
 	}()
 
-	if err := r.Client.Get(ctx, name, &snapshot); err != nil {
-		if errors.IsNotFound(err) {
-			klog.V(4).InfoS("Ignoring NotFound clusterSchedulingPolicySnapshot", "clusterSchedulingPolicySnapshot", snapshotKRef)
-			return ctrl.Result{}, nil
+	var snapshot fleetv1beta1.PolicySnapshotObj
+	var err error
+	if req.Namespace == "" {
+		// ClusterSchedulingPolicySnapshot (cluster-scoped)
+		var clusterSchedulingPolicySnapshot fleetv1beta1.ClusterSchedulingPolicySnapshot
+		if err = r.Client.Get(ctx, req.NamespacedName, &clusterSchedulingPolicySnapshot); err != nil {
+			klog.ErrorS(err, "Failed to get cluster scheduling policy snapshot", "policySnapshot", snapshotKRef)
+			return ctrl.Result{}, controller.NewAPIServerError(true, client.IgnoreNotFound(err))
 		}
-		klog.ErrorS(err, "Failed to get clusterSchedulingPolicySnapshot", "clusterSchedulingPolicySnapshot", snapshotKRef)
-		return ctrl.Result{}, controller.NewAPIServerError(true, err)
+		snapshot = &clusterSchedulingPolicySnapshot
+	} else {
+		// schedulingPolicySnapshot (namespaced)
+		var schedulingPolicySnapshot fleetv1beta1.SchedulingPolicySnapshot
+		if err = r.Client.Get(ctx, req.NamespacedName, &schedulingPolicySnapshot); err != nil {
+			klog.ErrorS(err, "Failed to get scheduling policy snapshot", "policySnapshot", snapshotKRef)
+			return ctrl.Result{}, controller.NewAPIServerError(true, client.IgnoreNotFound(err))
+		}
+		snapshot = &schedulingPolicySnapshot
 	}
-	crp := snapshot.Labels[fleetv1beta1.PlacementTrackingLabel]
-	if len(crp) == 0 {
-		err := fmt.Errorf("invalid label value %s", fleetv1beta1.PlacementTrackingLabel)
-		klog.ErrorS(err, "Invalid clusterSchedulingPolicySnapshot", "clusterSchedulingPolicySnapshot", snapshotKRef)
+
+	placementName := snapshot.GetLabels()[fleetv1beta1.PlacementTrackingLabel]
+	if len(placementName) == 0 {
+		err := fmt.Errorf("label %s is missing or has empty value", fleetv1beta1.PlacementTrackingLabel)
+		klog.ErrorS(err, "Failed to enqueue placement due to invalid schedulingPolicySnapshot", "policySnapshot", snapshotKRef)
 		return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
 	}
 
-	r.PlacementController.Enqueue(crp)
+	r.PlacementController.Enqueue(controller.GetObjectKeyFromNamespaceName(req.Namespace, placementName))
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
-func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+// SetupWithManagerForClusterSchedulingPolicySnapshot sets up the controller with the Manager for ClusterSchedulingPolicySnapshot.
+func (r *Reconciler) SetupWithManagerForClusterSchedulingPolicySnapshot(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).Named("clusterschedulingpolicysnapshot-watcher").
 		For(&fleetv1beta1.ClusterSchedulingPolicySnapshot{}).
 		WithEventFilter(predicate.Funcs{
 			// skipping delete and create events so that CRP controller does not need to update the status.
+			DeleteFunc: func(e event.DeleteEvent) bool {
+				return false
+			},
+			CreateFunc: func(e event.CreateEvent) bool {
+				return false
+			},
+		}).Complete(r)
+}
+
+// SetupWithManagerForSchedulingPolicySnapshot sets up the controller with the Manager for SchedulingPolicySnapshot.
+func (r *Reconciler) SetupWithManagerForSchedulingPolicySnapshot(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).Named("schedulingpolicysnapshot-watcher").
+		For(&fleetv1beta1.SchedulingPolicySnapshot{}).
+		WithEventFilter(predicate.Funcs{
+			// skipping delete and create events so that RP controller does not need to update the status.
 			DeleteFunc: func(e event.DeleteEvent) bool {
 				return false
 			},

@@ -115,12 +115,20 @@ func (r *Reconciler) selectResources(placement *fleetv1alpha1.ClusterResourcePla
 func convertResourceSelector(old []fleetv1alpha1.ClusterResourceSelector) []fleetv1beta1.ClusterResourceSelector {
 	res := make([]fleetv1beta1.ClusterResourceSelector, len(old))
 	for i, item := range old {
-		res[i] = fleetv1beta1.ClusterResourceSelector(item)
+		res[i] = fleetv1beta1.ClusterResourceSelector{
+			Group:          item.Group,
+			Version:        item.Version,
+			Kind:           item.Kind,
+			Name:           item.Name,
+			LabelSelector:  item.LabelSelector,
+			SelectionScope: fleetv1beta1.NamespaceWithResources,
+		}
 	}
 	return res
 }
 
 // gatherSelectedResource gets all the resources according to the resource selector.
+// TODO: treat the RP selector differently to not allow RP to select cluster scoped resources
 func (r *Reconciler) gatherSelectedResource(placement string, selectors []fleetv1beta1.ClusterResourceSelector) ([]*unstructured.Unstructured, error) {
 	var resources []*unstructured.Unstructured
 	var resourceMap = make(map[fleetv1beta1.ResourceIdentifier]bool)
@@ -294,7 +302,7 @@ func (r *Reconciler) fetchClusterScopedResources(selector fleetv1beta1.ClusterRe
 	return selectedObjs, nil
 }
 
-// fetchNamespaceResources retrieves all the objects for a ClusterResourceSelector that is for namespace.
+// fetchNamespaceResources retrieves all the objects for a ResourceSelectorTerm that is for namespace.
 func (r *Reconciler) fetchNamespaceResources(selector fleetv1beta1.ClusterResourceSelector, placeName string) ([]runtime.Object, error) {
 	klog.V(2).InfoS("start to fetch the namespace resources by the selector", "selector", selector)
 	var resources []runtime.Object
@@ -510,9 +518,10 @@ func generateResourceContent(object *unstructured.Unstructured) (*fleetv1beta1.R
 // selectResourcesForPlacement selects the resources according to the placement resourceSelectors.
 // It also generates an array of resource content and resource identifier based on the selected resources.
 // It also returns the number of envelope configmaps so the CRP controller can have the right expectation of the number of work objects.
-func (r *Reconciler) selectResourcesForPlacement(placement *fleetv1beta1.ClusterResourcePlacement) (int, []fleetv1beta1.ResourceContent, []fleetv1beta1.ResourceIdentifier, error) {
+func (r *Reconciler) selectResourcesForPlacement(placementObj fleetv1beta1.PlacementObj) (int, []fleetv1beta1.ResourceContent, []fleetv1beta1.ResourceIdentifier, error) {
 	envelopeObjCount := 0
-	selectedObjects, err := r.gatherSelectedResource(placement.GetName(), placement.Spec.ResourceSelectors)
+	placementSpec := placementObj.GetPlacementSpec()
+	selectedObjects, err := r.gatherSelectedResource(placementObj.GetName(), placementSpec.ResourceSelectors)
 	if err != nil {
 		return 0, nil, nil, err
 	}

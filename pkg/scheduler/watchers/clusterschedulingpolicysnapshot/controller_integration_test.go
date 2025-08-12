@@ -41,7 +41,9 @@ const (
 )
 
 const (
-	crpName = "crp"
+	crpName       = "crp"
+	rpName        = "rp"
+	testNamespace = "test-namespace"
 
 	policySnapshotName1 = "policy-snapshot-1"
 	policySnapshotName2 = "policy-snapshot-2"
@@ -58,15 +60,13 @@ var (
 var (
 	// expectedKeySetEnqueuedActual is a function that checks if the expected key set has been enqueued.
 	expectedKeySetEnqueuedActual = func() error {
-		if isAllPresent, absentKeys := keyCollector.IsPresent(crpName); !isAllPresent {
-			return fmt.Errorf("expected key(s) %v is not found", absentKeys)
-		}
+		return isKeyPresent(crpName)
+	}
 
-		if queueLen := keyCollector.Len(); queueLen != 1 {
-			return fmt.Errorf("more than one key is enqueued: current len %d, want 1", queueLen)
-		}
-
-		return nil
+	// expectedRPKeySetEnqueuedActual is a function that checks if the expected RP key set has been enqueued.
+	expectedRPKeySetEnqueuedActual = func() error {
+		expectedRPKey := testNamespace + "/" + rpName
+		return isKeyPresent(expectedRPKey)
 	}
 
 	// noKeyEnqueuedActual is a function that checks if the work queue is empty.
@@ -77,6 +77,18 @@ var (
 		return nil
 	}
 )
+
+func isKeyPresent(key string) error {
+	if isAllPresent, absentKeys := keyCollector.IsPresent(key); !isAllPresent {
+		return fmt.Errorf("expected key(s) %v is not found", absentKeys)
+	}
+
+	if queueLen := keyCollector.Len(); queueLen != 1 {
+		return fmt.Errorf("more than one key is enqueued: current len %d, want 1", queueLen)
+	}
+
+	return nil
+}
 
 func TestMain(m *testing.M) {
 	// Add custom APIs to the runtime scheme.
@@ -207,7 +219,7 @@ var _ = Describe("cluster scheduling policy snapshot scheduler source controller
 		})
 	})
 
-	Context("policy snapshot becomes inactive", func() {
+	Context("policy snapshot becomes not latest", func() {
 		BeforeAll(func() {
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 
@@ -218,7 +230,7 @@ var _ = Describe("cluster scheduling policy snapshot scheduler source controller
 			Expect(hubClient.Update(ctx, &policySnapshot)).Should(Succeed(), "Failed to update cluster scheduling policy snapshot")
 		})
 
-		It("should not enqueue the CRP when poliy snapshot becomes inactive", func() {
+		It("should not enqueue the CRP when policy snapshot not latest", func() {
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 		})
 
@@ -240,6 +252,173 @@ var _ = Describe("cluster scheduling policy snapshot scheduler source controller
 		})
 
 		It("should not enqueue the CRP when poliy snapshot is deleted", func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+		})
+
+		AfterAll(func() {
+			keyCollector.Reset()
+		})
+	})
+})
+
+// Copied the same set of tests for RP since the original tests are run serially
+// and to reduce the maintenance burden, we copy the full tests.
+var _ = Describe("scheduling policy snapshot scheduler source controller for ResourcePlacement", Serial, Ordered, func() {
+	BeforeAll(func() {
+		policySnapshot := fleetv1beta1.SchedulingPolicySnapshot{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      policySnapshotName1,
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					fleetv1beta1.IsLatestSnapshotLabel:  "true",
+					fleetv1beta1.PlacementTrackingLabel: rpName,
+				},
+				Annotations: map[string]string{
+					fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(int(numOfClusters)),
+					fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(observedCRPGeneration),
+				},
+			},
+			Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
+				Policy: &fleetv1beta1.PlacementPolicy{
+					PlacementType:    fleetv1beta1.PickNPlacementType,
+					NumberOfClusters: &numOfClusters,
+				},
+				PolicyHash: []byte(policyHash1),
+			},
+		}
+		Expect(hubClient.Create(ctx, &policySnapshot)).Should(Succeed(), "Failed to create scheduling policy snapshot")
+	})
+
+	Context("first policy snapshot created", func() {
+		It("should enqueue the RP when first policy snapshot created", func() {
+			Eventually(expectedRPKeySetEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to enqueue expected RP key set")
+			Consistently(expectedRPKeySetEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to enqueue expected RP key set")
+		})
+
+		AfterAll(func() {
+			keyCollector.Reset()
+		})
+	})
+
+	Context("number of clusters annotation updated", func() {
+		BeforeAll(func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+
+			policySnapshot := fleetv1beta1.SchedulingPolicySnapshot{}
+			Expect(hubClient.Get(ctx, client.ObjectKey{Name: policySnapshotName1, Namespace: testNamespace}, &policySnapshot)).Should(Succeed(), "Failed to get scheduling policy snapshot")
+
+			policySnapshot.Annotations[fleetv1beta1.NumberOfClustersAnnotation] = strconv.Itoa(int(numOfClusters) + 1)
+			Expect(hubClient.Update(ctx, &policySnapshot)).Should(Succeed(), "Failed to update scheduling policy snapshot")
+		})
+
+		It("should enqueue the RP when number of clusters annotation updated", func() {
+			Eventually(expectedRPKeySetEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to enqueue expected RP key set")
+			Consistently(expectedRPKeySetEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to enqueue expected RP key set")
+		})
+
+		AfterAll(func() {
+			keyCollector.Reset()
+		})
+	})
+
+	Context("RP generation annotation updated", func() {
+		BeforeAll(func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+
+			policySnapshot := fleetv1beta1.SchedulingPolicySnapshot{}
+			Expect(hubClient.Get(ctx, client.ObjectKey{Name: policySnapshotName1, Namespace: testNamespace}, &policySnapshot)).Should(Succeed(), "Failed to get scheduling policy snapshot")
+
+			policySnapshot.Annotations[fleetv1beta1.CRPGenerationAnnotation] = strconv.Itoa(observedCRPGeneration + 1)
+			Expect(hubClient.Update(ctx, &policySnapshot)).Should(Succeed(), "Failed to update scheduling policy snapshot")
+		})
+
+		It("should enqueue the RP when generation annotation updated", func() {
+			Eventually(expectedRPKeySetEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to enqueue expected RP key set")
+			Consistently(expectedRPKeySetEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to enqueue expected RP key set")
+		})
+
+		AfterAll(func() {
+			keyCollector.Reset()
+		})
+	})
+
+	Context("next RP policy snapshot created", func() {
+		BeforeAll(func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+
+			policySnapshot := fleetv1beta1.SchedulingPolicySnapshot{}
+			Expect(hubClient.Get(ctx, client.ObjectKey{Name: policySnapshotName1, Namespace: testNamespace}, &policySnapshot)).Should(Succeed(), "Failed to get scheduling policy snapshot")
+
+			policySnapshot.Labels[fleetv1beta1.IsLatestSnapshotLabel] = strconv.FormatBool(false)
+			Expect(hubClient.Update(ctx, &policySnapshot)).Should(Succeed(), "Failed to update scheduling policy snapshot")
+
+			nextPolicySnapshot := fleetv1beta1.SchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      policySnapshotName2,
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						fleetv1beta1.IsLatestSnapshotLabel:  "true",
+						fleetv1beta1.PlacementTrackingLabel: rpName,
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(int(numOfClusters)),
+					},
+				},
+				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &fleetv1beta1.PlacementPolicy{
+						PlacementType:    fleetv1beta1.PickNPlacementType,
+						NumberOfClusters: &numOfClusters,
+					},
+					PolicyHash: []byte(policyHash2),
+				},
+			}
+			Expect(hubClient.Create(ctx, &nextPolicySnapshot)).Should(Succeed(), "Failed to create scheduling policy snapshot")
+		})
+
+		It("should enqueue the RP when next policy snapshot created", func() {
+			Eventually(expectedRPKeySetEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to enqueue expected RP key set")
+			Consistently(expectedRPKeySetEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to enqueue expected RP key set")
+		})
+
+		AfterAll(func() {
+			keyCollector.Reset()
+		})
+	})
+
+	Context("RP policy snapshot becomes not latest", func() {
+		BeforeAll(func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+
+			policySnapshot := fleetv1beta1.SchedulingPolicySnapshot{}
+			Expect(hubClient.Get(ctx, client.ObjectKey{Name: policySnapshotName2, Namespace: testNamespace}, &policySnapshot)).Should(Succeed(), "Failed to get scheduling policy snapshot")
+
+			policySnapshot.Labels[fleetv1beta1.IsLatestSnapshotLabel] = strconv.FormatBool(false)
+			Expect(hubClient.Update(ctx, &policySnapshot)).Should(Succeed(), "Failed to update scheduling policy snapshot")
+		})
+
+		It("should not enqueue the RP when policy snapshot becomes not latest", func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+		})
+
+		AfterAll(func() {
+			keyCollector.Reset()
+		})
+	})
+
+	Context("old RP policy snapshot is deleted", func() {
+		BeforeAll(func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+
+			policySnapshot := fleetv1beta1.SchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      policySnapshotName1,
+					Namespace: testNamespace,
+				},
+			}
+			Expect(hubClient.Delete(ctx, &policySnapshot)).Should(Succeed(), "Failed to delete scheduling policy snapshot")
+		})
+
+		It("should not enqueue the RP when policy snapshot is deleted", func() {
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 		})
 

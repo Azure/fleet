@@ -109,3 +109,16 @@ func ConvertCRB2DArrayToBindingObjs(bindingSets [][]*placementv1beta1.ClusterRes
 	}
 	return result
 }
+
+// ConvertRBArrayToBindingObjs converts an array of ResourceBinding pointers to BindingObj interfaces.
+// This is the common helper function for converting concrete types to interfaces in the scheduler package.
+func ConvertRBArrayToBindingObjs(bindings []*placementv1beta1.ResourceBinding) []placementv1beta1.BindingObj {
+	if len(bindings) == 0 {
+		return nil
+	}
+	result := make([]placementv1beta1.BindingObj, len(bindings))
+	for i, binding := range bindings {
+		result[i] = binding
+	}
+	return result
+}

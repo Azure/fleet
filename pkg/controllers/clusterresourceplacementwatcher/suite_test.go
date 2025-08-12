@@ -23,6 +23,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -79,6 +81,14 @@ var _ = BeforeSuite(func() {
 	Expect(err).Should(Succeed())
 	Expect(k8sClient).NotTo(BeNil())
 
+	By("creating a test namespace")
+	var ns = corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: testNamespace,
+		},
+	}
+	Expect(k8sClient.Create(ctx, &ns)).Should(Succeed(), "failed to create namespace")
+
 	By("starting the controller manager")
 	klog.InitFlags(flag.CommandLine)
 	flag.Parse()
@@ -96,7 +106,12 @@ var _ = BeforeSuite(func() {
 
 	err = (&Reconciler{
 		PlacementController: fakePlacementController,
-	}).SetupWithManager(mgr)
+	}).SetupWithManagerForClusterResourcePlacement(mgr)
+	Expect(err).Should(Succeed())
+
+	err = (&Reconciler{
+		PlacementController: fakePlacementController,
+	}).SetupWithManagerForResourcePlacement(mgr)
 	Expect(err).Should(Succeed())
 
 	go func() {

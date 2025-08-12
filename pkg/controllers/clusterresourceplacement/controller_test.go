@@ -39,6 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/defaulter"
@@ -46,8 +47,8 @@ import (
 )
 
 const (
-	testCRPName   = "my-crp"
-	crpGeneration = 15
+	testCRPName         = "my-crp"
+	placementGeneration = 15
 )
 
 var (
@@ -101,7 +102,7 @@ func clusterResourcePlacementForTest() *fleetv1beta1.ClusterResourcePlacement {
 	return &fleetv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       testCRPName,
-			Generation: crpGeneration,
+			Generation: placementGeneration,
 		},
 		Spec: fleetv1beta1.PlacementSpec{
 			ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
@@ -121,8 +122,9 @@ func clusterResourcePlacementForTest() *fleetv1beta1.ClusterResourcePlacement {
 
 func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 	testPolicy := placementPolicyForTest()
-	testPolicy.NumberOfClusters = nil
-	jsonBytes, err := json.Marshal(testPolicy)
+	testPolicyHash := testPolicy.DeepCopy()
+	testPolicyHash.NumberOfClusters = nil
+	jsonBytes, err := json.Marshal(testPolicyHash)
 	if err != nil {
 		t.Fatalf("failed to create the policy hash: %v", err)
 	}
@@ -185,7 +187,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(placementGeneration),
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
@@ -247,7 +249,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.CRPGenerationAnnotation: strconv.Itoa(crpGeneration),
+							fleetv1beta1.CRPGenerationAnnotation: strconv.Itoa(placementGeneration),
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
@@ -281,7 +283,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
-							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(placementGeneration),
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
@@ -310,7 +312,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
-							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(placementGeneration),
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
@@ -417,7 +419,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(placementGeneration),
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
@@ -477,7 +479,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(placementGeneration),
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
@@ -592,7 +594,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
-							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(placementGeneration),
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
@@ -709,7 +711,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
-							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(placementGeneration),
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
@@ -745,15 +747,22 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 			if tc.revisionHistoryLimit != nil {
 				limit = *tc.revisionHistoryLimit
 			}
-			got, err := r.getOrCreateClusterSchedulingPolicySnapshot(ctx, crp, int(limit))
+			got, err := r.getOrCreateSchedulingPolicySnapshot(ctx, crp, int(limit))
 			if err != nil {
-				t.Fatalf("failed to getOrCreateClusterSchedulingPolicySnapshot: %v", err)
+				t.Fatalf("failed to getOrCreateSchedulingPolicySnapshot: %v", err)
 			}
+
+			// Convert interface to concrete type for comparison
+			gotSnapshot, ok := got.(*fleetv1beta1.ClusterSchedulingPolicySnapshot)
+			if !ok {
+				t.Fatalf("getOrCreateSchedulingPolicySnapshot() got %T, want *ClusterSchedulingPolicySnapshot", got)
+			}
+
 			options := []cmp.Option{
 				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
 			}
-			if diff := cmp.Diff(tc.wantPolicySnapshots[tc.wantLatestSnapshotIndex], *got, options...); diff != "" {
-				t.Errorf("getOrCreateClusterSchedulingPolicySnapshot() mismatch (-want, +got):\n%s", diff)
+			if diff := cmp.Diff(tc.wantPolicySnapshots[tc.wantLatestSnapshotIndex], *gotSnapshot, options...); diff != "" {
+				t.Errorf("getOrCreateSchedulingPolicySnapshot() mismatch (-want, +got):\n%s", diff)
 			}
 			clusterPolicySnapshotList := &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
 			if err := fakeClient.List(ctx, clusterPolicySnapshotList); err != nil {
@@ -1037,7 +1046,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 				Scheme:   scheme,
 				Recorder: record.NewFakeRecorder(10),
 			}
-			_, err := r.getOrCreateClusterSchedulingPolicySnapshot(ctx, crp, 1)
+			_, err := r.getOrCreateSchedulingPolicySnapshot(ctx, crp, 1)
 			if err == nil { // if error is nil
 				t.Fatal("getOrCreateClusterResourceSnapshot() = nil, want err")
 			}
@@ -2701,12 +2710,12 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 				limit = *tc.revisionHistoryLimit
 			}
 			resourceSnapshotResourceSizeLimit = tc.selectedResourcesSizeLimit
-			res, got, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, tc.envelopeObjCount, tc.resourceSnapshotSpec, int(limit))
+			res, got, err := r.getOrCreateResourceSnapshot(ctx, crp, tc.envelopeObjCount, tc.resourceSnapshotSpec, int(limit))
 			if err != nil {
-				t.Fatalf("failed to handle getOrCreateClusterResourceSnapshot: %v", err)
+				t.Fatalf("failed to handle getOrCreateResourceSnapshot: %v", err)
 			}
 			if res.Requeue != tc.wantRequeue {
-				t.Fatalf("getOrCreateClusterResourceSnapshot() got Requeue %v, want %v", res.Requeue, tc.wantRequeue)
+				t.Fatalf("getOrCreateResourceSnapshot() got Requeue %v, want %v", res.Requeue, tc.wantRequeue)
 			}
 
 			options := []cmp.Option{
@@ -2717,7 +2726,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 			}
 			if tc.wantRequeue {
 				if res.RequeueAfter <= 0 {
-					t.Fatalf("getOrCreateClusterResourceSnapshot() got RequeueAfter %v, want greater than zero value", res.RequeueAfter)
+					t.Fatalf("getOrCreateResourceSnapshot() got RequeueAfter %v, want greater than zero value", res.RequeueAfter)
 				}
 			}
 			annotationOption := cmp.Transformer("NormalizeAnnotations", func(m map[string]string) map[string]string {
@@ -2736,8 +2745,12 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 				return normalized
 			})
 			options = append(options, sortClusterResourceSnapshotOption, annotationOption)
-			if diff := cmp.Diff(tc.wantResourceSnapshots[tc.wantLatestSnapshotIndex], *got, options...); diff != "" {
-				t.Errorf("getOrCreateClusterResourceSnapshot() mismatch (-want, +got):\n%s", diff)
+			gotSnapshot, ok := got.(*fleetv1beta1.ClusterResourceSnapshot)
+			if !ok {
+				t.Fatalf("expected *fleetv1beta1.ClusterResourceSnapshot, got %T", got)
+			}
+			if diff := cmp.Diff(tc.wantResourceSnapshots[tc.wantLatestSnapshotIndex], *gotSnapshot, options...); diff != "" {
+				t.Errorf("getOrCreateResourceSnapshot() mismatch (-want, +got):\n%s", diff)
 			}
 			clusterResourceSnapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
 			if err := fakeClient.List(ctx, clusterResourceSnapshotList); err != nil {
@@ -2781,7 +2794,7 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 		},
 		{
 			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterResourceSnapshot.
-			name: "existing active policy snapshot does not have hash annotation",
+			name: "existing active resource snapshot does not have hash annotation",
 			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -3089,7 +3102,7 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 				Client: fakeClient,
 				Scheme: scheme,
 			}
-			res, _, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, 0, resourceSnapshotSpecA, 1)
+			res, _, err := r.getOrCreateResourceSnapshot(ctx, crp, 0, resourceSnapshotSpecA, 1)
 			if err == nil { // if error is nil
 				t.Fatal("getOrCreateClusterResourceSnapshot() = nil, want err")
 			}
@@ -3098,70 +3111,6 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 			}
 			if !errors.Is(err, controller.ErrUnexpectedBehavior) {
 				t.Errorf("getOrCreateClusterResourceSnapshot() got %v, want %v type", err, controller.ErrUnexpectedBehavior)
-			}
-		})
-	}
-}
-
-func TestSplitSelectedResources(t *testing.T) {
-	// test service is 383 bytes in size.
-	serviceResourceContent := *resource.ServiceResourceContentForTest(t)
-	// test deployment 390 bytes in size.
-	deploymentResourceContent := *resource.DeploymentResourceContentForTest(t)
-	// test secret is 152 bytes in size.
-	secretResourceContent := *resource.SecretResourceContentForTest(t)
-	tests := []struct {
-		name                       string
-		selectedResourcesSizeLimit int
-		selectedResources          []fleetv1beta1.ResourceContent
-		wantSplitSelectedResources [][]fleetv1beta1.ResourceContent
-	}{
-		{
-			name:                       "empty split selected resources - empty list of selectedResources",
-			selectedResources:          []fleetv1beta1.ResourceContent{},
-			wantSplitSelectedResources: nil,
-		},
-		{
-			name:                       "selected resources don't cross individual clusterResourceSnapshot size limit",
-			selectedResourcesSizeLimit: 1000,
-			selectedResources:          []fleetv1beta1.ResourceContent{secretResourceContent, serviceResourceContent, deploymentResourceContent},
-			wantSplitSelectedResources: [][]fleetv1beta1.ResourceContent{{secretResourceContent, serviceResourceContent, deploymentResourceContent}},
-		},
-		{
-			name:                       "selected resource cross clusterResourceSnapshot size limit - each resource in separate list, each resource is larger than the size limit",
-			selectedResourcesSizeLimit: 100,
-			selectedResources:          []fleetv1beta1.ResourceContent{secretResourceContent, serviceResourceContent, deploymentResourceContent},
-			wantSplitSelectedResources: [][]fleetv1beta1.ResourceContent{{secretResourceContent}, {serviceResourceContent}, {deploymentResourceContent}},
-		},
-		{
-			name:                       "selected resources cross individual clusterResourceSnapshot size limit - each resource in separate list, any grouping of resources is larger than the size limit",
-			selectedResourcesSizeLimit: 500,
-			selectedResources:          []fleetv1beta1.ResourceContent{secretResourceContent, serviceResourceContent, deploymentResourceContent},
-			wantSplitSelectedResources: [][]fleetv1beta1.ResourceContent{{secretResourceContent}, {serviceResourceContent}, {deploymentResourceContent}},
-		},
-		{
-			name:                       "selected resources cross individual clusterResourceSnapshot size limit - two resources in first list, one resource in second list",
-			selectedResourcesSizeLimit: 600,
-			selectedResources:          []fleetv1beta1.ResourceContent{secretResourceContent, serviceResourceContent, deploymentResourceContent},
-			wantSplitSelectedResources: [][]fleetv1beta1.ResourceContent{{secretResourceContent, serviceResourceContent}, {deploymentResourceContent}},
-		},
-		{
-			name:                       "selected resources cross individual clusterResourceSnapshot size limit - one resource in first list, two resources in second list",
-			selectedResourcesSizeLimit: 600,
-			selectedResources:          []fleetv1beta1.ResourceContent{serviceResourceContent, deploymentResourceContent, secretResourceContent},
-			wantSplitSelectedResources: [][]fleetv1beta1.ResourceContent{{serviceResourceContent}, {deploymentResourceContent, secretResourceContent}},
-		},
-	}
-	originalResourceSnapshotResourceSizeLimit := resourceSnapshotResourceSizeLimit
-	defer func() {
-		resourceSnapshotResourceSizeLimit = originalResourceSnapshotResourceSizeLimit
-	}()
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			resourceSnapshotResourceSizeLimit = tc.selectedResourcesSizeLimit
-			gotSplitSelectedResources := splitSelectedResources(tc.selectedResources)
-			if diff := cmp.Diff(tc.wantSplitSelectedResources, gotSplitSelectedResources); diff != "" {
-				t.Errorf("splitSelectedResources List() mismatch (-want, +got):\n%s", diff)
 			}
 		})
 	}
@@ -3383,7 +3332,7 @@ func TestHandleDelete(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			crp := clusterResourcePlacementForTest()
-			crp.Finalizers = []string{fleetv1beta1.ClusterResourcePlacementCleanupFinalizer}
+			crp.Finalizers = []string{fleetv1beta1.PlacementCleanupFinalizer}
 			now := metav1.Now()
 			crp.DeletionTimestamp = &now
 			objects := []client.Object{crp}
@@ -3628,14 +3577,14 @@ func TestIsRolloutComplete(t *testing.T) {
 	}
 }
 
-func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
+func TestDetermineRolloutStateForPlacementWithExternalRolloutStrategy(t *testing.T) {
 	namespaceResourceContent := *resource.NamespaceResourceContentForTest(t)
 	deploymentResourceContent := *resource.DeploymentResourceContentForTest(t)
 
 	tests := []struct {
 		name                          string
 		selected                      []*fleetv1beta1.ClusterDecision
-		allRPS                        []fleetv1beta1.ResourcePlacementStatus
+		allRPS                        []fleetv1beta1.PerClusterPlacementStatus
 		resourceSnapshots             []*fleetv1beta1.ClusterResourceSnapshot
 		selectedResources             []fleetv1beta1.ResourceIdentifier
 		existingObservedResourceIndex string
@@ -3649,7 +3598,7 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 		{
 			name:               "no selected clusters", // This should not happen in normal cases.
 			selected:           []*fleetv1beta1.ClusterDecision{},
-			allRPS:             []fleetv1beta1.ResourcePlacementStatus{},
+			allRPS:             []fleetv1beta1.PerClusterPlacementStatus{},
 			resourceSnapshots:  []*fleetv1beta1.ClusterResourceSnapshot{},
 			existingConditions: []metav1.Condition{},
 			wantErr:            true,
@@ -3666,7 +3615,7 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "0",
@@ -3704,7 +3653,7 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "",
@@ -3741,7 +3690,7 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "",
@@ -3812,7 +3761,7 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "",
@@ -3854,7 +3803,7 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "",
@@ -3925,7 +3874,7 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "",
@@ -3959,13 +3908,13 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "2",
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Type:               string(fleetv1beta1.PerClusterRolloutStartedConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 1,
 						},
@@ -3991,7 +3940,7 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "2",
@@ -4034,13 +3983,13 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "2",
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Type:               string(fleetv1beta1.PerClusterRolloutStartedConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 1,
 						},
@@ -4105,13 +4054,13 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "2",
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Type:               string(fleetv1beta1.PerClusterRolloutStartedConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 1,
 						},
@@ -4169,13 +4118,13 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "2",
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Type:               string(fleetv1beta1.PerClusterRolloutStartedConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 1,
 						},
@@ -4186,7 +4135,7 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					ObservedResourceIndex: "2",
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Type:               string(fleetv1beta1.PerClusterRolloutStartedConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 1,
 						},
@@ -4313,13 +4262,13 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "2",
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Type:               string(fleetv1beta1.PerClusterRolloutStartedConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 1,
 						},
@@ -4330,7 +4279,7 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					ObservedResourceIndex: "2",
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Type:               string(fleetv1beta1.PerClusterRolloutStartedConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 1,
 						},
@@ -4408,13 +4357,13 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 					Selected:    true,
 				},
 			},
-			allRPS: []fleetv1beta1.ResourcePlacementStatus{
+			allRPS: []fleetv1beta1.PerClusterPlacementStatus{
 				{
 					ClusterName:           "cluster1",
 					ObservedResourceIndex: "2",
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
+							Type:               string(fleetv1beta1.PerClusterRolloutStartedConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 1,
 						},
@@ -4479,23 +4428,24 @@ func TestDetermineRolloutStateForCRPWithExternalRolloutStrategy(t *testing.T) {
 			var cmpOptions = []cmp.Option{
 				// ignore the message as we may change the message in the future
 				cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime"),
+				cmpopts.SortSlices(utils.LessFuncResourceIdentifier),
 			}
-			gotRolloutUnknown, gotErr := r.determineRolloutStateForCRPWithExternalRolloutStrategy(context.Background(), crp, tc.selected, tc.allRPS, tc.selectedResources)
+			gotRolloutUnknown, gotErr := r.determineRolloutStateForPlacementWithExternalRolloutStrategy(context.Background(), crp, tc.selected, tc.allRPS, tc.selectedResources)
 			if (gotErr != nil) != tc.wantErr {
-				t.Errorf("determineRolloutStateForCRPWithExternalRolloutStrategy() got error %v, want error %t", gotErr, tc.wantErr)
+				t.Errorf("determineRolloutStateForPlacementWithExternalRolloutStrategy() got error %v, want error %t", gotErr, tc.wantErr)
 			}
 			if !tc.wantErr {
 				if gotRolloutUnknown != tc.wantRolloutUnknown {
-					t.Errorf("determineRolloutStateForCRPWithExternalRolloutStrategy() got RolloutUnknown set to %v, want %v", gotRolloutUnknown, tc.wantRolloutUnknown)
+					t.Errorf("determineRolloutStateForPlacementWithExternalRolloutStrategy() got RolloutUnknown set to %v, want %v", gotRolloutUnknown, tc.wantRolloutUnknown)
 				}
 				if crp.Status.ObservedResourceIndex != tc.wantObservedResourceIndex {
-					t.Errorf("determineRolloutStateForCRPWithExternalRolloutStrategy() got crp.Status.ObservedResourceIndex set to %v, want %v", crp.Status.ObservedResourceIndex, tc.wantObservedResourceIndex)
+					t.Errorf("determineRolloutStateForPlacementWithExternalRolloutStrategy() got crp.Status.ObservedResourceIndex set to %v, want %v", crp.Status.ObservedResourceIndex, tc.wantObservedResourceIndex)
 				}
-				if diff := cmp.Diff(tc.wantSelectedResources, crp.Status.SelectedResources); diff != "" {
-					t.Errorf("determineRolloutStateForCRPWithExternalRolloutStrategy() got crp.Status.SelectedResources mismatch (-want, +got):\n%s", diff)
+				if diff := cmp.Diff(tc.wantSelectedResources, crp.Status.SelectedResources, cmpOptions...); diff != "" {
+					t.Errorf("determineRolloutStateForPlacementWithExternalRolloutStrategy() got crp.Status.SelectedResources mismatch (-want, +got):\n%s", diff)
 				}
 				if diff := cmp.Diff(tc.wantConditions, crp.Status.Conditions, cmpOptions...); diff != "" {
-					t.Errorf("determineRolloutStateForCRPWithExternalRolloutStrategy() got crp.Status.Conditions mismatch (-want, +got):\n%s", diff)
+					t.Errorf("determineRolloutStateForPlacementWithExternalRolloutStrategy() got crp.Status.Conditions mismatch (-want, +got):\n%s", diff)
 				}
 			}
 		})

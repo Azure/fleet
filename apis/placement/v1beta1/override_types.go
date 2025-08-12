@@ -26,6 +26,7 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:storageversion
 // +kubebuilder:resource:scope="Cluster",categories={fleet,fleet-placement}
+// +kubebuilder:validation:XValidation:rule="!has(self.spec.placement) || self.spec.placement.scope != 'Namespaced'",message="clusterResourceOverride placement reference cannot be Namespaced scope"
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ClusterResourceOverride defines a group of override policies about how to override the selected cluster scope resources
@@ -67,12 +68,32 @@ type ClusterResourceOverrideSpec struct {
 	Policy *OverridePolicy `json:"policy"`
 }
 
+// ResourceScope defines the scope of placement reference.
+type ResourceScope string
+
+const (
+	// ClusterScoped indicates placement is cluster-scoped.
+	ClusterScoped ResourceScope = "Cluster"
+
+	// NamespaceScoped indicates placement is namespace-scoped.
+	NamespaceScoped ResourceScope = "Namespaced"
+)
+
 // PlacementRef is the reference to a placement.
 // For now, we only support ClusterResourcePlacement.
 type PlacementRef struct {
 	// Name is the reference to the name of placement.
 	// +required
 	Name string `json:"name"`
+
+	// Scope defines the scope of the placement.
+	// A clusterResourceOverride can only reference a clusterResourcePlacement (cluster-scoped),
+	// and a resourceOverride can reference either a clusterResourcePlacement or resourcePlacement (namespaced).
+	// The referenced resourcePlacement must be in the same namespace as the resourceOverride.
+	// +kubebuilder:validation:Enum=Cluster;Namespaced
+	// +kubebuilder:default=Cluster
+	// +optional
+	Scope ResourceScope `json:"scope,omitempty"`
 }
 
 // OverridePolicy defines how to override the selected resources on the target clusters.

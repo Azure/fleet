@@ -23,6 +23,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -74,6 +76,14 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred(), "Failed to create hub cluster client")
 	Expect(hubClient).ToNot(BeNil(), "Hub cluster client is nil")
 
+	By("creating a test namespace")
+	var ns = corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: testNamespace,
+		},
+	}
+	Expect(hubClient.Create(ctx, &ns)).Should(Succeed(), "failed to create namespace")
+
 	// Set up a controller manager and let it manage the hub cluster controller.
 	ctrlMgr, err := ctrl.NewManager(hubCfg, ctrl.Options{
 		Scheme: scheme.Scheme,
@@ -85,13 +95,20 @@ var _ = BeforeSuite(func() {
 
 	schedulerWorkQueue := queue.NewSimplePlacementSchedulingQueue()
 
-	// Create ClusterResourceBinding watcher reconciler.
-	reconciler := &Reconciler{
+	// Create ClusterResourceBinding watcher crbReconciler.
+	crbReconciler := &Reconciler{
 		Client:             hubClient,
 		SchedulerWorkQueue: schedulerWorkQueue,
 	}
-	err = reconciler.SetupWithManager(ctrlMgr)
-	Expect(err).ToNot(HaveOccurred(), "Failed to set up controller with controller manager")
+	err = crbReconciler.SetupWithManagerForClusterResourceBinding(ctrlMgr)
+	Expect(err).ToNot(HaveOccurred(), "Failed to set up crb controller with controller manager")
+
+	rbReconciler := &Reconciler{
+		Client:             hubClient,
+		SchedulerWorkQueue: schedulerWorkQueue,
+	}
+	err = rbReconciler.SetupWithManagerForResourceBinding(ctrlMgr)
+	Expect(err).ToNot(HaveOccurred(), "Failed to set up rb controller with controller manager")
 
 	// Start the key collector.
 	keyCollector = keycollector.NewSchedulerWorkqueueKeyCollector(schedulerWorkQueue)

@@ -10,22 +10,5 @@ spec:
       version: v1
   policy:
     placementType: PickN
-    numberOfClusters: 2
-    affinity:
-      clusterAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          clusterSelectorTerms:
-            - propertySelector:
-                matchExpressions:
-                  - name: kubernetes.azure.com/per-gb-memory-cost
-                    operator: Lt
-                    values:
-                      - "0.019"
-            - propertySelector:
-                matchExpressions:
-                  - name: kubernetes.azure.com/per-cpu-core-cost
-                    operator: Le
-                    values:
-                      - "0.070"
   strategy:
     type: RollingUpdate

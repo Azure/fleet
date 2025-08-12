@@ -173,8 +173,7 @@ var (
 )
 
 var (
-	drainBinaryPath    = filepath.Join("../../", "hack", "tools", "bin", "kubectl-draincluster")
-	uncordonBinaryPath = filepath.Join("../../", "hack", "tools", "bin", "kubectl-uncordoncluster")
+	fleetBinaryPath = filepath.Join("../../", "hack", "tools", "bin", "kubectl-fleet")
 )
 
 var (
@@ -193,10 +192,10 @@ var (
 	lessFuncCondition = func(a, b metav1.Condition) bool {
 		return a.Type < b.Type
 	}
-	lessFuncPlacementStatus = func(a, b placementv1beta1.ResourcePlacementStatus) bool {
+	lessFuncPlacementStatus = func(a, b placementv1beta1.PerClusterPlacementStatus) bool {
 		return a.ClusterName < b.ClusterName
 	}
-	lessFuncPlacementStatusByConditions = func(a, b placementv1beta1.ResourcePlacementStatus) bool {
+	lessFuncPlacementStatusByConditions = func(a, b placementv1beta1.PerClusterPlacementStatus) bool {
 		return len(a.Conditions) < len(b.Conditions)
 	}
 
@@ -209,7 +208,7 @@ var (
 	ignoreAgentStatusHeartbeatField                             = cmpopts.IgnoreFields(clusterv1beta1.AgentStatus{}, "LastReceivedHeartbeat")
 	ignoreNamespaceStatusField                                  = cmpopts.IgnoreFields(corev1.Namespace{}, "Status")
 	ignoreNamespaceSpecField                                    = cmpopts.IgnoreFields(corev1.Namespace{}, "Spec")
-	ignoreClusterNameField                                      = cmpopts.IgnoreFields(placementv1beta1.ResourcePlacementStatus{}, "ClusterName")
+	ignoreClusterNameField                                      = cmpopts.IgnoreFields(placementv1beta1.PerClusterPlacementStatus{}, "ClusterName")
 	ignoreMemberClusterJoinAndPropertyProviderStartedConditions = cmpopts.IgnoreSliceElements(func(c metav1.Condition) bool {
 		return c.Type == string(clusterv1beta1.ConditionTypeMemberClusterReadyToJoin) ||
 			c.Type == string(clusterv1beta1.ConditionTypeMemberClusterJoined) ||
@@ -376,11 +375,9 @@ func beforeSuiteForAllProcesses() {
 			allMemberClusterNames = append(allMemberClusterNames, allMemberClusters[i].ClusterName)
 		}
 
-		// Check if drain cluster and uncordon cluster binaries exist.
-		_, err := os.Stat(drainBinaryPath)
-		Expect(os.IsNotExist(err)).To(BeFalse(), fmt.Sprintf("drain binary not found at %s", drainBinaryPath))
-		_, err = os.Stat(uncordonBinaryPath)
-		Expect(os.IsNotExist(err)).To(BeFalse(), fmt.Sprintf("uncordon binary not found at %s", uncordonBinaryPath))
+		// Check if kubectl-fleet binary exists.
+		_, err := os.Stat(fleetBinaryPath)
+		Expect(os.IsNotExist(err)).To(BeFalse(), fmt.Sprintf("kubectl-fleet binary not found at %s", fleetBinaryPath))
 	})
 }
 

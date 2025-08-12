@@ -27,12 +27,12 @@ import (
 )
 
 const (
-	// ClusterResourcePlacementCleanupFinalizer is a finalizer added by the CRP controller to all CRPs, to make sure
-	// that the CRP controller can react to CRP deletions if necessary.
-	ClusterResourcePlacementCleanupFinalizer = fleetPrefix + "crp-cleanup"
+	// PlacementCleanupFinalizer is a finalizer added by the placement controller to all placement objects, to make sure
+	// that the placement controller can react to placement object deletions if necessary.
+	PlacementCleanupFinalizer = fleetPrefix + "crp-cleanup"
 
-	// SchedulerCleanupFinalizer is a finalizer added by the scheduler to CRPs, to make sure
-	// that all bindings derived from a CRP can be cleaned up after the CRP is deleted.
+	// SchedulerCleanupFinalizer is a finalizer added by the scheduler to placement objects, to make sure
+	// that all bindings derived from a placement object can be cleaned up after the placement object is deleted.
 	SchedulerCleanupFinalizer = fleetPrefix + "scheduler-cleanup"
 )
 
@@ -113,6 +113,7 @@ type ClusterResourcePlacement struct {
 
 	// The desired state of ClusterResourcePlacement.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="!((has(oldSelf.policy) && !has(self.policy)) || (has(oldSelf.policy) && has(self.policy) && has(self.policy.placementType) && has(oldSelf.policy.placementType) && self.policy.placementType != oldSelf.policy.placementType))",message="placement type is immutable"
 	Spec PlacementSpec `json:"spec"`
 
 	// The observed status of ClusterResourcePlacement.
@@ -121,8 +122,8 @@ type ClusterResourcePlacement struct {
 }
 
 // PlacementSpec defines the desired state of ClusterResourcePlacement and ResourcePlacement.
+// +kubebuilder:validation:XValidation:rule="!(self.statusReportingScope == 'NamespaceAccessible' && size(self.resourceSelectors.filter(x, x.kind == 'Namespace')) != 1)",message="when statusReportingScope is NamespaceAccessible, exactly one resourceSelector with kind 'Namespace' is required"
 type PlacementSpec struct {
-
 	// ResourceSelectors is an array of selectors used to select cluster scoped resources. The selectors are `ORed`.
 	// You can have 1-100 selectors.
 	// +kubebuilder:validation:Required
@@ -140,7 +141,7 @@ type PlacementSpec struct {
 	// +patchStrategy=retainKeys
 	Strategy RolloutStrategy `json:"strategy,omitempty"`
 
-	// The number of old ClusterSchedulingPolicySnapshot or ClusterResourceSnapshot resources to retain to allow rollback.
+	// The number of old SchedulingPolicySnapshot or ResourceSnapshot resources to retain to allow rollback.
 	// This is a pointer to distinguish between explicit zero and not specified.
 	// Defaults to 10.
 	// +kubebuilder:validation:Minimum=1
@@ -148,6 +149,17 @@ type PlacementSpec struct {
 	// +kubebuilder:default=10
 	// +kubebuilder:validation:Optional
 	RevisionHistoryLimit *int32 `json:"revisionHistoryLimit,omitempty"`
+
+	// StatusReportingScope controls where ClusterResourcePlacement status information is made available.
+	// When set to "ClusterScopeOnly", status is accessible only through the cluster-scoped ClusterResourcePlacement object.
+	// When set to "NamespaceAccessible", a ClusterResourcePlacementStatus object is created in the target namespace,
+	// providing namespace-scoped access to the placement status alongside the cluster-scoped status. This option is only
+	// supported when the ClusterResourcePlacement targets exactly one namespace.
+	// Defaults to "ClusterScopeOnly".
+	// +kubebuilder:default=ClusterScopeOnly
+	// +kubebuilder:validation:Enum=ClusterScopeOnly;NamespaceAccessible
+	// +kubebuilder:validation:Optional
+	StatusReportingScope StatusReportingScope `json:"statusReportingScope,omitempty"`
 }
 
 // Tolerations returns tolerations for PlacementSpec to handle nil policy case.
@@ -159,7 +171,8 @@ func (p *PlacementSpec) Tolerations() []Toleration {
 }
 
 // TODO: rename this to ResourceSelectorTerm
-// ClusterResourceSelector is used to select cluster scoped resources as the target resources to be placed.
+
+// ClusterResourceSelector is used to select resources as the target resources to be placed.
 // All the fields are `ANDed`. In other words, a resource must match all the fields to be selected.
 type ClusterResourceSelector struct {
 	// Group name of the cluster-scoped resource.
@@ -172,7 +185,7 @@ type ClusterResourceSelector struct {
 	Version string `json:"version"`
 
 	// Kind of the cluster-scoped resource.
-	// Note: When `Kind` is `namespace`, ALL the resources under the selected namespaces are selected.
+	// Note: When `Kind` is `namespace`, by default ALL the resources under the selected namespaces are selected.
 	// +kubebuilder:validation:Required
 	Kind string `json:"kind"`
 
@@ -187,7 +200,24 @@ type ClusterResourceSelector struct {
 	// Note that namespace-scoped resources can't be selected even if they match the query.
 	// +kubebuilder:validation:Optional
 	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
+
+	// SelectionScope defines the scope of resource selections when the Kind is `namespace`.
+	// +kubebuilder:validation:Enum=NamespaceOnly;NamespaceWithResources
+	// +kubebuilder:default=NamespaceWithResources
+	// +kubebuilder:validation:Optional
+	SelectionScope SelectionScope `json:"selectionScope,omitempty"`
 }
+
+// SelectionScope defines the scope of resource selections.
+type SelectionScope string
+
+const (
+	// NamespaceOnly means only the namespace itself is selected.
+	NamespaceOnly SelectionScope = "NamespaceOnly"
+
+	// NamespaceWithResources means all the resources under the namespace including namespace itself are selected.
+	NamespaceWithResources SelectionScope = "NamespaceWithResources"
+)
 
 // PlacementPolicy contains the rules to select target member clusters to place the selected resources.
 // Note that only clusters that are both joined and satisfying the rules will be selected.
@@ -470,6 +500,24 @@ const (
 	// ScheduleAnyway instructs the scheduler to schedule the resource
 	// even if constraints are not satisfied.
 	ScheduleAnyway UnsatisfiableConstraintAction = "ScheduleAnyway"
+)
+
+// StatusReportingScope defines where ClusterResourcePlacement status information is made available.
+// This setting only applies to ClusterResourcePlacements that select resources from a single namespace.
+// It enables different levels of access to placement status across cluster and namespace scopes.
+// +enum
+type StatusReportingScope string
+
+const (
+
+	// ClusterScopeOnly makes status available only through the cluster-scoped ClusterResourcePlacement object.
+	// This is the default behavior where status information is accessible only to users with cluster-level permissions.
+	ClusterScopeOnly StatusReportingScope = "ClusterScopeOnly"
+
+	// NamespaceAccessible makes status available in both cluster and namespace scopes.
+	// In addition to the cluster-scoped status, a ClusterResourcePlacementStatus object is created
+	// in the target namespace, enabling namespace-scoped users to access placement status information.
+	NamespaceAccessible StatusReportingScope = "NamespaceAccessible"
 )
 
 // RolloutStrategy describes how to roll out a new change in selected resources to target clusters.
@@ -886,14 +934,14 @@ type PlacementStatus struct {
 	// +kubebuilder:validation:Optional
 	ObservedResourceIndex string `json:"observedResourceIndex,omitempty"`
 
-	// PlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
+	// PerClusterPlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
 	// Each selected cluster according to the observed resource placement is guaranteed to have a corresponding placementStatuses.
 	// In the pickN case, there are N placement statuses where N = NumberOfClusters; Or in the pickFixed case, there are
 	// N placement statuses where N = ClusterNames.
 	// In these cases, some of them may not have assigned clusters when we cannot fill the required number of clusters.
 	// TODO, For pickAll type, considering providing unselected clusters info.
 	// +kubebuilder:validation:Optional
-	PlacementStatuses []ResourcePlacementStatus `json:"placementStatuses,omitempty"`
+	PerClusterPlacementStatuses []PerClusterPlacementStatus `json:"placementStatuses,omitempty"`
 
 	// +patchMergeKey=type
 	// +patchStrategy=merge
@@ -972,8 +1020,8 @@ const (
 	ResourceEnvelopeType EnvelopeType = "ResourceEnvelope"
 )
 
-// ResourcePlacementStatus represents the placement status of selected resources for one target cluster.
-type ResourcePlacementStatus struct {
+// PerClusterPlacementStatus represents the placement status of selected resources for one target cluster.
+type PerClusterPlacementStatus struct {
 	// ClusterName is the name of the cluster this resource is assigned to.
 	// If it is not empty, its value should be unique cross all placement decisions for the Placement.
 	// +kubebuilder:validation:Optional
@@ -1172,7 +1220,7 @@ type Toleration struct {
 	Effect corev1.TaintEffect `json:"effect,omitempty"`
 }
 
-// ClusterResourcePlacementConditionType defines a specific condition of a cluster resource placement.
+// ClusterResourcePlacementConditionType defines a specific condition of a cluster resource placement object.
 // +enum
 type ClusterResourcePlacementConditionType string
 
@@ -1242,37 +1290,104 @@ const (
 	ClusterResourcePlacementDiffReportedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementDiffReported"
 )
 
-// ResourcePlacementConditionType defines a specific condition of a resource placement.
+// ResourcePlacementConditionType defines a specific condition of a resource placement object.
 // +enum
 type ResourcePlacementConditionType string
 
 const (
-	// ResourceScheduledConditionType indicates whether we have successfully scheduled the selected resources.
+	// ResourcePlacementScheduledConditionType indicates whether we have successfully scheduled the ResourcePlacement.
+	// Its condition status can be one of the following:
+	// - "True" means we have successfully scheduled the resources to fully satisfy the placement requirement.
+	// - "False" means we didn't fully satisfy the placement requirement. We will fill the Reason field.
+	// - "Unknown" means we don't have a scheduling decision yet.
+	ResourcePlacementScheduledConditionType ResourcePlacementConditionType = "ResourcePlacementScheduled"
+
+	// ResourcePlacementRolloutStartedConditionType indicates whether the selected resources start rolling out or not.
+	// Its condition status can be one of the following:
+	// - "True" means the selected resources successfully start rolling out in all scheduled clusters.
+	// - "False" means the selected resources have not been rolled out in all scheduled clusters yet.
+	// - "Unknown" means we don't have a rollout decision yet.
+	ResourcePlacementRolloutStartedConditionType ResourcePlacementConditionType = "ResourcePlacementRolloutStarted"
+
+	// ResourcePlacementOverriddenConditionType indicates whether all the selected resources have been overridden
+	// successfully before applying to the target cluster.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are successfully overridden before applying to the target cluster or
+	// override is not needed if there is no override defined with the reason of NoOverrideSpecified.
+	// - "False" means some of them have failed.
+	// - "Unknown" means we haven't finished the override yet.
+	ResourcePlacementOverriddenConditionType ResourcePlacementConditionType = "ResourcePlacementOverridden"
+
+	// ResourcePlacementWorkSynchronizedConditionType indicates whether the selected resources are created or updated
+	// under the per-cluster namespaces (i.e., fleet-member-<member-name>) on the hub cluster.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are successfully created or updated under the per-cluster namespaces
+	// (i.e., fleet-member-<member-name>) on the hub cluster.
+	// - "False" means all the selected resources have not been created or updated under the per-cluster namespaces
+	// (i.e., fleet-member-<member-name>) on the hub cluster yet.
+	// - "Unknown" means we haven't started processing the work yet.
+	ResourcePlacementWorkSynchronizedConditionType ResourcePlacementConditionType = "ResourcePlacementWorkSynchronized"
+
+	// ResourcePlacementAppliedConditionType indicates whether all the selected member clusters have applied
+	// the selected resources locally.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are successfully applied to all the target clusters or apply is not needed
+	// if there are no cluster(s) selected by the scheduler.
+	// - "False" means some of them have failed. We will place some of the detailed failure in the FailedResourcePlacement array.
+	// - "Unknown" means we haven't finished the apply yet.
+	ResourcePlacementAppliedConditionType ResourcePlacementConditionType = "ResourcePlacementApplied"
+
+	// ResourcePlacementAvailableConditionType indicates whether the selected resources are available on all the
+	// selected member clusters.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are available on all the selected member clusters.
+	// - "False" means some of them are not available yet. We will place some of the detailed failure in the FailedResourcePlacement
+	// array.
+	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
+	ResourcePlacementAvailableConditionType ResourcePlacementConditionType = "ResourcePlacementAvailable"
+
+	// ResourcePlacementDiffReportedConditionType indicates whether Fleet has reported
+	// configuration differences between the desired states of resources as kept in the hub cluster
+	// and the current states on the all member clusters.
+	//
+	// It can have the following condition statuses:
+	// * True: Fleet has reported complete sets of configuration differences on all member clusters.
+	// * False: Fleet has not yet reported complete sets of configuration differences on some member
+	//   clusters, or an error has occurred.
+	// * Unknown: Fleet has not finished processing the diff reporting yet.
+	ResourcePlacementDiffReportedConditionType ResourcePlacementConditionType = "ResourcePlacementDiffReported"
+)
+
+// PerClusterPlacementConditionType defines a specific condition of a per cluster placement.
+// +enum
+type PerClusterPlacementConditionType string
+
+const (
+	// PerClusterScheduledConditionType indicates whether we have successfully scheduled the selected resources on a particular cluster.
 	// Its condition status can be one of the following:
 	// - "True" means we have successfully scheduled the resources to satisfy the placement requirement.
 	// - "False" means we didn't fully satisfy the placement requirement. We will fill the Message field.
-	ResourceScheduledConditionType ResourcePlacementConditionType = "Scheduled"
+	PerClusterScheduledConditionType PerClusterPlacementConditionType = "Scheduled"
 
-	// ResourceRolloutStartedConditionType indicates whether the selected resources start rolling out or
-	// not.
+	// PerClusterRolloutStartedConditionType indicates whether the selected resources start rolling out on that particular member cluster.
 	// Its condition status can be one of the following:
 	// - "True" means the selected resources successfully start rolling out in the target clusters.
 	// - "False" means the selected resources have not been rolled out in the target cluster yet to honor the rollout
 	// strategy configurations specified in the placement
 	// - "Unknown" means it is in the processing state.
-	ResourceRolloutStartedConditionType ResourcePlacementConditionType = "RolloutStarted"
+	PerClusterRolloutStartedConditionType PerClusterPlacementConditionType = "RolloutStarted"
 
-	// ResourceOverriddenConditionType indicates whether all the selected resources have been overridden successfully
+	// PerClusterOverriddenConditionType indicates whether all the selected resources have been overridden successfully
 	// before applying to the target cluster if there is any override defined.
 	// Its condition status can be one of the following:
 	// - "True" means all the selected resources are successfully overridden before applying to the target cluster or
 	// override is not needed if there is no override defined with the reason of NoOverrideSpecified.
 	// - "False" means some of them have failed.
 	// - "Unknown" means we haven't finished the override yet.
-	ResourceOverriddenConditionType ResourcePlacementConditionType = "Overridden"
+	PerClusterOverriddenConditionType PerClusterPlacementConditionType = "Overridden"
 
-	// ResourceWorkSynchronizedConditionType indicates whether we have created or updated the corresponding work object(s)
-	// under the per-cluster namespaces (i.e., fleet-member-<member-name>) which have the latest resources selected by
+	// PerClusterWorkSynchronizedConditionType indicates whether we have created or updated the corresponding work object(s)
+	// under that particular cluster namespaces (i.e., fleet-member-<member-name>) which have the latest resources selected by
 	// the placement.
 	// Its condition status can be one of the following:
 	// - "True" means we have successfully created the latest corresponding work(s) or updated the existing work(s) to
@@ -1280,21 +1395,21 @@ const (
 	// - "False" means we have not created the latest corresponding work(s) or updated the existing work(s) to the latest
 	// yet.
 	// - "Unknown" means we haven't finished creating work yet.
-	ResourceWorkSynchronizedConditionType ResourcePlacementConditionType = "WorkSynchronized"
+	PerClusterWorkSynchronizedConditionType PerClusterPlacementConditionType = "WorkSynchronized"
 
-	// ResourcesAppliedConditionType indicates whether the selected member cluster has applied the selected resources locally.
+	// PerClusterAppliedConditionType indicates whether the selected member cluster has applied the selected resources.
 	// Its condition status can be one of the following:
 	// - "True" means all the selected resources are successfully applied to the target cluster.
 	// - "False" means some of them have failed.
 	// - "Unknown" means we haven't finished the apply yet.
-	ResourcesAppliedConditionType ResourcePlacementConditionType = "Applied"
+	PerClusterAppliedConditionType PerClusterPlacementConditionType = "Applied"
 
-	// ResourcesAvailableConditionType indicates whether the selected resources are available on the selected member cluster.
+	// PerClusterAvailableConditionType indicates whether the selected resources are available on the selected member cluster.
 	// Its condition status can be one of the following:
 	// - "True" means all the selected resources are available on the target cluster.
 	// - "False" means some of them are not available yet.
 	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
-	ResourcesAvailableConditionType ResourcePlacementConditionType = "Available"
+	PerClusterAvailableConditionType PerClusterPlacementConditionType = "Available"
 
 	// ResourceDiffReportedConditionType indicates whether Fleet has reported configuration
 	// differences between the desired states of resources as kept in the hub cluster and the
@@ -1305,7 +1420,7 @@ const (
 	// * False: Fleet has not yet reported the complete set of configuration differences on the
 	//   member cluster, or an error has occurred.
 	// * Unknown: Fleet has not finished processing the diff reporting yet.
-	ResourcesDiffReportedConditionType ResourcePlacementConditionType = "DiffReported"
+	PerClusterDiffReportedConditionType PerClusterPlacementConditionType = "DiffReported"
 )
 
 // PlacementType identifies the type of placement.
@@ -1495,6 +1610,57 @@ func (rpl *ResourcePlacementList) GetPlacementObjs() []PlacementObj {
 	return objs
 }
 
+// +genclient
+// +genclient:Namespaced
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:scope="Namespaced",shortName=crps,categories={fleet,fleet-placement}
+// +kubebuilder:subresource:status
+// +kubebuilder:storageversion
+// +kubebuilder:printcolumn:JSONPath=`.status.observedResourceIndex`,name="Resource-Index",type=string
+// +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// ClusterResourcePlacementStatus is a namespaced resource that mirrors the PlacementStatus of a corresponding
+// ClusterResourcePlacement object. This allows namespace-scoped access to cluster-scoped placement status.
+//
+// This object will be created within the target namespace that contains resources being managed by the CRP.
+// When multiple ClusterResourcePlacements target the same namespace, each ClusterResourcePlacementStatus within that
+// namespace is uniquely identified by its object name, which corresponds to the specific ClusterResourcePlacement
+// that created it.
+//
+// The name of this object should be the same as the name of the corresponding ClusterResourcePlacement.
+type ClusterResourcePlacementStatus struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// The observed status of ClusterResourcePlacementStatus which mirrors the PlacementStatus of the corresponding ClusterResourcePlacement.
+	// This includes information about the namespace and resources within that namespace that are being managed by the placement.
+	// The status will show placement details for resources selected by the ClusterResourcePlacement's ResourceSelectors.
+	// +kubebuilder:validation:Optional
+	Status PlacementStatus `json:"status,omitempty"`
+}
+
+// ClusterResourcePlacementStatusList contains a list of ClusterResourcePlacementStatus.
+// +kubebuilder:resource:scope="Namespaced"
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type ClusterResourcePlacementStatusList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []ClusterResourcePlacementStatus `json:"items"`
+}
+
+// SetConditions sets the conditions of the ClusterResourcePlacementStatus.
+func (m *ClusterResourcePlacementStatus) SetConditions(conditions ...metav1.Condition) {
+	for _, c := range conditions {
+		meta.SetStatusCondition(&m.Status.Conditions, c)
+	}
+}
+
+// GetCondition returns the condition of the ClusterResourcePlacementStatus objects.
+func (m *ClusterResourcePlacementStatus) GetCondition(conditionType string) *metav1.Condition {
+	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
+}
+
 func init() {
-	SchemeBuilder.Register(&ClusterResourcePlacement{}, &ClusterResourcePlacementList{}, &ResourcePlacement{}, &ResourcePlacementList{})
+	SchemeBuilder.Register(&ClusterResourcePlacement{}, &ClusterResourcePlacementList{}, &ResourcePlacement{}, &ResourcePlacementList{}, &ClusterResourcePlacementStatus{}, &ClusterResourcePlacementStatusList{})
 }

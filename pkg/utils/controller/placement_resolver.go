@@ -43,28 +43,22 @@ func FetchPlacementFromKey(ctx context.Context, c client.Reader, placementKey qu
 		return nil, err
 	}
 	// Check if the key contains a namespace separator
+	var placement fleetv1beta1.PlacementObj
 	if namespace != "" {
 		// This is a namespaced ResourcePlacement
-		rp := &fleetv1beta1.ResourcePlacement{}
-		key := types.NamespacedName{
-			Namespace: namespace,
-			Name:      name,
-		}
-		if err := c.Get(ctx, key, rp); err != nil {
-			return nil, err
-		}
-		return rp, nil
+		placement = &fleetv1beta1.ResourcePlacement{}
 	} else {
 		// This is a cluster-scoped ClusterResourcePlacement
-		crp := &fleetv1beta1.ClusterResourcePlacement{}
-		key := types.NamespacedName{
-			Name: name,
-		}
-		if err := c.Get(ctx, key, crp); err != nil {
-			return nil, err
-		}
-		return crp, nil
+		placement = &fleetv1beta1.ClusterResourcePlacement{}
 	}
+	key := types.NamespacedName{
+		Namespace: namespace,
+		Name:      name,
+	}
+	if err := c.Get(ctx, key, placement); err != nil {
+		return nil, err
+	}
+	return placement, nil
 }
 
 // GetObjectKeyFromObj generates a object Key from a meta object.

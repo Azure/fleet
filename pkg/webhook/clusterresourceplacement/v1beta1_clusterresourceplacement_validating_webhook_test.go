@@ -38,7 +38,7 @@ func TestHandle(t *testing.T) {
 	invalidCRPObject := &placementv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "test-crp",
-			Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+			Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 		},
 		Spec: placementv1beta1.PlacementSpec{
 			Policy: &placementv1beta1.PlacementPolicy{
@@ -57,7 +57,7 @@ func TestHandle(t *testing.T) {
 	invalidCRPObjectDeleting := &placementv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "test-crp",
-			Finalizers:        []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+			Finalizers:        []string{placementv1beta1.PlacementCleanupFinalizer},
 			DeletionTimestamp: ptr.To(metav1.NewTime(time.Now())),
 		},
 		Spec: placementv1beta1.PlacementSpec{
@@ -117,7 +117,7 @@ func TestHandle(t *testing.T) {
 	validCRPObject := &placementv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "test-crp",
-			Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+			Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 		},
 		Spec: placementv1beta1.PlacementSpec{
 			Policy: &placementv1beta1.PlacementPolicy{
@@ -154,7 +154,7 @@ func TestHandle(t *testing.T) {
 	updatedValidSpecCRPObject := &placementv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "test-crp",
-			Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+			Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 		},
 		Spec: placementv1beta1.PlacementSpec{
 			Policy: &placementv1beta1.PlacementPolicy{
@@ -194,7 +194,7 @@ func TestHandle(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "test-crp",
 			Labels:     map[string]string{"key1": "value1"},
-			Finalizers: []string{placementv1beta1.ClusterResourcePlacementCleanupFinalizer},
+			Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 		},
 		Spec: placementv1beta1.PlacementSpec{
 			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
