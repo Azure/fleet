@@ -96,7 +96,11 @@ func GetObjectKeyFromNamespaceName(namespace, name string) string {
 
 // ExtractNamespaceNameFromKey resolves a PlacementKey to a (namespace, name) tuple of the placement object.
 func ExtractNamespaceNameFromKey(key queue.PlacementKey) (string, string, error) {
-	keyStr := string(key)
+	return ExtractNamespaceNameFromKeyStr(string(key))
+}
+
+// ExtractNamespaceNameFromKeyStr resolves a PlacementKey string to a (namespace, name) tuple of the placement object.
+func ExtractNamespaceNameFromKeyStr(keyStr string) (string, string, error) {
 	// Check if the key contains a namespace separator
 	if strings.Contains(keyStr, namespaceSeparator) {
 		// This is a namespaced ResourcePlacement

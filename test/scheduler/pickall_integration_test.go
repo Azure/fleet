@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
 var _ = Describe("scheduling CRPs with no scheduling policy specified", func() {
@@ -36,7 +37,7 @@ var _ = Describe("scheduling CRPs with no scheduling policy specified", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpName)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP with no scheduling policy specified, along with its associated policy snapshot.
@@ -44,7 +45,7 @@ var _ = Describe("scheduling CRPs with no scheduling policy specified", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpName)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
@@ -68,7 +69,7 @@ var _ = Describe("scheduling CRPs with no scheduling policy specified", func() {
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpName)
 		})
 	})
 
@@ -91,7 +92,7 @@ var _ = Describe("scheduling CRPs with no scheduling policy specified", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpName)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP with no scheduling policy specified, along with its associated policy snapshot.
@@ -112,7 +113,7 @@ var _ = Describe("scheduling CRPs with no scheduling policy specified", func() {
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpName)
 
 			// Delete the provisional cluster.
 			ensureProvisionalClusterDeletion(newUnhealthyMemberClusterName)
@@ -138,7 +139,7 @@ var _ = Describe("scheduling CRPs with no scheduling policy specified", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpName)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP with no scheduling policy specified, along with its associated policy snapshot.
@@ -167,7 +168,7 @@ var _ = Describe("scheduling CRPs with no scheduling policy specified", func() {
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpName)
 
 			// Delete the provisional cluster.
 			ensureProvisionalClusterDeletion(newUnhealthyMemberClusterName)
@@ -182,7 +183,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpName)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickAll placement type, along with its associated policy snapshot.
@@ -190,7 +191,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpName)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
@@ -214,7 +215,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpName)
 		})
 	})
 
@@ -238,7 +239,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpName)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickAll placement type, along with its associated policy snapshot.
@@ -271,7 +272,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpName)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
@@ -295,7 +296,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpName)
 		})
 	})
 
@@ -319,7 +320,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpName)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickAll placement type, along with its associated policy snapshot.
@@ -359,7 +360,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpName)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
@@ -383,7 +384,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpName)
 		})
 	})
 
@@ -419,7 +420,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpName)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickAll placement type, along with its associated policy snapshot.
@@ -495,7 +496,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpName)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
@@ -525,7 +526,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpName)
 		})
 	})
 
@@ -547,7 +548,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpName)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			policy := &placementv1beta1.PlacementPolicy{
@@ -587,7 +588,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpName)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
@@ -605,7 +606,452 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpName)
+		})
+	})
+})
+
+var _ = Describe("scheduling RPs of the PickAll placement type", func() {
+	Context("pick all valid clusters", Ordered, func() {
+		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+		rpKey := controller.GetObjectKeyFromNamespaceName(testNamespace, rpName)
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, rpName, 1)
+		policySnapshotKey := controller.GetObjectKeyFromNamespaceName(testNamespace, policySnapshotName)
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(rpKey)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Create a RP of the PickAll placement type, along with its associated policy snapshot.
+			createPickAllRPWithPolicySnapshot(testNamespace, rpName, policySnapshotName, nil)
+		})
+
+		It("should add scheduler cleanup finalizer to the RP", func() {
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(rpKey)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to RP")
+		})
+
+		It("should create scheduled bindings for all healthy clusters", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(healthyClusters, zeroScoreByCluster, rpKey, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+		})
+
+		It("should not create any binding for unhealthy clusters", func() {
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(unhealthyClusters, rpKey)
+			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+		})
+
+		It("should report status correctly", func() {
+			statusUpdatedActual := pickAllPolicySnapshotStatusUpdatedActual(healthyClusters, unhealthyClusters, policySnapshotKey)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update status")
+			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update status")
+		})
+
+		AfterAll(func() {
+			// Delete the RP.
+			ensurePlacementAndAllRelatedResourcesDeletion(rpKey)
+		})
+	})
+
+	Context("pick clusters with specific affinities (single term, multiple selectors)", Ordered, func() {
+		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+		rpKey := controller.GetObjectKeyFromNamespaceName(testNamespace, rpName)
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, rpName, 1)
+		policySnapshotKey := controller.GetObjectKeyFromNamespaceName(testNamespace, policySnapshotName)
+
+		wantTargetClusters := []string{
+			memberCluster1EastProd,
+			memberCluster2EastProd,
+			memberCluster6WestProd,
+		}
+		wantIgnoredClusters := []string{
+			memberCluster3EastCanary,
+			memberCluster4CentralProd,
+			memberCluster5CentralProd,
+			memberCluster7WestCanary,
+			memberCluster8UnhealthyEastProd,
+			memberCluster9LeftCentralProd,
+		}
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(rpKey)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Create a RP of the PickAll placement type, along with its associated policy snapshot.
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											envLabel: "prod",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      regionLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values:   []string{"east", "west"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			createPickAllRPWithPolicySnapshot(testNamespace, rpName, policySnapshotName, policy)
+		})
+
+		It("should add scheduler cleanup finalizer to the RP", func() {
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(rpKey)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to RP")
+		})
+
+		It("should create scheduled bindings for all matching clusters", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantTargetClusters, zeroScoreByCluster, rpKey, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+		})
+
+		It("should not create any binding for non-matching clusters", func() {
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(wantIgnoredClusters, rpKey)
+			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+		})
+
+		It("should report status correctly", func() {
+			statusUpdatedActual := pickAllPolicySnapshotStatusUpdatedActual(wantTargetClusters, wantIgnoredClusters, policySnapshotKey)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update status")
+			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update status")
+		})
+
+		AfterAll(func() {
+			// Delete the RP.
+			ensurePlacementAndAllRelatedResourcesDeletion(rpKey)
+		})
+	})
+
+	Context("pick clusters with specific affinities (multiple terms, single selector)", Ordered, func() {
+		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+		rpKey := controller.GetObjectKeyFromNamespaceName(testNamespace, rpName)
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, rpName, 1)
+		policySnapshotKey := controller.GetObjectKeyFromNamespaceName(testNamespace, policySnapshotName)
+
+		wantTargetClusters := []string{
+			memberCluster3EastCanary,
+			memberCluster6WestProd,
+			memberCluster7WestCanary,
+		}
+		wantIgnoredClusters := []string{
+			memberCluster1EastProd,
+			memberCluster2EastProd,
+			memberCluster4CentralProd,
+			memberCluster5CentralProd,
+			memberCluster8UnhealthyEastProd,
+			memberCluster9LeftCentralProd,
+		}
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(rpKey)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Create a RP of the PickAll placement type, along with its associated policy snapshot.
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											envLabel: "canary",
+										},
+									},
+								},
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      regionLabel,
+												Operator: metav1.LabelSelectorOpNotIn,
+												Values: []string{
+													"east",
+													"central",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			createPickAllRPWithPolicySnapshot(testNamespace, rpName, policySnapshotName, policy)
+		})
+
+		It("should add scheduler cleanup finalizer to the RP", func() {
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(rpKey)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to RP")
+		})
+
+		It("should create scheduled bindings for all matching clusters", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantTargetClusters, zeroScoreByCluster, rpKey, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+		})
+
+		It("should not create any binding for non-matching clusters", func() {
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(wantIgnoredClusters, rpKey)
+			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+		})
+
+		It("should report status correctly", func() {
+			statusUpdatedActual := pickAllPolicySnapshotStatusUpdatedActual(wantTargetClusters, wantIgnoredClusters, policySnapshotKey)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update status")
+			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update status")
+		})
+
+		AfterAll(func() {
+			// Delete the RP.
+			ensurePlacementAndAllRelatedResourcesDeletion(rpKey)
+		})
+	})
+
+	Context("affinities updated", Ordered, func() {
+		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+		rpKey := controller.GetObjectKeyFromNamespaceName(testNamespace, rpName)
+		policySnapshotName1 := fmt.Sprintf(policySnapshotNameTemplate, rpName, 1)
+		policySnapshotName2 := fmt.Sprintf(policySnapshotNameTemplate, rpName, 2)
+		policySnapshotKey2 := controller.GetObjectKeyFromNamespaceName(testNamespace, policySnapshotName2)
+
+		wantTargetClusters1 := []string{
+			memberCluster3EastCanary,
+			memberCluster7WestCanary,
+		}
+		wantTargetClusters2 := []string{
+			memberCluster3EastCanary,
+			memberCluster6WestProd,
+			memberCluster7WestCanary,
+		}
+		wantIgnoredClusters2 := []string{
+			memberCluster1EastProd,
+			memberCluster2EastProd,
+			memberCluster4CentralProd,
+			memberCluster5CentralProd,
+			memberCluster8UnhealthyEastProd,
+			memberCluster9LeftCentralProd,
+		}
+		boundClusters := []string{
+			memberCluster3EastCanary,
+		}
+		scheduledClusters := []string{
+			memberCluster6WestProd,
+			memberCluster7WestCanary,
+		}
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(rpKey)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Create a RP of the PickAll placement type, along with its associated policy snapshot.
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											envLabel: "canary",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      regionLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values: []string{
+													"east",
+													"west",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			createPickAllRPWithPolicySnapshot(testNamespace, rpName, policySnapshotName1, policy)
+
+			// Verify that bindings have been created as expected.
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantTargetClusters1, zeroScoreByCluster, rpKey, policySnapshotName1)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+
+			// Bind some bindings.
+			markBindingsAsBoundForClusters(rpKey, boundClusters)
+
+			// Update the CRP with a new affinity.
+			affinity := &placementv1beta1.Affinity{
+				ClusterAffinity: &placementv1beta1.ClusterAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+							{
+								LabelSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										envLabel: "canary",
+									},
+								},
+							},
+							{
+								LabelSelector: &metav1.LabelSelector{
+									MatchExpressions: []metav1.LabelSelectorRequirement{
+										{
+											Key:      regionLabel,
+											Operator: metav1.LabelSelectorOpNotIn,
+											Values: []string{
+												"east",
+												"central",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			updatePickAllRPWithNewAffinity(testNamespace, rpName, affinity, policySnapshotName1, policySnapshotName2)
+		})
+
+		It("should add scheduler cleanup finalizer to the RP", func() {
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(rpKey)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to RP")
+		})
+
+		It("should create/update scheduled bindings for newly matched clusters", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(scheduledClusters, zeroScoreByCluster, rpKey, policySnapshotName2)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+		})
+
+		It("should update bound bindings for newly matched clusters", func() {
+			boundBindingsUpdatedActual := boundBindingsCreatedOrUpdatedForClustersActual(boundClusters, zeroScoreByCluster, rpKey, policySnapshotName2)
+			Eventually(boundBindingsUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the expected set of bindings")
+			Consistently(boundBindingsUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update the expected set of bindings")
+		})
+
+		It("should not create any binding for non-matching clusters", func() {
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(wantIgnoredClusters2, rpKey)
+			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+		})
+
+		It("should report status correctly", func() {
+			statusUpdatedActual := pickAllPolicySnapshotStatusUpdatedActual(wantTargetClusters2, wantIgnoredClusters2, policySnapshotKey2)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update status")
+			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update status")
+		})
+
+		AfterAll(func() {
+			// Delete the RP.
+			ensurePlacementAndAllRelatedResourcesDeletion(rpKey)
+		})
+	})
+
+	Context("no matching clusters", Ordered, func() {
+		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+		rpKey := controller.GetObjectKeyFromNamespaceName(testNamespace, rpName)
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, rpName, 1)
+		policySnapshotKey := controller.GetObjectKeyFromNamespaceName(testNamespace, policySnapshotName)
+
+		wantIgnoredClusters := []string{
+			memberCluster1EastProd,
+			memberCluster2EastProd,
+			memberCluster3EastCanary,
+			memberCluster4CentralProd,
+			memberCluster5CentralProd,
+			memberCluster6WestProd,
+			memberCluster7WestCanary,
+			memberCluster8UnhealthyEastProd,
+			memberCluster9LeftCentralProd,
+		}
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(rpKey)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											envLabel: "wonderland",
+										},
+									},
+								},
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      regionLabel,
+												Operator: metav1.LabelSelectorOpNotIn,
+												Values: []string{
+													"east",
+													"central",
+													"west",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			createPickAllRPWithPolicySnapshot(testNamespace, rpName, policySnapshotName, policy)
+		})
+
+		It("should add scheduler cleanup finalizer to the RP", func() {
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(rpKey)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to RP")
+		})
+
+		It("should not create any binding for non-matching clusters", func() {
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(wantIgnoredClusters, rpKey)
+			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+		})
+
+		It("should report status correctly", func() {
+			statusUpdatedActual := pickAllPolicySnapshotStatusUpdatedActual([]string{}, wantIgnoredClusters, policySnapshotKey)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update status")
+			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update status")
+		})
+
+		AfterAll(func() {
+			// Delete the RP.
+			ensurePlacementAndAllRelatedResourcesDeletion(rpKey)
 		})
 	})
 })

@@ -18,56 +18,82 @@ package membercluster
 
 import (
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 )
 
-// isCRPFullyScheduled returns whether a CRP is fully scheduled.
-func isCRPFullyScheduled(crp *fleetv1beta1.ClusterResourcePlacement) bool {
-	// Check the scheduled condition on the CRP to determine if it is fully scheduled.
+// isPlacementFullyScheduled returns whether a placement is fully scheduled.
+func isPlacementFullyScheduled(placement fleetv1beta1.PlacementObj) bool {
+	// Check the scheduled condition on the placement to determine if it is fully scheduled.
 	//
 	// Here the controller checks the status rather than listing all the bindings and verify
-	// if the count matches with the CRP spec as the former approach has less overhead and
+	// if the count matches with the placement spec as the former approach has less overhead and
 	// (more importantly) avoids leaking scheduler-specific logic into this controller. The
-	// trade-off is that the controller may consider some fully scheduled CRPs as not fully
-	// scheduled, if the CRP-side controller(s) cannot update the CRP status in a timely
+	// trade-off is that the controller may consider some fully scheduled placements as not fully
+	// scheduled, if the placement-side controller(s) cannot update the placement status in a timely
 	// manner.
 
-	scheduledCondition := meta.FindStatusCondition(crp.Status.Conditions, string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType))
-	// Check if the CRP is fully scheduled, or its scheduled condition is out of date.
-	return condition.IsConditionStatusTrue(scheduledCondition, crp.Generation)
+	var scheduledCondition *metav1.Condition
+	if placement.GetNamespace() == "" {
+		// Find CRP scheduled condition.
+		scheduledCondition = meta.FindStatusCondition(placement.GetPlacementStatus().Conditions, string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType))
+	} else {
+		// Find RP scheduled condition.
+		scheduledCondition = meta.FindStatusCondition(placement.GetPlacementStatus().Conditions, string(fleetv1beta1.ResourcePlacementScheduledConditionType))
+	}
+	// Check if the placement is fully scheduled, or its scheduled condition is out of date.
+	return condition.IsConditionStatusTrue(scheduledCondition, placement.GetGeneration())
 }
 
-// classifyCRPs returns a list of CRPs that are affected by cluster side changes in case 1a) and
+// classifyPlacements returns a list of placements that are affected by cluster side changes in case 1a) and
 // 1b).
-func classifyCRPs(crps []fleetv1beta1.ClusterResourcePlacement) (toProcess []fleetv1beta1.ClusterResourcePlacement) {
+func classifyPlacements(placements []fleetv1beta1.PlacementObj) (toProcess []fleetv1beta1.PlacementObj) {
 	// Pre-allocate array.
-	toProcess = make([]fleetv1beta1.ClusterResourcePlacement, 0, len(crps))
+	toProcess = make([]fleetv1beta1.PlacementObj, 0, len(placements))
 
-	for idx := range crps {
-		crp := crps[idx]
+	for idx := range placements {
+		placement := placements[idx]
 		switch {
-		case crp.Spec.Policy == nil:
-			// CRPs with no placement policy specified are considered to be of the PickAll placement
+		case placement.GetPlacementSpec().Policy == nil:
+			// Placements with no placement policy specified are considered to be of the PickAll placement
 			// type and are affected by cluster side changes in case 1a) and 1b).
-			toProcess = append(toProcess, crp)
-		case crp.Spec.Policy.PlacementType == fleetv1beta1.PickFixedPlacementType:
-			if !isCRPFullyScheduled(&crp) {
-				// Any CRP with an non-empty list of target cluster names can be affected by cluster
+			toProcess = append(toProcess, placement)
+		case placement.GetPlacementSpec().Policy.PlacementType == fleetv1beta1.PickFixedPlacementType:
+			if !isPlacementFullyScheduled(placement) {
+				// Any Placement with an non-empty list of target cluster names can be affected by cluster
 				// side changes in case 1b), if it is not yet fully scheduled.
-				toProcess = append(toProcess, crp)
+				toProcess = append(toProcess, placement)
 			}
-		case crp.Spec.Policy.PlacementType == fleetv1beta1.PickAllPlacementType:
-			// CRPs of the PickAll placement type are affected by cluster side changes in case 1a)
+		case placement.GetPlacementSpec().Policy.PlacementType == fleetv1beta1.PickAllPlacementType:
+			// Placements of the PickAll placement type are affected by cluster side changes in case 1a)
 			// and 1b).
-			toProcess = append(toProcess, crp)
-		case !isCRPFullyScheduled(&crp):
-			// CRPs of the PickN placement type, which have not been fully scheduled, are affected
+			toProcess = append(toProcess, placement)
+		case !isPlacementFullyScheduled(placement):
+			// Placements of the PickN placement type, which have not been fully scheduled, are affected
 			// by cluster side changes in case 1a) and 1b) listed in the Reconcile func.
-			toProcess = append(toProcess, crp)
+			toProcess = append(toProcess, placement)
 		}
 	}
 
 	return toProcess
+}
+
+// convertCRPArrayToPlacementObjs converts a slice of ClusterResourcePlacement items to PlacementObj array.
+func convertCRPArrayToPlacementObjs(crps []fleetv1beta1.ClusterResourcePlacement) []fleetv1beta1.PlacementObj {
+	placements := make([]fleetv1beta1.PlacementObj, len(crps))
+	for i := range crps {
+		placements[i] = &crps[i]
+	}
+	return placements
+}
+
+// convertRPArrayToPlacementObjs converts a slice of ResourcePlacement items to PlacementObj array.
+func convertRPArrayToPlacementObjs(rps []fleetv1beta1.ResourcePlacement) []fleetv1beta1.PlacementObj {
+	placements := make([]fleetv1beta1.PlacementObj, len(rps))
+	for i := range rps {
+		placements[i] = &rps[i]
+	}
+	return placements
 }

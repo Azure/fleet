@@ -67,7 +67,7 @@ func classifyBindings(policy placementv1beta1.PolicySnapshotObj, bindings []plac
 
 		switch {
 		case !binding.GetDeletionTimestamp().IsZero():
-			// we need remove scheduler CRB cleanup finalizer from deleting bindings.
+			// we need remove scheduler binding cleanup finalizer from deleting bindings.
 			deleting = append(deleting, binding)
 		case bindingSpec.State == placementv1beta1.BindingStateUnscheduled:
 			// we need to remember those bindings so that we will not create another one.
@@ -503,7 +503,7 @@ func equalDecisions(current, desired []placementv1beta1.ClusterDecision) bool {
 // many scheduled or bound bindings it should remove.
 func shouldDownscale(policy placementv1beta1.PolicySnapshotObj, desired, present, obsolete int) (act bool, count int) {
 	if policy.GetPolicySnapshotSpec().Policy.PlacementType == placementv1beta1.PickNPlacementType && desired <= present {
-		// Downscale only applies to CRPs of the Pick N placement type; and it only applies when the number of
+		// Downscale only applies to placements of the Pick N placement type; and it only applies when the number of
 		// clusters requested by the user is less than the number of currently bound + scheduled bindings combined;
 		// or there are the right number of bound + scheduled bindings, yet some obsolete bindings still linger
 		// in the system.
@@ -531,7 +531,7 @@ func sortByClusterScoreAndName(bindings []placementv1beta1.BindingObj) (sorted [
 		switch {
 		case scoreA == nil && scoreB == nil:
 			// Both bindings have no assigned cluster scores; normally this will never happen,
-			// as for CRPs of the PickN type, the scheduler will always assign cluster scores
+			// as for placements of the PickN type, the scheduler will always assign cluster scores
 			// to bindings.
 			//
 			// In this case, compare their target cluster names instead.

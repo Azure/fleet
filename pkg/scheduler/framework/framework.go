@@ -93,7 +93,7 @@ type Handle interface {
 type Framework interface {
 	Handle
 
-	// RunSchedulingCycleFor performs scheduling for a cluster resource placement, specifically
+	// RunSchedulingCycleFor performs scheduling for a resource placement, specifically
 	// its associated latest scheduling policy snapshot.
 	RunSchedulingCycleFor(ctx context.Context, placementKey queue.PlacementKey, policy placementv1beta1.PolicySnapshotObj) (result ctrl.Result, err error)
 }
@@ -242,7 +242,7 @@ func (f *framework) ClusterEligibilityChecker() *clustereligibilitychecker.Clust
 	return f.clusterEligibilityChecker
 }
 
-// RunSchedulingCycleFor performs scheduling for a cluster resource placement
+// RunSchedulingCycleFor performs scheduling for a resource placement
 // (more specifically, its associated scheduling policy snapshot).
 func (f *framework) RunSchedulingCycleFor(ctx context.Context, placementKey queue.PlacementKey, policy placementv1beta1.PolicySnapshotObj) (result ctrl.Result, err error) {
 	startTime := time.Now()
@@ -313,7 +313,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, placementKey queu
 	// result so that we won't have a ever increasing chain of flip flop bindings.
 	bound, scheduled, obsolete, unscheduled, dangling, deleting := classifyBindings(policy, bindings, clusters)
 
-	// Remove scheduler CRB cleanup finalizer on all deleting bindings.
+	// Remove scheduler binding cleanup finalizer on all deleting bindings.
 	if err := f.updateBindings(ctx, deleting, removeFinalizerAndUpdate); err != nil {
 		klog.ErrorS(err, "Failed to remove finalizers from deleting bindings", "policySnapshot", policyRef)
 		return ctrl.Result{}, err
@@ -379,7 +379,7 @@ var markUnscheduledForAndUpdate = func(ctx context.Context, hubClient client.Cli
 	return err
 }
 
-// removeFinalizerAndUpdate removes scheduler CRB cleanup finalizer from binding and updates it.
+// removeFinalizerAndUpdate removes scheduler binding cleanup finalizer from binding and updates it.
 var removeFinalizerAndUpdate = func(ctx context.Context, hubClient client.Client, binding placementv1beta1.BindingObj) error {
 	controllerutil.RemoveFinalizer(binding, placementv1beta1.SchedulerBindingCleanupFinalizer)
 	err := hubClient.Update(ctx, binding, &client.UpdateOptions{})
@@ -430,7 +430,7 @@ func (f *framework) runSchedulingCycleForPickAllPlacementType(
 
 	// The scheduler always needs to take action when processing scheduling policies of the PickAll
 	// placement type; enter the actual scheduling stages right away.
-	klog.V(2).InfoS("Scheduling is always needed for CRPs of the PickAll placement type; entering scheduling stages", "policySnapshot", policyRef)
+	klog.V(2).InfoS("Scheduling is always needed for placements of the PickAll placement type; entering scheduling stages", "policySnapshot", policyRef)
 
 	// Run all plugins needed.
 	//

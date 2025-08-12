@@ -488,7 +488,7 @@ spec:
                 type: string
               placementStatuses:
                 description: |-
-                  PlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
+                  PerClusterPlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
                   Each selected cluster according to the observed resource placement is guaranteed to have a corresponding placementStatuses.
                   In the pickN case, there are N placement statuses where N = NumberOfClusters; Or in the pickFixed case, there are
                   N placement statuses where N = ClusterNames.

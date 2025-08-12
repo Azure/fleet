@@ -153,7 +153,7 @@ type SchedulingPolicySnapshotStatus struct {
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 
-	// ObservedCRPGeneration is the generation of the CRP which the scheduler uses to perform
+	// ObservedCRPGeneration is the generation of the resource placement which the scheduler uses to perform
 	// the scheduling cycle and prepare the scheduling status.
 	// +required
 	ObservedCRPGeneration int64 `json:"observedCRPGeneration"`

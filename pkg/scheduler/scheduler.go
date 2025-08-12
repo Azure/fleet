@@ -124,14 +124,13 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 	defer metrics.SchedulerActiveWorkers.WithLabelValues().Add(-1)
 
 	startTime := time.Now()
-	placementRef := klog.KRef("", string(placementKey))
-	klog.V(2).InfoS("Schedule once started", "placement", placementRef, "worker", worker)
+	klog.V(2).InfoS("Schedule once started", "placement", placementKey, "worker", worker)
 	defer func() {
 		// Note that the time spent on pulling keys from the work queue (and the time spent on waiting
 		// for a key to arrive) is not counted here, as we cannot reliably distinguish between
 		// system processing latencies and actual duration of placement absence.
 		latency := time.Since(startTime).Milliseconds()
-		klog.V(2).InfoS("Schedule once completed", "placement", placementRef, "latency", latency, "worker", worker)
+		klog.V(2).InfoS("Schedule once completed", "placement", placementKey, "latency", latency, "worker", worker)
 	}()
 
 	// Retrieve the placement object (either ClusterResourcePlacement or ResourcePlacement).
@@ -143,18 +142,18 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 			// has been marked for deletion but does not have the scheduler cleanup finalizer to
 			// the work queue. Such placements needs no further processing any way though, as the absence
 			// of the cleanup finalizer implies that bindings derived from the placement are no longer present.
-			klog.ErrorS(err, "placement is already deleted", "placement", placementRef)
+			klog.ErrorS(err, "placement is already deleted", "placement", placementKey)
 			return
 		}
 		if errors.Is(err, controller.ErrUnexpectedBehavior) {
 			// The placement is in an unexpected state; this is a scheduler-side error, and
 			// Note that this is a scheduler-side error, so it does not return an error to the caller.
 			// Raise an alert for it.
-			klog.ErrorS(err, "Placement is in an unexpected state", "placement", placementRef)
+			klog.ErrorS(err, "Placement is in an unexpected state", "placement", placementKey)
 			return
 		}
 		// Wrap the error for metrics; this method does not return an error.
-		klog.ErrorS(controller.NewAPIServerError(true, err), "Failed to get placement", "placement", placementRef)
+		klog.ErrorS(controller.NewAPIServerError(true, err), "Failed to get placement", "placement", placementKey)
 
 		// Requeue for later processing.
 		s.queue.AddRateLimited(placementKey)
@@ -163,10 +162,10 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 
 	// Check if the placement has been marked for deletion, and if it has the scheduler cleanup finalizer.
 	if placement.GetDeletionTimestamp() != nil {
-		// Use SchedulerCRPCleanupFinalizer consistently for all placement types
+		// Use SchedulerCleanupFinalizer consistently for all placement types
 		if controllerutil.ContainsFinalizer(placement, fleetv1beta1.SchedulerCleanupFinalizer) {
 			if err := s.cleanUpAllBindingsFor(ctx, placement); err != nil {
-				klog.ErrorS(err, "Failed to clean up all bindings for placement", "placement", placementRef)
+				klog.ErrorS(err, "Failed to clean up all bindings for placement", "placement", placementKey)
 				if errors.Is(err, controller.ErrUnexpectedBehavior) {
 					// The placement is in an unexpected state, don't requeue it.
 					return
@@ -189,7 +188,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 	// Verify that it has an active policy snapshot.
 	latestPolicySnapshot, err := s.lookupLatestPolicySnapshot(ctx, placement)
 	if err != nil {
-		klog.ErrorS(err, "Failed to lookup latest policy snapshot", "placement", placementRef)
+		klog.ErrorS(err, "Failed to lookup latest policy snapshot", "placement", placementKey)
 		// No requeue is needed; the scheduler will be triggered again when an active policy
 		// snapshot is created.
 
@@ -200,7 +199,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 
 	// Add the scheduler cleanup finalizer to the placement (if it does not have one yet).
 	if err := s.addSchedulerCleanUpFinalizer(ctx, placement); err != nil {
-		klog.ErrorS(err, "Failed to add scheduler cleanup finalizer", "placement", placementRef)
+		klog.ErrorS(err, "Failed to add scheduler cleanup finalizer", "placement", placementKey)
 		// Requeue for later processing.
 		s.queue.AddRateLimited(placementKey)
 		return
@@ -211,18 +210,18 @@ func (s *Scheduler) scheduleOnce(ctx context.Context, worker int) {
 	// Note that the scheduler will enter this cycle as long as the placement is active and an active
 	// policy snapshot has been produced.
 	cycleStartTime := time.Now()
-	res, err := s.framework.RunSchedulingCycleFor(ctx, controller.GetObjectKeyFromObj(placement), latestPolicySnapshot)
+	res, err := s.framework.RunSchedulingCycleFor(ctx, placementKey, latestPolicySnapshot)
 	if err != nil {
 		if errors.Is(err, controller.ErrUnexpectedBehavior) {
 			// The placement is in an unexpected state; this is a scheduler-side error, and
 			// Note that this is a scheduler-side error, so it does not return an error to the caller.
 			// Raise an alert for it.
-			klog.ErrorS(err, "Placement is in an unexpected state", "placement", placementRef)
+			klog.ErrorS(err, "Placement is in an unexpected state", "placement", placementKey)
 			observeSchedulingCycleMetrics(cycleStartTime, true, false)
 			return
 		}
 		// Requeue for later processing.
-		klog.ErrorS(err, "Failed to run scheduling cycle", "placement", placementRef)
+		klog.ErrorS(err, "Failed to run scheduling cycle", "placement", placementKey)
 		s.queue.AddRateLimited(placementKey)
 		observeSchedulingCycleMetrics(cycleStartTime, true, true)
 		return
@@ -310,7 +309,7 @@ func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, placement fleetv1
 		return err
 	}
 
-	// Remove scheduler CRB cleanup finalizer from deleting bindings.
+	// Remove scheduler binding cleanup finalizer from deleting bindings.
 	//
 	// Note that once a placement has been marked for deletion, it will no longer enter the scheduling cycle,
 	// so any cleanup finalizer has to be removed here.
@@ -335,7 +334,7 @@ func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, placement fleetv1
 	}
 
 	// All bindings have been deleted; remove the scheduler cleanup finalizer from the placement.
-	// Use SchedulerCRPCleanupFinalizer consistently for all placement types.
+	// Use SchedulerCleanupFinalizer consistently for all placement types.
 	controllerutil.RemoveFinalizer(placement, fleetv1beta1.SchedulerCleanupFinalizer)
 	if err := s.client.Update(ctx, placement); err != nil {
 		klog.ErrorS(err, "Failed to remove scheduler cleanup finalizer from placement", "placement", placementRef)
@@ -376,7 +375,7 @@ func (s *Scheduler) lookupLatestPolicySnapshot(ctx context.Context, placement fl
 	case len(policySnapshots) == 0:
 		// There is no latest policy snapshot associated with the placement; it could happen when
 		// * the placement is newly created; or
-		// * the new policy snapshots is in the middle of being replaced.
+		// * the new policy snapshot is in the middle of being replaced.
 		//
 		// Either way, it is out of the scheduler's scope to handle such a case; the scheduler will
 		// be triggered again if the situation is corrected.
