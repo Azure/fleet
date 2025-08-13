@@ -340,11 +340,8 @@ docker-build-crd-installer: docker-buildx-builder
 # Fleet Agents and Networking Agents are packaged and pushed to MCR for Arc Extension.
 .PHONY: helm-package-arc-member-cluster-agents
 helm-package-arc-member-cluster-agents:
-	# Update Chart.yaml version
-	sed -i.bak "s/^version:.*/version: $(ARC_MEMBER_AGENT_IMAGE_VERSION)/" charts/member-agent-arc/Chart.yaml
-
-	cat charts/member-agent-arc/Chart.yaml
-	 
+	# Update Chart.yaml version & environment variables in values.yaml
+	sed -i.bak "s/^version:.*/version: $(ARC_MEMBER_AGENT_IMAGE_VERSION)/" charts/member-agent-arc/Chart.yaml && \
 	envsubst < charts/member-agent-arc/values.yaml > charts/member-agent-arc/values.yaml.tmp && \
 	mv charts/member-agent-arc/values.yaml.tmp charts/member-agent-arc/values.yaml && \
 
