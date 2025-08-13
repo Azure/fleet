@@ -48,7 +48,6 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/sameplacementaffinity"
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/tainttoleration"
 	"github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework/plugins/topologyspreadconstraints"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
 // This file features some utilities used in the test suites.
@@ -513,7 +512,7 @@ func updatePickFixedRPWithNewTargetClustersAndRefreshSnapshots(namespace, rpName
 	Expect(hubClient.Create(ctx, policySnapshot)).To(Succeed(), "Failed to create policy snapshot")
 }
 
-func markBindingsAsBoundForClusters(placementKey string, boundClusters []string) {
+func markBindingsAsBoundForClusters(placementKey types.NamespacedName, boundClusters []string) {
 	bindingList, err := listBindings(placementKey)
 	Expect(err).ToNot(HaveOccurred(), "Failed to list bindings")
 
@@ -530,10 +529,8 @@ func markBindingsAsBoundForClusters(placementKey string, boundClusters []string)
 	}
 }
 
-func ensurePlacementAndAllRelatedResourcesDeletion(placementKey string) {
-	namespace, placementName, err := controller.ExtractNamespaceNameFromKeyStr(placementKey)
-	Expect(err).ToNot(HaveOccurred(), "Failed to extract namespace and name from placement key")
-
+func ensurePlacementAndAllRelatedResourcesDeletion(placementKey types.NamespacedName) {
+	namespace, placementName := placementKey.Namespace, placementKey.Name
 	// Delete the placement.
 	var placement placementv1beta1.PlacementObj
 	if namespace == "" {
@@ -565,7 +562,7 @@ func ensurePlacementAndAllRelatedResourcesDeletion(placementKey string) {
 
 	// Remove all the other finalizers from the placement.
 	Eventually(func() error {
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: placementName, Namespace: namespace}, placement); err != nil {
+		if err := hubClient.Get(ctx, placementKey, placement); err != nil {
 			return err
 		}
 
@@ -575,7 +572,7 @@ func ensurePlacementAndAllRelatedResourcesDeletion(placementKey string) {
 
 	// Ensure that the placement is deleted.
 	Eventually(func() error {
-		err := hubClient.Get(ctx, types.NamespacedName{Name: placementName, Namespace: namespace}, placement)
+		err := hubClient.Get(ctx, placementKey, placement)
 		if errors.IsNotFound(err) {
 			return nil
 		}
@@ -1077,23 +1074,18 @@ func resetClusterPropertiesFor(clusterName string) {
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to reset cluster properties")
 }
 
-func listBindings(placementKey string) (placementv1beta1.BindingObjList, error) {
-	namespace, placementName, err := controller.ExtractNamespaceNameFromKeyStr(placementKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract namespace and name from placement key %s: %w", placementKey, err)
-	}
-
+func listBindings(placementKey types.NamespacedName) (placementv1beta1.BindingObjList, error) {
 	var bindingList placementv1beta1.BindingObjList
-	labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.PlacementTrackingLabel: placementName})
+	labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.PlacementTrackingLabel: placementKey.Name})
 	listOptions := &client.ListOptions{LabelSelector: labelSelector}
 
-	if namespace == "" {
+	if placementKey.Namespace == "" {
 		// List ClusterResourceBindings.
 		bindingList = &placementv1beta1.ClusterResourceBindingList{}
 	} else {
 		// List ResourceBindings.
 		bindingList = &placementv1beta1.ResourceBindingList{}
-		listOptions.Namespace = namespace
+		listOptions.Namespace = placementKey.Namespace
 	}
 
 	if err := hubClient.List(ctx, bindingList, listOptions); err != nil {
@@ -1102,22 +1094,17 @@ func listBindings(placementKey string) (placementv1beta1.BindingObjList, error) 
 	return bindingList, nil
 }
 
-func getSchedulingPolicySnapshot(policySnapshotKey string) (placementv1beta1.PolicySnapshotObj, error) {
-	namespace, policySnapshotName, err := controller.ExtractNamespaceNameFromKeyStr(policySnapshotKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract namespace and name from policy snapshot key %s: %w", policySnapshotKey, err)
-	}
-
+func getSchedulingPolicySnapshot(policySnapshotKey types.NamespacedName) (placementv1beta1.PolicySnapshotObj, error) {
 	// Get the policy snapshot.
 	var policySnapshot placementv1beta1.PolicySnapshotObj
-	if namespace == "" {
+	if policySnapshotKey.Namespace == "" {
 		// Get ClusterSchedulingPolicySnapshot.
 		policySnapshot = &placementv1beta1.ClusterSchedulingPolicySnapshot{}
 	} else {
 		// Get SchedulingPolicySnapshot.
 		policySnapshot = &placementv1beta1.SchedulingPolicySnapshot{}
 	}
-	if err := hubClient.Get(ctx, types.NamespacedName{Name: policySnapshotName, Namespace: namespace}, policySnapshot); err != nil {
+	if err := hubClient.Get(ctx, types.NamespacedName{Name: policySnapshotKey.Name, Namespace: policySnapshotKey.Namespace}, policySnapshot); err != nil {
 		return nil, err
 	}
 	return policySnapshot, nil

@@ -29,12 +29,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
 // This file features common actuals (and utilities for generating actuals) in the test suites.
 
-func noBindingsCreatedForPlacementActual(placementKey string) func() error {
+func noBindingsCreatedForPlacementActual(placementKey types.NamespacedName) func() error {
 	return func() error {
 		bindingList, err := listBindings(placementKey)
 		if err != nil {
@@ -50,23 +49,18 @@ func noBindingsCreatedForPlacementActual(placementKey string) func() error {
 	}
 }
 
-func placementSchedulerFinalizerAddedActual(placementKey string) func() error {
+func placementSchedulerFinalizerAddedActual(placementKey types.NamespacedName) func() error {
 	return func() error {
-		namespace, placementName, err := controller.ExtractNamespaceNameFromKeyStr(placementKey)
-		if err != nil {
-			return fmt.Errorf("failed to extract namespace and name from placement key %s: %w", placementKey, err)
-		}
-
 		// Retrieve the placement.
 		var placement placementv1beta1.PlacementObj
-		if namespace == "" {
+		if placementKey.Namespace == "" {
 			// Retrieve CRP.
 			placement = &placementv1beta1.ClusterResourcePlacement{}
 		} else {
 			// Retrieve RP.
 			placement = &placementv1beta1.ResourcePlacement{}
 		}
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: placementName, Namespace: namespace}, placement); err != nil {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: placementKey.Name, Namespace: placementKey.Namespace}, placement); err != nil {
 			return err
 		}
 
@@ -79,23 +73,18 @@ func placementSchedulerFinalizerAddedActual(placementKey string) func() error {
 	}
 }
 
-func placementSchedulerFinalizerRemovedActual(placementKey string) func() error {
+func placementSchedulerFinalizerRemovedActual(placementKey types.NamespacedName) func() error {
 	return func() error {
-		namespace, placementName, err := controller.ExtractNamespaceNameFromKeyStr(placementKey)
-		if err != nil {
-			return fmt.Errorf("failed to extract namespace and name from placement key %s: %w", placementKey, err)
-		}
-
 		// Retrieve the placement.
 		var placement placementv1beta1.PlacementObj
-		if namespace == "" {
+		if placementKey.Namespace == "" {
 			// Retrieve CRP.
 			placement = &placementv1beta1.ClusterResourcePlacement{}
 		} else {
 			// Retrieve RP.
 			placement = &placementv1beta1.ResourcePlacement{}
 		}
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: placementName, Namespace: namespace}, placement); err != nil {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: placementKey.Name, Namespace: placementKey.Namespace}, placement); err != nil {
 			return err
 		}
 
@@ -108,13 +97,8 @@ func placementSchedulerFinalizerRemovedActual(placementKey string) func() error 
 	}
 }
 
-func scheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCluster map[string]*placementv1beta1.ClusterScore, placementKey, policySnapshotName string) func() error {
+func scheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCluster map[string]*placementv1beta1.ClusterScore, placementKey types.NamespacedName, policySnapshotName string) func() error {
 	return func() error {
-		namespace, placementName, err := controller.ExtractNamespaceNameFromKeyStr(placementKey)
-		if err != nil {
-			return fmt.Errorf("failed to extract namespace and name from placement key %s: %w", placementKey, err)
-		}
-
 		bindingList, err := listBindings(placementKey)
 		if err != nil {
 			return fmt.Errorf("failed to list bindings for placement %s: %w", placementKey, err)
@@ -136,13 +120,13 @@ func scheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, score
 		for _, name := range clusters {
 			score := scoreByCluster[name]
 			var binding placementv1beta1.BindingObj
-			if namespace == "" {
+			if placementKey.Namespace == "" {
 				// Create CRB.
 				binding = &placementv1beta1.ClusterResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingNamePlaceholder,
 						Labels: map[string]string{
-							placementv1beta1.PlacementTrackingLabel: placementName,
+							placementv1beta1.PlacementTrackingLabel: placementKey.Name,
 						},
 						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
@@ -162,9 +146,9 @@ func scheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, score
 				binding = &placementv1beta1.ResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      bindingNamePlaceholder,
-						Namespace: namespace,
+						Namespace: placementKey.Namespace,
 						Labels: map[string]string{
-							placementv1beta1.PlacementTrackingLabel: placementName,
+							placementv1beta1.PlacementTrackingLabel: placementKey.Name,
 						},
 						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
@@ -189,7 +173,7 @@ func scheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, score
 
 		// Verify that binding names are formatted correctly.
 		for _, binding := range bindingList.GetBindingObjs() {
-			wantPrefix := fmt.Sprintf("%s-%s", placementName, binding.GetBindingSpec().TargetCluster)
+			wantPrefix := fmt.Sprintf("%s-%s", placementKey.Name, binding.GetBindingSpec().TargetCluster)
 			if !strings.HasPrefix(binding.GetName(), wantPrefix) {
 				return fmt.Errorf("binding name %s is not formatted correctly; want prefix %s", binding.GetName(), wantPrefix)
 			}
@@ -199,12 +183,8 @@ func scheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, score
 	}
 }
 
-func boundBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCluster map[string]*placementv1beta1.ClusterScore, placementKey, policySnapshotName string) func() error {
+func boundBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCluster map[string]*placementv1beta1.ClusterScore, placementKey types.NamespacedName, policySnapshotName string) func() error {
 	return func() error {
-		namespace, placementName, err := controller.ExtractNamespaceNameFromKeyStr(placementKey)
-		if err != nil {
-			return fmt.Errorf("failed to extract namespace and name from placement key %s: %w", placementKey, err)
-		}
 		bindingList, err := listBindings(placementKey)
 		if err != nil {
 			return fmt.Errorf("failed to list bindings for placement %s: %w", placementKey, err)
@@ -222,14 +202,14 @@ func boundBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCl
 		}
 
 		wantBound := []placementv1beta1.BindingObj{}
-		if namespace == "" {
+		if placementKey.Namespace == "" {
 			for _, name := range clusters {
 				score := scoreByCluster[name]
 				binding := &placementv1beta1.ClusterResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingNamePlaceholder,
 						Labels: map[string]string{
-							placementv1beta1.PlacementTrackingLabel: placementName,
+							placementv1beta1.PlacementTrackingLabel: placementKey.Name,
 						},
 						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
@@ -252,9 +232,9 @@ func boundBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCl
 				binding := &placementv1beta1.ResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      bindingNamePlaceholder,
-						Namespace: namespace,
+						Namespace: placementKey.Namespace,
 						Labels: map[string]string{
-							placementv1beta1.PlacementTrackingLabel: placementName,
+							placementv1beta1.PlacementTrackingLabel: placementKey.Name,
 						},
 						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
@@ -279,7 +259,7 @@ func boundBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCl
 
 		// Verify that binding names are formatted correctly.
 		for _, binding := range bindingList.GetBindingObjs() {
-			wantPrefix := fmt.Sprintf("%s-%s", placementName, binding.GetBindingSpec().TargetCluster)
+			wantPrefix := fmt.Sprintf("%s-%s", placementKey.Name, binding.GetBindingSpec().TargetCluster)
 			if !strings.HasPrefix(binding.GetName(), wantPrefix) {
 				return fmt.Errorf("binding name %s is not formatted correctly; want prefix %s", binding.GetName(), wantPrefix)
 			}
@@ -289,12 +269,8 @@ func boundBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCl
 	}
 }
 
-func unscheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCluster map[string]*placementv1beta1.ClusterScore, placementKey string, policySnapshotName string) func() error {
+func unscheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCluster map[string]*placementv1beta1.ClusterScore, placementKey types.NamespacedName, policySnapshotName string) func() error {
 	return func() error {
-		namespace, placementName, err := controller.ExtractNamespaceNameFromKeyStr(placementKey)
-		if err != nil {
-			return fmt.Errorf("failed to extract namespace and name from placement key %s: %w", placementKey, err)
-		}
 		bindingList, err := listBindings(placementKey)
 		if err != nil {
 			return fmt.Errorf("failed to list bindings for placement %s: %w", placementKey, err)
@@ -312,14 +288,14 @@ func unscheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, sco
 		}
 		// TODO (rzhang): fix me, compare the annotations when we know its previous state
 		wantUnscheduled := []placementv1beta1.BindingObj{}
-		if namespace == "" {
+		if placementKey.Namespace == "" {
 			for _, name := range clusters {
 				score := scoreByCluster[name]
 				binding := &placementv1beta1.ClusterResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingNamePlaceholder,
 						Labels: map[string]string{
-							placementv1beta1.PlacementTrackingLabel: placementName,
+							placementv1beta1.PlacementTrackingLabel: placementKey.Name,
 						},
 						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
@@ -342,9 +318,9 @@ func unscheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, sco
 				binding := &placementv1beta1.ResourceBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      bindingNamePlaceholder,
-						Namespace: namespace,
+						Namespace: placementKey.Namespace,
 						Labels: map[string]string{
-							placementv1beta1.PlacementTrackingLabel: placementName,
+							placementv1beta1.PlacementTrackingLabel: placementKey.Name,
 						},
 						Finalizers: []string{placementv1beta1.SchedulerBindingCleanupFinalizer},
 					},
@@ -369,7 +345,7 @@ func unscheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, sco
 
 		// Verify that binding names are formatted correctly.
 		for _, binding := range bindingList.GetBindingObjs() {
-			wantPrefix := fmt.Sprintf("%s-%s", placementName, binding.GetBindingSpec().TargetCluster)
+			wantPrefix := fmt.Sprintf("%s-%s", placementKey.Name, binding.GetBindingSpec().TargetCluster)
 			if !strings.HasPrefix(binding.GetName(), wantPrefix) {
 				return fmt.Errorf("binding name %s is not formatted correctly; want prefix %s", binding.GetName(), wantPrefix)
 			}
@@ -379,7 +355,7 @@ func unscheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, sco
 	}
 }
 
-func noBindingsCreatedForClustersActual(clusters []string, placementKey string) func() error {
+func noBindingsCreatedForClustersActual(clusters []string, placementKey types.NamespacedName) func() error {
 	// Build a map for clusters for quicker lookup.
 	clusterMap := map[string]bool{}
 	for _, name := range clusters {
@@ -404,7 +380,7 @@ func noBindingsCreatedForClustersActual(clusters []string, placementKey string) 
 	}
 }
 
-func pickFixedPolicySnapshotStatusUpdatedActual(valid, invalidOrNotFound []string, policySnapshotKey string) func() error {
+func pickFixedPolicySnapshotStatusUpdatedActual(valid, invalidOrNotFound []string, policySnapshotKey types.NamespacedName) func() error {
 	return func() error {
 		policySnapshot, err := getSchedulingPolicySnapshot(policySnapshotKey)
 		if err != nil {
@@ -460,7 +436,7 @@ func pickFixedPolicySnapshotStatusUpdatedActual(valid, invalidOrNotFound []strin
 	}
 }
 
-func pickAllPolicySnapshotStatusUpdatedActual(scored, filtered []string, policySnapshotKey string) func() error {
+func pickAllPolicySnapshotStatusUpdatedActual(scored, filtered []string, policySnapshotKey types.NamespacedName) func() error {
 	return func() error {
 		policySnapshot, err := getSchedulingPolicySnapshot(policySnapshotKey)
 		if err != nil {
@@ -509,7 +485,7 @@ func pickAllPolicySnapshotStatusUpdatedActual(scored, filtered []string, policyS
 	}
 }
 
-func hasNScheduledOrBoundBindingsPresentActual(placementKey string, clusters []string) func() error {
+func hasNScheduledOrBoundBindingsPresentActual(placementKey types.NamespacedName, clusters []string) func() error {
 	clusterMap := make(map[string]bool)
 	for _, name := range clusters {
 		clusterMap[name] = true
@@ -547,7 +523,7 @@ func pickNPolicySnapshotStatusUpdatedActual(
 	numOfClusters int,
 	picked, notPicked, filtered []string,
 	scoreByCluster map[string]*placementv1beta1.ClusterScore,
-	policySnapshotKey string,
+	policySnapshotKey types.NamespacedName,
 	opts []cmp.Option,
 ) func() error {
 	return func() error {
