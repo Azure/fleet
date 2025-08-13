@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
@@ -83,7 +84,7 @@ var (
 // selectResources selects the resources according to the placement resourceSelectors.
 // It also generates an array of manifests obj based on the selected resources.
 func (r *Reconciler) selectResources(placement *fleetv1alpha1.ClusterResourcePlacement) ([]workv1alpha1.Manifest, error) {
-	selectedObjects, err := r.gatherSelectedResource(placement.GetName(), convertResourceSelector(placement.Spec.ResourceSelectors))
+	selectedObjects, err := r.gatherSelectedResource(types.NamespacedName{Name: placement.GetName()}, convertResourceSelector(placement.Spec.ResourceSelectors))
 	if err != nil {
 		return nil, err
 	}
@@ -128,8 +129,7 @@ func convertResourceSelector(old []fleetv1alpha1.ClusterResourceSelector) []flee
 }
 
 // gatherSelectedResource gets all the resources according to the resource selector.
-// TODO: treat the RP selector differently to not allow RP to select cluster scoped resources
-func (r *Reconciler) gatherSelectedResource(placement string, selectors []fleetv1beta1.ClusterResourceSelector) ([]*unstructured.Unstructured, error) {
+func (r *Reconciler) gatherSelectedResource(placementKey types.NamespacedName, selectors []fleetv1beta1.ClusterResourceSelector) ([]*unstructured.Unstructured, error) {
 	var resources []*unstructured.Unstructured
 	var resourceMap = make(map[fleetv1beta1.ResourceIdentifier]bool)
 	for _, selector := range selectors {
@@ -145,10 +145,10 @@ func (r *Reconciler) gatherSelectedResource(placement string, selectors []fleetv
 		}
 		var objs []runtime.Object
 		var err error
-		if gvk == utils.NamespaceGVK {
-			objs, err = r.fetchNamespaceResources(selector, placement)
+		if gvk == utils.NamespaceGVK && placementKey.Namespace == "" {
+			objs, err = r.fetchNamespaceResources(selector, placementKey.Name)
 		} else {
-			objs, err = r.fetchClusterScopedResources(selector, placement)
+			objs, err = r.fetchResources(selector, placementKey)
 		}
 		if err != nil {
 			return nil, err
@@ -164,7 +164,7 @@ func (r *Reconciler) gatherSelectedResource(placement string, selectors []fleetv
 			}
 			if _, exist := resourceMap[ri]; exist {
 				err = fmt.Errorf("found duplicate resource %+v", ri)
-				klog.ErrorS(err, "user selected one resource more than once", "resource", ri, "placement", placement)
+				klog.ErrorS(err, "User selected one resource more than once", "resource", ri, "placement", placementKey)
 				return nil, controller.NewUserError(err)
 			}
 			resourceMap[ri] = true
@@ -230,16 +230,16 @@ func buildApplyOrderMap() map[string]int {
 	return ordering
 }
 
-// fetchClusterScopedResources retrieves the objects based on the selector.
-func (r *Reconciler) fetchClusterScopedResources(selector fleetv1beta1.ClusterResourceSelector, placeName string) ([]runtime.Object, error) {
-	klog.V(2).InfoS("start to fetch the cluster scoped resources by the selector", "selector", selector)
+// fetchResources retrieves the objects based on the selector.
+func (r *Reconciler) fetchResources(selector fleetv1beta1.ClusterResourceSelector, placementKey types.NamespacedName) ([]runtime.Object, error) {
+	klog.V(2).InfoS("Start to fetch resources by the selector", "selector", selector, "placement", placementKey)
 	gk := schema.GroupKind{
 		Group: selector.Group,
 		Kind:  selector.Kind,
 	}
 	restMapping, err := r.RestMapper.RESTMapping(gk, selector.Version)
 	if err != nil {
-		return nil, controller.NewUserError(fmt.Errorf("invalid placement %s, failed to get GVR of the selector: %w", placeName, err))
+		return nil, controller.NewUserError(fmt.Errorf("invalid placement %s, failed to get GVR of the selector: %w", placementKey, err))
 	}
 	gvr := restMapping.Resource
 	gvk := schema.GroupVersionKind{
@@ -247,26 +247,47 @@ func (r *Reconciler) fetchClusterScopedResources(selector fleetv1beta1.ClusterRe
 		Version: selector.Version,
 		Kind:    selector.Kind,
 	}
-	if !r.InformerManager.IsClusterScopedResources(gvk) {
-		return nil, controller.NewUserError(fmt.Errorf("invalid placement %s: %+v is not a cluster scoped resource", placeName, restMapping.Resource))
+
+	isNamespacedResource := !r.InformerManager.IsClusterScopedResources(gvk)
+	if isNamespacedResource && placementKey.Namespace == "" {
+		// If it's a namespace-scoped resource but placement has no namespace, return error.
+		err := fmt.Errorf("invalid placement %s: cannot select namespace-scoped resource %v in a clusterResourcePlacement", placementKey, gvr)
+		klog.ErrorS(err, "Invalid resource selector", "selector", selector)
+		return nil, controller.NewUserError(err)
+	} else if !isNamespacedResource && placementKey.Namespace != "" {
+		// If it's a cluster-scoped resource but placement has a namespace, return error.
+		err := fmt.Errorf("invalid placement %s: cannot select cluster-scoped resource %v in a resourcePlacement", placementKey, gvr)
+		klog.ErrorS(err, "Invalid resource selector", "selector", selector)
+		return nil, controller.NewUserError(err)
 	}
+
 	if !r.InformerManager.IsInformerSynced(gvr) {
-		return nil, controller.NewExpectedBehaviorError(fmt.Errorf("informer cache for %+v is not synced yet", restMapping.Resource))
+		err := fmt.Errorf("informer cache for %+v is not synced yet", restMapping.Resource)
+		klog.ErrorS(err, "Informer cache is not synced", "gvr", gvr, "placement", placementKey)
+		return nil, controller.NewExpectedBehaviorError(err)
 	}
 
 	lister := r.InformerManager.Lister(gvr)
+
 	// TODO: validator should enforce the mutual exclusiveness between the `name` and `labelSelector` fields
 	if len(selector.Name) != 0 {
-		obj, err := lister.Get(selector.Name)
+		var obj runtime.Object
+		var err error
+
+		if isNamespacedResource {
+			obj, err = lister.ByNamespace(placementKey.Namespace).Get(selector.Name)
+		} else {
+			obj, err = lister.Get(selector.Name)
+		}
+
 		if err != nil {
-			klog.ErrorS(err, "cannot get the resource", "gvr", gvr, "name", selector.Name)
+			klog.ErrorS(err, "Cannot get the resource", "gvr", gvr, "name", selector.Name, "namespace", placementKey.Namespace)
 			return nil, controller.NewAPIServerError(true, client.IgnoreNotFound(err))
 		}
-		uObj := obj.DeepCopyObject().(*unstructured.Unstructured)
-		if uObj.GetDeletionTimestamp() != nil {
-			// skip a to be deleted namespace
-			klog.V(2).InfoS("skip the deleting cluster scoped resources by the selector",
-				"selector", selector, "placeName", placeName, "resource name", uObj.GetName())
+		if uObj := obj.DeepCopyObject().(*unstructured.Unstructured); uObj.GetDeletionTimestamp() != nil {
+			// skip a to be deleted resource
+			klog.V(2).InfoS("Skip the deleting resource by the selector",
+				"selector", selector, "placement", placementKey, "resourceName", uObj.GetName())
 			return []runtime.Object{}, nil
 		}
 		return []runtime.Object{obj}, nil
@@ -282,18 +303,26 @@ func (r *Reconciler) fetchClusterScopedResources(selector fleetv1beta1.ClusterRe
 			return nil, controller.NewUnexpectedBehaviorError(fmt.Errorf("cannot convert the label selector to a selector: %w", err))
 		}
 	}
+
 	var selectedObjs []runtime.Object
-	objects, err := lister.List(labelSelector)
-	if err != nil {
-		return nil, controller.NewAPIServerError(true, fmt.Errorf("cannot list all the objects: %w", err))
+	var objects []runtime.Object
+
+	if isNamespacedResource {
+		objects, err = lister.ByNamespace(placementKey.Namespace).List(labelSelector)
+	} else {
+		objects, err = lister.List(labelSelector)
 	}
+	if err != nil {
+		klog.ErrorS(err, "Cannot list all the objects", "gvr", gvr, "labelSelector", labelSelector, "placement", placementKey)
+		return nil, controller.NewAPIServerError(true, err)
+	}
+
 	// go ahead and claim all objects by adding a finalizer and insert the placement in its annotation
 	for i := 0; i < len(objects); i++ {
-		uObj := objects[i].DeepCopyObject().(*unstructured.Unstructured)
-		if uObj.GetDeletionTimestamp() != nil {
-			// skip a to be deleted namespace
-			klog.V(2).InfoS("skip the deleting cluster scoped resources by the selector",
-				"selector", selector, "placeName", placeName, "resource name", uObj.GetName())
+		if uObj := objects[i].DeepCopyObject().(*unstructured.Unstructured); uObj.GetDeletionTimestamp() != nil {
+			// skip a to be deleted resource
+			klog.V(2).InfoS("Skip the deleting resource by the selector",
+				"selector", selector, "placement", placementKey, "resourceName", uObj.GetName())
 			continue
 		}
 		selectedObjs = append(selectedObjs, objects[i])
@@ -330,7 +359,8 @@ func (r *Reconciler) fetchNamespaceResources(selector fleetv1beta1.ClusterResour
 	}
 	namespaces, err := r.InformerManager.Lister(utils.NamespaceGVR).List(labelSelector)
 	if err != nil {
-		return nil, controller.NewAPIServerError(true, fmt.Errorf("cannot list all the namespaces given the label selector: %w", err))
+		klog.ErrorS(err, "Cannot list all the namespaces by the label selector", "labelSelector", labelSelector, "placement", placeName)
+		return nil, controller.NewAPIServerError(true, err)
 	}
 
 	for _, namespace := range namespaces {
@@ -384,10 +414,17 @@ func (r *Reconciler) fetchAllResourcesInOneNamespace(namespaceName string, place
 		lister := r.InformerManager.Lister(gvr)
 		objs, err := lister.ByNamespace(namespaceName).List(labels.Everything())
 		if err != nil {
-			return nil, controller.NewAPIServerError(true, fmt.Errorf("cannot list all the objects of type %+v in namespace %s: %w", gvr, namespaceName, err))
+			klog.ErrorS(err, "Cannot list all the objects in namespace", "gvr", gvr, "namespace", namespaceName)
+			return nil, controller.NewAPIServerError(true, err)
 		}
 		for _, obj := range objs {
 			uObj := obj.DeepCopyObject().(*unstructured.Unstructured)
+			if uObj.GetDeletionTimestamp() != nil {
+				// skip a to be deleted resource
+				klog.V(2).InfoS("skip the deleting resource by the selector",
+					"placeName", placeName, "namespace", namespaceName, "object", klog.KObj(uObj))
+				continue
+			}
 			shouldInclude, err := utils.ShouldPropagateObj(r.InformerManager, uObj)
 			if err != nil {
 				klog.ErrorS(err, "cannot determine if we should propagate an object", "object", klog.KObj(uObj))
@@ -520,8 +557,10 @@ func generateResourceContent(object *unstructured.Unstructured) (*fleetv1beta1.R
 // It also returns the number of envelope configmaps so the CRP controller can have the right expectation of the number of work objects.
 func (r *Reconciler) selectResourcesForPlacement(placementObj fleetv1beta1.PlacementObj) (int, []fleetv1beta1.ResourceContent, []fleetv1beta1.ResourceIdentifier, error) {
 	envelopeObjCount := 0
-	placementSpec := placementObj.GetPlacementSpec()
-	selectedObjects, err := r.gatherSelectedResource(placementObj.GetName(), placementSpec.ResourceSelectors)
+	selectedObjects, err := r.gatherSelectedResource(types.NamespacedName{
+		Name:      placementObj.GetName(),
+		Namespace: placementObj.GetNamespace(),
+	}, placementObj.GetPlacementSpec().ResourceSelectors)
 	if err != nil {
 		return 0, nil, nil, err
 	}

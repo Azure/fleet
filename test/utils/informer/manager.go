@@ -35,11 +35,24 @@ type FakeLister struct {
 	Err     error
 }
 
-func (f *FakeLister) List(_ labels.Selector) ([]runtime.Object, error) {
+func (f *FakeLister) List(selector labels.Selector) ([]runtime.Object, error) {
 	if f.Err != nil {
 		return nil, f.Err
 	}
-	return f.Objects, nil
+
+	if selector == nil {
+		return f.Objects, nil
+	}
+
+	var filtered []runtime.Object
+	for _, obj := range f.Objects {
+		if uObj, ok := obj.(*unstructured.Unstructured); ok {
+			if selector.Matches(labels.Set(uObj.GetLabels())) {
+				filtered = append(filtered, obj)
+			}
+		}
+	}
+	return filtered, nil
 }
 
 func (f *FakeLister) Get(name string) (runtime.Object, error) {
@@ -65,11 +78,25 @@ type FakeNamespaceLister struct {
 	Err       error
 }
 
-func (f *FakeNamespaceLister) List(_ labels.Selector) ([]runtime.Object, error) {
+func (f *FakeNamespaceLister) List(selector labels.Selector) ([]runtime.Object, error) {
 	if f.Err != nil {
 		return nil, f.Err
 	}
-	return f.Objects, nil
+
+	var filtered []runtime.Object
+	for _, obj := range f.Objects {
+		if uObj, ok := obj.(*unstructured.Unstructured); ok {
+			// Filter by namespace first
+			if uObj.GetNamespace() != f.Namespace {
+				continue
+			}
+			// Then filter by label selector if provided
+			if selector == nil || selector.Matches(labels.Set(uObj.GetLabels())) {
+				filtered = append(filtered, obj)
+			}
+		}
+	}
+	return filtered, nil
 }
 
 func (f *FakeNamespaceLister) Get(name string) (runtime.Object, error) {
@@ -77,7 +104,7 @@ func (f *FakeNamespaceLister) Get(name string) (runtime.Object, error) {
 		return nil, f.Err
 	}
 	for _, obj := range f.Objects {
-		if obj.(*unstructured.Unstructured).GetName() == name {
+		if uObj := obj.(*unstructured.Unstructured); uObj.GetName() == name && uObj.GetNamespace() == f.Namespace {
 			return obj, nil
 		}
 	}
@@ -96,6 +123,8 @@ type FakeManager struct {
 	IsClusterScopedResource bool
 	// Listers provides fake listers for testing.
 	Listers map[schema.GroupVersionResource]*FakeLister
+	// NamespaceScopedResources is the list of namespace-scoped resources for testing.
+	NamespaceScopedResources []schema.GroupVersionResource
 }
 
 func (m *FakeManager) AddDynamicResources(_ []informer.APIResourceMeta, _ cache.ResourceEventHandler, _ bool) {
@@ -122,7 +151,7 @@ func (m *FakeManager) Lister(gvr schema.GroupVersionResource) cache.GenericListe
 }
 
 func (m *FakeManager) GetNameSpaceScopedResources() []schema.GroupVersionResource {
-	return nil
+	return m.NamespaceScopedResources
 }
 
 func (m *FakeManager) IsClusterScopedResources(gvk schema.GroupVersionKind) bool {
