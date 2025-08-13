@@ -64,30 +64,30 @@ jobs:
         run: |
           az login --identity 
           az acr login -n ${{ secrets.AZURE_REGISTRY }}
-      # - name: Build and publish hub-agent
-      #   run: |
-      #     make docker-build-hub-agent
-      #   env:
-      #     HUB_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
-      #     REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
-      # - name: Build and publish member-agent
-      #   run: |
-      #     make docker-build-member-agent
-      #   env:
-      #     MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
-      #     REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
-      # - name: Build and publish refresh-token
-      #   run: |
-      #     make docker-build-refresh-token
-      #   env:
-      #     REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
-      #     REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
-      # - name: Build and publish crd-installer
-      #   run: |
-      #     make docker-build-crd-installer
-      #   env:
-      #     CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
-      #     REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
+      - name: Build and publish hub-agent
+        run: |
+          make docker-build-hub-agent
+        env:
+          HUB_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
+      - name: Build and publish member-agent
+        run: |
+          make docker-build-member-agent
+        env:
+          MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
+      - name: Build and publish refresh-token
+        run: |
+          make docker-build-refresh-token
+        env:
+          REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
+      - name: Build and publish crd-installer
+        run: |
+          make docker-build-crd-installer
+        env:
+          CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
       # Build Arc Extension for member clusters
       # Arc-connected clusters can join fleets as member clusters through an Arc Extension.
       # An Arc Extension is a packaged Helm chart that gets deployed to Arc clusters.
