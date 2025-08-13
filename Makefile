@@ -343,6 +343,8 @@ helm-package-arc-member-cluster-agents:
 	# Update Chart.yaml version
 	sed -i.bak "s/^version:.*/version: $(ARC_MEMBER_AGENT_IMAGE_VERSION)/" charts/member-agent-arc/Chart.yaml
 
+	cat charts/member-agent-arc/Chart.yaml
+	 
 	envsubst < charts/member-agent-arc/values.yaml > charts/member-agent-arc/values.yaml.tmp && \
 	mv charts/member-agent-arc/values.yaml.tmp charts/member-agent-arc/values.yaml && \
 
