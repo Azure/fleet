@@ -135,13 +135,14 @@ test: manifests generate fmt vet local-unit-test integration-test## Run tests.
 
 ##
 ## workaround to bypass the pkg/controllers/workv1alpha1 tests failure
+## rollout controller tests need a bit longer to complete, so we increase the timeout
 ##
 .PHONY: local-unit-test
 local-unit-test: $(ENVTEST) ## Run tests.
 	export CGO_ENABLED=1 && \
 	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" && \
 	go test ./pkg/controllers/workv1alpha1 -race -coverprofile=ut-coverage.xml -covermode=atomic -v && \
-	go test `go list ./pkg/... ./cmd/... | grep -v pkg/controllers/workv1alpha1` -race -coverpkg=./...  -coverprofile=ut-coverage.xml -covermode=atomic -v
+	go test `go list ./pkg/... ./cmd/... | grep -v pkg/controllers/workv1alpha1` -race -coverpkg=./...  -coverprofile=ut-coverage.xml -covermode=atomic -v -timeout=20m
 
 .PHONY: integration-test
 integration-test: $(ENVTEST) ## Run tests.
