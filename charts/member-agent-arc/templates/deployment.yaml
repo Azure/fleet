@@ -15,6 +15,19 @@ spec:
         app.kubernetes.io/name: fleet-member-agent
     spec:
       serviceAccountName: fleet-member-agent-sa
+      {{- if and .Values.crdInstaller.enabled .Values.enableV1Beta1APIs }}
+      initContainers:
+        - name: crd-installer
+          imagePullPolicy: IfNotPresent
+          image: "{{ .Values.crdInstaller.image.repository }}:{{ .Values.crdInstaller.image.tag }}"
+          args:
+            - --mode=member
+            - --v={{ .Values.crdInstaller.logVerbosity }}
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+      {{- end }}
       containers:
         - name: addon-token-adapter
           imagePullPolicy: IfNotPresent

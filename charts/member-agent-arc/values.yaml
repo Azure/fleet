@@ -14,6 +14,13 @@ refreshtoken:
   repository: mcr.microsoft.com/aks/fleet/refresh-token
   tag: "${REFRESH_TOKEN_IMAGE_VERSION}"
 
+crdInstaller:
+  enabled: false
+  image:
+    repository: mcr.microsoft.com/aks/fleet/refresh-token/fleet/crd-installer
+    tag: "${CRD_INSTALLER_IMAGE_VERSION}"
+  logVerbosity: 2
+
 logVerbosity: 5
 
 namespace: fleet-system
