@@ -2057,7 +2057,7 @@ func generateClusterResourceOverrideSnapshot(testCROName, testPlacementName stri
 						},
 					},
 				},
-				ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+				ClusterResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 					{
 						Group:   "",
 						Version: "v1",
