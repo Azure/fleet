@@ -51,7 +51,7 @@ var (
 )
 
 var (
-	defaultResourceSelectors = []placementv1beta1.ClusterResourceSelector{
+	defaultResourceSelectors = []placementv1beta1.ResourceSelectorTerm{
 		{
 			Group:   "core",
 			Kind:    "Namespace",

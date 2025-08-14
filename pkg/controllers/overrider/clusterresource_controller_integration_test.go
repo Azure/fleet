@@ -35,7 +35,7 @@ import (
 
 func getClusterResourceOverrideSpec() placementv1beta1.ClusterResourceOverrideSpec {
 	return placementv1beta1.ClusterResourceOverrideSpec{
-		ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+		ClusterResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 			{
 				Group:   "",
 				Version: "v1",

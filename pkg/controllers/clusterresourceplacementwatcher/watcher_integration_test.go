@@ -45,7 +45,7 @@ func clusterResourcePlacementForTest() *fleetv1beta1.ClusterResourcePlacement {
 			Name: testCRPName,
 		},
 		Spec: fleetv1beta1.PlacementSpec{
-			ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
+			ResourceSelectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   corev1.GroupName,
 					Version: "v1",
@@ -67,7 +67,7 @@ func resourcePlacementForTest() *fleetv1beta1.ResourcePlacement {
 			Namespace: testNamespace,
 		},
 		Spec: fleetv1beta1.PlacementSpec{
-			ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
+			ResourceSelectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   corev1.GroupName,
 					Version: "v1",

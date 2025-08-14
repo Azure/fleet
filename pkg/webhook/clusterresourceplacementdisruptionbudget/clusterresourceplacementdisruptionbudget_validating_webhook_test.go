@@ -121,7 +121,7 @@ func TestHandle(t *testing.T) {
 			Name: "pick-all-crp",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{},
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{},
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickAllPlacementType,
 			},
@@ -132,7 +132,7 @@ func TestHandle(t *testing.T) {
 			Name: "crp-pickn",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{},
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{},
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType:    placementv1beta1.PickNPlacementType,
 				NumberOfClusters: ptr.To(int32(1)),
@@ -144,7 +144,7 @@ func TestHandle(t *testing.T) {
 			Name: "crp-pickfixed",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{},
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{},
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickFixedPlacementType,
 				ClusterNames:  []string{"cluster1", "cluster2"},

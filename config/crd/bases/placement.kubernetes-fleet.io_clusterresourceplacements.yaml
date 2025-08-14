@@ -1589,22 +1589,22 @@ spec:
                   You can have 1-100 selectors.
                 items:
                   description: |-
-                    ClusterResourceSelector is used to select resources as the target resources to be placed.
+                    ResourceSelectorTerm is used to select resources as the target resources to be placed.
                     All the fields are `ANDed`. In other words, a resource must match all the fields to be selected.
                   properties:
                     group:
                       description: |-
-                        Group name of the cluster-scoped resource.
+                        Group name of the be selected resource.
                         Use an empty string to select resources under the core API group (e.g., namespaces).
                       type: string
                     kind:
                       description: |-
-                        Kind of the cluster-scoped resource.
+                        Kind of the to be selected resource.
                         Note: When `Kind` is `namespace`, by default ALL the resources under the selected namespaces are selected.
                       type: string
                     labelSelector:
                       description: |-
-                        A label query over all the cluster-scoped resources. Resources matching the query are selected.
+                        A label query over all the be selected  resources. Resources matching the query are selected.
                         Note that namespace-scoped resources can't be selected even if they match the query.
                       properties:
                         matchExpressions:
@@ -1651,7 +1651,7 @@ spec:
                       type: object
                       x-kubernetes-map-type: atomic
                     name:
-                      description: Name of the cluster-scoped resource.
+                      description: Name of the be selected  resource.
                       type: string
                     selectionScope:
                       default: NamespaceWithResources
@@ -1662,7 +1662,7 @@ spec:
                       - NamespaceWithResources
                       type: string
                     version:
-                      description: Version of the cluster-scoped resource.
+                      description: Version of the to be selected resource.
                       type: string
                   required:
                   - group

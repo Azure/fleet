@@ -129,7 +129,7 @@ type PlacementSpec struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=100
-	ResourceSelectors []ClusterResourceSelector `json:"resourceSelectors"`
+	ResourceSelectors []ResourceSelectorTerm `json:"resourceSelectors"`
 
 	// Policy defines how to select member clusters to place the selected resources.
 	// If unspecified, all the joined member clusters are selected.
@@ -170,33 +170,31 @@ func (p *PlacementSpec) Tolerations() []Toleration {
 	return nil
 }
 
-// TODO: rename this to ResourceSelectorTerm
-
-// ClusterResourceSelector is used to select resources as the target resources to be placed.
+// ResourceSelectorTerm is used to select resources as the target resources to be placed.
 // All the fields are `ANDed`. In other words, a resource must match all the fields to be selected.
-type ClusterResourceSelector struct {
-	// Group name of the cluster-scoped resource.
+type ResourceSelectorTerm struct {
+	// Group name of the be selected resource.
 	// Use an empty string to select resources under the core API group (e.g., namespaces).
 	// +kubebuilder:validation:Required
 	Group string `json:"group"`
 
-	// Version of the cluster-scoped resource.
+	// Version of the to be selected resource.
 	// +kubebuilder:validation:Required
 	Version string `json:"version"`
 
-	// Kind of the cluster-scoped resource.
+	// Kind of the to be selected resource.
 	// Note: When `Kind` is `namespace`, by default ALL the resources under the selected namespaces are selected.
 	// +kubebuilder:validation:Required
 	Kind string `json:"kind"`
 
 	// You can only specify at most one of the following two fields: Name and LabelSelector.
-	// If none is specified, all the cluster-scoped resources with the given group, version and kind are selected.
+	// If none is specified, all the be selected resources with the given group, version and kind are selected.
 
-	// Name of the cluster-scoped resource.
+	// Name of the be selected  resource.
 	// +kubebuilder:validation:Optional
 	Name string `json:"name,omitempty"`
 
-	// A label query over all the cluster-scoped resources. Resources matching the query are selected.
+	// A label query over all the be selected  resources. Resources matching the query are selected.
 	// Note that namespace-scoped resources can't be selected even if they match the query.
 	// +kubebuilder:validation:Optional
 	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`

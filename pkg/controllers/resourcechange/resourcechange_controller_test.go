@@ -692,7 +692,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -715,7 +715,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -740,7 +740,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{},
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{},
 					},
 				},
 			},
@@ -755,7 +755,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -776,7 +776,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -804,7 +804,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -827,7 +827,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -854,7 +854,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -890,7 +890,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -928,7 +928,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 					},
 					Spec: placementv1beta1.PlacementSpec{
 						// the mis-matching resource selector
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -971,7 +971,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -1007,7 +1007,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -1028,7 +1028,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -1049,7 +1049,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 					},
 					Spec: placementv1beta1.PlacementSpec{
 						// Selector that does not match the resource
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -1086,7 +1086,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-not-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "rbac.authorization.k8s.io",
 								Version: "v1",
@@ -1156,7 +1156,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 						Namespace: "test-namespace",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "apps",
 								Version: "v1",
@@ -1182,7 +1182,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 						Namespace: "test-namespace",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{},
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{},
 					},
 				},
 			},
@@ -1197,7 +1197,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 						Namespace: "test-namespace",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "apps",
 								Version: "v1",
@@ -1220,7 +1220,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 						Namespace: "test-namespace",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "apps",
 								Version: "v1",
@@ -1242,7 +1242,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 						Namespace: "test-namespace",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "apps",
 								Version: "v1",
@@ -1279,7 +1279,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 						Namespace: "test-namespace",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "apps",
 								Version: "v1",
@@ -1300,7 +1300,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 						Namespace: "test-namespace",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "",
 								Version: "v1",
@@ -1328,7 +1328,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 					},
 					Spec: placementv1beta1.PlacementSpec{
 						// Selector that does not match the resource
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "apps",
 								Version: "v1",
@@ -1439,7 +1439,7 @@ func TestHandleUpdatedResource(t *testing.T) {
 			Name: "test-crp",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "",
 					Version: "v1",
@@ -1460,7 +1460,7 @@ func TestHandleUpdatedResource(t *testing.T) {
 			Namespace: "test-namespace",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "apps",
 					Version: "v1",
@@ -2109,7 +2109,7 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 			Namespace: "test-namespace",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "apps",
 					Version: "v1",
@@ -2130,7 +2130,7 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 			Name: "test-crp",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "",
 					Version: "v1",
@@ -2247,7 +2247,7 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 						Namespace: "test-namespace",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "apps",
 								Version: "v1",
@@ -2334,7 +2334,7 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 						Name: "test-crp-2",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "",
 								Version: "v1",
@@ -2409,7 +2409,7 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 						Name: "crp-namespace-only",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:          "",
 								Version:        "v1",
@@ -2700,7 +2700,7 @@ func TestHandleDeletedResource(t *testing.T) {
 						Name: "crp-namespace-only",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:          "",
 								Version:        "v1",
@@ -2771,11 +2771,11 @@ func TestHandleDeletedResource(t *testing.T) {
 
 func TestIsSelectNamespaceOnly(t *testing.T) {
 	tests := map[string]struct {
-		selector placementv1beta1.ClusterResourceSelector
+		selector placementv1beta1.ResourceSelectorTerm
 		want     bool
 	}{
 		"namespace with namespace only scope": {
-			selector: placementv1beta1.ClusterResourceSelector{
+			selector: placementv1beta1.ResourceSelectorTerm{
 				Group:          "",
 				Version:        "v1",
 				Kind:           "Namespace",
@@ -2784,7 +2784,7 @@ func TestIsSelectNamespaceOnly(t *testing.T) {
 			want: true,
 		},
 		"namespace with namespace with resources scope": {
-			selector: placementv1beta1.ClusterResourceSelector{
+			selector: placementv1beta1.ResourceSelectorTerm{
 				Group:          "",
 				Version:        "v1",
 				Kind:           "Namespace",
@@ -2793,7 +2793,7 @@ func TestIsSelectNamespaceOnly(t *testing.T) {
 			want: false,
 		},
 		"configmap with namespace only scope": {
-			selector: placementv1beta1.ClusterResourceSelector{
+			selector: placementv1beta1.ResourceSelectorTerm{
 				Group:          "",
 				Version:        "v1",
 				Kind:           "ConfigMap",
@@ -2802,7 +2802,7 @@ func TestIsSelectNamespaceOnly(t *testing.T) {
 			want: false,
 		},
 		"deployment with namespace only scope": {
-			selector: placementv1beta1.ClusterResourceSelector{
+			selector: placementv1beta1.ResourceSelectorTerm{
 				Group:          "apps",
 				Version:        "v1",
 				Kind:           "Deployment",
@@ -2811,7 +2811,7 @@ func TestIsSelectNamespaceOnly(t *testing.T) {
 			want: false,
 		},
 		"namespace with wrong group": {
-			selector: placementv1beta1.ClusterResourceSelector{
+			selector: placementv1beta1.ResourceSelectorTerm{
 				Group:          "core",
 				Version:        "v1",
 				Kind:           "Namespace",
@@ -2820,7 +2820,7 @@ func TestIsSelectNamespaceOnly(t *testing.T) {
 			want: false,
 		},
 		"namespace with wrong version": {
-			selector: placementv1beta1.ClusterResourceSelector{
+			selector: placementv1beta1.ResourceSelectorTerm{
 				Group:          "",
 				Version:        "v2",
 				Kind:           "Namespace",
@@ -2829,7 +2829,7 @@ func TestIsSelectNamespaceOnly(t *testing.T) {
 			want: false,
 		},
 		"namespace with default selection scope (NamespaceWithResources)": {
-			selector: placementv1beta1.ClusterResourceSelector{
+			selector: placementv1beta1.ResourceSelectorTerm{
 				Group:   "",
 				Version: "v1",
 				Kind:    "Namespace",

@@ -70,7 +70,7 @@ var (
 	// by any controller (the scheduler cares only about policy snapshots and manipulates
 	// bindings accordingly), it is safe for all suites to select the same set of resources
 	// (which is not even provisioned in the environment).
-	defaultResourceSelectors = []placementv1beta1.ClusterResourceSelector{
+	defaultResourceSelectors = []placementv1beta1.ResourceSelectorTerm{
 		{
 			Group:   "core",
 			Kind:    "Namespace",

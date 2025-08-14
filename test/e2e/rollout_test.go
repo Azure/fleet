@@ -771,7 +771,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("create the CRP that select the namespace and CRD", func() {
 			crp = buildCRPForSafeRollout()
-			crdClusterResourceSelector := placementv1beta1.ClusterResourceSelector{
+			crdClusterResourceSelector := placementv1beta1.ResourceSelectorTerm{
 				Group:   utils.CRDMetaGVK.Group,
 				Kind:    utils.CRDMetaGVK.Kind,
 				Version: utils.CRDMetaGVK.Version,
@@ -914,7 +914,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("create the CRP that select the namespace and CRD", func() {
 			crp = buildCRPForSafeRollout()
-			crdClusterResourceSelector := placementv1beta1.ClusterResourceSelector{
+			crdClusterResourceSelector := placementv1beta1.ResourceSelectorTerm{
 				Group:   utils.CRDMetaGVK.Group,
 				Kind:    utils.CRDMetaGVK.Kind,
 				Version: utils.CRDMetaGVK.Version,

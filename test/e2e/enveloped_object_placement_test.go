@@ -79,7 +79,7 @@ var _ = Describe("placing wrapped resources using a CRP", func() {
 					Finalizers: []string{customDeletionBlockerFinalizer},
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "",
 							Kind:    "Namespace",

@@ -388,7 +388,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Name: testCRPName,
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   corev1.GroupName,
 							Version: "v1",
@@ -976,7 +976,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 
 			By("Update CRP spec to add another resource selector")
 			gotCRP.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors,
-				placementv1beta1.ClusterResourceSelector{
+				placementv1beta1.ResourceSelectorTerm{
 					Group:   corev1.GroupName,
 					Version: "v1",
 					Kind:    "Namespace",
@@ -1400,7 +1400,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Name: testCRPName,
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   corev1.GroupName,
 							Version: "v1",
@@ -1918,7 +1918,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Name: testCRPName,
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   corev1.GroupName,
 							Version: "v1",
@@ -1980,7 +1980,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Name: testCRPName,
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   corev1.GroupName,
 							Version: "v1",

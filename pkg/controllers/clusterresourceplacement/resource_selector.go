@@ -113,10 +113,10 @@ func (r *Reconciler) selectResources(placement *fleetv1alpha1.ClusterResourcePla
 // Note: temporary solution to share the same set of utils between v1alpha1 and v1beta1 APIs so that v1alpha1 implementation
 // won't be broken. v1alpha1 implementation should be removed when new API is ready.
 // The clusterResourceSelect has no changes between different versions.
-func convertResourceSelector(old []fleetv1alpha1.ClusterResourceSelector) []fleetv1beta1.ClusterResourceSelector {
-	res := make([]fleetv1beta1.ClusterResourceSelector, len(old))
+func convertResourceSelector(old []fleetv1alpha1.ClusterResourceSelector) []fleetv1beta1.ResourceSelectorTerm {
+	res := make([]fleetv1beta1.ResourceSelectorTerm, len(old))
 	for i, item := range old {
-		res[i] = fleetv1beta1.ClusterResourceSelector{
+		res[i] = fleetv1beta1.ResourceSelectorTerm{
 			Group:          item.Group,
 			Version:        item.Version,
 			Kind:           item.Kind,
@@ -129,7 +129,7 @@ func convertResourceSelector(old []fleetv1alpha1.ClusterResourceSelector) []flee
 }
 
 // gatherSelectedResource gets all the resources according to the resource selector.
-func (r *Reconciler) gatherSelectedResource(placementKey types.NamespacedName, selectors []fleetv1beta1.ClusterResourceSelector) ([]*unstructured.Unstructured, error) {
+func (r *Reconciler) gatherSelectedResource(placementKey types.NamespacedName, selectors []fleetv1beta1.ResourceSelectorTerm) ([]*unstructured.Unstructured, error) {
 	var resources []*unstructured.Unstructured
 	var resourceMap = make(map[fleetv1beta1.ResourceIdentifier]bool)
 	for _, selector := range selectors {
@@ -145,7 +145,7 @@ func (r *Reconciler) gatherSelectedResource(placementKey types.NamespacedName, s
 		}
 		var objs []runtime.Object
 		var err error
-		if gvk == utils.NamespaceGVK && placementKey.Namespace == "" {
+		if gvk == utils.NamespaceGVK && placementKey.Namespace == "" && selector.SelectionScope != fleetv1beta1.NamespaceOnly {
 			objs, err = r.fetchNamespaceResources(selector, placementKey.Name)
 		} else {
 			objs, err = r.fetchResources(selector, placementKey)
@@ -231,7 +231,7 @@ func buildApplyOrderMap() map[string]int {
 }
 
 // fetchResources retrieves the objects based on the selector.
-func (r *Reconciler) fetchResources(selector fleetv1beta1.ClusterResourceSelector, placementKey types.NamespacedName) ([]runtime.Object, error) {
+func (r *Reconciler) fetchResources(selector fleetv1beta1.ResourceSelectorTerm, placementKey types.NamespacedName) ([]runtime.Object, error) {
 	klog.V(2).InfoS("Start to fetch resources by the selector", "selector", selector, "placement", placementKey)
 	gk := schema.GroupKind{
 		Group: selector.Group,
@@ -332,13 +332,13 @@ func (r *Reconciler) fetchResources(selector fleetv1beta1.ClusterResourceSelecto
 }
 
 // fetchNamespaceResources retrieves all the objects for a ResourceSelectorTerm that is for namespace.
-func (r *Reconciler) fetchNamespaceResources(selector fleetv1beta1.ClusterResourceSelector, placeName string) ([]runtime.Object, error) {
+func (r *Reconciler) fetchNamespaceResources(selector fleetv1beta1.ResourceSelectorTerm, placementName string) ([]runtime.Object, error) {
 	klog.V(2).InfoS("start to fetch the namespace resources by the selector", "selector", selector)
 	var resources []runtime.Object
 
 	if len(selector.Name) != 0 {
 		// just a single namespace
-		objs, err := r.fetchAllResourcesInOneNamespace(selector.Name, placeName)
+		objs, err := r.fetchAllResourcesInOneNamespace(selector.Name, placementName)
 		if err != nil {
 			klog.ErrorS(err, "failed to fetch all the selected resource in a namespace", "namespace", selector.Name)
 			return nil, err
@@ -359,7 +359,7 @@ func (r *Reconciler) fetchNamespaceResources(selector fleetv1beta1.ClusterResour
 	}
 	namespaces, err := r.InformerManager.Lister(utils.NamespaceGVR).List(labelSelector)
 	if err != nil {
-		klog.ErrorS(err, "Cannot list all the namespaces by the label selector", "labelSelector", labelSelector, "placement", placeName)
+		klog.ErrorS(err, "Cannot list all the namespaces by the label selector", "labelSelector", labelSelector, "placement", placementName)
 		return nil, controller.NewAPIServerError(true, err)
 	}
 
@@ -368,7 +368,7 @@ func (r *Reconciler) fetchNamespaceResources(selector fleetv1beta1.ClusterResour
 		if err != nil {
 			return nil, controller.NewUnexpectedBehaviorError(fmt.Errorf("cannot get the name of a namespace object: %w", err))
 		}
-		objs, err := r.fetchAllResourcesInOneNamespace(ns.GetName(), placeName)
+		objs, err := r.fetchAllResourcesInOneNamespace(ns.GetName(), placementName)
 		if err != nil {
 			klog.ErrorS(err, "failed to fetch all the selected resource in a namespace", "namespace", ns.GetName())
 			return nil, err

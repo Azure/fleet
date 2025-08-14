@@ -5968,7 +5968,7 @@ func TestSetPlacementStatusForClusterResourcePlacement(t *testing.T) {
 					Name: testCRPName,
 				},
 				Spec: fleetv1beta1.PlacementSpec{
-					ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []fleetv1beta1.ResourceSelectorTerm{
 						{
 							Group:   corev1.GroupName,
 							Version: "v1",
@@ -6647,7 +6647,7 @@ func TestSetResourcePlacementStatus(t *testing.T) {
 					Namespace: testRPNamespace,
 				},
 				Spec: fleetv1beta1.PlacementSpec{
-					ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []fleetv1beta1.ResourceSelectorTerm{
 						{
 							Group:   corev1.GroupName,
 							Version: "v1",

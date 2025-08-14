@@ -54,7 +54,7 @@ var _ = Describe("validating CRP when using customized resourceSnapshotCreationM
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
 			Spec: placementv1beta1.PlacementSpec{
-				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+				ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 					{
 						Group:   "",
 						Kind:    "Namespace",
@@ -165,7 +165,7 @@ var _ = Describe("validating that CRP status can be updated after updating the r
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
 			Spec: placementv1beta1.PlacementSpec{
-				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+				ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 					{
 						Group:   "",
 						Kind:    "Namespace",

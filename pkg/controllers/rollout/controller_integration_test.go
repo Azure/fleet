@@ -1547,7 +1547,7 @@ func resourcePlacementForTest(namespace, rpName string, policy *placementv1beta1
 			Namespace: namespace,
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "v1",
 					Version: "v1",

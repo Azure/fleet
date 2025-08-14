@@ -27,8 +27,8 @@ const (
 	workNamespaceLabelName = "target-test-spec"
 )
 
-func workResourceSelector(workNamespaceName string) []placementv1beta1.ClusterResourceSelector {
-	return []placementv1beta1.ClusterResourceSelector{
+func workResourceSelector(workNamespaceName string) []placementv1beta1.ResourceSelectorTerm {
+	return []placementv1beta1.ResourceSelectorTerm{
 		{
 			Group:   "",
 			Kind:    "Namespace",

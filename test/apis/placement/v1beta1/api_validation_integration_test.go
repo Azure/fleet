@@ -58,7 +58,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					Name: crpName,
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "",
 							Version: "v1",
@@ -112,7 +112,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					Name: crpName,
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "",
 							Version: "v1",
@@ -132,7 +132,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					Name: crpName,
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "",
 							Version: "v1",
@@ -164,7 +164,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					Name: crpName,
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "",
 							Version: "v1",
@@ -202,7 +202,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					Name: crpName,
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "",
 							Version: "v1",
@@ -245,7 +245,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					Name: crpName,
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "",
 							Version: "v1",
@@ -280,7 +280,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					Name: crpName,
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "rbac.authorization.k8s.io",
 							Version: "v1",
@@ -314,7 +314,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					Name: crpName,
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "",
 							Version: "v1",
@@ -337,7 +337,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 		})
 
 		It("should allow update of ClusterResourcePlacement with StatusReportingScope NamespaceAccessible, one namespace plus other cluster-scoped resources", func() {
-			crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, []placementv1beta1.ClusterResourceSelector{
+			crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "rbac.authorization.k8s.io",
 					Version: "v1",
@@ -356,7 +356,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 		})
 
 		It("should allow update of ClusterResourcePlacement with StatusReportingScope ClusterScopeOnly, multiple namespace selectors", func() {
-			crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, []placementv1beta1.ClusterResourceSelector{
+			crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "",
 					Version: "v1",
@@ -381,7 +381,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 		})
 
 		It("should allow update of ClusterResourcePlacement with default StatusReportingScope, multiple namespace selectors", func() {
-			crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, []placementv1beta1.ClusterResourceSelector{
+			crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "",
 					Version: "v1",
@@ -405,7 +405,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 		})
 
 		It("should deny update of ClusterResourcePlacement with StatusReportingScope NamespaceAccessible and multiple namespace selectors", func() {
-			crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, []placementv1beta1.ClusterResourceSelector{
+			crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "",
 					Version: "v1",
@@ -427,7 +427,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 		})
 
 		It("should deny update of ClusterResourcePlacement with StatusReportingScope NamespaceAccessible, no namespace selectors", func() {
-			crp.Spec.ResourceSelectors = []placementv1beta1.ClusterResourceSelector{
+			crp.Spec.ResourceSelectors = []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "rbac.authorization.k8s.io",
 					Version: "v1",
@@ -1041,7 +1041,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					Name: fmt.Sprintf(croNameTemplate, GinkgoParallelProcess()),
 				},
 				Spec: placementv1beta1.ClusterResourceOverrideSpec{
-					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ClusterResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "",
 							Version: "v1",
@@ -1079,7 +1079,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 						Name:  "test-placement",
 						Scope: placementv1beta1.ClusterScoped,
 					},
-					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ClusterResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "",
 							Version: "v1",
@@ -1116,7 +1116,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 					Placement: &placementv1beta1.PlacementRef{
 						Name: "test-placement",
 					},
-					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ClusterResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "",
 							Version: "v1",
@@ -1156,7 +1156,7 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 						Name:  "test-placement",
 						Scope: placementv1beta1.NamespaceScoped,
 					},
-					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ClusterResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "",
 							Version: "v1",

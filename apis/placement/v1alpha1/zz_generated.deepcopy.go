@@ -308,7 +308,7 @@ func (in *ClusterResourceOverrideSpec) DeepCopyInto(out *ClusterResourceOverride
 	}
 	if in.ClusterResourceSelectors != nil {
 		in, out := &in.ClusterResourceSelectors, &out.ClusterResourceSelectors
-		*out = make([]v1beta1.ClusterResourceSelector, len(*in))
+		*out = make([]v1beta1.ResourceSelectorTerm, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}

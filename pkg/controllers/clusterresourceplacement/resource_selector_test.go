@@ -989,7 +989,7 @@ func TestGatherSelectedResource(t *testing.T) {
 	tests := []struct {
 		name            string
 		placementName   types.NamespacedName
-		selectors       []fleetv1beta1.ClusterResourceSelector
+		selectors       []fleetv1beta1.ResourceSelectorTerm
 		resourceConfig  *utils.ResourceConfig
 		informerManager *testinformer.FakeManager
 		want            []*unstructured.Unstructured
@@ -998,13 +998,13 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should handle empty selectors",
 			placementName: types.NamespacedName{Name: "test-placement"},
-			selectors:     []fleetv1beta1.ClusterResourceSelector{},
+			selectors:     []fleetv1beta1.ResourceSelectorTerm{},
 			want:          nil,
 		},
 		{
 			name:          "should skip disabled resources",
 			placementName: types.NamespacedName{Name: "test-placement"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "apps",
 					Version: "v1",
@@ -1012,13 +1012,13 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-deployment",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(true), // deny list - empty means deny all
+			resourceConfig: utils.NewResourceConfig(true), // make this allow list - nothing is allowed
 			want:           nil,
 		},
 		{
 			name:          "should return error for cluster-scoped resource",
 			placementName: types.NamespacedName{Name: "test-placement", Namespace: "test-ns"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "rbac.authorization.k8s.io",
 					Version: "v1",
@@ -1026,7 +1026,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-clusterrole",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: &testinformer.FakeManager{
 				IsClusterScopedResource: false,
 				Listers:                 map[schema.GroupVersionResource]*testinformer.FakeLister{},
@@ -1037,7 +1037,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should handle single resource selection successfully",
 			placementName: types.NamespacedName{Name: "test-placement", Namespace: "test-ns"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "apps",
 					Version: "v1",
@@ -1045,7 +1045,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-deployment",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1060,7 +1060,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should return empty result when informer manager returns not found error",
 			placementName: types.NamespacedName{Name: "test-placement", Namespace: "test-ns"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "apps",
 					Version: "v1",
@@ -1068,7 +1068,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-deployment",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1085,7 +1085,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should return error when informer manager returns non-NotFound error",
 			placementName: types.NamespacedName{Name: "test-placement", Namespace: "test-ns"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "apps",
 					Version: "v1",
@@ -1093,7 +1093,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-deployment",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1110,14 +1110,14 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should return error using label selector when informer manager returns error",
 			placementName: types.NamespacedName{Name: "test-placement", Namespace: "test-ns"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "apps",
 					Version: "v1",
 					Kind:    "Deployment",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1134,7 +1134,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should return only non-deleting resources when mixed with deleting resources",
 			placementName: types.NamespacedName{Name: "test-placement", Namespace: "test-ns"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "apps",
 					Version: "v1",
@@ -1148,7 +1148,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-deleting-deployment", // deleting deployment
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1163,7 +1163,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should handle resource selection successfully by using label selector",
 			placementName: types.NamespacedName{Name: "test-placement", Namespace: "test-ns"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "apps",
 					Version: "v1",
@@ -1175,7 +1175,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					},
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1190,7 +1190,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should handle label selector with MatchExpressions",
 			placementName: types.NamespacedName{Name: "test-placement", Namespace: "test-ns"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "apps",
 					Version: "v1",
@@ -1206,7 +1206,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					},
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1221,7 +1221,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should detect duplicate resources",
 			placementName: types.NamespacedName{Name: "test-placement", Namespace: "test-ns"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "apps",
 					Version: "v1",
@@ -1235,7 +1235,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-deployment", // same deployment selected twice
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1249,7 +1249,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should sort resources according to apply order",
 			placementName: types.NamespacedName{Name: "test-placement", Namespace: "test-ns"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "apps",
 					Version: "v1",
@@ -1263,7 +1263,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-configmap",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // Allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1280,7 +1280,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should return error for namespace-scoped resource for cluster scoped placement",
 			placementName: types.NamespacedName{Name: "test-placement"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "apps",
 					Version: "v1",
@@ -1288,7 +1288,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-deployment",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: &testinformer.FakeManager{
 				IsClusterScopedResource: true,
 				Listers:                 map[schema.GroupVersionResource]*testinformer.FakeLister{},
@@ -1299,7 +1299,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should sort resources for cluster scoped placement",
 			placementName: types.NamespacedName{Name: "test-placement"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "rbac.authorization.k8s.io",
 					Version: "v1",
@@ -1313,7 +1313,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-ns",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // Allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: false,
@@ -1330,7 +1330,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should select resources by name for cluster scoped placement",
 			placementName: types.NamespacedName{Name: "test-placement"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "rbac.authorization.k8s.io",
 					Version: "v1",
@@ -1344,7 +1344,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					Name:    "test-ns",
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // Allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: false,
@@ -1360,7 +1360,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should select namespaces and its children resources by using label selector for cluster scoped placement",
 			placementName: types.NamespacedName{Name: "test-placement"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "",
 					Version: "v1",
@@ -1373,7 +1373,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceWithResources,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: false,
@@ -1391,7 +1391,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should skip the resource for cluster scoped placement",
 			placementName: types.NamespacedName{Name: "test-placement"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "",
 					Version: "v1",
@@ -1426,7 +1426,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should select namespaces using nil label selector for cluster scoped placement",
 			placementName: types.NamespacedName{Name: "test-placement"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:          "",
 					Version:        "v1",
@@ -1434,7 +1434,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceWithResources,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: false,
@@ -1446,13 +1446,92 @@ func TestGatherSelectedResource(t *testing.T) {
 					NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR, utils.ConfigMapGVR},
 				}
 			}(),
-			// Should select only non-reserved namespaces with matching labels and their children resources
+			// Should select only non-reserved namespaces with matching labels and their child resources
 			want: []*unstructured.Unstructured{prodNamespace, testNamespace, testConfigMap, testDeployment},
+		},
+		{
+			name:          "should select only namespaces for namespace only scope for a namespace",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Version:        "v1",
+					Kind:           "Namespace",
+					Name:           "test-ns",
+					SelectionScope: fleetv1beta1.NamespaceOnly,
+				},
+			},
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			informerManager: func() *testinformer.FakeManager {
+				return &testinformer.FakeManager{
+					IsClusterScopedResource: false,
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+						utils.NamespaceGVR:  {Objects: []runtime.Object{testNamespace, prodNamespace, testDeletingNamespace}},
+						utils.DeploymentGVR: {Objects: []runtime.Object{testDeployment, testDeletingDeployment}},
+						utils.ConfigMapGVR:  {Objects: []runtime.Object{testConfigMap, kubeRootCAConfigMap}},
+					},
+					NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR, utils.ConfigMapGVR},
+				}
+			}(),
+			// Should select only the namespace with name "test-ns" and none of its child resources
+			want: []*unstructured.Unstructured{testNamespace},
+		},
+		{
+			name:          "should select only namespaces for namespace only scope for namespaces with labels",
+			placementName: types.NamespacedName{Name: "test-placement"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Version:        "v1",
+					Kind:           "Namespace",
+					SelectionScope: fleetv1beta1.NamespaceOnly,
+				},
+			},
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			informerManager: func() *testinformer.FakeManager {
+				return &testinformer.FakeManager{
+					IsClusterScopedResource: false,
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+						utils.NamespaceGVR:  {Objects: []runtime.Object{testNamespace, prodNamespace, testDeletingNamespace}},
+						utils.DeploymentGVR: {Objects: []runtime.Object{testDeployment, testDeletingDeployment}},
+						utils.ConfigMapGVR:  {Objects: []runtime.Object{testConfigMap, kubeRootCAConfigMap}},
+					},
+					NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR, utils.ConfigMapGVR},
+				}
+			}(),
+			// Should select only non-deleting namespaces with matching labels and none of their child resources
+			want: []*unstructured.Unstructured{prodNamespace, testNamespace},
+		},
+		{
+			name:          "should return error if a resourceplacement selects namespaces even for namespace only scope",
+			placementName: types.NamespacedName{Name: "test-placement", Namespace: "test-ns"},
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Version:        "v1",
+					Kind:           "Namespace",
+					Name:           "test-ns",
+					SelectionScope: fleetv1beta1.NamespaceOnly,
+				},
+			},
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
+			informerManager: func() *testinformer.FakeManager {
+				return &testinformer.FakeManager{
+					IsClusterScopedResource: false,
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
+						utils.NamespaceGVR:  {Objects: []runtime.Object{testNamespace, prodNamespace, testDeletingNamespace}},
+						utils.DeploymentGVR: {Objects: []runtime.Object{testDeployment, testDeletingDeployment}},
+						utils.ConfigMapGVR:  {Objects: []runtime.Object{testConfigMap, kubeRootCAConfigMap}},
+					},
+					NamespaceScopedResources: []schema.GroupVersionResource{utils.DeploymentGVR, utils.ConfigMapGVR},
+				}
+			}(),
+			wantError: controller.ErrUserError,
 		},
 		{
 			name:          "should return error when selecting a reserved namespace for cluster scoped placement",
 			placementName: types.NamespacedName{Name: "test-placement"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "",
 					Version: "v1",
@@ -1465,7 +1544,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceWithResources,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: false,
@@ -1482,7 +1561,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should return empty result when informer manager returns not found error for cluster scoped placement",
 			placementName: types.NamespacedName{Name: "test-placement"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:          "",
 					Version:        "v1",
@@ -1491,7 +1570,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceWithResources,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1508,7 +1587,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should return error when informer manager returns non-NotFound error (getting namespace) for cluster scoped placement",
 			placementName: types.NamespacedName{Name: "test-placement"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:          "",
 					Version:        "v1",
@@ -1517,7 +1596,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceWithResources,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1534,7 +1613,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should return error using label selector when informer manager returns error (getting namespace) for cluster scoped placement",
 			placementName: types.NamespacedName{Name: "test-placement"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:          "",
 					Version:        "v1",
@@ -1542,7 +1621,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceWithResources,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,
@@ -1559,7 +1638,7 @@ func TestGatherSelectedResource(t *testing.T) {
 		{
 			name:          "should return error when informer manager returns non-NotFound error (getting deployment) for cluster scoped placement",
 			placementName: types.NamespacedName{Name: "test-placement"},
-			selectors: []fleetv1beta1.ClusterResourceSelector{
+			selectors: []fleetv1beta1.ResourceSelectorTerm{
 				{
 					Group:          "",
 					Version:        "v1",
@@ -1568,7 +1647,7 @@ func TestGatherSelectedResource(t *testing.T) {
 					SelectionScope: fleetv1beta1.NamespaceWithResources,
 				},
 			},
-			resourceConfig: utils.NewResourceConfig(false), // allow all resources
+			resourceConfig: utils.NewResourceConfig(false), // default deny list
 			informerManager: func() *testinformer.FakeManager {
 				return &testinformer.FakeManager{
 					IsClusterScopedResource: true,

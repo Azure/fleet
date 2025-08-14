@@ -35,7 +35,7 @@ import (
 var (
 	positiveNumberOfClusters int32 = 1
 	negativeNumberOfClusters int32 = -1
-	resourceSelector               = placementv1beta1.ClusterResourceSelector{
+	resourceSelector               = placementv1beta1.ResourceSelectorTerm{
 		Group:   "rbac.authorization.k8s.io",
 		Version: "v1",
 		Kind:    "ClusterRole",
@@ -222,7 +222,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 					Name: "test-crp",
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{resourceSelector},
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 					},
@@ -239,7 +239,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 					Name: "test-crp-with-very-long-name-field-exceeding-DNS1035LabelMaxLength",
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{resourceSelector},
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 					},
@@ -257,7 +257,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 					Name: "test-crp",
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "rbac.authorization.k8s.io",
 							Version: "v1",
@@ -285,7 +285,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 					Name: "test-crp",
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "rbac.authorization.k8s.io",
 							Version: "v1",
@@ -305,7 +305,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 					Name: "test-crp",
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "apps",
 							Kind:    "Deployment",
@@ -327,7 +327,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 					Name: "test-crp",
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{resourceSelector},
 				},
 			},
 			resourceInformer: nil,

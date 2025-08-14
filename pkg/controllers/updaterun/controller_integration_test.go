@@ -350,7 +350,7 @@ func generateTestClusterResourcePlacement() *placementv1beta1.ClusterResourcePla
 			Name: testCRPName,
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "",
 					Version: "v1",
@@ -607,7 +607,7 @@ func generateTestClusterResourceOverride() *placementv1beta1.ClusterResourceOver
 		},
 		Spec: placementv1beta1.ClusterResourceOverrideSnapshotSpec{
 			OverrideSpec: placementv1beta1.ClusterResourceOverrideSpec{
-				ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+				ClusterResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 					{
 						Group:   "",
 						Version: "v1",

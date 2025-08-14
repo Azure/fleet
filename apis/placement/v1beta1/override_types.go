@@ -61,7 +61,7 @@ type ClusterResourceOverrideSpec struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=20
 	// +required
-	ClusterResourceSelectors []ClusterResourceSelector `json:"clusterResourceSelectors"`
+	ClusterResourceSelectors []ResourceSelectorTerm `json:"clusterResourceSelectors"`
 
 	// Policy defines how to override the selected resources on the target clusters.
 	// +required

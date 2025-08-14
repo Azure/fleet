@@ -115,22 +115,21 @@ func (r *Reconciler) handleDeletedResource(key keys.ClusterWideKey, isClusterSco
 }
 
 // handleUpdatedResourceForClusterResourcePlacement handles the updated resource for cluster resource placement.
-func (r *Reconciler) handleUpdatedResourceForClusterResourcePlacement(key keys.ClusterWideKey, clusterObj runtime.Object, isClusterScoped bool) error {
+func (r *Reconciler) handleUpdatedResourceForClusterResourcePlacement(key keys.ClusterWideKey, obj runtime.Object, isClusterScoped bool) error {
 	if isClusterScoped {
 		klog.V(2).InfoS("Find clusterResourcePlacement that selects the cluster scoped object", "obj", key)
-		return r.triggerAffectedPlacementsForUpdatedRes(key, clusterObj.(*unstructured.Unstructured), true)
+		return r.triggerAffectedPlacementsForUpdatedRes(key, obj.(*unstructured.Unstructured), true)
 	}
 
 	klog.V(2).InfoS("Find namespace that contains the namespace scoped object", "obj", key)
 	// we will use the parent namespace object to search for the affected placements
-	var err error
-	clusterObj, err = r.InformerManager.Lister(utils.NamespaceGVR).Get(key.Namespace)
+	nsObj, err := r.InformerManager.Lister(utils.NamespaceGVR).Get(key.Namespace)
 	if err != nil {
 		klog.ErrorS(err, "Failed to find the namespace the resource belongs to", "obj", key)
 		return client.IgnoreNotFound(err)
 	}
 	klog.V(2).InfoS("Find clusterResourcePlacement that selects the namespace", "obj", key)
-	if err := r.triggerAffectedPlacementsForUpdatedRes(key, clusterObj.(*unstructured.Unstructured), true); err != nil {
+	if err := r.triggerAffectedPlacementsForUpdatedRes(key, nsObj.(*unstructured.Unstructured), true); err != nil {
 		klog.ErrorS(err, "Failed to trigger affected placements for updated cluster resource", "obj", key)
 		return err
 	}
@@ -405,7 +404,7 @@ func collectAllAffectedPlacementsV1Alpha1(res *unstructured.Unstructured, crpLis
 	return placements
 }
 
-func isSelectNamespaceOnly(selector placementv1beta1.ClusterResourceSelector) bool {
+func isSelectNamespaceOnly(selector placementv1beta1.ResourceSelectorTerm) bool {
 	return selector.Group == "" && selector.Version == "v1" && selector.Kind == "Namespace" && selector.SelectionScope == placementv1beta1.NamespaceOnly
 }
 
@@ -491,7 +490,7 @@ func matchSelectorGVKV1Alpha1(targetGVK schema.GroupVersionKind, selector fleetv
 		selector.Kind == targetGVK.Kind
 }
 
-func matchSelectorGVKV1Beta1(targetGVK schema.GroupVersionKind, selector placementv1beta1.ClusterResourceSelector) bool {
+func matchSelectorGVKV1Beta1(targetGVK schema.GroupVersionKind, selector placementv1beta1.ResourceSelectorTerm) bool {
 	return selector.Group == targetGVK.Group && selector.Version == targetGVK.Version &&
 		selector.Kind == targetGVK.Kind
 }
@@ -506,7 +505,7 @@ func matchSelectorLabelSelectorV1Alpha1(targetLabels map[string]string, selector
 	return s.Matches(labels.Set(targetLabels))
 }
 
-func matchSelectorLabelSelectorV1Beta1(targetLabels map[string]string, selector placementv1beta1.ClusterResourceSelector) bool {
+func matchSelectorLabelSelectorV1Beta1(targetLabels map[string]string, selector placementv1beta1.ResourceSelectorTerm) bool {
 	if selector.LabelSelector == nil {
 		// if the labelselector not set, it means select all
 		return true

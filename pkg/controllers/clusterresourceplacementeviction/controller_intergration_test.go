@@ -492,7 +492,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 						PlacementType: placementv1beta1.PickFixedPlacementType,
 						ClusterNames:  []string{"test-cluster-1"},
 					},
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "",
 							Kind:    "Namespace",
@@ -537,7 +537,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 			// Create the CRP.
 			By("Create ClusterResourcePlacement", func() {
 				crp := buildTestPickAllCRP(crpName)
-				crp.Spec.ResourceSelectors = []placementv1beta1.ClusterResourceSelector{
+				crp.Spec.ResourceSelectors = []placementv1beta1.ResourceSelectorTerm{
 					{
 						Group:   "",
 						Kind:    "Namespace",
@@ -709,7 +709,7 @@ func buildTestPickNCRP(crpName string, clusterCount int32) placementv1beta1.Clus
 				PlacementType:    placementv1beta1.PickNPlacementType,
 				NumberOfClusters: ptr.To(clusterCount),
 			},
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "",
 					Kind:    "Namespace",
