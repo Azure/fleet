@@ -49,6 +49,9 @@ type Reconciler struct {
 
 	// clusterEligibilityCheck helps check if a cluster is eligible for resource replacement.
 	ClusterEligibilityChecker *clustereligibilitychecker.ClusterEligibilityChecker
+
+	// enableResourcePlacement indicates whether the resource placement controller is enabled.
+	EnableResourcePlacement bool
 }
 
 // Reconcile reconciles a member cluster.
@@ -141,10 +144,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, controller.NewAPIServerError(true, err)
 	}
 	rpList := &placementv1beta1.ResourcePlacementList{}
-	// Empty namespace provided to list RPs across all namespaces.
-	if err := r.Client.List(ctx, rpList, client.InNamespace("")); err != nil {
-		klog.ErrorS(err, "Failed to list RPs", "memberCluster", memberClusterRef)
-		return ctrl.Result{}, controller.NewAPIServerError(true, err)
+	if r.EnableResourcePlacement {
+		// Empty namespace provided to list RPs across all namespaces.
+		if err := r.Client.List(ctx, rpList, client.InNamespace("")); err != nil {
+			klog.ErrorS(err, "Failed to list RPs", "memberCluster", memberClusterRef)
+			return ctrl.Result{}, controller.NewAPIServerError(true, err)
+		}
 	}
 
 	placements := append(convertCRPArrayToPlacementObjs(crpList.Items), convertRPArrayToPlacementObjs(rpList.Items)...)

@@ -615,6 +615,7 @@ func beforeSuiteForProcess1() []byte {
 		Client:                    hubClient,
 		SchedulerWorkQueue:        schedulerWorkQueue,
 		ClusterEligibilityChecker: clusterEligibilityChecker,
+		EnableResourcePlacement:   true,
 	}
 	err = memberClusterWatcher.SetupWithManager(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred(), "Failed to set up member cluster watcher with controller manager")
