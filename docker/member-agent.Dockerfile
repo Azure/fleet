@@ -1,5 +1,5 @@
 # Build the memberagent binary
-FROM mcr.microsoft.com/oss/go/microsoft/golang:1.24.4 AS builder
+FROM mcr.microsoft.com/oss/go/microsoft/golang:1.24.6 AS builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
