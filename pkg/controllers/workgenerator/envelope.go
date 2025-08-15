@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
@@ -214,17 +213,8 @@ func buildNewWorkForEnvelopeCR(
 				fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        resourceOverrideSnapshotHash,
 				fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: clusterResourceOverrideSnapshotHash,
 			},
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: fleetv1beta1.GroupVersion.String(),
-					Kind:       resourceBinding.GetObjectKind().GroupVersionKind().Kind,
-					Name:       resourceBinding.GetName(),
-					UID:        resourceBinding.GetUID(),
-					// Make sure that the resource binding can only be deleted after
-					// all of its managed work objects have been deleted.
-					BlockOwnerDeletion: ptr.To(true),
-				},
-			},
+			// OwnerReferences cannot be added, as the namespaces of work and resourceBinding are different.
+			// Garbage collector will assume the resourceBinding is invalid as it cannot be found in the same namespace.
 		},
 		Spec: fleetv1beta1.WorkSpec{
 			Workload: fleetv1beta1.WorkloadTemplate{
