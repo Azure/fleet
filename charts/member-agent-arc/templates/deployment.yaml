@@ -15,14 +15,14 @@ spec:
         app.kubernetes.io/name: fleet-member-agent
     spec:
       serviceAccountName: fleet-member-agent-sa
-      {{- if and .Values.crdInstaller.enabled .Values.enableV1Beta1APIs }}
+      {{- if and .Values.crdinstaller.enabled .Values.enableV1Beta1APIs }}
       initContainers:
         - name: crd-installer
           imagePullPolicy: IfNotPresent
-          image: "{{ .Values.crdInstaller.image.repository }}:{{ .Values.crdInstaller.image.tag }}"
+          image: "{{ .Values.crdinstaller.repository }}:{{ .Values.crdinstaller.tag }}"
           args:
             - --mode=member
-            - --v={{ .Values.crdInstaller.logVerbosity }}
+            - --v={{ .Values.crdinstaller.logVerbosity }}
           securityContext:
             capabilities:
               drop:
