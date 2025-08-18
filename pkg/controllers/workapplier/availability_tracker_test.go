@@ -1047,36 +1047,36 @@ func TestTrackInMemberClusterObjAvailability(t *testing.T) {
 					id: &fleetv1beta1.WorkResourceIdentifier{
 						Ordinal: 0,
 					},
-					gvr:                &utils.DeploymentGVR,
-					inMemberClusterObj: toUnstructured(t, availableDeploy),
-					applyResTyp:        ManifestProcessingApplyResultTypeApplied,
+					gvr:                     &utils.DeploymentGVR,
+					inMemberClusterObj:      toUnstructured(t, availableDeploy),
+					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
 				},
 				// A failed to get applied service.
 				{
 					id: &fleetv1beta1.WorkResourceIdentifier{
 						Ordinal: 1,
 					},
-					gvr:                &utils.ServiceGVR,
-					inMemberClusterObj: nil,
-					applyResTyp:        ManifestProcessingApplyResultTypeFailedToApply,
+					gvr:                     &utils.ServiceGVR,
+					inMemberClusterObj:      nil,
+					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeFailedToApply,
 				},
 				// An unavailable daemon set.
 				{
 					id: &fleetv1beta1.WorkResourceIdentifier{
 						Ordinal: 2,
 					},
-					gvr:                &utils.DaemonSetGVR,
-					inMemberClusterObj: toUnstructured(t, unavailableDaemonSet),
-					applyResTyp:        ManifestProcessingApplyResultTypeApplied,
+					gvr:                     &utils.DaemonSetGVR,
+					inMemberClusterObj:      toUnstructured(t, unavailableDaemonSet),
+					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
 				},
 				// An untrackable job.
 				{
 					id: &fleetv1beta1.WorkResourceIdentifier{
 						Ordinal: 3,
 					},
-					gvr:                &utils.JobGVR,
-					inMemberClusterObj: toUnstructured(t, untrackableJob),
-					applyResTyp:        ManifestProcessingApplyResultTypeApplied,
+					gvr:                     &utils.JobGVR,
+					inMemberClusterObj:      toUnstructured(t, untrackableJob),
+					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
 				},
 			},
 			wantBundles: []*manifestProcessingBundle{
@@ -1084,37 +1084,37 @@ func TestTrackInMemberClusterObjAvailability(t *testing.T) {
 					id: &fleetv1beta1.WorkResourceIdentifier{
 						Ordinal: 0,
 					},
-					gvr:                &utils.DeploymentGVR,
-					inMemberClusterObj: toUnstructured(t, availableDeploy),
-					applyResTyp:        ManifestProcessingApplyResultTypeApplied,
-					availabilityResTyp: ManifestProcessingAvailabilityResultTypeAvailable,
+					gvr:                     &utils.DeploymentGVR,
+					inMemberClusterObj:      toUnstructured(t, availableDeploy),
+					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
+					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeAvailable,
 				},
 				{
 					id: &fleetv1beta1.WorkResourceIdentifier{
 						Ordinal: 1,
 					},
-					gvr:                &utils.ServiceGVR,
-					inMemberClusterObj: nil,
-					applyResTyp:        ManifestProcessingApplyResultTypeFailedToApply,
-					availabilityResTyp: ManifestProcessingAvailabilityResultTypeSkipped,
+					gvr:                     &utils.ServiceGVR,
+					inMemberClusterObj:      nil,
+					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeFailedToApply,
+					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeSkipped,
 				},
 				{
 					id: &fleetv1beta1.WorkResourceIdentifier{
 						Ordinal: 2,
 					},
-					gvr:                &utils.DaemonSetGVR,
-					inMemberClusterObj: toUnstructured(t, unavailableDaemonSet),
-					applyResTyp:        ManifestProcessingApplyResultTypeApplied,
-					availabilityResTyp: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+					gvr:                     &utils.DaemonSetGVR,
+					inMemberClusterObj:      toUnstructured(t, unavailableDaemonSet),
+					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
+					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeNotYetAvailable,
 				},
 				{
 					id: &fleetv1beta1.WorkResourceIdentifier{
 						Ordinal: 3,
 					},
-					gvr:                &utils.JobGVR,
-					inMemberClusterObj: toUnstructured(t, untrackableJob),
-					applyResTyp:        ManifestProcessingApplyResultTypeApplied,
-					availabilityResTyp: ManifestProcessingAvailabilityResultTypeNotTrackable,
+					gvr:                     &utils.JobGVR,
+					inMemberClusterObj:      toUnstructured(t, untrackableJob),
+					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
+					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeNotTrackable,
 				},
 			},
 		},

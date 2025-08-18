@@ -86,6 +86,7 @@ func (r *Reconciler) refreshWorkStatus(
 		}
 	}
 
+	isReportDiffModeOn := work.Spec.ApplyStrategy != nil && work.Spec.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff
 	for idx := range bundles {
 		bundle := bundles[idx]
 
@@ -102,9 +103,9 @@ func (r *Reconciler) refreshWorkStatus(
 		if bundle.inMemberClusterObj != nil {
 			inMemberClusterObjGeneration = bundle.inMemberClusterObj.GetGeneration()
 		}
-		setManifestAppliedCondition(manifestCond, bundle.applyResTyp, bundle.applyErr, inMemberClusterObjGeneration)
+		setManifestAppliedCondition(manifestCond, isReportDiffModeOn, bundle.applyOrReportDiffResTyp, bundle.applyOrReportDiffErr, inMemberClusterObjGeneration)
 		setManifestAvailableCondition(manifestCond, bundle.availabilityResTyp, bundle.availabilityErr, inMemberClusterObjGeneration)
-		setManifestDiffReportedCondition(manifestCond, bundle.reportDiffResTyp, bundle.reportDiffErr, inMemberClusterObjGeneration)
+		setManifestDiffReportedCondition(manifestCond, isReportDiffModeOn, bundle.applyOrReportDiffResTyp, bundle.applyOrReportDiffErr, inMemberClusterObjGeneration)
 
 		// Check if a first drifted timestamp has been set; if not, set it to the current time.
 		firstDriftedTimestamp := &now
@@ -151,7 +152,7 @@ func (r *Reconciler) refreshWorkStatus(
 		}
 
 		// Tally the stats.
-		if isManifestObjectApplied(bundle.applyResTyp) {
+		if isManifestObjectApplied(bundle.applyOrReportDiffResTyp) {
 			appliedManifestsCount++
 		}
 		if isAppliedObjectAvailable(bundle.availabilityResTyp) {
@@ -160,7 +161,7 @@ func (r *Reconciler) refreshWorkStatus(
 		if bundle.availabilityResTyp == ManifestProcessingAvailabilityResultTypeNotTrackable {
 			untrackableAppliedObjectsCount++
 		}
-		if isManifestObjectDiffReported(bundle.reportDiffResTyp) {
+		if isManifestObjectDiffReported(bundle.applyOrReportDiffResTyp) {
 			diffReportedObjectsCount++
 		}
 	}
@@ -210,7 +211,7 @@ func (r *Reconciler) refreshAppliedWorkStatus(
 	for idx := range bundles {
 		bundle := bundles[idx]
 
-		if isManifestObjectApplied(bundle.applyResTyp) {
+		if isManifestObjectApplied(bundle.applyOrReportDiffResTyp) {
 			appliedResources = append(appliedResources, fleetv1beta1.AppliedResourceMeta{
 				WorkResourceIdentifier: *bundle.id,
 				UID:                    bundle.inMemberClusterObj.GetUID(),
@@ -237,29 +238,33 @@ func isAppliedObjectAvailable(availabilityResTyp ManifestProcessingAvailabilityR
 
 // isManifestObjectDiffReported returns if a diff report result type indicates that a manifest
 // object has been checked for configuration differences.
-func isManifestObjectDiffReported(reportDiffResTyp ManifestProcessingReportDiffResultType) bool {
-	return reportDiffResTyp == ManifestProcessingReportDiffResultTypeFoundDiff || reportDiffResTyp == ManifestProcessingReportDiffResultTypeNoDiffFound
+func isManifestObjectDiffReported(reportDiffResTyp ManifestProcessingApplyOrReportDiffResultType) bool {
+	return reportDiffResTyp == ApplyOrReportDiffResTypeFoundDiff || reportDiffResTyp == ApplyOrReportDiffResTypeNoDiffFound
 }
 
 // setManifestAppliedCondition sets the Applied condition on an applied manifest.
 func setManifestAppliedCondition(
 	manifestCond *fleetv1beta1.ManifestCondition,
-	appliedResTyp manifestProcessingAppliedResultType,
-	applyError error,
+	isReportDiffModeOn bool,
+	applyOrReportDiffResTyp ManifestProcessingApplyOrReportDiffResultType,
+	applyOrReportDiffError error,
 	inMemberClusterObjGeneration int64,
 ) {
 	var appliedCond *metav1.Condition
-	switch appliedResTyp {
-	case ManifestProcessingApplyResultTypeApplied:
+	switch {
+	case isReportDiffModeOn:
+		// ReportDiff mode is on and no apply op has been performed. In this case, Fleet
+		// will reset the Applied condition.
+	case applyOrReportDiffResTyp == ApplyOrReportDiffResTypeApplied:
 		// The manifest has been successfully applied.
 		appliedCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeApplied,
 			Status:             metav1.ConditionTrue,
-			Reason:             string(ManifestProcessingApplyResultTypeApplied),
-			Message:            ManifestProcessingApplyResultTypeAppliedDescription,
+			Reason:             string(ApplyOrReportDiffResTypeApplied),
+			Message:            ApplyOrReportDiffResTypeAppliedDescription,
 			ObservedGeneration: inMemberClusterObjGeneration,
 		}
-	case ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetection:
+	case applyOrReportDiffResTyp == ApplyOrReportDiffResTypeAppliedWithFailedDriftDetection:
 		// The manifest has been successfully applied, but drift detection has failed.
 		//
 		// At this moment Fleet does not prepare a dedicated condition for drift detection
@@ -267,20 +272,35 @@ func setManifestAppliedCondition(
 		appliedCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeApplied,
 			Status:             metav1.ConditionTrue,
-			Reason:             string(ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetection),
-			Message:            ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetectionDescription,
+			Reason:             string(ApplyOrReportDiffResTypeAppliedWithFailedDriftDetection),
+			Message:            string(ApplyOrReportDiffResTypeAppliedWithFailedDriftDetection),
 			ObservedGeneration: inMemberClusterObjGeneration,
 		}
-	case ManifestProcessingApplyResultTypeNoApplyPerformed:
-		// ReportDiff mode is on and no apply op has been performed. In this case, Fleet
-		// will reset the Applied condition.
+	case !manifestProcessingApplyResTypSet.Has(applyOrReportDiffResTyp):
+		// Do a sanity check; verify if the returned result type is a valid one.
+		// Normally this branch should never run.
+		wrappedErr := fmt.Errorf("found an unexpected apply result type %s", applyOrReportDiffResTyp)
+		klog.ErrorS(wrappedErr, "Failed to set Applied condition",
+			"workResourceID", manifestCond.Identifier,
+			"applyOrReportDiffResTyp", applyOrReportDiffResTyp,
+			"applyOrReportDiffError", applyOrReportDiffError)
+		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
+		// The work applier will consider this to be an apply failure.
+		appliedCond = &metav1.Condition{
+			Type:   fleetv1beta1.WorkConditionTypeApplied,
+			Status: metav1.ConditionFalse,
+			Reason: string(ApplyOrReportDiffResTypeFailedToApply),
+			Message: fmt.Sprintf("An unexpected apply result is yielded (%s, error: %s)",
+				applyOrReportDiffResTyp, applyOrReportDiffError),
+			ObservedGeneration: inMemberClusterObjGeneration,
+		}
 	default:
 		// The apply op fails.
 		appliedCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeApplied,
 			Status:             metav1.ConditionFalse,
-			Reason:             string(appliedResTyp),
-			Message:            fmt.Sprintf("Failed to apply the manifest (error: %s)", applyError),
+			Reason:             string(applyOrReportDiffResTyp),
+			Message:            fmt.Sprintf("Failed to apply the manifest (error: %s)", applyOrReportDiffError),
 			ObservedGeneration: inMemberClusterObjGeneration,
 		}
 	}
@@ -289,7 +309,7 @@ func setManifestAppliedCondition(
 		meta.SetStatusCondition(&manifestCond.Conditions, *appliedCond)
 		klog.V(2).InfoS("Applied condition set in ManifestCondition",
 			"workResourceID", manifestCond.Identifier,
-			"applyResTyp", appliedResTyp, "applyError", applyError,
+			"applyOrReportDiffResTyp", applyOrReportDiffResTyp, "applyOrReportDiffError", applyOrReportDiffError,
 			"inMemberClusterObjGeneration", inMemberClusterObjGeneration)
 	} else {
 		// As the conditions are ported back; removal must be performed if the Applied
@@ -297,7 +317,7 @@ func setManifestAppliedCondition(
 		meta.RemoveStatusCondition(&manifestCond.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 		klog.V(2).InfoS("Applied condition removed from ManifestCondition",
 			"workResourceID", manifestCond.Identifier,
-			"applyResTyp", appliedResTyp, "applyError", applyError,
+			"applyOrReportDiffResTyp", applyOrReportDiffResTyp, "applyOrReportDiffError", applyOrReportDiffError,
 			"inMemberClusterObjGeneration", inMemberClusterObjGeneration)
 	}
 }
@@ -373,43 +393,52 @@ func setManifestAvailableCondition(
 // setManifestDiffReportedCondition sets the DiffReported condition on a manifest.
 func setManifestDiffReportedCondition(
 	manifestCond *fleetv1beta1.ManifestCondition,
-	reportDiffResTyp ManifestProcessingReportDiffResultType,
-	reportDiffError error,
+	isReportDiffModeOn bool,
+	applyOrReportDiffResTyp ManifestProcessingApplyOrReportDiffResultType,
+	applyOrReportDiffErr error,
 	inMemberClusterObjGeneration int64,
 ) {
 	var diffReportedCond *metav1.Condition
-	switch reportDiffResTyp {
-	case ManifestProcessingReportDiffResultTypeFailed:
+	switch {
+	case !isReportDiffModeOn:
+		// ReportDiff mode is not on; Fleet will remove DiffReported condition.
+	case applyOrReportDiffResTyp == ApplyOrReportDiffResTypeFailedToReportDiff:
 		// Diff reporting has failed.
 		diffReportedCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 			Status:             metav1.ConditionFalse,
-			Reason:             string(ManifestProcessingReportDiffResultTypeFailed),
-			Message:            fmt.Sprintf(ManifestProcessingReportDiffResultTypeFailedDescription, reportDiffError),
+			Reason:             string(ApplyOrReportDiffResTypeFailedToReportDiff),
+			Message:            fmt.Sprintf(ApplyOrReportDiffResTypeFailedToReportDiffDescription, applyOrReportDiffErr),
 			ObservedGeneration: inMemberClusterObjGeneration,
 		}
-	case ManifestProcessingReportDiffResultTypeNotEnabled:
-		// Diff reporting is not enabled.
-		//
-		// For simplicity reasons, the DiffReported condition will only appear when
-		// the ReportDiff mode is on; in other configurations, the condition will be
-		// removed.
-	case ManifestProcessingReportDiffResultTypeNoDiffFound:
+	case applyOrReportDiffResTyp == ApplyOrReportDiffResTypeNoDiffFound:
 		// No diff has been found.
 		diffReportedCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 			Status:             metav1.ConditionTrue,
-			Reason:             string(ManifestProcessingReportDiffResultTypeNoDiffFound),
-			Message:            ManifestProcessingReportDiffResultTypeNoDiffFoundDescription,
+			Reason:             string(ApplyOrReportDiffResTypeNoDiffFound),
+			Message:            ApplyOrReportDiffResTypeNoDiffFoundDescription,
 			ObservedGeneration: inMemberClusterObjGeneration,
 		}
-	case ManifestProcessingReportDiffResultTypeFoundDiff:
+	case applyOrReportDiffResTyp == ApplyOrReportDiffResTypeFoundDiff:
 		// Found diffs.
 		diffReportedCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 			Status:             metav1.ConditionTrue,
-			Reason:             string(ManifestProcessingReportDiffResultTypeFoundDiff),
-			Message:            ManifestProcessingReportDiffResultTypeFoundDiffDescription,
+			Reason:             string(ApplyOrReportDiffResTypeFoundDiff),
+			Message:            ApplyOrReportDiffResTypeFoundDiffDescription,
+			ObservedGeneration: inMemberClusterObjGeneration,
+		}
+	default:
+		// There are cases where the work applier might not be able to complete the diff reporting
+		// due to failures in the pre-processing or processing stage (e.g., the manifest cannot be decoded,
+		// or the user sets up a takeover strategy that cannot be completed). This is not considered
+		// as a system error.
+		diffReportedCond = &metav1.Condition{
+			Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+			Status:             metav1.ConditionFalse,
+			Reason:             string(ApplyOrReportDiffResTypeFailedToReportDiff),
+			Message:            fmt.Sprintf("An error blocks the diff reporting process (%s, error: %s)", applyOrReportDiffResTyp, applyOrReportDiffErr),
 			ObservedGeneration: inMemberClusterObjGeneration,
 		}
 	}
@@ -418,7 +447,7 @@ func setManifestDiffReportedCondition(
 		meta.SetStatusCondition(&manifestCond.Conditions, *diffReportedCond)
 		klog.V(2).InfoS("DiffReported condition set in ManifestCondition",
 			"workResourceID", manifestCond.Identifier,
-			"reportDiffResTyp", reportDiffResTyp, "reportDiffError", reportDiffError,
+			"applyOrReportDiffResTyp", applyOrReportDiffResTyp, "applyOrReportDiffErr", applyOrReportDiffErr,
 			"inMemberClusterObjGeneration", inMemberClusterObjGeneration)
 	} else {
 		// As the conditions are ported back; removal must be performed if the DiffReported
@@ -426,7 +455,7 @@ func setManifestDiffReportedCondition(
 		meta.RemoveStatusCondition(&manifestCond.Conditions, fleetv1beta1.WorkConditionTypeDiffReported)
 		klog.V(2).InfoS("DiffReported condition removed from ManifestCondition",
 			"workResourceID", manifestCond.Identifier,
-			"reportDiffResTyp", reportDiffResTyp, "reportDiffError", reportDiffError,
+			"applyOrReportDiffResTyp", applyOrReportDiffResTyp, "applyOrReportDiffErr", applyOrReportDiffErr,
 			"inMemberClusterObjGeneration", inMemberClusterObjGeneration)
 	}
 }

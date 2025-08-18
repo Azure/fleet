@@ -609,7 +609,7 @@ var _ = Describe("Process objects with generate name", Ordered, func() {
 								Condition: metav1.Condition{
 									Type:               placementv1beta1.WorkConditionTypeApplied,
 									Status:             metav1.ConditionFalse,
-									Reason:             string(workapplier.ManifestProcessingApplyResultTypeFoundGenerateName),
+									Reason:             string(workapplier.ApplyOrReportDiffResTypeFoundGenerateName),
 									ObservedGeneration: 0,
 								},
 							},
@@ -689,7 +689,7 @@ func checkForRolloutStuckOnOneFailedClusterStatus(wantSelectedResources []placem
 			Condition: metav1.Condition{
 				Type:   placementv1beta1.WorkConditionTypeApplied,
 				Status: metav1.ConditionFalse,
-				Reason: string(workapplier.ManifestProcessingApplyResultTypeFailedToApply),
+				Reason: string(workapplier.ApplyOrReportDiffResTypeFailedToApply),
 			},
 		},
 	}

@@ -48,7 +48,7 @@ func (r *Reconciler) trackInMemberClusterObjAvailability(ctx context.Context, bu
 
 	doWork := func(pieces int) {
 		bundle := bundles[pieces]
-		if !isManifestObjectApplied(bundle.applyResTyp) {
+		if !isManifestObjectApplied(bundle.applyOrReportDiffResTyp) {
 			// The manifest object in the bundle has not been applied yet. No availability check
 			// is needed.
 			bundle.availabilityResTyp = ManifestProcessingAvailabilityResultTypeSkipped

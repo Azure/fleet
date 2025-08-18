@@ -40,7 +40,7 @@ func (r *Reconciler) processManifests(
 	// TODO: We have to apply the namespace/crd/secret/configmap/pvc first
 	// then we can process some of the manifests in parallel.
 	for _, bundle := range bundles {
-		if bundle.applyErr != nil {
+		if bundle.applyOrReportDiffErr != nil {
 			// Skip a manifest if it has failed pre-processing.
 			continue
 		}
@@ -95,8 +95,8 @@ func (r *Reconciler) processOneManifest(
 	if !canApplyWithOwnership(bundle.inMemberClusterObj, expectedAppliedWorkOwnerRef) {
 		klog.V(2).InfoS("Ownership is not established yet; skip the apply op",
 			"manifestObj", manifestObjRef, "GVR", *bundle.gvr, "work", workRef)
-		bundle.applyErr = fmt.Errorf("no ownership of the object in the member cluster; takeover is needed")
-		bundle.applyResTyp = ManifestProcessingApplyResultTypeNotTakenOver
+		bundle.applyOrReportDiffErr = fmt.Errorf("no ownership of the object in the member cluster; takeover is needed")
+		bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeNotTakenOver
 		return
 	}
 
@@ -109,8 +109,8 @@ func (r *Reconciler) processOneManifest(
 	// Perform the apply op.
 	appliedObj, err := r.apply(ctx, bundle.gvr, bundle.manifestObj, bundle.inMemberClusterObj, work.Spec.ApplyStrategy, expectedAppliedWorkOwnerRef)
 	if err != nil {
-		bundle.applyErr = fmt.Errorf("failed to apply the manifest: %w", err)
-		bundle.applyResTyp = ManifestProcessingApplyResultTypeFailedToApply
+		bundle.applyOrReportDiffErr = fmt.Errorf("failed to apply the manifest: %w", err)
+		bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeFailedToApply
 		klog.ErrorS(err, "Failed to apply the manifest",
 			"work", klog.KObj(work), "GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
 			"inMemberClusterObj", klog.KObj(bundle.inMemberClusterObj), "expectedAppliedWorkOwnerRef", *expectedAppliedWorkOwnerRef)
@@ -138,7 +138,7 @@ func (r *Reconciler) processOneManifest(
 	}
 
 	// All done.
-	bundle.applyResTyp = ManifestProcessingApplyResultTypeApplied
+	bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeApplied
 	klog.V(2).InfoS("Manifest processing completed",
 		"manifestObj", manifestObjRef, "GVR", *bundle.gvr, "work", workRef)
 }
@@ -172,8 +172,8 @@ func (r *Reconciler) findInMemberClusterObjectFor(
 	default:
 		// An unexpected error has occurred.
 		wrappedErr := controller.NewAPIServerError(true, err)
-		bundle.applyErr = fmt.Errorf("failed to find the corresponding object for the manifest object in the member cluster: %w", wrappedErr)
-		bundle.applyResTyp = ManifestProcessingApplyResultTypeFailedToFindObjInMemberCluster
+		bundle.applyOrReportDiffErr = fmt.Errorf("failed to find the corresponding object for the manifest object in the member cluster: %w", wrappedErr)
+		bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeFailedToFindObjInMemberCluster
 		klog.ErrorS(wrappedErr,
 			"Failed to find the corresponding object for the manifest object in the member cluster",
 			"work", klog.KObj(work), "GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
@@ -204,8 +204,8 @@ func (r *Reconciler) takeOverInMemberClusterObjectIfApplicable(
 	switch {
 	case err != nil:
 		// An unexpected error has occurred.
-		bundle.applyErr = fmt.Errorf("failed to take over a pre-existing object: %w", err)
-		bundle.applyResTyp = ManifestProcessingApplyResultTypeFailedToTakeOver
+		bundle.applyOrReportDiffErr = fmt.Errorf("failed to take over a pre-existing object: %w", err)
+		bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeFailedToTakeOver
 		klog.ErrorS(err, "Failed to take over a pre-existing object",
 			"work", klog.KObj(work), "GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
 			"inMemberClusterObj", klog.KObj(bundle.inMemberClusterObj), "expectedAppliedWorkOwnerRef", *expectedAppliedWorkOwnerRef)
@@ -214,8 +214,8 @@ func (r *Reconciler) takeOverInMemberClusterObjectIfApplicable(
 		// Takeover cannot be performed as configuration differences are found between the manifest
 		// object and the object in the member cluster.
 		bundle.diffs = configDiffs
-		bundle.applyErr = fmt.Errorf("cannot take over object: configuration differences are found between the manifest object and the corresponding object in the member cluster")
-		bundle.applyResTyp = ManifestProcessingApplyResultTypeFailedToTakeOver
+		bundle.applyOrReportDiffErr = fmt.Errorf("cannot take over object: configuration differences are found between the manifest object and the corresponding object in the member cluster")
+		bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeFailedToTakeOver
 		klog.V(2).InfoS("Cannot take over object as configuration differences are found between the manifest object and the corresponding object in the member cluster",
 			"work", klog.KObj(work), "GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
 			"expectedAppliedWorkOwnerRef", *expectedAppliedWorkOwnerRef)
@@ -273,20 +273,16 @@ func (r *Reconciler) reportDiffOnlyIfApplicable(
 	expectedAppliedWorkOwnerRef *metav1.OwnerReference,
 ) (shouldSkipProcessing bool) {
 	if work.Spec.ApplyStrategy.Type != fleetv1beta1.ApplyStrategyTypeReportDiff {
-		// ReportDiff mode is not enabled; proceed with the processing.
-		bundle.reportDiffResTyp = ManifestProcessingReportDiffResultTypeNotEnabled
 		klog.V(2).InfoS("ReportDiff mode is not enabled; skip the step")
 		return false
 	}
-
-	bundle.applyResTyp = ManifestProcessingApplyResultTypeNoApplyPerformed
 
 	if bundle.inMemberClusterObj == nil {
 		// The object has not created in the member cluster yet.
 		//
 		// In this case, the diff found would be the full object; for simplicity reasons,
 		// Fleet will use a placeholder here rather than including the full JSON representation.
-		bundle.reportDiffResTyp = ManifestProcessingReportDiffResultTypeFoundDiff
+		bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeFoundDiff
 		bundle.diffs = []fleetv1beta1.PatchDetail{
 			{
 				// The root path.
@@ -311,8 +307,8 @@ func (r *Reconciler) reportDiffOnlyIfApplicable(
 	switch {
 	case err != nil:
 		// Failed to calculate the configuration diffs.
-		bundle.reportDiffErr = fmt.Errorf("failed to calculate configuration diffs between the manifest object and the object from the member cluster: %w", err)
-		bundle.reportDiffResTyp = ManifestProcessingReportDiffResultTypeFailed
+		bundle.applyOrReportDiffErr = fmt.Errorf("failed to calculate configuration diffs between the manifest object and the object from the member cluster: %w", err)
+		bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeFailedToReportDiff
 		klog.ErrorS(err,
 			"Failed to calculate configuration diffs between the manifest object and the object from the member cluster",
 			"work", klog.KObj(work), "GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
@@ -320,14 +316,14 @@ func (r *Reconciler) reportDiffOnlyIfApplicable(
 	case len(configDiffs) > 0:
 		// Configuration diffs are found.
 		bundle.diffs = configDiffs
-		bundle.reportDiffResTyp = ManifestProcessingReportDiffResultTypeFoundDiff
+		bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeFoundDiff
 		klog.V(2).InfoS("Diff report completed; configuration diffs are found",
 			"diffCount", len(configDiffs),
 			"GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
 			"work", klog.KObj(work))
 	default:
 		// No configuration diffs are found.
-		bundle.reportDiffResTyp = ManifestProcessingReportDiffResultTypeNoDiffFound
+		bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeNoDiffFound
 		klog.V(2).InfoS("Diff report completed; no configuration diffs are found",
 			"GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
 			"work", klog.KObj(work))
@@ -380,8 +376,8 @@ func (r *Reconciler) performPreApplyDriftDetectionIfApplicable(
 		// For completion purposes, Fleet will still attempt to catch this and
 		// report this as an unexpected error.
 		_ = controller.NewUnexpectedBehaviorError(fmt.Errorf("failed to determine if pre-apply drift detection is needed: %w", err))
-		bundle.applyErr = fmt.Errorf("failed to determine if pre-apply drift detection is needed: %w", err)
-		bundle.applyResTyp = ManifestProcessingApplyResultTypeFailedToRunDriftDetection
+		bundle.applyOrReportDiffErr = fmt.Errorf("failed to determine if pre-apply drift detection is needed: %w", err)
+		bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeFailedToRunDriftDetection
 		return true
 	case !isPreApplyDriftDetectionNeeded:
 		// Drift detection is not needed; proceed with the processing.
@@ -396,8 +392,8 @@ func (r *Reconciler) performPreApplyDriftDetectionIfApplicable(
 		switch {
 		case err != nil:
 			// An unexpected error has occurred.
-			bundle.applyErr = fmt.Errorf("failed to calculate pre-apply drifts between the manifest and the object from the member cluster: %w", err)
-			bundle.applyResTyp = ManifestProcessingApplyResultTypeFailedToRunDriftDetection
+			bundle.applyOrReportDiffErr = fmt.Errorf("failed to calculate pre-apply drifts between the manifest and the object from the member cluster: %w", err)
+			bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeFailedToRunDriftDetection
 			klog.ErrorS(err,
 				"Failed to calculate pre-apply drifts between the manifest and the object from the member cluster",
 				"work", klog.KObj(work), "GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
@@ -406,8 +402,8 @@ func (r *Reconciler) performPreApplyDriftDetectionIfApplicable(
 		case len(drifts) > 0:
 			// Drifts are found in the pre-apply drift detection process.
 			bundle.drifts = drifts
-			bundle.applyErr = fmt.Errorf("cannot apply manifest: drifts are found between the manifest and the object from the member cluster")
-			bundle.applyResTyp = ManifestProcessingApplyResultTypeFoundDrifts
+			bundle.applyOrReportDiffErr = fmt.Errorf("cannot apply manifest: drifts are found between the manifest and the object from the member cluster")
+			bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeFoundDrifts
 			klog.V(2).InfoS("Cannot apply manifest: drifts are found between the manifest and the object from the member cluster",
 				"work", klog.KObj(work), "GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),
 				"inMemberClusterObj", klog.KObj(bundle.inMemberClusterObj), "expectedAppliedWorkOwnerRef", *expectedAppliedWorkOwnerRef)
@@ -467,10 +463,10 @@ func (r *Reconciler) performPostApplyDriftDetectionIfApplicable(
 	switch {
 	case err != nil:
 		// An unexpected error has occurred.
-		bundle.applyErr = fmt.Errorf("failed to calculate post-apply drifts between the manifest object and the object from the member cluster: %w", err)
+		bundle.applyOrReportDiffErr = fmt.Errorf("failed to calculate post-apply drifts between the manifest object and the object from the member cluster: %w", err)
 		// This case counts as a partial error; the apply op has been completed, but Fleet
 		// cannot determine if there are any drifts.
-		bundle.applyResTyp = ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetection
+		bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeAppliedWithFailedDriftDetection
 		klog.ErrorS(err,
 			"Failed to calculate post-apply drifts between the manifest object and the object from the member cluster",
 			"work", klog.KObj(work), "GVR", *bundle.gvr, "manifestObj", klog.KObj(bundle.manifestObj),

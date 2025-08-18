@@ -448,14 +448,14 @@ func TestPrepareManifestCondForWA(t *testing.T) {
 				{
 					Identifier: *nsWRI(0, nsName),
 					Conditions: []metav1.Condition{
-						manifestAppliedCond(workGeneration, metav1.ConditionTrue, string(ManifestProcessingApplyResultTypeApplied), ManifestProcessingApplyResultTypeAppliedDescription),
+						manifestAppliedCond(workGeneration, metav1.ConditionTrue, string(ApplyOrReportDiffResTypeApplied), ApplyOrReportDiffResTypeAppliedDescription),
 					},
 				},
 			},
 			wantManifestCondForWA: &fleetv1beta1.ManifestCondition{
 				Identifier: *nsWRI(0, nsName),
 				Conditions: []metav1.Condition{
-					manifestAppliedCond(workGeneration, metav1.ConditionTrue, string(ManifestProcessingApplyResultTypeApplied), ManifestProcessingApplyResultTypeAppliedDescription),
+					manifestAppliedCond(workGeneration, metav1.ConditionTrue, string(ApplyOrReportDiffResTypeApplied), ApplyOrReportDiffResTypeAppliedDescription),
 				},
 			},
 		},
@@ -515,7 +515,7 @@ func TestFindLeftOverManifests(t *testing.T) {
 				{
 					Identifier: *nsWRI(1, nsName1),
 					Conditions: []metav1.Condition{
-						manifestAppliedCond(workGeneration0, metav1.ConditionTrue, string(ManifestProcessingApplyResultTypeApplied), ManifestProcessingApplyResultTypeAppliedDescription),
+						manifestAppliedCond(workGeneration0, metav1.ConditionTrue, string(ApplyOrReportDiffResTypeApplied), ApplyOrReportDiffResTypeAppliedDescription),
 					},
 				},
 			},
@@ -530,21 +530,21 @@ func TestFindLeftOverManifests(t *testing.T) {
 				{
 					Identifier: *nsWRI(1, nsName1),
 					Conditions: []metav1.Condition{
-						manifestAppliedCond(workGeneration0, metav1.ConditionTrue, string(ManifestProcessingApplyResultTypeApplied), ManifestProcessingApplyResultTypeAppliedDescription),
+						manifestAppliedCond(workGeneration0, metav1.ConditionTrue, string(ApplyOrReportDiffResTypeApplied), ApplyOrReportDiffResTypeAppliedDescription),
 					},
 				},
 				// Manifest condition that corresponds to a previously applied and now gone manifest.
 				{
 					Identifier: *nsWRI(2, nsName2),
 					Conditions: []metav1.Condition{
-						manifestAppliedCond(workGeneration0, metav1.ConditionTrue, string(ManifestProcessingApplyResultTypeApplied), ManifestProcessingApplyResultTypeAppliedDescription),
+						manifestAppliedCond(workGeneration0, metav1.ConditionTrue, string(ApplyOrReportDiffResTypeApplied), ApplyOrReportDiffResTypeAppliedDescription),
 					},
 				},
 				// Manifest condition that corresponds to a gone manifest that failed to be applied.
 				{
 					Identifier: *nsWRI(3, nsName3),
 					Conditions: []metav1.Condition{
-						manifestAppliedCond(workGeneration0, metav1.ConditionFalse, string(ManifestProcessingApplyResultTypeFailedToApply), ""),
+						manifestAppliedCond(workGeneration0, metav1.ConditionFalse, string(ApplyOrReportDiffResTypeFailedToApply), ""),
 					},
 				},
 				// Manifest condition that corresponds to a gone manifest that has been marked as to be applied (preparing to be processed).

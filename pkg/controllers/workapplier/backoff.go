@@ -60,7 +60,7 @@ const (
 )
 
 const (
-	processingResultStrTpl = "%s,%s,%s"
+	processingResultStrTpl = "%s,%s"
 )
 
 // RequeueMultiStageWithExponentialBackoffRateLimiter is a rate limiter that allows requeues of various
@@ -287,7 +287,7 @@ func computeProcessingResultHash(work *fleetv1beta1.Work, bundles []*manifestPro
 	// The order of manifests is stable in a bundle.
 	processingResults := make([]string, 0, len(bundles))
 	for _, bundle := range bundles {
-		processingResults = append(processingResults, fmt.Sprintf(processingResultStrTpl, bundle.applyResTyp, bundle.availabilityResTyp, bundle.reportDiffResTyp))
+		processingResults = append(processingResults, fmt.Sprintf(processingResultStrTpl, bundle.applyOrReportDiffResTyp, bundle.availabilityResTyp))
 	}
 
 	processingResHash, err := resource.HashOf(processingResults)

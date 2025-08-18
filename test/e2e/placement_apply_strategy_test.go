@@ -278,7 +278,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 									Condition: metav1.Condition{
 										Type:               placementv1beta1.WorkConditionTypeApplied,
 										Status:             metav1.ConditionFalse,
-										Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
+										Reason:             string(workapplier.ApplyOrReportDiffResTypeFailedToTakeOver),
 										ObservedGeneration: 0,
 									},
 								},
@@ -516,7 +516,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 									Condition: metav1.Condition{
 										Type:   string(placementv1beta1.PerClusterAppliedConditionType),
 										Status: metav1.ConditionFalse,
-										Reason: string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
+										Reason: string(workapplier.ApplyOrReportDiffResTypeFailedToTakeOver),
 									},
 								},
 								{
@@ -529,7 +529,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 									Condition: metav1.Condition{
 										Type:   string(placementv1beta1.PerClusterAppliedConditionType),
 										Status: metav1.ConditionFalse,
-										Reason: string(workapplier.ManifestProcessingApplyResultTypeFailedToTakeOver),
+										Reason: string(workapplier.ApplyOrReportDiffResTypeFailedToTakeOver),
 									},
 								},
 							},
@@ -983,7 +983,7 @@ var _ = Describe("switching apply strategies", func() {
 									Condition: metav1.Condition{
 										Type:   string(placementv1beta1.PerClusterAppliedConditionType),
 										Status: metav1.ConditionFalse,
-										Reason: string(workapplier.ManifestProcessingApplyResultTypeNotTakenOver),
+										Reason: string(workapplier.ApplyOrReportDiffResTypeNotTakenOver),
 									},
 								},
 							},
@@ -1050,7 +1050,7 @@ var _ = Describe("switching apply strategies", func() {
 									Condition: metav1.Condition{
 										Type:   string(placementv1beta1.PerClusterAppliedConditionType),
 										Status: metav1.ConditionFalse,
-										Reason: string(workapplier.ManifestProcessingApplyResultTypeNotTakenOver),
+										Reason: string(workapplier.ApplyOrReportDiffResTypeNotTakenOver),
 									},
 								},
 							},

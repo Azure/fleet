@@ -71,7 +71,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 							Conditions: []metav1.Condition{
 								{
 									Type:   placementv1beta1.WorkConditionTypeApplied,
-									Reason: string(ManifestProcessingApplyResultTypeApplied),
+									Reason: string(ApplyOrReportDiffResTypeApplied),
 									Status: metav1.ConditionTrue,
 								},
 								{
@@ -113,7 +113,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 								{
 									Type:   placementv1beta1.WorkConditionTypeApplied,
 									Status: metav1.ConditionFalse,
-									Reason: string(ManifestProcessingApplyResultTypeFailedToApply),
+									Reason: string(ApplyOrReportDiffResTypeFailedToApply),
 								},
 							},
 						},
@@ -155,7 +155,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 							Conditions: []metav1.Condition{
 								{
 									Type:   placementv1beta1.WorkConditionTypeApplied,
-									Reason: string(ManifestProcessingApplyResultTypeApplied),
+									Reason: string(ApplyOrReportDiffResTypeApplied),
 									Status: metav1.ConditionTrue,
 								},
 								{
@@ -201,7 +201,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 								{
 									Type:   placementv1beta1.WorkConditionTypeDiffReported,
 									Status: metav1.ConditionTrue,
-									Reason: string(ManifestProcessingReportDiffResultTypeNoDiffFound),
+									Reason: string(ApplyOrReportDiffResTypeNoDiffFound),
 								},
 							},
 						},
@@ -243,7 +243,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 								{
 									Type:   placementv1beta1.WorkConditionTypeDiffReported,
 									Status: metav1.ConditionFalse,
-									Reason: string(ManifestProcessingReportDiffResultTypeFailed),
+									Reason: string(ApplyOrReportDiffResTypeFailedToReportDiff),
 								},
 							},
 						},
@@ -263,12 +263,12 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 				fleet_manifest_processing_requests_total{apply_status="Applied",availability_status="Available",diff_detection_status="NotFound",diff_reporting_status="Skipped",drift_detection_status="NotFound"} 1
             	fleet_manifest_processing_requests_total{apply_status="Applied",availability_status="ManifestNotAvailableYet",diff_detection_status="NotFound",diff_reporting_status="Skipped",drift_detection_status="NotFound"} 1
             	fleet_manifest_processing_requests_total{apply_status="ManifestApplyFailed",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="Skipped",drift_detection_status="NotFound"} 1
-            	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="Failed",drift_detection_status="NotFound"} 1
+            	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="FailedToReportDiff",drift_detection_status="NotFound"} 1
             	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="NoDiffFound",drift_detection_status="NotFound"} 1
 			`,
 		},
 		{
-			name: "applied failed, found drifts, multiple manifests",
+			name: "apply op failed, found drifts, multiple manifests",
 			work: &placementv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: workName,
@@ -287,7 +287,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 								{
 									Type:   placementv1beta1.WorkConditionTypeApplied,
 									Status: metav1.ConditionFalse,
-									Reason: string(ManifestProcessingApplyResultTypeFoundDrifts),
+									Reason: string(ApplyOrReportDiffResTypeFoundDrifts),
 								},
 							},
 							DriftDetails: &placementv1beta1.DriftDetails{},
@@ -297,7 +297,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 								{
 									Type:   placementv1beta1.WorkConditionTypeApplied,
 									Status: metav1.ConditionTrue,
-									Reason: string(ManifestProcessingApplyResultTypeApplied),
+									Reason: string(ApplyOrReportDiffResTypeApplied),
 								},
 								{
 									Type:   placementv1beta1.WorkConditionTypeAvailable,
@@ -323,7 +323,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
             	fleet_manifest_processing_requests_total{apply_status="Applied",availability_status="ManifestNotAvailableYet",diff_detection_status="NotFound",diff_reporting_status="Skipped",drift_detection_status="NotFound"} 1
             	fleet_manifest_processing_requests_total{apply_status="FoundDrifts",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="Skipped",drift_detection_status="Found"} 1
             	fleet_manifest_processing_requests_total{apply_status="ManifestApplyFailed",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="Skipped",drift_detection_status="NotFound"} 1
-            	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="Failed",drift_detection_status="NotFound"} 1
+            	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="FailedToReportDiff",drift_detection_status="NotFound"} 1
             	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="NoDiffFound",drift_detection_status="NotFound"} 1
 			`,
 		},
@@ -347,7 +347,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 								{
 									Type:   placementv1beta1.WorkConditionTypeDiffReported,
 									Status: metav1.ConditionTrue,
-									Reason: string(ManifestProcessingReportDiffResultTypeFoundDiff),
+									Reason: string(ApplyOrReportDiffResTypeFoundDiff),
 								},
 							},
 							DiffDetails: &placementv1beta1.DiffDetails{},
@@ -357,7 +357,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 								{
 									Type:   placementv1beta1.WorkConditionTypeDiffReported,
 									Status: metav1.ConditionTrue,
-									Reason: string(ManifestProcessingReportDiffResultTypeNoDiffFound),
+									Reason: string(ApplyOrReportDiffResTypeNoDiffFound),
 								},
 							},
 						},
@@ -379,7 +379,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
             	fleet_manifest_processing_requests_total{apply_status="FoundDrifts",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="Skipped",drift_detection_status="Found"} 1
             	fleet_manifest_processing_requests_total{apply_status="ManifestApplyFailed",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="Skipped",drift_detection_status="NotFound"} 1
             	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="Found",diff_reporting_status="FoundDiff",drift_detection_status="NotFound"} 1
-            	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="Failed",drift_detection_status="NotFound"} 1
+            	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="FailedToReportDiff",drift_detection_status="NotFound"} 1
             	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="NoDiffFound",drift_detection_status="NotFound"} 2
 			`,
 		},
@@ -441,7 +441,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
             	fleet_manifest_processing_requests_total{apply_status="FoundDrifts",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="Skipped",drift_detection_status="Found"} 1
             	fleet_manifest_processing_requests_total{apply_status="ManifestApplyFailed",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="Skipped",drift_detection_status="NotFound"} 1
             	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="Found",diff_reporting_status="FoundDiff",drift_detection_status="NotFound"} 1
-            	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="Failed",drift_detection_status="NotFound"} 1
+            	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="FailedToReportDiff",drift_detection_status="NotFound"} 1
             	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="NoDiffFound",drift_detection_status="NotFound"} 2
             	fleet_manifest_processing_requests_total{apply_status="Unknown",availability_status="Unknown",diff_detection_status="NotFound",diff_reporting_status="Unknown",drift_detection_status="NotFound"} 1
 			`,
@@ -477,7 +477,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 								{
 									Type:   placementv1beta1.WorkConditionTypeApplied,
 									Status: metav1.ConditionTrue,
-									Reason: string(ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetection),
+									Reason: string(ApplyOrReportDiffResTypeAppliedWithFailedDriftDetection),
 								},
 								{
 									Type:   placementv1beta1.WorkConditionTypeAvailable,
@@ -487,7 +487,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 								{
 									Type:   placementv1beta1.WorkConditionTypeDiffReported,
 									Status: metav1.ConditionTrue,
-									Reason: string(ManifestProcessingReportDiffResultTypeFoundDiff),
+									Reason: string(ApplyOrReportDiffResTypeFoundDiff),
 								},
 							},
 						},
@@ -510,7 +510,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
             	fleet_manifest_processing_requests_total{apply_status="FoundDrifts",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="Skipped",drift_detection_status="Found"} 1
             	fleet_manifest_processing_requests_total{apply_status="ManifestApplyFailed",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="Skipped",drift_detection_status="NotFound"} 1
             	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="Found",diff_reporting_status="FoundDiff",drift_detection_status="NotFound"} 1
-            	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="Failed",drift_detection_status="NotFound"} 1
+            	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="FailedToReportDiff",drift_detection_status="NotFound"} 1
             	fleet_manifest_processing_requests_total{apply_status="Skipped",availability_status="Skipped",diff_detection_status="NotFound",diff_reporting_status="NoDiffFound",drift_detection_status="NotFound"} 2
             	fleet_manifest_processing_requests_total{apply_status="Unknown",availability_status="Unknown",diff_detection_status="NotFound",diff_reporting_status="Unknown",drift_detection_status="NotFound"} 1
 			`,

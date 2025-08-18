@@ -390,6 +390,45 @@ func crpDiffReportedConditions(generation int64, hasOverride bool) []metav1.Cond
 	}
 }
 
+func crpDiffReportingFailedConditions(generation int64, hasOverride bool) []metav1.Condition {
+	overrideConditionReason := condition.OverrideNotSpecifiedReason
+	if hasOverride {
+		overrideConditionReason = condition.OverriddenSucceededReason
+	}
+	return []metav1.Condition{
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             scheduler.FullyScheduledReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.RolloutStartedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementOverriddenConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             overrideConditionReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.WorkSynchronizedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementDiffReportedConditionType),
+			Status:             metav1.ConditionFalse,
+			Reason:             condition.DiffReportedStatusFalseReason,
+			ObservedGeneration: generation,
+		},
+	}
+}
+
 func crpRolloutCompletedConditions(generation int64, hasOverride bool) []metav1.Condition {
 	overrideConditionReason := condition.OverrideNotSpecifiedReason
 	if hasOverride {
@@ -534,6 +573,41 @@ func resourcePlacementDiffReportedConditions(generation int64) []metav1.Conditio
 			Type:               string(placementv1beta1.ResourceBindingDiffReported),
 			Status:             metav1.ConditionTrue,
 			Reason:             condition.AllWorkDiffReportedReason,
+			ObservedGeneration: generation,
+		},
+	}
+}
+
+func resourcePlacementDiffReportingFailedConditions(generation int64) []metav1.Condition {
+	return []metav1.Condition{
+		{
+			Type:               string(placementv1beta1.PerClusterScheduledConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.ScheduleSucceededReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.PerClusterRolloutStartedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.RolloutStartedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.PerClusterOverriddenConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.OverrideNotSpecifiedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.PerClusterWorkSynchronizedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.AllWorkSyncedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourceBindingDiffReported),
+			Status:             metav1.ConditionFalse,
+			Reason:             condition.WorkNotDiffReportedReason,
 			ObservedGeneration: generation,
 		},
 	}
