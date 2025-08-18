@@ -43,9 +43,9 @@ import (
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller/metrics"
 	metricsutils "github.com/kubefleet-dev/kubefleet/test/utils/metrics"
 )
 

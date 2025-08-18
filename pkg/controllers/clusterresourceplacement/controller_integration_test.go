@@ -35,9 +35,9 @@ import (
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
-	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller/metrics"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/resource"
 	metricsUtils "github.com/kubefleet-dev/kubefleet/test/utils/metrics"
 )
@@ -475,6 +475,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantMetrics := []*prometheusclientmodel.Metric{
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
@@ -487,6 +488,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType))},
@@ -531,6 +533,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantMetrics := []*prometheusclientmodel.Metric{
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
@@ -543,6 +546,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
@@ -639,6 +643,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantMetrics := []*prometheusclientmodel.Metric{
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
@@ -651,6 +656,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType))},
@@ -754,6 +760,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("Ensure placement status metric was emitted")
 			wantMetrics = append(wantMetrics, &prometheusclientmodel.Metric{
 				Label: []*prometheusclientmodel.LabelPair{
+					{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 					{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 					{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 					{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType))},
@@ -847,6 +854,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantMetrics := []*prometheusclientmodel.Metric{
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
@@ -859,6 +867,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType))},
@@ -962,6 +971,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("Ensure placement status metric was emitted for 1st generation")
 			wantMetrics = append(wantMetrics, &prometheusclientmodel.Metric{
 				Label: []*prometheusclientmodel.LabelPair{
+					{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 					{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 					{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 					{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType))},
@@ -1024,6 +1034,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			// In this case we have 2 metrics for Scheduled condition type as crp generation goes from 1 to 2.
 			wantMetrics = append(wantMetrics, &prometheusclientmodel.Metric{
 				Label: []*prometheusclientmodel.LabelPair{
+					{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 					{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 					{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 					{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
@@ -1145,6 +1156,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			// In this case we have 2 metrics for different condition types as crp updates and its generation goes from 1 to 2.
 			wantMetrics = append(wantMetrics, &prometheusclientmodel.Metric{
 				Label: []*prometheusclientmodel.LabelPair{
+					{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 					{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 					{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 					{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType))},
@@ -1266,6 +1278,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantMetrics := []*prometheusclientmodel.Metric{
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
@@ -1278,6 +1291,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType))},
@@ -1290,6 +1304,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType))},
@@ -1333,6 +1348,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("Ensure placement status applied metric was emitted")
 			wantMetrics = append(wantMetrics, &prometheusclientmodel.Metric{
 				Label: []*prometheusclientmodel.LabelPair{
+					{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 					{Name: ptr.To("name"), Value: ptr.To(crp.Name)},
 					{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 					{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementAppliedConditionType))},
@@ -1375,6 +1391,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("Ensure placement status completed metric was emitted")
 			wantMetrics = append(wantMetrics, &prometheusclientmodel.Metric{
 				Label: []*prometheusclientmodel.LabelPair{
+					{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 					{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 					{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 					{Name: ptr.To("conditionType"), Value: ptr.To("Completed")},
@@ -1560,6 +1577,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantMetrics := []*prometheusclientmodel.Metric{
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
@@ -1572,6 +1590,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType))},
@@ -1584,6 +1603,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType))},
@@ -1627,6 +1647,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("Ensure placement status metric for reportDiff was emitted")
 			wantMetrics = append(wantMetrics, &prometheusclientmodel.Metric{
 				Label: []*prometheusclientmodel.LabelPair{
+					{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 					{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 					{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 					{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementDiffReportedConditionType))},
@@ -1743,6 +1764,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantMetrics := []*prometheusclientmodel.Metric{
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
@@ -1755,6 +1777,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType))},
@@ -1767,6 +1790,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType))},
@@ -1884,6 +1908,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantMetrics = append(wantMetrics,
 				&prometheusclientmodel.Metric{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To("Completed")},
@@ -1954,6 +1979,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantMetrics := []*prometheusclientmodel.Metric{
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
@@ -2036,6 +2062,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			wantMetrics := []*prometheusclientmodel.Metric{
 				{
 					Label: []*prometheusclientmodel.LabelPair{
+						{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 						{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 						{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 						{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementScheduledConditionType))},
@@ -2111,6 +2138,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			By("Ensure placement status metric for rollout external was emitted")
 			wantMetrics = append(wantMetrics, &prometheusclientmodel.Metric{
 				Label: []*prometheusclientmodel.LabelPair{
+					{Name: ptr.To("namespace"), Value: ptr.To(gotCRP.Namespace)},
 					{Name: ptr.To("name"), Value: ptr.To(gotCRP.Name)},
 					{Name: ptr.To("generation"), Value: ptr.To(strconv.FormatInt(gotCRP.Generation, 10))},
 					{Name: ptr.To("conditionType"), Value: ptr.To(string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType))},

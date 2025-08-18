@@ -19,6 +19,7 @@ package clusterresourceplacementeviction
 import (
 	"context"
 	"flag"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -33,9 +34,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
 )
 
 var (
@@ -46,6 +49,13 @@ var (
 	ctx       context.Context
 	cancel    context.CancelFunc
 )
+
+func TestMain(m *testing.M) {
+	// Register here as the metric is both tested in ginkgo tests and go unit tests.
+	ctrlmetrics.Registry.MustRegister(metrics.FleetEvictionStatus)
+
+	os.Exit(m.Run())
+}
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)

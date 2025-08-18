@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
@@ -42,6 +43,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/controllers/clusterresourcebindingwatcher"
 	"github.com/kubefleet-dev/kubefleet/pkg/controllers/clusterresourceplacementwatcher"
 	"github.com/kubefleet-dev/kubefleet/pkg/controllers/clusterschedulingpolicysnapshot"
+	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
@@ -149,6 +151,9 @@ var _ = BeforeSuite(func() {
 		PlacementController: crpController,
 	}).SetupWithManagerForClusterResourceBinding(mgr)
 	Expect(err).Should(Succeed(), "failed to create clusterResourceBinding watcher")
+
+	// Register metrics.
+	ctrlmetrics.Registry.MustRegister(metrics.FleetPlacementStatusLastTimeStampSeconds)
 
 	ctx, cancel = context.WithCancel(context.TODO())
 	// Run the controller manager

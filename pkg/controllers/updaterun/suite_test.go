@@ -35,11 +35,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
 	placementv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1alpha1"
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/informer"
 )
@@ -96,11 +98,11 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).Should(Succeed())
 
-	// make sure the k8s client is same as the controller client, or we can have cache delay
+	// Make sure the k8s client is same as the controller client, or we can have cache delay.
 	By("set k8s client same as the controller manager")
 	k8sClient = mgr.GetClient()
 
-	// setup informer manager for the reconciler
+	// Setup informer manager for the reconciler.
 	dynamicClient, err := dynamic.NewForConfig(cfg)
 	Expect(err).Should(Succeed())
 	dynamicInformerManager := informer.NewInformerManager(dynamicClient, 0, ctx.Done())
@@ -110,12 +112,15 @@ var _ = BeforeSuite(func() {
 		IsClusterScoped:      true,
 	}, nil)
 
-	// setup our main reconciler
+	// Setup our main reconciler.
 	err = (&Reconciler{
 		Client:          k8sClient,
 		InformerManager: dynamicInformerManager,
 	}).SetupWithManager(mgr)
 	Expect(err).Should(Succeed())
+
+	// Register metrics.
+	ctrlmetrics.Registry.MustRegister(metrics.FleetUpdateRunStatusLastTimestampSeconds)
 
 	go func() {
 		defer GinkgoRecover()

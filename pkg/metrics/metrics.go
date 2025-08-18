@@ -43,6 +43,26 @@ var (
 		Name: "placement_apply_succeed_counter",
 		Help: "Number of successfully applied cluster resource placement",
 	}, []string{"name"})
+
+	// FleetPlacementStatusLastTimeStampSeconds is a prometheus metric which keeps track of the last placement status.
+	FleetPlacementStatusLastTimeStampSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "fleet_workload_placement_status_last_timestamp_seconds",
+		Help: "Last update timestamp of placement status in seconds",
+	}, []string{"namespace", "name", "generation", "conditionType", "status", "reason"})
+
+	// FleetEvictionStatus is prometheus metrics which holds the
+	// status of eviction completion.
+	FleetEvictionStatus = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "fleet_workload_eviction_complete",
+		Help: "Last update timestamp of eviction complete status in seconds",
+	}, []string{"name", "isCompleted", "isValid"})
+
+	// FleetUpdateRunStatusLastTimestampSeconds is a prometheus metric which holds the
+	// last update timestamp of update run status in seconds.
+	FleetUpdateRunStatusLastTimestampSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "fleet_workload_update_run_status_last_timestamp_seconds",
+		Help: "Last update timestamp of update run status in seconds",
+	}, []string{"name", "generation", "condition", "status", "reason"})
 )
 
 var (
