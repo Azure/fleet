@@ -48,6 +48,9 @@ var _ = Context("creating clusterResourceOverride (selecting all clusters) to ov
 				Name: croName,
 			},
 			Spec: placementv1beta1.ClusterResourceOverrideSpec{
+				Placement: &placementv1beta1.PlacementRef{
+					Name: crpName, // assigned CRP name
+				},
 				ClusterResourceSelectors: workResourceSelector(),
 				Policy: &placementv1beta1.OverridePolicy{
 					OverrideRules: []placementv1beta1.OverrideRule{
@@ -101,7 +104,7 @@ var _ = Context("creating clusterResourceOverride (selecting all clusters) to ov
 		checkIfOverrideAnnotationsOnAllMemberClusters(true, want)
 	})
 
-	It("update cro attached to this CRP only and change annotation value", func() {
+	It("update cro and change annotation value", func() {
 		Eventually(func() error {
 			cro := &placementv1beta1.ClusterResourceOverride{}
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: croName}, cro); err != nil {
@@ -148,7 +151,7 @@ var _ = Context("creating clusterResourceOverride (selecting all clusters) to ov
 		checkIfOverrideAnnotationsOnAllMemberClusters(true, want)
 	})
 
-	It("update cro attached to this CRP only and no updates on the namespace", func() {
+	It("update cro and no updates on the namespace", func() {
 		Eventually(func() error {
 			cro := &placementv1beta1.ClusterResourceOverride{}
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: croName}, cro); err != nil {
@@ -275,25 +278,6 @@ var _ = Context("creating clusterResourceOverride with multiple jsonPatchOverrid
 	It("should have annotations on all member clusters", func() {
 		wantAnnotations := map[string]string{croTestAnnotationKey: croTestAnnotationValue, croTestAnnotationKey1: croTestAnnotationValue1}
 		checkIfOverrideAnnotationsOnAllMemberClusters(true, wantAnnotations)
-	})
-
-	It("update cro attached to an invalid CRP", func() {
-		Eventually(func() error {
-			cro := &placementv1beta1.ClusterResourceOverride{}
-			if err := hubClient.Get(ctx, types.NamespacedName{Name: croName}, cro); err != nil {
-				return err
-			}
-			cro.Spec.Placement = &placementv1beta1.PlacementRef{
-				Name: "invalid-crp", // assigned CRP name
-			}
-			return hubClient.Update(ctx, cro)
-		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cro as expected", crpName)
-	})
-
-	It("CRP status should not be changed", func() {
-		wantCRONames := []string{fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, croName, 0)}
-		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
-		Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "CRP %s status has been changed", crpName)
 	})
 })
 

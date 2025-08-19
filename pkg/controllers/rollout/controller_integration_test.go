@@ -359,14 +359,6 @@ var _ = Describe("Test the rollout Controller", func() {
 		// Verify bindings are NOT updated (rollout not triggered) by resourceOverrideSnapshot.
 		verifyBindingsNotUpdatedWithOverridesConsistently(controller.ConvertCRBArrayToBindingObjs(bindings), nil, nil)
 
-		By(fmt.Sprintf("Updating resourceOverrideSnapshot %s to refer the clusterResourcePlacement instead", resourceOverrideSnapshot1.Name))
-		resourceOverrideSnapshot1.Spec.OverrideSpec.Placement.Scope = placementv1beta1.ClusterScoped
-		Expect(k8sClient.Update(ctx, resourceOverrideSnapshot1)).Should(Succeed(), "Failed to update resource override snapshot")
-
-		// Verify bindings are NOT updated (rollout not triggered) by resourceOverrideSnapshot.
-		// This is because rollout controller is not triggered by overrideSnapshot update events.
-		verifyBindingsNotUpdatedWithOverridesConsistently(controller.ConvertCRBArrayToBindingObjs(bindings), nil, nil)
-
 		// Create a clusterResourceOverrideSnapshot and verify it triggers rollout.
 		testCROName := "cro" + utils.RandStr()
 		clusterResourceOverrideSnapshot := generateClusterResourceOverrideSnapshot(testCROName, testCRPName)
@@ -374,8 +366,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		Expect(k8sClient.Create(ctx, clusterResourceOverrideSnapshot)).Should(Succeed(), "Failed to create cluster resource override snapshot")
 
 		// Verify bindings are updated, note that both clusterResourceOverrideSnapshot and resourceOverrideSnapshot are set in the bindings.
-		waitUntilRolloutCompleted(controller.ConvertCRBArrayToBindingObjs(bindings), []string{clusterResourceOverrideSnapshot.Name},
-			[]placementv1beta1.NamespacedName{{Name: resourceOverrideSnapshot1.Name, Namespace: resourceOverrideSnapshot1.Namespace}})
+		waitUntilRolloutCompleted(controller.ConvertCRBArrayToBindingObjs(bindings), []string{clusterResourceOverrideSnapshot.Name}, nil)
 
 		// Create another resourceOverrideSnapshot referencing the same CRP and verify bindings are updated again.
 		testROName2 := "ro" + utils.RandStr()
@@ -386,7 +377,6 @@ var _ = Describe("Test the rollout Controller", func() {
 		// Verify bindings are updated, note that both clusterResourceOverrideSnapshot and resourceOverrideSnapshot are set in the bindings.
 		waitUntilRolloutCompleted(controller.ConvertCRBArrayToBindingObjs(bindings), []string{clusterResourceOverrideSnapshot.Name},
 			[]placementv1beta1.NamespacedName{
-				{Name: resourceOverrideSnapshot1.Name, Namespace: resourceOverrideSnapshot1.Namespace},
 				{Name: resourceOverrideSnapshot2.Name, Namespace: resourceOverrideSnapshot2.Namespace},
 			},
 		)

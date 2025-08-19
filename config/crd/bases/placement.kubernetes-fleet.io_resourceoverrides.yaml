@@ -52,7 +52,17 @@ spec:
                   The recommended way is to set the placement so that the override can be rolled out immediately.
                 properties:
                   name:
-                    description: Name is the reference to the name of placement.
+                    type: string
+                  scope:
+                    default: Cluster
+                    description: |-
+                      Scope defines the scope of the placement.
+                      A clusterResourceOverride can only reference a clusterResourcePlacement (cluster-scoped),
+                      and a resourceOverride can reference either a clusterResourcePlacement or resourcePlacement (namespaced).
+                      The referenced resourcePlacement must be in the same namespace as the resourceOverride.
+                    enum:
+                    - Cluster
+                    - Namespaced
                     type: string
                 required:
                 - name
@@ -311,6 +321,10 @@ spec:
             - policy
             - resourceSelectors
             type: object
+            x-kubernetes-validations:
+            - message: The placement field is immutable
+              rule: (has(oldSelf.placement) && has(self.placement) && oldSelf.placement
+                == self.placement) || (!has(oldSelf.placement) && !has(self.placement))
         required:
         - spec
         type: object
@@ -931,6 +945,10 @@ spec:
             - policy
             - resourceSelectors
             type: object
+            x-kubernetes-validations:
+            - message: The placement field is immutable
+              rule: (has(oldSelf.placement) && has(self.placement) && oldSelf.placement
+                == self.placement) || (!has(oldSelf.placement) && !has(self.placement))
         required:
         - spec
         type: object
