@@ -100,6 +100,7 @@ jobs:
           ARC_MEMBER_AGENT_HELMCHART_VERSION: ${{ inputs.arcExtensionVersion }}
           MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
           REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
           MCS_CONTROLLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.fleet_networking_version }}
           MEMBER_NET_CONTROLLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.fleet_networking_version }}
           REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.ARC_REGISTRY_REPO}}
