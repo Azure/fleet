@@ -151,7 +151,7 @@ var _ = Describe("handling errors and failures gracefully", func() {
 									},
 								},
 							},
-							Conditions: resourcePlacementApplyFailedConditions(crp.Generation),
+							Conditions: perClusterApplyFailedConditions(crp.Generation),
 						},
 					},
 					SelectedResources: []placementv1beta1.ResourceIdentifier{
@@ -170,7 +170,7 @@ var _ = Describe("handling errors and failures gracefully", func() {
 					},
 					ObservedResourceIndex: "0",
 				}
-				if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
+				if diff := cmp.Diff(crp.Status, wantStatus, placementStatusCmpOptions...); diff != "" {
 					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 				}
 				return nil
@@ -299,7 +299,7 @@ var _ = Describe("handling errors and failures gracefully", func() {
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
-							Conditions:            resourcePlacementDiffReportingFailedConditions(crp.Generation),
+							Conditions:            perClusterDiffReportingFailedConditions(crp.Generation),
 						},
 					},
 					SelectedResources: []placementv1beta1.ResourceIdentifier{
@@ -318,7 +318,7 @@ var _ = Describe("handling errors and failures gracefully", func() {
 					},
 					ObservedResourceIndex: "0",
 				}
-				if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
+				if diff := cmp.Diff(crp.Status, wantStatus, placementStatusCmpOptions...); diff != "" {
 					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 				}
 				return nil

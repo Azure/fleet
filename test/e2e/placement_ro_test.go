@@ -53,7 +53,7 @@ var _ = Context("creating resourceOverride (selecting all clusters) to override 
 				Placement: &placementv1beta1.PlacementRef{
 					Name: crpName, // assigned CRP name
 				},
-				ResourceSelectors: configMapSelector(),
+				ResourceSelectors: configMapOverrideSelector(),
 				Policy: &placementv1beta1.OverridePolicy{
 					OverrideRules: []placementv1beta1.OverrideRule{
 						{
@@ -119,7 +119,7 @@ var _ = Context("creating resourceOverride (selecting all clusters) to override 
 				Placement: &placementv1beta1.PlacementRef{
 					Name: crpName,
 				},
-				ResourceSelectors: configMapSelector(),
+				ResourceSelectors: configMapOverrideSelector(),
 				Policy: &placementv1beta1.OverridePolicy{
 					OverrideRules: []placementv1beta1.OverrideRule{
 						{
@@ -214,7 +214,7 @@ var _ = Context("creating resourceOverride with multiple jsonPatchOverrides to o
 				Namespace: roNamespace,
 			},
 			Spec: placementv1beta1.ResourceOverrideSpec{
-				ResourceSelectors: configMapSelector(),
+				ResourceSelectors: configMapOverrideSelector(),
 				Policy: &placementv1beta1.OverridePolicy{
 					OverrideRules: []placementv1beta1.OverrideRule{
 						{
@@ -317,7 +317,7 @@ var _ = Context("creating resourceOverride with different rules for each cluster
 				Placement: &placementv1beta1.PlacementRef{
 					Name: crpName, // assigned CRP name
 				},
-				ResourceSelectors: configMapSelector(),
+				ResourceSelectors: configMapOverrideSelector(),
 				Policy: &placementv1beta1.OverridePolicy{
 					OverrideRules: []placementv1beta1.OverrideRule{
 						{
@@ -452,7 +452,7 @@ var _ = Context("creating resourceOverride and clusterResourceOverride, resource
 				Namespace: roNamespace,
 			},
 			Spec: placementv1beta1.ResourceOverrideSpec{
-				ResourceSelectors: configMapSelector(),
+				ResourceSelectors: configMapOverrideSelector(),
 				Policy: &placementv1beta1.OverridePolicy{
 					OverrideRules: []placementv1beta1.OverrideRule{
 						{
@@ -543,7 +543,7 @@ var _ = Context("creating resourceOverride with incorrect path", Ordered, func()
 				Placement: &placementv1beta1.PlacementRef{
 					Name: crpName, // assigned CRP name
 				},
-				ResourceSelectors: configMapSelector(),
+				ResourceSelectors: configMapOverrideSelector(),
 				Policy: &placementv1beta1.OverridePolicy{
 					OverrideRules: []placementv1beta1.OverrideRule{
 						{
@@ -614,7 +614,7 @@ var _ = Context("creating resourceOverride and resource becomes invalid after ov
 				Placement: &placementv1beta1.PlacementRef{
 					Name: crpName, // assigned CRP name
 				},
-				ResourceSelectors: configMapSelector(),
+				ResourceSelectors: configMapOverrideSelector(),
 				Policy: &placementv1beta1.OverridePolicy{
 					OverrideRules: []placementv1beta1.OverrideRule{
 						{
@@ -674,7 +674,7 @@ var _ = Context("creating resourceOverride with a templated rules with cluster n
 				Namespace: roNamespace,
 			},
 			Spec: placementv1beta1.ResourceOverrideSpec{
-				ResourceSelectors: configMapSelector(),
+				ResourceSelectors: configMapOverrideSelector(),
 				Policy: &placementv1beta1.OverridePolicy{
 					OverrideRules: []placementv1beta1.OverrideRule{
 						{
@@ -773,7 +773,7 @@ var _ = Context("creating resourceOverride with delete configMap", Ordered, func
 				Namespace: roNamespace,
 			},
 			Spec: placementv1beta1.ResourceOverrideSpec{
-				ResourceSelectors: configMapSelector(),
+				ResourceSelectors: configMapOverrideSelector(),
 				Policy: &placementv1beta1.OverridePolicy{
 					OverrideRules: []placementv1beta1.OverrideRule{
 						{
@@ -893,7 +893,7 @@ var _ = Context("creating resourceOverride with a templated rules with cluster l
 				Placement: &placementv1beta1.PlacementRef{
 					Name: crpName, // assigned CRP name
 				},
-				ResourceSelectors: configMapSelector(),
+				ResourceSelectors: configMapOverrideSelector(),
 				Policy: &placementv1beta1.OverridePolicy{
 					OverrideRules: []placementv1beta1.OverrideRule{
 						{
@@ -1005,7 +1005,7 @@ var _ = Context("creating resourceOverride with a templated rules with cluster l
 					ObservedGeneration: crp.Generation,
 				},
 			}
-			if diff := cmp.Diff(crp.Status.Conditions, wantCondition, crpStatusCmpOptions...); diff != "" {
+			if diff := cmp.Diff(crp.Status.Conditions, wantCondition, placementStatusCmpOptions...); diff != "" {
 				return fmt.Errorf("CRP condition diff (-got, +want): %s", diff)
 			}
 			return nil
@@ -1050,7 +1050,7 @@ var _ = Context("creating resourceOverride with non-exist label", Ordered, func(
 				Placement: &placementv1beta1.PlacementRef{
 					Name: crpName, // assigned CRP name
 				},
-				ResourceSelectors: configMapSelector(),
+				ResourceSelectors: configMapOverrideSelector(),
 				Policy: &placementv1beta1.OverridePolicy{
 					OverrideRules: []placementv1beta1.OverrideRule{
 						{
