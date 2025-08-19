@@ -8,10 +8,6 @@ on:
       releaseTag:
         description: 'Release tag to publish images, defaults to the latest one'
         type: string
-      arcExtensionVersion:
-        description: 'Release version of the Arc extension.'
-        type: string
-        required: true
 
 permissions:
   id-token: write
@@ -28,6 +24,7 @@ jobs:
     outputs:
       release_tag: ${{ steps.vars.outputs.release_tag }}
       fleet_networking_version: ${{ steps.vars.outputs.fleet_networking_version }}
+      arc_helmchart_version: ${{ steps.vars.outputs.arc_helmchart_version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,6 +39,11 @@ jobs:
             echo "The user input release tag is empty, will use the latest tag $RELEASE_TAG."
           fi
           echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+
+          # Strip 'v' prefix from RELEASE_TAG for helm chart version
+          ARC_HELMCHART_VERSION="${RELEASE_TAG#v}"
+          echo "arc_helmchart_version=$ARC_HELMCHART_VERSION" >> $GITHUB_OUTPUT
+          echo "Using Arc Helm Chart version: $ARC_HELMCHART_VERSION"
 
           # Fetch the latest fleet-networking version
           # NOTE: The fleet-networking image must be cut and pushed to MCR first before retrieving this version
@@ -97,7 +99,7 @@ jobs:
         run: |
           make helm-package-arc-member-cluster-agents
         env:
-          ARC_MEMBER_AGENT_HELMCHART_VERSION: ${{ inputs.arcExtensionVersion }}
+          ARC_MEMBER_AGENT_HELMCHART_VERSION: ${{ needs.prepare-variables.outputs.arc_helmchart_version }}
           MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
           REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
           MCS_CONTROLLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.fleet_networking_version }}
