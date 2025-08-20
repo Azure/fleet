@@ -75,8 +75,10 @@ spec:
               value: /config/token
             - name: MEMBER_CLUSTER_NAME
               value: {{ .Values.config.memberClusterName | quote }}
+            {{- if .Values.config.hubCA }}
             - name: HUB_CERTIFICATE_AUTHORITY
               value: {{ .Values.config.hubCA | quote }}
+            {{- end }}
             {{- if .Values.Azure.proxySettings.isProxyEnabled }}
             - name: HTTPS_PROXY
               value: {{ .Values.Azure.proxySettings.httpProxy | quote }}
@@ -229,8 +231,10 @@ spec:
               value: /config/token
             - name: MEMBER_CLUSTER_NAME
               value: {{ .Values.config.memberClusterName | quote }}
+            {{- if .Values.config.hubCA }}
             - name: HUB_CERTIFICATE_AUTHORITY
               value: {{ .Values.config.hubCA | quote }}
+            {{- end }}
             {{- if .Values.Azure.proxySettings.isProxyEnabled }}
             - name: HTTPS_PROXY
               value: {{ .Values.Azure.proxySettings.httpProxy | quote }}
@@ -348,8 +352,10 @@ spec:
               value: /config/token
             - name: MEMBER_CLUSTER_NAME
               value: {{ .Values.config.memberClusterName | quote }}
+            {{- if .Values.config.hubCA }}
             - name: HUB_CERTIFICATE_AUTHORITY
               value: {{ .Values.config.hubCA | quote }}
+            {{- end }}
             {{- if .Values.Azure.proxySettings.isProxyEnabled }}
             - name: HTTPS_PROXY
               value: {{ .Values.Azure.proxySettings.httpProxy | quote }}
