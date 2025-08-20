@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package clusterschedulingpolicysnapshot features a controller that enqueues placement objects for the
+// Package schedulingpolicysnapshot features a controller that enqueues placement objects for the
 // scheduler to process where there is a change in their scheduling policy snapshots.
-package clusterschedulingpolicysnapshot
+package schedulingpolicysnapshot
 
 import (
 	"context"

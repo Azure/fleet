@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package clusterresourceplacement features a controller that enqueues placement objects for the
+// Package placement features a controller that enqueues placement objects for the
 // scheduler to process where the placement object is marked for deletion.
-package clusterresourceplacement
+package placement
 
 import (
 	"context"

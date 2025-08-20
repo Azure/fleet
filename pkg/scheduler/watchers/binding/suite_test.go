@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package clusterresourceplacement
+package binding
 
 import (
 	"context"
@@ -49,7 +49,7 @@ var (
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "Scheduler Source Cluster Resource Placement Controller Suite")
+	RunSpecs(t, "Scheduler Source Binding Controller Suite")
 }
 
 var _ = BeforeSuite(func() {
@@ -71,7 +71,7 @@ var _ = BeforeSuite(func() {
 	// Add custom APIs to the runtime scheme.
 	Expect(fleetv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 
-	// Set up a client for the hub cluster..
+	// Set up a client for the hub cluster.
 	hubClient, err = client.New(hubCfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).ToNot(HaveOccurred(), "Failed to create hub cluster client")
 	Expect(hubClient).ToNot(BeNil(), "Hub cluster client is nil")
@@ -84,7 +84,7 @@ var _ = BeforeSuite(func() {
 	}
 	Expect(hubClient.Create(ctx, &ns)).Should(Succeed(), "failed to create namespace")
 
-	// Set up a controller manager and let it manage the member cluster controller.
+	// Set up a controller manager and let it manage the hub cluster controller.
 	ctrlMgr, err := ctrl.NewManager(hubCfg, ctrl.Options{
 		Scheme: scheme.Scheme,
 		Metrics: metricsserver.Options{
@@ -95,19 +95,20 @@ var _ = BeforeSuite(func() {
 
 	schedulerWorkQueue := queue.NewSimplePlacementSchedulingQueue()
 
-	crpReconciler := &Reconciler{
+	// Create ClusterResourceBinding watcher crbReconciler.
+	crbReconciler := &Reconciler{
 		Client:             hubClient,
 		SchedulerWorkQueue: schedulerWorkQueue,
 	}
-	err = crpReconciler.SetupWithManagerForClusterResourcePlacement(ctrlMgr)
-	Expect(err).ToNot(HaveOccurred(), "Failed to set up crp controller with controller manager")
+	err = crbReconciler.SetupWithManagerForClusterResourceBinding(ctrlMgr)
+	Expect(err).ToNot(HaveOccurred(), "Failed to set up crb controller with controller manager")
 
-	rpReconciler := &Reconciler{
+	rbReconciler := &Reconciler{
 		Client:             hubClient,
 		SchedulerWorkQueue: schedulerWorkQueue,
 	}
-	err = rpReconciler.SetupWithManagerForResourcePlacement(ctrlMgr)
-	Expect(err).ToNot(HaveOccurred(), "Failed to set up rp controller with controller manager")
+	err = rbReconciler.SetupWithManagerForResourceBinding(ctrlMgr)
+	Expect(err).ToNot(HaveOccurred(), "Failed to set up rb controller with controller manager")
 
 	// Start the key collector.
 	keyCollector = keycollector.NewSchedulerWorkqueueKeyCollector(schedulerWorkQueue)

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package clusterschedulingpolicysnapshot
+package placement
 
 import (
 	"context"
@@ -49,7 +49,7 @@ var (
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "Scheduler Source Cluster Scheduling Policy Snapshot Controller Suite")
+	RunSpecs(t, "Scheduler Source Placement Controller Suite")
 }
 
 var _ = BeforeSuite(func() {
@@ -95,15 +95,19 @@ var _ = BeforeSuite(func() {
 
 	schedulerWorkQueue := queue.NewSimplePlacementSchedulingQueue()
 
-	reconciler := &Reconciler{
+	crpReconciler := &Reconciler{
 		Client:             hubClient,
 		SchedulerWorkQueue: schedulerWorkQueue,
 	}
-	err = reconciler.SetupWithManagerForClusterSchedulingPolicySnapshot(ctrlMgr)
-	Expect(err).ToNot(HaveOccurred(), "Failed to set up controller with controller manager for ClusterSchedulingPolicySnapshot")
+	err = crpReconciler.SetupWithManagerForClusterResourcePlacement(ctrlMgr)
+	Expect(err).ToNot(HaveOccurred(), "Failed to set up crp controller with controller manager")
 
-	err = reconciler.SetupWithManagerForSchedulingPolicySnapshot(ctrlMgr)
-	Expect(err).ToNot(HaveOccurred(), "Failed to set up controller with controller manager for SchedulingPolicySnapshot")
+	rpReconciler := &Reconciler{
+		Client:             hubClient,
+		SchedulerWorkQueue: schedulerWorkQueue,
+	}
+	err = rpReconciler.SetupWithManagerForResourcePlacement(ctrlMgr)
+	Expect(err).ToNot(HaveOccurred(), "Failed to set up rp controller with controller manager")
 
 	// Start the key collector.
 	keyCollector = keycollector.NewSchedulerWorkqueueKeyCollector(schedulerWorkQueue)
