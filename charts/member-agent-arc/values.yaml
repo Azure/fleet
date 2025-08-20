@@ -16,7 +16,7 @@ refreshtoken:
 
 crdinstaller:
   enabled: true
-  repository: mcr.microsoft.com/aks/fleet/refresh-token/fleet/crd-installer
+  repository: mcr.microsoft.com/aks/fleet/crd-installer
   tag: "${CRD_INSTALLER_IMAGE_VERSION}"
   logVerbosity: 2
 
