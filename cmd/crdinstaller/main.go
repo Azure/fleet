@@ -21,9 +21,7 @@ import (
 	"go.goms.io/fleet/cmd/crdinstaller/utils"
 )
 
-var (
-	mode = flag.String("mode", "", "Mode to run in: 'hub' or 'member' (required)")
-)
+var mode = flag.String("mode", "", "Mode to run in: 'hub' or 'member' (required)")
 
 func main() {
 	klog.InitFlags(nil)
@@ -58,7 +56,6 @@ func main() {
 	client, err := client.New(config, client.Options{
 		Scheme: scheme,
 	})
-
 	if err != nil {
 		klog.Fatalf("Failed to create Kubernetes client: %v", err)
 	}
@@ -72,7 +69,7 @@ func main() {
 	klog.Infof("Successfully installed %s CRDs", *mode)
 
 	if err := utils.InstallManagedResourceVAP(ctx, client, *mode); err != nil {
-		klog.Fatalf("Failed to install managed resource ValidatingAdmissionPolicy: %v", err)
+		klog.Warningf("Failed to install managed resource ValidatingAdmissionPolicy: %v", err)
 	}
 
 	klog.Infof("Successfully installed %s managed resource ValidatingAdmissionPolicy", *mode)

@@ -80,7 +80,7 @@ func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.
 func install(ctx context.Context, client client.Client, obj client.Object, mut func() error) error {
 	result, err := controllerutil.CreateOrUpdate(ctx, client, obj, mut)
 	if err != nil {
-		klog.ErrorS(err, "Failed to create or update", "kind", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), "operation", result)
+		klog.ErrorS(err, "Failed to create or update", "kind", obj.GetObjectKind().GroupVersionKind().Kind, "name", obj.GetName(), "operation", result)
 		return err
 	}
 	return nil
@@ -181,6 +181,7 @@ func InstallManagedResourceVAP(ctx context.Context, c client.Client, mode string
 		return err
 	}
 	if !ok { // the cluster doesn't support VAP
+		klog.Infof("Cluster does not support ValidatingAdmissionPolicy, skipping installation")
 		return nil // not installing
 	}
 
