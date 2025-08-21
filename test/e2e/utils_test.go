@@ -825,6 +825,10 @@ func checkIfRemovedWorkResourcesFromMemberClusters(clusters []*framework.Cluster
 	}
 }
 
+func checkIfRemovedConfigMapFromAllMemberClusters() {
+	checkIfRemovedConfigMapFromMemberClusters(allMemberClusters)
+}
+
 func checkIfRemovedWorkResourcesFromAllMemberClustersConsistently() {
 	checkIfRemovedWorkResourcesFromMemberClustersConsistently(allMemberClusters)
 }
