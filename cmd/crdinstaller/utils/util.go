@@ -182,6 +182,7 @@ func InstallManagedResourceVAP(ctx context.Context, c client.Client, mode string
 		if err := install(ctx, c, ob, nil); err != nil {
 			if meta.IsNoMatchError(err) {
 				klog.Infof("Cluster does not support %s resource, skipping installation", ob.GetObjectKind().GroupVersionKind().Kind)
+				return nil
 			}
 			return err
 		}
