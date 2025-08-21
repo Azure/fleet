@@ -33,6 +33,7 @@ config:
 enableV1Alpha1APIs: false
 enableV1Beta1APIs: true
 enableTrafficManagerFeature: false
+enableNetworkingFeatures: false
 
 Azure:
   proxySettings:
