@@ -70,6 +70,7 @@ func main() {
 
 	if err := utils.InstallManagedResourceVAP(ctx, client, *mode); err != nil {
 		klog.Warningf("Failed to install managed resource ValidatingAdmissionPolicy: %v", err)
+		return
 	}
 
 	klog.Infof("Successfully installed %s managed resource ValidatingAdmissionPolicy", *mode)
