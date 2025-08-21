@@ -10,6 +10,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const resourceName = "aks-fleet-managed-by-arm"
+
 func GetValidatingAdmissionPolicy(isHub bool) *admv1.ValidatingAdmissionPolicy {
 	vap := &admv1.ValidatingAdmissionPolicy{
 		TypeMeta: metav1.TypeMeta{
@@ -17,7 +19,7 @@ func GetValidatingAdmissionPolicy(isHub bool) *admv1.ValidatingAdmissionPolicy {
 			Kind:       "ValidatingAdmissionPolicy",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "aks-fleet-managed-by-arm",
+			Name: resourceName,
 		},
 		Spec: admv1.ValidatingAdmissionPolicySpec{
 			MatchConstraints: &admv1.MatchResources{
@@ -92,7 +94,7 @@ func GetValidatingAdmissionPolicyBinding() *admv1.ValidatingAdmissionPolicyBindi
 			Kind:       "ValidatingAdmissionPolicyBinding",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "aks-fleet-managed-by-arm",
+			Name: resourceName,
 		},
 		Spec: admv1.ValidatingAdmissionPolicyBindingSpec{
 			PolicyName: "aks-fleet-managed-by-arm",

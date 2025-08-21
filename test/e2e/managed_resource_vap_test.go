@@ -25,13 +25,9 @@ import (
 	. "github.com/onsi/gomega"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 
 	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 )
@@ -63,62 +59,6 @@ func createUnmanagedNamespace(name string) *corev1.Namespace {
 	}
 }
 
-func createManagedResourceQuota(name, namespace string) *corev1.ResourceQuota {
-	return &corev1.ResourceQuota{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels: map[string]string{
-				managedByLabel: managedByLabelValue,
-			},
-		},
-		Spec: corev1.ResourceQuotaSpec{
-			Hard: corev1.ResourceList{
-				corev1.ResourcePods: resource.MustParse("10"),
-			},
-		},
-	}
-}
-
-func createManagedNetworkPolicy(name, namespace string) *networkingv1.NetworkPolicy {
-	return &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels: map[string]string{
-				managedByLabel: managedByLabelValue,
-			},
-		},
-		Spec: networkingv1.NetworkPolicySpec{
-			PodSelector: metav1.LabelSelector{},
-			PolicyTypes: []networkingv1.PolicyType{
-				networkingv1.PolicyTypeIngress,
-			},
-		},
-	}
-}
-
-func createManagedCRP(name string) *placementv1beta1.ClusterResourcePlacement {
-	return &placementv1beta1.ClusterResourcePlacement{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-			Labels: map[string]string{
-				managedByLabel: managedByLabelValue,
-			},
-		},
-		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
-				{
-					Group:   "",
-					Version: "v1",
-					Kind:    "Namespace",
-					Name:    "test-ns",
-				},
-			},
-		},
-	}
-}
-
 func expectDeniedByVAP(err error) {
 	var statusErr *k8sErrors.StatusError
 	Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Expected StatusError, got error %s of type %s", err, reflect.TypeOf(err)))
@@ -132,16 +72,12 @@ func expectDeniedByVAP(err error) {
 }
 
 var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("managedresource"), Ordered, func() {
-	BeforeEach(func() {
-		Eventually(func() error {
-			var vap admissionregistrationv1.ValidatingAdmissionPolicy
-			return hubClient.Get(ctx, types.NamespacedName{Name: vapName}, &vap)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "ValidatingAdmissionPolicy should be installed")
+	BeforeAll(func() {
+		var vap admissionregistrationv1.ValidatingAdmissionPolicy
+		Expect(hubClient.Get(ctx, types.NamespacedName{Name: vapName}, &vap)).Should(Succeed(), "ValidatingAdmissionPolicy should be installed")
 
-		Eventually(func() error {
-			var vapBinding admissionregistrationv1.ValidatingAdmissionPolicyBinding
-			return hubClient.Get(ctx, types.NamespacedName{Name: vapBindingName}, &vapBinding)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "ValidatingAdmissionPolicyBinding should be installed")
+		var vapBinding admissionregistrationv1.ValidatingAdmissionPolicyBinding
+		Expect(hubClient.Get(ctx, types.NamespacedName{Name: vapBindingName}, &vapBinding)).Should(Succeed(), "ValidatingAdmissionPolicyBinding should be installed")
 	})
 
 	Context("Namespace operations on managed-by label", func() {
@@ -157,6 +93,7 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 			By("creating managed namespace with system:masters user")
 			Expect(hubClient.Create(ctx, managedNS)).To(Succeed())
 
+			var updateErr error
 			Eventually(func() error {
 				var ns corev1.Namespace
 				if err := hubClient.Get(ctx, types.NamespacedName{Name: managedNS.Name}, &ns); err != nil {
@@ -168,10 +105,11 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 				if k8sErrors.IsConflict(err) {
 					return err
 				}
-				expectDeniedByVAP(err)
+				updateErr = err
 				return nil
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 
+			expectDeniedByVAP(updateErr)
 			Expect(hubClient.Delete(ctx, managedNS)).To(Succeed())
 		})
 
