@@ -14,8 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package clusterresourceplacementwatcher features a controller to watch the clusterResourcePlacement and resourcePlacement changes.
-package clusterresourceplacementwatcher
+// Package placementwatcher features a controller to watch the clusterResourcePlacement and resourcePlacement changes.
+package placementwatcher
 
 import (
 	"context"

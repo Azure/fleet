@@ -14,8 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package clusterresourcebindingwatcher features a controller to watch the clusterResourceBinding and resourceBinding changes.
-package clusterresourcebindingwatcher
+// Package bindingwatcher features a controller to watch the clusterResourceBinding and resourceBinding changes.
+package bindingwatcher
 
 import (
 	"context"

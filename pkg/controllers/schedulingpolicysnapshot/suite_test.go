@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package clusterschedulingpolicysnapshot
+package schedulingpolicysnapshot
 
 import (
 	"context"
@@ -54,7 +54,7 @@ var (
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "ClusterSchedulingPolicySnapshot Controller Suite")
+	RunSpecs(t, "SchedulingPolicySnapshot Controller Suite")
 }
 
 var _ = BeforeSuite(func() {

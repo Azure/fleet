@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package clusterresourceplacement
+package placement
 
 import (
 	"context"
@@ -40,9 +40,9 @@ import (
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/cmd/hubagent/options"
-	"github.com/kubefleet-dev/kubefleet/pkg/controllers/clusterresourcebindingwatcher"
-	"github.com/kubefleet-dev/kubefleet/pkg/controllers/clusterresourceplacementwatcher"
-	"github.com/kubefleet-dev/kubefleet/pkg/controllers/clusterschedulingpolicysnapshot"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/bindingwatcher"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/placementwatcher"
+	"github.com/kubefleet-dev/kubefleet/pkg/controllers/schedulingpolicysnapshot"
 	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
@@ -65,7 +65,7 @@ const (
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "ClusterResourcePlacement Controller Suite")
+	RunSpecs(t, "Placement Controller Suite")
 }
 
 var _ = BeforeSuite(func() {
@@ -135,18 +135,18 @@ var _ = BeforeSuite(func() {
 	crpController := controller.NewController(controllerName, controller.NamespaceKeyFunc, reconciler.Reconcile, rateLimiter)
 
 	// Set up the watchers
-	err = (&clusterschedulingpolicysnapshot.Reconciler{
+	err = (&schedulingpolicysnapshot.Reconciler{
 		Client:              mgr.GetClient(),
 		PlacementController: crpController,
 	}).SetupWithManagerForClusterSchedulingPolicySnapshot(mgr)
 	Expect(err).Should(Succeed(), "failed to create clusterSchedulingPolicySnapshot watcher")
 
-	err = (&clusterresourceplacementwatcher.Reconciler{
+	err = (&placementwatcher.Reconciler{
 		PlacementController: crpController,
 	}).SetupWithManagerForClusterResourcePlacement(mgr)
 	Expect(err).Should(Succeed(), "failed to create clusterResourcePlacement watcher")
 
-	err = (&clusterresourcebindingwatcher.Reconciler{
+	err = (&bindingwatcher.Reconciler{
 		Client:              mgr.GetClient(),
 		PlacementController: crpController,
 	}).SetupWithManagerForClusterResourceBinding(mgr)

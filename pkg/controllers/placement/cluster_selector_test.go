@@ -1,4 +1,4 @@
-package clusterresourceplacement
+package placement
 
 import (
 	"testing"

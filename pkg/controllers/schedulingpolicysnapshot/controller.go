@@ -14,8 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package clusterschedulingpolicysnapshot features a controller to reconcile the clusterSchedulingPolicySnapshot object.
-package clusterschedulingpolicysnapshot
+// Package schedulingpolicysnapshot features a controller to reconcile the clusterSchedulingPolicySnapshot or the schedulingPolicySnapshot objects.
+package schedulingpolicysnapshot
 
 import (
 	"context"

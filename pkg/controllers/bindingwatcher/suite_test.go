@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package clusterresourceplacementwatcher
+package bindingwatcher
 
 import (
 	"context"
@@ -32,9 +32,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	fleetv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	"github.com/kubefleet-dev/kubefleet/test/utils/controller"
@@ -53,13 +52,16 @@ var (
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "ClusterResourcePlacement Watcher Suite")
+	RunSpecs(t, "Binding Watcher Suite")
 }
 
 var _ = BeforeSuite(func() {
-	klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
-
 	ctx, cancel = context.WithCancel(context.TODO())
+
+	By("Setup klog")
+	fs := flag.NewFlagSet("klog", flag.ContinueOnError)
+	klog.InitFlags(fs)
+	Expect(fs.Parse([]string{"--v", "5", "-add_dir_header", "true"})).Should(Succeed())
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -75,7 +77,6 @@ var _ = BeforeSuite(func() {
 	err = fleetv1beta1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	//+kubebuilder:scaffold:scheme
 	By("construct the k8s client")
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).Should(Succeed())
@@ -95,7 +96,7 @@ var _ = BeforeSuite(func() {
 
 	mgr, err = ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme.Scheme,
-		Metrics: metricsserver.Options{
+		Metrics: server.Options{
 			BindAddress: "0",
 		},
 		Logger: textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(4))),
@@ -105,13 +106,15 @@ var _ = BeforeSuite(func() {
 	fakePlacementController = &controller.FakeController{}
 
 	err = (&Reconciler{
+		Client:              mgr.GetClient(),
 		PlacementController: fakePlacementController,
-	}).SetupWithManagerForClusterResourcePlacement(mgr)
+	}).SetupWithManagerForClusterResourceBinding(mgr)
 	Expect(err).Should(Succeed())
 
 	err = (&Reconciler{
+		Client:              mgr.GetClient(),
 		PlacementController: fakePlacementController,
-	}).SetupWithManagerForResourcePlacement(mgr)
+	}).SetupWithManagerForResourceBinding(mgr)
 	Expect(err).Should(Succeed())
 
 	go func() {

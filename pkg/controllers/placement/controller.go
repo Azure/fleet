@@ -14,8 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package clusterresourceplacement features a controller to reconcile the clusterResourcePlacement changes.
-package clusterresourceplacement
+// Package placement features a controller to reconcile the clusterResourcePlacement or resourcePlacement changes.
+package placement
 
 import (
 	"context"
