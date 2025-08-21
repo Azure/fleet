@@ -802,6 +802,16 @@ func checkIfPlacedNamespaceResourceOnAllMemberClusters() {
 	}
 }
 
+// checkIfRemovedConfigMapFromMemberCluster verifies that the ConfigMap has been removed from the specified member cluster.
+func checkIfRemovedConfigMapFromMemberClusters(clusters []*framework.Cluster) {
+	for idx := range clusters {
+		memberCluster := clusters[idx]
+
+		configMapRemovedActual := namespacedResourcesRemovedFromClusterActual(memberCluster)
+		Eventually(configMapRemovedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove config map from member cluster %s", memberCluster.ClusterName)
+	}
+}
+
 func checkIfRemovedWorkResourcesFromAllMemberClusters() {
 	checkIfRemovedWorkResourcesFromMemberClusters(allMemberClusters)
 }

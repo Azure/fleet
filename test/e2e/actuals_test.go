@@ -193,6 +193,14 @@ func placementRolloutCompletedConditions(placementKey types.NamespacedName, gene
 	}
 }
 
+func placementScheduledConditions(placementKey types.NamespacedName, generation int64) []metav1.Condition {
+	if placementKey.Namespace == "" {
+		return crpScheduledConditions(generation)
+	} else {
+		return rpScheduledConditions(generation)
+	}
+}
+
 func placementSchedulePartiallyFailedConditions(placementKey types.NamespacedName, generation int64) []metav1.Condition {
 	if placementKey.Namespace == "" {
 		return crpSchedulePartiallyFailedConditions(generation)
@@ -302,6 +310,28 @@ func rpScheduleFailedConditions(generation int64) []metav1.Condition {
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: generation,
 			Reason:             scheduler.NotFullyScheduledReason,
+		},
+	}
+}
+
+func rpScheduledConditions(generation int64) []metav1.Condition {
+	return []metav1.Condition{
+		{
+			Type:               string(placementv1beta1.ResourcePlacementScheduledConditionType),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: generation,
+			Reason:             scheduler.FullyScheduledReason,
+		},
+	}
+}
+
+func crpScheduledConditions(generation int64) []metav1.Condition {
+	return []metav1.Condition{
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: generation,
+			Reason:             scheduler.FullyScheduledReason,
 		},
 	}
 }
@@ -1214,15 +1244,8 @@ func customizedPlacementStatusUpdatedActual(
 		if len(wantSelectedClusters) > 0 {
 			wantPlacementConditions = placementRolloutCompletedConditions(placementKey, placement.GetGeneration(), false)
 		} else {
-			wantPlacementConditions = []metav1.Condition{
-				// we don't set the remaining resource conditions.
-				{
-					Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-					Status:             metav1.ConditionTrue,
-					Reason:             scheduler.FullyScheduledReason,
-					ObservedGeneration: placement.GetGeneration(),
-				},
-			}
+			// We don't set the remaining resource conditions.
+			wantPlacementConditions = placementScheduledConditions(placementKey, placement.GetGeneration())
 		}
 
 		if len(wantUnselectedClusters) > 0 {
