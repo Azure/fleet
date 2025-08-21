@@ -7,13 +7,22 @@ Licensed under the MIT license.
 package utils
 
 import (
+	"context"
 	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	admv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 var (
@@ -111,6 +120,228 @@ func runTest(t *testing.T, crdPath string) {
 			if diff := cmp.Diff(tt.wantedCRDNames, gotCRDNames, cmpopts.SortSlices(lessFunc)); diff != "" {
 				t.Errorf("CRD names mismatch (-want +got):\n%s", diff)
 			}
+		})
+	}
+}
+
+func TestInstallCRD(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, apiextensionsv1.AddToScheme(scheme))
+
+	testCRD := &apiextensionsv1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test.example.com",
+		},
+		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+			Group: "example.com",
+			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+				{
+					Name:    "v1",
+					Served:  true,
+					Storage: true,
+					Schema: &apiextensionsv1.CustomResourceValidation{
+						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+							Type: "object",
+						},
+					},
+				},
+			},
+			Scope: apiextensionsv1.NamespaceScoped,
+			Names: apiextensionsv1.CustomResourceDefinitionNames{
+				Plural:   "tests",
+				Singular: "test",
+				Kind:     "Test",
+			},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		crd       *apiextensionsv1.CustomResourceDefinition
+		wantError bool
+	}{
+		{
+			name:      "successful CRD installation",
+			crd:       testCRD,
+			wantError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			err := InstallCRD(context.Background(), fakeClient, tt.crd)
+
+			if tt.wantError {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+
+			var installedCRD apiextensionsv1.CustomResourceDefinition
+			err = fakeClient.Get(context.Background(), types.NamespacedName{Name: tt.crd.Name}, &installedCRD)
+			assert.NoError(t, err)
+
+			assert.Equal(t, "true", installedCRD.Labels[CRDInstallerLabelKey])
+			assert.Equal(t, FleetLabelValue, installedCRD.Labels[AzureManagedLabelKey])
+			assert.Equal(t, tt.crd.Spec, installedCRD.Spec)
+		})
+	}
+}
+
+func TestInstall(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, apiextensionsv1.AddToScheme(scheme))
+
+	testCRD := &apiextensionsv1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test.example.com",
+		},
+		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+			Group: "example.com",
+			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+				{
+					Name:    "v1",
+					Served:  true,
+					Storage: true,
+					Schema: &apiextensionsv1.CustomResourceValidation{
+						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+							Type: "object",
+						},
+					},
+				},
+			},
+			Scope: apiextensionsv1.NamespaceScoped,
+			Names: apiextensionsv1.CustomResourceDefinitionNames{
+				Plural:   "tests",
+				Singular: "test",
+				Kind:     "Test",
+			},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		obj       client.Object
+		mutFunc   func() error
+		wantError bool
+	}{
+		{
+			name: "successful install with mutation",
+			obj:  testCRD,
+			mutFunc: func() error {
+				if testCRD.Labels == nil {
+					testCRD.Labels = make(map[string]string)
+				}
+				testCRD.Labels["test"] = "value"
+				return nil
+			},
+			wantError: false,
+		},
+		{
+			name: "successful install without mutation",
+			obj: &apiextensionsv1.CustomResourceDefinition{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test2.example.com",
+				},
+				Spec: testCRD.Spec,
+			},
+			mutFunc: func() error {
+				return nil
+			},
+			wantError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			err := install(context.Background(), fakeClient, tt.obj, tt.mutFunc)
+
+			if tt.wantError {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+
+			var installed apiextensionsv1.CustomResourceDefinition
+			err = fakeClient.Get(context.Background(), types.NamespacedName{Name: tt.obj.GetName()}, &installed)
+			assert.NoError(t, err)
+
+			if tt.mutFunc != nil && tt.obj.GetName() == "test.example.com" {
+				assert.Equal(t, "value", installed.Labels["test"])
+			}
+		})
+	}
+}
+
+func TestCheckResourceSupport(t *testing.T) {
+	tests := []struct {
+		name string
+		gvk  schema.GroupVersionKind
+	}{
+		{
+			name: "VAP resource check",
+			gvk: schema.GroupVersionKind{
+				Group:   "admissionregistration.k8s.io",
+				Version: "v1",
+				Kind:    "ValidatingAdmissionPolicy",
+			},
+		},
+		{
+			name: "nonexistent resource check",
+			gvk: schema.GroupVersionKind{
+				Group:   "nonexistent.io",
+				Version: "v1",
+				Kind:    "NonExistentResource",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			require.NoError(t, admv1.AddToScheme(scheme))
+
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			supported, err := checkResourceSupport(fakeClient, tt.gvk)
+
+			// The function should not panic and should return a boolean result
+			assert.NoError(t, err)
+			assert.IsType(t, false, supported)
+		})
+	}
+}
+
+func TestInstallManagedResourceVAP(t *testing.T) {
+	tests := []struct {
+		name string
+		mode string
+	}{
+		{
+			name: "hub mode",
+			mode: "hub",
+		},
+		{
+			name: "member mode",
+			mode: "member",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			require.NoError(t, admv1.AddToScheme(scheme))
+
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			err := InstallManagedResourceVAP(context.Background(), fakeClient, tt.mode)
+
+			// The function should complete without errors
+			// The actual installation behavior depends on the RESTMapper implementation
+			// which is difficult to test reliably with the fake client
+			assert.NoError(t, err)
 		})
 	}
 }

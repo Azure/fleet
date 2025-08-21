@@ -70,6 +70,12 @@ func main() {
 	}
 
 	klog.Infof("Successfully installed %s CRDs", *mode)
+
+	if err := utils.InstallManagedResourceVAP(ctx, client, *mode); err != nil {
+		klog.Fatalf("Failed to install managed resource ValidatingAdmissionPolicy: %v", err)
+	}
+
+	klog.Infof("Successfully installed %s managed resource ValidatingAdmissionPolicy", *mode)
 }
 
 // installCRDs installs the CRDs from the specified directory based on the mode.
