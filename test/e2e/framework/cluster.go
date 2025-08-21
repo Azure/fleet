@@ -32,9 +32,7 @@ import (
 	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 )
 
-var (
-	kubeconfigPath = os.Getenv("KUBECONFIG")
-)
+var kubeconfigPath = os.Getenv("KUBECONFIG")
 
 // Cluster object defines the required clients based on the kubeconfig of the test cluster.
 type Cluster struct {
@@ -94,6 +92,10 @@ func GetClientConfig(cluster *Cluster) clientcmd.ClientConfig {
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigPath},
 		&clientcmd.ConfigOverrides{
 			CurrentContext: cluster.ClusterName,
+			AuthInfo: api.AuthInfo{
+				Impersonate:       "system",
+				ImpersonateGroups: []string{"system:masters"},
+			},
 		})
 }
 

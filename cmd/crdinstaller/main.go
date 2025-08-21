@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 
+	admv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
@@ -52,6 +53,9 @@ func main() {
 	scheme := runtime.NewScheme()
 	if err := apiextensionsv1.AddToScheme(scheme); err != nil {
 		klog.Fatalf("Failed to add apiextensions scheme: %v", err)
+	}
+	if err := admv1.AddToScheme(scheme); err != nil {
+		klog.Fatalf("Failed to add admissionregistration scheme: %v", err)
 	}
 	client, err := client.New(config, client.Options{
 		Scheme: scheme,
