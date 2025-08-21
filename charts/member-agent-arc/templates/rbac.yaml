@@ -14,7 +14,7 @@ subjects:
 apiVersion: clusterconfig.azure.com/v1beta1
 kind: AzureExtensionIdentity
 metadata:
-  name: {{ .Values.Azure.Extension.Name }} 
+  name: {{ .Values.Azure.Extension.Name }}-override
   namespace: azure-arc # this must be azure-arc, do not change
 spec:
   serviceAccounts: # this would the service accounts that are mounted in the extension pods which require azure identity
