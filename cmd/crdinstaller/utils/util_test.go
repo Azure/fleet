@@ -19,17 +19,14 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-var (
-	lessFunc = func(s1, s2 string) bool {
-		return s1 < s2
-	}
-)
+var lessFunc = func(s1, s2 string) bool {
+	return s1 < s2
+}
 
 // Test using the actual config/crd/bases directory.
 func TestCollectCRDFileNamesWithActualPath(t *testing.T) {
@@ -273,44 +270,6 @@ func TestInstall(t *testing.T) {
 			if tt.mutFunc != nil && tt.obj.GetName() == "test.example.com" {
 				assert.Equal(t, "value", installed.Labels["test"])
 			}
-		})
-	}
-}
-
-func TestCheckResourceSupport(t *testing.T) {
-	tests := []struct {
-		name string
-		gvk  schema.GroupVersionKind
-	}{
-		{
-			name: "VAP resource check",
-			gvk: schema.GroupVersionKind{
-				Group:   "admissionregistration.k8s.io",
-				Version: "v1",
-				Kind:    "ValidatingAdmissionPolicy",
-			},
-		},
-		{
-			name: "nonexistent resource check",
-			gvk: schema.GroupVersionKind{
-				Group:   "nonexistent.io",
-				Version: "v1",
-				Kind:    "NonExistentResource",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			scheme := runtime.NewScheme()
-			require.NoError(t, admv1.AddToScheme(scheme))
-
-			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-			supported, err := checkResourceSupport(fakeClient, tt.gvk)
-
-			// The function should not panic and should return a boolean result
-			assert.NoError(t, err)
-			assert.IsType(t, false, supported)
 		})
 	}
 }

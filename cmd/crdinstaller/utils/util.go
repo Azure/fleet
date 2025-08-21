@@ -18,7 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -78,6 +77,10 @@ func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.
 }
 
 func install(ctx context.Context, client client.Client, obj client.Object, mut func() error) error {
+	if mut == nil {
+		mut = func() error { return nil }
+	}
+
 	result, err := controllerutil.CreateOrUpdate(ctx, client, obj, mut)
 	if err != nil {
 		klog.ErrorS(err, "Failed to create or update", "kind", obj.GetObjectKind().GroupVersionKind().Kind, "name", obj.GetName(), "operation", result)
@@ -175,34 +178,14 @@ func GetCRDFromPath(crdPath string, scheme *runtime.Scheme) (*apiextensionsv1.Cu
 func InstallManagedResourceVAP(ctx context.Context, c client.Client, mode string) error {
 	vap := managedresource.GetValidatingAdmissionPolicy(mode == "hub")
 	vapBinding := managedresource.GetValidatingAdmissionPolicyBinding()
-
-	ok, err := checkResourceSupport(c, vap.GroupVersionKind())
-	if err != nil {
-		return err
-	}
-	if !ok { // the cluster doesn't support VAP
-		klog.Infof("Cluster does not support ValidatingAdmissionPolicy, skipping installation")
-		return nil // not installing
-	}
-
 	for _, ob := range []client.Object{vap, vapBinding} {
-		if err = install(ctx, c, ob, nil); err != nil {
+		if err := install(ctx, c, ob, nil); err != nil {
+			if meta.IsNoMatchError(err) {
+				klog.Infof("Cluster does not support %s resource, skipping installation", ob.GetObjectKind().GroupVersionKind().Kind)
+			}
 			return err
 		}
 	}
 	klog.Infof("Successfully installed managed resource ValidatingAdmissionPolicy")
 	return nil
-}
-
-func checkResourceSupport(client client.Client, gvk schema.GroupVersionKind) (bool, error) {
-	restMapper := client.RESTMapper()
-
-	_, err := restMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-	if err != nil {
-		if meta.IsNoMatchError(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
 }
