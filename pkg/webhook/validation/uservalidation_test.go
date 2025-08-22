@@ -328,6 +328,106 @@ func TestValidateFleetMemberClusterUpdate(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, "nonSystemMastersUser", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
+		"allow label modification by any user for kubernetes-fleet.io/* labels": {
+			denyModifyMemberClusterLabels: true,
+			oldMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"kubernetes-fleet.io/some-label": "old-value"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			newMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"kubernetes-fleet.io/some-label": "new-value"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "nonSystemMastersUser",
+						Groups:   []string{"someGroup"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, "nonSystemMastersUser", utils.GenerateGroupString([]string{"someGroup"}),
+				admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow label creation by any user for kubernetes-fleet.io/* labels": {
+			denyModifyMemberClusterLabels: true,
+			oldMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			newMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"kubernetes-fleet.io/some-label": "new-value"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "nonSystemMastersUser",
+						Groups:   []string{"someGroup"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, "nonSystemMastersUser", utils.GenerateGroupString([]string{"someGroup"}),
+				admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow label deletion by any user for kubernetes-fleet.io/* labels": {
+			denyModifyMemberClusterLabels: true,
+			oldMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"kubernetes-fleet.io/some-label": "old-value"},
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			newMC: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+					Annotations: map[string]string{
+						"fleet.azure.com/cluster-resource-id": "test-cluster-resource-id",
+					},
+				},
+			},
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "nonSystemMastersUser",
+						Groups:   []string{"someGroup"},
+					},
+					RequestKind: &utils.MCMetaGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, "nonSystemMastersUser", utils.GenerateGroupString([]string{"someGroup"}),
+				admissionv1.Update, &utils.MCMetaGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
 	}
 
 	for testName, testCase := range testCases {

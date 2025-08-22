@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	clusterv1beta1 "github.com/kubefleet-dev/kubefleet/apis/cluster/v1beta1"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	fleetv1alpha1 "github.com/kubefleet-dev/kubefleet/apis/v1alpha1"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 )
@@ -109,14 +110,11 @@ func ValidateFleetMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberClus
 		return admission.Denied(err.Error())
 	}
 
-	// Users are no longer allowed to modify labels of fleet member cluster through webhook.
-	// This will be disabled until member labels are accessible through CLI
-	if denyModifyMemberClusterLabels {
-		isLabelUpdated := isMapFieldUpdated(currentMC.GetLabels(), oldMC.GetLabels())
-		if isLabelUpdated && !isUserInGroup(userInfo, mastersGroup) {
-			klog.V(2).InfoS(DeniedModifyMemberClusterLabels, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
-			return admission.Denied(DeniedModifyMemberClusterLabels)
-		}
+	isLabelUpdated := isMapFieldUpdated(currentMC.GetLabels(), oldMC.GetLabels())
+	if isLabelUpdated && !isUserInGroup(userInfo, mastersGroup) && shouldDenyLabelModification(currentMC.GetLabels(), oldMC.GetLabels(), denyModifyMemberClusterLabels) {
+		// allow any user to modify kubernetes-fleet.io/* labels, but restricts other label modifications given denyModifyMemberClusterLabels is true.
+		klog.V(2).InfoS(DeniedModifyMemberClusterLabels, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
+		return admission.Denied(DeniedModifyMemberClusterLabels)
 	}
 
 	isAnnotationUpdated := isFleetAnnotationUpdated(currentMC.Annotations, oldMC.Annotations)
@@ -177,6 +175,29 @@ func isAKSSupportUser(userInfo authenticationv1.UserInfo) bool {
 // isUserInGroup returns true if user belongs to the specified groupName.
 func isUserInGroup(userInfo authenticationv1.UserInfo, groupName string) bool {
 	return slices.Contains(userInfo.Groups, groupName)
+}
+
+// shouldDenyLabelModification returns true if any labels (besides kubernetes-fleet.io/* labels) are being modified and denyModifyMemberClusterLabels is true.
+func shouldDenyLabelModification(currentLabels, oldLabels map[string]string, denyModifyMemberClusterLabels bool) bool {
+	if !denyModifyMemberClusterLabels {
+		return false
+	}
+	for k, v := range currentLabels {
+		oldV, exists := oldLabels[k]
+		if !exists || oldV != v {
+			if !strings.HasPrefix(k, placementv1beta1.FleetPrefix) {
+				return true
+			}
+		}
+	}
+	for k := range oldLabels {
+		if _, exists := currentLabels[k]; !exists {
+			if !strings.HasPrefix(k, placementv1beta1.FleetPrefix) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // isMemberClusterMapFieldUpdated return true if member cluster label is updated.

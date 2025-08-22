@@ -28,7 +28,7 @@ const (
 	// SchedulerBindingCleanupFinalizer is a finalizer added to bindings to ensure we can look up the
 	// corresponding CRP name for deleting bindings to trigger a new scheduling cycle.
 	// TODO: migrate the finalizer to the new name "scheduler-binding-cleanup" in the future.
-	SchedulerBindingCleanupFinalizer = fleetPrefix + "scheduler-crb-cleanup"
+	SchedulerBindingCleanupFinalizer = FleetPrefix + "scheduler-crb-cleanup"
 )
 
 // make sure the BindingObj and BindingObjList interfaces are implemented by the

@@ -26,13 +26,13 @@ import (
 
 const (
 	// PolicyIndexLabel is the label that indicate the policy snapshot index of a cluster policy.
-	PolicyIndexLabel = fleetPrefix + "policy-index"
+	PolicyIndexLabel = FleetPrefix + "policy-index"
 
 	// PolicySnapshotNameFmt is clusterPolicySnapshot name format: {CRPName}-{PolicySnapshotIndex}.
 	PolicySnapshotNameFmt = "%s-%d"
 
 	// NumberOfClustersAnnotation is the annotation that indicates how many clusters should be selected for selectN placement type.
-	NumberOfClustersAnnotation = fleetPrefix + "number-of-clusters"
+	NumberOfClustersAnnotation = FleetPrefix + "number-of-clusters"
 )
 
 // make sure the PolicySnapshotObj and PolicySnapshotList interfaces are implemented by the

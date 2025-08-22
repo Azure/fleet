@@ -29,11 +29,11 @@ import (
 const (
 	// PlacementCleanupFinalizer is a finalizer added by the placement controller to all placement objects, to make sure
 	// that the placement controller can react to placement object deletions if necessary.
-	PlacementCleanupFinalizer = fleetPrefix + "crp-cleanup"
+	PlacementCleanupFinalizer = FleetPrefix + "crp-cleanup"
 
 	// SchedulerCleanupFinalizer is a finalizer added by the scheduler to placement objects, to make sure
 	// that all bindings derived from a placement object can be cleaned up after the placement object is deleted.
-	SchedulerCleanupFinalizer = fleetPrefix + "scheduler-cleanup"
+	SchedulerCleanupFinalizer = FleetPrefix + "scheduler-cleanup"
 )
 
 // make sure the PlacementObj and PlacementObjList interfaces are implemented by the
@@ -1521,7 +1521,7 @@ func (m *ClusterResourcePlacement) SetPlacementStatus(status PlacementStatus) {
 const (
 	// ResourcePlacementCleanupFinalizer is a finalizer added by the RP controller to all RPs, to make sure
 	// that the RP controller can react to RP deletions if necessary.
-	ResourcePlacementCleanupFinalizer = fleetPrefix + "rp-cleanup"
+	ResourcePlacementCleanupFinalizer = FleetPrefix + "rp-cleanup"
 )
 
 // +genclient
