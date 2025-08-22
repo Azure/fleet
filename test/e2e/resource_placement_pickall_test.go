@@ -31,7 +31,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
 )
 
-var _ = Describe("placing namespaced scoped resources using a RP with PickAll policy", func() {
+var _ = Describe("placing namespaced scoped resources using a RP with PickAll policy", Label("resourceplacement"), func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
 

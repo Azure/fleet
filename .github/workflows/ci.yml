@@ -89,9 +89,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        customized-settings: [default, joinleave, custom]
+        customized-settings: [default, resourceplacement, joinleave, custom]
         include:
           - customized-settings: default
+            # to shorten the test duration, set the resource snapshot creation interval to 0
+            resource-snapshot-creation-minimum-interval: 0m
+            resource-changes-collection-duration: 0m
+          - customized-settings: resourceplacement
             # to shorten the test duration, set the resource snapshot creation interval to 0
             resource-snapshot-creation-minimum-interval: 0m
             resource-changes-collection-duration: 0m
@@ -136,7 +140,9 @@ jobs:
       - name: Run e2e tests
         run: |
           if [ "${{ matrix.customized-settings }}" = "default" ]; then
-            make e2e-tests LABEL_FILTER="!custom && !joinleave"
+            make e2e-tests LABEL_FILTER="!custom && !joinleave && !resourceplacement"
+          elif [ "${{ matrix.customized-settings }}" = "resourceplacement" ]; then
+            make e2e-tests LABEL_FILTER="!custom && resourceplacement"
           elif [ "${{ matrix.customized-settings }}" = "joinleave" ]; then
             make e2e-tests LABEL_FILTER="!custom && joinleave"
           else
