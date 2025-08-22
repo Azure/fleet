@@ -158,7 +158,7 @@ func (r *Reconciler) refreshWorkStatus(
 		if isAppliedObjectAvailable(bundle.availabilityResTyp) {
 			availableAppliedObjectsCount++
 		}
-		if bundle.availabilityResTyp == ManifestProcessingAvailabilityResultTypeNotTrackable {
+		if bundle.availabilityResTyp == AvailabilityResultTypeNotTrackable {
 			untrackableAppliedObjectsCount++
 		}
 		if isManifestObjectDiffReported(bundle.applyOrReportDiffResTyp) {
@@ -233,7 +233,7 @@ func (r *Reconciler) refreshAppliedWorkStatus(
 // isManifestObjectAvailable returns if an availability result type indicates that a manifest
 // object in a bundle is available.
 func isAppliedObjectAvailable(availabilityResTyp ManifestProcessingAvailabilityResultType) bool {
-	return availabilityResTyp == ManifestProcessingAvailabilityResultTypeAvailable || availabilityResTyp == ManifestProcessingAvailabilityResultTypeNotTrackable
+	return availabilityResTyp == AvailabilityResultTypeAvailable || availabilityResTyp == AvailabilityResultTypeNotTrackable
 }
 
 // isManifestObjectDiffReported returns if a diff report result type indicates that a manifest
@@ -331,35 +331,35 @@ func setManifestAvailableCondition(
 ) {
 	var availableCond *metav1.Condition
 	switch availabilityResTyp {
-	case ManifestProcessingAvailabilityResultTypeSkipped:
+	case AvailabilityResultTypeSkipped:
 		// Availability check has been skipped for the manifest as it has not been applied yet.
 		//
 		// In this case, no availability condition is set.
-	case ManifestProcessingAvailabilityResultTypeFailed:
+	case AvailabilityResultTypeFailed:
 		// Availability check has failed.
 		availableCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeAvailable,
 			Status:             metav1.ConditionFalse,
-			Reason:             string(ManifestProcessingAvailabilityResultTypeFailed),
-			Message:            fmt.Sprintf(ManifestProcessingAvailabilityResultTypeFailedDescription, availabilityError),
+			Reason:             string(AvailabilityResultTypeFailed),
+			Message:            fmt.Sprintf(AvailabilityResultTypeFailedDescription, availabilityError),
 			ObservedGeneration: inMemberClusterObjGeneration,
 		}
-	case ManifestProcessingAvailabilityResultTypeNotYetAvailable:
+	case AvailabilityResultTypeNotYetAvailable:
 		// The manifest is not yet available.
 		availableCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeAvailable,
 			Status:             metav1.ConditionFalse,
-			Reason:             string(ManifestProcessingAvailabilityResultTypeNotYetAvailable),
-			Message:            ManifestProcessingAvailabilityResultTypeNotYetAvailableDescription,
+			Reason:             string(AvailabilityResultTypeNotYetAvailable),
+			Message:            AvailabilityResultTypeNotYetAvailableDescription,
 			ObservedGeneration: inMemberClusterObjGeneration,
 		}
-	case ManifestProcessingAvailabilityResultTypeNotTrackable:
+	case AvailabilityResultTypeNotTrackable:
 		// Fleet cannot track the availability of the manifest.
 		availableCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeAvailable,
 			Status:             metav1.ConditionTrue,
-			Reason:             string(ManifestProcessingAvailabilityResultTypeNotTrackable),
-			Message:            ManifestProcessingAvailabilityResultTypeNotTrackableDescription,
+			Reason:             string(AvailabilityResultTypeNotTrackable),
+			Message:            AvailabilityResultTypeNotTrackableDescription,
 			ObservedGeneration: inMemberClusterObjGeneration,
 		}
 	default:
@@ -367,8 +367,8 @@ func setManifestAvailableCondition(
 		availableCond = &metav1.Condition{
 			Type:               fleetv1beta1.WorkConditionTypeAvailable,
 			Status:             metav1.ConditionTrue,
-			Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
-			Message:            ManifestProcessingAvailabilityResultTypeAvailableDescription,
+			Reason:             string(AvailabilityResultTypeAvailable),
+			Message:            AvailabilityResultTypeAvailableDescription,
 			ObservedGeneration: inMemberClusterObjGeneration,
 		}
 	}

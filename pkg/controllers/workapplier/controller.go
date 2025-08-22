@@ -329,25 +329,26 @@ type ManifestProcessingAvailabilityResultType string
 
 const (
 	// The result type for availability check being skipped.
-	ManifestProcessingAvailabilityResultTypeSkipped ManifestProcessingAvailabilityResultType = "Skipped"
+	AvailabilityResultTypeSkipped ManifestProcessingAvailabilityResultType = "Skipped"
 
 	// The result type for availability check failures.
-	ManifestProcessingAvailabilityResultTypeFailed ManifestProcessingAvailabilityResultType = "Failed"
-
-	// The description for availability check failures.
-	ManifestProcessingAvailabilityResultTypeFailedDescription = "Failed to track the availability of the applied manifest (error = %s)"
+	AvailabilityResultTypeFailed ManifestProcessingAvailabilityResultType = "Failed"
 
 	// The result types for completed availability checks.
-	ManifestProcessingAvailabilityResultTypeAvailable ManifestProcessingAvailabilityResultType = "Available"
+	AvailabilityResultTypeAvailable ManifestProcessingAvailabilityResultType = "Available"
 	// Note that the reason string below uses the same value as kept in the old work applier.
-	ManifestProcessingAvailabilityResultTypeNotYetAvailable ManifestProcessingAvailabilityResultType = "ManifestNotAvailableYet"
+	AvailabilityResultTypeNotYetAvailable ManifestProcessingAvailabilityResultType = "ManifestNotAvailableYet"
+	AvailabilityResultTypeNotTrackable    ManifestProcessingAvailabilityResultType = "NotTrackable"
+)
 
-	ManifestProcessingAvailabilityResultTypeNotTrackable ManifestProcessingAvailabilityResultType = "NotTrackable"
+const (
+	// The description for availability check failures.
+	AvailabilityResultTypeFailedDescription = "Failed to track the availability of the applied manifest (error = %s)"
 
 	// The descriptions for completed availability checks.
-	ManifestProcessingAvailabilityResultTypeAvailableDescription       = "Manifest is available"
-	ManifestProcessingAvailabilityResultTypeNotYetAvailableDescription = "Manifest is not yet available; Fleet will check again later"
-	ManifestProcessingAvailabilityResultTypeNotTrackableDescription    = "Manifest's availability is not trackable; Fleet assumes that the applied manifest is available"
+	AvailabilityResultTypeAvailableDescription       = "Manifest is available"
+	AvailabilityResultTypeNotYetAvailableDescription = "Manifest is not yet available; Fleet will check again later"
+	AvailabilityResultTypeNotTrackableDescription    = "Manifest's availability is not trackable; Fleet assumes that the applied manifest is available"
 )
 
 type manifestProcessingBundle struct {

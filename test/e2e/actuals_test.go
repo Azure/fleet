@@ -1330,7 +1330,7 @@ func safeRolloutWorkloadCRPStatusUpdatedActual(wantSelectedResourceIdentifiers [
 					Condition: metav1.Condition{
 						Type:               string(placementv1beta1.PerClusterAvailableConditionType),
 						Status:             metav1.ConditionFalse,
-						Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeNotYetAvailable),
+						Reason:             string(workapplier.AvailabilityResultTypeNotYetAvailable),
 						ObservedGeneration: failedResourceObservedGeneration,
 					},
 				},

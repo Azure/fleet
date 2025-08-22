@@ -96,7 +96,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					},
 					inMemberClusterObj:      toUnstructured(t, deploy1.DeepCopy()),
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeAvailable,
+					availabilityResTyp:      AvailabilityResultTypeAvailable,
 				},
 			},
 			wantWorkStatus: &fleetv1beta1.WorkStatus{
@@ -135,7 +135,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 							{
 								Type:               fleetv1beta1.WorkConditionTypeAvailable,
 								Status:             metav1.ConditionTrue,
-								Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+								Reason:             string(AvailabilityResultTypeAvailable),
 								ObservedGeneration: 2,
 							},
 						},
@@ -165,7 +165,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					},
 					inMemberClusterObj:      toUnstructured(t, deploy2.DeepCopy()),
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeAppliedWithFailedDriftDetection,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeSkipped,
+					availabilityResTyp:      AvailabilityResultTypeSkipped,
 				},
 				{
 					id: &fleetv1beta1.WorkResourceIdentifier{
@@ -179,7 +179,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					},
 					inMemberClusterObj:      toUnstructured(t, deploy3.DeepCopy()),
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeFailedToTakeOver,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeSkipped,
+					availabilityResTyp:      AvailabilityResultTypeSkipped,
 				},
 			},
 			wantWorkStatus: &fleetv1beta1.WorkStatus{
@@ -252,7 +252,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					},
 					inMemberClusterObj:      toUnstructured(t, deploy.DeepCopy()),
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeFailed,
+					availabilityResTyp:      AvailabilityResultTypeFailed,
 				},
 				{
 					id: &fleetv1beta1.WorkResourceIdentifier{
@@ -266,7 +266,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					},
 					inMemberClusterObj:      toUnstructured(t, deploy.DeepCopy()),
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+					availabilityResTyp:      AvailabilityResultTypeNotYetAvailable,
 				},
 				{
 					id: &fleetv1beta1.WorkResourceIdentifier{
@@ -280,7 +280,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					},
 					inMemberClusterObj:      toUnstructured(t, deploy.DeepCopy()),
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeNotTrackable,
+					availabilityResTyp:      AvailabilityResultTypeNotTrackable,
 				},
 			},
 			wantWorkStatus: &fleetv1beta1.WorkStatus{
@@ -316,7 +316,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 							{
 								Type:   fleetv1beta1.WorkConditionTypeAvailable,
 								Status: metav1.ConditionFalse,
-								Reason: string(ManifestProcessingAvailabilityResultTypeFailed),
+								Reason: string(AvailabilityResultTypeFailed),
 							},
 						},
 					},
@@ -339,7 +339,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 							{
 								Type:   fleetv1beta1.WorkConditionTypeAvailable,
 								Status: metav1.ConditionFalse,
-								Reason: string(ManifestProcessingAvailabilityResultTypeNotYetAvailable),
+								Reason: string(AvailabilityResultTypeNotYetAvailable),
 							},
 						},
 					},
@@ -362,7 +362,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 							{
 								Type:   fleetv1beta1.WorkConditionTypeAvailable,
 								Status: metav1.ConditionTrue,
-								Reason: string(ManifestProcessingAvailabilityResultTypeNotTrackable),
+								Reason: string(AvailabilityResultTypeNotTrackable),
 							},
 						},
 					},
@@ -446,7 +446,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					},
 					inMemberClusterObj:      toUnstructured(t, deploy.DeepCopy()),
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeFoundDrifts,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeSkipped,
+					availabilityResTyp:      AvailabilityResultTypeSkipped,
 					drifts: []fleetv1beta1.PatchDetail{
 						{
 							Path:          "/spec/replicas",
@@ -466,7 +466,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					},
 					inMemberClusterObj:      toUnstructured(t, deploy2.DeepCopy()),
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeFailedToTakeOver,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeSkipped,
+					availabilityResTyp:      AvailabilityResultTypeSkipped,
 					diffs: []fleetv1beta1.PatchDetail{
 						{
 							Path:          "/spec/replicas",
@@ -605,7 +605,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					},
 					inMemberClusterObj:      toUnstructured(t, deploy.DeepCopy()),
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeFoundDiff,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeSkipped,
+					availabilityResTyp:      AvailabilityResultTypeSkipped,
 					diffs: []fleetv1beta1.PatchDetail{
 						{
 							Path:          "/x",
@@ -697,7 +697,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 								{
 									Type:   fleetv1beta1.WorkConditionTypeAvailable,
 									Status: metav1.ConditionTrue,
-									Reason: string(ManifestProcessingAvailabilityResultTypeAvailable),
+									Reason: string(AvailabilityResultTypeAvailable),
 								},
 							},
 						},
@@ -717,7 +717,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					},
 					inMemberClusterObj:      toUnstructured(t, deploy.DeepCopy()),
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeNoDiffFound,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeSkipped,
+					availabilityResTyp:      AvailabilityResultTypeSkipped,
 					diffs:                   []fleetv1beta1.PatchDetail{},
 				},
 			},
@@ -815,7 +815,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 								{
 									Type:   fleetv1beta1.WorkConditionTypeAvailable,
 									Status: metav1.ConditionTrue,
-									Reason: string(ManifestProcessingAvailabilityResultTypeAvailable),
+									Reason: string(AvailabilityResultTypeAvailable),
 								},
 							},
 						},
@@ -835,7 +835,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					},
 					inMemberClusterObj:      toUnstructured(t, deploy.DeepCopy()),
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeFoundDiff,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeSkipped,
+					availabilityResTyp:      AvailabilityResultTypeSkipped,
 
 					diffs: []fleetv1beta1.PatchDetail{
 						{
@@ -855,7 +855,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					},
 					inMemberClusterObj:      toUnstructured(t, ns.DeepCopy()),
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeNoDiffFound,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeSkipped,
+					availabilityResTyp:      AvailabilityResultTypeSkipped,
 				},
 			},
 			wantWorkStatus: &fleetv1beta1.WorkStatus{
@@ -978,7 +978,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 								{
 									Type:   fleetv1beta1.WorkConditionTypeAvailable,
 									Status: metav1.ConditionTrue,
-									Reason: string(ManifestProcessingAvailabilityResultTypeAvailable),
+									Reason: string(AvailabilityResultTypeAvailable),
 								},
 							},
 						},
@@ -998,7 +998,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					},
 					inMemberClusterObj:      toUnstructured(t, deploy.DeepCopy()),
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeFailedToReportDiff,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeSkipped,
+					availabilityResTyp:      AvailabilityResultTypeSkipped,
 				},
 				{
 					id: &fleetv1beta1.WorkResourceIdentifier{
@@ -1011,7 +1011,7 @@ func TestRefreshWorkStatus(t *testing.T) {
 					},
 					inMemberClusterObj:      toUnstructured(t, ns.DeepCopy()),
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeNoDiffFound,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeSkipped,
+					availabilityResTyp:      AvailabilityResultTypeSkipped,
 				},
 			},
 			wantWorkStatus: &fleetv1beta1.WorkStatus{
@@ -1390,14 +1390,14 @@ func TestSetManifestAvailableCondition(t *testing.T) {
 		{
 			name:                         "available",
 			manifestCond:                 &fleetv1beta1.ManifestCondition{},
-			availabilityResTyp:           ManifestProcessingAvailabilityResultTypeAvailable,
+			availabilityResTyp:           AvailabilityResultTypeAvailable,
 			inMemberClusterObjGeneration: 1,
 			wantManifestCond: &fleetv1beta1.ManifestCondition{
 				Conditions: []metav1.Condition{
 					{
 						Type:               fleetv1beta1.WorkConditionTypeAvailable,
 						Status:             metav1.ConditionTrue,
-						Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+						Reason:             string(AvailabilityResultTypeAvailable),
 						ObservedGeneration: 1,
 					},
 				},
@@ -1410,19 +1410,19 @@ func TestSetManifestAvailableCondition(t *testing.T) {
 					{
 						Type:               fleetv1beta1.WorkConditionTypeAvailable,
 						Status:             metav1.ConditionTrue,
-						Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+						Reason:             string(AvailabilityResultTypeAvailable),
 						ObservedGeneration: 1,
 					},
 				},
 			},
-			availabilityResTyp:           ManifestProcessingAvailabilityResultTypeFailed,
+			availabilityResTyp:           AvailabilityResultTypeFailed,
 			inMemberClusterObjGeneration: 2,
 			wantManifestCond: &fleetv1beta1.ManifestCondition{
 				Conditions: []metav1.Condition{
 					{
 						Type:               fleetv1beta1.WorkConditionTypeAvailable,
 						Status:             metav1.ConditionFalse,
-						Reason:             string(ManifestProcessingAvailabilityResultTypeFailed),
+						Reason:             string(AvailabilityResultTypeFailed),
 						ObservedGeneration: 2,
 					},
 				},
@@ -1435,19 +1435,19 @@ func TestSetManifestAvailableCondition(t *testing.T) {
 					{
 						Type:               fleetv1beta1.WorkConditionTypeAvailable,
 						Status:             metav1.ConditionTrue,
-						Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+						Reason:             string(AvailabilityResultTypeAvailable),
 						ObservedGeneration: 1,
 					},
 				},
 			},
-			availabilityResTyp:           ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			availabilityResTyp:           AvailabilityResultTypeNotYetAvailable,
 			inMemberClusterObjGeneration: 1,
 			wantManifestCond: &fleetv1beta1.ManifestCondition{
 				Conditions: []metav1.Condition{
 					{
 						Type:               fleetv1beta1.WorkConditionTypeAvailable,
 						Status:             metav1.ConditionFalse,
-						Reason:             string(ManifestProcessingAvailabilityResultTypeNotYetAvailable),
+						Reason:             string(AvailabilityResultTypeNotYetAvailable),
 						ObservedGeneration: 1,
 					},
 				},
@@ -1456,14 +1456,14 @@ func TestSetManifestAvailableCondition(t *testing.T) {
 		{
 			name:                         "untrackable",
 			manifestCond:                 &fleetv1beta1.ManifestCondition{},
-			availabilityResTyp:           ManifestProcessingAvailabilityResultTypeNotTrackable,
+			availabilityResTyp:           AvailabilityResultTypeNotTrackable,
 			inMemberClusterObjGeneration: 1,
 			wantManifestCond: &fleetv1beta1.ManifestCondition{
 				Conditions: []metav1.Condition{
 					{
 						Type:               fleetv1beta1.WorkConditionTypeAvailable,
 						Status:             metav1.ConditionTrue,
-						Reason:             string(ManifestProcessingAvailabilityResultTypeNotTrackable),
+						Reason:             string(AvailabilityResultTypeNotTrackable),
 						ObservedGeneration: 1,
 					},
 				},
@@ -1476,12 +1476,12 @@ func TestSetManifestAvailableCondition(t *testing.T) {
 					{
 						Type:               fleetv1beta1.WorkConditionTypeAvailable,
 						Status:             metav1.ConditionFalse,
-						Reason:             string(ManifestProcessingAvailabilityResultTypeFailed),
+						Reason:             string(AvailabilityResultTypeFailed),
 						ObservedGeneration: 1,
 					},
 				},
 			},
-			availabilityResTyp:           ManifestProcessingAvailabilityResultTypeSkipped,
+			availabilityResTyp:           AvailabilityResultTypeSkipped,
 			inMemberClusterObjGeneration: 2,
 			wantManifestCond: &fleetv1beta1.ManifestCondition{
 				Conditions: []metav1.Condition{},

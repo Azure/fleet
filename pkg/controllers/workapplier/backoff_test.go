@@ -977,7 +977,7 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 			bundles: []*manifestProcessingBundle{
 				{
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+					availabilityResTyp:      AvailabilityResultTypeNotYetAvailable,
 				},
 			},
 			wantRequeueDelaySeconds: 5,
@@ -1001,7 +1001,7 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 			bundles: []*manifestProcessingBundle{
 				{
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeAvailable,
+					availabilityResTyp:      AvailabilityResultTypeAvailable,
 				},
 			},
 			wantRequeueDelaySeconds: 5, // Use fixed delay, since the processing result has changed.
@@ -1025,7 +1025,7 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 			bundles: []*manifestProcessingBundle{
 				{
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeAvailable,
+					availabilityResTyp:      AvailabilityResultTypeAvailable,
 				},
 			},
 			wantRequeueDelaySeconds: 10, // Start the slow backoff.
@@ -1049,7 +1049,7 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 			bundles: []*manifestProcessingBundle{
 				{
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeAvailable,
+					availabilityResTyp:      AvailabilityResultTypeAvailable,
 				},
 			},
 			wantRequeueDelaySeconds: 50, // Skip to fast back off.
@@ -1073,7 +1073,7 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 			bundles: []*manifestProcessingBundle{
 				{
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeAvailable,
+					availabilityResTyp:      AvailabilityResultTypeAvailable,
 				},
 			},
 			wantRequeueDelaySeconds: 200, // Reached the max. cap.
@@ -1510,7 +1510,7 @@ func TestComputeProcessingResultHash(t *testing.T) {
 			bundles: []*manifestProcessingBundle{
 				{
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+					availabilityResTyp:      AvailabilityResultTypeNotYetAvailable,
 				},
 			},
 			wantHash: "339954d2619310502c70300409bdf65fd6f14d81c12cfade84879e713ea850ea",
@@ -1520,7 +1520,7 @@ func TestComputeProcessingResultHash(t *testing.T) {
 			bundles: []*manifestProcessingBundle{
 				{
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeAvailable,
+					availabilityResTyp:      AvailabilityResultTypeAvailable,
 				},
 			},
 			wantHash: "708387dadaf07f43d46b032c3afb5d984868107b297dad9c99c2d258584d2377",
@@ -1552,11 +1552,11 @@ func TestComputeProcessingResultHash(t *testing.T) {
 				},
 				{
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeAvailable,
+					availabilityResTyp:      AvailabilityResultTypeAvailable,
 				},
 				{
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeNotTrackable,
+					availabilityResTyp:      AvailabilityResultTypeNotTrackable,
 				},
 			},
 			wantHash: "1a001803829ef5509d24d60806593cb5fbfb0445d32b9ab1301e5faea57bbaa9",
@@ -1566,7 +1566,7 @@ func TestComputeProcessingResultHash(t *testing.T) {
 			bundles: []*manifestProcessingBundle{
 				{
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeAvailable,
+					availabilityResTyp:      AvailabilityResultTypeAvailable,
 				},
 				{
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeFailedToApply,
@@ -1574,7 +1574,7 @@ func TestComputeProcessingResultHash(t *testing.T) {
 				},
 				{
 					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
-					availabilityResTyp:      ManifestProcessingAvailabilityResultTypeNotTrackable,
+					availabilityResTyp:      AvailabilityResultTypeNotTrackable,
 				},
 			},
 			// Note that different orders of the manifests result in different hashes.

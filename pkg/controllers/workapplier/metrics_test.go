@@ -76,7 +76,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 								},
 								{
 									Type:   placementv1beta1.WorkConditionTypeAvailable,
-									Reason: string(ManifestProcessingAvailabilityResultTypeAvailable),
+									Reason: string(AvailabilityResultTypeAvailable),
 									Status: metav1.ConditionTrue,
 								},
 							},
@@ -160,7 +160,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 								},
 								{
 									Type:   placementv1beta1.WorkConditionTypeAvailable,
-									Reason: string(ManifestProcessingAvailabilityResultTypeNotYetAvailable),
+									Reason: string(AvailabilityResultTypeNotYetAvailable),
 									Status: metav1.ConditionFalse,
 								},
 							},
@@ -302,7 +302,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 								{
 									Type:   placementv1beta1.WorkConditionTypeAvailable,
 									Status: metav1.ConditionTrue,
-									Reason: string(ManifestProcessingAvailabilityResultTypeAvailable),
+									Reason: string(AvailabilityResultTypeAvailable),
 								},
 							},
 						},
@@ -482,7 +482,7 @@ func TestTrackWorkAndManifestProcessingRequestMetrics(t *testing.T) {
 								{
 									Type:   placementv1beta1.WorkConditionTypeAvailable,
 									Status: metav1.ConditionFalse,
-									Reason: string(ManifestProcessingAvailabilityResultTypeFailed),
+									Reason: string(AvailabilityResultTypeFailed),
 								},
 								{
 									Type:   placementv1beta1.WorkConditionTypeDiffReported,

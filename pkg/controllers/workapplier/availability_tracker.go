@@ -51,7 +51,7 @@ func (r *Reconciler) trackInMemberClusterObjAvailability(ctx context.Context, bu
 		if !isManifestObjectApplied(bundle.applyOrReportDiffResTyp) {
 			// The manifest object in the bundle has not been applied yet. No availability check
 			// is needed.
-			bundle.availabilityResTyp = ManifestProcessingAvailabilityResultTypeSkipped
+			bundle.availabilityResTyp = AvailabilityResultTypeSkipped
 
 			// Note that some of the objects might have failed the pre-processing stage and do not
 			// even have a GVR or a manifest object.
@@ -69,7 +69,7 @@ func (r *Reconciler) trackInMemberClusterObjAvailability(ctx context.Context, bu
 		if err != nil {
 			// An unexpected error has occurred during the availability check.
 			bundle.availabilityErr = err
-			bundle.availabilityResTyp = ManifestProcessingAvailabilityResultTypeFailed
+			bundle.availabilityResTyp = AvailabilityResultTypeFailed
 			klog.ErrorS(err,
 				"Failed to track the availability of the applied object in the member cluster",
 				"work", workRef, "GVR", *bundle.gvr, "inMemberClusterObj", klog.KObj(bundle.inMemberClusterObj))
@@ -108,11 +108,11 @@ func trackInMemberClusterObjAvailabilityByGVR(
 		if isDataResource(*gvr) {
 			klog.V(2).InfoS("The object from the member cluster is a data object, consider it to be immediately available",
 				"gvr", *gvr, "inMemberClusterObj", klog.KObj(inMemberClusterObj))
-			return ManifestProcessingAvailabilityResultTypeAvailable, nil
+			return AvailabilityResultTypeAvailable, nil
 		}
 		klog.V(2).InfoS("Cannot determine the availability of the object from the member cluster; untrack its availability",
 			"gvr", *gvr, "resource", klog.KObj(inMemberClusterObj))
-		return ManifestProcessingAvailabilityResultTypeNotTrackable, nil
+		return AvailabilityResultTypeNotTrackable, nil
 	}
 }
 
@@ -123,7 +123,7 @@ func trackDeploymentAvailability(inMemberClusterObj *unstructured.Unstructured) 
 		// Normally this branch should never run.
 		wrappedErr := fmt.Errorf("failed to convert the unstructured object to a deployment: %w", err)
 		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-		return ManifestProcessingAvailabilityResultTypeFailed, wrappedErr
+		return AvailabilityResultTypeFailed, wrappedErr
 	}
 
 	// Check if the deployment is available.
@@ -136,10 +136,10 @@ func trackDeploymentAvailability(inMemberClusterObj *unstructured.Unstructured) 
 		requiredReplicas == deploy.Status.UpdatedReplicas &&
 		deploy.Status.UnavailableReplicas == 0 {
 		klog.V(2).InfoS("Deployment is available", "deployment", klog.KObj(inMemberClusterObj))
-		return ManifestProcessingAvailabilityResultTypeAvailable, nil
+		return AvailabilityResultTypeAvailable, nil
 	}
 	klog.V(2).InfoS("Deployment is not ready yet, will check later to see if it becomes available", "deployment", klog.KObj(inMemberClusterObj))
-	return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
+	return AvailabilityResultTypeNotYetAvailable, nil
 }
 
 // trackStatefulSetAvailability tracks the availability of a stateful set in the member cluster.
@@ -149,7 +149,7 @@ func trackStatefulSetAvailability(inMemberClusterObj *unstructured.Unstructured)
 		// Normally this branch should never run.
 		wrappedErr := fmt.Errorf("failed to convert the unstructured object to a stateful set: %w", err)
 		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-		return ManifestProcessingAvailabilityResultTypeFailed, wrappedErr
+		return AvailabilityResultTypeFailed, wrappedErr
 	}
 
 	// Check if the stateful set is available.
@@ -165,10 +165,10 @@ func trackStatefulSetAvailability(inMemberClusterObj *unstructured.Unstructured)
 		statefulSet.Status.CurrentReplicas == statefulSet.Status.UpdatedReplicas &&
 		statefulSet.Status.CurrentRevision == statefulSet.Status.UpdateRevision {
 		klog.V(2).InfoS("StatefulSet is available", "statefulSet", klog.KObj(inMemberClusterObj))
-		return ManifestProcessingAvailabilityResultTypeAvailable, nil
+		return AvailabilityResultTypeAvailable, nil
 	}
 	klog.V(2).InfoS("Stateful set is not ready yet, will check later to see if it becomes available", "statefulSet", klog.KObj(inMemberClusterObj))
-	return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
+	return AvailabilityResultTypeNotYetAvailable, nil
 }
 
 // trackDaemonSetAvailability tracks the availability of a daemon set in the member cluster.
@@ -178,7 +178,7 @@ func trackDaemonSetAvailability(inMemberClusterObj *unstructured.Unstructured) (
 		wrappedErr := fmt.Errorf("failed to convert the unstructured object to a daemon set: %w", err)
 		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
 		// Normally this branch should never run.
-		return ManifestProcessingAvailabilityResultTypeFailed, wrappedErr
+		return AvailabilityResultTypeFailed, wrappedErr
 	}
 
 	// Check if the daemonSet is available.
@@ -190,10 +190,10 @@ func trackDaemonSetAvailability(inMemberClusterObj *unstructured.Unstructured) (
 		daemonSet.Status.NumberAvailable == daemonSet.Status.DesiredNumberScheduled &&
 		daemonSet.Status.CurrentNumberScheduled == daemonSet.Status.UpdatedNumberScheduled {
 		klog.V(2).InfoS("DaemonSet is available", "daemonSet", klog.KObj(inMemberClusterObj))
-		return ManifestProcessingAvailabilityResultTypeAvailable, nil
+		return AvailabilityResultTypeAvailable, nil
 	}
 	klog.V(2).InfoS("Daemon set is not ready yet, will check later to see if it becomes available", "daemonSet", klog.KObj(inMemberClusterObj))
-	return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
+	return AvailabilityResultTypeNotYetAvailable, nil
 }
 
 // trackServiceAvailability tracks the availability of a service in the member cluster.
@@ -202,7 +202,7 @@ func trackServiceAvailability(inMemberClusterObj *unstructured.Unstructured) (Ma
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(inMemberClusterObj.Object, &svc); err != nil {
 		wrappedErr := fmt.Errorf("failed to convert the unstructured object to a service: %w", err)
 		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-		return ManifestProcessingAvailabilityResultTypeFailed, wrappedErr
+		return AvailabilityResultTypeFailed, wrappedErr
 	}
 	switch svc.Spec.Type {
 	case "":
@@ -214,25 +214,25 @@ func trackServiceAvailability(inMemberClusterObj *unstructured.Unstructured) (Ma
 		// IP assigned.
 		if len(svc.Spec.ClusterIPs) > 0 && len(svc.Spec.ClusterIPs[0]) > 0 {
 			klog.V(2).InfoS("Service is available", "service", klog.KObj(inMemberClusterObj), "serviceType", svc.Spec.Type)
-			return ManifestProcessingAvailabilityResultTypeAvailable, nil
+			return AvailabilityResultTypeAvailable, nil
 		}
 		klog.V(2).InfoS("Service is not ready yet, will check later to see if it becomes available", "service", klog.KObj(inMemberClusterObj), "serviceType", svc.Spec.Type)
-		return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
+		return AvailabilityResultTypeNotYetAvailable, nil
 	case corev1.ServiceTypeLoadBalancer:
 		// Fleet considers a loadBalancer service to be available if it has at least one load
 		// balancer IP or hostname assigned.
 		if len(svc.Status.LoadBalancer.Ingress) > 0 &&
 			(len(svc.Status.LoadBalancer.Ingress[0].IP) > 0 || len(svc.Status.LoadBalancer.Ingress[0].Hostname) > 0) {
 			klog.V(2).InfoS("Service is available", "service", klog.KObj(inMemberClusterObj), "serviceType", svc.Spec.Type)
-			return ManifestProcessingAvailabilityResultTypeAvailable, nil
+			return AvailabilityResultTypeAvailable, nil
 		}
 		klog.V(2).InfoS("Service is not ready yet, will check later to see if it becomes available", "service", klog.KObj(inMemberClusterObj), "serviceType", svc.Spec.Type)
-		return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
+		return AvailabilityResultTypeNotYetAvailable, nil
 	}
 
 	// we don't know how to track the availability of when the service type is externalName
 	klog.V(2).InfoS("Cannot determine the availability of external name services; untrack its availability", "service", klog.KObj(inMemberClusterObj))
-	return ManifestProcessingAvailabilityResultTypeNotTrackable, nil
+	return AvailabilityResultTypeNotTrackable, nil
 }
 
 // trackCRDAvailability tracks the availability of a custom resource definition in the member cluster.
@@ -241,32 +241,32 @@ func trackCRDAvailability(inMemberClusterObj *unstructured.Unstructured) (Manife
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(inMemberClusterObj.Object, &crd); err != nil {
 		wrappedErr := fmt.Errorf("failed to convert the unstructured object to a custom resource definition: %w", err)
 		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
-		return ManifestProcessingAvailabilityResultTypeFailed, wrappedErr
+		return AvailabilityResultTypeFailed, wrappedErr
 	}
 
 	// If both conditions are True, the CRD has become available.
 	if apiextensionshelpers.IsCRDConditionTrue(&crd, apiextensionsv1.Established) && apiextensionshelpers.IsCRDConditionTrue(&crd, apiextensionsv1.NamesAccepted) {
 		klog.V(2).InfoS("CustomResourceDefinition is available", "customResourceDefinition", klog.KObj(inMemberClusterObj))
-		return ManifestProcessingAvailabilityResultTypeAvailable, nil
+		return AvailabilityResultTypeAvailable, nil
 	}
 
 	klog.V(2).InfoS("Custom resource definition is not ready yet, will check later to see if it becomes available", klog.KObj(inMemberClusterObj))
-	return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
+	return AvailabilityResultTypeNotYetAvailable, nil
 }
 
 // trackPDBAvailability tracks the availability of a pod disruption budget in the member cluster
 func trackPDBAvailability(curObj *unstructured.Unstructured) (ManifestProcessingAvailabilityResultType, error) {
 	var pdb policyv1.PodDisruptionBudget
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &pdb); err != nil {
-		return ManifestProcessingAvailabilityResultTypeFailed, controller.NewUnexpectedBehaviorError(err)
+		return AvailabilityResultTypeFailed, controller.NewUnexpectedBehaviorError(err)
 	}
 	// Check if conditions are up-to-date
 	if poddisruptionbudget.ConditionsAreUpToDate(&pdb) {
 		klog.V(2).InfoS("PodDisruptionBudget is available", "pdb", klog.KObj(curObj))
-		return ManifestProcessingAvailabilityResultTypeAvailable, nil
+		return AvailabilityResultTypeAvailable, nil
 	}
 	klog.V(2).InfoS("Still need to wait for PodDisruptionBudget to be available", "pdb", klog.KObj(curObj))
-	return ManifestProcessingAvailabilityResultTypeNotYetAvailable, nil
+	return AvailabilityResultTypeNotYetAvailable, nil
 }
 
 // isDataResource checks if the resource is a data resource; such resources are
