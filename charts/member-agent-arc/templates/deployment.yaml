@@ -33,7 +33,9 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
           - name: TOKEN_NAMESPACE    
-            value: "fleet-system"         
+            value: "fleet-system"
+          - name: STARTUP_RESOURCE_TYPE    
+            value: "6dae42f8-4368-4678-94ff-3960e28e3630"   
 {{-  .Values.Azure.Identity.MSIAdapterYaml | nindent 10 }}
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
@@ -42,6 +44,7 @@ spec:
             - azure
             - --clientid=any-client-id
             - --scope={{ .Values.config.scope }}
+            - --v={{ .Values.logVerbosity }}
           resources:
             limits:
               cpu: 50m
@@ -161,7 +164,9 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
           - name: TOKEN_NAMESPACE    
-            value: "fleet-system"         
+            value: "fleet-system"
+          - name: STARTUP_RESOURCE_TYPE    
+            value: "6dae42f8-4368-4678-94ff-3960e28e3630"   
 {{-  .Values.Azure.Identity.MSIAdapterYaml | nindent 10 }}
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
@@ -170,6 +175,7 @@ spec:
             - azure
             - --clientid=any-client-id
             - --scope={{ .Values.config.scope }}
+            - --v={{ .Values.logVerbosity }}
           resources:
             limits:
               cpu: 50m
@@ -286,7 +292,9 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
           - name: TOKEN_NAMESPACE    
-            value: "fleet-system"         
+            value: "fleet-system"   
+          - name: STARTUP_RESOURCE_TYPE    
+            value: "6dae42f8-4368-4678-94ff-3960e28e3630"   
 {{-  .Values.Azure.Identity.MSIAdapterYaml | nindent 10 }}
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
@@ -295,6 +303,7 @@ spec:
             - azure
             - --clientid=any-client-id
             - --scope={{ .Values.config.scope }}
+            - --v={{ .Values.logVerbosity }}
           resources:
             limits:
               cpu: 50m
