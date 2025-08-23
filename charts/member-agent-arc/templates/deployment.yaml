@@ -34,8 +34,6 @@ spec:
           env:
           - name: TOKEN_NAMESPACE    
             value: "fleet-system"
-          - name: STARTUP_RESOURCE_TYPE    
-            value: "6dae42f8-4368-4678-94ff-3960e28e3630"   
 {{-  .Values.Azure.Identity.MSIAdapterYaml | nindent 10 }}
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
@@ -165,8 +163,6 @@ spec:
           env:
           - name: TOKEN_NAMESPACE    
             value: "fleet-system"
-          - name: STARTUP_RESOURCE_TYPE    
-            value: "6dae42f8-4368-4678-94ff-3960e28e3630"   
 {{-  .Values.Azure.Identity.MSIAdapterYaml | nindent 10 }}
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
@@ -292,9 +288,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
           - name: TOKEN_NAMESPACE    
-            value: "fleet-system"   
-          - name: STARTUP_RESOURCE_TYPE    
-            value: "6dae42f8-4368-4678-94ff-3960e28e3630"   
+            value: "fleet-system"
 {{-  .Values.Azure.Identity.MSIAdapterYaml | nindent 10 }}
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
