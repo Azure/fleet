@@ -62,7 +62,7 @@ func createUnmanagedNamespace(name string) *corev1.Namespace {
 func expectDeniedByVAP(err error) {
 	var statusErr *k8sErrors.StatusError
 	Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Expected StatusError, got error %s of type %s", err, reflect.TypeOf(err)))
-	Expect(statusErr.ErrStatus.Code).To(Equal(int32(http.StatusUnprocessableEntity)), "Expected 422 UnprocessableEntity")
+	Expect(statusErr.ErrStatus.Code).To(Equal(int32(http.StatusForbidden)), "Expected HTTP 403 Forbidden")
 	// ValidatingAdmissionPolicy denials typically contain these patterns
 	Expect(statusErr.ErrStatus.Message).To(SatisfyAny(
 		ContainSubstring("ValidatingAdmissionPolicy"),
@@ -74,82 +74,110 @@ func expectDeniedByVAP(err error) {
 var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("managedresource"), Ordered, func() {
 	BeforeAll(func() {
 		var vap admissionregistrationv1.ValidatingAdmissionPolicy
-		Expect(hubClient.Get(ctx, types.NamespacedName{Name: vapName}, &vap)).Should(Succeed(), "ValidatingAdmissionPolicy should be installed")
+		Expect(sysMastersClient.Get(ctx, types.NamespacedName{Name: vapName}, &vap)).Should(Succeed(), "ValidatingAdmissionPolicy should be installed")
 
 		var vapBinding admissionregistrationv1.ValidatingAdmissionPolicyBinding
-		Expect(hubClient.Get(ctx, types.NamespacedName{Name: vapBindingName}, &vapBinding)).Should(Succeed(), "ValidatingAdmissionPolicyBinding should be installed")
+		Expect(sysMastersClient.Get(ctx, types.NamespacedName{Name: vapBindingName}, &vapBinding)).Should(Succeed(), "ValidatingAdmissionPolicyBinding should be installed")
 	})
 
-	Context("Namespace operations on managed-by label", func() {
+	It("should allow operations on unmanaged namespace for non-system:masters user", func() {
+		unmanagedNS := createUnmanagedNamespace("test-unmanaged-ns")
+		By("expecting successful CREATE operation on unmanaged namespace")
+		Expect(notMasterUser.Create(ctx, unmanagedNS)).To(Succeed())
+
+		By("expecting successful UPDATE operation on unmanaged namespace")
+		Eventually(func() error {
+			var ns corev1.Namespace
+			if err := notMasterUser.Get(ctx, types.NamespacedName{Name: unmanagedNS.Name}, &ns); err != nil {
+				return err
+			}
+			ns.Annotations = map[string]string{"test": "annotation"}
+			return notMasterUser.Update(ctx, &ns)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+
+		By("expecting successful DELETE operation on unmanaged namespace")
+		Expect(notMasterUser.Delete(ctx, unmanagedNS)).To(Succeed())
+	})
+
+	Context("When the namespace doesn't exist", func() {
 		It("should deny CREATE operation on managed namespace for non-system:masters user", func() {
 			managedNS := createManagedNamespace("test-managed-ns-create")
 			By("expecting denial of CREATE operation on managed namespace")
-			err := impersonateHubClient.Create(ctx, managedNS)
+			err := notMasterUser.Create(ctx, managedNS)
 			expectDeniedByVAP(err)
-		})
-
-		It("should deny UPDATE operation on managed namespace for non-system:masters user", func() {
-			managedNS := createManagedNamespace("test-managed-ns-update")
-			By("creating managed namespace with system:masters user")
-			Expect(hubClient.Create(ctx, managedNS)).To(Succeed())
-
-			var updateErr error
-			Eventually(func() error {
-				var ns corev1.Namespace
-				if err := hubClient.Get(ctx, types.NamespacedName{Name: managedNS.Name}, &ns); err != nil {
-					return err
-				}
-				ns.Annotations = map[string]string{"test": "annotation"}
-				By("expecting denial of UPDATE operation on managed namespace")
-				err := impersonateHubClient.Update(ctx, &ns)
-				if k8sErrors.IsConflict(err) {
-					return err
-				}
-				updateErr = err
-				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-
-			expectDeniedByVAP(updateErr)
-			Expect(hubClient.Delete(ctx, managedNS)).To(Succeed())
-		})
-
-		It("should deny DELETE operation on managed namespace for non-system:masters user", func() {
-			managedNS := createManagedNamespace("test-managed-ns-delete")
-			By("creating managed namespace with system:masters user")
-			Expect(hubClient.Create(ctx, managedNS)).To(Succeed())
-
-			By("expecting denial of DELETE operation on managed namespace")
-			err := impersonateHubClient.Delete(ctx, managedNS)
-			expectDeniedByVAP(err)
-
-			Expect(hubClient.Delete(ctx, managedNS)).To(Succeed())
 		})
 
 		It("should allow CREATE operation on managed namespace for system:masters user", func() {
 			managedNS := createManagedNamespace("test-managed-ns-masters")
 			By("expecting successful CREATE operation with system:masters user")
-			Expect(hubClient.Create(ctx, managedNS)).To(Succeed())
+			Expect(sysMastersClient.Create(ctx, managedNS)).To(Succeed())
 
-			Expect(hubClient.Delete(ctx, managedNS)).To(Succeed())
+			Expect(sysMastersClient.Delete(ctx, managedNS)).To(Succeed())
+		})
+	})
+
+	Context("When the namespace exists", Ordered, func() {
+		managedNS := createManagedNamespace("test-managed-ns-update")
+		BeforeAll(func() {
+			err := sysMastersClient.Delete(ctx, managedNS)
+			if err != nil {
+				Expect(k8sErrors.IsNotFound(err)).To(BeTrue())
+			}
+
+			Expect(sysMastersClient.Create(ctx, managedNS)).To(Succeed())
+			var ns corev1.Namespace
+			err = sysMastersClient.Get(ctx, types.NamespacedName{Name: managedNS.Name}, &ns)
+			Expect(err).To(BeNil())
+			Expect(ns.Labels).To(HaveKeyWithValue(managedByLabel, managedByLabelValue))
 		})
 
-		It("should allow operations on unmanaged namespace for non-system:masters user", func() {
-			unmanagedNS := createUnmanagedNamespace("test-unmanaged-ns")
-			By("expecting successful CREATE operation on unmanaged namespace")
-			Expect(impersonateHubClient.Create(ctx, unmanagedNS)).To(Succeed())
+		It("should deny DELETE operation on managed namespace for non-system:masters user", func() {
+			By("expecting denial of DELETE operation on managed namespace")
+			err := notMasterUser.Delete(ctx, managedNS)
+			expectDeniedByVAP(err)
+		})
 
-			By("expecting successful UPDATE operation on unmanaged namespace")
+		It("should deny UPDATE operation on managed namespace for non-system:masters user", func() {
+			var updateErr error
 			Eventually(func() error {
 				var ns corev1.Namespace
-				if err := impersonateHubClient.Get(ctx, types.NamespacedName{Name: unmanagedNS.Name}, &ns); err != nil {
+				if err := sysMastersClient.Get(ctx, types.NamespacedName{Name: managedNS.Name}, &ns); err != nil {
 					return err
 				}
 				ns.Annotations = map[string]string{"test": "annotation"}
-				return impersonateHubClient.Update(ctx, &ns)
+				By("expecting denial of UPDATE operation on managed namespace")
+				updateErr = notMasterUser.Update(ctx, &ns)
+				if k8sErrors.IsConflict(updateErr) {
+					return updateErr
+				}
+				return nil
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 
-			By("expecting successful DELETE operation on unmanaged namespace")
-			Expect(impersonateHubClient.Delete(ctx, unmanagedNS)).To(Succeed())
+			expectDeniedByVAP(updateErr)
+		})
+
+		It("should allow UPDATE operation on managed namespace for system:masters user", func() {
+			var updateErr error
+			Eventually(func() error {
+				var ns corev1.Namespace
+				if err := sysMastersClient.Get(ctx, types.NamespacedName{Name: managedNS.Name}, &ns); err != nil {
+					return err
+				}
+				ns.Annotations = map[string]string{"test": "annotation"}
+				By("expecting denial of UPDATE operation on managed namespace")
+				updateErr = notMasterUser.Update(ctx, &ns)
+				if k8sErrors.IsConflict(updateErr) {
+					return updateErr
+				}
+				return nil
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		AfterAll(func() {
+			err := sysMastersClient.Delete(ctx, managedNS)
+			if err != nil {
+				Expect(k8sErrors.IsNotFound(err)).To(BeTrue())
+			}
 		})
 	})
 })

@@ -78,7 +78,7 @@ var _ = Describe("fleet guard rail tests for deny fleet MC CREATE operations", f
 		}
 
 		By(fmt.Sprintf("expecting denial of operation CREATE of fleet member cluster %s", mc.Name))
-		Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, mc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &mcGVK, "", types.NamespacedName{Name: mc.Name}))).Should(Succeed())
+		Expect(checkIfStatusErrorWithMessage(notMasterUser.Create(ctx, mc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &mcGVK, "", types.NamespacedName{Name: mc.Name}))).Should(Succeed())
 	})
 })
 
@@ -105,7 +105,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 				return errors.New("annotations are empty")
 			}
 			mc.Annotations[fleetClusterResourceIDAnnotationKey] = clusterID2
-			err = impersonateHubClient.Update(ctx, &mc)
+			err = notMasterUser.Update(ctx, &mc)
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
@@ -120,7 +120,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			}
 			By(fmt.Sprintf("remove fleet member cluster, cluster id annotation %s", mc.Name))
 			mc.SetAnnotations(nil)
-			err = impersonateHubClient.Update(ctx, &mc)
+			err = notMasterUser.Update(ctx, &mc)
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
@@ -155,7 +155,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			By(fmt.Sprintf("update fleet member cluster spec for MC %s", mc.Name))
 			mc.Spec.HeartbeatPeriodSeconds = 30
 			By(fmt.Sprintf("expecting denial of operation UPDATE of fleet member cluster %s", mc.Name))
-			err = impersonateHubClient.Update(ctx, &mc)
+			err = notMasterUser.Update(ctx, &mc)
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
@@ -175,7 +175,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 				return errors.New("status conditions are empty")
 			}
 			mc.Status.Conditions[0].Reason = testReason
-			err = impersonateHubClient.Status().Update(ctx, &mc)
+			err = notMasterUser.Status().Update(ctx, &mc)
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
@@ -190,7 +190,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			},
 		}
 		By(fmt.Sprintf("expecting denial of operation DELETE of fleet member cluster %s", mc.Name))
-		Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Delete(ctx, &mc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &mcGVK, "", types.NamespacedName{Name: mc.Name}))).Should(Succeed())
+		Expect(checkIfStatusErrorWithMessage(notMasterUser.Delete(ctx, &mc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &mcGVK, "", types.NamespacedName{Name: mc.Name}))).Should(Succeed())
 	})
 
 	It("should allow update operation on fleet member cluster CR labels for non system user", func() {
@@ -202,7 +202,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 				return err
 			}
 			mc.SetLabels(map[string]string{testKey: testValue})
-			return impersonateHubClient.Update(ctx, &mc)
+			return notMasterUser.Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -220,7 +220,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 			}
 			annotations[testKey] = testValue
 			mc.SetAnnotations(annotations)
-			return impersonateHubClient.Update(ctx, &mc)
+			return notMasterUser.Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -288,7 +288,7 @@ var _ = Describe("fleet guard rail tests for allow/deny fleet MC UPDATE, DELETE 
 				Effect: corev1.TaintEffectNoSchedule,
 			}
 			mc.Spec.Taints = append(mc.Spec.Taints, taint)
-			return impersonateHubClient.Update(ctx, &mc)
+			return notMasterUser.Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -339,9 +339,9 @@ var _ = Describe("fleet guard rail tests for allow upstream MC CREATE, DELETE op
 				HeartbeatPeriodSeconds: 60,
 			},
 		}
-		Expect(impersonateHubClient.Create(ctx, mc)).Should(Succeed())
-		Expect(impersonateHubClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed())
-		Expect(impersonateHubClient.Delete(ctx, mc)).Should(Succeed())
+		Expect(notMasterUser.Create(ctx, mc)).Should(Succeed())
+		Expect(notMasterUser.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed())
+		Expect(notMasterUser.Delete(ctx, mc)).Should(Succeed())
 		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 })
@@ -366,7 +366,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 			}
 			By(fmt.Sprintf("add fleet member cluster, cluster id annotation %s", mc.Name))
 			mc.SetAnnotations(map[string]string{fleetClusterResourceIDAnnotationKey: clusterID1})
-			err = impersonateHubClient.Update(ctx, &mc)
+			err = notMasterUser.Update(ctx, &mc)
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
@@ -403,7 +403,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 				return errors.New("status conditions are empty")
 			}
 			mc.Status.Conditions[0].Reason = testReason
-			err = impersonateHubClient.Status().Update(ctx, &mc)
+			err = notMasterUser.Status().Update(ctx, &mc)
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
@@ -420,7 +420,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 				return err
 			}
 			mc.SetLabels(map[string]string{testKey: testValue})
-			return impersonateHubClient.Update(ctx, &mc)
+			return notMasterUser.Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -433,7 +433,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 				return err
 			}
 			mc.SetAnnotations(map[string]string{testKey: testValue})
-			return impersonateHubClient.Update(ctx, &mc)
+			return notMasterUser.Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -451,7 +451,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 				Effect: corev1.TaintEffectNoSchedule,
 			}
 			mc.Spec.Taints = append(mc.Spec.Taints, taint)
-			return impersonateHubClient.Update(ctx, &mc)
+			return notMasterUser.Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -478,7 +478,7 @@ var _ = Describe("fleet guard rail tests for allow/deny upstream MC UPDATE opera
 			By(fmt.Sprintf("update upstream member cluster spec for MC %s", mc.Name))
 			mc.Spec.HeartbeatPeriodSeconds = 32
 			By(fmt.Sprintf("expecting denial of operation UPDATE of upstream member cluster %s", mc.Name))
-			return impersonateHubClient.Update(ctx, &mc)
+			return notMasterUser.Update(ctx, &mc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -524,7 +524,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 			},
 		}
 		By(fmt.Sprintf("expecting denial of operation CREATE of Internal Member Cluster %s/%s", mcName, imcNamespace))
-		Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, &imc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}))).Should(Succeed())
+		Expect(checkIfStatusErrorWithMessage(notMasterUser.Create(ctx, &imc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}))).Should(Succeed())
 	})
 
 	It("should deny UPDATE operation on internal member cluster CR for user not in MC identity in fleet member namespace", func() {
@@ -536,7 +536,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 			}
 			imc.Spec.HeartbeatPeriodSeconds = 25
 			By("expecting denial of operation UPDATE of Internal Member Cluster")
-			err = impersonateHubClient.Update(ctx, &imc)
+			err = notMasterUser.Update(ctx, &imc)
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
@@ -548,7 +548,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 		var imc clusterv1beta1.InternalMemberCluster
 		Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
 		By("expecting denial of operation DELETE of Internal Member Cluster")
-		Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Delete(ctx, &imc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}))).Should(Succeed())
+		Expect(checkIfStatusErrorWithMessage(notMasterUser.Delete(ctx, &imc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}))).Should(Succeed())
 	})
 
 	It("should deny UPDATE operation on internal member cluster CR status for user not in MC identity in fleet member namespace", func() {
@@ -569,7 +569,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 				AgentStatus: nil,
 			}
 			By("expecting denial of operation UPDATE of internal member cluster CR status")
-			err = impersonateHubClient.Status().Update(ctx, &imc)
+			err = notMasterUser.Status().Update(ctx, &imc)
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
@@ -609,7 +609,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 				AgentStatus: nil,
 			}
 			By("expecting successful UPDATE of Internal Member Cluster Status")
-			return impersonateHubClient.Status().Update(ctx, &imc)
+			return notMasterUser.Status().Update(ctx, &imc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -622,7 +622,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 			}
 			imc.Labels = map[string]string{testKey: testValue}
 			By("expecting successful UPDATE of Internal Member Cluster Status")
-			return impersonateHubClient.Update(ctx, &imc)
+			return notMasterUser.Update(ctx, &imc)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -693,7 +693,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 			},
 		}
 		By(fmt.Sprintf("expecting denial of operation CREATE of Work %s/%s", workName, imcNamespace))
-		Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, &w), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &workGVK, "", types.NamespacedName{Name: w.Name, Namespace: w.Namespace}))).Should(Succeed())
+		Expect(checkIfStatusErrorWithMessage(notMasterUser.Create(ctx, &w), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &workGVK, "", types.NamespacedName{Name: w.Name, Namespace: w.Namespace}))).Should(Succeed())
 	})
 
 	It("should deny UPDATE operation on work CR status for user not in MC identity", func() {
@@ -715,7 +715,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 				},
 			}
 			By("expecting denial of operation UPDATE of work CR status")
-			err = impersonateHubClient.Status().Update(ctx, &w)
+			err = notMasterUser.Status().Update(ctx, &w)
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
@@ -727,7 +727,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 		var w placementv1beta1.Work
 		Expect(hubClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: imcNamespace}, &w)).Should(Succeed())
 		By("expecting denial of operation DELETE of work")
-		Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Delete(ctx, &w), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &workGVK, "", types.NamespacedName{Name: w.Name, Namespace: w.Namespace}))).Should(Succeed())
+		Expect(checkIfStatusErrorWithMessage(notMasterUser.Delete(ctx, &w), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &workGVK, "", types.NamespacedName{Name: w.Name, Namespace: w.Namespace}))).Should(Succeed())
 	})
 })
 
@@ -755,7 +755,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 			}
 			w.SetLabels(map[string]string{testKey: testValue})
 			By("expecting successful UPDATE of work")
-			return impersonateHubClient.Update(ctx, &w)
+			return notMasterUser.Update(ctx, &w)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -778,7 +778,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 				},
 			}
 			By("expecting successful UPDATE of work Status")
-			return impersonateHubClient.Status().Update(ctx, &w)
+			return notMasterUser.Status().Update(ctx, &w)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
@@ -827,7 +827,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 				}
 				ise.SetLabels(map[string]string{testKey: testValue})
 				By("expecting denial of operation UPDATE of Internal Service Export")
-				err = impersonateHubClient.Update(ctx, &ise)
+				err = notMasterUser.Update(ctx, &ise)
 				if k8sErrors.IsConflict(err) {
 					return err
 				}
@@ -854,29 +854,29 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 		It("should allow CREATE operation on Internal service export resource in fleet-member namespace for user in member cluster identity", func() {
 			ise := internalServiceExport(iseName, imcNamespace)
 			By("expecting successful CREATE of Internal Service Export")
-			Expect(impersonateHubClient.Create(ctx, &ise)).Should(Succeed())
+			Expect(notMasterUser.Create(ctx, &ise)).Should(Succeed())
 
 			By("deleting Internal Service Export")
 			// Cleanup the internalServiceExport so that it won't block the member deletion.
-			Expect(impersonateHubClient.Delete(ctx, &ise)).Should(Succeed(), "failed to delete Internal Service Export")
+			Expect(notMasterUser.Delete(ctx, &ise)).Should(Succeed(), "failed to delete Internal Service Export")
 		})
 
 		It("should allow CREATE operation on Internal service import resource in fleet-member namespace for user in member cluster identity", func() {
 			isi := internalServiceImport(isiName, imcNamespace)
 			By("expecting successful CREATE of Internal Service Import")
-			Expect(impersonateHubClient.Create(ctx, &isi)).Should(Succeed())
+			Expect(notMasterUser.Create(ctx, &isi)).Should(Succeed())
 
 			By("deleting Internal Service Import")
-			Expect(impersonateHubClient.Delete(ctx, &isi)).Should(Succeed(), "failed to delete Internal Service Import")
+			Expect(notMasterUser.Delete(ctx, &isi)).Should(Succeed(), "failed to delete Internal Service Import")
 		})
 
 		It("should allow CREATE operation on Endpoint slice export resource in fleet-member namespace for user in member cluster identity", func() {
 			esx := endpointSliceExport(epName, imcNamespace)
 			By("expecting successful CREATE of Endpoint slice export")
-			Expect(impersonateHubClient.Create(ctx, &esx)).Should(Succeed())
+			Expect(notMasterUser.Create(ctx, &esx)).Should(Succeed())
 
 			By("deleting Endpoint Slice Export")
-			Expect(impersonateHubClient.Delete(ctx, &esx)).Should(Succeed(), "failed to delete EndpointSlice Export")
+			Expect(notMasterUser.Delete(ctx, &esx)).Should(Succeed(), "failed to delete EndpointSlice Export")
 		})
 	})
 
@@ -910,7 +910,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 				}
 				ise.SetLabels(map[string]string{testKey: testValue})
 				By("expecting denial of operation UPDATE of Internal Service Export")
-				return impersonateHubClient.Update(ctx, &ise)
+				return notMasterUser.Update(ctx, &ise)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 	})
@@ -929,12 +929,12 @@ var _ = Describe("fleet guard rail restrict internal fleet resources from being 
 					HeartbeatPeriodSeconds: 30,
 				},
 			}
-			Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, &imc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}))).Should(Succeed())
+			Expect(checkIfStatusErrorWithMessage(notMasterUser.Create(ctx, &imc), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}))).Should(Succeed())
 		})
 	})
 
 	It("should deny CREATE operation on internal service export resource in kube-system namespace for invalid user", func() {
 		ise := internalServiceExport("test-ise", "kube-system")
-		Expect(checkIfStatusErrorWithMessage(impersonateHubClient.Create(ctx, &ise), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &iseGVK, "", types.NamespacedName{Name: ise.Name, Namespace: ise.Namespace}))).Should(Succeed())
+		Expect(checkIfStatusErrorWithMessage(notMasterUser.Create(ctx, &ise), fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &iseGVK, "", types.NamespacedName{Name: ise.Name, Namespace: ise.Namespace}))).Should(Succeed())
 	})
 })

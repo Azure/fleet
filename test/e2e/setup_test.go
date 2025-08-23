@@ -107,7 +107,8 @@ var (
 	memberCluster3WestProd   *framework.Cluster
 
 	hubClient                      client.Client
-	impersonateHubClient           client.Client
+	notMasterUser                  client.Client
+	sysMastersClient               client.Client
 	memberCluster1EastProdClient   client.Client
 	memberCluster2EastCanaryClient client.Client
 	memberCluster3WestProdClient   client.Client
@@ -172,9 +173,7 @@ var (
 	}
 )
 
-var (
-	fleetBinaryPath = filepath.Join("../../", "hack", "tools", "bin", "kubectl-fleet")
-)
+var fleetBinaryPath = filepath.Join("../../", "hack", "tools", "bin", "kubectl-fleet")
 
 var (
 	isAzurePropertyProviderEnabled = (os.Getenv(propertyProviderEnvVarName) == azurePropertyProviderEnvVarValue)
@@ -334,8 +333,10 @@ func beforeSuiteForAllProcesses() {
 	framework.GetClusterClient(hubCluster)
 	hubClient = hubCluster.KubeClient
 	Expect(hubClient).NotTo(BeNil(), "Failed to initialize client for accessing Kubernetes cluster")
-	impersonateHubClient = hubCluster.ImpersonateKubeClient
-	Expect(impersonateHubClient).NotTo(BeNil(), "Failed to initialize impersonate client for accessing Kubernetes cluster")
+	notMasterUser = hubCluster.ImpersonateKubeClient
+	Expect(notMasterUser).NotTo(BeNil(), "Failed to initialize impersonate client for accessing Kubernetes cluster")
+	sysMastersClient = hubCluster.SystemMastersClient
+	Expect(notMasterUser).NotTo(BeNil(), "Failed to initialize impersonate client for accessing Kubernetes cluster")
 
 	var pricingProvider1 trackers.PricingProvider
 	if isAzurePropertyProviderEnabled {
