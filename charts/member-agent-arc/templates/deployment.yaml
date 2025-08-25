@@ -33,7 +33,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
           - name: TOKEN_NAMESPACE    
-            value: "fleet-system"         
+            value: "fleet-system"
 {{-  .Values.Azure.Identity.MSIAdapterYaml | nindent 10 }}
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
@@ -42,6 +42,7 @@ spec:
             - azure
             - --clientid=any-client-id
             - --scope={{ .Values.config.scope }}
+            - --v={{ .Values.logVerbosity }}
           resources:
             limits:
               cpu: 50m
@@ -75,8 +76,10 @@ spec:
               value: /config/token
             - name: MEMBER_CLUSTER_NAME
               value: {{ .Values.config.memberClusterName | quote }}
+            {{- if .Values.config.hubCA }}
             - name: HUB_CERTIFICATE_AUTHORITY
               value: {{ .Values.config.hubCA | quote }}
+            {{- end }}
             {{- if .Values.Azure.proxySettings.isProxyEnabled }}
             - name: HTTPS_PROXY
               value: {{ .Values.Azure.proxySettings.httpProxy | quote }}
@@ -159,7 +162,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
           - name: TOKEN_NAMESPACE    
-            value: "fleet-system"         
+            value: "fleet-system"
 {{-  .Values.Azure.Identity.MSIAdapterYaml | nindent 10 }}
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
@@ -168,6 +171,7 @@ spec:
             - azure
             - --clientid=any-client-id
             - --scope={{ .Values.config.scope }}
+            - --v={{ .Values.logVerbosity }}
           resources:
             limits:
               cpu: 50m
@@ -190,6 +194,7 @@ spec:
             - --add_dir_header
             - --enable-v1alpha1-apis={{ .Values.enableV1Alpha1APIs }}
             - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
+            - --enable-networking-features={{ .Values.enableNetworkingFeatures }}
           securityContext:
             capabilities:
               drop:
@@ -229,8 +234,10 @@ spec:
               value: /config/token
             - name: MEMBER_CLUSTER_NAME
               value: {{ .Values.config.memberClusterName | quote }}
+            {{- if .Values.config.hubCA }}
             - name: HUB_CERTIFICATE_AUTHORITY
               value: {{ .Values.config.hubCA | quote }}
+            {{- end }}
             {{- if .Values.Azure.proxySettings.isProxyEnabled }}
             - name: HTTPS_PROXY
               value: {{ .Values.Azure.proxySettings.httpProxy | quote }}
@@ -281,7 +288,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
           - name: TOKEN_NAMESPACE    
-            value: "fleet-system"         
+            value: "fleet-system"
 {{-  .Values.Azure.Identity.MSIAdapterYaml | nindent 10 }}
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
@@ -290,6 +297,7 @@ spec:
             - azure
             - --clientid=any-client-id
             - --scope={{ .Values.config.scope }}
+            - --v={{ .Values.logVerbosity }}
           resources:
             limits:
               cpu: 50m
@@ -313,6 +321,7 @@ spec:
             - --enable-v1alpha1-apis={{ .Values.enableV1Alpha1APIs }}
             - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
             - --enable-traffic-manager-feature={{ .Values.enableTrafficManagerFeature }}
+            - --enable-networking-features={{ .Values.enableNetworkingFeatures }}
           ports:
           - containerPort: 8080
             name: hubmetrics
@@ -348,8 +357,10 @@ spec:
               value: /config/token
             - name: MEMBER_CLUSTER_NAME
               value: {{ .Values.config.memberClusterName | quote }}
+            {{- if .Values.config.hubCA }}
             - name: HUB_CERTIFICATE_AUTHORITY
               value: {{ .Values.config.hubCA | quote }}
+            {{- end }}
             {{- if .Values.Azure.proxySettings.isProxyEnabled }}
             - name: HTTPS_PROXY
               value: {{ .Values.Azure.proxySettings.httpProxy | quote }}
