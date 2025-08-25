@@ -32,9 +32,7 @@ import (
 	"go.goms.io/fleet/pkg/propertyprovider/azure/trackers"
 )
 
-var (
-	kubeconfigPath = os.Getenv("KUBECONFIG")
-)
+var kubeconfigPath = os.Getenv("KUBECONFIG")
 
 // Cluster object defines the required clients based on the kubeconfig of the test cluster.
 type Cluster struct {
@@ -47,6 +45,7 @@ type Cluster struct {
 	HubURL                                   string
 	RestMapper                               meta.RESTMapper
 	PricingProvider                          trackers.PricingProvider
+	SystemMastersClient                      client.Client
 }
 
 func NewCluster(name, svcAccountName string, scheme *runtime.Scheme, pp trackers.PricingProvider) *Cluster {
@@ -62,6 +61,7 @@ func NewCluster(name, svcAccountName string, scheme *runtime.Scheme, pp trackers
 func GetClusterClient(cluster *Cluster) {
 	clusterConfig := GetClientConfig(cluster)
 	impersonateClusterConfig := GetImpersonateClientConfig(cluster)
+	systemMastersConfig := GetSystemMastersClientConfig(cluster)
 
 	restConfig, err := clusterConfig.ClientConfig()
 	if err != nil {
@@ -69,6 +69,11 @@ func GetClusterClient(cluster *Cluster) {
 	}
 
 	impersonateRestConfig, err := impersonateClusterConfig.ClientConfig()
+	if err != nil {
+		gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up impersonate rest config")
+	}
+
+	systemMastersRestConfig, err := systemMastersConfig.ClientConfig()
 	if err != nil {
 		gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up impersonate rest config")
 	}
@@ -87,6 +92,9 @@ func GetClusterClient(cluster *Cluster) {
 
 	cluster.ImpersonateKubeClient, err = client.New(impersonateRestConfig, client.Options{Scheme: cluster.Scheme})
 	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Impersonate Kube Client")
+
+	cluster.SystemMastersClient, err = client.New(systemMastersRestConfig, client.Options{Scheme: cluster.Scheme})
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Impersonate Kube Client")
 }
 
 func GetClientConfig(cluster *Cluster) clientcmd.ClientConfig {
@@ -94,6 +102,18 @@ func GetClientConfig(cluster *Cluster) clientcmd.ClientConfig {
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigPath},
 		&clientcmd.ConfigOverrides{
 			CurrentContext: cluster.ClusterName,
+		})
+}
+
+func GetSystemMastersClientConfig(cluster *Cluster) clientcmd.ClientConfig {
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigPath},
+		&clientcmd.ConfigOverrides{
+			CurrentContext: cluster.ClusterName,
+			AuthInfo: api.AuthInfo{
+				Impersonate:       "system",
+				ImpersonateGroups: []string{"system:masters"},
+			},
 		})
 }
 

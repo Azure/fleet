@@ -11,6 +11,7 @@ RUN go mod download
 
 # Copy the go source
 COPY cmd/crdinstaller/ cmd/crdinstaller/
+COPY pkg pkg
 
 ARG TARGETARCH
 

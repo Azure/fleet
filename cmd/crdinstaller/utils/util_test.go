@@ -7,20 +7,24 @@ Licensed under the MIT license.
 package utils
 
 import (
+	"context"
 	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	admv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-var (
-	lessFunc = func(s1, s2 string) bool {
-		return s1 < s2
-	}
-)
+var lessFunc = func(s1, s2 string) bool {
+	return s1 < s2
+}
 
 // Test using the actual config/crd/bases directory.
 func TestCollectCRDFileNamesWithActualPath(t *testing.T) {
@@ -110,6 +114,224 @@ func runTest(t *testing.T, crdPath string) {
 			// Sort the names for comparison.
 			if diff := cmp.Diff(tt.wantedCRDNames, gotCRDNames, cmpopts.SortSlices(lessFunc)); diff != "" {
 				t.Errorf("CRD names mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestInstallCRD(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := apiextensionsv1.AddToScheme(scheme); err != nil {
+		t.Fatalf("Failed to add apiextensions scheme: %v", err)
+	}
+
+	testCRD := &apiextensionsv1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test.example.com",
+		},
+		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+			Group: "example.com",
+			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+				{
+					Name:    "v1",
+					Served:  true,
+					Storage: true,
+					Schema: &apiextensionsv1.CustomResourceValidation{
+						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+							Type: "object",
+						},
+					},
+				},
+			},
+			Scope: apiextensionsv1.NamespaceScoped,
+			Names: apiextensionsv1.CustomResourceDefinitionNames{
+				Plural:   "tests",
+				Singular: "test",
+				Kind:     "Test",
+			},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		crd       *apiextensionsv1.CustomResourceDefinition
+		wantError bool
+	}{
+		{
+			name:      "successful CRD installation",
+			crd:       testCRD,
+			wantError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			err := InstallCRD(context.Background(), fakeClient, tt.crd)
+
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("InstallCRD() expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("InstallCRD() unexpected error: %v", err)
+				return
+			}
+
+			var installedCRD apiextensionsv1.CustomResourceDefinition
+			err = fakeClient.Get(context.Background(), types.NamespacedName{Name: tt.crd.Name}, &installedCRD)
+			if err != nil {
+				t.Errorf("Failed to get installed CRD: %v", err)
+				return
+			}
+
+			if installedCRD.Labels[CRDInstallerLabelKey] != "true" {
+				t.Errorf("Expected CRD label %s to be 'true', got %q", CRDInstallerLabelKey, installedCRD.Labels[CRDInstallerLabelKey])
+			}
+
+			if installedCRD.Labels[AzureManagedLabelKey] != FleetLabelValue {
+				t.Errorf("Expected CRD label %s to be %q, got %q", AzureManagedLabelKey, FleetLabelValue, installedCRD.Labels[AzureManagedLabelKey])
+			}
+
+			if diff := cmp.Diff(tt.crd.Spec, installedCRD.Spec); diff != "" {
+				t.Errorf("CRD spec mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestInstall(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := apiextensionsv1.AddToScheme(scheme); err != nil {
+		t.Fatalf("Failed to add apiextensions scheme: %v", err)
+	}
+
+	testCRD := &apiextensionsv1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test.example.com",
+		},
+		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+			Group: "example.com",
+			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+				{
+					Name:    "v1",
+					Served:  true,
+					Storage: true,
+					Schema: &apiextensionsv1.CustomResourceValidation{
+						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+							Type: "object",
+						},
+					},
+				},
+			},
+			Scope: apiextensionsv1.NamespaceScoped,
+			Names: apiextensionsv1.CustomResourceDefinitionNames{
+				Plural:   "tests",
+				Singular: "test",
+				Kind:     "Test",
+			},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		obj       client.Object
+		mutFunc   func() error
+		wantError bool
+	}{
+		{
+			name: "successful install with mutation",
+			obj:  testCRD,
+			mutFunc: func() error {
+				if testCRD.Labels == nil {
+					testCRD.Labels = make(map[string]string)
+				}
+				testCRD.Labels["test"] = "value"
+				return nil
+			},
+			wantError: false,
+		},
+		{
+			name: "successful install without mutation",
+			obj: &apiextensionsv1.CustomResourceDefinition{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test2.example.com",
+				},
+				Spec: testCRD.Spec,
+			},
+			mutFunc: func() error {
+				return nil
+			},
+			wantError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			err := install(context.Background(), fakeClient, tt.obj, tt.mutFunc)
+
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("install() expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("install() unexpected error: %v", err)
+				return
+			}
+
+			var installed apiextensionsv1.CustomResourceDefinition
+			err = fakeClient.Get(context.Background(), types.NamespacedName{Name: tt.obj.GetName()}, &installed)
+			if err != nil {
+				t.Errorf("Failed to get installed object: %v", err)
+				return
+			}
+
+			if tt.mutFunc != nil && tt.obj.GetName() == "test.example.com" {
+				if installed.Labels["test"] != "value" {
+					t.Errorf("Expected label 'test' to be 'value', got %q", installed.Labels["test"])
+				}
+			}
+		})
+	}
+}
+
+func TestInstallManagedResourceVAP(t *testing.T) {
+	tests := []struct {
+		name string
+		mode string
+	}{
+		{
+			name: "hub mode",
+			mode: "hub",
+		},
+		{
+			name: "member mode",
+			mode: "member",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			if err := admv1.AddToScheme(scheme); err != nil {
+				t.Fatalf("Failed to add admissionregistration scheme: %v", err)
+			}
+
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			err := InstallManagedResourceVAP(context.Background(), fakeClient, tt.mode)
+
+			// The function should complete without errors
+			// The actual installation behavior depends on the RESTMapper implementation
+			// which is difficult to test reliably with the fake client
+			if err != nil {
+				t.Errorf("InstallManagedResourceVAP() unexpected error: %v", err)
 			}
 		})
 	}

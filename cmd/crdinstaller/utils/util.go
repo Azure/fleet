@@ -15,12 +15,15 @@ import (
 	"strings"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	"go.goms.io/fleet/pkg/webhook/managedresource"
 )
 
 const (
@@ -51,7 +54,7 @@ func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.
 		},
 	}
 
-	createOrUpdateRes, err := controllerutil.CreateOrUpdate(ctx, client, &existingCRD, func() error {
+	mutFn := func() error {
 		// Copy spec from our decoded CRD to the object we're creating/updating.
 		existingCRD.Spec = crd.Spec
 
@@ -65,14 +68,24 @@ func InstallCRD(ctx context.Context, client client.Client, crd *apiextensionsv1.
 		// needed for clean up of CRD by kube-addon-manager.
 		existingCRD.Labels[AzureManagedLabelKey] = FleetLabelValue
 		return nil
-	})
+	}
+	err := install(ctx, client, &existingCRD, mutFn)
+	if err == nil {
+		klog.Infof("Successfully created/updated CRD %s", crd.Name)
+	}
+	return err
+}
 
-	if err != nil {
-		klog.ErrorS(err, "Failed to create or update CRD", "name", crd.Name, "operation", createOrUpdateRes)
-		return err
+func install(ctx context.Context, client client.Client, obj client.Object, mut func() error) error {
+	if mut == nil {
+		mut = func() error { return nil }
 	}
 
-	klog.Infof("Successfully created/updated CRD %s", crd.Name)
+	result, err := controllerutil.CreateOrUpdate(ctx, client, obj, mut)
+	if err != nil {
+		klog.ErrorS(err, "Failed to create or update", "kind", obj.GetObjectKind().GroupVersionKind().Kind, "name", obj.GetName(), "operation", result)
+		return err
+	}
 	return nil
 }
 
@@ -160,4 +173,20 @@ func GetCRDFromPath(crdPath string, scheme *runtime.Scheme) (*apiextensionsv1.Cu
 	}
 
 	return crd, nil
+}
+
+func InstallManagedResourceVAP(ctx context.Context, c client.Client, mode string) error {
+	vap := managedresource.GetValidatingAdmissionPolicy(mode == "hub")
+	vapBinding := managedresource.GetValidatingAdmissionPolicyBinding()
+	for _, ob := range []client.Object{vap, vapBinding} {
+		if err := install(ctx, c, ob, nil); err != nil {
+			if meta.IsNoMatchError(err) {
+				klog.Infof("Cluster does not support %s resource, skipping installation", ob.GetObjectKind().GroupVersionKind().Kind)
+				return nil
+			}
+			return err
+		}
+	}
+	klog.Infof("Successfully installed managed resource ValidatingAdmissionPolicy")
+	return nil
 }
