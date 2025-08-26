@@ -948,11 +948,6 @@ spec:
             required:
             - resourceSelectors
             type: object
-            x-kubernetes-validations:
-            - message: when statusReportingScope is NamespaceAccessible, exactly one
-                resourceSelector with kind 'Namespace' is required
-              rule: '!(self.statusReportingScope == ''NamespaceAccessible'' && size(self.resourceSelectors.filter(x,
-                x.kind == ''Namespace'')) != 1)'
           status:
             description: The observed status of ResourcePlacement.
             properties:

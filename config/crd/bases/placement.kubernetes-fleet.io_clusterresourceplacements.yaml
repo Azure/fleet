@@ -2022,6 +2022,9 @@ spec:
                 resourceSelector with kind 'Namespace' is required
               rule: '!(self.statusReportingScope == ''NamespaceAccessible'' && size(self.resourceSelectors.filter(x,
                 x.kind == ''Namespace'')) != 1)'
+            - message: statusReportingScope is immutable
+              rule: '!has(oldSelf.statusReportingScope) || self.statusReportingScope
+                == oldSelf.statusReportingScope'
           status:
             description: The observed status of ClusterResourcePlacement.
             properties:
