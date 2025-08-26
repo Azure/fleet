@@ -25,11 +25,12 @@ import (
 	. "github.com/onsi/gomega"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 const (
@@ -39,14 +40,16 @@ const (
 	vapBindingName      = "aks-fleet-managed-by-arm"
 )
 
+var managedByLabelMap = map[string]string{
+	managedByLabel: managedByLabelValue,
+}
+
 // Helper functions for creating managed resources
 func createManagedNamespace(name string) *corev1.Namespace {
 	return &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-			Labels: map[string]string{
-				managedByLabel: managedByLabelValue,
-			},
+			Name:   name,
+			Labels: managedByLabelMap,
 		},
 	}
 }
@@ -72,7 +75,7 @@ func expectDeniedByVAP(err error) {
 }
 
 var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("managedresource"), Ordered, func() {
-	BeforeAll(func() {
+	It("The VAP and its binding should exist", func() {
 		var vap admissionregistrationv1.ValidatingAdmissionPolicy
 		Expect(sysMastersClient.Get(ctx, types.NamespacedName{Name: vapName}, &vap)).Should(Succeed(), "ValidatingAdmissionPolicy should be installed")
 
@@ -93,7 +96,7 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 			}
 			ns.Annotations = map[string]string{"test": "annotation"}
 			return notMasterUser.Update(ctx, &ns)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, eventuallyDuration, workloadEventuallyDuration).Should(Succeed())
 
 		By("expecting successful DELETE operation on unmanaged namespace")
 		Expect(notMasterUser.Delete(ctx, unmanagedNS)).To(Succeed())
@@ -123,7 +126,6 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 			if err != nil {
 				Expect(k8sErrors.IsNotFound(err)).To(BeTrue())
 			}
-
 			Expect(sysMastersClient.Create(ctx, managedNS)).To(Succeed())
 			var ns corev1.Namespace
 			err = sysMastersClient.Get(ctx, types.NamespacedName{Name: managedNS.Name}, &ns)
@@ -151,7 +153,7 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 					return updateErr
 				}
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, workloadEventuallyDuration).Should(Succeed())
 
 			expectDeniedByVAP(updateErr)
 		})
@@ -170,7 +172,7 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 					return updateErr
 				}
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			}, eventuallyDuration, workloadEventuallyDuration).Should(Succeed())
 		})
 
 		AfterAll(func() {
@@ -178,6 +180,68 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 			if err != nil {
 				Expect(k8sErrors.IsNotFound(err)).To(BeTrue())
 			}
+		})
+	})
+
+	Context("For other resources in scope", func() {
+		It("should deny creating managed resource quotas", func() {
+			Eventually(func() error {
+				rq := corev1.ResourceQuota{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "managedrq",
+						Namespace: "default",
+						Labels:    managedByLabelMap,
+					},
+				}
+				err := notMasterUser.Create(ctx, &rq)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				expectDeniedByVAP(err)
+				return nil
+			}, eventuallyDuration, workloadEventuallyDuration).Should(Succeed())
+		})
+		It("should deny creating managed network policy", func() {
+			Eventually(func() error {
+				np := networkingv1.NetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "managednp",
+						Namespace: "default",
+						Labels:    managedByLabelMap,
+					},
+				}
+				err := notMasterUser.Create(ctx, &np)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				expectDeniedByVAP(err)
+				return nil
+			}, eventuallyDuration, workloadEventuallyDuration).Should(Succeed())
+		})
+		It("should deny creating managed CRP", func() {
+			Eventually(func() error {
+				crp := placementv1beta1.ClusterResourcePlacement{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "managedcrp",
+						Labels: managedByLabelMap,
+					},
+					Spec: placementv1beta1.PlacementSpec{
+						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+							{
+								Group:   "",
+								Version: "v1",
+								Kind:    "Namespace",
+							},
+						},
+					},
+				}
+				err := notMasterUser.Create(ctx, &crp)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				expectDeniedByVAP(err)
+				return nil
+			}, eventuallyDuration, workloadEventuallyDuration).Should(Succeed())
 		})
 	})
 })

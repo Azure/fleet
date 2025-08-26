@@ -50,7 +50,6 @@ func GetValidatingAdmissionPolicy(isHub bool) *admv1.ValidatingAdmissionPolicy {
 							},
 							Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
 						},
-						ResourceNames: []string{"default"},
 					},
 					{
 						RuleWithOperations: admv1.RuleWithOperations{
@@ -61,7 +60,6 @@ func GetValidatingAdmissionPolicy(isHub bool) *admv1.ValidatingAdmissionPolicy {
 							},
 							Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
 						},
-						ResourceNames: []string{"default"},
 					},
 				},
 			},
