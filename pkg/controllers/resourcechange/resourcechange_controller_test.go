@@ -671,20 +671,41 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-nameSpace",
+			Name: "test-namespace",
 			Labels: map[string]string{
 				"region":  rand.String(10),
 				"version": rand.String(4),
 			},
 		},
 	}
+
+	// Common ResourceIdentifier for Namespace tests (cluster-scoped)
+	namespaceResourceIdentifier := fleetv1alpha1.ResourceIdentifier{
+		Group:   "",
+		Version: "v1",
+		Kind:    "Namespace",
+		Name:    "test-namespace",
+	}
+
+	// Common ResourceIdentifier for namespace-scoped resource tests
+	namespaceScopedResourceIdentifier := fleetv1alpha1.ResourceIdentifier{
+		Group:     "apps",
+		Version:   "v1",
+		Kind:      "Deployment",
+		Name:      "test-deployment",
+		Namespace: "test-namespace",
+	}
+
 	tests := map[string]struct {
-		isClusterScoped bool
-		res             *corev1.Namespace
-		crpList         []*placementv1beta1.ClusterResourcePlacement
-		wantCRP         map[string]bool
+		key     keys.ClusterWideKey
+		res     *corev1.Namespace
+		crpList []*placementv1beta1.ClusterResourcePlacement
+		wantCRP map[string]bool
 	}{
 		"match a place with the matching label": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -708,6 +729,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"resource-selected": true},
 		},
 		"Skip a placement with selecting ns only": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceScopedResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -732,8 +756,10 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: make(map[string]bool),
 		},
 		"does not match a place with no selector": {
-			isClusterScoped: true,
-			res:             matchRes,
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
+			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -747,8 +773,10 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: make(map[string]bool),
 		},
 		"match a place with the name selector": {
-			isClusterScoped: true,
-			res:             matchRes,
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
+			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -769,6 +797,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"resource-selected": true},
 		},
 		"match a place with a match Expressions label": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -797,6 +828,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"resource-selected": true},
 		},
 		"match a place with a single matching label": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -820,6 +854,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"resource-selected": true},
 		},
 		"does not match a place with a miss matching label": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -847,6 +884,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: make(map[string]bool),
 		},
 		"match a place with multiple matching resource selectors": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -883,6 +923,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"resource-selected": true},
 		},
 		"match a place with only one matching resource selectors": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -920,6 +963,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"resource-selected": true},
 		},
 		"match a place with a miss matching label but was selected": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -964,6 +1010,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"resource-selected": true},
 		},
 		"does not match a place with a miss matching label and was not selected": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -1000,6 +1049,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: make(map[string]bool),
 		},
 		"don't select placement with name, nil label selector for namespace with different name": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -1021,6 +1073,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: make(map[string]bool),
 		},
 		"select placement with empty name, nil label selector for namespace": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -1041,6 +1096,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"resource-selected": true},
 		},
 		"match placement through status SelectedResources when selector does not match": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -1079,6 +1137,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"status-matched-placement": true},
 		},
 		"does not match placement with different GVK selector": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -1101,6 +1162,124 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			},
 			wantCRP: make(map[string]bool),
 		},
+		"match ClusterResourcePlacement with previously selected resource": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceScopedResourceIdentifier,
+			},
+			res: matchRes,
+			crpList: []*placementv1beta1.ClusterResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "crp-with-selected-resource",
+					},
+					Spec: placementv1beta1.PlacementSpec{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+							{
+								Group:   corev1.GroupName,
+								Version: "v1",
+								Kind:    matchRes.Kind,
+								LabelSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"nonexistent": "label",
+									},
+								},
+							},
+						},
+					},
+					Status: placementv1beta1.PlacementStatus{
+						SelectedResources: []placementv1beta1.ResourceIdentifier{
+							{
+								Group:     "apps",
+								Version:   "v1",
+								Kind:      "Deployment",
+								Name:      "test-deployment",
+								Namespace: "test-namespace",
+							},
+						},
+					},
+				},
+			},
+			wantCRP: map[string]bool{"crp-with-selected-resource": true},
+		},
+		"match ClusterResourcePlacement (even with namespace only) with previously selected resource": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceScopedResourceIdentifier,
+			},
+			res: matchRes,
+			crpList: []*placementv1beta1.ClusterResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "crp-with-selected-resource",
+					},
+					Spec: placementv1beta1.PlacementSpec{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+							{
+								Group:   corev1.GroupName,
+								Version: "v1",
+								Kind:    matchRes.Kind,
+								LabelSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"nonexistent": "label",
+									},
+								},
+								SelectionScope: placementv1beta1.NamespaceOnly,
+							},
+						},
+					},
+					Status: placementv1beta1.PlacementStatus{
+						SelectedResources: []placementv1beta1.ResourceIdentifier{
+							{
+								Group:     "apps",
+								Version:   "v1",
+								Kind:      "Deployment",
+								Name:      "test-deployment",
+								Namespace: "test-namespace",
+							},
+						},
+					},
+				},
+			},
+			wantCRP: map[string]bool{"crp-with-selected-resource": true},
+		},
+		"does not match ClusterResourcePlacement with previously selected resource when namespace is different": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceScopedResourceIdentifier,
+			},
+			res: matchRes,
+			crpList: []*placementv1beta1.ClusterResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "crp-with-selected-resource",
+					},
+					Spec: placementv1beta1.PlacementSpec{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+							{
+								Group:   corev1.GroupName,
+								Version: "v1",
+								Kind:    matchRes.Kind,
+								LabelSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"nonexistent": "label",
+									},
+								},
+							},
+						},
+					},
+					Status: placementv1beta1.PlacementStatus{
+						SelectedResources: []placementv1beta1.ResourceIdentifier{
+							{
+								Group:     "apps",
+								Version:   "v1",
+								Kind:      "Deployment",
+								Name:      "test-deployment",
+								Namespace: "different-namespace",
+							},
+						},
+					},
+				},
+			},
+			wantCRP: make(map[string]bool),
+		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -1111,7 +1290,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			}
 			uRes, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(tt.res)
 			clusterPlacements := convertToClusterResourcePlacements(crpList)
-			got := collectAllAffectedPlacementsV1Beta1(tt.isClusterScoped, &unstructured.Unstructured{Object: uRes}, clusterPlacements)
+			got := collectAllAffectedPlacementsV1Beta1(tt.key, &unstructured.Unstructured{Object: uRes}, clusterPlacements)
 			if !reflect.DeepEqual(got, tt.wantCRP) {
 				t.Errorf("test case `%s` got = %v, wantResult %v", name, got, tt.wantCRP)
 			}
@@ -1142,12 +1321,25 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 		Kind:    "Deployment",
 	})
 
+	// Common ResourceIdentifier for Deployment tests
+	deploymentResourceIdentifier := fleetv1alpha1.ResourceIdentifier{
+		Group:     "apps",
+		Version:   "v1",
+		Kind:      "Deployment",
+		Name:      "test-deployment",
+		Namespace: "test-namespace",
+	}
+
 	tests := map[string]struct {
+		key    keys.ClusterWideKey
 		res    *unstructured.Unstructured
 		rpList []*placementv1beta1.ResourcePlacement
 		wantRP map[string]bool
 	}{
 		"match ResourcePlacement with the matching label": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: deploymentResourceIdentifier,
+			},
 			res: matchRes,
 			rpList: []*placementv1beta1.ResourcePlacement{
 				{
@@ -1174,6 +1366,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 			wantRP: map[string]bool{"resource-selected": true},
 		},
 		"does not match ResourcePlacement with no selector": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: deploymentResourceIdentifier,
+			},
 			res: matchRes,
 			rpList: []*placementv1beta1.ResourcePlacement{
 				{
@@ -1189,6 +1384,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 			wantRP: make(map[string]bool),
 		},
 		"match ResourcePlacement with the name selector": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: deploymentResourceIdentifier,
+			},
 			res: matchRes,
 			rpList: []*placementv1beta1.ResourcePlacement{
 				{
@@ -1212,6 +1410,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 			wantRP: map[string]bool{"resource-selected": true},
 		},
 		"does not match ResourcePlacement with different name": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: deploymentResourceIdentifier,
+			},
 			res: matchRes,
 			rpList: []*placementv1beta1.ResourcePlacement{
 				{
@@ -1234,6 +1435,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 			wantRP: make(map[string]bool),
 		},
 		"match ResourcePlacement with previously selected resource": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: deploymentResourceIdentifier,
+			},
 			res: matchRes,
 			rpList: []*placementv1beta1.ResourcePlacement{
 				{
@@ -1242,6 +1446,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 						Namespace: "test-namespace",
 					},
 					Spec: placementv1beta1.PlacementSpec{
+						// Selector that does not match the resource
 						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "apps",
@@ -1256,6 +1461,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 						},
 					},
 					Status: placementv1beta1.PlacementStatus{
+						// But the resource is in the selected resources status
 						SelectedResources: []placementv1beta1.ResourceIdentifier{
 							{
 								Group:     "apps",
@@ -1271,6 +1477,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 			wantRP: map[string]bool{"resource-selected": true},
 		},
 		"select ResourcePlacement with empty name, nil label selector for deployment": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: deploymentResourceIdentifier,
+			},
 			res: matchRes,
 			rpList: []*placementv1beta1.ResourcePlacement{
 				{
@@ -1292,6 +1501,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 			wantRP: map[string]bool{"resource-selected": true},
 		},
 		"does not match ResourcePlacement with different GVK selector": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: deploymentResourceIdentifier,
+			},
 			res: matchRes,
 			rpList: []*placementv1beta1.ResourcePlacement{
 				{
@@ -1318,7 +1530,10 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 			},
 			wantRP: make(map[string]bool),
 		},
-		"match ResourcePlacement through status SelectedResources when selector does not match": {
+		"does not match ResourcePlacement through status SelectedResources when name is different": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: deploymentResourceIdentifier,
+			},
 			res: matchRes,
 			rpList: []*placementv1beta1.ResourcePlacement{
 				{
@@ -1348,14 +1563,14 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 								Group:     "apps",
 								Version:   "v1",
 								Kind:      "Deployment",
-								Name:      "test-deployment",
+								Name:      "different-deployment",
 								Namespace: "test-namespace",
 							},
 						},
 					},
 				},
 			},
-			wantRP: map[string]bool{"status-matched-rp": true},
+			wantRP: make(map[string]bool),
 		},
 	}
 
@@ -1367,7 +1582,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 				rpList = append(rpList, &unstructured.Unstructured{Object: uMap})
 			}
 			resourcePlacements := convertToResourcePlacements(rpList)
-			got := collectAllAffectedPlacementsV1Beta1(false, tt.res, resourcePlacements)
+			got := collectAllAffectedPlacementsV1Beta1(tt.key, tt.res, resourcePlacements)
 			if !reflect.DeepEqual(got, tt.wantRP) {
 				t.Errorf("test case `%s` got = %v, wantResult %v", name, got, tt.wantRP)
 			}
@@ -2486,6 +2701,13 @@ func TestHandleDeletedResource(t *testing.T) {
 					Kind:      "Namespace",
 					Name:      "test-namespace",
 					Namespace: "",
+				},
+				{
+					Group:     "apps",
+					Version:   "v1",
+					Kind:      "Deployment",
+					Name:      "test-deployment",
+					Namespace: "test-namespace",
 				},
 			},
 		},

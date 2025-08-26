@@ -292,7 +292,7 @@ func (r *Reconciler) getUnstructuredObject(objectKey keys.ClusterWideKey) (runti
 }
 
 // triggerAffectedPlacementsForUpdatedRes find the affected placements for a given updated cluster scoped or namespace scoped resources.
-// If the key is namespace scoped, res will be the namespace object.
+// If the key is namespace scoped, res will be the namespace object for the clusterResourcePlacement.
 // If triggerCRP is true, it will trigger the cluster resource placement controller, otherwise it will trigger the resource placement controller.
 func (r *Reconciler) triggerAffectedPlacementsForUpdatedRes(key keys.ClusterWideKey, res *unstructured.Unstructured, triggerCRP bool) error {
 	if triggerCRP {
@@ -326,7 +326,7 @@ func (r *Reconciler) triggerAffectedPlacementsForUpdatedRes(key keys.ClusterWide
 			}
 
 			// Find all matching CRPs.
-			matchedCRPs := collectAllAffectedPlacementsV1Beta1(key.Namespace == "", res, convertToClusterResourcePlacements(crpList))
+			matchedCRPs := collectAllAffectedPlacementsV1Beta1(key, res, convertToClusterResourcePlacements(crpList))
 			if len(matchedCRPs) == 0 {
 				klog.V(2).InfoS("Change in object does not affect any v1beta1 cluster resource placement", "obj", key)
 				return nil
@@ -350,7 +350,7 @@ func (r *Reconciler) triggerAffectedPlacementsForUpdatedRes(key keys.ClusterWide
 		}
 
 		// Find all matching ResourcePlacements.
-		matchedRPs := collectAllAffectedPlacementsV1Beta1(key.Namespace == "", res, convertToResourcePlacements(rpList))
+		matchedRPs := collectAllAffectedPlacementsV1Beta1(key, res, convertToResourcePlacements(rpList))
 		if len(matchedRPs) == 0 {
 			klog.V(2).InfoS("Change in object does not affect any resource placement", "obj", key)
 			return nil
@@ -408,17 +408,18 @@ func isSelectNamespaceOnly(selector placementv1beta1.ResourceSelectorTerm) bool 
 	return selector.Group == "" && selector.Version == "v1" && selector.Kind == "Namespace" && selector.SelectionScope == placementv1beta1.NamespaceOnly
 }
 
-// collectAllAffectedPlacementsV1Beta1 goes through all v1beta1 placements and collect the ones whose resource selector matches the object given its gvk
-func collectAllAffectedPlacementsV1Beta1(isClusterScoped bool, res *unstructured.Unstructured, placementList []placementv1beta1.PlacementObj) map[string]bool {
+// collectAllAffectedPlacementsV1Beta1 goes through all v1beta1 placements and collect the ones whose resource selector matches the object given its gvk.
+// If the key is namespace scoped, res will be the namespace object for the clusterResourcePlacement.
+func collectAllAffectedPlacementsV1Beta1(key keys.ClusterWideKey, res *unstructured.Unstructured, placementList []placementv1beta1.PlacementObj) map[string]bool {
 	placements := make(map[string]bool)
 	for _, placement := range placementList {
 		match := false
 		// find the placements selected this resource (before this change)
-		// For the resource placement, we do not compare the namespace in the selectedResources status.
-		// We assume the namespace is the same as the resource placement's namespace.
+		// If the namespaced scope resource is in the clusterResourcePlacement status and placement is namespaceOnly,
+		// the placement should be triggered to create a new resourceSnapshot.
 		for _, selectedRes := range placement.GetPlacementStatus().SelectedResources {
-			if selectedRes.Group == res.GroupVersionKind().Group && selectedRes.Version == res.GroupVersionKind().Version &&
-				selectedRes.Kind == res.GroupVersionKind().Kind && selectedRes.Name == res.GetName() {
+			if selectedRes.Group == key.GroupVersionKind().Group && selectedRes.Version == key.GroupVersionKind().Version &&
+				selectedRes.Kind == key.GroupVersionKind().Kind && selectedRes.Name == key.Name && selectedRes.Namespace == key.Namespace {
 				placements[placement.GetName()] = true
 				match = true
 				break
@@ -433,9 +434,9 @@ func collectAllAffectedPlacementsV1Beta1(isClusterScoped bool, res *unstructured
 		// will validate the resource placement's namespace matches the resource's namespace.
 		for _, selector := range placement.GetPlacementSpec().ResourceSelectors {
 			// For the clusterResourcePlacement, we skip the namespace scoped resources if the placement is cluster scoped.
-			if !isClusterScoped && isSelectNamespaceOnly(selector) && placement.GetNamespace() == "" {
+			if key.Namespace != "" && isSelectNamespaceOnly(selector) && placement.GetNamespace() == "" {
 				// If the selector is namespace only, we skip the namespace scoped resources.
-				klog.V(2).InfoS("Skipping namespace scoped resource for namespace only selector", "obj", klog.KRef(res.GetNamespace(), res.GetName()), "selector", selector, "placement", klog.KObj(placement))
+				klog.V(2).InfoS("Skipping namespace scoped resource for namespace only selector", "key", key, "obj", klog.KRef(res.GetNamespace(), res.GetName()), "selector", selector, "placement", klog.KObj(placement))
 				continue
 			}
 
