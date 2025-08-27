@@ -52,6 +52,11 @@ done
 if [ -n "$UPGRADE_HUB_SIDE" ]; then
     echo "Upgrading the hub agent in the hub cluster..."
     kind export kubeconfig --name $HUB_CLUSTER
+
+    echo "Uninstalling the hub agent Helm release in the hub cluster..."
+    helm uninstall hub-agent --wait --timeout 5m
+
+    echo "Re-installing the hub agent Helm release in the hub cluster..."
     helm upgrade hub-agent charts/hub-agent/ \
         --set image.pullPolicy=Never \
         --set image.repository=$REGISTRY/$HUB_AGENT_IMAGE \
@@ -74,8 +79,11 @@ if [ -n "$UPGRADE_MEMBER_SIDE" ]; then
     echo "Upgrading the member agents in the member clusters..."
     for (( i=0; i<${MEMBER_CLUSTER_COUNT}; i++ ));
     do
+        echo "Uninstalling the member agent Helm release in the member cluster ${MEMBER_CLUSTERS[$i]}..."
+        helm uninstall member-agent --wait --timeout 5m
+
         kind export kubeconfig --name "${MEMBER_CLUSTERS[$i]}"
-        helm upgrade member-agent charts/member-agent/ \
+        helm install member-agent charts/member-agent/ \
             --set config.hubURL=$HUB_SERVER_URL \
             --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
             --set image.tag=$IMAGE_TAG \
