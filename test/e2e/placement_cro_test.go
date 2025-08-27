@@ -707,3 +707,246 @@ var _ = Context("creating clusterResourceOverride with delete rules for one clus
 		}, consistentlyDuration, eventuallyInterval).Should(BeTrue(), "Failed to delete work resources on member cluster %s", memberCluster.ClusterName)
 	})
 })
+
+var _ = Context("creating clusterResourceOverride with cluster-scoped placementRef", Ordered, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
+	croSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, croName, 0)
+
+	BeforeAll(func() {
+		By("creating work resources")
+		createWorkResources()
+
+		// Create the working CRO with proper PlacementRef before CRP so that the observed resource index is predictable.
+		croWorking := &placementv1beta1.ClusterResourceOverride{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: croName,
+			},
+			Spec: placementv1beta1.ClusterResourceOverrideSpec{
+				Placement: &placementv1beta1.PlacementRef{
+					Name:  crpName, // correct CRP name
+					Scope: placementv1beta1.ClusterScoped,
+				},
+				ClusterResourceSelectors: workResourceSelector(),
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
+						{
+							ClusterSelector: &placementv1beta1.ClusterSelector{
+								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
+							},
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
+								{
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
+									Path:     "/metadata/annotations",
+									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s"}`, croTestAnnotationKey, croTestAnnotationValue))},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		By(fmt.Sprintf("creating working clusterResourceOverride %s", croName))
+		Expect(hubClient.Create(ctx, croWorking)).To(Succeed(), "Failed to create clusterResourceOverride %s", croName)
+
+		// This is to make sure the working cro snapshot is created before the CRP
+		Eventually(func() error {
+			croSnap := &placementv1beta1.ClusterResourceOverrideSnapshot{}
+			return hubClient.Get(ctx, types.NamespacedName{Name: croSnapShotName}, croSnap)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cro snapshot as expected", croName)
+
+		// Create the CRP.
+		createCRP(crpName)
+	})
+
+	AfterAll(func() {
+		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+
+		By(fmt.Sprintf("deleting clusterResourceOverride %s", croName))
+		cleanupClusterResourceOverride(croName)
+	})
+
+	It("should update CRP status as expected", func() {
+		wantCRONames := []string{croSnapShotName}
+		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	// This check will ignore the annotation of resources.
+	It("should place the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
+	It("should have override annotations from working CRO on the placed resources", func() {
+		want := map[string]string{croTestAnnotationKey: croTestAnnotationValue}
+		checkIfOverrideAnnotationsOnAllMemberClusters(true, want)
+	})
+})
+
+var _ = Context("creating clusterResourceOverride with cluster-scoped placementRef but pointing to a different crp", Ordered, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	croNotWorkingName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
+	fakeCRPName := "fake-crp-name"
+
+	BeforeAll(func() {
+		By("creating work resources")
+		createWorkResources()
+
+		// Create the not working CRO with incorrect PlacementRef
+		croNotWorking := &placementv1beta1.ClusterResourceOverride{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: croNotWorkingName,
+			},
+			Spec: placementv1beta1.ClusterResourceOverrideSpec{
+				Placement: &placementv1beta1.PlacementRef{
+					Name:  fakeCRPName, // fake CRP name
+					Scope: placementv1beta1.ClusterScoped,
+				},
+				ClusterResourceSelectors: workResourceSelector(),
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
+						{
+							ClusterSelector: &placementv1beta1.ClusterSelector{
+								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
+							},
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
+								{
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
+									Path:     "/metadata/annotations",
+									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s"}`, croTestAnnotationKey1, croTestAnnotationValue1))},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		By(fmt.Sprintf("creating not working clusterResourceOverride %s", croNotWorkingName))
+		Expect(hubClient.Create(ctx, croNotWorking)).To(Succeed(), "Failed to create clusterResourceOverride %s", croNotWorkingName)
+
+		// Create the CRP.
+		createCRP(crpName)
+	})
+
+	AfterAll(func() {
+		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+
+		By(fmt.Sprintf("deleting clusterResourceOverride %s", croNotWorkingName))
+		cleanupClusterResourceOverride(croNotWorkingName)
+	})
+
+	It("should update CRP status with no overrides", func() {
+		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, "0", nil, nil)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	// This check will ignore the annotation of resources.
+	It("should place the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
+	It("should not have annotations from not working CRO on the placed resources", func() {
+		for _, memberCluster := range allMemberClusters {
+			Expect(validateNamespaceNoAnnotationOnCluster(memberCluster, croTestAnnotationKey1)).Should(Succeed(), "CRO pointing to a different CRP should not add annotations on %s", memberCluster.ClusterName)
+			Expect(validateConfigMapNoAnnotationKeyOnCluster(memberCluster, croTestAnnotationKey1)).Should(Succeed(), "CRO pointing to a different CRP should not add annotations on config map on %s", memberCluster.ClusterName)
+		}
+	})
+})
+
+var _ = Context("creating clusterResourceOverride for a namespace-only CRP", Ordered, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
+	croSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, croName, 0)
+
+	BeforeAll(func() {
+		By("creating work resources")
+		createWorkResources()
+
+		// Create the CRO before CRP so that the observed resource index is predictable.
+		cro := &placementv1beta1.ClusterResourceOverride{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: croName,
+			},
+			Spec: placementv1beta1.ClusterResourceOverrideSpec{
+				Placement: &placementv1beta1.PlacementRef{
+					Name:  crpName, // assigned CRP name
+					Scope: placementv1beta1.ClusterScoped,
+				},
+				ClusterResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+					{
+						Group:   "",
+						Kind:    "Namespace",
+						Version: "v1",
+						Name:    fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
+					},
+				},
+				Policy: &placementv1beta1.OverridePolicy{
+					OverrideRules: []placementv1beta1.OverrideRule{
+						{
+							ClusterSelector: &placementv1beta1.ClusterSelector{
+								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
+							},
+							JSONPatchOverrides: []placementv1beta1.JSONPatchOverride{
+								{
+									Operator: placementv1beta1.JSONPatchOverrideOpAdd,
+									Path:     "/metadata/annotations",
+									Value:    apiextensionsv1.JSON{Raw: []byte(fmt.Sprintf(`{"%s": "%s"}`, croTestAnnotationKey, croTestAnnotationValue))},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		By(fmt.Sprintf("creating clusterResourceOverride %s", croName))
+		Expect(hubClient.Create(ctx, cro)).To(Succeed(), "Failed to create clusterResourceOverride %s", croName)
+
+		// This is to make sure the CRO snapshot is created before the CRP
+		Eventually(func() error {
+			croSnap := &placementv1beta1.ClusterResourceOverrideSnapshot{}
+			return hubClient.Get(ctx, types.NamespacedName{Name: croSnapShotName}, croSnap)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRO snapshot as expected", croName)
+
+		// Create the namespace-only CRP.
+		createNamespaceOnlyCRP(crpName)
+	})
+
+	AfterAll(func() {
+		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+
+		By(fmt.Sprintf("deleting clusterResourceOverride %s", croName))
+		cleanupClusterResourceOverride(croName)
+	})
+
+	It("should update CRP status as expected", func() {
+		wantCRONames := []string{croSnapShotName}
+		crpStatusUpdatedActual := crpStatusWithOverrideUpdatedActual(workNamespaceIdentifiers(), allMemberClusterNames, "0", wantCRONames, nil)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	It("should place only the namespace on member clusters", func() {
+		for _, memberCluster := range allMemberClusters {
+			workNamespacePlacedActual := workNamespacePlacedOnClusterActual(memberCluster)
+			Eventually(workNamespacePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work namespace on member cluster %s", memberCluster.ClusterName)
+		}
+	})
+
+	It("should have override annotations on the namespace only", func() {
+		want := map[string]string{croTestAnnotationKey: croTestAnnotationValue}
+		for _, memberCluster := range allMemberClusters {
+			Expect(validateAnnotationOfWorkNamespaceOnCluster(memberCluster, want)).Should(Succeed(), "Failed to override the annotation of work namespace on %s", memberCluster.ClusterName)
+		}
+	})
+
+	It("should not place configmap or other resources on member clusters", func() {
+		for _, memberCluster := range allMemberClusters {
+			// Verify configmap is not placed
+			Consistently(func() bool {
+				configMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
+				configMap := &corev1.ConfigMap{}
+				workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+				err := memberCluster.KubeClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: configMapName}, configMap)
+				return errors.IsNotFound(err)
+			}, consistentlyDuration, eventuallyInterval).Should(BeTrue(), "ConfigMap should not be placed on member cluster %s", memberCluster.ClusterName)
+		}
+	})
+})
