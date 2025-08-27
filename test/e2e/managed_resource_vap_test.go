@@ -188,7 +188,7 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 			Eventually(func() error {
 				rq := corev1.ResourceQuota{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "managedrq",
+						Name:      "default",
 						Namespace: "default",
 						Labels:    managedByLabelMap,
 					},
@@ -205,7 +205,7 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 			Eventually(func() error {
 				np := networkingv1.NetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "managednp",
+						Name:      "default",
 						Namespace: "default",
 						Labels:    managedByLabelMap,
 					},
