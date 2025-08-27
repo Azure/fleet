@@ -1452,18 +1452,16 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			})
 
 			It("should deny update of ClusterResourceOverride placement name", func() {
-				updatedCRO := cro.DeepCopy()
-				updatedCRO.Spec.Placement.Name = "different-placement"
-				err := hubClient.Update(ctx, updatedCRO)
+				cro.Spec.Placement.Name = "different-placement"
+				err := hubClient.Update(ctx, &cro)
 				var statusErr *k8sErrors.StatusError
 				Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update ClusterResourceOverride call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 				Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("The placement field is immutable"))
 			})
 
 			It("should deny update of ClusterResourceOverride placement scope", func() {
-				updatedCRO := cro.DeepCopy()
-				updatedCRO.Spec.Placement.Scope = placementv1beta1.NamespaceScoped
-				err := hubClient.Update(ctx, updatedCRO)
+				cro.Spec.Placement.Scope = placementv1beta1.NamespaceScoped
+				err := hubClient.Update(ctx, &cro)
 				var statusErr *k8sErrors.StatusError
 				Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update ClusterResourceOverride call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 				Expect(statusErr.ErrStatus.Message).Should(ContainSubstring("placement reference cannot be Namespaced scope"))
@@ -1489,9 +1487,8 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			})
 
 			It("should deny update of ClusterResourceOverride placement from non-nil to nil", func() {
-				updatedCRO := cro.DeepCopy()
-				updatedCRO.Spec.Placement = nil
-				err := hubClient.Update(ctx, updatedCRO)
+				cro.Spec.Placement = nil
+				err := hubClient.Update(ctx, &cro)
 				var statusErr *k8sErrors.StatusError
 				Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update ClusterResourceOverride call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 				Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("The placement field is immutable"))
@@ -1572,9 +1569,8 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			})
 
 			It("should deny update of ResourceOverride placement name", func() {
-				updatedRO := ro.DeepCopy()
-				updatedRO.Spec.Placement.Name = "different-placement"
-				err := hubClient.Update(ctx, updatedRO)
+				ro.Spec.Placement.Name = "different-placement"
+				err := hubClient.Update(ctx, &ro)
 				var statusErr *k8sErrors.StatusError
 				Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update ResourceOverride call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 				Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("The placement field is immutable"))
@@ -1601,18 +1597,16 @@ var _ = Describe("Test placement v1beta1 API validation", func() {
 			})
 
 			It("should deny update of ResourceOverride placement from non-nil to nil", func() {
-				updatedRO := ro.DeepCopy()
-				updatedRO.Spec.Placement = nil
-				err := hubClient.Update(ctx, updatedRO)
+				ro.Spec.Placement = nil
+				err := hubClient.Update(ctx, &ro)
 				var statusErr *k8sErrors.StatusError
 				Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update ResourceOverride call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 				Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("The placement field is immutable"))
 			})
 
 			It("should deny update of ResourceOverride placement from cluster-scoped to namespace-scoped", func() {
-				updatedRO := ro.DeepCopy()
-				updatedRO.Spec.Placement.Scope = placementv1beta1.NamespaceScoped
-				err := hubClient.Update(ctx, updatedRO)
+				ro.Spec.Placement.Scope = placementv1beta1.NamespaceScoped
+				err := hubClient.Update(ctx, &ro)
 				var statusErr *k8sErrors.StatusError
 				Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update ResourceOverride call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 				Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("The placement field is immutable"))

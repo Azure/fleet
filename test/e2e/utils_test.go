@@ -1468,7 +1468,10 @@ func ensureUpdateRunStrategyDeletion(strategyName string) {
 	Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "ClusterStagedUpdateStrategy still exists")
 }
 
-func ensureRPAndRelatedResourcesDeleted(rpKey types.NamespacedName, memberClusters []*framework.Cluster) {
+// ensureRPAndRelatedResourcesDeleted deletes rp and verifies resources in the specified namespace placed by the rp are removed from the cluster.
+// It checks if the placed configMap is removed by default, as this is tested in most of the test cases.
+// For tests with additional resources placed, e.g. deployments, daemonSets, add those to placedResources.
+func ensureRPAndRelatedResourcesDeleted(rpKey types.NamespacedName, memberClusters []*framework.Cluster, placedResources ...client.Object) {
 	// Delete the ResourcePlacement.
 	rp := &placementv1beta1.ResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1482,7 +1485,7 @@ func ensureRPAndRelatedResourcesDeleted(rpKey types.NamespacedName, memberCluste
 	for idx := range memberClusters {
 		memberCluster := memberClusters[idx]
 
-		workResourcesRemovedActual := namespacedResourcesRemovedFromClusterActual(memberCluster)
+		workResourcesRemovedActual := namespacedResourcesRemovedFromClusterActual(memberCluster, placedResources...)
 		Eventually(workResourcesRemovedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
 	}
 
