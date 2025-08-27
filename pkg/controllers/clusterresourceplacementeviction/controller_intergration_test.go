@@ -32,10 +32,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils/condition"
-	"go.goms.io/fleet/pkg/utils/controller/metrics"
-	testutilseviction "go.goms.io/fleet/test/utils/eviction"
+	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
+	"github.com/kubefleet-dev/kubefleet/pkg/metrics"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
+	testutilseviction "github.com/kubefleet-dev/kubefleet/test/utils/eviction"
 )
 
 const (
@@ -492,7 +492,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 						PlacementType: placementv1beta1.PickFixedPlacementType,
 						ClusterNames:  []string{"test-cluster-1"},
 					},
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "",
 							Kind:    "Namespace",
@@ -537,7 +537,7 @@ var _ = Describe("Test ClusterResourcePlacementEviction Controller", func() {
 			// Create the CRP.
 			By("Create ClusterResourcePlacement", func() {
 				crp := buildTestPickAllCRP(crpName)
-				crp.Spec.ResourceSelectors = []placementv1beta1.ClusterResourceSelector{
+				crp.Spec.ResourceSelectors = []placementv1beta1.ResourceSelectorTerm{
 					{
 						Group:   "",
 						Kind:    "Namespace",
@@ -709,7 +709,7 @@ func buildTestPickNCRP(crpName string, clusterCount int32) placementv1beta1.Clus
 				PlacementType:    placementv1beta1.PickNPlacementType,
 				NumberOfClusters: ptr.To(clusterCount),
 			},
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "",
 					Kind:    "Namespace",

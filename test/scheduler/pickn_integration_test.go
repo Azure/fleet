@@ -45,6 +45,7 @@ var (
 var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 	Context("pick N clusters with no affinities/topology spread constraints specified", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crpKey := types.NamespacedName{Name: crpName}
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 
 		numOfClusters := int32(3) // Less than the number of clusters available (7) in the fleet.
@@ -70,7 +71,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpKey)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
@@ -82,36 +83,37 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpKey)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, zeroScoreByCluster, crpName, policySnapshotName)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, zeroScoreByCluster, crpKey, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, zeroScoreByCluster, types.NamespacedName{Name: policySnapshotName}, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpKey)
 		})
 	})
 
 	Context("not enough clusters to pick", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crpKey := types.NamespacedName{Name: crpName}
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 
 		numOfClusters := int32(10) // More than the number of clusters available (7) in the fleet.
@@ -135,7 +137,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpKey)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
@@ -147,43 +149,44 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpKey)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, zeroScoreByCluster, crpName, policySnapshotName)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, zeroScoreByCluster, crpKey, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, types.NamespacedName{Name: policySnapshotName}, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpKey)
 		})
 	})
 
 	Context("pick 0 clusters", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crpKey := types.NamespacedName{Name: crpName}
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 
 		numOfClusters := int32(0)
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpKey)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
@@ -195,30 +198,31 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpKey)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, []string{})
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, []string{})
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), []string{}, []string{}, []string{}, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), []string{}, []string{}, []string{}, zeroScoreByCluster, types.NamespacedName{Name: policySnapshotName}, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpKey)
 		})
 	})
 
 	Context("pick with required affinity", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crpKey := types.NamespacedName{Name: crpName}
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 
 		numOfClusters := int32(2)
@@ -239,7 +243,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpKey)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
@@ -275,36 +279,37 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpKey)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, zeroScoreByCluster, crpName, policySnapshotName)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, zeroScoreByCluster, crpKey, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, types.NamespacedName{Name: policySnapshotName}, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpKey)
 		})
 	})
 
 	Context("pick with required affinity, multiple terms", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crpKey := types.NamespacedName{Name: crpName}
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 
 		numOfClusters := int32(4)
@@ -326,7 +331,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpKey)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
@@ -378,36 +383,37 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpKey)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, zeroScoreByCluster, crpName, policySnapshotName)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, zeroScoreByCluster, crpKey, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, types.NamespacedName{Name: policySnapshotName}, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpKey)
 		})
 	})
 
 	Context("pick with preferred affinity", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crpKey := types.NamespacedName{Name: crpName}
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 
 		numOfClusters := int32(4)
@@ -446,7 +452,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpKey)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
@@ -483,36 +489,37 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpKey)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpName, policySnapshotName)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpKey, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, types.NamespacedName{Name: policySnapshotName}, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpKey)
 		})
 	})
 
 	Context("pick with preferred affinity, multiple terms", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crpKey := types.NamespacedName{Name: crpName}
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 
 		numOfClusters := int32(4)
@@ -554,7 +561,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpKey)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
@@ -610,36 +617,37 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpKey)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpName, policySnapshotName)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpKey, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, types.NamespacedName{Name: policySnapshotName}, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpKey)
 		})
 	})
 
 	Context("pick with required topology spread constraints", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crpKey := types.NamespacedName{Name: crpName}
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 
 		numOfClusters := int32(2)
@@ -688,7 +696,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpKey)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
@@ -707,36 +715,37 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpKey)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpName, policySnapshotName)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpKey, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, types.NamespacedName{Name: policySnapshotName}, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpKey)
 		})
 	})
 
 	Context("pick with required topology spread constraints, multiple terms", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crpKey := types.NamespacedName{Name: crpName}
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 
 		numOfClusters := int32(2)
@@ -811,7 +820,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpKey)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
@@ -835,36 +844,37 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpKey)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpName, policySnapshotName)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpKey, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, types.NamespacedName{Name: policySnapshotName}, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpKey)
 		})
 	})
 
 	Context("pick with preferred topology spread constraints", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crpKey := types.NamespacedName{Name: crpName}
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 
 		numOfClusters := int32(2)
@@ -916,7 +926,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpKey)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
@@ -935,36 +945,37 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpKey)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpName, policySnapshotName)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpKey, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, types.NamespacedName{Name: policySnapshotName}, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpKey)
 		})
 	})
 
 	Context("pick with preferred topology spread constraints, multiple terms", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crpKey := types.NamespacedName{Name: crpName}
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 
 		numOfClusters := int32(2)
@@ -1048,7 +1059,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpKey)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
@@ -1072,36 +1083,37 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpKey)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpName, policySnapshotName)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpKey, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, types.NamespacedName{Name: policySnapshotName}, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpKey)
 		})
 	})
 
 	Context("pick with mixed affinities and topology spread constraints, required only", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crpKey := types.NamespacedName{Name: crpName}
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 
 		numOfClusters := int32(2)
@@ -1151,7 +1163,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpKey)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
@@ -1191,36 +1203,37 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpKey)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpName, policySnapshotName)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpKey, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, types.NamespacedName{Name: policySnapshotName}, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpKey)
 		})
 	})
 
 	Context("pick with mixed affinities and topology spread constraints, preferred only", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crpKey := types.NamespacedName{Name: crpName}
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 
 		numOfClusters := int32(6)
@@ -1296,7 +1309,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpKey)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
@@ -1331,36 +1344,37 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpKey)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpName, policySnapshotName)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpKey, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, types.NamespacedName{Name: policySnapshotName}, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpKey)
 		})
 	})
 
 	Context("pick with mixed affinities and topology spread constraints, mixed", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crpKey := types.NamespacedName{Name: crpName}
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 
 		numOfClusters := int32(3)
@@ -1426,7 +1440,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpKey)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
@@ -1477,36 +1491,37 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpKey)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClusters)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClusters)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpName, policySnapshotName)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, crpKey, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, types.NamespacedName{Name: policySnapshotName}, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpKey)
 		})
 	})
 
 	Context("upscaling", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crpKey := types.NamespacedName{Name: crpName}
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 
 		numOfClustersBefore := int32(1)
@@ -1537,7 +1552,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpKey)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
@@ -1548,11 +1563,11 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 
 			// Verify that scheduling has been completed.
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClustersBefore)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClustersBefore)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClustersBefore, zeroScoreByCluster, crpName, policySnapshotName)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClustersBefore, zeroScoreByCluster, crpKey, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 
@@ -1574,36 +1589,37 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpKey)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClustersAfter)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClustersAfter)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClustersAfter, zeroScoreByCluster, crpName, policySnapshotName)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClustersAfter, zeroScoreByCluster, crpKey, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClustersAfter), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClustersAfter), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, zeroScoreByCluster, types.NamespacedName{Name: policySnapshotName}, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpKey)
 		})
 	})
 
 	Context("downscaling", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crpKey := types.NamespacedName{Name: crpName}
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 
 		numOfClustersBefore := int32(3)
@@ -1628,7 +1644,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpKey)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
@@ -1639,11 +1655,11 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 
 			// Verify that scheduling has been completed.
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClustersBefore)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClustersBefore)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClustersBefore, zeroScoreByCluster, crpName, policySnapshotName)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClustersBefore, zeroScoreByCluster, crpKey, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 
@@ -1665,36 +1681,37 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpKey)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClustersAfter)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClustersAfter)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClustersAfter, zeroScoreByCluster, crpName, policySnapshotName)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClustersAfter, zeroScoreByCluster, crpKey, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClustersAfter), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClustersAfter), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, zeroScoreByCluster, types.NamespacedName{Name: policySnapshotName}, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpKey)
 		})
 	})
 
 	Context("affinities and topology spread constraints updated", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		crpKey := types.NamespacedName{Name: crpName}
 		policySnapshotNameBefore := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 		policySnapshotNameAfter := fmt.Sprintf(policySnapshotNameTemplate, crpName, 2)
 
@@ -1812,7 +1829,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(crpKey)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
@@ -1862,11 +1879,11 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			createPickNCRPWithPolicySnapshot(crpName, policySnapshotNameBefore, policy)
 
 			// Verify that scheduling has been completed.
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClustersBefore)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClustersBefore)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClustersBefore, scoreByClusterBefore, crpName, policySnapshotNameBefore)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClustersBefore, scoreByClusterBefore, crpKey, policySnapshotNameBefore)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 
@@ -1898,31 +1915,513 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(crpKey)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create N bindings", func() {
-			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, wantPickedClustersAfter)
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpKey, wantPickedClustersAfter)
 			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
 			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClustersAfter, scoreByClusterAfter, crpName, policySnapshotNameAfter)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClustersAfter, scoreByClusterAfter, crpKey, policySnapshotNameAfter)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, scoreByClusterAfter, policySnapshotNameAfter, pickNCmpOpts)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, scoreByClusterAfter, types.NamespacedName{Name: policySnapshotNameAfter}, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+			ensurePlacementAndAllRelatedResourcesDeletion(crpKey)
+		})
+	})
+})
+
+var _ = Describe("scheduling RPs of the PickN placement type", func() {
+	Context("pick N clusters with no affinities/topology spread constraints specified", Ordered, func() {
+		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+		rpKey := types.NamespacedName{Namespace: testNamespace, Name: rpName}
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, rpName, 1)
+		policySnapshotKey := types.NamespacedName{Namespace: testNamespace, Name: policySnapshotName}
+
+		numOfClusters := int32(3) // Less than the number of clusters available (7) in the fleet.
+
+		// The scheduler is designed to produce only deterministic decisions; if there are no
+		// comparable scores available for selected clusters, the scheduler will rank the clusters
+		// by their names.
+		wantPickedClusters := []string{
+			memberCluster5CentralProd,
+			memberCluster6WestProd,
+			memberCluster7WestCanary,
+		}
+		wantNotPickedClusters := []string{
+			memberCluster1EastProd,
+			memberCluster2EastProd,
+			memberCluster3EastCanary,
+			memberCluster4CentralProd,
+		}
+		wantFilteredClusters := []string{
+			memberCluster8UnhealthyEastProd,
+			memberCluster9LeftCentralProd,
+		}
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(rpKey)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Create a RP of the PickN placement type, along with its associated policy snapshot.
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+			}
+			createPickNRPWithPolicySnapshot(testNamespace, rpName, policySnapshotName, policy)
+		})
+
+		It("should add scheduler cleanup finalizer to the CRP", func() {
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(rpKey)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to RP")
+		})
+
+		It("should create N bindings", func() {
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(rpKey, wantPickedClusters)
+			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
+			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
+		})
+
+		It("should create scheduled bindings for selected clusters", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, zeroScoreByCluster, rpKey, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
+		})
+
+		It("should report status correctly", func() {
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, zeroScoreByCluster, policySnapshotKey, pickNCmpOpts)
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
+		})
+
+		AfterAll(func() {
+			// Delete the RP.
+			ensurePlacementAndAllRelatedResourcesDeletion(rpKey)
+		})
+	})
+
+	Context("not enough clusters to pick", Ordered, func() {
+		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+		rpKey := types.NamespacedName{Namespace: testNamespace, Name: rpName}
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, rpName, 1)
+		policySnapshotKey := types.NamespacedName{Namespace: testNamespace, Name: policySnapshotName}
+
+		numOfClusters := int32(10) // More than the number of clusters available (7) in the fleet.
+
+		// The scheduler is designed to produce only deterministic decisions; if there are no
+		// comparable scores available for selected clusters, the scheduler will rank the clusters
+		// by their names.
+		wantPickedClusters := []string{
+			memberCluster1EastProd,
+			memberCluster2EastProd,
+			memberCluster3EastCanary,
+			memberCluster4CentralProd,
+			memberCluster5CentralProd,
+			memberCluster6WestProd,
+			memberCluster7WestCanary,
+		}
+		wantFilteredClusters := []string{
+			memberCluster8UnhealthyEastProd,
+			memberCluster9LeftCentralProd,
+		}
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(rpKey)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+			}
+			createPickNRPWithPolicySnapshot(testNamespace, rpName, policySnapshotName, policy)
+		})
+
+		It("should add scheduler cleanup finalizer to the CRP", func() {
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(rpKey)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to RP")
+		})
+
+		It("should create N bindings", func() {
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(rpKey, wantPickedClusters)
+			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
+			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
+		})
+
+		It("should create scheduled bindings for selected clusters", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, zeroScoreByCluster, rpKey, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
+		})
+
+		It("should report status correctly", func() {
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotKey, pickNCmpOpts)
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
+		})
+
+		AfterAll(func() {
+			// Delete the RP.
+			ensurePlacementAndAllRelatedResourcesDeletion(rpKey)
+		})
+	})
+
+	Context("pick 0 clusters", Ordered, func() {
+		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+		rpKey := types.NamespacedName{Namespace: testNamespace, Name: rpName}
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, rpName, 1)
+		policySnapshotKey := types.NamespacedName{Namespace: testNamespace, Name: policySnapshotName}
+
+		numOfClusters := int32(0)
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(rpKey)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+			}
+			createPickNRPWithPolicySnapshot(testNamespace, rpName, policySnapshotName, policy)
+		})
+
+		It("should add scheduler cleanup finalizer to the RP", func() {
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(rpKey)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to RP")
+		})
+
+		It("should create N bindings", func() {
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(rpKey, []string{})
+			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
+			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
+		})
+
+		It("should report status correctly", func() {
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), []string{}, []string{}, []string{}, zeroScoreByCluster, policySnapshotKey, pickNCmpOpts)
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
+		})
+
+		AfterAll(func() {
+			// Delete the RP.
+			ensurePlacementAndAllRelatedResourcesDeletion(rpKey)
+		})
+	})
+
+	Context("pick with required affinity", Ordered, func() {
+		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+		rpKey := types.NamespacedName{Namespace: testNamespace, Name: rpName}
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, rpName, 1)
+		policySnapshotKey := types.NamespacedName{Namespace: testNamespace, Name: policySnapshotName}
+
+		numOfClusters := int32(2)
+
+		wantPickedClusters := []string{
+			memberCluster1EastProd,
+			memberCluster2EastProd,
+		}
+		wantFilteredClusters := []string{
+			memberCluster3EastCanary,
+			memberCluster4CentralProd,
+			memberCluster5CentralProd,
+			memberCluster6WestProd,
+			memberCluster7WestCanary,
+			memberCluster8UnhealthyEastProd,
+			memberCluster9LeftCentralProd,
+		}
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(rpKey)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Create a RP of the PickN placement type, along with its associated policy snapshot.
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "east",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      envLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values: []string{
+													"prod",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			createPickNRPWithPolicySnapshot(testNamespace, rpName, policySnapshotName, policy)
+		})
+
+		It("should add scheduler cleanup finalizer to the RP", func() {
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(rpKey)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to RP")
+		})
+
+		It("should create N bindings", func() {
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(rpKey, wantPickedClusters)
+			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
+			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
+		})
+
+		It("should create scheduled bindings for selected clusters", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, zeroScoreByCluster, rpKey, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
+		})
+
+		It("should report status correctly", func() {
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotKey, pickNCmpOpts)
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
+		})
+
+		AfterAll(func() {
+			// Delete the RP.
+			ensurePlacementAndAllRelatedResourcesDeletion(rpKey)
+		})
+	})
+
+	Context("pick with required affinity, multiple terms", Ordered, func() {
+		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+		rpKey := types.NamespacedName{Namespace: testNamespace, Name: rpName}
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, rpName, 1)
+		policySnapshotKey := types.NamespacedName{Namespace: testNamespace, Name: policySnapshotName}
+
+		numOfClusters := int32(4)
+
+		// Note that the number of matching clusters is less than the desired one.
+		wantPickedClusters := []string{
+			memberCluster1EastProd,
+			memberCluster2EastProd,
+			memberCluster7WestCanary,
+		}
+		wantFilteredClusters := []string{
+			memberCluster3EastCanary,
+			memberCluster4CentralProd,
+			memberCluster5CentralProd,
+			memberCluster6WestProd,
+			memberCluster8UnhealthyEastProd,
+			memberCluster9LeftCentralProd,
+		}
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(rpKey)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Create a RP of the PickN placement type, along with its associated policy snapshot.
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "east",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      envLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values: []string{
+													"prod",
+												},
+											},
+										},
+									},
+								},
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "west",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      envLabel,
+												Operator: metav1.LabelSelectorOpNotIn,
+												Values: []string{
+													"prod",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			createPickNRPWithPolicySnapshot(testNamespace, rpName, policySnapshotName, policy)
+		})
+
+		It("should add scheduler cleanup finalizer to the RP", func() {
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(rpKey)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to RP")
+		})
+
+		It("should create N bindings", func() {
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(rpKey, wantPickedClusters)
+			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
+			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
+		})
+
+		It("should create scheduled bindings for selected clusters", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, zeroScoreByCluster, rpKey, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
+		})
+
+		It("should report status correctly", func() {
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotKey, pickNCmpOpts)
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
+		})
+
+		AfterAll(func() {
+			// Delete the RP.
+			ensurePlacementAndAllRelatedResourcesDeletion(rpKey)
+		})
+	})
+
+	Context("pick with preferred affinity", Ordered, func() {
+		rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+		rpKey := types.NamespacedName{Namespace: testNamespace, Name: rpName}
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, rpName, 1)
+		policySnapshotKey := types.NamespacedName{Namespace: testNamespace, Name: policySnapshotName}
+
+		numOfClusters := int32(4)
+
+		wantPickedClusters := []string{
+			memberCluster4CentralProd,
+			memberCluster5CentralProd,
+			memberCluster7WestCanary,
+			memberCluster6WestProd,
+		}
+		wantNotPickedClusters := []string{
+			memberCluster1EastProd,
+			memberCluster2EastProd,
+			memberCluster3EastCanary,
+		}
+		wantFilteredClusters := []string{
+			memberCluster8UnhealthyEastProd,
+			memberCluster9LeftCentralProd,
+		}
+
+		scoreByCluster := map[string]*placementv1beta1.ClusterScore{
+			memberCluster1EastProd:   &zeroScore,
+			memberCluster2EastProd:   &zeroScore,
+			memberCluster3EastCanary: &zeroScore,
+			memberCluster4CentralProd: {
+				AffinityScore:       ptr.To(int32(10)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster5CentralProd: {
+				AffinityScore:       ptr.To(int32(10)),
+				TopologySpreadScore: ptr.To(int32(0)),
+			},
+			memberCluster6WestProd:   &zeroScore,
+			memberCluster7WestCanary: &zeroScore,
+		}
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForPlacementActual(rpKey)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Create a RP of the PickN placement type, along with its associated policy snapshot.
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+							{
+								Weight: 10,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "central",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      envLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values: []string{
+													"prod",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			createPickNRPWithPolicySnapshot(testNamespace, rpName, policySnapshotName, policy)
+		})
+
+		It("should add scheduler cleanup finalizer to the RP", func() {
+			finalizerAddedActual := placementSchedulerFinalizerAddedActual(rpKey)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to RP")
+		})
+
+		It("should create N bindings", func() {
+			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(rpKey, wantPickedClusters)
+			Eventually(hasNScheduledOrBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create N bindings")
+			Consistently(hasNScheduledOrBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create N bindings")
+		})
+
+		It("should create scheduled bindings for selected clusters", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantPickedClusters, scoreByCluster, rpKey, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
+		})
+
+		It("should report status correctly", func() {
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotKey, pickNCmpOpts)
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
+		})
+
+		AfterAll(func() {
+			// Delete the RP.
+			ensurePlacementAndAllRelatedResourcesDeletion(rpKey)
 		})
 	})
 })

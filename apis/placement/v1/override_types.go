@@ -42,11 +42,13 @@ type ClusterResourceOverride struct {
 // The ClusterResourceOverride create or update will fail when the resource has been selected by the existing ClusterResourceOverride.
 // If the resource is selected by both ClusterResourceOverride and ResourceOverride, ResourceOverride will win when resolving
 // conflicts.
+// +kubebuilder:validation:XValidation:rule="(has(oldSelf.placement) && has(self.placement) && oldSelf.placement == self.placement) || (!has(oldSelf.placement) && !has(self.placement))",message="The placement field is immutable"
 type ClusterResourceOverrideSpec struct {
 	// Placement defines whether the override is applied to a specific placement or not.
 	// If set, the override will trigger the placement rollout immediately when the rollout strategy type is RollingUpdate.
 	// Otherwise, it will be applied to the next rollout.
 	// The recommended way is to set the placement so that the override can be rolled out immediately.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="The placement field is immutable"
 	// +optional
 	Placement *PlacementRef `json:"placement,omitempty"`
 
@@ -66,12 +68,32 @@ type ClusterResourceOverrideSpec struct {
 	Policy *OverridePolicy `json:"policy"`
 }
 
+// ResourceScope defines the scope of placement reference.
+type ResourceScope string
+
+const (
+	// ClusterScoped indicates placement is cluster-scoped.
+	ClusterScoped ResourceScope = "Cluster"
+
+	// NamespaceScoped indicates placement is namespace-scoped.
+	NamespaceScoped ResourceScope = "Namespaced"
+)
+
 // PlacementRef is the reference to a placement.
 // For now, we only support ClusterResourcePlacement.
 type PlacementRef struct {
 	// Name is the reference to the name of placement.
 	// +required
+
 	Name string `json:"name"`
+	// Scope defines the scope of the placement.
+	// A clusterResourceOverride can only reference a clusterResourcePlacement (cluster-scoped),
+	// and a resourceOverride can reference either a clusterResourcePlacement or resourcePlacement (namespaced).
+	// The referenced resourcePlacement must be in the same namespace as the resourceOverride.
+	// +kubebuilder:validation:Enum=Cluster;Namespaced
+	// +kubebuilder:default=Cluster
+	// +optional
+	Scope ResourceScope `json:"scope,omitempty"`
 }
 
 // OverridePolicy defines how to override the selected resources on the target clusters.
@@ -144,6 +166,7 @@ type ResourceOverride struct {
 // The ResourceOverride create or update will fail when the resource has been selected by the existing ResourceOverride.
 // If the resource is selected by both ClusterResourceOverride and ResourceOverride, ResourceOverride will win when resolving
 // conflicts.
+// +kubebuilder:validation:XValidation:rule="(has(oldSelf.placement) && has(self.placement) && oldSelf.placement == self.placement) || (!has(oldSelf.placement) && !has(self.placement))",message="The placement field is immutable"
 type ResourceOverrideSpec struct {
 	// Placement defines whether the override is applied to a specific placement or not.
 	// If set, the override will trigger the placement rollout immediately when the rollout strategy type is RollingUpdate.

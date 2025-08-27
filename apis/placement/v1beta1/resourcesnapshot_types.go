@@ -27,23 +27,23 @@ import (
 
 const (
 	// ResourceIndexLabel is the label that indicate the resource snapshot index of a cluster resource snapshot.
-	ResourceIndexLabel = fleetPrefix + "resource-index"
+	ResourceIndexLabel = FleetPrefix + "resource-index"
 
 	// ResourceGroupHashAnnotation is the annotation that contains the value of the sha-256 hash
 	// value of all the snapshots belong to the same snapshot index.
-	ResourceGroupHashAnnotation = fleetPrefix + "resource-hash"
+	ResourceGroupHashAnnotation = FleetPrefix + "resource-hash"
 
 	// NumberOfEnvelopedObjectsAnnotation is the annotation that contains the number of the enveloped objects in the resource snapshot group.
-	NumberOfEnvelopedObjectsAnnotation = fleetPrefix + "number-of-enveloped-object"
+	NumberOfEnvelopedObjectsAnnotation = FleetPrefix + "number-of-enveloped-object"
 
 	// NumberOfResourceSnapshotsAnnotation is the annotation that contains the total number of resource snapshots.
-	NumberOfResourceSnapshotsAnnotation = fleetPrefix + "number-of-resource-snapshots"
+	NumberOfResourceSnapshotsAnnotation = FleetPrefix + "number-of-resource-snapshots"
 
 	// SubindexOfResourceSnapshotAnnotation is the annotation to store the subindex of resource snapshot in the group.
-	SubindexOfResourceSnapshotAnnotation = fleetPrefix + "subindex-of-resource-snapshot"
+	SubindexOfResourceSnapshotAnnotation = FleetPrefix + "subindex-of-resource-snapshot"
 
 	// NextResourceSnapshotCandidateDetectionTimeAnnotation is the annotation to store the time of next resourceSnapshot candidate detected by the controller.
-	NextResourceSnapshotCandidateDetectionTimeAnnotation = fleetPrefix + "next-resource-snapshot-candidate-detection-time"
+	NextResourceSnapshotCandidateDetectionTimeAnnotation = FleetPrefix + "next-resource-snapshot-candidate-detection-time"
 
 	// ResourceSnapshotNameFmt is resourcePolicySnapshot name format: {CRPName}-{resourceIndex}-snapshot.
 	ResourceSnapshotNameFmt = "%s-%d-snapshot"

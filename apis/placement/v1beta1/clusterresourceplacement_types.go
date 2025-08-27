@@ -29,11 +29,11 @@ import (
 const (
 	// PlacementCleanupFinalizer is a finalizer added by the placement controller to all placement objects, to make sure
 	// that the placement controller can react to placement object deletions if necessary.
-	PlacementCleanupFinalizer = fleetPrefix + "crp-cleanup"
+	PlacementCleanupFinalizer = FleetPrefix + "crp-cleanup"
 
 	// SchedulerCleanupFinalizer is a finalizer added by the scheduler to placement objects, to make sure
 	// that all bindings derived from a placement object can be cleaned up after the placement object is deleted.
-	SchedulerCleanupFinalizer = fleetPrefix + "scheduler-cleanup"
+	SchedulerCleanupFinalizer = FleetPrefix + "scheduler-cleanup"
 )
 
 // make sure the PlacementObj and PlacementObjList interfaces are implemented by the
@@ -114,6 +114,8 @@ type ClusterResourcePlacement struct {
 	// The desired state of ClusterResourcePlacement.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:XValidation:rule="!((has(oldSelf.policy) && !has(self.policy)) || (has(oldSelf.policy) && has(self.policy) && has(self.policy.placementType) && has(oldSelf.policy.placementType) && self.policy.placementType != oldSelf.policy.placementType))",message="placement type is immutable"
+	// +kubebuilder:validation:XValidation:rule="!(self.statusReportingScope == 'NamespaceAccessible' && size(self.resourceSelectors.filter(x, x.kind == 'Namespace')) != 1)",message="when statusReportingScope is NamespaceAccessible, exactly one resourceSelector with kind 'Namespace' is required"
+	// +kubebuilder:validation:XValidation:rule="!has(oldSelf.statusReportingScope) || self.statusReportingScope == oldSelf.statusReportingScope",message="statusReportingScope is immutable"
 	Spec PlacementSpec `json:"spec"`
 
 	// The observed status of ClusterResourcePlacement.
@@ -122,14 +124,13 @@ type ClusterResourcePlacement struct {
 }
 
 // PlacementSpec defines the desired state of ClusterResourcePlacement and ResourcePlacement.
-// +kubebuilder:validation:XValidation:rule="!(self.statusReportingScope == 'NamespaceAccessible' && size(self.resourceSelectors.filter(x, x.kind == 'Namespace')) != 1)",message="when statusReportingScope is NamespaceAccessible, exactly one resourceSelector with kind 'Namespace' is required"
 type PlacementSpec struct {
 	// ResourceSelectors is an array of selectors used to select cluster scoped resources. The selectors are `ORed`.
 	// You can have 1-100 selectors.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=100
-	ResourceSelectors []ClusterResourceSelector `json:"resourceSelectors"`
+	ResourceSelectors []ResourceSelectorTerm `json:"resourceSelectors"`
 
 	// Policy defines how to select member clusters to place the selected resources.
 	// If unspecified, all the joined member clusters are selected.
@@ -170,33 +171,31 @@ func (p *PlacementSpec) Tolerations() []Toleration {
 	return nil
 }
 
-// TODO: rename this to ResourceSelectorTerm
-
-// ClusterResourceSelector is used to select resources as the target resources to be placed.
+// ResourceSelectorTerm is used to select resources as the target resources to be placed.
 // All the fields are `ANDed`. In other words, a resource must match all the fields to be selected.
-type ClusterResourceSelector struct {
-	// Group name of the cluster-scoped resource.
+type ResourceSelectorTerm struct {
+	// Group name of the be selected resource.
 	// Use an empty string to select resources under the core API group (e.g., namespaces).
 	// +kubebuilder:validation:Required
 	Group string `json:"group"`
 
-	// Version of the cluster-scoped resource.
+	// Version of the to be selected resource.
 	// +kubebuilder:validation:Required
 	Version string `json:"version"`
 
-	// Kind of the cluster-scoped resource.
+	// Kind of the to be selected resource.
 	// Note: When `Kind` is `namespace`, by default ALL the resources under the selected namespaces are selected.
 	// +kubebuilder:validation:Required
 	Kind string `json:"kind"`
 
 	// You can only specify at most one of the following two fields: Name and LabelSelector.
-	// If none is specified, all the cluster-scoped resources with the given group, version and kind are selected.
+	// If none is specified, all the be selected resources with the given group, version and kind are selected.
 
-	// Name of the cluster-scoped resource.
+	// Name of the be selected  resource.
 	// +kubebuilder:validation:Optional
 	Name string `json:"name,omitempty"`
 
-	// A label query over all the cluster-scoped resources. Resources matching the query are selected.
+	// A label query over all the be selected  resources. Resources matching the query are selected.
 	// Note that namespace-scoped resources can't be selected even if they match the query.
 	// +kubebuilder:validation:Optional
 	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
@@ -1523,7 +1522,7 @@ func (m *ClusterResourcePlacement) SetPlacementStatus(status PlacementStatus) {
 const (
 	// ResourcePlacementCleanupFinalizer is a finalizer added by the RP controller to all RPs, to make sure
 	// that the RP controller can react to RP deletions if necessary.
-	ResourcePlacementCleanupFinalizer = fleetPrefix + "rp-cleanup"
+	ResourcePlacementCleanupFinalizer = FleetPrefix + "rp-cleanup"
 )
 
 // +genclient
@@ -1614,14 +1613,15 @@ func (rpl *ResourcePlacementList) GetPlacementObjs() []PlacementObj {
 // +genclient:Namespaced
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope="Namespaced",shortName=crps,categories={fleet,fleet-placement}
-// +kubebuilder:subresource:status
 // +kubebuilder:storageversion
-// +kubebuilder:printcolumn:JSONPath=`.status.observedResourceIndex`,name="Resource-Index",type=string
+// +kubebuilder:printcolumn:JSONPath=`.sourceStatus.observedResourceIndex`,name="Resource-Index",type=string
+// +kubebuilder:printcolumn:JSONPath=`.lastUpdatedTime`,name="Last-Updated",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ClusterResourcePlacementStatus is a namespaced resource that mirrors the PlacementStatus of a corresponding
 // ClusterResourcePlacement object. This allows namespace-scoped access to cluster-scoped placement status.
+// The LastUpdatedTime field is updated whenever the CRPS object is updated.
 //
 // This object will be created within the target namespace that contains resources being managed by the CRP.
 // When multiple ClusterResourcePlacements target the same namespace, each ClusterResourcePlacementStatus within that
@@ -1633,11 +1633,16 @@ type ClusterResourcePlacementStatus struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// The observed status of ClusterResourcePlacementStatus which mirrors the PlacementStatus of the corresponding ClusterResourcePlacement.
-	// This includes information about the namespace and resources within that namespace that are being managed by the placement.
-	// The status will show placement details for resources selected by the ClusterResourcePlacement's ResourceSelectors.
-	// +kubebuilder:validation:Optional
-	Status PlacementStatus `json:"status,omitempty"`
+	// Source status copied from the corresponding ClusterResourcePlacement.
+	// +kubebuilder:validation:Required
+	PlacementStatus `json:"sourceStatus,omitempty"`
+
+	// LastUpdatedTime is the timestamp when this CRPS object was last updated.
+	// This field is set to the current time whenever the CRPS object is created or modified.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Format=date-time
+	LastUpdatedTime metav1.Time `json:"lastUpdatedTime,omitempty"`
 }
 
 // ClusterResourcePlacementStatusList contains a list of ClusterResourcePlacementStatus.
@@ -1647,18 +1652,6 @@ type ClusterResourcePlacementStatusList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ClusterResourcePlacementStatus `json:"items"`
-}
-
-// SetConditions sets the conditions of the ClusterResourcePlacementStatus.
-func (m *ClusterResourcePlacementStatus) SetConditions(conditions ...metav1.Condition) {
-	for _, c := range conditions {
-		meta.SetStatusCondition(&m.Status.Conditions, c)
-	}
-}
-
-// GetCondition returns the condition of the ClusterResourcePlacementStatus objects.
-func (m *ClusterResourcePlacementStatus) GetCondition(conditionType string) *metav1.Condition {
-	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
 
 func init() {

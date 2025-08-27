@@ -714,13 +714,13 @@ var _ = Describe("applying manifests", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -739,13 +739,13 @@ var _ = Describe("applying manifests", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 1,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 1,
 						},
 					},
@@ -896,13 +896,13 @@ var _ = Describe("applying manifests", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -921,13 +921,13 @@ var _ = Describe("applying manifests", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 1,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 1,
 						},
 					},
@@ -1014,13 +1014,13 @@ var _ = Describe("applying manifests", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -1193,13 +1193,13 @@ var _ = Describe("applying manifests", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -1217,7 +1217,7 @@ var _ = Describe("applying manifests", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             string(ManifestProcessingApplyResultTypeFoundGenerateName),
+							Reason:             string(ApplyOrReportDiffResTypeFoundGenerateName),
 							ObservedGeneration: 0,
 						},
 					},
@@ -1352,13 +1352,13 @@ var _ = Describe("applying manifests", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -1376,7 +1376,7 @@ var _ = Describe("applying manifests", func() {
 						{
 							Type:   fleetv1beta1.WorkConditionTypeApplied,
 							Status: metav1.ConditionFalse,
-							Reason: string(ManifestProcessingApplyResultTypeDecodingErred),
+							Reason: string(ApplyOrReportDiffResTypeDecodingErred),
 						},
 					},
 				},
@@ -1393,12 +1393,12 @@ var _ = Describe("applying manifests", func() {
 						{
 							Type:   fleetv1beta1.WorkConditionTypeApplied,
 							Status: metav1.ConditionTrue,
-							Reason: string(ManifestProcessingApplyResultTypeApplied),
+							Reason: string(ApplyOrReportDiffResTypeApplied),
 						},
 						{
 							Type:   fleetv1beta1.WorkConditionTypeAvailable,
 							Status: metav1.ConditionTrue,
-							Reason: string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason: string(AvailabilityResultTypeAvailable),
 						},
 					},
 				},
@@ -1451,6 +1451,161 @@ var _ = Describe("applying manifests", func() {
 			// Kubebuilder suggests that in a testing environment like this, to check for the existence of the AppliedWork object
 			// OwnerReference in the Namespace object (https://book.kubebuilder.io/reference/envtest.html#testing-considerations).
 			checkNSOwnerReferences(workName, nsName)
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
+
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt so verify its deletion.
+		})
+	})
+
+	Context("apply op failure (decoding error)", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+
+		var regularNS *corev1.Namespace
+		var malformedConfigMap *corev1.ConfigMap
+
+		BeforeAll(func() {
+			// Prepare a NS object.
+			regularNS = ns.DeepCopy()
+			regularNS.Name = nsName
+			regularNSJSON := marshalK8sObjJSON(regularNS)
+
+			malformedConfigMap = configMap.DeepCopy()
+			malformedConfigMap.Namespace = nsName
+			// This will trigger a decoding error on the work applier side as this API is not registered.
+			malformedConfigMap.TypeMeta = metav1.TypeMeta{
+				APIVersion: "malformed/v10",
+				Kind:       "Unknown",
+			}
+			malformedConfigMapJSON := marshalK8sObjJSON(malformedConfigMap)
+
+			// Create a new Work object with all the manifest JSONs and proper apply strategy.
+			createWorkObject(workName, nil, regularNSJSON, malformedConfigMapJSON)
+		})
+
+		It("should add cleanup finalizer to the Work object", func() {
+			finalizerAddedActual := workFinalizerAddedActual(workName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+		})
+
+		It("should prepare an AppliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
+
+			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
+		})
+
+		It("should not apply malformed manifest", func() {
+			Consistently(func() error {
+				configMap := &corev1.ConfigMap{}
+				objKey := client.ObjectKey{Namespace: nsName, Name: malformedConfigMap.Name}
+				if err := memberClient.Get(ctx, objKey, configMap); !errors.IsNotFound(err) {
+					return fmt.Errorf("the config map exists, or an unexpected error has occurred: %w", err)
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Manifests are applied unexpectedly")
+		})
+
+		It("should apply the other manifests", func() {
+			// Ensure that the NS object has been applied as expected.
+			regularNSObjectAppliedActual := regularNSObjectAppliedActual(nsName, appliedWorkOwnerRef)
+			Eventually(regularNSObjectAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
+
+			Expect(memberClient.Get(ctx, client.ObjectKey{Name: nsName}, regularNS)).To(Succeed(), "Failed to retrieve the NS object")
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionFalse,
+					Reason: condition.WorkNotAllManifestsAppliedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
+							ObservedGeneration: 0,
+						},
+						{
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(AvailabilityResultTypeAvailable),
+							ObservedGeneration: 0,
+						},
+					},
+				},
+				{
+					// Note that this specific decoding error will not block the work applier from extracting
+					// the GVR, hence the populated API group, version and kind information.
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "malformed",
+						Version:   "v10",
+						Kind:      "Unknown",
+						Resource:  "",
+						Name:      malformedConfigMap.Name,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionFalse,
+							Reason: string(ApplyOrReportDiffResTypeDecodingErred),
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should update the AppliedWork object status", func() {
+			// Prepare the status information.
+			appliedResourceMeta := []fleetv1beta1.AppliedResourceMeta{
+				{
+					WorkResourceIdentifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					UID: regularNS.UID,
+				},
+			}
+
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, appliedResourceMeta)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		AfterAll(func() {
+			// Delete the Work object and related resources.
+			deleteWorkObject(workName)
 
 			// Ensure that the AppliedWork object has been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
@@ -1556,13 +1711,13 @@ var _ = Describe("work applier garbage collection", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -1581,13 +1736,13 @@ var _ = Describe("work applier garbage collection", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 1,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 1,
 						},
 					},
@@ -1827,13 +1982,13 @@ var _ = Describe("work applier garbage collection", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -1852,13 +2007,13 @@ var _ = Describe("work applier garbage collection", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 1,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 1,
 						},
 					},
@@ -1876,13 +2031,13 @@ var _ = Describe("work applier garbage collection", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -2146,13 +2301,13 @@ var _ = Describe("work applier garbage collection", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -2171,13 +2326,13 @@ var _ = Describe("work applier garbage collection", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 1,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 1,
 						},
 					},
@@ -2195,13 +2350,13 @@ var _ = Describe("work applier garbage collection", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -2463,12 +2618,12 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:   fleetv1beta1.WorkConditionTypeApplied,
 							Status: metav1.ConditionTrue,
-							Reason: string(ManifestProcessingApplyResultTypeApplied),
+							Reason: string(ApplyOrReportDiffResTypeApplied),
 						},
 						{
 							Type:   fleetv1beta1.WorkConditionTypeAvailable,
 							Status: metav1.ConditionTrue,
-							Reason: string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason: string(AvailabilityResultTypeAvailable),
 						},
 					},
 				},
@@ -2486,13 +2641,13 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 2,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 2,
 						},
 					},
@@ -2739,13 +2894,13 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -2764,7 +2919,7 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             string(ManifestProcessingApplyResultTypeFailedToTakeOver),
+							Reason:             string(ApplyOrReportDiffResTypeFailedToTakeOver),
 							ObservedGeneration: 1,
 						},
 					},
@@ -2996,7 +3151,7 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             string(ManifestProcessingApplyResultTypeFailedToTakeOver),
+							Reason:             string(ApplyOrReportDiffResTypeFailedToTakeOver),
 							ObservedGeneration: 0,
 						},
 					},
@@ -3031,7 +3186,7 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             string(ManifestProcessingApplyResultTypeFailedToTakeOver),
+							Reason:             string(ApplyOrReportDiffResTypeFailedToTakeOver),
 							ObservedGeneration: 1,
 						},
 					},
@@ -3191,13 +3346,13 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -3216,13 +3371,13 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 1,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 1,
 						},
 					},
@@ -3431,13 +3586,13 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -3456,7 +3611,7 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             string(ManifestProcessingApplyResultTypeFoundDrifts),
+							Reason:             string(ApplyOrReportDiffResTypeFoundDrifts),
 							ObservedGeneration: 2,
 						},
 					},
@@ -3594,13 +3749,13 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -3717,7 +3872,7 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             string(ManifestProcessingApplyResultTypeFoundDrifts),
+							Reason:             string(ApplyOrReportDiffResTypeFoundDrifts),
 							ObservedGeneration: 0,
 						},
 					},
@@ -3834,13 +3989,13 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -3960,13 +4115,13 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -4091,13 +4246,13 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -4214,7 +4369,7 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             string(ManifestProcessingApplyResultTypeFoundDrifts),
+							Reason:             string(ApplyOrReportDiffResTypeFoundDrifts),
 							ObservedGeneration: 0,
 						},
 					},
@@ -4321,13 +4476,13 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -4452,13 +4607,13 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -4541,7 +4696,7 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             string(ManifestProcessingApplyResultTypeFoundDrifts),
+							Reason:             string(ApplyOrReportDiffResTypeFoundDrifts),
 							ObservedGeneration: 0,
 						},
 					},
@@ -4615,7 +4770,7 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             string(ManifestProcessingApplyResultTypeFoundDrifts),
+							Reason:             string(ApplyOrReportDiffResTypeFoundDrifts),
 							ObservedGeneration: 0,
 						},
 					},
@@ -4761,7 +4916,7 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             string(ManifestProcessingApplyResultTypeNotTakenOver),
+							Reason:             string(ApplyOrReportDiffResTypeNotTakenOver),
 							ObservedGeneration: 0,
 						},
 					},
@@ -4780,13 +4935,13 @@ var _ = Describe("drift detection and takeover", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 1,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 1,
 						},
 					},
@@ -4877,7 +5032,7 @@ var _ = Describe("report diff", func() {
 		It("should not apply the manifests", func() {
 			// Ensure that the NS object has not been applied.
 			regularNSObjectNotAppliedActual := regularNSObjectNotAppliedActual(nsName)
-			Eventually(regularNSObjectNotAppliedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to avoid applying the namespace object")
+			Consistently(regularNSObjectNotAppliedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to avoid applying the namespace object")
 		})
 
 		It("should update the Work object status", func() {
@@ -4903,7 +5058,7 @@ var _ = Describe("report diff", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingReportDiffResultTypeFoundDiff),
+							Reason:             string(ApplyOrReportDiffResTypeFoundDiff),
 							ObservedGeneration: 0,
 						},
 					},
@@ -5114,7 +5269,7 @@ var _ = Describe("report diff", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingReportDiffResultTypeNoDiffFound),
+							Reason:             string(ApplyOrReportDiffResTypeNoDiffFound),
 							ObservedGeneration: 0,
 						},
 					},
@@ -5133,7 +5288,7 @@ var _ = Describe("report diff", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingReportDiffResultTypeFoundDiff),
+							Reason:             string(ApplyOrReportDiffResTypeFoundDiff),
 							ObservedGeneration: 1,
 						},
 					},
@@ -5214,7 +5369,7 @@ var _ = Describe("report diff", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingReportDiffResultTypeNoDiffFound),
+							Reason:             string(ApplyOrReportDiffResTypeNoDiffFound),
 							ObservedGeneration: 0,
 						},
 					},
@@ -5233,7 +5388,7 @@ var _ = Describe("report diff", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingReportDiffResultTypeNoDiffFound),
+							Reason:             string(ApplyOrReportDiffResTypeNoDiffFound),
 							ObservedGeneration: 2,
 						},
 					},
@@ -5321,7 +5476,7 @@ var _ = Describe("report diff", func() {
 
 		It("should not apply any manifest", func() {
 			// Verify that the NS manifest has not been applied.
-			Eventually(func() error {
+			Consistently(func() error {
 				// Retrieve the NS object.
 				updatedNS := &corev1.Namespace{}
 				if err := memberClient.Get(ctx, client.ObjectKey{Name: nsName}, updatedNS); err != nil {
@@ -5342,10 +5497,10 @@ var _ = Describe("report diff", func() {
 				}
 
 				return nil
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to leave the NS object alone")
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to leave the NS object alone")
 
 			// Verify that the Deployment manifest has not been applied.
-			Eventually(func() error {
+			Consistently(func() error {
 				// Retrieve the Deployment object.
 				updatedDeploy := &appsv1.Deployment{}
 				if err := memberClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: deployName}, updatedDeploy); err != nil {
@@ -5393,7 +5548,7 @@ var _ = Describe("report diff", func() {
 					return fmt.Errorf("deployment diff (-got +want):\n%s", diff)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to leave the Deployment object alone")
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to leave the Deployment object alone")
 		})
 
 		It("should update the Work object status", func() {
@@ -5419,7 +5574,7 @@ var _ = Describe("report diff", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingReportDiffResultTypeNoDiffFound),
+							Reason:             string(ApplyOrReportDiffResTypeNoDiffFound),
 							ObservedGeneration: 0,
 						},
 					},
@@ -5438,7 +5593,7 @@ var _ = Describe("report diff", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingReportDiffResultTypeFoundDiff),
+							Reason:             string(ApplyOrReportDiffResTypeFoundDiff),
 							ObservedGeneration: 1,
 						},
 					},
@@ -5474,6 +5629,146 @@ var _ = Describe("report diff", func() {
 			// Ensure applied manifest has been removed.
 			regularDeployRemovedActual := regularDeployRemovedActual(nsName, deployName)
 			Eventually(regularDeployRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the deployment object")
+
+			// Ensure that the AppliedWork object has been removed.
+			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
+			Eventually(appliedWorkRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the AppliedWork object")
+
+			workRemovedActual := workRemovedActual(workName)
+			Eventually(workRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove the Work object")
+
+			// The environment prepared by the envtest package does not support namespace
+			// deletion; consequently this test suite would not attempt so verify its deletion.
+		})
+	})
+
+	Context("report diff failure (decoding error)", Ordered, func() {
+		workName := fmt.Sprintf(workNameTemplate, utils.RandStr())
+		// The environment prepared by the envtest package does not support namespace
+		// deletion; each test case would use a new namespace.
+		nsName := fmt.Sprintf(nsNameTemplate, utils.RandStr())
+
+		var regularNS *corev1.Namespace
+		var malformedConfigMap *corev1.ConfigMap
+
+		BeforeAll(func() {
+			// Prepare a NS object.
+			regularNS = ns.DeepCopy()
+			regularNS.Name = nsName
+			regularNSJSON := marshalK8sObjJSON(regularNS)
+
+			malformedConfigMap = configMap.DeepCopy()
+			malformedConfigMap.Namespace = nsName
+			// This will trigger a decoding error on the work applier side as this API is not registered.
+			malformedConfigMap.TypeMeta = metav1.TypeMeta{
+				APIVersion: "malformed/v10",
+				Kind:       "Unknown",
+			}
+			malformedConfigMapJSON := marshalK8sObjJSON(malformedConfigMap)
+
+			// Create a new Work object with all the manifest JSONs and proper apply strategy.
+			applyStrategy := &fleetv1beta1.ApplyStrategy{
+				Type: fleetv1beta1.ApplyStrategyTypeReportDiff,
+			}
+			createWorkObject(workName, applyStrategy, regularNSJSON, malformedConfigMapJSON)
+		})
+
+		It("should add cleanup finalizer to the Work object", func() {
+			finalizerAddedActual := workFinalizerAddedActual(workName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add cleanup finalizer to the Work object")
+		})
+
+		It("should prepare an AppliedWork object", func() {
+			appliedWorkCreatedActual := appliedWorkCreatedActual(workName)
+			Eventually(appliedWorkCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to prepare an AppliedWork object")
+
+			appliedWorkOwnerRef = prepareAppliedWorkOwnerRef(workName)
+		})
+
+		It("should not apply any manifest", func() {
+			Consistently(func() error {
+				configMap := &corev1.ConfigMap{}
+				objKey := client.ObjectKey{Namespace: nsName, Name: malformedConfigMap.Name}
+				if err := memberClient.Get(ctx, objKey, configMap); !errors.IsNotFound(err) {
+					return fmt.Errorf("the config map exists, or an unexpected error has occurred: %w", err)
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The config map has been applied unexpectedly")
+
+			Consistently(regularNSObjectNotAppliedActual(nsName), consistentlyDuration, consistentlyInterval).Should(Succeed(), "The namespace object has been applied unexpectedly")
+		})
+
+		It("should update the Work object status", func() {
+			// Prepare the status information.
+			workConds := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+					Status: metav1.ConditionFalse,
+					Reason: condition.WorkNotAllManifestsDiffReportedReason,
+				},
+			}
+			manifestConds := []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:  0,
+						Group:    "",
+						Version:  "v1",
+						Kind:     "Namespace",
+						Resource: "namespaces",
+						Name:     nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
+							Status:             metav1.ConditionTrue,
+							Reason:             string(ApplyOrReportDiffResTypeFoundDiff),
+							ObservedGeneration: 0,
+						},
+					},
+					DiffDetails: &fleetv1beta1.DiffDetails{
+						ObservedDiffs: []fleetv1beta1.PatchDetail{
+							{
+								Path:       "/",
+								ValueInHub: "(the whole object)",
+							},
+						},
+					},
+				},
+				{
+					// Note that this specific decoding error will not block the work applier from extracting
+					// the GVR, hence the populated API group, version and kind information.
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal:   1,
+						Group:     "malformed",
+						Version:   "v10",
+						Kind:      "Unknown",
+						Resource:  "",
+						Name:      malformedConfigMap.Name,
+						Namespace: nsName,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeDiffReported,
+							Status: metav1.ConditionFalse,
+							Reason: string(ApplyOrReportDiffResTypeFailedToReportDiff),
+						},
+					},
+				},
+			}
+
+			workStatusUpdatedActual := workStatusUpdated(workName, workConds, manifestConds, nil, nil)
+			Eventually(workStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update work status")
+		})
+
+		It("should update the AppliedWork object status", func() {
+			// Prepare the status information.
+			appliedWorkStatusUpdatedActual := appliedWorkStatusUpdated(workName, nil)
+			Eventually(appliedWorkStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update appliedWork status")
+		})
+
+		AfterAll(func() {
+			// Delete the Work object and related resources.
+			deleteWorkObject(workName)
 
 			// Ensure that the AppliedWork object has been removed.
 			appliedWorkRemovedActual := appliedWorkRemovedActual(workName, nsName)
@@ -5659,7 +5954,7 @@ var _ = Describe("handling different apply strategies", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingReportDiffResultTypeNoDiffFound),
+							Reason:             string(ApplyOrReportDiffResTypeNoDiffFound),
 							ObservedGeneration: 0,
 						},
 					},
@@ -5678,7 +5973,7 @@ var _ = Describe("handling different apply strategies", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingReportDiffResultTypeFoundDiff),
+							Reason:             string(ApplyOrReportDiffResTypeFoundDiff),
 							ObservedGeneration: 1,
 						},
 					},
@@ -5755,13 +6050,13 @@ var _ = Describe("handling different apply strategies", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -5780,13 +6075,13 @@ var _ = Describe("handling different apply strategies", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 2,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionFalse,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeNotYetAvailable),
+							Reason:             string(AvailabilityResultTypeNotYetAvailable),
 							ObservedGeneration: 2,
 						},
 					},
@@ -5969,13 +6264,13 @@ var _ = Describe("handling different apply strategies", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -5994,13 +6289,13 @@ var _ = Describe("handling different apply strategies", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 1,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionFalse,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeNotYetAvailable),
+							Reason:             string(AvailabilityResultTypeNotYetAvailable),
 							ObservedGeneration: 1,
 						},
 					},
@@ -6052,7 +6347,7 @@ var _ = Describe("handling different apply strategies", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingReportDiffResultTypeNoDiffFound),
+							Reason:             string(ApplyOrReportDiffResTypeNoDiffFound),
 							ObservedGeneration: 0,
 						},
 					},
@@ -6071,7 +6366,7 @@ var _ = Describe("handling different apply strategies", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeDiffReported,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingReportDiffResultTypeNoDiffFound),
+							Reason:             string(ApplyOrReportDiffResTypeNoDiffFound),
 							ObservedGeneration: 1,
 						},
 					},
@@ -6270,7 +6565,7 @@ var _ = Describe("handling different apply strategies", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             string(ManifestProcessingApplyResultTypeNotTakenOver),
+							Reason:             string(ApplyOrReportDiffResTypeNotTakenOver),
 							ObservedGeneration: 0,
 						},
 					},
@@ -6289,7 +6584,7 @@ var _ = Describe("handling different apply strategies", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             string(ManifestProcessingApplyResultTypeNotTakenOver),
+							Reason:             string(ApplyOrReportDiffResTypeNotTakenOver),
 							ObservedGeneration: 1,
 						},
 					},
@@ -6409,13 +6704,13 @@ var _ = Describe("handling different apply strategies", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -6434,7 +6729,7 @@ var _ = Describe("handling different apply strategies", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionFalse,
-							Reason:             string(ManifestProcessingApplyResultTypeFailedToTakeOver),
+							Reason:             string(ApplyOrReportDiffResTypeFailedToTakeOver),
 							ObservedGeneration: 1,
 						},
 					},
@@ -6649,13 +6944,13 @@ var _ = Describe("handling different apply strategies", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
@@ -6674,13 +6969,13 @@ var _ = Describe("handling different apply strategies", func() {
 						{
 							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingApplyResultTypeApplied),
+							Reason:             string(ApplyOrReportDiffResTypeApplied),
 							ObservedGeneration: 0,
 						},
 						{
 							Type:               fleetv1beta1.WorkConditionTypeAvailable,
 							Status:             metav1.ConditionTrue,
-							Reason:             string(ManifestProcessingAvailabilityResultTypeAvailable),
+							Reason:             string(AvailabilityResultTypeAvailable),
 							ObservedGeneration: 0,
 						},
 					},
