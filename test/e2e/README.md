@@ -35,14 +35,19 @@ test suites, follow the steps below:
    ginkgo --label-filter="!custom" -v -p .
    ```
 
-   or run the custom configuration e2e tests with the following command
+   or run the custom configuration e2e tests with the following command:
    ```sh
    ginkgo --label-filter="custom" -v -p .
    ```
 
-   or run tests involving member cluster join/leave scenarios with the following command (serially)
+   or run tests involving member cluster join/leave scenarios with the following command (serially):
    ```sh
    ginkgo --label-filter="joinleave" -v .
+   ```
+
+   or run tests related to resourcePlacement (rp) only with the following command:
+   ```sh
+   ginkgo --label-filter="resourceplacement" -v -p .
    ```
 
    or create a launch.json in your vscode workspace.

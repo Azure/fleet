@@ -2613,7 +2613,7 @@ func clusterResourcePlacementForTest(crpName string, policy *placementv1beta1.Pl
 			Name: crpName,
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   corev1.GroupName,
 					Version: "v1",

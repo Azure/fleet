@@ -40,10 +40,10 @@ import (
 // The following definitions are originally declared in the controllers/workv1alpha1/manager.go file.
 const (
 	// ManifestHashAnnotation is the annotation that indicates whether the spec of the object has been changed or not.
-	ManifestHashAnnotation = fleetPrefix + "spec-hash"
+	ManifestHashAnnotation = FleetPrefix + "spec-hash"
 
 	// LastAppliedConfigAnnotation is to record the last applied configuration on the object.
-	LastAppliedConfigAnnotation = fleetPrefix + "last-applied-configuration"
+	LastAppliedConfigAnnotation = FleetPrefix + "last-applied-configuration"
 
 	// WorkConditionTypeApplied represents workload in Work is applied successfully on the spoke cluster.
 	WorkConditionTypeApplied = "Applied"

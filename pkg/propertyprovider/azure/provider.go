@@ -24,12 +24,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
@@ -88,8 +90,64 @@ var _ propertyprovider.PropertyProvider = &PropertyProvider{}
 func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error {
 	klog.V(2).Info("Starting Azure property provider")
 
+	podObj := client.Object(&corev1.Pod{})
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme: scheme.Scheme,
+		Cache: cache.Options{
+			ByObject: map[client.Object]cache.ByObject{
+				podObj: {
+					// Set up field selectors so that API server will not send out watch events that
+					// are not relevant to the pod watcher. This is essentially a trade-off between
+					// in-memory check overhead and encoding/transmission overhead; for large clusters
+					// with frequent pod creation/deletion ops, the trade-off seems to be worth it based
+					// on current experimentation results.
+					Field: fields.AndSelectors(
+						fields.OneTermNotEqualSelector("spec.nodeName", ""),
+						fields.OneTermNotEqualSelector("status.phase", string(corev1.PodSucceeded)),
+						fields.OneTermNotEqualSelector("status.phase", string(corev1.PodFailed)),
+					),
+					// Drop irrelevant fields from the pod object; this can significantly reduce the
+					// CPU and memory usage of the pod watcher, as less data is stored in cache.
+					Transform: func(obj interface{}) (interface{}, error) {
+						pod, ok := obj.(*corev1.Pod)
+						if !ok {
+							return nil, fmt.Errorf("failed to cast object to a pod object")
+						}
+
+						// The pod watcher only cares about a very limited set of pod fields,
+						// specifically the pod's current phase, node name, and resource requests.
+
+						// Drop unused metadata fields.
+						pod.ObjectMeta.Labels = nil
+						pod.ObjectMeta.Annotations = nil
+						pod.ObjectMeta.OwnerReferences = nil
+						pod.ObjectMeta.ManagedFields = nil
+
+						// Drop the rest of the pod status as they are irrelevant to the pod watcher.
+						pod.Status = corev1.PodStatus{
+							Phase: pod.Status.Phase,
+						}
+
+						// Drop the unwanted pod spec fields.
+						rebuiltedContainers := make([]corev1.Container, 0, len(pod.Spec.Containers))
+						for idx := range pod.Spec.Containers {
+							c := pod.Spec.Containers[idx]
+							rebuiltedContainers = append(rebuiltedContainers, corev1.Container{
+								Name:         c.Name,
+								Image:        c.Image,
+								Resources:    c.Resources,
+								ResizePolicy: c.ResizePolicy,
+							})
+						}
+						pod.Spec = corev1.PodSpec{
+							NodeName:   pod.Spec.NodeName,
+							Containers: rebuiltedContainers,
+						}
+						return pod, nil
+					},
+				},
+			},
+		},
 		// Disable metric serving for the Azure property provider controller manager.
 		//
 		// Note that this will not stop the metrics from being collected and exported; as they

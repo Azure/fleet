@@ -428,7 +428,7 @@ func crpWithOneFailedAvailabilityCheckStatusUpdatedActual(
 							Status: metav1.ConditionFalse,
 							// The new and old applier uses the same reason string to make things
 							// a bit easier.
-							Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeNotYetAvailable),
+							Reason:             string(workapplier.AvailabilityResultTypeNotYetAvailable),
 							ObservedGeneration: wantFailedResourceObservedGeneration,
 						},
 					},
@@ -486,7 +486,7 @@ func crpWithOneFailedApplyOpStatusUpdatedActual(
 							Status: metav1.ConditionFalse,
 							// The new and old applier uses the same reason string to make things
 							// a bit easier.
-							Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToApply),
+							Reason:             string(workapplier.ApplyOrReportDiffResTypeFailedToApply),
 							ObservedGeneration: wantFailedResourceObservedGeneration,
 						},
 					},
@@ -578,7 +578,7 @@ func crpWithStuckRolloutDueToOneFailedAvailabilityCheckStatusUpdatedActual(
 						Status: metav1.ConditionFalse,
 						// The new and old applier uses the same reason string to make things
 						// a bit easier.
-						Reason:             string(workapplier.ManifestProcessingAvailabilityResultTypeNotYetAvailable),
+						Reason:             string(workapplier.AvailabilityResultTypeNotYetAvailable),
 						ObservedGeneration: failedResourceObservedGeneration,
 					},
 				},
@@ -694,7 +694,7 @@ func crpWithStuckRolloutDueToOneFailedApplyOpStatusUpdatedActual(
 						Status: metav1.ConditionFalse,
 						// The new and old applier uses the same reason string to make things
 						// a bit easier.
-						Reason:             string(workapplier.ManifestProcessingApplyResultTypeFailedToApply),
+						Reason:             string(workapplier.ApplyOrReportDiffResTypeFailedToApply),
 						ObservedGeneration: failedResourceObservedGeneration,
 					},
 				},

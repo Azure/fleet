@@ -61,7 +61,7 @@ func TestFetchClusterResourceOverrideSnapshot(t *testing.T) {
 			},
 			Spec: placementv1beta1.ClusterResourceOverrideSnapshotSpec{
 				OverrideSpec: placementv1beta1.ClusterResourceOverrideSpec{
-					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ClusterResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "rbac.authorization.k8s.io",
 							Version: "v1",
@@ -87,7 +87,7 @@ func TestFetchClusterResourceOverrideSnapshot(t *testing.T) {
 			},
 			Spec: placementv1beta1.ClusterResourceOverrideSnapshotSpec{
 				OverrideSpec: placementv1beta1.ClusterResourceOverrideSpec{
-					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ClusterResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "rbac.authorization.k8s.io",
 							Version: "v1",

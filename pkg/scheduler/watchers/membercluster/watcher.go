@@ -49,6 +49,9 @@ type Reconciler struct {
 
 	// clusterEligibilityCheck helps check if a cluster is eligible for resource replacement.
 	ClusterEligibilityChecker *clustereligibilitychecker.ClusterEligibilityChecker
+
+	// enableResourcePlacement indicates whether the resource placement controller is enabled.
+	EnableResourcePlacement bool
 }
 
 // Reconcile reconciles a member cluster.
@@ -132,35 +135,43 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		// Do nothing if there is no error returned.
 	}
 
-	// List all CRPs.
+	// List all placements.
 	//
-	// Note that this controller reads CRPs from the same cache as the scheduler.
+	// Note that this controller reads placements from the same cache as the scheduler.
 	crpList := &placementv1beta1.ClusterResourcePlacementList{}
 	if err := r.Client.List(ctx, crpList); err != nil {
 		klog.ErrorS(err, "Failed to list CRPs", "memberCluster", memberClusterRef)
 		return ctrl.Result{}, controller.NewAPIServerError(true, err)
 	}
-
-	crps := crpList.Items
-	if !isMemberClusterMissing && memberCluster.GetDeletionTimestamp().IsZero() {
-		// If the member cluster is set to the left state, the scheduler needs to process all
-		// CRPs (case 2c)); otherwise, only CRPs of the PickAll type + CRPs of the PickN type,
-		// which have not been fully scheduled, need to be processed (case 1a) and 1b)).
-		crps = classifyCRPs(crpList.Items)
+	rpList := &placementv1beta1.ResourcePlacementList{}
+	if r.EnableResourcePlacement {
+		// Empty namespace provided to list RPs across all namespaces.
+		if err := r.Client.List(ctx, rpList, client.InNamespace("")); err != nil {
+			klog.ErrorS(err, "Failed to list RPs", "memberCluster", memberClusterRef)
+			return ctrl.Result{}, controller.NewAPIServerError(true, err)
+		}
 	}
 
-	// Enqueue the CRPs.
+	placements := append(convertCRPArrayToPlacementObjs(crpList.Items), convertRPArrayToPlacementObjs(rpList.Items)...)
+	if !isMemberClusterMissing && memberCluster.GetDeletionTimestamp().IsZero() {
+		// If the member cluster is set to the left state, the scheduler needs to process all
+		// placements (case 2c)); otherwise, only placements of the PickAll type + placements of the PickN type,
+		// which have not been fully scheduled, need to be processed (case 1a) and 1b)).
+		placements = classifyPlacements(placements)
+	}
+
+	// Enqueue the placements.
 	//
-	// Note that all the CRPs in the system are enqueued; technically speaking, for situation
-	// 1a), 1b) and 1c), PickN CRPs that have been fully scheduled needs no further processing, however,
+	// Note that all the placements in the system are enqueued; technically speaking, for situation
+	// 1a), 1b) and 1c), PickN placements that have been fully scheduled needs no further processing, however,
 	// for simplicity reasons, this controller will not distinguish between the cases.
-	for idx := range crps {
-		crp := &crps[idx]
+	for idx := range placements {
+		placement := placements[idx]
 		klog.V(2).InfoS(
-			"Enqueueing CRP for scheduler processing",
+			"Enqueueing placement for scheduler processing",
 			"memberCluster", memberClusterRef,
-			"clusterResourcePlacement", klog.KObj(crp))
-		r.SchedulerWorkQueue.Add(queue.PlacementKey(crp.Name))
+			"placement", klog.KObj(placement))
+		r.SchedulerWorkQueue.Add(controller.GetObjectKeyFromObj(placement))
 	}
 
 	// The reconciliation loop completes.

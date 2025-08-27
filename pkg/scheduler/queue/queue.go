@@ -38,12 +38,12 @@ type PlacementSchedulingQueueWriter interface {
 	// Add adds a PlacementKey to the work queue.
 	//
 	// Note that this bypasses the rate limiter.
-	Add(crpKey PlacementKey)
+	Add(placementKey PlacementKey)
 	// AddRateLimited adds a PlacementKey to the work queue after the rate limiter (if any)
 	// says that it is OK.
-	AddRateLimited(crpKey PlacementKey)
+	AddRateLimited(placementKey PlacementKey)
 	// AddAfter adds a PlacementKey to the work queue after a set duration.
-	AddAfter(crpKey PlacementKey, duration time.Duration)
+	AddAfter(placementKey PlacementKey, duration time.Duration)
 }
 
 // PlacementSchedulingQueue is an interface which queues PlacementKeys for the scheduler
@@ -61,9 +61,9 @@ type PlacementSchedulingQueue interface {
 	// NextPlacementKey returns the next-in-line PlacementKey for the scheduler to consume.
 	NextPlacementKey() (key PlacementKey, closed bool)
 	// Done marks a PlacementKey as done.
-	Done(crpKey PlacementKey)
+	Done(placementKey PlacementKey)
 	// Forget untracks a PlacementKey from rate limiter(s) (if any) set up with the queue.
-	Forget(crpKey PlacementKey)
+	Forget(placementKey PlacementKey)
 }
 
 // simplePlacementSchedulingQueue is a simple implementation of
@@ -127,53 +127,53 @@ func (sq *simplePlacementSchedulingQueue) CloseWithDrain() {
 	sq.active.ShutDownWithDrain()
 }
 
-// NextPlacementKey returns the next ClusterResourcePlacementKey in the work queue for
-// the scheduler to process.
+// NextPlacementKey returns the next PlacementKey (either clusterResourcePlacementKey or resourcePlacementKey)
+// in the work queue for the scheduler to process.
 //
 // Note that for now the queue simply wraps a work queue, and consider its state (whether it
 // is shut down or not) as its own closedness. In the future, when more queues are added, the
 // queue implementation must manage its own state.
 func (sq *simplePlacementSchedulingQueue) NextPlacementKey() (key PlacementKey, closed bool) {
 	// This will block on a condition variable if the queue is empty.
-	crpKey, shutdown := sq.active.Get()
+	placementKey, shutdown := sq.active.Get()
 	if shutdown {
 		return "", true
 	}
-	return crpKey.(PlacementKey), false
+	return placementKey.(PlacementKey), false
 }
 
-// Done marks a ClusterResourcePlacementKey as done.
-func (sq *simplePlacementSchedulingQueue) Done(crpKey PlacementKey) {
-	sq.active.Done(crpKey)
+// Done marks a PlacementKey as done.
+func (sq *simplePlacementSchedulingQueue) Done(placementKey PlacementKey) {
+	sq.active.Done(placementKey)
 }
 
-// Add adds a ClusterResourcePlacementKey to the work queue.
+// Add adds a PlacementKey to the work queue.
 //
 // Note that this bypasses the rate limiter (if any).
-func (sq *simplePlacementSchedulingQueue) Add(crpKey PlacementKey) {
-	sq.active.Add(crpKey)
+func (sq *simplePlacementSchedulingQueue) Add(placementKey PlacementKey) {
+	sq.active.Add(placementKey)
 }
 
-// AddRateLimited adds a ClusterResourcePlacementKey to the work queue after the rate limiter (if any)
+// AddRateLimited adds a PlacementKey to the work queue after the rate limiter (if any)
 // says that it is OK.
-func (sq *simplePlacementSchedulingQueue) AddRateLimited(crpKey PlacementKey) {
-	sq.active.AddRateLimited(crpKey)
+func (sq *simplePlacementSchedulingQueue) AddRateLimited(placementKey PlacementKey) {
+	sq.active.AddRateLimited(placementKey)
 }
 
-// AddAfter adds a ClusterResourcePlacementKey to the work queue after a set duration.
+// AddAfter adds a PlacementKey to the work queue after a set duration.
 //
 // Note that this bypasses the rate limiter (if any)
-func (sq *simplePlacementSchedulingQueue) AddAfter(crpKey PlacementKey, duration time.Duration) {
-	sq.active.AddAfter(crpKey, duration)
+func (sq *simplePlacementSchedulingQueue) AddAfter(placementKey PlacementKey, duration time.Duration) {
+	sq.active.AddAfter(placementKey, duration)
 }
 
-// Forget untracks a ClusterResourcePlacementKey from rate limiter(s) (if any) set up with the queue.
-func (sq *simplePlacementSchedulingQueue) Forget(crpKey PlacementKey) {
-	sq.active.Forget(crpKey)
+// Forget untracks a PlacementKey from rate limiter(s) (if any) set up with the queue.
+func (sq *simplePlacementSchedulingQueue) Forget(placementKey PlacementKey) {
+	sq.active.Forget(placementKey)
 }
 
 // NewSimplePlacementSchedulingQueue returns a
-// simpleClusterResourcePlacementSchedulingQueue.
+// simplePlacementSchedulingQueue.
 func NewSimplePlacementSchedulingQueue(opts ...Option) PlacementSchedulingQueue {
 	options := defaultSimplePlacementSchedulingQueueOptions
 	for _, opt := range opts {

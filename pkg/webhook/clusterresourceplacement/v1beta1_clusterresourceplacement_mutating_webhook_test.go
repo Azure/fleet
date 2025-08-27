@@ -46,7 +46,7 @@ func TestMutatingHandle(t *testing.T) {
 			Name: "test-crp-no-revisionhistory",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{resourceSelector},
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickAllPlacementType,
 			},
@@ -73,7 +73,7 @@ func TestMutatingHandle(t *testing.T) {
 			Name: "test-crp-no-policy",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{resourceSelector},
 			// Policy omitted
 			Strategy: placementv1beta1.RolloutStrategy{
 				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
@@ -98,7 +98,7 @@ func TestMutatingHandle(t *testing.T) {
 			Name: "test-crp-no-strategy",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{resourceSelector},
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickAllPlacementType,
 			},
@@ -112,7 +112,7 @@ func TestMutatingHandle(t *testing.T) {
 			Name: "test-crp-no-apply-strategy",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{resourceSelector},
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickAllPlacementType,
 			},
@@ -134,7 +134,7 @@ func TestMutatingHandle(t *testing.T) {
 			Name: "test-crp-no-serverside-apply-config",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{resourceSelector},
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickAllPlacementType,
 			},
@@ -162,7 +162,7 @@ func TestMutatingHandle(t *testing.T) {
 			Name: "test-crp-no-rolling-update-config",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{resourceSelector},
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickFixedPlacementType,
 				ClusterNames:  []string{"cluster1", "cluster2"},
@@ -186,7 +186,7 @@ func TestMutatingHandle(t *testing.T) {
 			Name: "test-crp-no-toleration-operator",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{resourceSelector},
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickAllPlacementType,
 				Tolerations: []placementv1beta1.Toleration{
@@ -215,7 +215,7 @@ func TestMutatingHandle(t *testing.T) {
 			Name: "test-crp-topology-spread-constraints",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{resourceSelector},
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickAllPlacementType,
 				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
@@ -243,7 +243,7 @@ func TestMutatingHandle(t *testing.T) {
 			Name: "test-crp-all-fields",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{resourceSelector},
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType:    placementv1beta1.PickNPlacementType,
 				NumberOfClusters: ptr.To(int32(3)),
@@ -298,7 +298,7 @@ func TestMutatingHandle(t *testing.T) {
 			Name: "test-crp-update-missing",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{resourceSelector},
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType:    placementv1beta1.PickNPlacementType, // Policy change is immutable
 				NumberOfClusters: ptr.To(int32(3)),
@@ -313,7 +313,7 @@ func TestMutatingHandle(t *testing.T) {
 			Name: "test-crp-update-change-field",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{resourceSelector},
 			Policy: &placementv1beta1.PlacementPolicy{
 				PlacementType:    placementv1beta1.PickNPlacementType,
 				NumberOfClusters: ptr.To(int32(5)), // Changed from 3 to 5

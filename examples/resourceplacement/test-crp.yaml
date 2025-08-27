@@ -1,0 +1,20 @@
+# This tests a CRP selecting a namespace only.
+# Prerequisite: create a namespace named "test-ns".
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourcePlacement
+metadata:
+  name: ns-only-crp
+spec:
+  resourceSelectors:
+    - group: ""
+      kind: Namespace
+      name: test-ns
+      version: v1
+      selectionScope: NamespaceOnly # only namespace itself is placed, no resources within the namespace
+  policy:
+    placementType: PickAll
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
