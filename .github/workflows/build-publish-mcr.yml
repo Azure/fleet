@@ -61,7 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.prepare-variables.outputs.release_tag }}
+          ref: main
       - name: 'Login the ACR'
         run: |
           az login --identity 
