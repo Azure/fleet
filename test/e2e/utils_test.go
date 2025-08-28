@@ -1323,6 +1323,24 @@ func updateCRPWithTolerations(tolerations []placementv1beta1.Toleration) {
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement with tolerations %s", crpName)
 }
 
+func updateRPWithTolerations(rpKey types.NamespacedName, tolerations []placementv1beta1.Toleration) {
+	Eventually(func() error {
+		var rp placementv1beta1.ResourcePlacement
+		err := hubClient.Get(ctx, rpKey, &rp)
+		if err != nil {
+			return err
+		}
+		if rp.Spec.Policy == nil {
+			rp.Spec.Policy = &placementv1beta1.PlacementPolicy{
+				Tolerations: tolerations,
+			}
+		} else {
+			rp.Spec.Policy.Tolerations = tolerations
+		}
+		return hubClient.Update(ctx, &rp)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update resource placement with tolerations %s", rpKey)
+}
+
 func cleanupClusterResourceOverride(name string) {
 	cro := &placementv1beta1.ClusterResourceOverride{
 		ObjectMeta: metav1.ObjectMeta{
