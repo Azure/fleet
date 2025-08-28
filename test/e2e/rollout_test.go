@@ -286,7 +286,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", true)
+			crpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(types.NamespacedName{Name: crpName}, wantSelectedResources, allMemberClusterNames, nil, "0", true)
 			Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -370,7 +370,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", true)
+			crpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(types.NamespacedName{Name: crpName}, wantSelectedResources, allMemberClusterNames, nil, "0", true)
 			Eventually(crpStatusUpdatedActual, 2*workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -693,7 +693,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(types.NamespacedName{Name: crpName}, wantSelectedResources, allMemberClusterNames, nil, "0", false)
 			Eventually(crpStatusUpdatedActual, 2*time.Duration(unAvailablePeriodSeconds)*time.Second, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -718,7 +718,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 		// job is not trackable, so we need to wait for a bit longer for each roll out
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "1", false)
+			crpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(types.NamespacedName{Name: crpName}, wantSelectedResources, allMemberClusterNames, nil, "1", false)
 			Eventually(crpStatusUpdatedActual, 5*time.Duration(unAvailablePeriodSeconds)*time.Second, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -771,7 +771,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("create the CRP that select the namespace and CRD", func() {
 			crp = buildCRPForSafeRollout()
-			crdClusterResourceSelector := placementv1beta1.ClusterResourceSelector{
+			crdClusterResourceSelector := placementv1beta1.ResourceSelectorTerm{
 				Group:   utils.CRDMetaGVK.Group,
 				Kind:    utils.CRDMetaGVK.Kind,
 				Version: utils.CRDMetaGVK.Version,
@@ -807,7 +807,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				return nil
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to select all the expected resources")
 
-			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, []string{memberCluster1EastProdName}, nil, observedResourceIdx, false)
+			crpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(types.NamespacedName{Name: crpName}, wantSelectedResources, []string{memberCluster1EastProdName}, nil, observedResourceIdx, false)
 			Eventually(crpStatusUpdatedActual, 2*time.Duration(unAvailablePeriodSeconds)*time.Second, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -863,7 +863,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 				return nil
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to select all the expected resources")
 
-			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, []string{memberCluster1EastProdName}, nil, observedResourceIdx, false)
+			crpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(types.NamespacedName{Name: crpName}, wantSelectedResources, []string{memberCluster1EastProdName}, nil, observedResourceIdx, false)
 			Eventually(crpStatusUpdatedActual, 4*time.Duration(unAvailablePeriodSeconds)*time.Second, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -914,7 +914,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 
 		It("create the CRP that select the namespace and CRD", func() {
 			crp = buildCRPForSafeRollout()
-			crdClusterResourceSelector := placementv1beta1.ClusterResourceSelector{
+			crdClusterResourceSelector := placementv1beta1.ResourceSelectorTerm{
 				Group:   utils.CRDMetaGVK.Group,
 				Kind:    utils.CRDMetaGVK.Kind,
 				Version: utils.CRDMetaGVK.Version,
@@ -929,7 +929,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "0", false)
+			crpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(types.NamespacedName{Name: crpName}, wantSelectedResources, allMemberClusterNames, nil, "0", false)
 			Eventually(crpStatusUpdatedActual, 2*time.Duration(unAvailablePeriodSeconds)*time.Second, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -992,7 +992,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := customizedCRPStatusUpdatedActual(crpName, wantSelectedResources, allMemberClusterNames, nil, "1", false)
+			crpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(types.NamespacedName{Name: crpName}, wantSelectedResources, allMemberClusterNames, nil, "1", false)
 			Eventually(crpStatusUpdatedActual, 4*time.Duration(unAvailablePeriodSeconds)*time.Second, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 

@@ -698,7 +698,7 @@ var _ = Describe("test CRP rollout with staged update run", func() {
 					Namespace: roNamespace,
 				},
 				Spec: placementv1beta1.ResourceOverrideSpec{
-					ResourceSelectors: configMapSelector(),
+					ResourceSelectors: configMapOverrideSelector(),
 					Policy: &placementv1beta1.OverridePolicy{
 						OverrideRules: []placementv1beta1.OverrideRule{
 							{

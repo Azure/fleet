@@ -218,7 +218,7 @@ func createCRP(crp *v1beta1.ClusterResourcePlacement, crpFile string, crpName st
 
 	crp.Name = crpName
 	if useTestResources {
-		crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, v1beta1.ClusterResourceSelector{
+		crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, v1beta1.ResourceSelectorTerm{
 			Group:   "",
 			Version: "v1",
 			Kind:    "Namespace",

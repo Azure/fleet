@@ -218,11 +218,11 @@ var (
 			// disappear from the status of the MemberCluster object.
 			c.Type == string(clusterv1beta1.ConditionTypeClusterPropertyProviderStarted)
 	})
-	ignoreTimeTypeFields                            = cmpopts.IgnoreTypes(time.Time{}, metav1.Time{})
-	ignoreCRPStatusDriftedPlacementsTimestampFields = cmpopts.IgnoreFields(placementv1beta1.DriftedResourcePlacement{}, "ObservationTime", "FirstDriftedObservedTime")
-	ignoreCRPStatusDiffedPlacementsTimestampFields  = cmpopts.IgnoreFields(placementv1beta1.DiffedResourcePlacement{}, "ObservationTime", "FirstDiffedObservedTime")
+	ignoreTimeTypeFields                                  = cmpopts.IgnoreTypes(time.Time{}, metav1.Time{})
+	ignorePlacementStatusDriftedPlacementsTimestampFields = cmpopts.IgnoreFields(placementv1beta1.DriftedResourcePlacement{}, "ObservationTime", "FirstDriftedObservedTime")
+	ignorePlacementStatusDiffedPlacementsTimestampFields  = cmpopts.IgnoreFields(placementv1beta1.DiffedResourcePlacement{}, "ObservationTime", "FirstDiffedObservedTime")
 
-	crpStatusCmpOptions = cmp.Options{
+	placementStatusCmpOptions = cmp.Options{
 		cmpopts.SortSlices(lessFuncCondition),
 		cmpopts.SortSlices(lessFuncPlacementStatus),
 		cmpopts.SortSlices(utils.LessFuncResourceIdentifier),
@@ -230,14 +230,14 @@ var (
 		cmpopts.SortSlices(utils.LessFuncDiffedResourcePlacements),
 		cmpopts.SortSlices(utils.LessFuncDriftedResourcePlacements),
 		utils.IgnoreConditionLTTAndMessageFields,
-		ignoreCRPStatusDriftedPlacementsTimestampFields,
-		ignoreCRPStatusDiffedPlacementsTimestampFields,
+		ignorePlacementStatusDriftedPlacementsTimestampFields,
+		ignorePlacementStatusDiffedPlacementsTimestampFields,
 		cmpopts.EquateEmpty(),
 	}
 
 	// We don't sort ResourcePlacementStatus by their name since we don't know which cluster will become unavailable first,
 	// prompting the rollout to be blocked for remaining clusters.
-	safeRolloutCRPStatusCmpOptions = cmp.Options{
+	safeRolloutPlacementStatusCmpOptions = cmp.Options{
 		cmpopts.SortSlices(lessFuncCondition),
 		cmpopts.SortSlices(lessFuncPlacementStatusByConditions),
 		cmpopts.SortSlices(utils.LessFuncResourceIdentifier),

@@ -34,6 +34,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
+	"k8s.io/utils/set"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -231,9 +232,6 @@ type Reconciler struct {
 }
 
 // NewReconciler returns a new Work object reconciler for the work applier.
-//
-// TO-DO (chenyu1): evaluate if KubeFleet needs to expose the requeue rate limiter
-// parameters as command-line arguments for user-side configuration.
 func NewReconciler(
 	hubClient client.Client, workNameSpace string,
 	spokeDynamicClient dynamic.Interface, spokeClient client.Client, restMapper meta.RESTMapper,
@@ -266,93 +264,105 @@ func NewReconciler(
 	}
 }
 
-type manifestProcessingAppliedResultType string
+type ManifestProcessingApplyOrReportDiffResultType string
 
 const (
-	// The result types and descriptions for processing failures.
-	ManifestProcessingApplyResultTypeDecodingErred                  manifestProcessingAppliedResultType = "DecodingErred"
-	ManifestProcessingApplyResultTypeFoundGenerateName              manifestProcessingAppliedResultType = "FoundGenerateName"
-	ManifestProcessingApplyResultTypeDuplicated                     manifestProcessingAppliedResultType = "Duplicated"
-	ManifestProcessingApplyResultTypeFailedToFindObjInMemberCluster manifestProcessingAppliedResultType = "FailedToFindObjInMemberCluster"
-	ManifestProcessingApplyResultTypeFailedToTakeOver               manifestProcessingAppliedResultType = "FailedToTakeOver"
-	ManifestProcessingApplyResultTypeNotTakenOver                   manifestProcessingAppliedResultType = "NotTakenOver"
-	ManifestProcessingApplyResultTypeFailedToRunDriftDetection      manifestProcessingAppliedResultType = "FailedToRunDriftDetection"
-	ManifestProcessingApplyResultTypeFoundDrifts                    manifestProcessingAppliedResultType = "FoundDrifts"
+	// The result types for apply op failures.
+	ApplyOrReportDiffResTypeDecodingErred                  ManifestProcessingApplyOrReportDiffResultType = "DecodingErred"
+	ApplyOrReportDiffResTypeFoundGenerateName              ManifestProcessingApplyOrReportDiffResultType = "FoundGenerateName"
+	ApplyOrReportDiffResTypeDuplicated                     ManifestProcessingApplyOrReportDiffResultType = "Duplicated"
+	ApplyOrReportDiffResTypeFailedToFindObjInMemberCluster ManifestProcessingApplyOrReportDiffResultType = "FailedToFindObjInMemberCluster"
+	ApplyOrReportDiffResTypeFailedToTakeOver               ManifestProcessingApplyOrReportDiffResultType = "FailedToTakeOver"
+	ApplyOrReportDiffResTypeNotTakenOver                   ManifestProcessingApplyOrReportDiffResultType = "NotTakenOver"
+	ApplyOrReportDiffResTypeFailedToRunDriftDetection      ManifestProcessingApplyOrReportDiffResultType = "FailedToRunDriftDetection"
+	ApplyOrReportDiffResTypeFoundDrifts                    ManifestProcessingApplyOrReportDiffResultType = "FoundDrifts"
 	// Note that the reason string below uses the same value as kept in the old work applier.
-	ManifestProcessingApplyResultTypeFailedToApply manifestProcessingAppliedResultType = "ManifestApplyFailed"
+	ApplyOrReportDiffResTypeFailedToApply ManifestProcessingApplyOrReportDiffResultType = "ManifestApplyFailed"
 
-	// The result type and description for partially successfully processing attempts.
-	ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetection manifestProcessingAppliedResultType = "AppliedWithFailedDriftDetection"
+	// The result type and description for successful apply ops.
+	ApplyOrReportDiffResTypeApplied ManifestProcessingApplyOrReportDiffResultType = "Applied"
+)
 
-	ManifestProcessingApplyResultTypeAppliedWithFailedDriftDetectionDescription = "Manifest has been applied successfully, but drift detection has failed"
+const (
+	// The descriptions for different apply op result types.
 
-	// The result type and description for successful processing attempts.
-	ManifestProcessingApplyResultTypeApplied manifestProcessingAppliedResultType = "Applied"
+	// The description for partially successful apply ops.
+	ApplyOrReportDiffResTypeAppliedWithFailedDriftDetection ManifestProcessingApplyOrReportDiffResultType = "AppliedWithFailedDriftDetection"
+	// The description for successful apply ops.
+	ApplyOrReportDiffResTypeAppliedDescription = "Manifest has been applied successfully"
+)
 
-	ManifestProcessingApplyResultTypeAppliedDescription = "Manifest has been applied successfully"
+const (
+	// The result type for diff reporting failures.
+	ApplyOrReportDiffResTypeFailedToReportDiff ManifestProcessingApplyOrReportDiffResultType = "FailedToReportDiff"
 
-	// A special result type for the case where no apply is performed (i.e., the ReportDiff mode).
-	ManifestProcessingApplyResultTypeNoApplyPerformed manifestProcessingAppliedResultType = "Skipped"
+	// The result type for successful diff reportings.
+	ApplyOrReportDiffResTypeFoundDiff   ManifestProcessingApplyOrReportDiffResultType = "FoundDiff"
+	ApplyOrReportDiffResTypeNoDiffFound ManifestProcessingApplyOrReportDiffResultType = "NoDiffFound"
+)
+
+const (
+	// The descriptions for different diff reporting result types.
+	ApplyOrReportDiffResTypeFailedToReportDiffDescription = "Failed to report the diff between the hub cluster and the member cluster (error = %s)"
+	ApplyOrReportDiffResTypeNoDiffFoundDescription        = "No diff has been found between the hub cluster and the member cluster"
+	ApplyOrReportDiffResTypeFoundDiffDescription          = "Diff has been found between the hub cluster and the member cluster"
+)
+
+var (
+	// A set for all apply related result types.
+	manifestProcessingApplyResTypSet = set.New(
+		ApplyOrReportDiffResTypeDecodingErred,
+		ApplyOrReportDiffResTypeFoundGenerateName,
+		ApplyOrReportDiffResTypeDuplicated,
+		ApplyOrReportDiffResTypeFailedToFindObjInMemberCluster,
+		ApplyOrReportDiffResTypeFailedToTakeOver,
+		ApplyOrReportDiffResTypeNotTakenOver,
+		ApplyOrReportDiffResTypeFailedToRunDriftDetection,
+		ApplyOrReportDiffResTypeFoundDrifts,
+		ApplyOrReportDiffResTypeFailedToApply,
+		ApplyOrReportDiffResTypeAppliedWithFailedDriftDetection,
+		ApplyOrReportDiffResTypeApplied,
+	)
 )
 
 type ManifestProcessingAvailabilityResultType string
 
 const (
 	// The result type for availability check being skipped.
-	ManifestProcessingAvailabilityResultTypeSkipped ManifestProcessingAvailabilityResultType = "Skipped"
+	AvailabilityResultTypeSkipped ManifestProcessingAvailabilityResultType = "Skipped"
 
 	// The result type for availability check failures.
-	ManifestProcessingAvailabilityResultTypeFailed ManifestProcessingAvailabilityResultType = "Failed"
-
-	// The description for availability check failures.
-	ManifestProcessingAvailabilityResultTypeFailedDescription = "Failed to track the availability of the applied manifest (error = %s)"
+	AvailabilityResultTypeFailed ManifestProcessingAvailabilityResultType = "Failed"
 
 	// The result types for completed availability checks.
-	ManifestProcessingAvailabilityResultTypeAvailable ManifestProcessingAvailabilityResultType = "Available"
+	AvailabilityResultTypeAvailable ManifestProcessingAvailabilityResultType = "Available"
 	// Note that the reason string below uses the same value as kept in the old work applier.
-	ManifestProcessingAvailabilityResultTypeNotYetAvailable ManifestProcessingAvailabilityResultType = "ManifestNotAvailableYet"
-
-	ManifestProcessingAvailabilityResultTypeNotTrackable ManifestProcessingAvailabilityResultType = "NotTrackable"
-
-	// The descriptions for completed availability checks.
-	ManifestProcessingAvailabilityResultTypeAvailableDescription       = "Manifest is available"
-	ManifestProcessingAvailabilityResultTypeNotYetAvailableDescription = "Manifest is not yet available; Fleet will check again later"
-	ManifestProcessingAvailabilityResultTypeNotTrackableDescription    = "Manifest's availability is not trackable; Fleet assumes that the applied manifest is available"
+	AvailabilityResultTypeNotYetAvailable ManifestProcessingAvailabilityResultType = "ManifestNotAvailableYet"
+	AvailabilityResultTypeNotTrackable    ManifestProcessingAvailabilityResultType = "NotTrackable"
 )
 
-type ManifestProcessingReportDiffResultType string
-
 const (
-	// The result type for the cases where ReportDiff mode is not enabled.
-	ManifestProcessingReportDiffResultTypeNotEnabled ManifestProcessingReportDiffResultType = "NotEnabled"
+	// The description for availability check failures.
+	AvailabilityResultTypeFailedDescription = "Failed to track the availability of the applied manifest (error = %s)"
 
-	// The result type for diff reporting failures.
-	ManifestProcessingReportDiffResultTypeFailed ManifestProcessingReportDiffResultType = "Failed"
-
-	ManifestProcessingReportDiffResultTypeFailedDescription = "Failed to report the diff between the hub cluster and the member cluster (error = %s)"
-
-	// The result type for completed diff reportings.
-	ManifestProcessingReportDiffResultTypeFoundDiff   ManifestProcessingReportDiffResultType = "FoundDiff"
-	ManifestProcessingReportDiffResultTypeNoDiffFound ManifestProcessingReportDiffResultType = "NoDiffFound"
-
-	ManifestProcessingReportDiffResultTypeNoDiffFoundDescription = "No diff has been found between the hub cluster and the member cluster"
-	ManifestProcessingReportDiffResultTypeFoundDiffDescription   = "Diff has been found between the hub cluster and the member cluster"
+	// The descriptions for completed availability checks.
+	AvailabilityResultTypeAvailableDescription       = "Manifest is available"
+	AvailabilityResultTypeNotYetAvailableDescription = "Manifest is not yet available; Fleet will check again later"
+	AvailabilityResultTypeNotTrackableDescription    = "Manifest's availability is not trackable; Fleet assumes that the applied manifest is available"
 )
 
 type manifestProcessingBundle struct {
-	manifest           *fleetv1beta1.Manifest
-	id                 *fleetv1beta1.WorkResourceIdentifier
-	manifestObj        *unstructured.Unstructured
-	inMemberClusterObj *unstructured.Unstructured
-	gvr                *schema.GroupVersionResource
-	applyResTyp        manifestProcessingAppliedResultType
-	availabilityResTyp ManifestProcessingAvailabilityResultType
-	reportDiffResTyp   ManifestProcessingReportDiffResultType
-	applyErr           error
-	availabilityErr    error
-	reportDiffErr      error
-	drifts             []fleetv1beta1.PatchDetail
-	diffs              []fleetv1beta1.PatchDetail
+	manifest                *fleetv1beta1.Manifest
+	id                      *fleetv1beta1.WorkResourceIdentifier
+	manifestObj             *unstructured.Unstructured
+	inMemberClusterObj      *unstructured.Unstructured
+	gvr                     *schema.GroupVersionResource
+	applyOrReportDiffResTyp ManifestProcessingApplyOrReportDiffResultType
+	availabilityResTyp      ManifestProcessingAvailabilityResultType
+	applyOrReportDiffErr    error
+	availabilityErr         error
+	drifts                  []fleetv1beta1.PatchDetail
+	diffs                   []fleetv1beta1.PatchDetail
 }
 
 // Reconcile implement the control loop logic for Work object.

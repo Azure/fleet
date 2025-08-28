@@ -140,7 +140,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 						Finalizers: []string{customDeletionBlockerFinalizer},
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "",
 								Kind:    "InvalidNamespace",
@@ -170,7 +170,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 						Finalizers: []string{customDeletionBlockerFinalizer},
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "apps",
 								Kind:    "Deployment",
@@ -813,7 +813,7 @@ var _ = Describe("webhook tests for MC taints", Ordered, func() {
 
 var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations", func() {
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
-	selector := placementv1beta1.ClusterResourceSelector{
+	selector := placementv1beta1.ResourceSelectorTerm{
 		Group:          "rbac.authorization.k8s.io/v1",
 		Kind:           "ClusterRole",
 		Version:        "v1",
@@ -853,7 +853,7 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations", 
 
 	It("should deny create CRO with invalid resource selection ", func() {
 		Consistently(func(g Gomega) error {
-			invalidSelector := placementv1beta1.ClusterResourceSelector{
+			invalidSelector := placementv1beta1.ResourceSelectorTerm{
 				Group:   "rbac.authorization.k8s.io/v1",
 				Kind:    "ClusterRole",
 				Version: "v1",
@@ -862,7 +862,7 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations", 
 				},
 				SelectionScope: placementv1beta1.NamespaceWithResources,
 			}
-			invalidSelector1 := placementv1beta1.ClusterResourceSelector{
+			invalidSelector1 := placementv1beta1.ResourceSelectorTerm{
 				Group:          "rbac.authorization.k8s.io/v1",
 				Kind:           "ClusterRole",
 				Version:        "v1",
@@ -874,7 +874,7 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations", 
 					Name: croName,
 				},
 				Spec: placementv1beta1.ClusterResourceOverrideSpec{
-					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ClusterResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						invalidSelector, selector, selector, invalidSelector1,
 					},
 					Policy: policy,
@@ -912,7 +912,7 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operation lim
 					Name: "test-cro-101",
 				},
 				Spec: placementv1beta1.ClusterResourceOverrideSpec{
-					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ClusterResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "rbac.authorization.k8s.io/v1",
 							Kind:    "ClusterRole",
@@ -964,7 +964,7 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operation lim
 
 var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations resource selection limitations", Ordered, Serial, func() {
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
-	selector := placementv1beta1.ClusterResourceSelector{
+	selector := placementv1beta1.ResourceSelectorTerm{
 		Group:          "rbac.authorization.k8s.io/v1",
 		Kind:           "ClusterRole",
 		Version:        "v1",
@@ -978,7 +978,7 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations re
 				Name: croName,
 			},
 			Spec: placementv1beta1.ClusterResourceOverrideSpec{
-				ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+				ClusterResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 					selector,
 				},
 				Policy: &placementv1beta1.OverridePolicy{
@@ -1028,7 +1028,7 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations re
 					Name: fmt.Sprintf("test-cro-%d", GinkgoParallelProcess()),
 				},
 				Spec: placementv1beta1.ClusterResourceOverrideSpec{
-					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ClusterResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						selector,
 					},
 					Policy: &placementv1beta1.OverridePolicy{
@@ -1097,7 +1097,7 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 			Name: croName,
 		},
 		Spec: placementv1beta1.ClusterResourceOverrideSpec{
-			ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+			ClusterResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "rbac.authorization.k8s.io/v1",
 					Kind:    "ClusterRole",
@@ -1138,7 +1138,7 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 		Eventually(func(g Gomega) error {
 			var cro placementv1beta1.ClusterResourceOverride
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: croName}, &cro)).Should(Succeed())
-			invalidSelector := placementv1beta1.ClusterResourceSelector{
+			invalidSelector := placementv1beta1.ResourceSelectorTerm{
 				Group:   "rbac.authorization.k8s.io/v1",
 				Kind:    "ClusterRole",
 				Version: "v1",
@@ -1147,7 +1147,7 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 				},
 				SelectionScope: placementv1beta1.NamespaceWithResources,
 			}
-			invalidSelector1 := placementv1beta1.ClusterResourceSelector{
+			invalidSelector1 := placementv1beta1.ResourceSelectorTerm{
 				Group:          "rbac.authorization.k8s.io/v1",
 				Kind:           "ClusterRole",
 				Version:        "v1",
@@ -1178,7 +1178,7 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 					Name: cro1Name,
 				},
 				Spec: placementv1beta1.ClusterResourceOverrideSpec{
-					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					ClusterResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 						{
 							Group:   "rbac.authorization.k8s.io/v1",
 							Kind:    "ClusterRole",
@@ -1206,7 +1206,7 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 			Expect(hubClient.Create(ctx, cro1)).To(Succeed(), "Failed to create CRO %s", cro1.Name)
 			var cro placementv1beta1.ClusterResourceOverride
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: croName}, &cro)).Should(Succeed())
-			selector := placementv1beta1.ClusterResourceSelector{
+			selector := placementv1beta1.ResourceSelectorTerm{
 				Group:          "rbac.authorization.k8s.io/v1",
 				Kind:           "ClusterRole",
 				Version:        "v1",

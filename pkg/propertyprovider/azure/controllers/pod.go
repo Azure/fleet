@@ -52,7 +52,10 @@ func (p *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		klog.V(2).InfoS("Reconciliation ends for pod objects in the Azure property provider", "pod", podRef, "latency", latency)
 	}()
 
-	// Retrieve the pod object.
+	// Retrieve the pod object from cache.
+	//
+	// Note that the transform func has removed fields that are irrelevant to the pod watcher
+	// from the retrieved objects at this moment.
 	pod := &corev1.Pod{}
 	if err := p.Client.Get(ctx, req.NamespacedName, pod); err != nil {
 		// Failed to get the pod object.
@@ -86,8 +89,12 @@ func (p *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	// This behavior is consistent with how the Kubernetes CLI tool reports requested capacity
 	// on a specific node (`kubectl describe node` command).
 	//
-	// Note that the tracker will attempt to track the pod even if it has been marked for deletion.
+	// The tracker will attempt to track the pod even if it has been marked for deletion (when it
+	// is actually gone, the pod will be untracked).
 	if len(pod.Spec.NodeName) > 0 && pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed {
+		// The pod watcher has field selectors enabled, which will not see pods that should not
+		// be tracked (e.g., pods that are not assigned to a node, or pods that are in terminal states).
+		// The check is added here for completeness reasons.
 		klog.V(2).InfoS("Attempt to track the pod", "pod", podRef)
 		p.PT.AddOrUpdate(pod)
 	} else {

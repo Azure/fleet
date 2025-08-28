@@ -35,10 +35,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/metrics"
 	bindingutils "go.goms.io/fleet/pkg/utils/binding"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
-	"go.goms.io/fleet/pkg/utils/controller/metrics"
 	"go.goms.io/fleet/pkg/utils/defaulter"
 	evictionutils "go.goms.io/fleet/pkg/utils/eviction"
 )

@@ -44,6 +44,7 @@ type ClusterResourceOverride struct {
 // The ClusterResourceOverride create or update will fail when the resource has been selected by the existing ClusterResourceOverride.
 // If the resource is selected by both ClusterResourceOverride and ResourceOverride, ResourceOverride will win when resolving
 // conflicts.
+// +kubebuilder:validation:XValidation:rule="(has(oldSelf.placement) && has(self.placement) && oldSelf.placement == self.placement) || (!has(oldSelf.placement) && !has(self.placement))",message="The placement field is immutable"
 type ClusterResourceOverrideSpec struct {
 	// Placement defines whether the override is applied to a specific placement or not.
 	// If set, the override will trigger the placement rollout immediately when the rollout strategy type is RollingUpdate.
@@ -61,7 +62,7 @@ type ClusterResourceOverrideSpec struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=20
 	// +required
-	ClusterResourceSelectors []ClusterResourceSelector `json:"clusterResourceSelectors"`
+	ClusterResourceSelectors []ResourceSelectorTerm `json:"clusterResourceSelectors"`
 
 	// Policy defines how to override the selected resources on the target clusters.
 	// +required
@@ -167,6 +168,7 @@ type ResourceOverride struct {
 // The ResourceOverride create or update will fail when the resource has been selected by the existing ResourceOverride.
 // If the resource is selected by both ClusterResourceOverride and ResourceOverride, ResourceOverride will win when resolving
 // conflicts.
+// +kubebuilder:validation:XValidation:rule="(has(oldSelf.placement) && has(self.placement) && oldSelf.placement == self.placement) || (!has(oldSelf.placement) && !has(self.placement))",message="The placement field is immutable"
 type ResourceOverrideSpec struct {
 	// Placement defines whether the override is applied to a specific placement or not.
 	// If set, the override will trigger the placement rollout immediately when the rollout strategy type is RollingUpdate.

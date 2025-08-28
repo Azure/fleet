@@ -26,15 +26,11 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/tools/cache"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -43,6 +39,7 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
 	"go.goms.io/fleet/pkg/utils/keys"
+	testinformer "go.goms.io/fleet/test/utils/informer"
 )
 
 var _ controller.Controller = &fakeController{}
@@ -69,104 +66,6 @@ func (w *fakeController) Enqueue(obj interface{}) {
 		w.QueueObj = []string{}
 	}
 	w.QueueObj = append(w.QueueObj, obj.(string))
-}
-
-// fakeLister is a simple fake lister for testing
-type fakeLister struct {
-	objects []runtime.Object
-	err     error
-}
-
-func (f *fakeLister) List(_ labels.Selector) ([]runtime.Object, error) {
-	if f.err != nil {
-		return nil, f.err
-	}
-	return f.objects, nil
-}
-
-func (f *fakeLister) Get(name string) (runtime.Object, error) {
-	if f.err != nil {
-		return nil, f.err
-	}
-	for _, obj := range f.objects {
-		if obj.(*unstructured.Unstructured).GetName() == name {
-			return obj, nil
-		}
-	}
-	return nil, apierrors.NewNotFound(schema.GroupResource{Resource: "test"}, name)
-}
-
-func (f *fakeLister) ByNamespace(namespace string) cache.GenericNamespaceLister {
-	return &fakeNamespaceLister{objects: f.objects, namespace: namespace, err: f.err}
-}
-
-// fakeNamespaceLister implements cache.GenericNamespaceLister
-type fakeNamespaceLister struct {
-	objects   []runtime.Object
-	namespace string
-	err       error
-}
-
-func (f *fakeNamespaceLister) List(_ labels.Selector) ([]runtime.Object, error) {
-	if f.err != nil {
-		return nil, f.err
-	}
-	return f.objects, nil
-}
-
-func (f *fakeNamespaceLister) Get(name string) (runtime.Object, error) {
-	if f.err != nil {
-		return nil, f.err
-	}
-	for _, obj := range f.objects {
-		if obj.(*unstructured.Unstructured).GetName() == name {
-			return obj, nil
-		}
-	}
-	return nil, apierrors.NewNotFound(schema.GroupResource{Resource: "test"}, name)
-}
-
-// fakeInformerManager is a test-specific informer manager
-type fakeInformerManager struct {
-	listers map[schema.GroupVersionResource]*fakeLister
-}
-
-func (f *fakeInformerManager) AddDynamicResources(_ []informer.APIResourceMeta, _ cache.ResourceEventHandler, _ bool) {
-}
-
-func (f *fakeInformerManager) AddStaticResource(_ informer.APIResourceMeta, _ cache.ResourceEventHandler) {
-}
-
-func (f *fakeInformerManager) IsInformerSynced(_ schema.GroupVersionResource) bool {
-	return true
-}
-
-func (f *fakeInformerManager) Start() {
-}
-
-func (f *fakeInformerManager) Stop() {
-}
-
-func (f *fakeInformerManager) Lister(gvr schema.GroupVersionResource) cache.GenericLister {
-	if lister, exists := f.listers[gvr]; exists {
-		return lister
-	}
-	return &fakeLister{objects: []runtime.Object{}}
-}
-
-func (f *fakeInformerManager) GetNameSpaceScopedResources() []schema.GroupVersionResource {
-	return nil
-}
-
-func (f *fakeInformerManager) IsClusterScopedResources(_ schema.GroupVersionKind) bool {
-	return true
-}
-
-func (f *fakeInformerManager) WaitForCacheSync() {
-}
-
-func (f *fakeInformerManager) GetClient() dynamic.Interface {
-	return nil
 }
 
 func TestFindPlacementsSelectedDeletedResV1Alpha1(t *testing.T) {
@@ -772,20 +671,41 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-nameSpace",
+			Name: "test-namespace",
 			Labels: map[string]string{
 				"region":  rand.String(10),
 				"version": rand.String(4),
 			},
 		},
 	}
+
+	// Common ResourceIdentifier for Namespace tests (cluster-scoped)
+	namespaceResourceIdentifier := fleetv1alpha1.ResourceIdentifier{
+		Group:   "",
+		Version: "v1",
+		Kind:    "Namespace",
+		Name:    "test-namespace",
+	}
+
+	// Common ResourceIdentifier for namespace-scoped resource tests
+	namespaceScopedResourceIdentifier := fleetv1alpha1.ResourceIdentifier{
+		Group:     "apps",
+		Version:   "v1",
+		Kind:      "Deployment",
+		Name:      "test-deployment",
+		Namespace: "test-namespace",
+	}
+
 	tests := map[string]struct {
-		isClusterScoped bool
-		res             *corev1.Namespace
-		crpList         []*placementv1beta1.ClusterResourcePlacement
-		wantCRP         map[string]bool
+		key     keys.ClusterWideKey
+		res     *corev1.Namespace
+		crpList []*placementv1beta1.ClusterResourcePlacement
+		wantCRP map[string]bool
 	}{
 		"match a place with the matching label": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -793,7 +713,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -809,6 +729,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"resource-selected": true},
 		},
 		"Skip a placement with selecting ns only": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceScopedResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -816,7 +739,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -833,30 +756,34 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: make(map[string]bool),
 		},
 		"does not match a place with no selector": {
-			isClusterScoped: true,
-			res:             matchRes,
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
+			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{},
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{},
 					},
 				},
 			},
 			wantCRP: make(map[string]bool),
 		},
 		"match a place with the name selector": {
-			isClusterScoped: true,
-			res:             matchRes,
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
+			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -870,6 +797,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"resource-selected": true},
 		},
 		"match a place with a match Expressions label": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -877,7 +807,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -898,6 +828,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"resource-selected": true},
 		},
 		"match a place with a single matching label": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -905,7 +838,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -921,6 +854,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"resource-selected": true},
 		},
 		"does not match a place with a miss matching label": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -928,7 +864,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -948,6 +884,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: make(map[string]bool),
 		},
 		"match a place with multiple matching resource selectors": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -955,7 +894,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -984,6 +923,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"resource-selected": true},
 		},
 		"match a place with only one matching resource selectors": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -991,7 +933,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -1021,6 +963,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"resource-selected": true},
 		},
 		"match a place with a miss matching label but was selected": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -1029,7 +974,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 					},
 					Spec: placementv1beta1.PlacementSpec{
 						// the mis-matching resource selector
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -1065,6 +1010,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"resource-selected": true},
 		},
 		"does not match a place with a miss matching label and was not selected": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -1072,7 +1020,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -1101,6 +1049,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: make(map[string]bool),
 		},
 		"don't select placement with name, nil label selector for namespace with different name": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -1108,7 +1059,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -1122,6 +1073,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: make(map[string]bool),
 		},
 		"select placement with empty name, nil label selector for namespace": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -1129,7 +1083,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -1142,6 +1096,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"resource-selected": true},
 		},
 		"match placement through status SelectedResources when selector does not match": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -1150,7 +1107,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 					},
 					Spec: placementv1beta1.PlacementSpec{
 						// Selector that does not match the resource
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   corev1.GroupName,
 								Version: "v1",
@@ -1180,6 +1137,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			wantCRP: map[string]bool{"status-matched-placement": true},
 		},
 		"does not match placement with different GVK selector": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceResourceIdentifier,
+			},
 			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
@@ -1187,7 +1147,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 						Name: "resource-not-selected",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "rbac.authorization.k8s.io",
 								Version: "v1",
@@ -1195,6 +1155,124 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: matchRes.Labels,
 								},
+							},
+						},
+					},
+				},
+			},
+			wantCRP: make(map[string]bool),
+		},
+		"match ClusterResourcePlacement with previously selected resource": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceScopedResourceIdentifier,
+			},
+			res: matchRes,
+			crpList: []*placementv1beta1.ClusterResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "crp-with-selected-resource",
+					},
+					Spec: placementv1beta1.PlacementSpec{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+							{
+								Group:   corev1.GroupName,
+								Version: "v1",
+								Kind:    matchRes.Kind,
+								LabelSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"nonexistent": "label",
+									},
+								},
+							},
+						},
+					},
+					Status: placementv1beta1.PlacementStatus{
+						SelectedResources: []placementv1beta1.ResourceIdentifier{
+							{
+								Group:     "apps",
+								Version:   "v1",
+								Kind:      "Deployment",
+								Name:      "test-deployment",
+								Namespace: "test-namespace",
+							},
+						},
+					},
+				},
+			},
+			wantCRP: map[string]bool{"crp-with-selected-resource": true},
+		},
+		"match ClusterResourcePlacement (even with namespace only) with previously selected resource": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceScopedResourceIdentifier,
+			},
+			res: matchRes,
+			crpList: []*placementv1beta1.ClusterResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "crp-with-selected-resource",
+					},
+					Spec: placementv1beta1.PlacementSpec{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+							{
+								Group:   corev1.GroupName,
+								Version: "v1",
+								Kind:    matchRes.Kind,
+								LabelSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"nonexistent": "label",
+									},
+								},
+								SelectionScope: placementv1beta1.NamespaceOnly,
+							},
+						},
+					},
+					Status: placementv1beta1.PlacementStatus{
+						SelectedResources: []placementv1beta1.ResourceIdentifier{
+							{
+								Group:     "apps",
+								Version:   "v1",
+								Kind:      "Deployment",
+								Name:      "test-deployment",
+								Namespace: "test-namespace",
+							},
+						},
+					},
+				},
+			},
+			wantCRP: map[string]bool{"crp-with-selected-resource": true},
+		},
+		"does not match ClusterResourcePlacement with previously selected resource when namespace is different": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: namespaceScopedResourceIdentifier,
+			},
+			res: matchRes,
+			crpList: []*placementv1beta1.ClusterResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "crp-with-selected-resource",
+					},
+					Spec: placementv1beta1.PlacementSpec{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+							{
+								Group:   corev1.GroupName,
+								Version: "v1",
+								Kind:    matchRes.Kind,
+								LabelSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"nonexistent": "label",
+									},
+								},
+							},
+						},
+					},
+					Status: placementv1beta1.PlacementStatus{
+						SelectedResources: []placementv1beta1.ResourceIdentifier{
+							{
+								Group:     "apps",
+								Version:   "v1",
+								Kind:      "Deployment",
+								Name:      "test-deployment",
+								Namespace: "different-namespace",
 							},
 						},
 					},
@@ -1212,7 +1290,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ClusterResourcePlacement(t *testing
 			}
 			uRes, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(tt.res)
 			clusterPlacements := convertToClusterResourcePlacements(crpList)
-			got := collectAllAffectedPlacementsV1Beta1(tt.isClusterScoped, &unstructured.Unstructured{Object: uRes}, clusterPlacements)
+			got := collectAllAffectedPlacementsV1Beta1(tt.key, &unstructured.Unstructured{Object: uRes}, clusterPlacements)
 			if !reflect.DeepEqual(got, tt.wantCRP) {
 				t.Errorf("test case `%s` got = %v, wantResult %v", name, got, tt.wantCRP)
 			}
@@ -1243,12 +1321,25 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 		Kind:    "Deployment",
 	})
 
+	// Common ResourceIdentifier for Deployment tests
+	deploymentResourceIdentifier := fleetv1alpha1.ResourceIdentifier{
+		Group:     "apps",
+		Version:   "v1",
+		Kind:      "Deployment",
+		Name:      "test-deployment",
+		Namespace: "test-namespace",
+	}
+
 	tests := map[string]struct {
+		key    keys.ClusterWideKey
 		res    *unstructured.Unstructured
 		rpList []*placementv1beta1.ResourcePlacement
 		wantRP map[string]bool
 	}{
 		"match ResourcePlacement with the matching label": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: deploymentResourceIdentifier,
+			},
 			res: matchRes,
 			rpList: []*placementv1beta1.ResourcePlacement{
 				{
@@ -1257,7 +1348,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 						Namespace: "test-namespace",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "apps",
 								Version: "v1",
@@ -1275,6 +1366,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 			wantRP: map[string]bool{"resource-selected": true},
 		},
 		"does not match ResourcePlacement with no selector": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: deploymentResourceIdentifier,
+			},
 			res: matchRes,
 			rpList: []*placementv1beta1.ResourcePlacement{
 				{
@@ -1283,13 +1377,16 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 						Namespace: "test-namespace",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{},
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{},
 					},
 				},
 			},
 			wantRP: make(map[string]bool),
 		},
 		"match ResourcePlacement with the name selector": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: deploymentResourceIdentifier,
+			},
 			res: matchRes,
 			rpList: []*placementv1beta1.ResourcePlacement{
 				{
@@ -1298,7 +1395,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 						Namespace: "test-namespace",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "apps",
 								Version: "v1",
@@ -1313,6 +1410,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 			wantRP: map[string]bool{"resource-selected": true},
 		},
 		"does not match ResourcePlacement with different name": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: deploymentResourceIdentifier,
+			},
 			res: matchRes,
 			rpList: []*placementv1beta1.ResourcePlacement{
 				{
@@ -1321,7 +1421,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 						Namespace: "test-namespace",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "apps",
 								Version: "v1",
@@ -1335,6 +1435,9 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 			wantRP: make(map[string]bool),
 		},
 		"match ResourcePlacement with previously selected resource": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: deploymentResourceIdentifier,
+			},
 			res: matchRes,
 			rpList: []*placementv1beta1.ResourcePlacement{
 				{
@@ -1343,7 +1446,8 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 						Namespace: "test-namespace",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						// Selector that does not match the resource
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "apps",
 								Version: "v1",
@@ -1351,92 +1455,6 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										"different": "label",
-									},
-								},
-							},
-						},
-					},
-					Status: placementv1beta1.PlacementStatus{
-						SelectedResources: []placementv1beta1.ResourceIdentifier{
-							{
-								Group:     "apps",
-								Version:   "v1",
-								Kind:      "Deployment",
-								Name:      "test-deployment",
-								Namespace: "test-namespace",
-							},
-						},
-					},
-				},
-			},
-			wantRP: map[string]bool{"resource-selected": true},
-		},
-		"select ResourcePlacement with empty name, nil label selector for deployment": {
-			res: matchRes,
-			rpList: []*placementv1beta1.ResourcePlacement{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "resource-selected",
-						Namespace: "test-namespace",
-					},
-					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
-							{
-								Group:   "apps",
-								Version: "v1",
-								Kind:    "Deployment",
-							},
-						},
-					},
-				},
-			},
-			wantRP: map[string]bool{"resource-selected": true},
-		},
-		"does not match ResourcePlacement with different GVK selector": {
-			res: matchRes,
-			rpList: []*placementv1beta1.ResourcePlacement{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "resource-not-selected",
-						Namespace: "test-namespace",
-					},
-					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "ConfigMap",
-								LabelSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										"app":     "test-app",
-										"version": "v1.0",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			wantRP: make(map[string]bool),
-		},
-		"match ResourcePlacement through status SelectedResources when selector does not match": {
-			res: matchRes,
-			rpList: []*placementv1beta1.ResourcePlacement{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "status-matched-rp",
-						Namespace: "test-namespace",
-					},
-					Spec: placementv1beta1.PlacementSpec{
-						// Selector that does not match the resource
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
-							{
-								Group:   "apps",
-								Version: "v1",
-								Kind:    "Deployment",
-								LabelSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										"nonexistent": "label",
 									},
 								},
 							},
@@ -1456,7 +1474,103 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 					},
 				},
 			},
-			wantRP: map[string]bool{"status-matched-rp": true},
+			wantRP: map[string]bool{"resource-selected": true},
+		},
+		"select ResourcePlacement with empty name, nil label selector for deployment": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: deploymentResourceIdentifier,
+			},
+			res: matchRes,
+			rpList: []*placementv1beta1.ResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "resource-selected",
+						Namespace: "test-namespace",
+					},
+					Spec: placementv1beta1.PlacementSpec{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+							{
+								Group:   "apps",
+								Version: "v1",
+								Kind:    "Deployment",
+							},
+						},
+					},
+				},
+			},
+			wantRP: map[string]bool{"resource-selected": true},
+		},
+		"does not match ResourcePlacement with different GVK selector": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: deploymentResourceIdentifier,
+			},
+			res: matchRes,
+			rpList: []*placementv1beta1.ResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "resource-not-selected",
+						Namespace: "test-namespace",
+					},
+					Spec: placementv1beta1.PlacementSpec{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+							{
+								Group:   "",
+								Version: "v1",
+								Kind:    "ConfigMap",
+								LabelSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"app":     "test-app",
+										"version": "v1.0",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantRP: make(map[string]bool),
+		},
+		"does not match ResourcePlacement through status SelectedResources when name is different": {
+			key: keys.ClusterWideKey{
+				ResourceIdentifier: deploymentResourceIdentifier,
+			},
+			res: matchRes,
+			rpList: []*placementv1beta1.ResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "status-matched-rp",
+						Namespace: "test-namespace",
+					},
+					Spec: placementv1beta1.PlacementSpec{
+						// Selector that does not match the resource
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+							{
+								Group:   "apps",
+								Version: "v1",
+								Kind:    "Deployment",
+								LabelSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"nonexistent": "label",
+									},
+								},
+							},
+						},
+					},
+					Status: placementv1beta1.PlacementStatus{
+						// But the resource is in the selected resources status
+						SelectedResources: []placementv1beta1.ResourceIdentifier{
+							{
+								Group:     "apps",
+								Version:   "v1",
+								Kind:      "Deployment",
+								Name:      "different-deployment",
+								Namespace: "test-namespace",
+							},
+						},
+					},
+				},
+			},
+			wantRP: make(map[string]bool),
 		},
 	}
 
@@ -1468,7 +1582,7 @@ func TestCollectAllAffectedPlacementsV1Beta1_ResourcePlacement(t *testing.T) {
 				rpList = append(rpList, &unstructured.Unstructured{Object: uMap})
 			}
 			resourcePlacements := convertToResourcePlacements(rpList)
-			got := collectAllAffectedPlacementsV1Beta1(false, tt.res, resourcePlacements)
+			got := collectAllAffectedPlacementsV1Beta1(tt.key, tt.res, resourcePlacements)
 			if !reflect.DeepEqual(got, tt.wantRP) {
 				t.Errorf("test case `%s` got = %v, wantResult %v", name, got, tt.wantRP)
 			}
@@ -1540,7 +1654,7 @@ func TestHandleUpdatedResource(t *testing.T) {
 			Name: "test-crp",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "",
 					Version: "v1",
@@ -1561,7 +1675,7 @@ func TestHandleUpdatedResource(t *testing.T) {
 			Namespace: "test-namespace",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "apps",
 					Version: "v1",
@@ -1576,22 +1690,22 @@ func TestHandleUpdatedResource(t *testing.T) {
 		},
 	}
 
-	defaultFakeInformerManager := &fakeInformerManager{
-		listers: map[schema.GroupVersionResource]*fakeLister{
+	defaultFakeInformerManager := &testinformer.FakeManager{
+		Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 			{Group: "placement.kubernetes-fleet.io", Version: "v1beta1", Resource: "clusterresourceplacements"}: {
-				objects: func() []runtime.Object {
+				Objects: func() []runtime.Object {
 					uMap, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(testCRP)
 					return []runtime.Object{&unstructured.Unstructured{Object: uMap}}
 				}(),
 			},
 			{Group: "placement.kubernetes-fleet.io", Version: "v1beta1", Resource: "resourceplacements"}: {
-				objects: func() []runtime.Object {
+				Objects: func() []runtime.Object {
 					uMap, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(testRP)
 					return []runtime.Object{&unstructured.Unstructured{Object: uMap}}
 				}(),
 			},
 			{Group: "", Version: "v1", Resource: "namespaces"}: {
-				objects: func() []runtime.Object {
+				Objects: func() []runtime.Object {
 					uObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(testNamespace)
 					return []runtime.Object{&unstructured.Unstructured{Object: uObj}}
 				}(),
@@ -1684,16 +1798,16 @@ func TestHandleUpdatedResource(t *testing.T) {
 			},
 			clusterObj:      testDeployment,
 			isClusterScoped: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					{Group: "placement.kubernetes-fleet.io", Version: "v1beta1", Resource: "clusterresourceplacements"}: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 					{Group: "placement.kubernetes-fleet.io", Version: "v1beta1", Resource: "resourceplacements"}: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 					{Group: "", Version: "v1", Resource: "namespaces"}: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 				},
 			},
@@ -1714,19 +1828,19 @@ func TestHandleUpdatedResource(t *testing.T) {
 			},
 			clusterObj:      testDeployment,
 			isClusterScoped: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					{Group: "placement.kubernetes-fleet.io", Version: "v1beta1", Resource: "clusterresourceplacements"}: {
-						objects: func() []runtime.Object {
+						Objects: func() []runtime.Object {
 							uMap, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(testCRP)
 							return []runtime.Object{&unstructured.Unstructured{Object: uMap}}
 						}(),
 					},
 					{Group: "placement.kubernetes-fleet.io", Version: "v1beta1", Resource: "resourceplacements"}: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 					{Group: "", Version: "v1", Resource: "namespaces"}: {
-						objects: func() []runtime.Object {
+						Objects: func() []runtime.Object {
 							uObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(testNamespace)
 							return []runtime.Object{&unstructured.Unstructured{Object: uObj}}
 						}(),
@@ -1842,10 +1956,10 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: true,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: crpObjects,
+						Objects: crpObjects,
 					},
 				},
 			},
@@ -1862,10 +1976,10 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: true,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: crpObjects,
+						Objects: crpObjects,
 					},
 				},
 			},
@@ -1883,10 +1997,10 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ResourcePlacementGVR: {
-						objects: rpObjects,
+						Objects: rpObjects,
 					},
 				},
 			},
@@ -1904,10 +2018,10 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ResourcePlacementGVR: {
-						objects: rpObjects,
+						Objects: rpObjects,
 					},
 				},
 			},
@@ -1924,11 +2038,11 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: true,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: []runtime.Object{},
-						err:     errors.New("test lister error"),
+						Objects: []runtime.Object{},
+						Err:     errors.New("test lister error"),
 					},
 				},
 			},
@@ -1947,11 +2061,11 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ResourcePlacementGVR: {
-						objects: []runtime.Object{},
-						err:     errors.New("test lister error"),
+						Objects: []runtime.Object{},
+						Err:     errors.New("test lister error"),
 					},
 				},
 			},
@@ -1969,10 +2083,10 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: true,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 				},
 			},
@@ -1990,10 +2104,10 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ResourcePlacementGVR: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 				},
 			},
@@ -2010,10 +2124,10 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: true,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: func() []runtime.Object {
+						Objects: func() []runtime.Object {
 							// Create multiple CRPs that have selected this namespace
 							testCRP1 := &placementv1beta1.ClusterResourcePlacement{
 								ObjectMeta: metav1.ObjectMeta{
@@ -2089,10 +2203,10 @@ func TestTriggerAffectedPlacementsForDeletedRes(t *testing.T) {
 				},
 			},
 			isClusterScope: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ResourcePlacementGVR: {
-						objects: func() []runtime.Object {
+						Objects: func() []runtime.Object {
 							// Create multiple ResourcePlacements that have selected this deployment
 							testRP1 := &placementv1beta1.ResourcePlacement{
 								ObjectMeta: metav1.ObjectMeta{
@@ -2210,7 +2324,7 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 			Namespace: "test-namespace",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "apps",
 					Version: "v1",
@@ -2231,7 +2345,7 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 			Name: "test-crp",
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 				{
 					Group:   "",
 					Version: "v1",
@@ -2275,13 +2389,13 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 				},
 			},
 			resource: testNamespace,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: crpObjects,
+						Objects: crpObjects,
 					},
 					utils.ResourcePlacementGVR: {
-						objects: rpObjects,
+						Objects: rpObjects,
 					},
 				},
 			},
@@ -2300,13 +2414,13 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 				},
 			},
 			resource: createDeploymentUnstructured(createTestDeployment()),
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 					utils.ResourcePlacementGVR: {
-						objects: rpObjects,
+						Objects: rpObjects,
 					},
 				},
 			},
@@ -2348,7 +2462,7 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 						Namespace: "test-namespace",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "apps",
 								Version: "v1",
@@ -2365,13 +2479,13 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 				uMap, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(nonMatchingRP)
 				rpObjects := []runtime.Object{&unstructured.Unstructured{Object: uMap}}
 
-				return &fakeInformerManager{
-					listers: map[schema.GroupVersionResource]*fakeLister{
+				return &testinformer.FakeManager{
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 						utils.ClusterResourcePlacementGVR: {
-							objects: []runtime.Object{},
+							Objects: []runtime.Object{},
 						},
 						utils.ResourcePlacementGVR: {
-							objects: rpObjects,
+							Objects: rpObjects,
 						},
 					},
 				}
@@ -2404,13 +2518,13 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 				}
 				return createNamespaceUnstructured(otherResource)
 			}(),
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 					utils.ResourcePlacementGVR: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 				},
 			},
@@ -2435,7 +2549,7 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 						Name: "test-crp-2",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:   "",
 								Version: "v1",
@@ -2451,13 +2565,13 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 				}
 				uMap1, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(testClusterResourcePlacement)
 				uMap2, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(testCRP2)
-				return &fakeInformerManager{
-					listers: map[schema.GroupVersionResource]*fakeLister{
+				return &testinformer.FakeManager{
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 						utils.ClusterResourcePlacementGVR: {
-							objects: []runtime.Object{&unstructured.Unstructured{Object: uMap1}, &unstructured.Unstructured{Object: uMap2}},
+							Objects: []runtime.Object{&unstructured.Unstructured{Object: uMap1}, &unstructured.Unstructured{Object: uMap2}},
 						},
 						utils.ResourcePlacementGVR: {
-							objects: []runtime.Object{},
+							Objects: []runtime.Object{},
 						},
 					},
 				}
@@ -2478,13 +2592,13 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 				},
 			},
 			resource: testNamespace,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: crpObjects,
+						Objects: crpObjects,
 					},
 					utils.ResourcePlacementGVR: {
-						objects: rpObjects,
+						Objects: rpObjects,
 					},
 				},
 			},
@@ -2510,7 +2624,7 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 						Name: "crp-namespace-only",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:          "",
 								Version:        "v1",
@@ -2528,13 +2642,13 @@ func TestTriggerAffectedPlacementsForUpdatedRes(t *testing.T) {
 				uMap, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(crpWithNamespaceOnlySelector)
 				crpObjects := []runtime.Object{&unstructured.Unstructured{Object: uMap}}
 
-				return &fakeInformerManager{
-					listers: map[schema.GroupVersionResource]*fakeLister{
+				return &testinformer.FakeManager{
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 						utils.ClusterResourcePlacementGVR: {
-							objects: crpObjects,
+							Objects: crpObjects,
 						},
 						utils.ResourcePlacementGVR: {
-							objects: []runtime.Object{},
+							Objects: []runtime.Object{},
 						},
 					},
 				}
@@ -2587,6 +2701,13 @@ func TestHandleDeletedResource(t *testing.T) {
 					Kind:      "Namespace",
 					Name:      "test-namespace",
 					Namespace: "",
+				},
+				{
+					Group:     "apps",
+					Version:   "v1",
+					Kind:      "Deployment",
+					Name:      "test-deployment",
+					Namespace: "test-namespace",
 				},
 			},
 		},
@@ -2643,10 +2764,10 @@ func TestHandleDeletedResource(t *testing.T) {
 				},
 			},
 			isClusterScoped: true,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: crpObjects,
+						Objects: crpObjects,
 					},
 				},
 			},
@@ -2665,10 +2786,10 @@ func TestHandleDeletedResource(t *testing.T) {
 				},
 			},
 			isClusterScoped: true,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: crpObjects,
+						Objects: crpObjects,
 					},
 				},
 			},
@@ -2688,16 +2809,16 @@ func TestHandleDeletedResource(t *testing.T) {
 				},
 			},
 			isClusterScoped: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: crpObjects,
+						Objects: crpObjects,
 					},
 					utils.ResourcePlacementGVR: {
-						objects: rpObjects,
+						Objects: rpObjects,
 					},
 					utils.NamespaceGVR: {
-						objects: []runtime.Object{testNamespace},
+						Objects: []runtime.Object{testNamespace},
 					},
 				},
 			},
@@ -2717,14 +2838,14 @@ func TestHandleDeletedResource(t *testing.T) {
 				},
 			},
 			isClusterScoped: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: []runtime.Object{},
-						err:     errors.New("CRP lister error"),
+						Objects: []runtime.Object{},
+						Err:     errors.New("CRP lister error"),
 					},
 					utils.NamespaceGVR: {
-						objects: []runtime.Object{testNamespace},
+						Objects: []runtime.Object{testNamespace},
 					},
 				},
 			},
@@ -2744,14 +2865,14 @@ func TestHandleDeletedResource(t *testing.T) {
 				},
 			},
 			isClusterScoped: false,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: []runtime.Object{},
+						Objects: []runtime.Object{},
 					},
 					utils.ResourcePlacementGVR: {
-						objects: []runtime.Object{},
-						err:     errors.New("RP lister error"),
+						Objects: []runtime.Object{},
+						Err:     errors.New("RP lister error"),
 					},
 				},
 			},
@@ -2770,11 +2891,11 @@ func TestHandleDeletedResource(t *testing.T) {
 				},
 			},
 			isClusterScoped: true,
-			informerManager: &fakeInformerManager{
-				listers: map[schema.GroupVersionResource]*fakeLister{
+			informerManager: &testinformer.FakeManager{
+				Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 					utils.ClusterResourcePlacementGVR: {
-						objects: []runtime.Object{},
-						err:     errors.New("CRP lister error"),
+						Objects: []runtime.Object{},
+						Err:     errors.New("CRP lister error"),
 					},
 				},
 			},
@@ -2801,7 +2922,7 @@ func TestHandleDeletedResource(t *testing.T) {
 						Name: "crp-namespace-only",
 					},
 					Spec: placementv1beta1.PlacementSpec{
-						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
 							{
 								Group:          "",
 								Version:        "v1",
@@ -2813,16 +2934,16 @@ func TestHandleDeletedResource(t *testing.T) {
 				}
 				uMap, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(crpWithNamespaceOnlySelector)
 				crpObjects := []runtime.Object{&unstructured.Unstructured{Object: uMap}}
-				return &fakeInformerManager{
-					listers: map[schema.GroupVersionResource]*fakeLister{
+				return &testinformer.FakeManager{
+					Listers: map[schema.GroupVersionResource]*testinformer.FakeLister{
 						utils.ClusterResourcePlacementGVR: {
-							objects: crpObjects,
+							Objects: crpObjects,
 						},
 						utils.ResourcePlacementGVR: {
-							objects: rpObjects,
+							Objects: rpObjects,
 						},
 						utils.NamespaceGVR: {
-							objects: []runtime.Object{testNamespace},
+							Objects: []runtime.Object{testNamespace},
 						},
 					},
 				}
@@ -2872,11 +2993,11 @@ func TestHandleDeletedResource(t *testing.T) {
 
 func TestIsSelectNamespaceOnly(t *testing.T) {
 	tests := map[string]struct {
-		selector placementv1beta1.ClusterResourceSelector
+		selector placementv1beta1.ResourceSelectorTerm
 		want     bool
 	}{
 		"namespace with namespace only scope": {
-			selector: placementv1beta1.ClusterResourceSelector{
+			selector: placementv1beta1.ResourceSelectorTerm{
 				Group:          "",
 				Version:        "v1",
 				Kind:           "Namespace",
@@ -2885,7 +3006,7 @@ func TestIsSelectNamespaceOnly(t *testing.T) {
 			want: true,
 		},
 		"namespace with namespace with resources scope": {
-			selector: placementv1beta1.ClusterResourceSelector{
+			selector: placementv1beta1.ResourceSelectorTerm{
 				Group:          "",
 				Version:        "v1",
 				Kind:           "Namespace",
@@ -2894,7 +3015,7 @@ func TestIsSelectNamespaceOnly(t *testing.T) {
 			want: false,
 		},
 		"configmap with namespace only scope": {
-			selector: placementv1beta1.ClusterResourceSelector{
+			selector: placementv1beta1.ResourceSelectorTerm{
 				Group:          "",
 				Version:        "v1",
 				Kind:           "ConfigMap",
@@ -2903,7 +3024,7 @@ func TestIsSelectNamespaceOnly(t *testing.T) {
 			want: false,
 		},
 		"deployment with namespace only scope": {
-			selector: placementv1beta1.ClusterResourceSelector{
+			selector: placementv1beta1.ResourceSelectorTerm{
 				Group:          "apps",
 				Version:        "v1",
 				Kind:           "Deployment",
@@ -2912,7 +3033,7 @@ func TestIsSelectNamespaceOnly(t *testing.T) {
 			want: false,
 		},
 		"namespace with wrong group": {
-			selector: placementv1beta1.ClusterResourceSelector{
+			selector: placementv1beta1.ResourceSelectorTerm{
 				Group:          "core",
 				Version:        "v1",
 				Kind:           "Namespace",
@@ -2921,7 +3042,7 @@ func TestIsSelectNamespaceOnly(t *testing.T) {
 			want: false,
 		},
 		"namespace with wrong version": {
-			selector: placementv1beta1.ClusterResourceSelector{
+			selector: placementv1beta1.ResourceSelectorTerm{
 				Group:          "",
 				Version:        "v2",
 				Kind:           "Namespace",
@@ -2930,7 +3051,7 @@ func TestIsSelectNamespaceOnly(t *testing.T) {
 			want: false,
 		},
 		"namespace with default selection scope (NamespaceWithResources)": {
-			selector: placementv1beta1.ClusterResourceSelector{
+			selector: placementv1beta1.ResourceSelectorTerm{
 				Group:   "",
 				Version: "v1",
 				Kind:    "Namespace",
