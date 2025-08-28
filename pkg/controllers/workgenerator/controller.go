@@ -38,7 +38,6 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/ptr"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -326,10 +325,9 @@ func (r *Reconciler) handleDelete(ctx context.Context, resourceBinding fleetv1be
 		return controllerruntime.Result{}, err
 	}
 
-	// delete all the listed works
-	//
-	// TO-DO: this controller should be able to garbage collect all works automatically via
-	// background/foreground cascade deletion. This may render the finalizer unnecessary.
+	// Note: This controller cannot garbage collect all works automatically via background/foreground
+	// cascade deletion as the namespaces of work and resourceBinding are different
+	// and we don't set the ownerReference for the works.
 	for workName := range works {
 		work := works[workName]
 		if err := r.Client.Delete(ctx, work); err != nil && !apierrors.IsNotFound(err) {
@@ -746,15 +744,8 @@ func generateSnapshotWorkObj(workName string, resourceBinding fleetv1beta1.Bindi
 				fleetv1beta1.ParentResourceOverrideSnapshotHashAnnotation:        resourceOverrideSnapshotHash,
 				fleetv1beta1.ParentClusterResourceOverrideSnapshotHashAnnotation: clusterResourceOverrideSnapshotHash,
 			},
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion:         fleetv1beta1.GroupVersion.String(),
-					Kind:               resourceBinding.GetObjectKind().GroupVersionKind().Kind,
-					Name:               resourceBinding.GetName(),
-					UID:                resourceBinding.GetUID(),
-					BlockOwnerDeletion: ptr.To(true), // make sure that the k8s will call work delete when the binding is deleted
-				},
-			},
+			// OwnerReferences cannot be added, as the namespaces of work and resourceBinding are different.
+			// Garbage collector will assume the resourceBinding is invalid as it cannot be found in the same namespace.
 		},
 		Spec: fleetv1beta1.WorkSpec{
 			Workload: fleetv1beta1.WorkloadTemplate{

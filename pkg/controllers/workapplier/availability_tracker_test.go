@@ -224,39 +224,39 @@ func TestTrackDeploymentAvailability(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name                                         string
-		deploy                                       *appsv1.Deployment
-		wantManifestProcessingAvailabilityResultType ManifestProcessingAvailabilityResultType
+		name                       string
+		deploy                     *appsv1.Deployment
+		wantAvailabilityResultType ManifestProcessingAvailabilityResultType
 	}{
 		{
-			name:   "available deployment (w/ fixed replica count)",
-			deploy: availableDeployWithFixedReplicaCount,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available deployment (w/ fixed replica count)",
+			deploy:                     availableDeployWithFixedReplicaCount,
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:   "available deployment (w/ default replica count)",
-			deploy: availableDeployWithDefaultReplicaCount,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available deployment (w/ default replica count)",
+			deploy:                     availableDeployWithDefaultReplicaCount,
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:   "unavailable deployment with stale status",
-			deploy: unavailableDeployWithStaleStatus,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			name:                       "unavailable deployment with stale status",
+			deploy:                     unavailableDeployWithStaleStatus,
+			wantAvailabilityResultType: AvailabilityResultTypeNotYetAvailable,
 		},
 		{
-			name:   "unavailable deployment with not enough available replicas",
-			deploy: unavailableDeployWithNotEnoughAvailableReplicas,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			name:                       "unavailable deployment with not enough available replicas",
+			deploy:                     unavailableDeployWithNotEnoughAvailableReplicas,
+			wantAvailabilityResultType: AvailabilityResultTypeNotYetAvailable,
 		},
 		{
-			name:   "unavailable deployment with not enough updated replicas",
-			deploy: unavailableDeployWithNotEnoughUpdatedReplicas,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			name:                       "unavailable deployment with not enough updated replicas",
+			deploy:                     unavailableDeployWithNotEnoughUpdatedReplicas,
+			wantAvailabilityResultType: AvailabilityResultTypeNotYetAvailable,
 		},
 		{
-			name:   "unavailable deployment with unavailable replicas",
-			deploy: unavailableDeployWithMoreReplicasThanRequired,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			name:                       "unavailable deployment with unavailable replicas",
+			deploy:                     unavailableDeployWithMoreReplicasThanRequired,
+			wantAvailabilityResultType: AvailabilityResultTypeNotYetAvailable,
 		},
 	}
 
@@ -266,8 +266,8 @@ func TestTrackDeploymentAvailability(t *testing.T) {
 			if err != nil {
 				t.Fatalf("trackDeploymentAvailability() = %v, want no error", err)
 			}
-			if gotResTyp != tc.wantManifestProcessingAvailabilityResultType {
-				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantManifestProcessingAvailabilityResultType)
+			if gotResTyp != tc.wantAvailabilityResultType {
+				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantAvailabilityResultType)
 			}
 		})
 	}
@@ -341,39 +341,39 @@ func TestTrackStatefulSetAvailability(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name                                         string
-		statefulSet                                  *appsv1.StatefulSet
-		wantManifestProcessingAvailabilityResultType ManifestProcessingAvailabilityResultType
+		name                       string
+		statefulSet                *appsv1.StatefulSet
+		wantAvailabilityResultType ManifestProcessingAvailabilityResultType
 	}{
 		{
-			name:        "available stateful set (w/ fixed replica count)",
-			statefulSet: availableStatefulSetWithFixedReplicaCount,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available stateful set (w/ fixed replica count)",
+			statefulSet:                availableStatefulSetWithFixedReplicaCount,
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:        "available stateful set (w/ default replica count)",
-			statefulSet: availableStatefulSetWithDefaultReplicaCount,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available stateful set (w/ default replica count)",
+			statefulSet:                availableStatefulSetWithDefaultReplicaCount,
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:        "unavailable stateful set with stale status",
-			statefulSet: unavailableStatefulSetWithStaleStatus,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			name:                       "unavailable stateful set with stale status",
+			statefulSet:                unavailableStatefulSetWithStaleStatus,
+			wantAvailabilityResultType: AvailabilityResultTypeNotYetAvailable,
 		},
 		{
-			name:        "unavailable stateful set with not enough available replicas",
-			statefulSet: unavailableStatefulSetWithNotEnoughAvailableReplicas,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			name:                       "unavailable stateful set with not enough available replicas",
+			statefulSet:                unavailableStatefulSetWithNotEnoughAvailableReplicas,
+			wantAvailabilityResultType: AvailabilityResultTypeNotYetAvailable,
 		},
 		{
-			name:        "unavailable stateful set with not enough current replicas",
-			statefulSet: unavailableStatefulSetWithNotEnoughCurrentReplicas,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			name:                       "unavailable stateful set with not enough current replicas",
+			statefulSet:                unavailableStatefulSetWithNotEnoughCurrentReplicas,
+			wantAvailabilityResultType: AvailabilityResultTypeNotYetAvailable,
 		},
 		{
-			name:        "unavailable stateful set with not latest revision",
-			statefulSet: unavailableStatefulSetWithNotLatestRevision,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			name:                       "unavailable stateful set with not latest revision",
+			statefulSet:                unavailableStatefulSetWithNotLatestRevision,
+			wantAvailabilityResultType: AvailabilityResultTypeNotYetAvailable,
 		},
 	}
 
@@ -383,8 +383,8 @@ func TestTrackStatefulSetAvailability(t *testing.T) {
 			if err != nil {
 				t.Fatalf("trackStatefulSetAvailability() = %v, want no error", err)
 			}
-			if gotResTyp != tc.wantManifestProcessingAvailabilityResultType {
-				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantManifestProcessingAvailabilityResultType)
+			if gotResTyp != tc.wantAvailabilityResultType {
+				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantAvailabilityResultType)
 			}
 		})
 	}
@@ -427,29 +427,29 @@ func TestTrackDaemonSetAvailability(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name                                         string
-		daemonSet                                    *appsv1.DaemonSet
-		wantManifestProcessingAvailabilityResultType ManifestProcessingAvailabilityResultType
+		name                       string
+		daemonSet                  *appsv1.DaemonSet
+		wantAvailabilityResultType ManifestProcessingAvailabilityResultType
 	}{
 		{
-			name:      "available daemon set",
-			daemonSet: availableDaemonSet,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available daemon set",
+			daemonSet:                  availableDaemonSet,
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:      "unavailable daemon set with stale status",
-			daemonSet: unavailableDaemonSetWithStaleStatus,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			name:                       "unavailable daemon set with stale status",
+			daemonSet:                  unavailableDaemonSetWithStaleStatus,
+			wantAvailabilityResultType: AvailabilityResultTypeNotYetAvailable,
 		},
 		{
-			name:      "unavailable daemon set with not enough available pods",
-			daemonSet: unavailableDaemonSetWithNotEnoughAvailablePods,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			name:                       "unavailable daemon set with not enough available pods",
+			daemonSet:                  unavailableDaemonSetWithNotEnoughAvailablePods,
+			wantAvailabilityResultType: AvailabilityResultTypeNotYetAvailable,
 		},
 		{
-			name:      "unavailable daemon set with not enough updated pods",
-			daemonSet: unavailableDaemonSetWithNotEnoughUpdatedPods,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			name:                       "unavailable daemon set with not enough updated pods",
+			daemonSet:                  unavailableDaemonSetWithNotEnoughUpdatedPods,
+			wantAvailabilityResultType: AvailabilityResultTypeNotYetAvailable,
 		},
 	}
 
@@ -459,8 +459,8 @@ func TestTrackDaemonSetAvailability(t *testing.T) {
 			if err != nil {
 				t.Fatalf("trackDaemonSetAvailability() = %v, want no error", err)
 			}
-			if gotResTyp != tc.wantManifestProcessingAvailabilityResultType {
-				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantManifestProcessingAvailabilityResultType)
+			if gotResTyp != tc.wantAvailabilityResultType {
+				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantAvailabilityResultType)
 			}
 		})
 	}
@@ -469,9 +469,9 @@ func TestTrackDaemonSetAvailability(t *testing.T) {
 // TestTrackServiceAvailability tests the trackServiceAvailability function.
 func TestTrackServiceAvailability(t *testing.T) {
 	testCases := []struct {
-		name                                         string
-		service                                      *corev1.Service
-		wantManifestProcessingAvailabilityResultType ManifestProcessingAvailabilityResultType
+		name                       string
+		service                    *corev1.Service
+		wantAvailabilityResultType ManifestProcessingAvailabilityResultType
 	}{
 		{
 			name: "untrackable service (external name type)",
@@ -485,7 +485,7 @@ func TestTrackServiceAvailability(t *testing.T) {
 					ClusterIPs: []string{"192.168.1.1"},
 				},
 			},
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotTrackable,
+			wantAvailabilityResultType: AvailabilityResultTypeNotTrackable,
 		},
 		{
 			name: "available default typed service (IP assigned)",
@@ -499,7 +499,7 @@ func TestTrackServiceAvailability(t *testing.T) {
 					ClusterIPs: []string{"192.168.1.1"},
 				},
 			},
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
 			name: "available ClusterIP service (IP assigned)",
@@ -514,7 +514,7 @@ func TestTrackServiceAvailability(t *testing.T) {
 					ClusterIPs: []string{"192.168.1.1"},
 				},
 			},
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
 			name: "available headless service",
@@ -528,7 +528,7 @@ func TestTrackServiceAvailability(t *testing.T) {
 					ClusterIPs: []string{"None"},
 				},
 			},
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
 			name: "available node port service (IP assigned)",
@@ -543,7 +543,7 @@ func TestTrackServiceAvailability(t *testing.T) {
 					ClusterIPs: []string{"192.168.1.1"},
 				},
 			},
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
 			name: "unavailable ClusterIP service (no IP assigned)",
@@ -557,7 +557,7 @@ func TestTrackServiceAvailability(t *testing.T) {
 					ClusterIP: "13.6.2.2",
 				},
 			},
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			wantAvailabilityResultType: AvailabilityResultTypeNotYetAvailable,
 		},
 		{
 			name: "available LoadBalancer service (IP assigned)",
@@ -579,7 +579,7 @@ func TestTrackServiceAvailability(t *testing.T) {
 					},
 				},
 			},
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
 			name: "available LoadBalancer service (hostname assigned)",
@@ -601,7 +601,7 @@ func TestTrackServiceAvailability(t *testing.T) {
 					},
 				},
 			},
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
 			name: "unavailable LoadBalancer service (ingress not ready)",
@@ -619,7 +619,7 @@ func TestTrackServiceAvailability(t *testing.T) {
 					},
 				},
 			},
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			wantAvailabilityResultType: AvailabilityResultTypeNotYetAvailable,
 		},
 	}
 
@@ -629,8 +629,8 @@ func TestTrackServiceAvailability(t *testing.T) {
 			if err != nil {
 				t.Errorf("trackServiceAvailability() = %v, want no error", err)
 			}
-			if gotResTyp != tc.wantManifestProcessingAvailabilityResultType {
-				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantManifestProcessingAvailabilityResultType)
+			if gotResTyp != tc.wantAvailabilityResultType {
+				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantAvailabilityResultType)
 			}
 		})
 	}
@@ -681,24 +681,24 @@ func TestTrackCRDAvailability(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name                                         string
-		crd                                          *apiextensionsv1.CustomResourceDefinition
-		wantManifestProcessingAvailabilityResultType ManifestProcessingAvailabilityResultType
+		name                       string
+		crd                        *apiextensionsv1.CustomResourceDefinition
+		wantAvailabilityResultType ManifestProcessingAvailabilityResultType
 	}{
 		{
-			name: "available CRD",
-			crd:  availableCRD,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available CRD",
+			crd:                        availableCRD,
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name: "unavailable CRD (not established)",
-			crd:  unavailableCRDNotEstablished,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			name:                       "unavailable CRD (not established)",
+			crd:                        unavailableCRDNotEstablished,
+			wantAvailabilityResultType: AvailabilityResultTypeNotYetAvailable,
 		},
 		{
-			name: "unavailable CRD (name not accepted)",
-			crd:  unavailableCRDNameNotAccepted,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			name:                       "unavailable CRD (name not accepted)",
+			crd:                        unavailableCRDNameNotAccepted,
+			wantAvailabilityResultType: AvailabilityResultTypeNotYetAvailable,
 		},
 	}
 
@@ -708,8 +708,8 @@ func TestTrackCRDAvailability(t *testing.T) {
 			if err != nil {
 				t.Fatalf("trackCRDAvailability() = %v, want no error", err)
 			}
-			if gotResTyp != tc.wantManifestProcessingAvailabilityResultType {
-				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantManifestProcessingAvailabilityResultType)
+			if gotResTyp != tc.wantAvailabilityResultType {
+				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantAvailabilityResultType)
 			}
 		})
 	}
@@ -768,24 +768,24 @@ func TestTrackPDBAvailability(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name                                         string
-		pdb                                          *policyv1.PodDisruptionBudget
-		wantManifestProcessingAvailabilityResultType ManifestProcessingAvailabilityResultType
+		name                       string
+		pdb                        *policyv1.PodDisruptionBudget
+		wantAvailabilityResultType ManifestProcessingAvailabilityResultType
 	}{
 		{
-			name: "available PDB",
-			pdb:  availablePDB,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available PDB",
+			pdb:                        availablePDB,
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name: "unavailable PDB (insufficient pods)",
-			pdb:  unavailablePDBInsufficientPods,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			name:                       "unavailable PDB (insufficient pods)",
+			pdb:                        unavailablePDBInsufficientPods,
+			wantAvailabilityResultType: AvailabilityResultTypeNotYetAvailable,
 		},
 		{
-			name: "unavailable PDB (stale condition)",
-			pdb:  unavailablePDBStaleCondition,
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+			name:                       "unavailable PDB (stale condition)",
+			pdb:                        unavailablePDBStaleCondition,
+			wantAvailabilityResultType: AvailabilityResultTypeNotYetAvailable,
 		},
 	}
 
@@ -795,8 +795,8 @@ func TestTrackPDBAvailability(t *testing.T) {
 			if err != nil {
 				t.Fatalf("trackPDBAvailability() = %v, want no error", err)
 			}
-			if gotResTyp != tc.wantManifestProcessingAvailabilityResultType {
-				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantManifestProcessingAvailabilityResultType)
+			if gotResTyp != tc.wantAvailabilityResultType {
+				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantAvailabilityResultType)
 			}
 		})
 	}
@@ -876,124 +876,124 @@ func TestTrackInMemberClusterObjAvailabilityByGVR(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name                                         string
-		gvr                                          schema.GroupVersionResource
-		inMemberClusterObj                           *unstructured.Unstructured
-		wantManifestProcessingAvailabilityResultType ManifestProcessingAvailabilityResultType
+		name                       string
+		gvr                        schema.GroupVersionResource
+		inMemberClusterObj         *unstructured.Unstructured
+		wantAvailabilityResultType ManifestProcessingAvailabilityResultType
 	}{
 		{
-			name:               "available deployment",
-			gvr:                utils.DeploymentGVR,
-			inMemberClusterObj: toUnstructured(t, availableDeploy),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available deployment",
+			gvr:                        utils.DeploymentGVR,
+			inMemberClusterObj:         toUnstructured(t, availableDeploy),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:               "available stateful set",
-			gvr:                utils.StatefulSetGVR,
-			inMemberClusterObj: toUnstructured(t, availableStatefulSet),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available stateful set",
+			gvr:                        utils.StatefulSetGVR,
+			inMemberClusterObj:         toUnstructured(t, availableStatefulSet),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:               "available service",
-			gvr:                utils.ServiceGVR,
-			inMemberClusterObj: toUnstructured(t, availableSvc),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available service",
+			gvr:                        utils.ServiceGVR,
+			inMemberClusterObj:         toUnstructured(t, availableSvc),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:               "available daemon set",
-			gvr:                utils.DaemonSetGVR,
-			inMemberClusterObj: toUnstructured(t, availableDaemonSet),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available daemon set",
+			gvr:                        utils.DaemonSetGVR,
+			inMemberClusterObj:         toUnstructured(t, availableDaemonSet),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:               "available custom resource definition",
-			gvr:                utils.CustomResourceDefinitionGVR,
-			inMemberClusterObj: toUnstructured(t, availableCRD),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available custom resource definition",
+			gvr:                        utils.CustomResourceDefinitionGVR,
+			inMemberClusterObj:         toUnstructured(t, availableCRD),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:               "data object (namespace)",
-			gvr:                utils.NamespaceGVR,
-			inMemberClusterObj: toUnstructured(t, ns.DeepCopy()),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "data object (namespace)",
+			gvr:                        utils.NamespaceGVR,
+			inMemberClusterObj:         toUnstructured(t, ns.DeepCopy()),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:               "data object (config map)",
-			gvr:                utils.ConfigMapGVR,
-			inMemberClusterObj: toUnstructured(t, cm),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "data object (config map)",
+			gvr:                        utils.ConfigMapGVR,
+			inMemberClusterObj:         toUnstructured(t, cm),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:               "untrackable object (job)",
-			gvr:                utils.JobGVR,
-			inMemberClusterObj: toUnstructured(t, untrackableJob),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeNotTrackable,
+			name:                       "untrackable object (job)",
+			gvr:                        utils.JobGVR,
+			inMemberClusterObj:         toUnstructured(t, untrackableJob),
+			wantAvailabilityResultType: AvailabilityResultTypeNotTrackable,
 		},
 		{
-			name:               "available service account",
-			gvr:                utils.ServiceAccountGVR,
-			inMemberClusterObj: toUnstructured(t, &corev1.ServiceAccount{}),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available service account",
+			gvr:                        utils.ServiceAccountGVR,
+			inMemberClusterObj:         toUnstructured(t, &corev1.ServiceAccount{}),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:               "available network policy",
-			gvr:                utils.NetworkPolicyGVR,
-			inMemberClusterObj: toUnstructured(t, &networkingv1.NetworkPolicy{}),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available network policy",
+			gvr:                        utils.NetworkPolicyGVR,
+			inMemberClusterObj:         toUnstructured(t, &networkingv1.NetworkPolicy{}),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:               "available csi driver",
-			gvr:                utils.CSIDriverGVR,
-			inMemberClusterObj: toUnstructured(t, &storagev1.CSIDriver{}),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available csi driver",
+			gvr:                        utils.CSIDriverGVR,
+			inMemberClusterObj:         toUnstructured(t, &storagev1.CSIDriver{}),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:               "available csi node",
-			gvr:                utils.CSINodeGVR,
-			inMemberClusterObj: toUnstructured(t, &storagev1.CSINode{}),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available csi node",
+			gvr:                        utils.CSINodeGVR,
+			inMemberClusterObj:         toUnstructured(t, &storagev1.CSINode{}),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:               "available storage class",
-			gvr:                utils.StorageClassGVR,
-			inMemberClusterObj: toUnstructured(t, &storagev1.StorageClass{}),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available storage class",
+			gvr:                        utils.StorageClassGVR,
+			inMemberClusterObj:         toUnstructured(t, &storagev1.StorageClass{}),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:               "available csi storage capacity",
-			gvr:                utils.CSIStorageCapacityGVR,
-			inMemberClusterObj: toUnstructured(t, &storagev1.CSIStorageCapacity{}),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available csi storage capacity",
+			gvr:                        utils.CSIStorageCapacityGVR,
+			inMemberClusterObj:         toUnstructured(t, &storagev1.CSIStorageCapacity{}),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:               "available controller revision",
-			gvr:                utils.ControllerRevisionGVR,
-			inMemberClusterObj: toUnstructured(t, &appsv1.ControllerRevision{}),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available controller revision",
+			gvr:                        utils.ControllerRevisionGVR,
+			inMemberClusterObj:         toUnstructured(t, &appsv1.ControllerRevision{}),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:               "available ingress class",
-			gvr:                utils.IngressClassGVR,
-			inMemberClusterObj: toUnstructured(t, &networkingv1.IngressClass{}),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available ingress class",
+			gvr:                        utils.IngressClassGVR,
+			inMemberClusterObj:         toUnstructured(t, &networkingv1.IngressClass{}),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:               "available limit range",
-			gvr:                utils.LimitRangeGVR,
-			inMemberClusterObj: toUnstructured(t, &corev1.LimitRange{}),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available limit range",
+			gvr:                        utils.LimitRangeGVR,
+			inMemberClusterObj:         toUnstructured(t, &corev1.LimitRange{}),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:               "available resource quota",
-			gvr:                utils.ResourceQuotaGVR,
-			inMemberClusterObj: toUnstructured(t, &corev1.ResourceQuota{}),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available resource quota",
+			gvr:                        utils.ResourceQuotaGVR,
+			inMemberClusterObj:         toUnstructured(t, &corev1.ResourceQuota{}),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 		{
-			name:               "available priority class",
-			gvr:                utils.PriorityClassGVR,
-			inMemberClusterObj: toUnstructured(t, &schedulingv1.PriorityClass{}),
-			wantManifestProcessingAvailabilityResultType: ManifestProcessingAvailabilityResultTypeAvailable,
+			name:                       "available priority class",
+			gvr:                        utils.PriorityClassGVR,
+			inMemberClusterObj:         toUnstructured(t, &schedulingv1.PriorityClass{}),
+			wantAvailabilityResultType: AvailabilityResultTypeAvailable,
 		},
 	}
 
@@ -1003,8 +1003,8 @@ func TestTrackInMemberClusterObjAvailabilityByGVR(t *testing.T) {
 			if err != nil {
 				t.Fatalf("trackInMemberClusterObjAvailabilityByGVR() = %v, want no error", err)
 			}
-			if gotResTyp != tc.wantManifestProcessingAvailabilityResultType {
-				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantManifestProcessingAvailabilityResultType)
+			if gotResTyp != tc.wantAvailabilityResultType {
+				t.Errorf("manifestProcessingAvailabilityResultType = %v, want %v", gotResTyp, tc.wantAvailabilityResultType)
 			}
 		})
 	}
@@ -1047,36 +1047,36 @@ func TestTrackInMemberClusterObjAvailability(t *testing.T) {
 					id: &fleetv1beta1.WorkResourceIdentifier{
 						Ordinal: 0,
 					},
-					gvr:                &utils.DeploymentGVR,
-					inMemberClusterObj: toUnstructured(t, availableDeploy),
-					applyResTyp:        ManifestProcessingApplyResultTypeApplied,
+					gvr:                     &utils.DeploymentGVR,
+					inMemberClusterObj:      toUnstructured(t, availableDeploy),
+					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
 				},
 				// A failed to get applied service.
 				{
 					id: &fleetv1beta1.WorkResourceIdentifier{
 						Ordinal: 1,
 					},
-					gvr:                &utils.ServiceGVR,
-					inMemberClusterObj: nil,
-					applyResTyp:        ManifestProcessingApplyResultTypeFailedToApply,
+					gvr:                     &utils.ServiceGVR,
+					inMemberClusterObj:      nil,
+					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeFailedToApply,
 				},
 				// An unavailable daemon set.
 				{
 					id: &fleetv1beta1.WorkResourceIdentifier{
 						Ordinal: 2,
 					},
-					gvr:                &utils.DaemonSetGVR,
-					inMemberClusterObj: toUnstructured(t, unavailableDaemonSet),
-					applyResTyp:        ManifestProcessingApplyResultTypeApplied,
+					gvr:                     &utils.DaemonSetGVR,
+					inMemberClusterObj:      toUnstructured(t, unavailableDaemonSet),
+					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
 				},
 				// An untrackable job.
 				{
 					id: &fleetv1beta1.WorkResourceIdentifier{
 						Ordinal: 3,
 					},
-					gvr:                &utils.JobGVR,
-					inMemberClusterObj: toUnstructured(t, untrackableJob),
-					applyResTyp:        ManifestProcessingApplyResultTypeApplied,
+					gvr:                     &utils.JobGVR,
+					inMemberClusterObj:      toUnstructured(t, untrackableJob),
+					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
 				},
 			},
 			wantBundles: []*manifestProcessingBundle{
@@ -1084,37 +1084,37 @@ func TestTrackInMemberClusterObjAvailability(t *testing.T) {
 					id: &fleetv1beta1.WorkResourceIdentifier{
 						Ordinal: 0,
 					},
-					gvr:                &utils.DeploymentGVR,
-					inMemberClusterObj: toUnstructured(t, availableDeploy),
-					applyResTyp:        ManifestProcessingApplyResultTypeApplied,
-					availabilityResTyp: ManifestProcessingAvailabilityResultTypeAvailable,
+					gvr:                     &utils.DeploymentGVR,
+					inMemberClusterObj:      toUnstructured(t, availableDeploy),
+					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
+					availabilityResTyp:      AvailabilityResultTypeAvailable,
 				},
 				{
 					id: &fleetv1beta1.WorkResourceIdentifier{
 						Ordinal: 1,
 					},
-					gvr:                &utils.ServiceGVR,
-					inMemberClusterObj: nil,
-					applyResTyp:        ManifestProcessingApplyResultTypeFailedToApply,
-					availabilityResTyp: ManifestProcessingAvailabilityResultTypeSkipped,
+					gvr:                     &utils.ServiceGVR,
+					inMemberClusterObj:      nil,
+					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeFailedToApply,
+					availabilityResTyp:      AvailabilityResultTypeSkipped,
 				},
 				{
 					id: &fleetv1beta1.WorkResourceIdentifier{
 						Ordinal: 2,
 					},
-					gvr:                &utils.DaemonSetGVR,
-					inMemberClusterObj: toUnstructured(t, unavailableDaemonSet),
-					applyResTyp:        ManifestProcessingApplyResultTypeApplied,
-					availabilityResTyp: ManifestProcessingAvailabilityResultTypeNotYetAvailable,
+					gvr:                     &utils.DaemonSetGVR,
+					inMemberClusterObj:      toUnstructured(t, unavailableDaemonSet),
+					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
+					availabilityResTyp:      AvailabilityResultTypeNotYetAvailable,
 				},
 				{
 					id: &fleetv1beta1.WorkResourceIdentifier{
 						Ordinal: 3,
 					},
-					gvr:                &utils.JobGVR,
-					inMemberClusterObj: toUnstructured(t, untrackableJob),
-					applyResTyp:        ManifestProcessingApplyResultTypeApplied,
-					availabilityResTyp: ManifestProcessingAvailabilityResultTypeNotTrackable,
+					gvr:                     &utils.JobGVR,
+					inMemberClusterObj:      toUnstructured(t, untrackableJob),
+					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeApplied,
+					availabilityResTyp:      AvailabilityResultTypeNotTrackable,
 				},
 			},
 		},

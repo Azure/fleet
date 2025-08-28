@@ -51,7 +51,7 @@ var (
 )
 
 var (
-	defaultResourceSelectors = []placementv1beta1.ClusterResourceSelector{
+	defaultResourceSelectors = []placementv1beta1.ResourceSelectorTerm{
 		{
 			Group:   "core",
 			Kind:    "Namespace",
@@ -190,6 +190,7 @@ var _ = BeforeSuite(func() {
 		Client:                    hubClient,
 		SchedulerWorkQueue:        schedulerWorkQueue,
 		ClusterEligibilityChecker: clustereligibilitychecker.New(),
+		EnableResourcePlacement:   true,
 	}
 	err = reconciler.SetupWithManager(ctrlMgr)
 	Expect(err).ToNot(HaveOccurred(), "Failed to set up controller with controller manager")

@@ -69,7 +69,7 @@ func TestAddSchedulerCleanUpFinalizer(t *testing.T) {
 		wantFinalizers []string
 	}{
 		{
-			name: "cluster-scoped placement should add CRP finalizer",
+			name: "cluster-scoped placement should add scheduler cleanup finalizer",
 			placement: func() fleetv1beta1.PlacementObj {
 				return &fleetv1beta1.ClusterResourcePlacement{
 					ObjectMeta: metav1.ObjectMeta{
@@ -80,7 +80,7 @@ func TestAddSchedulerCleanUpFinalizer(t *testing.T) {
 			wantFinalizers: []string{fleetv1beta1.SchedulerCleanupFinalizer},
 		},
 		{
-			name: "namespaced placement should also add CRP finalizer",
+			name: "namespaced placement should also add scheduler cleanup finalizer",
 			placement: func() fleetv1beta1.PlacementObj {
 				return &fleetv1beta1.ResourcePlacement{
 					ObjectMeta: metav1.ObjectMeta{
@@ -175,7 +175,7 @@ func TestCleanUpAllBindingsFor(t *testing.T) {
 			wantRemainingBindings: []fleetv1beta1.BindingObj{},
 		},
 		{
-			name: "cluster-scoped placement cleanup without bindings but have CRP cleanup finalizer",
+			name: "cluster-scoped placement cleanup without bindings but have placement cleanup finalizer",
 			placement: func() fleetv1beta1.PlacementObj {
 				return &fleetv1beta1.ClusterResourcePlacement{
 					ObjectMeta: metav1.ObjectMeta{
@@ -328,7 +328,7 @@ func TestCleanUpAllBindingsFor(t *testing.T) {
 				cmpopts.SortSlices(func(b1, b2 fleetv1beta1.BindingObj) bool {
 					return b1.GetName() < b2.GetName()
 				})); diff != "" {
-				t.Errorf("Remaining bindings diff (+ got, - want): %s", diff)
+				t.Errorf("Remaining bindings diff (-got, +want): %s", diff)
 			}
 		})
 	}
@@ -451,6 +451,89 @@ func TestLookupLatestPolicySnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      policySnapshotName,
 						Namespace: "other-namespace",
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: "test-rp",
+							fleetv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
+						},
+					},
+				},
+			},
+			wantPolicySnapshot: &fleetv1beta1.SchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      policySnapshotName,
+					Namespace: "test-namespace",
+					Labels: map[string]string{
+						fleetv1beta1.PlacementTrackingLabel: "test-rp",
+						fleetv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
+					},
+				},
+			},
+		},
+		{
+			name: "cluster-scoped placement should not select namespaced policy snapshot with same placement label",
+			placement: func() fleetv1beta1.PlacementObj {
+				return &fleetv1beta1.ClusterResourcePlacement{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       crpName,
+						Finalizers: []string{fleetv1beta1.SchedulerCleanupFinalizer},
+					},
+				}
+			},
+			policySnapshots: []fleetv1beta1.PolicySnapshotObj{
+				&fleetv1beta1.ClusterSchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: policySnapshotName,
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: crpName,
+							fleetv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
+						},
+					},
+				},
+				&fleetv1beta1.SchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "namespaced-policy-snapshot",
+						Namespace: "test-namespace",
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: crpName,
+							fleetv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
+						},
+					},
+				},
+			},
+			wantPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policySnapshotName,
+					Labels: map[string]string{
+						fleetv1beta1.PlacementTrackingLabel: crpName,
+						fleetv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
+					},
+				},
+			},
+		},
+		{
+			name: "namespaced placement should not select cluster-scoped policy snapshot with same placement label",
+			placement: func() fleetv1beta1.PlacementObj {
+				return &fleetv1beta1.ResourcePlacement{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-rp",
+						Namespace: "test-namespace",
+					},
+				}
+			},
+			policySnapshots: []fleetv1beta1.PolicySnapshotObj{
+				&fleetv1beta1.SchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      policySnapshotName,
+						Namespace: "test-namespace",
+						Labels: map[string]string{
+							fleetv1beta1.PlacementTrackingLabel: "test-rp",
+							fleetv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
+						},
+					},
+				},
+				&fleetv1beta1.ClusterSchedulingPolicySnapshot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cluster-policy-snapshot",
 						Labels: map[string]string{
 							fleetv1beta1.PlacementTrackingLabel: "test-rp",
 							fleetv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),

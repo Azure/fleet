@@ -85,9 +85,16 @@ func init() {
 	// +kubebuilder:scaffold:scheme
 	klog.InitFlags(nil)
 
-	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics,
-		fleetmetrics.PlacementApplyFailedCount, fleetmetrics.PlacementApplySucceedCount,
-		fleetmetrics.SchedulingCycleDurationMilliseconds, fleetmetrics.SchedulerActiveWorkers)
+	metrics.Registry.MustRegister(
+		fleetmetrics.JoinResultMetrics,
+		fleetmetrics.LeaveResultMetrics,
+		fleetmetrics.PlacementApplyFailedCount,
+		fleetmetrics.PlacementApplySucceedCount,
+		fleetmetrics.SchedulingCycleDurationMilliseconds,
+		fleetmetrics.SchedulerActiveWorkers,
+		fleetmetrics.FleetPlacementStatusLastTimeStampSeconds,
+		fleetmetrics.FleetEvictionStatus,
+	)
 }
 
 func main() {

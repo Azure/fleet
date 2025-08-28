@@ -19,354 +19,12 @@ spec:
     singular: clusterresourceplacementstatus
   scope: Namespaced
   versions:
-  - name: v1
-    schema:
-      openAPIV3Schema:
-        description: ClusterResourcePlacementStatus defines the observed state of
-          the ClusterResourcePlacement object.
-        properties:
-          conditions:
-            description: Conditions is an array of current observed conditions for
-              ClusterResourcePlacement.
-            items:
-              description: Condition contains details for one aspect of the current
-                state of this API Resource.
-              properties:
-                lastTransitionTime:
-                  description: |-
-                    lastTransitionTime is the last time the condition transitioned from one status to another.
-                    This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
-                  format: date-time
-                  type: string
-                message:
-                  description: |-
-                    message is a human readable message indicating details about the transition.
-                    This may be an empty string.
-                  maxLength: 32768
-                  type: string
-                observedGeneration:
-                  description: |-
-                    observedGeneration represents the .metadata.generation that the condition was set based upon.
-                    For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
-                    with respect to the current state of the instance.
-                  format: int64
-                  minimum: 0
-                  type: integer
-                reason:
-                  description: |-
-                    reason contains a programmatic identifier indicating the reason for the condition's last transition.
-                    Producers of specific condition types may define expected values and meanings for this field,
-                    and whether the values are considered a guaranteed API.
-                    The value should be a CamelCase string.
-                    This field may not be empty.
-                  maxLength: 1024
-                  minLength: 1
-                  pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
-                  type: string
-                status:
-                  description: status of the condition, one of True, False, Unknown.
-                  enum:
-                  - "True"
-                  - "False"
-                  - Unknown
-                  type: string
-                type:
-                  description: type of condition in CamelCase or in foo.example.com/CamelCase.
-                  maxLength: 316
-                  pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
-                  type: string
-              required:
-              - lastTransitionTime
-              - message
-              - reason
-              - status
-              - type
-              type: object
-            type: array
-            x-kubernetes-list-map-keys:
-            - type
-            x-kubernetes-list-type: map
-          observedResourceIndex:
-            description: |-
-              Resource index logically represents the generation of the selected resources.
-              We take a new snapshot of the selected resources whenever the selection or their content change.
-              Each snapshot has a different resource index.
-              One resource snapshot can contain multiple clusterResourceSnapshots CRs in order to store large amount of resources.
-              To get clusterResourceSnapshot of a given resource index, use the following command:
-              `kubectl get ClusterResourceSnapshot --selector=kubernetes-fleet.io/resource-index=$ObservedResourceIndex `
-              ObservedResourceIndex is the resource index that the conditions in the ClusterResourcePlacementStatus observe.
-              For example, a condition of `ClusterResourcePlacementWorkSynchronized` type
-              is observing the synchronization status of the resource snapshot with the resource index $ObservedResourceIndex.
-            type: string
-          placementStatuses:
-            description: |-
-              PlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
-              Each selected cluster according to the latest resource placement is guaranteed to have a corresponding placementStatuses.
-              In the pickN case, there are N placement statuses where N = NumberOfClusters; Or in the pickFixed case, there are
-              N placement statuses where N = ClusterNames.
-              In these cases, some of them may not have assigned clusters when we cannot fill the required number of clusters.
-            items:
-              description: ResourcePlacementStatus represents the placement status
-                of selected resources for one target cluster.
-              properties:
-                applicableClusterResourceOverrides:
-                  description: |-
-                    ApplicableClusterResourceOverrides contains a list of applicable ClusterResourceOverride snapshots associated with
-                    the selected resources.
-
-                    This field is alpha-level and is for the override policy feature.
-                  items:
-                    type: string
-                  type: array
-                applicableResourceOverrides:
-                  description: |-
-                    ApplicableResourceOverrides contains a list of applicable ResourceOverride snapshots associated with the selected
-                    resources.
-
-                    This field is alpha-level and is for the override policy feature.
-                  items:
-                    description: NamespacedName comprises a resource name, with a
-                      mandatory namespace.
-                    properties:
-                      name:
-                        description: Name is the name of the namespaced scope resource.
-                        type: string
-                      namespace:
-                        description: Namespace is namespace of the namespaced scope
-                          resource.
-                        type: string
-                    required:
-                    - name
-                    - namespace
-                    type: object
-                  type: array
-                clusterName:
-                  description: |-
-                    ClusterName is the name of the cluster this resource is assigned to.
-                    If it is not empty, its value should be unique cross all placement decisions for the Placement.
-                  type: string
-                conditions:
-                  description: Conditions is an array of current observed conditions
-                    for ResourcePlacementStatus.
-                  items:
-                    description: Condition contains details for one aspect of the
-                      current state of this API Resource.
-                    properties:
-                      lastTransitionTime:
-                        description: |-
-                          lastTransitionTime is the last time the condition transitioned from one status to another.
-                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
-                        format: date-time
-                        type: string
-                      message:
-                        description: |-
-                          message is a human readable message indicating details about the transition.
-                          This may be an empty string.
-                        maxLength: 32768
-                        type: string
-                      observedGeneration:
-                        description: |-
-                          observedGeneration represents the .metadata.generation that the condition was set based upon.
-                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
-                          with respect to the current state of the instance.
-                        format: int64
-                        minimum: 0
-                        type: integer
-                      reason:
-                        description: |-
-                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
-                          Producers of specific condition types may define expected values and meanings for this field,
-                          and whether the values are considered a guaranteed API.
-                          The value should be a CamelCase string.
-                          This field may not be empty.
-                        maxLength: 1024
-                        minLength: 1
-                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
-                        type: string
-                      status:
-                        description: status of the condition, one of True, False,
-                          Unknown.
-                        enum:
-                        - "True"
-                        - "False"
-                        - Unknown
-                        type: string
-                      type:
-                        description: type of condition in CamelCase or in foo.example.com/CamelCase.
-                        maxLength: 316
-                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
-                        type: string
-                    required:
-                    - lastTransitionTime
-                    - message
-                    - reason
-                    - status
-                    - type
-                    type: object
-                  type: array
-                failedPlacements:
-                  description: |-
-                    FailedPlacements is a list of all the resources failed to be placed to the given cluster or the resource is unavailable.
-                    Note that we only include 100 failed resource placements even if there are more than 100.
-                    This field is only meaningful if the `ClusterName` is not empty.
-                  items:
-                    description: FailedResourcePlacement contains the failure details
-                      of a failed resource placement.
-                    properties:
-                      condition:
-                        description: The failed condition status.
-                        properties:
-                          lastTransitionTime:
-                            description: |-
-                              lastTransitionTime is the last time the condition transitioned from one status to another.
-                              This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
-                            format: date-time
-                            type: string
-                          message:
-                            description: |-
-                              message is a human readable message indicating details about the transition.
-                              This may be an empty string.
-                            maxLength: 32768
-                            type: string
-                          observedGeneration:
-                            description: |-
-                              observedGeneration represents the .metadata.generation that the condition was set based upon.
-                              For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
-                              with respect to the current state of the instance.
-                            format: int64
-                            minimum: 0
-                            type: integer
-                          reason:
-                            description: |-
-                              reason contains a programmatic identifier indicating the reason for the condition's last transition.
-                              Producers of specific condition types may define expected values and meanings for this field,
-                              and whether the values are considered a guaranteed API.
-                              The value should be a CamelCase string.
-                              This field may not be empty.
-                            maxLength: 1024
-                            minLength: 1
-                            pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
-                            type: string
-                          status:
-                            description: status of the condition, one of True, False,
-                              Unknown.
-                            enum:
-                            - "True"
-                            - "False"
-                            - Unknown
-                            type: string
-                          type:
-                            description: type of condition in CamelCase or in foo.example.com/CamelCase.
-                            maxLength: 316
-                            pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
-                            type: string
-                        required:
-                        - lastTransitionTime
-                        - message
-                        - reason
-                        - status
-                        - type
-                        type: object
-                      envelope:
-                        description: Envelope identifies the envelope object that
-                          contains this resource.
-                        properties:
-                          name:
-                            description: Name of the envelope object.
-                            type: string
-                          namespace:
-                            description: Namespace is the namespace of the envelope
-                              object. Empty if the envelope object is cluster scoped.
-                            type: string
-                          type:
-                            default: ConfigMap
-                            description: Type of the envelope object.
-                            enum:
-                            - ConfigMap
-                            type: string
-                        required:
-                        - name
-                        type: object
-                      group:
-                        description: Group is the group name of the selected resource.
-                        type: string
-                      kind:
-                        description: Kind represents the Kind of the selected resources.
-                        type: string
-                      name:
-                        description: Name of the target resource.
-                        type: string
-                      namespace:
-                        description: Namespace is the namespace of the resource. Empty
-                          if the resource is cluster scoped.
-                        type: string
-                      version:
-                        description: Version is the version of the selected resource.
-                        type: string
-                    required:
-                    - condition
-                    - kind
-                    - name
-                    - version
-                    type: object
-                  maxItems: 100
-                  type: array
-              type: object
-            type: array
-          selectedResources:
-            description: SelectedResources contains a list of resources selected by
-              ResourceSelectors.
-            items:
-              description: ResourceIdentifier identifies one Kubernetes resource.
-              properties:
-                envelope:
-                  description: Envelope identifies the envelope object that contains
-                    this resource.
-                  properties:
-                    name:
-                      description: Name of the envelope object.
-                      type: string
-                    namespace:
-                      description: Namespace is the namespace of the envelope object.
-                        Empty if the envelope object is cluster scoped.
-                      type: string
-                    type:
-                      default: ConfigMap
-                      description: Type of the envelope object.
-                      enum:
-                      - ConfigMap
-                      type: string
-                  required:
-                  - name
-                  type: object
-                group:
-                  description: Group is the group name of the selected resource.
-                  type: string
-                kind:
-                  description: Kind represents the Kind of the selected resources.
-                  type: string
-                name:
-                  description: Name of the target resource.
-                  type: string
-                namespace:
-                  description: Namespace is the namespace of the resource. Empty if
-                    the resource is cluster scoped.
-                  type: string
-                version:
-                  description: Version is the version of the selected resource.
-                  type: string
-              required:
-              - kind
-              - name
-              - version
-              type: object
-            type: array
-        type: object
-    served: true
-    storage: false
   - additionalPrinterColumns:
-    - jsonPath: .status.observedResourceIndex
+    - jsonPath: .sourceStatus.observedResourceIndex
       name: Resource-Index
+      type: string
+    - jsonPath: .lastUpdatedTime
+      name: Last-Updated
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
@@ -377,6 +35,7 @@ spec:
         description: |-
           ClusterResourcePlacementStatus is a namespaced resource that mirrors the PlacementStatus of a corresponding
           ClusterResourcePlacement object. This allows namespace-scoped access to cluster-scoped placement status.
+          The LastUpdatedTime field is updated whenever the CRPS object is updated.
 
           This object will be created within the target namespace that contains resources being managed by the CRP.
           When multiple ClusterResourcePlacements target the same namespace, each ClusterResourcePlacementStatus within that
@@ -400,13 +59,16 @@ spec:
               In CamelCase.
               More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
+          lastUpdatedTime:
+            description: |-
+              LastUpdatedTime is the timestamp when this CRPS object was last updated.
+              This field is set to the current time whenever the CRPS object is created or modified.
+            format: date-time
+            type: string
           metadata:
             type: object
-          status:
-            description: |-
-              The observed status of ClusterResourcePlacementStatus which mirrors the PlacementStatus of the corresponding ClusterResourcePlacement.
-              This includes information about the namespace and resources within that namespace that are being managed by the placement.
-              The status will show placement details for resources selected by the ClusterResourcePlacement's ResourceSelectors.
+          sourceStatus:
+            description: Source status copied from the corresponding ClusterResourcePlacement.
             properties:
               conditions:
                 description: |-
@@ -488,7 +150,7 @@ spec:
                 type: string
               placementStatuses:
                 description: |-
-                  PlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
+                  PerClusterPlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
                   Each selected cluster according to the observed resource placement is guaranteed to have a corresponding placementStatuses.
                   In the pickN case, there are N placement statuses where N = NumberOfClusters; Or in the pickFixed case, there are
                   N placement statuses where N = ClusterNames.
@@ -1005,8 +667,10 @@ spec:
                   type: object
                 type: array
             type: object
+        required:
+        - lastUpdatedTime
+        - sourceStatus
         type: object
     served: true
     storage: true
-    subresources:
-      status: {}
+    subresources: {}

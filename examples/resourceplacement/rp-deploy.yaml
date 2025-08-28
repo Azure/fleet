@@ -1,0 +1,26 @@
+# This tests selecting multiple resources in a namespace,
+# and only applying to a subset of clusters.
+# Prerequisite: create and expose a deployment named "test-nginx" in namespace "test-ns".
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ResourcePlacement
+metadata:
+  name: rp-nginx
+  namespace: test-ns
+spec:
+  resourceSelectors:
+    - group: apps
+      kind: Deployment
+      name: test-nginx
+      version: v1
+    - group: ""
+      kind: Service
+      name: test-nginx
+      version: v1
+  policy:
+    placementType: PickN
+    numberOfClusters: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1

@@ -1,0 +1,21 @@
+# This tests selecting a single resource in a namespace,
+# and applying it to all clusters.
+# Prerequisite: create a configMap named "test-cm" in namespace "test-ns".
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ResourcePlacement
+metadata:
+  name: rp-cm
+  namespace: test-ns
+spec:
+  resourceSelectors:
+    - group: ""
+      kind: ConfigMap
+      name: test-cm
+      version: v1
+  policy:
+    placementType: PickAll
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1

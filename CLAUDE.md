@@ -159,11 +159,16 @@ cmd/memberagent/        # Member agent main and setup
 ## Testing Patterns
 
 ### Unit Tests
-- Use `testify` for assertions
+- Avoid the use of ‘assert’ libraries.
 - Controllers use `envtest` for integration testing with real etcd
 - Mock external dependencies with `gomock`
 - Unit test files: `<go_file>_test.go` in same directory
 - Table-driven test style preferred
+- Use cmp.Equal for equality comparison and cmp.Diff to obtain a human-readable diff between objects.
+- Test outputs should output the actual value that the function returned before printing the value that was expected. A usual format for printing test outputs is “YourFunc(%v) = %v, want %v”.
+- If your function returns a struct, don’t write test code that performs an individual comparison for each field of the struct. Instead, construct the struct that you’re expecting your function to return, and compare in one shot using diffs or deep comparisons. The same rule applies to arrays and maps.
+- If your struct needs to be compared for approximate equality or some other kind of semantic equality, or it contains fields that cannot be compared for equality (e.g. if one of the fields is an io.Reader), tweaking a cmp.Diff or cmp.Equal comparison with cmpopts options such as cmpopts.IgnoreInterfaces may meet your needs (example); otherwise, this technique just won’t work, so do whatever works.
+- If your function returns multiple return values, you don’t need to wrap those in a struct before comparing them. Just compare the return values individually and print them.
 
 ### Integration Tests  
 - Located in `test/integration/` and `test/scheduler/`
@@ -181,6 +186,9 @@ cmd/memberagent/        # Member agent main and setup
 
 ### Test Coding Style
 - Use `want` or `wanted` instead of `expect` or `expected` when creating the desired state
+- Comments that are complete sentences should be capitalized and punctuated like standard English sentences. (As an exception, it is okay to begin a sentence with an uncapitalized identifier name if it is otherwise clear. Such cases are probably best done only at the beginning of a paragraph.)
+- Comments that are sentence fragments have no such requirements for punctuation or capitalization.
+- Documentation comments should always be complete sentences, and as such should always be capitalized and punctuated. Simple end-of-line comments (especially for struct fields) can be simple phrases that assume the field name is the subject.
 
 ## Key Patterns
 

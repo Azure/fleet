@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -23,22 +24,22 @@ import (
 )
 
 var _ = Describe("handling errors and failures gracefully", func() {
+	envelopeName := "wrapper"
+	wrappedCMName1 := "app-1"
+	wrappedCMName2 := "app-2"
+
+	cmDataKey := "foo"
+	cmDataVal1 := "bar"
+	cmDataVal2 := "baz"
+
 	// This test spec uses envelopes for placement as it is a bit tricky to simulate
 	// decoding errors with resources created directly in the hub cluster.
 	//
 	// TO-DO (chenyu1): reserve an API group exclusively on the hub cluster so that
-	// envelopes do not need to used for this test spec.
-	Context("pre-processing failure (decoding errors)", Ordered, func() {
+	// envelopes do not need to be used for this test spec.
+	Context("pre-processing failure in apply ops (decoding errors)", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-
-		envelopeName := "wrapper"
-		wrappedCMName1 := "app-1"
-		wrappedCMName2 := "app-2"
-
-		cmDataKey := "foo"
-		cmDataVal1 := "bar"
-		cmDataVal2 := "baz"
 
 		BeforeAll(func() {
 			// Use an envelope to create duplicate resource entries.
@@ -145,12 +146,12 @@ var _ = Describe("handling errors and failures gracefully", func() {
 									Condition: metav1.Condition{
 										Type:               placementv1beta1.WorkConditionTypeApplied,
 										Status:             metav1.ConditionFalse,
-										Reason:             string(workapplier.ManifestProcessingApplyResultTypeDecodingErred),
+										Reason:             string(workapplier.ApplyOrReportDiffResTypeDecodingErred),
 										ObservedGeneration: 0,
 									},
 								},
 							},
-							Conditions: resourcePlacementApplyFailedConditions(crp.Generation),
+							Conditions: perClusterApplyFailedConditions(crp.Generation),
 						},
 					},
 					SelectedResources: []placementv1beta1.ResourceIdentifier{
@@ -169,7 +170,7 @@ var _ = Describe("handling errors and failures gracefully", func() {
 					},
 					ObservedResourceIndex: "0",
 				}
-				if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
+				if diff := cmp.Diff(crp.Status, wantStatus, placementStatusCmpOptions...); diff != "" {
 					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 				}
 				return nil
@@ -210,6 +211,130 @@ var _ = Describe("handling errors and failures gracefully", func() {
 				}
 				return nil
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the configMap object #1")
+		})
+
+		AfterAll(func() {
+			// Remove the CRP and the namespace from the hub cluster.
+			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd})
+		})
+	})
+
+	Context("pre-processing failure in report diff mode (decoding errors)", Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+
+		BeforeAll(func() {
+			// Use an envelope to create duplicate resource entries.
+			ns := appNamespace()
+			Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
+
+			// Create an envelope resource to wrap the configMaps.
+			resourceEnvelope := &placementv1beta1.ResourceEnvelope{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      envelopeName,
+					Namespace: ns.Name,
+				},
+				Data: map[string]runtime.RawExtension{},
+			}
+
+			// Create a malformed config map as a wrapped resource.
+			badConfigMap := &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "malformed/v10",
+					Kind:       "Unknown",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: ns.Name,
+					Name:      wrappedCMName1,
+				},
+				Data: map[string]string{
+					cmDataKey: cmDataVal1,
+				},
+			}
+			badCMBytes, err := json.Marshal(badConfigMap)
+			Expect(err).To(BeNil(), "Failed to marshal configMap %s", badConfigMap.Name)
+			resourceEnvelope.Data["cm1.yaml"] = runtime.RawExtension{Raw: badCMBytes}
+			Expect(hubClient.Create(ctx, resourceEnvelope)).To(Succeed(), "Failed to create configMap %s", resourceEnvelope.Name)
+
+			// Create a CRP.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+						ClusterNames: []string{
+							memberCluster1EastProdName,
+						},
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: ptr.To(2),
+						},
+						ApplyStrategy: &placementv1beta1.ApplyStrategy{
+							Type: placementv1beta1.ApplyStrategyTypeReportDiff,
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
+
+		It("should update CRP status as expected", func() {
+			Eventually(func() error {
+				crp := &placementv1beta1.ClusterResourcePlacement{}
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+					return err
+				}
+
+				wantStatus := placementv1beta1.PlacementStatus{
+					Conditions: crpDiffReportingFailedConditions(crp.Generation, false),
+					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
+						{
+							ClusterName:           memberCluster1EastProdName,
+							ObservedResourceIndex: "0",
+							Conditions:            perClusterDiffReportingFailedConditions(crp.Generation),
+						},
+					},
+					SelectedResources: []placementv1beta1.ResourceIdentifier{
+						{
+							Kind:    "Namespace",
+							Name:    workNamespaceName,
+							Version: "v1",
+						},
+						{
+							Group:     placementv1beta1.GroupVersion.Group,
+							Kind:      placementv1beta1.ResourceEnvelopeKind,
+							Version:   placementv1beta1.GroupVersion.Version,
+							Name:      envelopeName,
+							Namespace: workNamespaceName,
+						},
+					},
+					ObservedResourceIndex: "0",
+				}
+				if diff := cmp.Diff(crp.Status, wantStatus, placementStatusCmpOptions...); diff != "" {
+					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
+				}
+				return nil
+			}, eventuallyDuration*20, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should not apply any resource", func() {
+			Consistently(func() error {
+				cm := &corev1.ConfigMap{}
+				if err := memberCluster1EastProdClient.Get(ctx, types.NamespacedName{Name: wrappedCMName1, Namespace: workNamespaceName}, cm); !errors.IsNotFound(err) {
+					return fmt.Errorf("the config map exists, or an unexpected error has occurred: %w", err)
+				}
+				return nil
+			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The malformed configMap has been applied unexpectedly")
+
+			Consistently(workNamespaceRemovedFromClusterActual(memberCluster1EastProd)).Should(Succeed(), "The namespace object has been applied unexpectedly")
 		})
 
 		AfterAll(func() {
