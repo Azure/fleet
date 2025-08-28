@@ -61,7 +61,7 @@ if [ -n "$UPGRADE_HUB_SIDE" ]; then
     helm uninstall hub-agent --wait --timeout 5m
 
     echo "Re-installing the hub agent Helm release in the hub cluster..."
-    helm upgrade hub-agent charts/hub-agent/ \
+    helm install hub-agent charts/hub-agent/ \
         --set image.pullPolicy=Never \
         --set image.repository=$REGISTRY/$HUB_AGENT_IMAGE \
         --set image.tag=$IMAGE_TAG \
