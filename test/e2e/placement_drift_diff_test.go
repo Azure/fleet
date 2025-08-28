@@ -74,7 +74,7 @@ var _ = Describe("take over existing resources", func() {
 				ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
 				WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeAlways,
 			}
-			createCRPWithApplyStrategy(crpName, applyStrategy)
+			createCRPWithApplyStrategy(crpName, applyStrategy, nil)
 		})
 
 		It("should update CRP status as expected", func() {
@@ -174,7 +174,7 @@ var _ = Describe("take over existing resources", func() {
 				ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
 				WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeIfNoDiff,
 			}
-			createCRPWithApplyStrategy(crpName, applyStrategy)
+			createCRPWithApplyStrategy(crpName, applyStrategy, nil)
 		})
 
 		It("should update CRP status as expected", func() {
@@ -346,7 +346,7 @@ var _ = Describe("take over existing resources", func() {
 				ComparisonOption: placementv1beta1.ComparisonOptionTypeFullComparison,
 				WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeIfNoDiff,
 			}
-			createCRPWithApplyStrategy(crpName, applyStrategy)
+			createCRPWithApplyStrategy(crpName, applyStrategy, nil)
 		})
 
 		It("should update CRP status as expected", func() {
@@ -526,7 +526,7 @@ var _ = Describe("detect drifts on placed resources", func() {
 				ComparisonOption: placementv1beta1.ComparisonOptionTypeFullComparison,
 				WhenToApply:      placementv1beta1.WhenToApplyTypeAlways,
 			}
-			createCRPWithApplyStrategy(crpName, applyStrategy)
+			createCRPWithApplyStrategy(crpName, applyStrategy, nil)
 		})
 
 		It("should update CRP status as expected", func() {
@@ -665,7 +665,7 @@ var _ = Describe("detect drifts on placed resources", func() {
 				ComparisonOption: placementv1beta1.ComparisonOptionTypePartialComparison,
 				WhenToApply:      placementv1beta1.WhenToApplyTypeIfNotDrifted,
 			}
-			createCRPWithApplyStrategy(crpName, applyStrategy)
+			createCRPWithApplyStrategy(crpName, applyStrategy, nil)
 		})
 
 		It("should update CRP status as expected", func() {
@@ -849,7 +849,7 @@ var _ = Describe("detect drifts on placed resources", func() {
 				ComparisonOption: placementv1beta1.ComparisonOptionTypeFullComparison,
 				WhenToApply:      placementv1beta1.WhenToApplyTypeIfNotDrifted,
 			}
-			createCRPWithApplyStrategy(crpName, applyStrategy)
+			createCRPWithApplyStrategy(crpName, applyStrategy, nil)
 		})
 
 		It("should update CRP status as expected", func() {
@@ -1079,7 +1079,7 @@ var _ = Describe("report diff mode", func() {
 				Type:             placementv1beta1.ApplyStrategyTypeReportDiff,
 				WhenToTakeOver:   placementv1beta1.WhenToTakeOverTypeNever,
 			}
-			createCRPWithApplyStrategy(crpName, applyStrategy)
+			createCRPWithApplyStrategy(crpName, applyStrategy, nil)
 		})
 
 		It("should update CRP status as expected", func() {

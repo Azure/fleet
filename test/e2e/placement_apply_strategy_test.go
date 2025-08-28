@@ -77,7 +77,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 
 			// Create the CRP.
 			strategy := &placementv1beta1.ApplyStrategy{AllowCoOwnership: true}
-			createCRPWithApplyStrategy(crpName, strategy)
+			createCRPWithApplyStrategy(crpName, strategy, nil)
 		})
 
 		AfterAll(func() {
@@ -136,7 +136,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 
 			// Create the CRP.
 			strategy := &placementv1beta1.ApplyStrategy{AllowCoOwnership: false}
-			createCRPWithApplyStrategy(crpName, strategy)
+			createCRPWithApplyStrategy(crpName, strategy, nil)
 		})
 
 		AfterAll(func() {
@@ -189,7 +189,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				Type:             placementv1beta1.ApplyStrategyTypeServerSideApply,
 				AllowCoOwnership: false,
 			}
-			createCRPWithApplyStrategy(crpName, strategy)
+			createCRPWithApplyStrategy(crpName, strategy, nil)
 		})
 
 		AfterAll(func() {
@@ -242,7 +242,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				Type:             placementv1beta1.ApplyStrategyTypeServerSideApply,
 				AllowCoOwnership: false,
 			}
-			createCRPWithApplyStrategy(crpName, strategy)
+			createCRPWithApplyStrategy(crpName, strategy, nil)
 		})
 
 		AfterAll(func() {
@@ -371,7 +371,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 				ServerSideApplyConfig: &placementv1beta1.ServerSideApplyConfig{ForceConflicts: true},
 				AllowCoOwnership:      true,
 			}
-			createCRPWithApplyStrategy(crpName, strategy)
+			createCRPWithApplyStrategy(crpName, strategy, nil)
 		})
 
 		AfterAll(func() {

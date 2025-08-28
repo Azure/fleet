@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 
 	placementv1beta1 "github.com/kubefleet-dev/kubefleet/apis/placement/v1beta1"
 	scheduler "github.com/kubefleet-dev/kubefleet/pkg/scheduler/framework"
@@ -37,31 +36,11 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 	BeforeEach(OncePerOrdered, func() {
-		By("creating work resources")
-		createWorkResources()
+		By("creating namespace")
+		createNamespace()
 
 		// Create the CRP with Namespace-only selector.
-		crp := &placementv1beta1.ClusterResourcePlacement{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-				// Add a custom finalizer; this would allow us to better observe
-				// the behavior of the controllers.
-				Finalizers: []string{customDeletionBlockerFinalizer},
-			},
-			Spec: placementv1beta1.PlacementSpec{
-				ResourceSelectors: namespaceOnlySelector(),
-				Policy: &placementv1beta1.PlacementPolicy{
-					PlacementType: placementv1beta1.PickAllPlacementType,
-				},
-				Strategy: placementv1beta1.RolloutStrategy{
-					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: ptr.To(2),
-					},
-				},
-			},
-		}
-		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		createNamespaceOnlyCRP(crpName)
 
 		By("should update CRP status as expected")
 		crpStatusUpdatedActual := crpStatusUpdatedActual(workNamespaceIdentifiers(), allMemberClusterNames, nil, "0")
@@ -78,27 +57,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 		workNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 
 		BeforeAll(func() {
+			createConfigMap()
+
 			// Create the RP in the same namespace selecting namespaced resources.
-			rp := &placementv1beta1.ResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       rpName,
-					Namespace:  workNamespace,
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: configMapSelector(),
-					Policy: &placementv1beta1.PlacementPolicy{
-						PlacementType: placementv1beta1.PickAllPlacementType,
-					},
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-					},
-				},
-			}
-			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP")
+			createRP(workNamespace, rpName)
 
 			// Create the ro.
 			ro := &placementv1beta1.ResourceOverride{
@@ -264,6 +226,8 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 		roSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)
 
 		BeforeAll(func() {
+			createConfigMap()
+
 			ro := &placementv1beta1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      roName,
@@ -303,26 +267,7 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", rpName)
 
 			// Create the RP.
-			rp := &placementv1beta1.ResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       rpName,
-					Namespace:  workNamespace,
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: configMapSelector(),
-					Policy: &placementv1beta1.PlacementPolicy{
-						PlacementType: placementv1beta1.PickAllPlacementType,
-					},
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-					},
-				},
-			}
-			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP")
+			createRP(workNamespace, rpName)
 		})
 
 		AfterAll(func() {
@@ -356,27 +301,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 		workNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 
 		BeforeAll(func() {
+			createConfigMap()
+
 			// Create the RP.
-			rp := &placementv1beta1.ResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       rpName,
-					Namespace:  workNamespace,
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: configMapSelector(),
-					Policy: &placementv1beta1.PlacementPolicy{
-						PlacementType: placementv1beta1.PickAllPlacementType,
-					},
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-					},
-				},
-			}
-			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP")
+			createRP(workNamespace, rpName)
 
 			// Create the ro.
 			ro := &placementv1beta1.ResourceOverride{
@@ -476,7 +404,7 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 		It("should have override annotations on the configmap", func() {
 			for i, cluster := range allMemberClusters {
 				wantAnnotations := map[string]string{roTestAnnotationKey: fmt.Sprintf("%s-%d", roTestAnnotationValue, i)}
-				Expect(validateOverrideAnnotationOfConfigMapOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", cluster.ClusterName)
+				Expect(validateAnnotationOfConfigMapOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", cluster.ClusterName)
 			}
 		})
 	})
@@ -488,6 +416,8 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 		roSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)
 
 		BeforeAll(func() {
+			createConfigMap()
+
 			// Create the bad ro.
 			ro := &placementv1beta1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
@@ -527,26 +457,7 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", rpName)
 
 			// Create the RP later
-			rp := &placementv1beta1.ResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       rpName,
-					Namespace:  workNamespace,
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: configMapSelector(),
-					Policy: &placementv1beta1.PlacementPolicy{
-						PlacementType: placementv1beta1.PickAllPlacementType,
-					},
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-					},
-				},
-			}
-			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP")
+			createRP(workNamespace, rpName)
 		})
 
 		AfterAll(func() {
@@ -575,27 +486,10 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 		workNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 
 		BeforeAll(func() {
+			createConfigMap()
+
 			// Create the RP.
-			rp := &placementv1beta1.ResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       rpName,
-					Namespace:  workNamespace,
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: configMapSelector(),
-					Policy: &placementv1beta1.PlacementPolicy{
-						PlacementType: placementv1beta1.PickAllPlacementType,
-					},
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-					},
-				},
-			}
-			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP")
+			createRP(workNamespace, rpName)
 
 			// Create the ro.
 			ro := &placementv1beta1.ResourceOverride{
@@ -658,6 +552,8 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 		roSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)
 
 		BeforeAll(func() {
+			createConfigMap()
+
 			// Create the ro before rp so that the observed resource index is predictable.
 			ro := &placementv1beta1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
@@ -708,26 +604,7 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", rpName)
 
 			// Create the RP.
-			rp := &placementv1beta1.ResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       rpName,
-					Namespace:  workNamespace,
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: configMapSelector(),
-					Policy: &placementv1beta1.PlacementPolicy{
-						PlacementType: placementv1beta1.PickAllPlacementType,
-					},
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-					},
-				},
-			}
-			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP")
+			createRP(workNamespace, rpName)
 		})
 
 		AfterAll(func() {
@@ -773,6 +650,8 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 		roSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)
 
 		BeforeAll(func() {
+			createConfigMap()
+
 			// Create the ro before rp so that the observed resource index is predictable.
 			ro := &placementv1beta1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
@@ -825,26 +704,7 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", rpName)
 
 			// Create the RP.
-			rp := &placementv1beta1.ResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       rpName,
-					Namespace:  workNamespace,
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: configMapSelector(),
-					Policy: &placementv1beta1.PlacementPolicy{
-						PlacementType: placementv1beta1.PickAllPlacementType,
-					},
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-					},
-				},
-			}
-			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP")
+			createRP(workNamespace, rpName)
 		})
 
 		AfterAll(func() {
@@ -875,7 +735,7 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 			for idx := 0; idx < 2; idx++ {
 				cluster := allMemberClusters[idx]
 				wantAnnotations := map[string]string{roTestAnnotationKey: roTestAnnotationValue}
-				Expect(validateOverrideAnnotationOfConfigMapOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", cluster.ClusterName)
+				Expect(validateAnnotationOfConfigMapOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", cluster.ClusterName)
 			}
 		})
 
@@ -897,6 +757,8 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 		workNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 
 		BeforeAll(func() {
+			createConfigMap()
+
 			// Create the ro before rp so that the observed resource index is predictable.
 			ro := &placementv1beta1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
@@ -951,26 +813,7 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 			Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create resourceOverride %s", roName)
 
 			// Create the RP.
-			rp := &placementv1beta1.ResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       rpName,
-					Namespace:  workNamespace,
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: configMapSelector(),
-					Policy: &placementv1beta1.PlacementPolicy{
-						PlacementType: placementv1beta1.PickAllPlacementType,
-					},
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-					},
-				},
-			}
-			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP")
+			createRP(workNamespace, rpName)
 		})
 
 		AfterAll(func() {
@@ -1072,6 +915,8 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 		roSnapShotName := fmt.Sprintf(placementv1beta1.OverrideSnapshotNameFmt, roName, 0)
 
 		BeforeAll(func() {
+			createConfigMap()
+
 			// Create the bad ro.
 			ro := &placementv1beta1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1130,26 +975,7 @@ var _ = Describe("placing namespaced scoped resources using a RP with ResourceOv
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ro as expected", rpName)
 
 			// Create the RP later so that failed override won't block the rollout
-			rp := &placementv1beta1.ResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       rpName,
-					Namespace:  workNamespace,
-					Finalizers: []string{customDeletionBlockerFinalizer},
-				},
-				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: configMapSelector(),
-					Policy: &placementv1beta1.PlacementPolicy{
-						PlacementType: placementv1beta1.PickAllPlacementType,
-					},
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-					},
-				},
-			}
-			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP")
+			createRP(workNamespace, rpName)
 		})
 
 		AfterAll(func() {

@@ -383,7 +383,7 @@ var _ = Context("creating resourceOverride with different rules for each cluster
 	It("should have override annotations on the configmap", func() {
 		for i, cluster := range allMemberClusters {
 			wantAnnotations := map[string]string{roTestAnnotationKey: fmt.Sprintf("%s-%d", roTestAnnotationValue, i)}
-			Expect(validateOverrideAnnotationOfConfigMapOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", cluster.ClusterName)
+			Expect(validateAnnotationOfConfigMapOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", cluster.ClusterName)
 		}
 	})
 })
@@ -498,7 +498,7 @@ var _ = Context("creating resourceOverride and clusterResourceOverride, resource
 		want := map[string]string{croTestAnnotationKey: croTestAnnotationValue}
 		for _, cluster := range allMemberClusters {
 			Expect(validateAnnotationOfWorkNamespaceOnCluster(cluster, want)).Should(Succeed(), "Failed to override the annotation of work namespace on %s", cluster.ClusterName)
-			Expect(validateOverrideAnnotationOfConfigMapOnCluster(cluster, want)).ShouldNot(Succeed(), "ResourceOverride Should win, ClusterResourceOverride annotated on $s", cluster.ClusterName)
+			Expect(validateAnnotationOfConfigMapOnCluster(cluster, want)).ShouldNot(Succeed(), "ResourceOverride Should win, ClusterResourceOverride annotated on $s", cluster.ClusterName)
 		}
 	})
 })
@@ -837,7 +837,7 @@ var _ = Context("creating resourceOverride with delete configMap", Ordered, func
 		for idx := 0; idx < 2; idx++ {
 			cluster := allMemberClusters[idx]
 			wantAnnotations := map[string]string{roTestAnnotationKey: roTestAnnotationValue}
-			Expect(validateOverrideAnnotationOfConfigMapOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", cluster.ClusterName)
+			Expect(validateAnnotationOfConfigMapOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", cluster.ClusterName)
 		}
 	})
 

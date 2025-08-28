@@ -391,7 +391,7 @@ var _ = Context("creating clusterResourceOverride with different rules for each 
 		for i, cluster := range allMemberClusters {
 			wantAnnotations := map[string]string{croTestAnnotationKey: fmt.Sprintf("%s-%d", croTestAnnotationValue, i)}
 			Expect(validateAnnotationOfWorkNamespaceOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of work namespace on %s", cluster.ClusterName)
-			Expect(validateOverrideAnnotationOfConfigMapOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", cluster.ClusterName)
+			Expect(validateAnnotationOfConfigMapOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", cluster.ClusterName)
 		}
 	})
 })
@@ -466,7 +466,7 @@ var _ = Context("creating clusterResourceOverride with different rules for each 
 		for _, cluster := range allMemberClusters {
 			wantAnnotations := map[string]string{croTestAnnotationKey: fmt.Sprintf("test-%s", cluster.ClusterName)}
 			Expect(validateAnnotationOfWorkNamespaceOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of work namespace on %s", cluster.ClusterName)
-			Expect(validateOverrideAnnotationOfConfigMapOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", cluster.ClusterName)
+			Expect(validateAnnotationOfConfigMapOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", cluster.ClusterName)
 		}
 	})
 })
@@ -691,7 +691,7 @@ var _ = Context("creating clusterResourceOverride with delete rules for one clus
 			cluster := allMemberClusters[idx]
 			wantAnnotations := map[string]string{croTestAnnotationKey1: croTestAnnotationValue1}
 			Expect(validateAnnotationOfWorkNamespaceOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of work namespace on %s", cluster.ClusterName)
-			Expect(validateOverrideAnnotationOfConfigMapOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", cluster.ClusterName)
+			Expect(validateAnnotationOfConfigMapOnCluster(cluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of configmap on %s", cluster.ClusterName)
 		}
 	})
 

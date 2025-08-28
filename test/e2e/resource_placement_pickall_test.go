@@ -40,27 +40,7 @@ var _ = Describe("placing namespaced scoped resources using a RP with PickAll po
 		createWorkResources()
 
 		// Create the CRP with Namespace-only selector.
-		crp := &placementv1beta1.ClusterResourcePlacement{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-				// Add a custom finalizer; this would allow us to better observe
-				// the behavior of the controllers.
-				Finalizers: []string{customDeletionBlockerFinalizer},
-			},
-			Spec: placementv1beta1.PlacementSpec{
-				ResourceSelectors: namespaceOnlySelector(),
-				Policy: &placementv1beta1.PlacementPolicy{
-					PlacementType: placementv1beta1.PickAllPlacementType,
-				},
-				Strategy: placementv1beta1.RolloutStrategy{
-					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: ptr.To(2),
-					},
-				},
-			},
-		}
-		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		createNamespaceOnlyCRP(crpName)
 
 		By("should update CRP status as expected")
 		crpStatusUpdatedActual := crpStatusUpdatedActual(workNamespaceIdentifiers(), allMemberClusterNames, nil, "0")
