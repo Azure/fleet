@@ -20,6 +20,7 @@ import (
 	"flag"
 	"path/filepath"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -122,6 +123,14 @@ var _ = BeforeSuite(func() {
 		err = mgr.Start(ctx)
 		Expect(err).Should(Succeed(), "failed to run manager")
 	}()
+
+	// Note (chenyu1): for the binding watcher integration tests, must wait for the cache to sync
+	// before moving onto the test stage, otherwise some Update events might not be caught properly.
+	//
+	// This is wrapped in an Eventually block as the manager might not have started yet.
+	Eventually(func() bool {
+		return mgr.GetCache().WaitForCacheSync(ctx)
+	}, time.Second*10, time.Second*2).To(BeTrue(), "failed to wait for cache to sync")
 })
 
 var _ = AfterSuite(func() {
