@@ -125,6 +125,9 @@ type FakeManager struct {
 	Listers map[schema.GroupVersionResource]*FakeLister
 	// NamespaceScopedResources is the list of namespace-scoped resources for testing.
 	NamespaceScopedResources []schema.GroupVersionResource
+	// InformerSynced controls whether IsInformerSynced returns true or false.
+	// If nil, defaults to true. If set, returns the value for all resources.
+	InformerSynced *bool
 }
 
 func (m *FakeManager) AddDynamicResources(_ []informer.APIResourceMeta, _ cache.ResourceEventHandler, _ bool) {
@@ -134,6 +137,9 @@ func (m *FakeManager) AddStaticResource(_ informer.APIResourceMeta, _ cache.Reso
 }
 
 func (m *FakeManager) IsInformerSynced(_ schema.GroupVersionResource) bool {
+	if m.InformerSynced != nil {
+		return *m.InformerSynced
+	}
 	return true
 }
 

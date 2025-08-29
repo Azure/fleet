@@ -284,13 +284,15 @@ func (r *Reconciler) fetchResources(selector fleetv1beta1.ResourceSelectorTerm, 
 			klog.ErrorS(err, "Cannot get the resource", "gvr", gvr, "name", selector.Name, "namespace", placementKey.Namespace)
 			return nil, controller.NewAPIServerError(true, client.IgnoreNotFound(err))
 		}
-		if uObj := obj.DeepCopyObject().(*unstructured.Unstructured); uObj.GetDeletionTimestamp() != nil {
-			// skip a to be deleted resource
-			klog.V(2).InfoS("Skip the deleting resource by the selector",
-				"selector", selector, "placement", placementKey, "resourceName", uObj.GetName())
-			return []runtime.Object{}, nil
+
+		shouldInclude, err := r.shouldPropagateObj(placementKey.Namespace, placementKey.Name, obj)
+		if err != nil {
+			return nil, err
 		}
-		return []runtime.Object{obj}, nil
+		if shouldInclude {
+			return []runtime.Object{obj}, nil
+		}
+		return []runtime.Object{}, nil
 	}
 
 	var labelSelector labels.Selector
@@ -319,16 +321,37 @@ func (r *Reconciler) fetchResources(selector fleetv1beta1.ResourceSelectorTerm, 
 
 	// go ahead and claim all objects by adding a finalizer and insert the placement in its annotation
 	for i := 0; i < len(objects); i++ {
-		if uObj := objects[i].DeepCopyObject().(*unstructured.Unstructured); uObj.GetDeletionTimestamp() != nil {
-			// skip a to be deleted resource
-			klog.V(2).InfoS("Skip the deleting resource by the selector",
-				"selector", selector, "placement", placementKey, "resourceName", uObj.GetName())
-			continue
+		shouldInclude, err := r.shouldPropagateObj(placementKey.Namespace, placementKey.Name, objects[i])
+		if err != nil {
+			return nil, err
 		}
-		selectedObjs = append(selectedObjs, objects[i])
+		if shouldInclude {
+			selectedObjs = append(selectedObjs, objects[i])
+		}
 	}
 
 	return selectedObjs, nil
+}
+
+func (r *Reconciler) shouldPropagateObj(namespace, placementName string, obj runtime.Object) (bool, error) {
+	uObj := obj.DeepCopyObject().(*unstructured.Unstructured)
+	uObjKObj := klog.KObj(uObj)
+	if uObj.GetDeletionTimestamp() != nil {
+		// skip a to be deleted resource
+		klog.V(2).InfoS("Skip the deleting resource by the selector", "namespace", namespace, "placement", placementName, "object", uObjKObj)
+		return false, nil
+	}
+
+	shouldInclude, err := utils.ShouldPropagateObj(r.InformerManager, uObj)
+	if err != nil {
+		klog.ErrorS(err, "Cannot determine if we should propagate an object", "namespace", namespace, "placement", placementName, "object", uObjKObj)
+		return false, err
+	}
+	if !shouldInclude {
+		klog.V(2).InfoS("Skip the resource by the selector which is forbidden", "namespace", namespace, "placement", placementName, "object", uObjKObj)
+		return false, nil
+	}
+	return true, nil
 }
 
 // fetchNamespaceResources retrieves all the objects for a ResourceSelectorTerm that is for namespace.
@@ -418,16 +441,8 @@ func (r *Reconciler) fetchAllResourcesInOneNamespace(namespaceName string, place
 			return nil, controller.NewAPIServerError(true, err)
 		}
 		for _, obj := range objs {
-			uObj := obj.DeepCopyObject().(*unstructured.Unstructured)
-			if uObj.GetDeletionTimestamp() != nil {
-				// skip a to be deleted resource
-				klog.V(2).InfoS("skip the deleting resource by the selector",
-					"placeName", placeName, "namespace", namespaceName, "object", klog.KObj(uObj))
-				continue
-			}
-			shouldInclude, err := utils.ShouldPropagateObj(r.InformerManager, uObj)
+			shouldInclude, err := r.shouldPropagateObj(namespaceName, placeName, obj)
 			if err != nil {
-				klog.ErrorS(err, "cannot determine if we should propagate an object", "object", klog.KObj(uObj))
 				return nil, err
 			}
 			if shouldInclude {
