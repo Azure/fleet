@@ -795,7 +795,7 @@ func createWrappedResourcesForEnvelopTest() {
 	// Create ResourceEnvelope with ResourceQuota inside
 	quotaBytes, err := json.Marshal(testResourceQuota)
 	Expect(err).Should(Succeed())
-	testResourceEnvelope.Data["resourceQuota1.yaml"] = runtime.RawExtension{Raw: quotaBytes}
+	testResourceEnvelope.Data["resourceQuota.yaml"] = runtime.RawExtension{Raw: quotaBytes}
 	deploymentBytes, err := json.Marshal(testDeployment)
 	Expect(err).Should(Succeed())
 	testResourceEnvelope.Data["deployment.yaml"] = runtime.RawExtension{Raw: deploymentBytes}
