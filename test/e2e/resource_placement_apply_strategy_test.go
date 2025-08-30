@@ -93,7 +93,7 @@ var _ = Describe("validating resource placement using different apply strategies
 
 				// Create the RP.
 				strategy := &placementv1beta1.ApplyStrategy{AllowCoOwnership: true}
-				createRPWithApplyStrategy(workNamespaceName, rpName, strategy)
+				createRPWithApplyStrategy(workNamespaceName, rpName, strategy, nil)
 			})
 
 			AfterAll(func() {
@@ -153,7 +153,7 @@ var _ = Describe("validating resource placement using different apply strategies
 
 				// Create the RP.
 				strategy := &placementv1beta1.ApplyStrategy{AllowCoOwnership: false}
-				createRPWithApplyStrategy(workNamespaceName, rpName, strategy)
+				createRPWithApplyStrategy(workNamespaceName, rpName, strategy, nil)
 			})
 
 			AfterAll(func() {
@@ -207,7 +207,7 @@ var _ = Describe("validating resource placement using different apply strategies
 					Type:             placementv1beta1.ApplyStrategyTypeServerSideApply,
 					AllowCoOwnership: false,
 				}
-				createRPWithApplyStrategy(workNamespaceName, rpName, strategy)
+				createRPWithApplyStrategy(workNamespaceName, rpName, strategy, nil)
 			})
 
 			AfterAll(func() {
@@ -261,7 +261,7 @@ var _ = Describe("validating resource placement using different apply strategies
 					Type:             placementv1beta1.ApplyStrategyTypeServerSideApply,
 					AllowCoOwnership: false,
 				}
-				createRPWithApplyStrategy(workNamespaceName, rpName, strategy)
+				createRPWithApplyStrategy(workNamespaceName, rpName, strategy, nil)
 			})
 
 			AfterAll(func() {
@@ -378,7 +378,7 @@ var _ = Describe("validating resource placement using different apply strategies
 					ServerSideApplyConfig: &placementv1beta1.ServerSideApplyConfig{ForceConflicts: true},
 					AllowCoOwnership:      true,
 				}
-				createRPWithApplyStrategy(workNamespaceName, rpName, strategy)
+				createRPWithApplyStrategy(workNamespaceName, rpName, strategy, nil)
 			})
 
 			AfterAll(func() {

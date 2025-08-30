@@ -1485,7 +1485,7 @@ func buildOwnerReference(cluster *framework.Cluster, crpName string) *metav1.Own
 }
 
 // createRPWithApplyStrategy creates a ResourcePlacement with the given name and apply strategy.
-func createRPWithApplyStrategy(rpNamespace, rpName string, applyStrategy *placementv1beta1.ApplyStrategy) {
+func createRPWithApplyStrategy(rpNamespace, rpName string, applyStrategy *placementv1beta1.ApplyStrategy, resourceSelectors []placementv1beta1.ResourceSelectorTerm) {
 	rp := &placementv1beta1.ResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rpName,
@@ -1507,15 +1507,15 @@ func createRPWithApplyStrategy(rpNamespace, rpName string, applyStrategy *placem
 	if applyStrategy != nil {
 		rp.Spec.Strategy.ApplyStrategy = applyStrategy
 	}
+	if resourceSelectors != nil {
+		rp.Spec.ResourceSelectors = resourceSelectors
+	}
 	By(fmt.Sprintf("creating placement %s", rpName))
 	Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create RP %s", rpName)
 }
 
 // createCRPWithApplyStrategy creates a ClusterResourcePlacement with the given name and apply strategy.
 func createCRPWithApplyStrategy(crpName string, applyStrategy *placementv1beta1.ApplyStrategy, resourceSelectors []placementv1beta1.ResourceSelectorTerm) {
-	if resourceSelectors == nil {
-		resourceSelectors = workResourceSelector()
-	}
 	crp := &placementv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crpName,
@@ -1524,7 +1524,7 @@ func createCRPWithApplyStrategy(crpName string, applyStrategy *placementv1beta1.
 			Finalizers: []string{customDeletionBlockerFinalizer},
 		},
 		Spec: placementv1beta1.PlacementSpec{
-			ResourceSelectors: resourceSelectors,
+			ResourceSelectors: workResourceSelector(),
 			Strategy: placementv1beta1.RolloutStrategy{
 				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 				RollingUpdate: &placementv1beta1.RollingUpdateConfig{
@@ -1536,13 +1536,16 @@ func createCRPWithApplyStrategy(crpName string, applyStrategy *placementv1beta1.
 	if applyStrategy != nil {
 		crp.Spec.Strategy.ApplyStrategy = applyStrategy
 	}
+	if resourceSelectors != nil {
+		crp.Spec.ResourceSelectors = resourceSelectors
+	}
 	By(fmt.Sprintf("creating placement %s", crpName))
 	Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
 }
 
 // createRP creates a ResourcePlacement with the given name.
 func createRP(rpNamespace, rpName string) {
-	createRPWithApplyStrategy(rpNamespace, rpName, nil)
+	createRPWithApplyStrategy(rpNamespace, rpName, nil, nil)
 }
 
 // createCRP creates a ClusterResourcePlacement with the given name.
