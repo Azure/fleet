@@ -1750,6 +1750,29 @@ func validateCRPSnapshotRevisions(crpName string, wantPolicySnapshotRevision, wa
 	return nil
 }
 
+func validateRPSnapshotRevisions(rpName, namespace string, wantPolicySnapshotRevision, wantResourceSnapshotRevision int) error {
+	listOptions := []client.ListOption{
+		client.InNamespace(namespace),
+		client.MatchingLabels{placementv1beta1.PlacementTrackingLabel: rpName},
+	}
+
+	snapshotList := &placementv1beta1.SchedulingPolicySnapshotList{}
+	if err := hubClient.List(ctx, snapshotList, listOptions...); err != nil {
+		return err
+	}
+	if len(snapshotList.Items) != wantPolicySnapshotRevision {
+		return fmt.Errorf("schedulingPolicySnapshotList got %v, want 1", len(snapshotList.Items))
+	}
+	resourceSnapshotList := &placementv1beta1.ResourceSnapshotList{}
+	if err := hubClient.List(ctx, resourceSnapshotList, listOptions...); err != nil {
+		return err
+	}
+	if len(resourceSnapshotList.Items) != wantResourceSnapshotRevision {
+		return fmt.Errorf("resourceSnapshotList got %v, want 2", len(resourceSnapshotList.Items))
+	}
+	return nil
+}
+
 func updateRunClusterRolloutSucceedConditions(generation int64) []metav1.Condition {
 	return []metav1.Condition{
 		{

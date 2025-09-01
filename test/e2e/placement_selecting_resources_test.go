@@ -812,7 +812,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 		propagage := metav1.DeletePropagationForeground
 		Expect(allMemberClusters[0].KubeClient.Delete(ctx, &existingNS, &client.DeleteOptions{PropagationPolicy: &propagage})).Should(Succeed(), "Failed to delete namespace %s", existingNS.Name)
 
-		By(fmt.Sprintf("garbage all things related to placement %s", crpName))
+		By(fmt.Sprintf("garbage collect all things related to placement %s", crpName))
 		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 	})
 
@@ -1217,6 +1217,7 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	BeforeAll(func() {
 		By("creating resources for multiple resource snapshots")
+		createWorkResources()
 		createResourcesForMultipleResourceSnapshots()
 
 		// Create the CRP.
@@ -1414,8 +1415,6 @@ var _ = Describe("creating CRP and checking selected resources order", Ordered, 
 })
 
 func createResourcesForMultipleResourceSnapshots() {
-	createWorkResources()
-
 	for i := 0; i < 3; i++ {
 		var secret corev1.Secret
 		Expect(utils.GetObjectFromManifest("../integration/manifests/resources/test-large-secret.yaml", &secret)).Should(Succeed(), "Failed to read large secret from file")

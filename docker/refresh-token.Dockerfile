@@ -1,4 +1,4 @@
-# Build the hubagent binary
+# Build the refreshtoken binary
 FROM mcr.microsoft.com/oss/go/microsoft/golang:1.24.6 AS builder
 
 WORKDIR /workspace

@@ -153,7 +153,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, placementObj fleetv1beta1
 		// TODO, create a separate user type error struct to improve the user facing messages
 		scheduleCondition := metav1.Condition{
 			Status:             metav1.ConditionFalse,
-			Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+			Type:               getPlacementScheduledConditionType(placementObj),
 			Reason:             condition.InvalidResourceSelectorsReason,
 			Message:            fmt.Sprintf("The resource selectors are invalid: %v", err),
 			ObservedGeneration: placementObj.GetGeneration(),
