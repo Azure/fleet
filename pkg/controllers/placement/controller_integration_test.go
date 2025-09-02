@@ -39,6 +39,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/resource"
+	statussyncutils "github.com/kubefleet-dev/kubefleet/test/utils/crpstatussync"
 	metricsUtils "github.com/kubefleet-dev/kubefleet/test/utils/metrics"
 )
 
@@ -46,8 +47,9 @@ const (
 	member1Name = "member-1"
 	member2Name = "member-2"
 
-	eventuallyTimeout = time.Second * 10
-	interval          = time.Millisecond * 250
+	eventuallyTimeout   = time.Second * 10
+	consistentlyTimeout = time.Second * 10
+	interval            = time.Millisecond * 250
 )
 
 var (
@@ -2150,6 +2152,171 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 			})
 			checkPlacementStatusMetric(wantMetrics)
+		})
+	})
+
+	Context("When creating a ClusterResourcePlacement with NamespaceAccessible StatusReportingScope and nonexistent target namespace", func() {
+		BeforeEach(func() {
+			By("Create a new crp with NamespaceAccessible StatusReportingScope targeting nonexistent namespace")
+			crp = &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testCRPName,
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+						{
+							Group:   corev1.GroupName,
+							Version: "v1",
+							Kind:    "Namespace",
+							Name:    "nonexistent-namespace", // This namespace doesn't exist.
+						},
+					},
+					StatusReportingScope: placementv1beta1.NamespaceAccessible,
+				},
+			}
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed(), "Failed to create crp with NamespaceAccessible scope")
+		})
+
+		AfterEach(func() {
+			By("Deleting crp")
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testCRPName,
+				},
+			}
+			Expect(k8sClient.Delete(ctx, crp)).Should(Succeed())
+			retrieveAndValidateCRPDeletion(crp)
+		})
+
+		It("Should handle missing target namespace", func() {
+			By("Validate CRP keeps retrying due to missing namespace (status remain nil)")
+			wantCRP := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       testCRPName,
+					Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
+				},
+				Spec: crp.Spec,
+			}
+			retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
+			// Ensure that CRP status remains nil as the controller keeps retrying.
+			Consistently(func() error {
+				gotCRP := &placementv1beta1.ClusterResourcePlacement{}
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName}, gotCRP); err != nil {
+					return err
+				}
+				if diff := cmp.Diff(wantCRP, gotCRP, cmpCRPOptions); diff != "" {
+					return fmt.Errorf("clusterResourcePlacement mismatch (-want, +got) :\n%s", diff)
+				}
+				return nil
+			}, consistentlyTimeout, interval).Should(Succeed(), "ClusterResourcePlacement status must be nil")
+			// Namespace doesn't exist, so no CRPS should be created - sanity check.
+			By("Ensure no ClusterResourcePlacementStatus is created in the nonexistent namespace")
+			Consistently(func() bool {
+				crpStatus := &placementv1beta1.ClusterResourcePlacementStatus{}
+				return errors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName, Namespace: "nonexistent-namespace"}, crpStatus))
+			}, consistentlyTimeout, interval).Should(BeTrue(), "ClusterResourcePlacementStatus should not exist in nonexistent namespace")
+		})
+	})
+
+	Context("When creating an ClusterResourcePlacement with NamespaceAccessible StatusReportingScope with invalid resource selector", func() {
+		namespaceName := "status-namespace"
+		BeforeEach(func() {
+			By("Create a namespace for status reporting")
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespaceName,
+				},
+			}
+			Expect(k8sClient.Create(ctx, namespace)).Should(Succeed(), "Failed to create status namespace")
+			// Wait for namespace creation
+			Eventually(func() error {
+				ns := &corev1.Namespace{}
+				return k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, ns)
+			}, eventuallyTimeout, interval).Should(Succeed(), "Failed to get status namespace")
+
+			By("Create a new crp with an invalid resource selector")
+			crp = &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testCRPName,
+				},
+				Spec: placementv1beta1.PlacementSpec{
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+						{
+							Group:   corev1.GroupName,
+							Version: "v1",
+							Kind:    "Namespace",
+							Name:    namespaceName,
+						},
+						{
+							Group:   corev1.GroupName,
+							Version: "v1",
+							Kind:    "InvalidKind", // Invalid kind to trigger user error
+							Name:    "invalid-resource",
+						},
+					},
+					StatusReportingScope: placementv1beta1.NamespaceAccessible,
+				},
+			}
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed(), "Failed to create crp with user error")
+		})
+
+		AfterEach(func() {
+			By("Deleting crp")
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testCRPName,
+				},
+			}
+			Expect(k8sClient.Delete(ctx, crp)).Should(Succeed())
+			retrieveAndValidateCRPDeletion(gotCRP)
+
+			// Need to manually clean up CRPS in test environment https://book.kubebuilder.io/reference/envtest#testing-considerations.
+			By("Deleting crps")
+			crps := &placementv1beta1.ClusterResourcePlacementStatus{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testCRPName,
+					Namespace: namespaceName,
+				},
+			}
+			Expect(k8sClient.Delete(ctx, crps)).Should(Succeed())
+			Eventually(func() bool {
+				return errors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: crps.Name, Namespace: crps.Namespace}, crps))
+			}, eventuallyTimeout, interval).Should(BeTrue(), "ClusterResourcePlacementStatus should be deleted")
+
+			By("Deleting status namespace")
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespaceName,
+				},
+			}
+			// Namespace cleanup is not supported in envtest https://book.kubebuilder.io/reference/envtest#namespace-usage-limitation.
+			Expect(k8sClient.Delete(ctx, namespace)).Should(Succeed())
+		})
+
+		It("Should handle invalid resource selector", func() {
+			By("Validate CRP status")
+			wantCRP := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       testCRPName,
+					Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
+				},
+				Spec: crp.Spec,
+				Status: placementv1beta1.PlacementStatus{
+					Conditions: []metav1.Condition{
+						{
+							Status: metav1.ConditionFalse,
+							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+							Reason: condition.InvalidResourceSelectorsReason,
+						},
+					},
+				},
+			}
+			gotCRP = retrieveAndValidateClusterResourcePlacement(crp.Name, wantCRP)
+
+			By("Validate CRPS status", func() {
+				crpsMatchesActual := statussyncutils.CRPSStatusMatchesCRPActual(ctx, k8sClient, testCRPName, namespaceName)
+				Eventually(crpsMatchesActual, eventuallyTimeout, interval).Should(Succeed(), "ClusterResourcePlacementStatus should match expected structure and CRP status")
+			})
 		})
 	})
 })

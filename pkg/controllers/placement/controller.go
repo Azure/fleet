@@ -159,10 +159,18 @@ func (r *Reconciler) handleUpdate(ctx context.Context, placementObj fleetv1beta1
 			ObservedGeneration: placementObj.GetGeneration(),
 		}
 		placementObj.SetConditions(scheduleCondition)
+
+		// Sync ClusterResourcePlacementStatus object if StatusReportingScope is NamespaceAccessible
+		if syncErr := r.syncClusterResourcePlacementStatus(ctx, placementObj); syncErr != nil {
+			klog.ErrorS(syncErr, "Failed to sync ClusterResourcePlacementStatus", "placement", placementKObj)
+			return ctrl.Result{}, syncErr
+		}
+
 		if updateErr := r.Client.Status().Update(ctx, placementObj); updateErr != nil {
 			klog.ErrorS(updateErr, "Failed to update the status", "placement", placementKObj)
 			return ctrl.Result{}, controller.NewUpdateIgnoreConflictError(updateErr)
 		}
+
 		// no need to retry faster, the user needs to fix the resource selectors
 		return ctrl.Result{RequeueAfter: controllerResyncPeriod}, nil
 	}
@@ -201,6 +209,12 @@ func (r *Reconciler) handleUpdate(ctx context.Context, placementObj fleetv1beta1
 	// isScheduleFullfilled is to indicate whether we need to requeue the placement request to track the rollout status.
 	isScheduleFullfilled, err := r.setPlacementStatus(ctx, placementObj, selectedResourceIDs, latestSchedulingPolicySnapshot, latestResourceSnapshot)
 	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Sync ClusterResourcePlacementStatus object if StatusReportingScope is NamespaceAccessible
+	if err := r.syncClusterResourcePlacementStatus(ctx, placementObj); err != nil {
+		klog.ErrorS(err, "Failed to sync ClusterResourcePlacementStatus", "placement", placementKObj)
 		return ctrl.Result{}, err
 	}
 

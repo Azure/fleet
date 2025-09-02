@@ -96,6 +96,7 @@ var (
 		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ClusterResourceOverrideSnapshotKind),
 		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ResourceOverrideKind),
 		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ResourceOverrideSnapshotKind),
+		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ClusterResourcePlacementStatusKind),
 	}
 
 	// There's a prerequisite that v1Beta1RequiredGVKs must be installed too.
