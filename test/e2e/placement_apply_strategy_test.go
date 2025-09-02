@@ -559,7 +559,7 @@ var _ = Describe("validating CRP when resources exists", Ordered, func() {
 		})
 
 		It("should not add additional owner reference to affected resources", func() {
-			expectedOwnerRef := buildOwnerReference(memberCluster1EastProd, crpName)
+			expectedOwnerRef := buildOwnerReference(memberCluster1EastProd, crpName, "")
 
 			ns := &corev1.Namespace{}
 			nsName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())

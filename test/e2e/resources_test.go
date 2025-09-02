@@ -90,6 +90,23 @@ func configMapSelector() []placementv1beta1.ResourceSelectorTerm {
 	}
 }
 
+func multipleConfigMapsSelector(cm1Name, cm2Name string) []placementv1beta1.ResourceSelectorTerm {
+	return []placementv1beta1.ResourceSelectorTerm{
+		{
+			Group:   "",
+			Kind:    "ConfigMap",
+			Version: "v1",
+			Name:    cm1Name,
+		},
+		{
+			Group:   "",
+			Kind:    "ConfigMap",
+			Version: "v1",
+			Name:    cm2Name,
+		},
+	}
+}
+
 func configMapOverrideSelector() []placementv1beta1.ResourceSelector {
 	return []placementv1beta1.ResourceSelector{
 		{

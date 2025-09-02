@@ -1151,6 +1151,26 @@ func appConfigMapIdentifiers() []placementv1beta1.ResourceIdentifier {
 	}
 }
 
+func multipleAppConfigMapIdentifiers() []placementv1beta1.ResourceIdentifier {
+	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	appConfigMapName1 := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
+	appConfigMapName2 := fmt.Sprintf(appConfigMapNameTemplate+"-%d", GinkgoParallelProcess(), 2)
+	return []placementv1beta1.ResourceIdentifier{
+		{
+			Kind:      "ConfigMap",
+			Name:      appConfigMapName1,
+			Version:   "v1",
+			Namespace: workNamespaceName,
+		},
+		{
+			Kind:      "ConfigMap",
+			Name:      appConfigMapName2,
+			Version:   "v1",
+			Namespace: workNamespaceName,
+		},
+	}
+}
+
 func crpStatusWithOverrideUpdatedActual(
 	wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier,
 	wantSelectedClusters []string,

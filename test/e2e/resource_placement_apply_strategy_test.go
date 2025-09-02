@@ -556,7 +556,7 @@ var _ = Describe("validating resource placement using different apply strategies
 			})
 
 			It("should not add additional owner reference to affected resources", func() {
-				expectedOwnerRef := buildOwnerReference(memberCluster1EastProd, fmt.Sprintf("%s.%s", workNamespaceName, rpName))
+				expectedOwnerRef := buildOwnerReference(memberCluster1EastProd, rpName, workNamespaceName)
 
 				cm := &corev1.ConfigMap{}
 				Expect(memberCluster1EastProdClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: workNamespaceName}, cm)).To(Succeed())

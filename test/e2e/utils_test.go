@@ -740,6 +740,29 @@ func cleanupConfigMapOnCluster(cluster *framework.Cluster) {
 	Eventually(configMapRemovedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove config map from %s cluster", cluster.ClusterName)
 }
 
+func cleanupAnotherConfigMapOnMemberCluster(name types.NamespacedName, cluster *framework.Cluster) {
+	cm := &corev1.ConfigMap{}
+	err := cluster.KubeClient.Get(ctx, name, cm)
+	if err != nil && k8serrors.IsNotFound(err) {
+		return
+	}
+	Expect(err).To(Succeed(), "Failed to get config map %s", name)
+
+	Expect(cluster.KubeClient.Delete(ctx, cm)).To(Succeed(), "Failed to delete config map %s", name)
+
+	Eventually(func() error {
+		cm := &corev1.ConfigMap{}
+		err := cluster.KubeClient.Get(ctx, name, cm)
+		if err != nil {
+			if k8serrors.IsNotFound(err) {
+				return nil
+			}
+			return err
+		}
+		return fmt.Errorf("config map %s still exists", name)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to wait for config map %s to be deleted", name)
+}
+
 // setMemberClusterToLeave sets a specific member cluster to leave the fleet.
 func setMemberClusterToLeave(memberCluster *framework.Cluster) {
 	mcObj := &clusterv1beta1.MemberCluster{
@@ -1465,12 +1488,17 @@ func checkIfStatusErrorWithMessage(err error, errorMsg string) error {
 	return fmt.Errorf("error message %s not found in error %w", errorMsg, err)
 }
 
-// buildOwnerReference builds an owner reference given a cluster and a CRP name.
+// buildOwnerReference builds an owner reference given a cluster and a placement name.
 //
-// This function assumes that the CRP has only one associated Work object (no resource snapshot
+// This function assumes that the placement has only one associated Work object (no resource snapshot
 // sub-index, no envelope object used).
-func buildOwnerReference(cluster *framework.Cluster, crpName string) *metav1.OwnerReference {
-	workName := fmt.Sprintf("%s-work", crpName)
+func buildOwnerReference(cluster *framework.Cluster, placementName, placementNamespace string) *metav1.OwnerReference {
+	var workName string
+	if placementNamespace == "" {
+		workName = fmt.Sprintf("%s-work", placementName)
+	} else {
+		workName = fmt.Sprintf("%s.%s-work", placementNamespace, placementName)
+	}
 
 	appliedWork := placementv1beta1.AppliedWork{}
 	Expect(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName}, &appliedWork)).Should(Succeed(), "Failed to get applied work object")
