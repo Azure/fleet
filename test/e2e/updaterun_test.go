@@ -1351,7 +1351,7 @@ var _ = Describe("Test member cluster join and leave flow with updateRun", Label
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 
 		By("Validating all work resources are placed on all member clusters")
-		checkIfPlacedWorkResourcesOnAllMemberClusters()
+		checkIfPlacedWorkResourcesOnMemberClustersInUpdateRun(allMemberClusters)
 
 		By("Unjoining member cluster 1")
 		setMemberClusterToLeave(allMemberClusters[0])
@@ -1573,18 +1573,6 @@ var _ = Describe("Test member cluster join and leave flow with updateRun", Label
 		})
 	})
 })
-
-func checkIfPlacedWorkResourcesOnAllMemberClusters() {
-	checkIfPlacedWorkResourcesOnMemberClustersInUpdateRun(allMemberClusters)
-}
-
-func checkIfPlacedWorkResourcesOnMemberClustersInUpdateRun(clusters []*framework.Cluster) {
-	for idx := range clusters {
-		memberCluster := clusters[idx]
-		workResourcesPlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster)
-		Eventually(workResourcesPlacedActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
-	}
-}
 
 func createStagedUpdateStrategySucceed(strategyName string) *placementv1beta1.ClusterStagedUpdateStrategy {
 	strategy := &placementv1beta1.ClusterStagedUpdateStrategy{

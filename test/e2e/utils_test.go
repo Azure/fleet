@@ -871,6 +871,26 @@ func checkIfPlacedWorkResourcesOnMemberClustersConsistently(clusters []*framewor
 	}
 }
 
+func checkIfPlacedWorkResourcesOnAllMemberClusters() {
+	checkIfPlacedWorkResourcesOnMemberClusters(allMemberClusters)
+}
+
+func checkIfPlacedWorkResourcesOnMemberClusters(clusters []*framework.Cluster) {
+	for idx := range clusters {
+		memberCluster := clusters[idx]
+		workResourcesPlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster)
+		Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+	}
+}
+
+func checkIfPlacedWorkResourcesOnMemberClustersInUpdateRun(clusters []*framework.Cluster) {
+	for idx := range clusters {
+		memberCluster := clusters[idx]
+		workResourcesPlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster)
+		Eventually(workResourcesPlacedActual, updateRunEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+	}
+}
+
 func checkIfPlacedNamespaceResourceOnAllMemberClusters() {
 	for idx := range allMemberClusters {
 		memberCluster := allMemberClusters[idx]
