@@ -37,15 +37,52 @@ func (r *Reconciler) processManifests(
 	work *fleetv1beta1.Work,
 	expectedAppliedWorkOwnerRef *metav1.OwnerReference,
 ) {
-	// TODO: We have to apply the namespace/crd/secret/configmap/pvc first
-	// then we can process some of the manifests in parallel.
-	for _, bundle := range bundles {
-		if bundle.applyOrReportDiffErr != nil {
-			// Skip a manifest if it has failed pre-processing.
-			continue
+	// Process all manifests in parallel.
+	//
+	// There are cases where certain groups of manifests should not be processed in parallel with
+	// each other (e.g., a config map must be applied after its owner namespace is applied);
+	// to address this situation, manifests are processed in waves: manifests in the same wave are
+	// processed in parallel, while different waves are processed sequentially.
+
+	// As a special case, if the ReportDiff mode is on, all manifests are processed in parallel in
+	// one wave.
+	if work.Spec.ApplyStrategy != nil && work.Spec.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeReportDiff {
+		doWork := func(piece int) {
+			if bundles[piece].applyOrReportDiffErr != nil {
+				// Skip a manifest if it has failed pre-processing.
+				return
+			}
+
+			r.processOneManifest(ctx, bundles[piece], work, expectedAppliedWorkOwnerRef)
+			klog.V(2).InfoS("Processed a manifest", "manifestObj", klog.KObj(bundles[piece].manifestObj), "work", klog.KObj(work))
 		}
-		r.processOneManifest(ctx, bundle, work, expectedAppliedWorkOwnerRef)
-		klog.V(2).InfoS("Processed a manifest", "manifestObj", klog.KObj(bundle.manifestObj), "work", klog.KObj(work))
+
+		r.parallelizer.ParallelizeUntil(ctx, len(bundles), doWork, "processingManifestsInReportDiffMode")
+		return
+	}
+
+	// Organize the bundles into different waves of bundles for parallel processing based on their
+	// GVR information.
+	processingWaves := organizeBundlesIntoProcessingWaves(bundles, klog.KObj(work))
+	for idx := range processingWaves {
+		bundlesInWave := processingWaves[idx].bundles
+
+		// TO-DO (chenyu1): evaluate if there is a need to avoid repeated closure
+		// assignment just for capturing variables.
+		doWork := func(piece int) {
+			if bundlesInWave[piece].applyOrReportDiffErr != nil {
+				// Skip a manifest if it has failed pre-processing.
+				//
+				// This added as a sanity check as the organization step normally
+				// would have already skipped all the manifests with processing failures.
+				return
+			}
+
+			r.processOneManifest(ctx, bundlesInWave[piece], work, expectedAppliedWorkOwnerRef)
+			klog.V(2).InfoS("Processed a manifest", "manifestObj", klog.KObj(bundlesInWave[piece].manifestObj), "work", klog.KObj(work))
+		}
+
+		r.parallelizer.ParallelizeUntil(ctx, len(bundlesInWave), doWork, "processingManifests")
 	}
 }
 
