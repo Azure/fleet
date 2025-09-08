@@ -77,12 +77,37 @@ func (r *Reconciler) preProcessManifests(
 
 		bundle.manifestObj = manifestObj
 		bundle.gvr = gvr
+
+		// Add the string representation of the work resource identifier to the bundle.
+		//
+		// Note that the string representation ignores the ordinal number in the identifier.
+		wriStr, err := formatWRIString(bundle.id)
+		if err != nil {
+			// The work resource identifier cannot be formatted as a string. The formatting will
+			// fail if and only if the manifest data cannot be decoded (a failure in the previous
+			// step); normally this branch will never run as such error should have already terminated
+			// the pre-processing stage.
+			klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("failed to format the work resource identifier as a string: %w", err)),
+				"Failed to format the work resource identifier as a string",
+				"ordinal", pieces, "work", klog.KObj(work))
+			return
+		}
+		bundle.workResourceIdentifierStr = wriStr
+
 		klog.V(2).InfoS("Decoded a manifest",
 			"manifestObj", klog.KObj(manifestObj),
 			"GVR", *gvr,
 			"work", klog.KObj(work))
 	}
 	r.parallelizer.ParallelizeUntil(childCtx, len(bundles), doWork, "decodingManifests")
+
+	// Check for duplicated manifests.
+	//
+	// This is to address a corner case where users might have specified the same manifest
+	// twice in resource envelopes (or both in the envelopes and directly in the hub cluster).
+	//
+	// Note that the CRP/RP APIs will block repeated resource selectors.
+	checkForDuplicatedManifests(bundles, work)
 
 	// Write ahead the manifest processing attempts in the Work object status. In the process
 	// Fleet will also perform a cleanup to remove any left-over manifests that are applied
@@ -141,9 +166,6 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 	// lookups.
 	existingManifestCondQIdx := prepareExistingManifestCondQIdx(work.Status.ManifestConditions)
 
-	// For each manifest, verify if it has been tracked in the newly prepared manifest conditions.
-	// This helps signal duplicated resources in the Work object.
-	checked := make(map[string]bool, len(bundles))
 	for idx := range bundles {
 		bundle := bundles[idx]
 		if bundle.applyOrReportDiffErr != nil {
@@ -153,45 +175,18 @@ func (r *Reconciler) writeAheadManifestProcessingAttempts(
 			// Such manifests would still be reported in the status (see the later parts of the
 			// reconciliation loop), it is just that they are not relevant in the write-ahead
 			// process.
-			klog.V(2).InfoS("Skipped a manifest in the write-ahead process as it has failed pre-processing", "work", workRef,
-				"ordinal", idx, "applyErr", bundle.applyOrReportDiffErr, "applyResTyp", bundle.applyOrReportDiffResTyp)
+			klog.V(2).InfoS("Skipped a manifest in the write-ahead process as it has failed the decoding process or the duplicated manifest checking process",
+				"work", workRef, "ordinal", idx,
+				"applyErr", bundle.applyOrReportDiffErr, "applyResTyp", bundle.applyOrReportDiffResTyp)
 			continue
 		}
-
-		// Register the manifest in the checked map; if another manifest with the same identifier
-		// has been checked before, Fleet would mark the current manifest as a duplicate and skip
-		// it. This is to address a corner case where users might have specified the same manifest
-		// twice in resource envelopes; duplication will not occur if the manifests are directly
-		// created in the hub cluster.
-		//
-		// A side note: Golang does support using structs as map keys; preparing the string
-		// representations of structs as keys can help performance, though not by much. The reason
-		// why string representations are used here is not for performance, though; instead, it
-		// is to address the issue that for this comparison, ordinals should be ignored.
-		wriStr, err := formatWRIString(bundle.id)
-		if err != nil {
-			// Normally this branch will never run as all manifests that cannot be decoded has been
-			// skipped in the check above. Here Fleet simply skips the manifest.
-			klog.ErrorS(err, "Failed to format the work resource identifier string",
-				"ordinal", idx, "work", workRef)
-			_ = controller.NewUnexpectedBehaviorError(err)
-			continue
-		}
-		if _, found := checked[wriStr]; found {
-			klog.V(2).InfoS("A duplicate manifest has been found",
-				"ordinal", idx, "work", workRef, "workResourceID", wriStr)
-			bundle.applyOrReportDiffErr = fmt.Errorf("a duplicate manifest has been found")
-			bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeDuplicated
-			continue
-		}
-		checked[wriStr] = true
 
 		// Prepare the manifest conditions for the write-ahead process.
-		manifestCondForWA := prepareManifestCondForWriteAhead(wriStr, bundle.id, work.Generation, existingManifestCondQIdx, work.Status.ManifestConditions)
+		manifestCondForWA := prepareManifestCondForWriteAhead(bundle.workResourceIdentifierStr, bundle.id, work.Generation, existingManifestCondQIdx, work.Status.ManifestConditions)
 		manifestCondsForWA = append(manifestCondsForWA, manifestCondForWA)
 
 		klog.V(2).InfoS("Prepared write-ahead information for a manifest",
-			"manifestObj", klog.KObj(bundle.manifestObj), "workResourceID", wriStr, "work", workRef)
+			"manifestObj", klog.KObj(bundle.manifestObj), "workResourceID", bundle.workResourceIdentifierStr, "work", workRef)
 	}
 
 	// Identify any manifests from previous runs that might have been applied and are now left
@@ -276,6 +271,37 @@ func buildWorkResourceIdentifier(
 	}
 
 	return identifier
+}
+
+// checkForDuplicateManifests checks for duplicated manifests in the bundles.
+func checkForDuplicatedManifests(bundles []*manifestProcessingBundle, work *fleetv1beta1.Work) {
+	checked := make(map[string]bool, len(bundles))
+
+	for idx := range bundles {
+		bundle := bundles[idx]
+		if bundle.applyOrReportDiffErr != nil {
+			// Skip a manifest if it cannot be pre-processed, i.e., it can only be identified by
+			// its ordinal.
+			//
+			// Such manifests would still be reported in the status (see the later parts of the
+			// reconciliation loop), it is just that they are not relevant in the duplicated manifest
+			// checking process.
+			klog.V(2).InfoS("Skipped a manifest in the duplicated manifest checking process as it has failed in the decoding process",
+				"work", klog.KObj(work), "ordinal", idx,
+				"applyErr", bundle.applyOrReportDiffErr, "applyResTyp", bundle.applyOrReportDiffResTyp)
+			continue
+		}
+
+		if _, found := checked[bundle.workResourceIdentifierStr]; found {
+			klog.V(2).InfoS("A duplicate manifest has been found",
+				"ordinal", idx, "work", klog.KObj(work), "workResourceID", bundle.workResourceIdentifierStr)
+			bundle.applyOrReportDiffErr = fmt.Errorf("a duplicate manifest has been found")
+			bundle.applyOrReportDiffResTyp = ApplyOrReportDiffResTypeDuplicated
+			continue
+		}
+		checked[bundle.workResourceIdentifierStr] = true
+	}
+	klog.V(2).InfoS("Completed the duplicated manifest checking process", "work", klog.KObj(work))
 }
 
 // prepareExistingManifestCondQIdx returns a map that allows quicker look up of a manifest

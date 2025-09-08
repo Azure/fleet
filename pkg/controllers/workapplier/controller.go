@@ -352,17 +352,38 @@ const (
 )
 
 type manifestProcessingBundle struct {
-	manifest                *fleetv1beta1.Manifest
-	id                      *fleetv1beta1.WorkResourceIdentifier
-	manifestObj             *unstructured.Unstructured
-	inMemberClusterObj      *unstructured.Unstructured
-	gvr                     *schema.GroupVersionResource
+	// The manifest data in the raw form (not decoded yet).
+	manifest *fleetv1beta1.Manifest
+	// The work resource identifier of the manifest.
+	// If the manifest data cannot be decoded as a Kubernetes API object at all, the identifier
+	// will feature only the ordinal of the manifest data (its rank in the list of the resources).
+	// If the manifest data can be decoded as a Kubernetes API object, but the API is not available
+	// on the member cluster, the resource field of the identifier will be empty.
+	id *fleetv1beta1.WorkResourceIdentifier
+	// A string representation of the work resource identifier (sans the resources field).
+	// This is only populated if the manifest data can be successfully decoded.
+	//
+	// It is of the format `GV=API_GROUP/VERSION, Kind=KIND, Namespace=NAMESPACE, Name=NAME`,
+	// where API_GROUP, VERSION, KIND, NAMESPACE, and NAME are the API group/version/kind of the
+	// manifest object, and its owner namespace (if applicable) and name, respectively.
+	workResourceIdentifierStr string
+	// The manifest data, decoded as a Kubernetes API object.
+	manifestObj *unstructured.Unstructured
+	// The object in the member cluster that corresponds to the manifest object.
+	inMemberClusterObj *unstructured.Unstructured
+	// The GVR of the manifest object.
+	gvr *schema.GroupVersionResource
+	// The result type of the apply op or the diff reporting op.
 	applyOrReportDiffResTyp ManifestProcessingApplyOrReportDiffResultType
-	availabilityResTyp      ManifestProcessingAvailabilityResultType
-	applyOrReportDiffErr    error
-	availabilityErr         error
-	drifts                  []fleetv1beta1.PatchDetail
-	diffs                   []fleetv1beta1.PatchDetail
+	// The result type of the availability check op.
+	availabilityResTyp ManifestProcessingAvailabilityResultType
+	// The error that stops the apply op or the diff reporting op.
+	applyOrReportDiffErr error
+	// The error that stops the availability check op.
+	availabilityErr error
+	// Configuration drifts/diffs detected during the apply op or the diff reporting op.
+	drifts []fleetv1beta1.PatchDetail
+	diffs  []fleetv1beta1.PatchDetail
 }
 
 // Reconcile implement the control loop logic for Work object.

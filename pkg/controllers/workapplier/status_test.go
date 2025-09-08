@@ -444,9 +444,10 @@ func TestRefreshWorkStatus(t *testing.T) {
 						Namespace: nsName,
 						Resource:  "deployments",
 					},
-					inMemberClusterObj:      toUnstructured(t, deploy.DeepCopy()),
-					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeFoundDrifts,
-					availabilityResTyp:      AvailabilityResultTypeSkipped,
+					workResourceIdentifierStr: fmt.Sprintf("GV=apps/v1, Kind=Deployment, Namespace=%s, Name=%s", nsName, deployName),
+					inMemberClusterObj:        toUnstructured(t, deploy.DeepCopy()),
+					applyOrReportDiffResTyp:   ApplyOrReportDiffResTypeFoundDrifts,
+					availabilityResTyp:        AvailabilityResultTypeSkipped,
 					drifts: []fleetv1beta1.PatchDetail{
 						{
 							Path:          "/spec/replicas",
@@ -464,9 +465,10 @@ func TestRefreshWorkStatus(t *testing.T) {
 						Namespace: nsName,
 						Resource:  "deployments",
 					},
-					inMemberClusterObj:      toUnstructured(t, deploy2.DeepCopy()),
-					applyOrReportDiffResTyp: ApplyOrReportDiffResTypeFailedToTakeOver,
-					availabilityResTyp:      AvailabilityResultTypeSkipped,
+					workResourceIdentifierStr: fmt.Sprintf("GV=apps/v1, Kind=Deployment, Namespace=%s, Name=%s", nsName, deployName2),
+					inMemberClusterObj:        toUnstructured(t, deploy2.DeepCopy()),
+					applyOrReportDiffResTyp:   ApplyOrReportDiffResTypeFailedToTakeOver,
+					availabilityResTyp:        AvailabilityResultTypeSkipped,
 					diffs: []fleetv1beta1.PatchDetail{
 						{
 							Path:          "/spec/replicas",
