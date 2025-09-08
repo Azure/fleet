@@ -55,6 +55,8 @@ const (
 	ResourceEnvelopeKind = "ResourceEnvelope"
 	// ClusterResourceEnvelopeKind is the kind of the ClusterResourceEnvelope.
 	ClusterResourceEnvelopeKind = "ClusterResourceEnvelope"
+	// ClusterResourcePlacementStatusKind is the kind of the ClusterResourcePlacementStatus.
+	ClusterResourcePlacementStatusKind = "ClusterResourcePlacementStatus"
 )
 
 const (

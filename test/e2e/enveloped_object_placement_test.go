@@ -27,6 +27,7 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -795,7 +796,7 @@ func createWrappedResourcesForEnvelopTest() {
 	// Create ResourceEnvelope with ResourceQuota inside
 	quotaBytes, err := json.Marshal(testResourceQuota)
 	Expect(err).Should(Succeed())
-	testResourceEnvelope.Data["resourceQuota1.yaml"] = runtime.RawExtension{Raw: quotaBytes}
+	testResourceEnvelope.Data["resourceQuota.yaml"] = runtime.RawExtension{Raw: quotaBytes}
 	deploymentBytes, err := json.Marshal(testDeployment)
 	Expect(err).Should(Succeed())
 	testResourceEnvelope.Data["deployment.yaml"] = runtime.RawExtension{Raw: deploymentBytes}
@@ -806,6 +807,21 @@ func createWrappedResourcesForEnvelopTest() {
 	Expect(err).Should(Succeed())
 	testClusterResourceEnvelope.Data["clusterRole.yaml"] = runtime.RawExtension{Raw: roleBytes}
 	Expect(hubClient.Create(ctx, &testClusterResourceEnvelope)).To(Succeed(), "Failed to create ClusterResourceEnvelope")
+}
+
+func cleanupWrappedResourcesForEnvelopTest() {
+	By("deleting namespace resources")
+	cleanupWorkResources()
+
+	By(fmt.Sprintf("deleting envelope %s", testClusterResourceEnvelope.Name))
+	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, &testClusterResourceEnvelope))).To(Succeed(), "Failed to delete testClusterResourceEnvelope")
+
+	Eventually(func() error {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: testClusterResourceEnvelope.Name}, &placementv1beta1.ClusterResourceEnvelope{}); !errors.IsNotFound(err) {
+			return fmt.Errorf("testClusterResourceEnvelope still exists or an unexpected error occurred: %w", err)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove testClusterResourceEnvelope from hub cluster")
 }
 
 func checkAllResourcesPlacement(memberCluster *framework.Cluster) func() error {

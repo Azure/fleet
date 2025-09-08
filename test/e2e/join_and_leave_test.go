@@ -42,206 +42,347 @@ const (
 	memberAgentName = "member-agent"
 )
 
-// Note that this container cannot run in parallel with other containers.
-var _ = Describe("Test member cluster join and leave flow", Label("joinleave"), Ordered, Serial, func() {
+var _ = Describe("Test member cluster join and leave flow", Label("joinleave"), func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 	internalServiceExportName := fmt.Sprintf("internal-service-export-%d", GinkgoParallelProcess())
-	var wantSelectedResources []placementv1beta1.ResourceIdentifier
-	BeforeAll(func() {
-		// Create the test resources.
+	rpKey := types.NamespacedName{Name: rpName, Namespace: workNamespaceName}
+	var wantCRPSelectedResources []placementv1beta1.ResourceIdentifier
+	var wantRPSelectedResources []placementv1beta1.ResourceIdentifier
+
+	BeforeEach(OncePerOrdered, func() {
 		readEnvelopTestManifests()
-		wantSelectedResources = []placementv1beta1.ResourceIdentifier{
-			{
-				Kind:    "Namespace",
-				Name:    workNamespaceName,
-				Version: "v1",
-			},
-			{
-				Kind:      "ConfigMap",
-				Name:      testConfigMap.Name,
-				Version:   "v1",
-				Namespace: workNamespaceName,
-			},
-			{
-				Group:     placementv1beta1.GroupVersion.Group,
-				Kind:      placementv1beta1.ResourceEnvelopeKind,
-				Version:   placementv1beta1.GroupVersion.Version,
-				Name:      testResourceEnvelope.Name,
-				Namespace: workNamespaceName,
-			},
-			{
-				Group:   placementv1beta1.GroupVersion.Group,
-				Kind:    placementv1beta1.ClusterResourceEnvelopeKind,
-				Version: placementv1beta1.GroupVersion.Version,
-				Name:    testClusterResourceEnvelope.Name,
-			},
-		}
+
+		By("creating the test resources")
+		createWrappedResourcesForEnvelopTest()
 	})
 
-	Context("Test cluster join and leave flow with CRP not deleted", Label("joinleave"), Ordered, Serial, func() {
-		It("Create the test resources in the namespace", createWrappedResourcesForEnvelopTest)
+	AfterEach(OncePerOrdered, func() {
+		By("deleting the test resources")
+		cleanupWrappedResourcesForEnvelopTest()
+	})
 
-		It("Create the CRP that select the name space and place it to all clusters", func() {
-			crp := &placementv1beta1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName,
-					// Add a custom finalizer; this would allow us to better observe
-					// the behavior of the controllers.
-					Finalizers: []string{customDeletionBlockerFinalizer},
+	// Note that this container cannot run in parallel with other containers.
+	Describe("Test member cluster join and leave flow for cluster resource placement", Ordered, Serial, func() {
+
+		BeforeAll(func() {
+			// Create the test resources.
+			wantCRPSelectedResources = []placementv1beta1.ResourceIdentifier{
+				{
+					Kind:    "Namespace",
+					Name:    workNamespaceName,
+					Version: "v1",
 				},
-				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
-						{
-							Group:   "",
-							Kind:    "Namespace",
-							Version: "v1",
-							Name:    workNamespaceName,
-						},
-						{
-							Group:   placementv1beta1.GroupVersion.Group,
-							Kind:    "ClusterResourceEnvelope",
-							Version: placementv1beta1.GroupVersion.Version,
-							Name:    testClusterResourceEnvelope.Name,
-						},
-					},
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: ptr.To(2),
-						},
-					},
+				{
+					Kind:      "ConfigMap",
+					Name:      testConfigMap.Name,
+					Version:   "v1",
+					Namespace: workNamespaceName,
 				},
-			}
-			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
-		})
-
-		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(types.NamespacedName{Name: crpName}, wantSelectedResources, allMemberClusterNames, nil, "0", true)
-			Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
-		})
-
-		It("should place the resources on all member clusters", func() {
-			for idx := range allMemberClusters {
-				memberCluster := allMemberClusters[idx]
-				workResourcesPlacedActual := checkAllResourcesPlacement(memberCluster)
-				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+				{
+					Group:     placementv1beta1.GroupVersion.Group,
+					Kind:      placementv1beta1.ResourceEnvelopeKind,
+					Version:   placementv1beta1.GroupVersion.Version,
+					Name:      testResourceEnvelope.Name,
+					Namespace: workNamespaceName,
+				},
+				{
+					Group:   placementv1beta1.GroupVersion.Group,
+					Kind:    placementv1beta1.ClusterResourceEnvelopeKind,
+					Version: placementv1beta1.GroupVersion.Version,
+					Name:    testClusterResourceEnvelope.Name,
+				},
 			}
 		})
 
-		It("create a dummy internalServiceExport in the reserved member namespace", func() {
-			for idx := range allMemberClusterNames {
-				memberCluster := allMemberClusters[idx]
-				namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.ClusterName)
-				internalServiceExport := &fleetnetworkingv1alpha1.InternalServiceExport{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: namespaceName,
-						Name:      internalServiceExportName,
-						// Add a custom finalizer; this would allow us to better observe
-						// the behavior of the controllers.
-						Finalizers: []string{customDeletionBlockerFinalizer},
+		Context("Test cluster join and leave flow with CRP not deleted", Label("joinleave"), Ordered, Serial, func() {
+			It("Create the CRP that select the name space and place it to all clusters", func() {
+				resourceSelectors := []placementv1beta1.ResourceSelectorTerm{
+					{
+						Group:   "",
+						Kind:    "Namespace",
+						Version: "v1",
+						Name:    workNamespaceName,
 					},
-					Spec: fleetnetworkingv1alpha1.InternalServiceExportSpec{
-						ServiceReference: fleetnetworkingv1alpha1.ExportedObjectReference{
-							NamespacedName:  "test-namespace/test-svc",
-							ClusterID:       memberCluster.ClusterName,
-							Kind:            "Service",
-							Namespace:       "test-namespace",
-							Name:            "test-svc",
-							ResourceVersion: "0",
-							UID:             "00000000-0000-0000-0000-000000000000",
+					{
+						Group:   placementv1beta1.GroupVersion.Group,
+						Kind:    "ClusterResourceEnvelope",
+						Version: placementv1beta1.GroupVersion.Version,
+						Name:    testClusterResourceEnvelope.Name,
+					},
+				}
+				createCRPWithApplyStrategy(crpName, nil, resourceSelectors)
+			})
+
+			It("should update CRP status as expected", func() {
+				crpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(types.NamespacedName{Name: crpName}, wantCRPSelectedResources, allMemberClusterNames, nil, "0", true)
+				Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			})
+
+			It("should place the resources on all member clusters", func() {
+				for idx := range allMemberClusters {
+					memberCluster := allMemberClusters[idx]
+					workResourcesPlacedActual := checkAllResourcesPlacement(memberCluster)
+					Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+				}
+			})
+
+			It("create a dummy internalServiceExport in the reserved member namespace", func() {
+				for idx := range allMemberClusterNames {
+					memberCluster := allMemberClusters[idx]
+					namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.ClusterName)
+					internalServiceExport := &fleetnetworkingv1alpha1.InternalServiceExport{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: namespaceName,
+							Name:      internalServiceExportName,
+							// Add a custom finalizer; this would allow us to better observe
+							// the behavior of the controllers.
+							Finalizers: []string{customDeletionBlockerFinalizer},
 						},
-						Ports: []fleetnetworkingv1alpha1.ServicePort{
-							{
-								Protocol: corev1.ProtocolTCP,
-								Port:     4848,
+						Spec: fleetnetworkingv1alpha1.InternalServiceExportSpec{
+							ServiceReference: fleetnetworkingv1alpha1.ExportedObjectReference{
+								NamespacedName:  "test-namespace/test-svc",
+								ClusterID:       memberCluster.ClusterName,
+								Kind:            "Service",
+								Namespace:       "test-namespace",
+								Name:            "test-svc",
+								ResourceVersion: "0",
+								UID:             "00000000-0000-0000-0000-000000000000",
+							},
+							Ports: []fleetnetworkingv1alpha1.ServicePort{
+								{
+									Protocol: corev1.ProtocolTCP,
+									Port:     4848,
+								},
 							},
 						},
-					},
+					}
+					Expect(hubClient.Create(ctx, internalServiceExport)).To(Succeed(), "Failed to create internalServiceExport")
 				}
-				Expect(hubClient.Create(ctx, internalServiceExport)).To(Succeed(), "Failed to create internalServiceExport")
-			}
-		})
+			})
 
-		It("Should fail the unjoin requests", func() {
-			for idx := range allMemberClusters {
-				memberCluster := allMemberClusters[idx]
-				mcObj := &clusterv1beta1.MemberCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: memberCluster.ClusterName,
-					},
+			It("Should fail the unjoin requests", func() {
+				for idx := range allMemberClusters {
+					memberCluster := allMemberClusters[idx]
+					mcObj := &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: memberCluster.ClusterName,
+						},
+					}
+					err := hubClient.Delete(ctx, mcObj)
+					Expect(err).ShouldNot(Succeed(), "Want the deletion to be denied")
+					var statusErr *apierrors.StatusError
+					Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete memberCluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&apierrors.StatusError{})))
+					Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("Please delete serviceExport test-namespace/test-svc in the member cluster before leaving, request is denied"))
 				}
-				err := hubClient.Delete(ctx, mcObj)
-				Expect(err).ShouldNot(Succeed(), "Want the deletion to be denied")
-				var statusErr *apierrors.StatusError
-				Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete memberCluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&apierrors.StatusError{})))
-				Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("Please delete serviceExport test-namespace/test-svc in the member cluster before leaving, request is denied"))
-			}
+			})
+
+			It("Deleting the internalServiceExports", func() {
+				for idx := range allMemberClusterNames {
+					memberCluster := allMemberClusters[idx]
+					namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.ClusterName)
+
+					internalSvcExportKey := types.NamespacedName{Namespace: namespaceName, Name: internalServiceExportName}
+					var export fleetnetworkingv1alpha1.InternalServiceExport
+					Expect(hubClient.Get(ctx, internalSvcExportKey, &export)).Should(Succeed(), "Failed to get internalServiceExport")
+					Expect(hubClient.Delete(ctx, &export)).To(Succeed(), "Failed to delete internalServiceExport")
+				}
+			})
+
+			It("Should be able to trigger the member cluster DELETE", func() {
+				setAllMemberClustersToLeave()
+			})
+
+			It("Removing the finalizer from the internalServiceExport", func() {
+				for idx := range allMemberClusterNames {
+					memberCluster := allMemberClusters[idx]
+					namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.ClusterName)
+
+					internalSvcExportKey := types.NamespacedName{Namespace: namespaceName, Name: internalServiceExportName}
+					var export fleetnetworkingv1alpha1.InternalServiceExport
+					Expect(hubClient.Get(ctx, internalSvcExportKey, &export)).Should(Succeed(), "Failed to get internalServiceExport")
+					export.Finalizers = nil
+					Expect(hubClient.Update(ctx, &export)).To(Succeed(), "Failed to update internalServiceExport")
+				}
+			})
+
+			It("Should be able to unjoin a cluster with crp still running", func() {
+				checkIfAllMemberClustersHaveLeft()
+			})
+
+			It("Should update CRP status to not placing any resources since all clusters are left", func() {
+				// resourceQuota is enveloped so it's not trackable yet
+				crpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(types.NamespacedName{Name: crpName}, wantCRPSelectedResources, nil, nil, "0", false)
+				Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			})
+
+			It("Validating if the resources are still on all member clusters", func() {
+				for idx := range allMemberClusters {
+					memberCluster := allMemberClusters[idx]
+					workResourcesPlacedActual := checkAllResourcesPlacement(memberCluster)
+					Consistently(workResourcesPlacedActual, 3*consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+				}
+			})
+
+			It("Should be able to rejoin the cluster", func() {
+				By("rejoin all the clusters without deleting the CRP")
+				setAllMemberClustersToJoin()
+				checkIfAllMemberClustersHaveJoined()
+				checkIfAzurePropertyProviderIsWorking()
+			})
+
+			It("should update CRP status to applied to all clusters again automatically after rejoining", func() {
+				crpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(types.NamespacedName{Name: crpName}, wantCRPSelectedResources, allMemberClusterNames, nil, "0", true)
+				Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			})
 		})
 
-		It("Deleting the internalServiceExports", func() {
-			for idx := range allMemberClusterNames {
-				memberCluster := allMemberClusters[idx]
-				namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.ClusterName)
-
-				internalSvcExportKey := types.NamespacedName{Namespace: namespaceName, Name: internalServiceExportName}
-				var export fleetnetworkingv1alpha1.InternalServiceExport
-				Expect(hubClient.Get(ctx, internalSvcExportKey, &export)).Should(Succeed(), "Failed to get internalServiceExport")
-				Expect(hubClient.Delete(ctx, &export)).To(Succeed(), "Failed to delete internalServiceExport")
-			}
-		})
-
-		It("Should be able to trigger the member cluster DELETE", func() {
-			setAllMemberClustersToLeave()
-		})
-
-		It("Removing the finalizer from the internalServiceExport", func() {
-			for idx := range allMemberClusterNames {
-				memberCluster := allMemberClusters[idx]
-				namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.ClusterName)
-
-				internalSvcExportKey := types.NamespacedName{Namespace: namespaceName, Name: internalServiceExportName}
-				var export fleetnetworkingv1alpha1.InternalServiceExport
-				Expect(hubClient.Get(ctx, internalSvcExportKey, &export)).Should(Succeed(), "Failed to get internalServiceExport")
-				export.Finalizers = nil
-				Expect(hubClient.Update(ctx, &export)).To(Succeed(), "Failed to update internalServiceExport")
-			}
-		})
-
-		It("Should be able to unjoin a cluster with crp still running", func() {
-			checkIfAllMemberClustersHaveLeft()
-		})
-
-		It("Should update CRP status to not placing any resources since all clusters are left", func() {
-			// resourceQuota is enveloped so it's not trackable yet
-			crpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(types.NamespacedName{Name: crpName}, wantSelectedResources, nil, nil, "0", false)
-			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
-		})
-
-		It("Validating if the resources are still on all member clusters", func() {
-			for idx := range allMemberClusters {
-				memberCluster := allMemberClusters[idx]
-				workResourcesPlacedActual := checkAllResourcesPlacement(memberCluster)
-				Consistently(workResourcesPlacedActual, 3*consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
-			}
-		})
-
-		It("Should be able to rejoin the cluster", func() {
-			By("rejoin all the clusters without deleting the CRP")
-			setAllMemberClustersToJoin()
-			checkIfAllMemberClustersHaveJoined()
-			checkIfAzurePropertyProviderIsWorking()
-		})
-
-		It("should update CRP status to applied to all clusters again automatically after rejoining", func() {
-			crpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(types.NamespacedName{Name: crpName}, wantSelectedResources, allMemberClusterNames, nil, "0", true)
-			Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		AfterAll(func() {
+			By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
 		})
 	})
 
-	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s and related resources", crpName))
-		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+	Describe("Test member cluster join and leave flow for resource placement", Ordered, Serial, func() {
+		BeforeAll(func() {
+			resourceSelectors := []placementv1beta1.ResourceSelectorTerm{
+				{
+					Group:          "",
+					Kind:           "Namespace",
+					Version:        "v1",
+					Name:           workNamespaceName,
+					SelectionScope: placementv1beta1.NamespaceOnly,
+				},
+				{
+					Group:   placementv1beta1.GroupVersion.Group,
+					Kind:    "ClusterResourceEnvelope",
+					Version: placementv1beta1.GroupVersion.Version,
+					Name:    testClusterResourceEnvelope.Name,
+				},
+			}
+			createCRPWithApplyStrategy(crpName, nil, resourceSelectors)
+
+			wantCRPSelectedResources = []placementv1beta1.ResourceIdentifier{
+				{
+					Kind:    "Namespace",
+					Name:    workNamespaceName,
+					Version: "v1",
+				},
+				{
+					Group:   placementv1beta1.GroupVersion.Group,
+					Kind:    placementv1beta1.ClusterResourceEnvelopeKind,
+					Version: placementv1beta1.GroupVersion.Version,
+					Name:    testClusterResourceEnvelope.Name,
+				},
+			}
+
+			By("should update CRP status as expected")
+			crpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(types.NamespacedName{Name: crpName}, wantCRPSelectedResources, allMemberClusterNames, nil, "0", true)
+			Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+
+			wantRPSelectedResources = []placementv1beta1.ResourceIdentifier{
+				{
+					Kind:      "ConfigMap",
+					Name:      testConfigMap.Name,
+					Version:   "v1",
+					Namespace: workNamespaceName,
+				},
+				{
+					Group:     placementv1beta1.GroupVersion.Group,
+					Kind:      placementv1beta1.ResourceEnvelopeKind,
+					Version:   placementv1beta1.GroupVersion.Version,
+					Name:      testResourceEnvelope.Name,
+					Namespace: workNamespaceName,
+				},
+			}
+		})
+
+		Context("Test cluster join and leave flow with RP not deleted", Label("joinleave"), Ordered, Serial, func() {
+			It("Create the RP that select the config map and place it to all clusters", func() {
+				resourceSelectors := []placementv1beta1.ResourceSelectorTerm{
+					{
+						Group:   "",
+						Kind:    "ConfigMap",
+						Name:    testConfigMap.Name,
+						Version: "v1",
+					},
+					{
+						Group:   placementv1beta1.GroupVersion.Group,
+						Kind:    placementv1beta1.ResourceEnvelopeKind,
+						Version: placementv1beta1.GroupVersion.Version,
+						Name:    testResourceEnvelope.Name,
+					},
+				}
+				createRPWithApplyStrategy(workNamespaceName, rpName, nil, resourceSelectors)
+			})
+
+			It("should update RP status as expected", func() {
+				rpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(rpKey, wantRPSelectedResources, allMemberClusterNames, nil, "0", true)
+				Eventually(rpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP status as expected")
+			})
+
+			It("should place the resources on all member clusters", func() {
+				for idx := range allMemberClusters {
+					memberCluster := allMemberClusters[idx]
+					workResourcesPlacedActual := checkAllResourcesPlacement(memberCluster)
+					Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+				}
+			})
+
+			// Skip the serviceExport check
+			It("Should be able to trigger the member cluster DELETE", func() {
+				setAllMemberClustersToLeave()
+			})
+
+			It("Should be able to unjoin a cluster with rp still running", func() {
+				checkIfAllMemberClustersHaveLeft()
+			})
+
+			It("Should update CRP status to not placing any resources since all clusters are left", func() {
+				crpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(types.NamespacedName{Name: crpName}, wantCRPSelectedResources, nil, nil, "0", false)
+				Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			})
+
+			It("Should update RP status to not placing any resources since all clusters are left", func() {
+				// resourceQuota is enveloped so it's not trackable yet
+				rpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(rpKey, wantRPSelectedResources, nil, nil, "0", false)
+				Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP status as expected")
+			})
+
+			It("Validating if the resources are still on all member clusters", func() {
+				for idx := range allMemberClusters {
+					memberCluster := allMemberClusters[idx]
+					workResourcesPlacedActual := checkAllResourcesPlacement(memberCluster)
+					Consistently(workResourcesPlacedActual, 3*consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+				}
+			})
+
+			It("Should be able to rejoin the cluster", func() {
+				By("rejoin all the clusters without deleting the RP")
+				setAllMemberClustersToJoin()
+				checkIfAllMemberClustersHaveJoined()
+				checkIfAzurePropertyProviderIsWorking()
+			})
+
+			It("should update CRP status to applied to all clusters again automatically after rejoining", func() {
+				crpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(types.NamespacedName{Name: crpName}, wantCRPSelectedResources, allMemberClusterNames, nil, "0", true)
+				Eventually(crpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			})
+
+			It("should update RP status to applied to all clusters again automatically after rejoining", func() {
+				rpStatusUpdatedActual := customizedPlacementStatusUpdatedActual(rpKey, wantRPSelectedResources, allMemberClusterNames, nil, "0", true)
+				Eventually(rpStatusUpdatedActual, workloadEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update RP status as expected")
+			})
+		})
+
+		AfterAll(func() {
+			By(fmt.Sprintf("deleting resource placement %s and related resources", rpName))
+			ensureRPAndRelatedResourcesDeleted(rpKey, allMemberClusters)
+
+			By(fmt.Sprintf("deleting placement %s and related resources", crpName))
+			ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+		})
 	})
 })
 
