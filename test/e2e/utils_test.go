@@ -1200,14 +1200,14 @@ func ensureCRPDisruptionBudgetDeleted(crpDisruptionBudgetName string) {
 // This is mostly used for simulating member agents for virtual clusters.
 //
 // Note that this utility function currently assumes that there is only one work object.
-func verifyWorkPropagationAndMarkAsAvailable(memberClusterName, crpName string, resourceIdentifiers []placementv1beta1.ResourceIdentifier) {
+func verifyWorkPropagationAndMarkAsAvailable(memberClusterName, placementName string, resourceIdentifiers []placementv1beta1.ResourceIdentifier) {
 	memberClusterReservedNS := fmt.Sprintf(utils.NamespaceNameFormat, memberClusterName)
 	// Wait until the works are created.
 	workList := placementv1beta1.WorkList{}
 	Eventually(func() error {
 		workList = placementv1beta1.WorkList{}
 		matchLabelOptions := client.MatchingLabels{
-			placementv1beta1.PlacementTrackingLabel: crpName,
+			placementv1beta1.PlacementTrackingLabel: placementName,
 		}
 		if err := hubClient.List(ctx, &workList, client.InNamespace(memberClusterReservedNS), matchLabelOptions); err != nil {
 			return err
