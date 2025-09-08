@@ -40,7 +40,7 @@ const (
 	testReason1                      = "testReason1"
 	testReason2                      = "testReason2"
 
-	eventuallyTimeout    = time.Second * 20
+	eventuallyTimeout    = time.Second * 10
 	consistentlyDuration = time.Second * 10
 	interval             = time.Millisecond * 250
 )

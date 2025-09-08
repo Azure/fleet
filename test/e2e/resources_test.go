@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
@@ -89,6 +90,23 @@ func configMapSelector() []placementv1beta1.ResourceSelectorTerm {
 	}
 }
 
+func multipleConfigMapsSelector(cm1Name, cm2Name string) []placementv1beta1.ResourceSelectorTerm {
+	return []placementv1beta1.ResourceSelectorTerm{
+		{
+			Group:   "",
+			Kind:    "ConfigMap",
+			Version: "v1",
+			Name:    cm1Name,
+		},
+		{
+			Group:   "",
+			Kind:    "ConfigMap",
+			Version: "v1",
+			Name:    cm2Name,
+		},
+	}
+}
+
 func configMapOverrideSelector() []placementv1beta1.ResourceSelector {
 	return []placementv1beta1.ResourceSelector{
 		{
@@ -126,10 +144,17 @@ func appNamespace() corev1.Namespace {
 }
 
 func appConfigMap() corev1.ConfigMap {
+	return buildAppConfigMap(types.NamespacedName{
+		Name:      fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess()),
+		Namespace: fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
+	})
+}
+
+func buildAppConfigMap(configMap types.NamespacedName) corev1.ConfigMap {
 	return corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess()),
-			Namespace: fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
+			Name:      configMap.Name,
+			Namespace: configMap.Namespace,
 		},
 		Data: map[string]string{
 			"data": "test",

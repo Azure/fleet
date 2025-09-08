@@ -1,6 +1,5 @@
 /*
 Copyright 2025 The KubeFleet Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -13,14 +12,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package bindingwatcher
+package clusterresourceplacementstatuswatcher
 
 import (
 	"context"
 	"flag"
 	"path/filepath"
 	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -36,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/test/utils/controller"
 )
 
@@ -50,10 +48,14 @@ var (
 	fakePlacementController *controller.FakeController
 )
 
+const (
+	testNamespace = "test-ns"
+)
+
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "Binding Watcher Suite")
+	RunSpecs(t, "ClusterResourcePlacementStatus Watcher Suite")
 }
 
 var _ = BeforeSuite(func() {
@@ -75,7 +77,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).Should(Succeed())
 	Expect(cfg).NotTo(BeNil())
 
-	err = fleetv1beta1.AddToScheme(scheme.Scheme)
+	err = placementv1beta1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	By("construct the k8s client")
@@ -109,13 +111,7 @@ var _ = BeforeSuite(func() {
 	err = (&Reconciler{
 		Client:              mgr.GetClient(),
 		PlacementController: fakePlacementController,
-	}).SetupWithManagerForClusterResourceBinding(mgr)
-	Expect(err).Should(Succeed())
-
-	err = (&Reconciler{
-		Client:              mgr.GetClient(),
-		PlacementController: fakePlacementController,
-	}).SetupWithManagerForResourceBinding(mgr)
+	}).SetupWithManager(mgr)
 	Expect(err).Should(Succeed())
 
 	go func() {
@@ -123,14 +119,6 @@ var _ = BeforeSuite(func() {
 		err = mgr.Start(ctx)
 		Expect(err).Should(Succeed(), "failed to run manager")
 	}()
-
-	// Note (chenyu1): for the binding watcher integration tests, must wait for the cache to sync
-	// before moving onto the test stage, otherwise some Update events might not be caught properly.
-	//
-	// This is wrapped in an Eventually block as the manager might not have started yet.
-	Eventually(func() bool {
-		return mgr.GetCache().WaitForCacheSync(ctx)
-	}, time.Second*10, time.Second*2).To(BeTrue(), "failed to wait for cache to sync")
 })
 
 var _ = AfterSuite(func() {

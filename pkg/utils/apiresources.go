@@ -150,6 +150,11 @@ var (
 		Kind:  placementv1beta1.ResourceOverrideSnapshotKind,
 	}
 
+	ClusterResourcePlacementStatusGK = schema.GroupKind{
+		Group: placementv1beta1.GroupVersion.Group,
+		Kind:  "ClusterResourcePlacementStatus",
+	}
+
 	// we use `;` to separate the different api groups
 	apiGroupSepToken = ";"
 )
@@ -214,6 +219,7 @@ func NewResourceConfig(isAllowList bool) *ResourceConfig {
 	r.AddGroupKind(ClusterResourceOverrideSnapshotGK)
 	r.AddGroupKind(ResourceOverrideGK)
 	r.AddGroupKind(ResourceOverrideSnapshotGK)
+	r.AddGroupKind(ClusterResourcePlacementStatusGK)
 
 	// disable the below built-in resources
 	r.AddGroup(eventsv1.GroupName)

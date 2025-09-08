@@ -89,6 +89,100 @@ func TestBuildWorkResourceIdentifier(t *testing.T) {
 	}
 }
 
+// TestCheckForDuplicatedManifests tests the checkForDuplicatedManifests function.
+func TestCheckForDuplicatedManifests(t *testing.T) {
+	wriStr1 := fmt.Sprintf("GV=/v1, Kind=Namespace, Namespace=, Name=%s", nsName)
+	wriStr2 := fmt.Sprintf("GV=apps/v1, Kind=Deployment, Namespace=%s, Name=%s", nsName, deployName)
+	wriStr3 := fmt.Sprintf("GV=apps/v1, Kind=ConfigMap, Namespace=%s, Name=%s", nsName, configMapName)
+
+	work := &fleetv1beta1.Work{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      workName,
+			Namespace: memberReservedNSName,
+		},
+	}
+
+	testCases := []struct {
+		name        string
+		bundles     []*manifestProcessingBundle
+		wantBundles []*manifestProcessingBundle
+	}{
+		{
+			name: "no duplicates",
+			bundles: []*manifestProcessingBundle{
+				{
+					workResourceIdentifierStr: wriStr1,
+				},
+				{
+					workResourceIdentifierStr: wriStr2,
+				},
+				{
+					workResourceIdentifierStr: wriStr3,
+				},
+			},
+			wantBundles: []*manifestProcessingBundle{
+				{
+					workResourceIdentifierStr: wriStr1,
+				},
+				{
+					workResourceIdentifierStr: wriStr2,
+				},
+				{
+					workResourceIdentifierStr: wriStr3,
+				},
+			},
+		},
+		{
+			name: "with duplicates",
+			bundles: []*manifestProcessingBundle{
+				{
+					workResourceIdentifierStr: wriStr1,
+				},
+				{
+					workResourceIdentifierStr: wriStr2,
+				},
+				{
+					workResourceIdentifierStr: wriStr1,
+				},
+			},
+			wantBundles: []*manifestProcessingBundle{
+				{
+					workResourceIdentifierStr: wriStr1,
+				},
+				{
+					workResourceIdentifierStr: wriStr2,
+				},
+				{
+					workResourceIdentifierStr: wriStr1,
+					applyOrReportDiffResTyp:   ApplyOrReportDiffResTypeDuplicated,
+					applyOrReportDiffErr:      fmt.Errorf("a duplicate manifest has been found"),
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			checkForDuplicatedManifests(tc.bundles, work)
+			if diff := cmp.Diff(
+				tc.bundles, tc.wantBundles,
+				cmp.AllowUnexported(manifestProcessingBundle{}),
+				cmp.Comparer(func(e1, e2 error) bool {
+					if e1 == nil && e2 == nil {
+						return true
+					}
+					if e1 != nil && e2 != nil {
+						return e1.Error() == e2.Error()
+					}
+					return false
+				}),
+			); diff != "" {
+				t.Errorf("checkForDuplicatedManifests() results mismatch (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
 // TestRemoveLeftOverManifests tests the removeLeftOverManifests method.
 func TestRemoveLeftOverManifests(t *testing.T) {
 	ctx := context.Background()

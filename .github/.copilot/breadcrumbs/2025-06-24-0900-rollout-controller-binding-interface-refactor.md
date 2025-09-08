@@ -328,7 +328,7 @@ go build ./pkg/controllers/rollout/ ./pkg/utils/binding/ ./pkg/utils/controller/
 5. **Import Updates for Helper Function Usage**:
    ```go
    // Added import for placement key type
-   "github.com/kubefleet-dev/kubefleet/pkg/scheduler/queue"
+   "go.goms.io/fleet/pkg/scheduler/queue"
    ```
 
 5. **Field Access Pattern Updates**:

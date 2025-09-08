@@ -111,7 +111,7 @@ func validateConfigMapOnCluster(cluster *framework.Cluster, name types.Namespace
 	return nil
 }
 
-func validateOverrideAnnotationOfConfigMapOnCluster(cluster *framework.Cluster, wantAnnotations map[string]string) error {
+func validateAnnotationOfConfigMapOnCluster(cluster *framework.Cluster, wantAnnotations map[string]string) error {
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 	appConfigMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
 
@@ -519,6 +519,41 @@ func crpRolloutPendingDueToExternalStrategyConditions(generation int64) []metav1
 	}
 }
 
+func rpAppliedFailedConditions(generation int64) []metav1.Condition {
+	return []metav1.Condition{
+		{
+			Type:               string(placementv1beta1.ResourcePlacementScheduledConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             scheduler.FullyScheduledReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourcePlacementRolloutStartedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.RolloutStartedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourcePlacementOverriddenConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.OverrideNotSpecifiedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourcePlacementWorkSynchronizedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.WorkSynchronizedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourcePlacementAppliedConditionType),
+			Status:             metav1.ConditionFalse,
+			Reason:             condition.ApplyFailedReason,
+			ObservedGeneration: generation,
+		},
+	}
+}
+
 func crpAppliedFailedConditions(generation int64) []metav1.Condition {
 	return []metav1.Condition{
 		{
@@ -594,6 +629,45 @@ func crpNotAvailableConditions(generation int64, hasOverride bool) []metav1.Cond
 			Type:               string(placementv1beta1.ClusterResourcePlacementAvailableConditionType),
 			Status:             metav1.ConditionFalse,
 			Reason:             condition.NotAvailableYetReason,
+			ObservedGeneration: generation,
+		},
+	}
+}
+
+func rpDiffReportedConditions(generation int64, hasOverride bool) []metav1.Condition {
+	overrideConditionReason := condition.OverrideNotSpecifiedReason
+	if hasOverride {
+		overrideConditionReason = condition.OverriddenSucceededReason
+	}
+	return []metav1.Condition{
+		{
+			Type:               string(placementv1beta1.ResourcePlacementScheduledConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             scheduler.FullyScheduledReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourcePlacementRolloutStartedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.RolloutStartedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourcePlacementOverriddenConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             overrideConditionReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourcePlacementWorkSynchronizedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.WorkSynchronizedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourcePlacementDiffReportedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.DiffReportedStatusTrueReason,
 			ObservedGeneration: generation,
 		},
 	}
@@ -1071,6 +1145,26 @@ func appConfigMapIdentifiers() []placementv1beta1.ResourceIdentifier {
 		{
 			Kind:      "ConfigMap",
 			Name:      appConfigMapName,
+			Version:   "v1",
+			Namespace: workNamespaceName,
+		},
+	}
+}
+
+func multipleAppConfigMapIdentifiers() []placementv1beta1.ResourceIdentifier {
+	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	appConfigMapName1 := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
+	appConfigMapName2 := fmt.Sprintf(appConfigMapNameTemplate+"-%d", GinkgoParallelProcess(), 2)
+	return []placementv1beta1.ResourceIdentifier{
+		{
+			Kind:      "ConfigMap",
+			Name:      appConfigMapName1,
+			Version:   "v1",
+			Namespace: workNamespaceName,
+		},
+		{
+			Kind:      "ConfigMap",
+			Name:      appConfigMapName2,
 			Version:   "v1",
 			Namespace: workNamespaceName,
 		},
@@ -1672,6 +1766,29 @@ func validateCRPSnapshotRevisions(crpName string, wantPolicySnapshotRevision, wa
 	}
 	if len(resourceSnapshotList.Items) != wantResourceSnapshotRevision {
 		return fmt.Errorf("clusterResourceSnapshotList got %v, want 2", len(snapshotList.Items))
+	}
+	return nil
+}
+
+func validateRPSnapshotRevisions(rpName, namespace string, wantPolicySnapshotRevision, wantResourceSnapshotRevision int) error {
+	listOptions := []client.ListOption{
+		client.InNamespace(namespace),
+		client.MatchingLabels{placementv1beta1.PlacementTrackingLabel: rpName},
+	}
+
+	snapshotList := &placementv1beta1.SchedulingPolicySnapshotList{}
+	if err := hubClient.List(ctx, snapshotList, listOptions...); err != nil {
+		return err
+	}
+	if len(snapshotList.Items) != wantPolicySnapshotRevision {
+		return fmt.Errorf("schedulingPolicySnapshotList got %v, want 1", len(snapshotList.Items))
+	}
+	resourceSnapshotList := &placementv1beta1.ResourceSnapshotList{}
+	if err := hubClient.List(ctx, resourceSnapshotList, listOptions...); err != nil {
+		return err
+	}
+	if len(resourceSnapshotList.Items) != wantResourceSnapshotRevision {
+		return fmt.Errorf("resourceSnapshotList got %v, want 2", len(resourceSnapshotList.Items))
 	}
 	return nil
 }
