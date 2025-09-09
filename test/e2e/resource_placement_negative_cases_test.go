@@ -34,7 +34,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/test/e2e/framework"
 )
 
-var _ = Describe("handling errors and failures gracefully", func() {
+var _ = Describe("handling errors and failures gracefully for resource placement", Label("resourceplacement"), func() {
 	envelopeName := "wrapper"
 	wrappedCMName1 := "app-1"
 	wrappedCMName2 := "app-2"
@@ -43,26 +43,39 @@ var _ = Describe("handling errors and failures gracefully", func() {
 	cmDataVal1 := cmDataVal
 	cmDataVal2 := "baz"
 
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	rpName := fmt.Sprintf(rpNameTemplate, GinkgoParallelProcess())
+	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+
+	BeforeEach(OncePerOrdered, func() {
+		// Create the resources.
+		createNamespace()
+
+		// Create the CRP with Namespace-only selector.
+		createNamespaceOnlyCRP(crpName)
+
+		By("should update CRP status as expected")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workNamespaceIdentifiers(), allMemberClusterNames, nil, "0")
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+	})
+
+	AfterEach(OncePerOrdered, func() {
+		ensureCRPAndRelatedResourcesDeleted(crpName, allMemberClusters)
+	})
+
 	// Many test specs below use envelopes for placement as it is a bit tricky to simulate
 	// decoding errors with resources created directly in the hub cluster.
 	//
 	// TO-DO (chenyu1): reserve an API group exclusively on the hub cluster so that
 	// envelopes do not need to be used for this test spec.
-
 	Context("pre-processing failure in apply ops (decoding errors)", Ordered, func() {
-		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-		workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-
 		BeforeAll(func() {
 			// Use an envelope to create duplicate resource entries.
-			ns := appNamespace()
-			Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
-
 			// Create an envelope resource to wrap the configMaps.
 			resourceEnvelope := &placementv1beta1.ResourceEnvelope{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      envelopeName,
-					Namespace: ns.Name,
+					Namespace: workNamespaceName,
 				},
 				Data: map[string]runtime.RawExtension{},
 			}
@@ -74,7 +87,7 @@ var _ = Describe("handling errors and failures gracefully", func() {
 					Kind:       "ConfigMap",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: ns.Name,
+					Namespace: workNamespaceName,
 					Name:      wrappedCMName1,
 				},
 				Data: map[string]string{
@@ -101,16 +114,24 @@ var _ = Describe("handling errors and failures gracefully", func() {
 
 			Expect(hubClient.Create(ctx, resourceEnvelope)).To(Succeed(), "Failed to create resource envelope %s", resourceEnvelope.Name)
 
-			// Create a CRP.
-			crp := &placementv1beta1.ClusterResourcePlacement{
+			// Create a ResourcePlacement.
+			rp := &placementv1beta1.ResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName,
+					Name:      rpName,
+					Namespace: workNamespaceName,
 					// Add a custom finalizer; this would allow us to better observe
 					// the behavior of the controllers.
 					Finalizers: []string{customDeletionBlockerFinalizer},
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: workResourceSelector(),
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+						{
+							Group:   placementv1beta1.GroupVersion.Group,
+							Kind:    placementv1beta1.ResourceEnvelopeKind,
+							Version: placementv1beta1.GroupVersion.Version,
+							Name:    envelopeName,
+						},
+					},
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickFixedPlacementType,
 						ClusterNames: []string{
@@ -125,18 +146,18 @@ var _ = Describe("handling errors and failures gracefully", func() {
 					},
 				},
 			}
-			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create ResourcePlacement")
 		})
 
-		It("should update CRP status as expected", func() {
+		It("should update ResourcePlacement status as expected", func() {
 			Eventually(func() error {
-				crp := &placementv1beta1.ClusterResourcePlacement{}
-				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+				rp := &placementv1beta1.ResourcePlacement{}
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: rpName, Namespace: workNamespaceName}, rp); err != nil {
 					return err
 				}
 
 				wantStatus := placementv1beta1.PlacementStatus{
-					Conditions: crpAppliedFailedConditions(crp.Generation),
+					Conditions: rpAppliedFailedConditions(rp.Generation),
 					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
@@ -163,15 +184,10 @@ var _ = Describe("handling errors and failures gracefully", func() {
 									},
 								},
 							},
-							Conditions: perClusterApplyFailedConditions(crp.Generation),
+							Conditions: perClusterApplyFailedConditions(rp.Generation),
 						},
 					},
 					SelectedResources: []placementv1beta1.ResourceIdentifier{
-						{
-							Kind:    "Namespace",
-							Name:    workNamespaceName,
-							Version: "v1",
-						},
 						{
 							Group:     placementv1beta1.GroupVersion.Group,
 							Kind:      placementv1beta1.ResourceEnvelopeKind,
@@ -182,18 +198,14 @@ var _ = Describe("handling errors and failures gracefully", func() {
 					},
 					ObservedResourceIndex: "0",
 				}
-				if diff := cmp.Diff(crp.Status, wantStatus, placementStatusCmpOptions...); diff != "" {
-					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
+				if diff := cmp.Diff(rp.Status, wantStatus, placementStatusCmpOptions...); diff != "" {
+					return fmt.Errorf("ResourcePlacement status diff (-got, +want): %s", diff)
 				}
 				return nil
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ResourcePlacement status as expected")
 		})
 
 		It("should place some manifests on member clusters", func() {
-			Eventually(func() error {
-				return validateWorkNamespaceOnCluster(memberCluster1EastProd, types.NamespacedName{Name: workNamespaceName})
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
-
 			Eventually(func() error {
 				cm := &corev1.ConfigMap{}
 				if err := memberCluster1EastProdClient.Get(ctx, types.NamespacedName{Name: wrappedCMName2, Namespace: workNamespaceName}, cm); err != nil {
@@ -226,25 +238,18 @@ var _ = Describe("handling errors and failures gracefully", func() {
 		})
 
 		AfterAll(func() {
-			// Remove the CRP and the namespace from the hub cluster.
-			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd})
+			// Remove the ResourcePlacement from the hub cluster.
+			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: workNamespaceName}, []*framework.Cluster{memberCluster1EastProd})
 		})
 	})
 
 	Context("pre-processing failure in report diff mode (decoding errors)", Ordered, func() {
-		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-		workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-
 		BeforeAll(func() {
-			// Use an envelope to create duplicate resource entries.
-			ns := appNamespace()
-			Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
-
 			// Create an envelope resource to wrap the configMaps.
 			resourceEnvelope := &placementv1beta1.ResourceEnvelope{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      envelopeName,
-					Namespace: ns.Name,
+					Namespace: workNamespaceName,
 				},
 				Data: map[string]runtime.RawExtension{},
 			}
@@ -256,7 +261,7 @@ var _ = Describe("handling errors and failures gracefully", func() {
 					Kind:       "Unknown",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: ns.Name,
+					Namespace: workNamespaceName,
 					Name:      wrappedCMName1,
 				},
 				Data: map[string]string{
@@ -268,16 +273,24 @@ var _ = Describe("handling errors and failures gracefully", func() {
 			resourceEnvelope.Data["cm1.yaml"] = runtime.RawExtension{Raw: badCMBytes}
 			Expect(hubClient.Create(ctx, resourceEnvelope)).To(Succeed(), "Failed to create resource envelope %s", resourceEnvelope.Name)
 
-			// Create a CRP.
-			crp := &placementv1beta1.ClusterResourcePlacement{
+			// Create a ResourcePlacement.
+			rp := &placementv1beta1.ResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName,
+					Name:      rpName,
+					Namespace: workNamespaceName,
 					// Add a custom finalizer; this would allow us to better observe
 					// the behavior of the controllers.
 					Finalizers: []string{customDeletionBlockerFinalizer},
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: workResourceSelector(),
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+						{
+							Group:   placementv1beta1.GroupVersion.Group,
+							Kind:    placementv1beta1.ResourceEnvelopeKind,
+							Version: placementv1beta1.GroupVersion.Version,
+							Name:    envelopeName,
+						},
+					},
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickFixedPlacementType,
 						ClusterNames: []string{
@@ -295,31 +308,26 @@ var _ = Describe("handling errors and failures gracefully", func() {
 					},
 				},
 			}
-			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create ResourcePlacement")
 		})
 
-		It("should update CRP status as expected", func() {
+		It("should update ResourcePlacement status as expected", func() {
 			Eventually(func() error {
-				crp := &placementv1beta1.ClusterResourcePlacement{}
-				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+				rp := &placementv1beta1.ResourcePlacement{}
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: rpName, Namespace: workNamespaceName}, rp); err != nil {
 					return err
 				}
 
 				wantStatus := placementv1beta1.PlacementStatus{
-					Conditions: crpDiffReportingFailedConditions(crp.Generation, false),
+					Conditions: rpDiffReportingFailedConditions(rp.Generation, false),
 					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
 							ObservedResourceIndex: "0",
-							Conditions:            perClusterDiffReportingFailedConditions(crp.Generation),
+							Conditions:            perClusterDiffReportingFailedConditions(rp.Generation),
 						},
 					},
 					SelectedResources: []placementv1beta1.ResourceIdentifier{
-						{
-							Kind:    "Namespace",
-							Name:    workNamespaceName,
-							Version: "v1",
-						},
 						{
 							Group:     placementv1beta1.GroupVersion.Group,
 							Kind:      placementv1beta1.ResourceEnvelopeKind,
@@ -330,11 +338,11 @@ var _ = Describe("handling errors and failures gracefully", func() {
 					},
 					ObservedResourceIndex: "0",
 				}
-				if diff := cmp.Diff(crp.Status, wantStatus, placementStatusCmpOptions...); diff != "" {
-					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
+				if diff := cmp.Diff(rp.Status, wantStatus, placementStatusCmpOptions...); diff != "" {
+					return fmt.Errorf("ResourcePlacement status diff (-got, +want): %s", diff)
 				}
 				return nil
-			}, eventuallyDuration*20, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			}, eventuallyDuration*20, eventuallyInterval).Should(Succeed(), "Failed to update ResourcePlacement status as expected")
 		})
 
 		It("should not apply any resource", func() {
@@ -345,30 +353,22 @@ var _ = Describe("handling errors and failures gracefully", func() {
 				}
 				return nil
 			}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "The malformed configMap has been applied unexpectedly")
-
-			Consistently(workNamespaceRemovedFromClusterActual(memberCluster1EastProd)).Should(Succeed(), "The namespace object has been applied unexpectedly")
 		})
 
 		AfterAll(func() {
-			// Remove the CRP and the namespace from the hub cluster.
-			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd})
+			// Remove the ResourcePlacement from the hub cluster.
+			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: workNamespaceName}, []*framework.Cluster{memberCluster1EastProd})
 		})
 	})
 
 	Context("pre-processing failure in apply ops (duplicated)", Ordered, func() {
-		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-		workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-
 		BeforeAll(func() {
 			// Use an envelope to create duplicate resource entries.
-			ns := appNamespace()
-			Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
-
 			// Create an envelope resource to wrap the configMaps.
 			resourceEnvelope := &placementv1beta1.ResourceEnvelope{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      envelopeName,
-					Namespace: ns.Name,
+					Namespace: workNamespaceName,
 				},
 				Data: map[string]runtime.RawExtension{},
 			}
@@ -380,7 +380,7 @@ var _ = Describe("handling errors and failures gracefully", func() {
 					Kind:       "ConfigMap",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: ns.Name,
+					Namespace: workNamespaceName,
 					Name:      wrappedCMName1,
 				},
 				Data: map[string]string{
@@ -406,16 +406,24 @@ var _ = Describe("handling errors and failures gracefully", func() {
 
 			Expect(hubClient.Create(ctx, resourceEnvelope)).To(Succeed(), "Failed to create resource envelope %s", resourceEnvelope.Name)
 
-			// Create a CRP.
-			crp := &placementv1beta1.ClusterResourcePlacement{
+			// Create a ResourcePlacement.
+			rp := &placementv1beta1.ResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName,
+					Name:      rpName,
+					Namespace: workNamespaceName,
 					// Add a custom finalizer; this would allow us to better observe
 					// the behavior of the controllers.
 					Finalizers: []string{customDeletionBlockerFinalizer},
 				},
 				Spec: placementv1beta1.PlacementSpec{
-					ResourceSelectors: workResourceSelector(),
+					ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+						{
+							Group:   placementv1beta1.GroupVersion.Group,
+							Kind:    placementv1beta1.ResourceEnvelopeKind,
+							Version: placementv1beta1.GroupVersion.Version,
+							Name:    envelopeName,
+						},
+					},
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickFixedPlacementType,
 						ClusterNames: []string{
@@ -430,18 +438,18 @@ var _ = Describe("handling errors and failures gracefully", func() {
 					},
 				},
 			}
-			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+			Expect(hubClient.Create(ctx, rp)).To(Succeed(), "Failed to create ResourcePlacement")
 		})
 
-		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := func() error {
-				crp := &placementv1beta1.ClusterResourcePlacement{}
-				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+		It("should update ResourcePlacement status as expected", func() {
+			rpStatusUpdatedActual := func() error {
+				rp := &placementv1beta1.ResourcePlacement{}
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: rpName, Namespace: workNamespaceName}, rp); err != nil {
 					return err
 				}
 
 				wantStatus := placementv1beta1.PlacementStatus{
-					Conditions: crpAppliedFailedConditions(crp.Generation),
+					Conditions: rpAppliedFailedConditions(rp.Generation),
 					PerClusterPlacementStatuses: []placementv1beta1.PerClusterPlacementStatus{
 						{
 							ClusterName:           memberCluster1EastProdName,
@@ -468,15 +476,10 @@ var _ = Describe("handling errors and failures gracefully", func() {
 									},
 								},
 							},
-							Conditions: perClusterApplyFailedConditions(crp.Generation),
+							Conditions: perClusterApplyFailedConditions(rp.Generation),
 						},
 					},
 					SelectedResources: []placementv1beta1.ResourceIdentifier{
-						{
-							Kind:    "Namespace",
-							Name:    workNamespaceName,
-							Version: "v1",
-						},
 						{
 							Group:     placementv1beta1.GroupVersion.Group,
 							Kind:      placementv1beta1.ResourceEnvelopeKind,
@@ -487,20 +490,16 @@ var _ = Describe("handling errors and failures gracefully", func() {
 					},
 					ObservedResourceIndex: "0",
 				}
-				if diff := cmp.Diff(crp.Status, wantStatus, placementStatusCmpOptions...); diff != "" {
-					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
+				if diff := cmp.Diff(rp.Status, wantStatus, placementStatusCmpOptions...); diff != "" {
+					return fmt.Errorf("ResourcePlacement status diff (-got, +want): %s", diff)
 				}
 				return nil
 			}
-			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
-			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "CRP status has changed unexpectedly")
+			Eventually(rpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update ResourcePlacement status as expected")
+			Consistently(rpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "ResourcePlacement status has changed unexpectedly")
 		})
 
 		It("should place the other manifests on member clusters", func() {
-			Eventually(func() error {
-				return validateWorkNamespaceOnCluster(memberCluster1EastProd, types.NamespacedName{Name: workNamespaceName})
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to apply the namespace object")
-
 			Eventually(func() error {
 				cm := &corev1.ConfigMap{}
 				if err := memberCluster1EastProdClient.Get(ctx, types.NamespacedName{Name: wrappedCMName1, Namespace: workNamespaceName}, cm); err != nil {
@@ -533,8 +532,8 @@ var _ = Describe("handling errors and failures gracefully", func() {
 		})
 
 		AfterAll(func() {
-			// Remove the CRP and the namespace from the hub cluster.
-			ensureCRPAndRelatedResourcesDeleted(crpName, []*framework.Cluster{memberCluster1EastProd})
+			// Remove the ResourcePlacement from the hub cluster.
+			ensureRPAndRelatedResourcesDeleted(types.NamespacedName{Name: rpName, Namespace: workNamespaceName}, []*framework.Cluster{memberCluster1EastProd})
 		})
 	})
 })
