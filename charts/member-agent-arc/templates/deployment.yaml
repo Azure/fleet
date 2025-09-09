@@ -252,7 +252,7 @@ spec:
             - name: provider-token
               mountPath: /config
             {{- if and (or .Values.Azure.proxySettings.isCustomCert .Values.Azure.proxySettings.isProxyEnabled) (.Values.Azure.proxySettings.proxyCert) }}
-             - name: azure-proxy-cert-store
+            - name: azure-proxy-cert-store
               mountPath: /etc/ssl/certs/azure-proxy-cert.crt
               subPath: azure-proxy-cert.crt
               readOnly: true
