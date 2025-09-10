@@ -46,6 +46,8 @@ type Cluster struct {
 	RestMapper                               meta.RESTMapper
 	PricingProvider                          trackers.PricingProvider
 	SystemMastersClient                      client.Client
+	KubeSystemClient                         client.Client
+	FleetSystemClient                        client.Client
 }
 
 func NewCluster(name, svcAccountName string, scheme *runtime.Scheme, pp trackers.PricingProvider) *Cluster {
@@ -62,6 +64,8 @@ func GetClusterClient(cluster *Cluster) {
 	clusterConfig := GetClientConfig(cluster)
 	impersonateClusterConfig := GetImpersonateClientConfig(cluster)
 	systemMastersConfig := GetSystemMastersClientConfig(cluster)
+	kubeSystemConfig := GetKubeSystemClientConfig(cluster)
+	fleetSystemConfig := GetFleetSystemClientConfig(cluster)
 
 	restConfig, err := clusterConfig.ClientConfig()
 	if err != nil {
@@ -75,7 +79,17 @@ func GetClusterClient(cluster *Cluster) {
 
 	systemMastersRestConfig, err := systemMastersConfig.ClientConfig()
 	if err != nil {
-		gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up impersonate rest config")
+		gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up system masters rest config")
+	}
+
+	kubeSystemRestConfig, err := kubeSystemConfig.ClientConfig()
+	if err != nil {
+		gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up kube-system service account rest config")
+	}
+
+	fleetSystemRestConfig, err := fleetSystemConfig.ClientConfig()
+	if err != nil {
+		gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up fleet-system service account rest config")
 	}
 
 	cluster.KubeClient, err = client.New(restConfig, client.Options{Scheme: cluster.Scheme})
@@ -94,7 +108,13 @@ func GetClusterClient(cluster *Cluster) {
 	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Impersonate Kube Client")
 
 	cluster.SystemMastersClient, err = client.New(systemMastersRestConfig, client.Options{Scheme: cluster.Scheme})
-	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Impersonate Kube Client")
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up System Masters Kube Client")
+
+	cluster.KubeSystemClient, err = client.New(kubeSystemRestConfig, client.Options{Scheme: cluster.Scheme})
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Kube System Service Account Client")
+
+	cluster.FleetSystemClient, err = client.New(fleetSystemRestConfig, client.Options{Scheme: cluster.Scheme})
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Fleet System Service Account Client")
 }
 
 func GetClientConfig(cluster *Cluster) clientcmd.ClientConfig {
@@ -127,4 +147,34 @@ func GetImpersonateClientConfig(cluster *Cluster) clientcmd.ClientConfig {
 				ImpersonateGroups: []string{"system:authenticated"},
 			},
 		})
+}
+
+func GetKubeSystemClientConfig(cluster *Cluster) clientcmd.ClientConfig {
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigPath},
+		&clientcmd.ConfigOverrides{
+			CurrentContext: cluster.ClusterName,
+			AuthInfo: api.AuthInfo{
+				Impersonate: "system:serviceaccount:kube-system:service-account-controller",
+				ImpersonateGroups: []string{
+					"system:serviceaccounts:kube-system",
+				},
+			},
+		},
+	)
+}
+
+func GetFleetSystemClientConfig(cluster *Cluster) clientcmd.ClientConfig {
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigPath},
+		&clientcmd.ConfigOverrides{
+			CurrentContext: cluster.ClusterName,
+			AuthInfo: api.AuthInfo{
+				Impersonate: "system:serviceaccount:fleet-system:service-account-controller",
+				ImpersonateGroups: []string{
+					"system:serviceaccounts:fleet-system",
+				},
+			},
+		},
+	)
 }

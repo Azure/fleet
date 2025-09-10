@@ -26,6 +26,7 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -127,6 +128,63 @@ func expectDeniedByVAP(err error) {
 }
 
 var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("managedresource"), Ordered, func() {
+	var clusterRole *rbacv1.ClusterRole
+	var clusterRoleBinding *rbacv1.ClusterRoleBinding
+
+	BeforeAll(func() {
+		By("Give permissions to service accounts")
+		// --- Create ClusterRole ---
+		clusterRole = &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "allow-certain-managed-resources",
+			},
+			Rules: []rbacv1.PolicyRule{
+				{
+					APIGroups: []string{""}, // Core API group
+					Resources: []string{"resourcequotas", "namespaces"},
+					Verbs:     []string{"create", "update", "delete"},
+				},
+				{
+					APIGroups: []string{"networking.k8s.io"},
+					Resources: []string{"networkpolicies"},
+					Verbs:     []string{"create", "update", "delete"},
+				},
+			},
+		}
+		Expect(hubClient.Create(ctx, clusterRole)).To(Succeed())
+
+		// --- Create ClusterRoleBinding ---
+		clusterRoleBinding = &rbacv1.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "service-accounts-binding-for-managed-resources",
+			},
+			Subjects: []rbacv1.Subject{
+				{
+					Kind:      rbacv1.ServiceAccountKind,
+					Name:      "service-account-controller", // The service account's name
+					Namespace: "kube-system",                // The service account's namespace
+				},
+				{
+					Kind:      rbacv1.ServiceAccountKind,
+					Name:      "service-account-controller", // The service account's name
+					Namespace: "fleet-system",               // The service account's namespace
+				},
+			},
+			RoleRef: rbacv1.RoleRef{
+				APIGroup: rbacv1.GroupName,
+				Kind:     "ClusterRole",
+				Name:     clusterRole.Name,
+			},
+		}
+		Expect(hubClient.Create(ctx, clusterRoleBinding)).To(Succeed())
+	})
+
+	AfterAll(func() {
+		By("Cleaning up service account permissions")
+		Expect(hubClient.Delete(ctx, clusterRoleBinding)).To(Succeed())
+		Expect(hubClient.Delete(ctx, clusterRole)).To(Succeed())
+	})
+
 	It("The VAP and its binding should exist", func() {
 		var vap admissionregistrationv1.ValidatingAdmissionPolicy
 		Expect(sysMastersClient.Get(ctx, types.NamespacedName{Name: vapName}, &vap)).Should(Succeed(), "ValidatingAdmissionPolicy should be installed")
@@ -168,6 +226,24 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 			Expect(sysMastersClient.Create(ctx, managedNS)).To(Succeed())
 
 			Expect(sysMastersClient.Delete(ctx, managedNS)).To(Succeed())
+		})
+
+		It("should allow CREATE operation on managed namespace for system:serviceaccount:kube-system user", func() {
+			managedNS := createManagedNamespace("test-managed-ns-kubesystem-sa")
+			By("expecting successful CREATE operation with system:serviceaccount:kube-system user")
+			Expect(kubeSystemClient.Create(ctx, managedNS)).To(Succeed())
+
+			By("expecting successful DELETE operation on managed namespace")
+			Expect(sysMastersClient.Delete(ctx, managedNS)).To(Succeed())
+		})
+
+		It("should allow CREATE operation on managed namespace for system:serviceaccounts:fleet-system user", func() {
+			managedNS := createManagedNamespace("test-managed-ns-fleet-system")
+			By("expecting successful CREATE operation with system:serviceaccounts:fleet-system user")
+			Expect(fleetSystemClient.Create(ctx, managedNS)).To(Succeed())
+
+			By("expecting successful DELETE operation on managed namespace")
+			Expect(fleetSystemClient.Delete(ctx, managedNS)).To(Succeed())
 		})
 	})
 
@@ -220,6 +296,40 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 				ns.Annotations = map[string]string{"test": "annotation"}
 				By("expecting denial of UPDATE operation on managed namespace")
 				updateErr = sysMastersClient.Update(ctx, &ns)
+				if k8sErrors.IsConflict(updateErr) {
+					return updateErr
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		It("should allow UPDATE operation on managed namespace for system:serviceaccounts:kube-system user", func() {
+			var updateErr error
+			Eventually(func() error {
+				var ns corev1.Namespace
+				if err := sysMastersClient.Get(ctx, types.NamespacedName{Name: managedNS.Name}, &ns); err != nil {
+					return err
+				}
+				ns.Annotations = map[string]string{"test": "annotation"}
+				By("expecting denial of UPDATE operation on managed namespace")
+				updateErr = kubeSystemClient.Update(ctx, &ns)
+				if k8sErrors.IsConflict(updateErr) {
+					return updateErr
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		It("should allow UPDATE operation on managed namespace for system:serviceaccounts:fleet-system user", func() {
+			var updateErr error
+			Eventually(func() error {
+				var ns corev1.Namespace
+				if err := sysMastersClient.Get(ctx, types.NamespacedName{Name: managedNS.Name}, &ns); err != nil {
+					return err
+				}
+				ns.Annotations = map[string]string{"test": "annotation"}
+				By("expecting denial of UPDATE operation on managed namespace")
+				updateErr = fleetSystemClient.Update(ctx, &ns)
 				if k8sErrors.IsConflict(updateErr) {
 					return updateErr
 				}
@@ -288,6 +398,42 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 				Expect(err).To(BeNil(), "system:masters user should delete managed NetworkPolicy")
 				err = sysMastersClient.Delete(ctx, crp)
 				Expect(err).To(BeNil(), "system:masters user should delete managed CRP")
+			})
+
+			It("should allow CREATE operation on managed ResourceQuota for kube-system service account", func() {
+				rq := createManagedResourceQuota(managedNS.Name, "default")
+				By("expecting successful CREATE operation with kube-system service account")
+				Expect(kubeSystemClient.Create(ctx, rq)).To(Succeed())
+
+				By("expecting successful DELETE operation with kube-system service account")
+				Expect(kubeSystemClient.Delete(ctx, rq)).To(Succeed())
+			})
+
+			It("should allow CREATE operation on managed ResourceQuota for fleet-system service account", func() {
+				rq := createManagedResourceQuota(managedNS.Name, "default")
+				By("expecting successful CREATE operation with fleet-system service account")
+				Expect(fleetSystemClient.Create(ctx, rq)).To(Succeed())
+
+				By("expecting successful DELETE operation with fleet-system service account")
+				Expect(fleetSystemClient.Delete(ctx, rq)).To(Succeed())
+			})
+
+			It("should allow CREATE operation on managed NetworkPolicy for kube-system service account", func() {
+				netpol := createManagedNetworkPolicy(managedNS.Name, "default")
+				By("expecting successful CREATE operation with kube-system service account")
+				Expect(kubeSystemClient.Create(ctx, netpol)).To(Succeed())
+
+				By("expecting successful DELETE operation with kube-system service account")
+				Expect(kubeSystemClient.Delete(ctx, netpol)).To(Succeed())
+			})
+
+			It("should allow CREATE operation on managed NetworkPolicy for fleet-system service account", func() {
+				netpol := createManagedNetworkPolicy(managedNS.Name, "default")
+				By("expecting successful CREATE operation with fleet-system service account")
+				Expect(fleetSystemClient.Create(ctx, netpol)).To(Succeed())
+
+				By("expecting successful DELETE operation with fleet-system service account")
+				Expect(fleetSystemClient.Delete(ctx, netpol)).To(Succeed())
 			})
 		})
 

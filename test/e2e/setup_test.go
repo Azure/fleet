@@ -109,6 +109,8 @@ var (
 	hubClient                      client.Client
 	notMasterUser                  client.Client
 	sysMastersClient               client.Client
+	kubeSystemClient               client.Client
+	fleetSystemClient              client.Client
 	memberCluster1EastProdClient   client.Client
 	memberCluster2EastCanaryClient client.Client
 	memberCluster3WestProdClient   client.Client
@@ -336,7 +338,11 @@ func beforeSuiteForAllProcesses() {
 	notMasterUser = hubCluster.ImpersonateKubeClient
 	Expect(notMasterUser).NotTo(BeNil(), "Failed to initialize impersonate client for accessing Kubernetes cluster")
 	sysMastersClient = hubCluster.SystemMastersClient
-	Expect(sysMastersClient).NotTo(BeNil(), "Failed to initialize impersonate client for accessing Kubernetes cluster")
+	Expect(sysMastersClient).NotTo(BeNil(), "Failed to initialize impersonate system masters client for accessing Kubernetes cluster")
+	kubeSystemClient = hubCluster.KubeSystemClient
+	Expect(kubeSystemClient).NotTo(BeNil(), "Failed to initialize kube-system service account client for accessing Kubernetes cluster")
+	fleetSystemClient = hubCluster.FleetSystemClient
+	Expect(fleetSystemClient).NotTo(BeNil(), "Failed to initialize fleet-system service account client for accessing Kubernetes cluster")
 
 	var pricingProvider1 trackers.PricingProvider
 	if isAzurePropertyProviderEnabled {
