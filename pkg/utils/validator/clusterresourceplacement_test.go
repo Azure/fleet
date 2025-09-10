@@ -514,6 +514,14 @@ func TestValidateClusterResourcePlacement_PickFixedPlacementPolicy(t *testing.T)
 			wantErr:    true,
 			wantErrMsg: "cluster names must be unique for policy type PickFixed",
 		},
+		"invalid placement policy - PickFixed with invalid cluster names": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickFixedPlacementType,
+				ClusterNames:  []string{"test@,cluster1", "test$cluster2"},
+			},
+			wantErr:    true,
+			wantErrMsg: "PickFixed cluster name test@,cluster1 is not a valid member name: a lowercase RFC 1123 label must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?'), PickFixed cluster name test$cluster2 is not a valid member name: a lowercase RFC 1123 label must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?')",
+		},
 		"invalid placement policy - PickFixed with non nil number of clusters": {
 			policy: &placementv1beta1.PlacementPolicy{
 				PlacementType:    placementv1beta1.PickFixedPlacementType,
