@@ -36,7 +36,7 @@ func GetValidatingAdmissionPolicy(isHub bool) *admv1.ValidatingAdmissionPolicy {
 							Rule: admv1.Rule{
 								APIGroups:   []string{""},
 								Resources:   []string{"namespaces"},
-								APIVersions: []string{"*"},
+								APIVersions: []string{"v1"},
 							},
 							Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
 						},
@@ -46,7 +46,7 @@ func GetValidatingAdmissionPolicy(isHub bool) *admv1.ValidatingAdmissionPolicy {
 							Rule: admv1.Rule{
 								APIGroups:   []string{""},
 								Resources:   []string{"resourcequotas"},
-								APIVersions: []string{"*"},
+								APIVersions: []string{"v1"},
 							},
 							Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
 						},
@@ -80,7 +80,7 @@ func GetValidatingAdmissionPolicy(isHub bool) *admv1.ValidatingAdmissionPolicy {
 			RuleWithOperations: admv1.RuleWithOperations{
 				Rule: admv1.Rule{
 					APIGroups:   []string{"placement.kubernetes-fleet.io"},
-					Resources:   []string{"clusterresourceplacements"},
+					Resources:   []string{"*"},
 					APIVersions: []string{"*"},
 				},
 				Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
@@ -101,7 +101,7 @@ func GetValidatingAdmissionPolicyBinding() *admv1.ValidatingAdmissionPolicyBindi
 			Name: resourceName,
 		},
 		Spec: admv1.ValidatingAdmissionPolicyBindingSpec{
-			PolicyName: "aks-fleet-managed-by-arm",
+			PolicyName: resourceName,
 			ValidationActions: []admv1.ValidationAction{
 				admv1.Deny,
 			},
