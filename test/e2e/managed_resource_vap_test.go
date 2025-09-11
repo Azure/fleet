@@ -37,7 +37,6 @@ const (
 	managedByLabel      = "fleet.azure.com/managed-by"
 	managedByLabelValue = "arm"
 	vapName             = "aks-fleet-managed-by-arm"
-	vapBindingName      = "aks-fleet-managed-by-arm"
 )
 
 var managedByLabelMap = map[string]string{
@@ -114,7 +113,7 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 		Expect(sysMastersClient.Get(ctx, types.NamespacedName{Name: vapName}, &vap)).Should(Succeed(), "ValidatingAdmissionPolicy should be installed")
 
 		var vapBinding admissionregistrationv1.ValidatingAdmissionPolicyBinding
-		Expect(sysMastersClient.Get(ctx, types.NamespacedName{Name: vapBindingName}, &vapBinding)).Should(Succeed(), "ValidatingAdmissionPolicyBinding should be installed")
+		Expect(sysMastersClient.Get(ctx, types.NamespacedName{Name: vapName}, &vapBinding)).Should(Succeed(), "ValidatingAdmissionPolicyBinding should be installed")
 	})
 
 	It("should allow operations on unmanaged namespace for non-system:masters user", func() {
@@ -130,7 +129,7 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 			}
 			ns.Annotations = map[string]string{"test": "annotation"}
 			return notMasterUser.Update(ctx, &ns)
-		}, eventuallyDuration, workloadEventuallyDuration).Should(Succeed())
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 
 		By("expecting successful DELETE operation on unmanaged namespace")
 		Expect(notMasterUser.Delete(ctx, unmanagedNS)).To(Succeed())
@@ -187,7 +186,7 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 					return updateErr
 				}
 				return nil
-			}, eventuallyDuration, workloadEventuallyDuration).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 
 			expectDeniedByVAP(updateErr)
 		})
@@ -206,7 +205,7 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 					return updateErr
 				}
 				return nil
-			}, eventuallyDuration, workloadEventuallyDuration).Should(Succeed())
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
 
 		Context("For other resources in scope", func() {
@@ -253,7 +252,7 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 						return updateErr
 					}
 					return nil
-				}, eventuallyDuration, workloadEventuallyDuration).Should(Succeed())
+				}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 				expectDeniedByVAP(updateErr)
 
 				err = notMasterUser.Delete(ctx, np)
