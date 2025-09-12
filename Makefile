@@ -316,7 +316,7 @@ docker-build-member-agent: docker-buildx-builder
 	docker buildx build \
 		--file docker/$(MEMBER_AGENT_IMAGE_NAME).Dockerfile \
 		--output=$(OUTPUT_TYPE) \
-		--platform="linux/amd64" \
+		--platform="linux/amd64,linux/arm64" \
 		--pull \
 		--tag $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION) .
 
@@ -325,7 +325,7 @@ docker-build-refresh-token: docker-buildx-builder
 	docker buildx build \
 		--file docker/$(REFRESH_TOKEN_IMAGE_NAME).Dockerfile \
 		--output=$(OUTPUT_TYPE) \
-		--platform="linux/amd64" \
+		--platform="linux/amd64,linux/arm64" \
 		--pull \
 		--tag $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) .
 
@@ -334,7 +334,7 @@ docker-build-crd-installer: docker-buildx-builder
 	docker buildx build \
 		--file docker/crd-installer.Dockerfile \
 		--output=$(OUTPUT_TYPE) \
-		--platform="linux/amd64" \
+		--platform="linux/amd64,linux/arm64" \
 		--pull \
 		--tag $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION) .
 
