@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/Azure/karpenter-provider-azure/pkg/providers/pricing"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/klog/v2"
@@ -81,15 +82,14 @@ type NodeTracker struct {
 	totalCapacity    corev1.ResourceList
 	totalAllocatable corev1.ResourceList
 
-	// costs tracks the cost-related information about the cluster.
-	costs *costInfo
-
 	// Below are a list of maps that tracks information about individual nodes in the cluster.
 	capacityByNode    map[string]corev1.ResourceList
 	allocatableByNode map[string]corev1.ResourceList
 	nodeSetBySKU      map[string]NodeSet
 	skuByNode         map[string]string
 
+	// costs tracks the cost-related information about the cluster.
+	costs *costInfo
 	// pricingProvider facilitates cost calculation.
 	pricingProvider PricingProvider
 
@@ -136,6 +136,15 @@ func NewNodeTracker(pp PricingProvider) *NodeTracker {
 //
 // Note that this method assumes that the access lock has been acquired.
 func (nt *NodeTracker) calculateCosts() {
+	// Skip the cost calculation is no pricing provider is available.
+	if nt.pricingProvider == nil {
+		// This error will not be read; it is set here for completeness reasons.
+		nt.costs = &costInfo{
+			err: fmt.Errorf("no pricing provider is set up; cannot calculate costs"),
+		}
+		return
+	}
+
 	totalCapacityCPU := nt.totalCapacity[corev1.ResourceCPU]
 	totalCapacityMemory := nt.totalCapacity[corev1.ResourceMemory]
 
@@ -560,6 +569,13 @@ func (nt *NodeTracker) TotalAllocatable() corev1.ResourceList {
 func (nt *NodeTracker) Costs() (perCPUCoreCost, perGBMemoryCost float64, warnings []string, err error) {
 	nt.mu.Lock()
 	defer nt.mu.Unlock()
+
+	if nt.pricingProvider == nil {
+		// Normally this branch will never run; it is set for completeness reasons.
+		wrappedErr := fmt.Errorf("no pricing provider is set up; cannot calculate costs")
+		_ = controller.NewUnexpectedBehaviorError(wrappedErr)
+		return 0.0, 0.0, nil, wrappedErr
+	}
 
 	if nt.costs.lastUpdated.Before(nt.pricingProvider.LastUpdated()) {
 		nt.calculateCosts()

@@ -108,9 +108,10 @@ func (p *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	return ctrl.Result{}, nil
 }
 
-func (p *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (p *PodReconciler) SetupWithManager(mgr ctrl.Manager, controllerName string) error {
 	// Reconcile any pod changes (create, update, delete).
 	return ctrl.NewControllerManagedBy(mgr).
+		Named(controllerName).
 		For(&corev1.Pod{}).
 		Complete(p)
 }

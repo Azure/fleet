@@ -89,9 +89,10 @@ func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	return ctrl.Result{}, nil
 }
 
-func (r *NodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *NodeReconciler) SetupWithManager(mgr ctrl.Manager, controllerName string) error {
 	// Reconcile any node changes (create, update, delete).
 	return ctrl.NewControllerManagedBy(mgr).
+		Named(controllerName).
 		For(&corev1.Node{}).
 		Complete(r)
 }

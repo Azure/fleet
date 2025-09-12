@@ -39,6 +39,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider"
 	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider/azure/controllers"
 	"github.com/kubefleet-dev/kubefleet/pkg/propertyprovider/azure/trackers"
+	"github.com/kubefleet-dev/kubefleet/pkg/utils/controller"
 )
 
 const (
@@ -78,9 +79,17 @@ type PropertyProvider struct {
 	// be either specified by the user or auto-discovered from the AKS cluster.
 	region *string
 
+	// The feature flags.
+	isCostCollectionEnabled               bool
+	isAvailableResourcesCollectionEnabled bool
+
 	// The controller manager in use by the Azure property provider; this field is mostly reserved for
 	// testing purposes.
 	mgr ctrl.Manager
+	// The names in use by the controllers managed by the property provider; these fields are exposed
+	// to avoid name conflicts, though at this moment are mostly reserved for testing purposes.
+	nodeControllerName string
+	podControllerName  string
 }
 
 // Verify that the Azure property provider implements the MetricProvider interface at compile time.
@@ -176,10 +185,14 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 		return err
 	}
 
-	klog.V(2).Info("Setting up the node tracker")
-	if p.nodeTracker == nil {
+	switch {
+	case p.nodeTracker != nil:
+		// A node tracker has been explicitly set; use it.
+		klog.V(2).Info("A node tracker has been explicitly set")
+	case p.isCostCollectionEnabled:
+		// No node tracker has been set, and cost collection is enabled; set up a node tracker
+		// using the default pricing client (the AKS Karpenter pricing client).
 		klog.V(2).Info("Building a node tracker using the default AKS Karpenter pricing client")
-
 		if p.region == nil || len(*p.region) == 0 {
 			klog.V(2).Info("Auto-discover region as none has been specified")
 			// Note that an API reader is passed here for the purpose of auto-discovering region
@@ -198,30 +211,47 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 		klog.V(2).Infof("Starting with the region set to %s", *p.region)
 		pp := trackers.NewAKSKarpenterPricingClient(ctx, *p.region)
 		p.nodeTracker = trackers.NewNodeTracker(pp)
+	default:
+		// No node tracker has been set, and cost collection is disabled; set up a node tracker
+		// with no pricing provider.
+		klog.V(2).Info("Building a node tracker with no pricing provider")
+		p.nodeTracker = trackers.NewNodeTracker(nil)
 	}
 
-	klog.V(2).Info("Setting up the pod tracker")
-	p.podTracker = trackers.NewPodTracker()
-
-	// Set up the node and pod reconcilers.
-	klog.V(2).Info("Starting the node reconciler")
+	// Set up the node reconciler.
+	klog.V(2).Info("Setting up the node reconciler")
 	nodeReconciler := &controllers.NodeReconciler{
 		NT:     p.nodeTracker,
 		Client: mgr.GetClient(),
 	}
-	if err := nodeReconciler.SetupWithManager(mgr); err != nil {
+	if err := nodeReconciler.SetupWithManager(mgr, p.nodeControllerName); err != nil {
 		klog.ErrorS(err, "Failed to start the node reconciler in the Azure property provider")
 		return err
 	}
 
-	klog.V(2).Info("Starting the pod reconciler")
-	podReconciler := &controllers.PodReconciler{
-		PT:     p.podTracker,
-		Client: mgr.GetClient(),
-	}
-	if err := podReconciler.SetupWithManager(mgr); err != nil {
-		klog.ErrorS(err, "Failed to start the pod reconciler in the Azure property provider")
-		return err
+	switch {
+	case p.podTracker != nil:
+		// A pod tracker has been explicitly set; use it.
+		klog.V(2).Info("A pod tracker has been explicitly set")
+	case !p.isAvailableResourcesCollectionEnabled:
+		// Available resource collection is disabled; there is no need to set up a pod tracker, and
+		// as a result there is no need to watch for pods either.
+		klog.V(2).Info("Skipping pod tracker setup as available resources collection is disabled")
+	default:
+		// No pod tracker has been set, and available resources collection is enabled; set up
+		// a pod tracker.
+		klog.V(2).Info("Building a pod tracker")
+		p.podTracker = trackers.NewPodTracker()
+
+		klog.V(2).Info("Starting the pod reconciler")
+		podReconciler := &controllers.PodReconciler{
+			PT:     p.podTracker,
+			Client: mgr.GetClient(),
+		}
+		if err := podReconciler.SetupWithManager(mgr, p.podControllerName); err != nil {
+			klog.ErrorS(err, "Failed to start the pod reconciler in the Azure property provider")
+			return err
+		}
 	}
 
 	// Start the controller manager.
@@ -250,15 +280,47 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 }
 
 // Collect collects the properties of an AKS cluster.
-func (p *PropertyProvider) Collect(_ context.Context) propertyprovider.PropertyCollectionResponse {
+func (p *PropertyProvider) Collect(ctx context.Context) propertyprovider.PropertyCollectionResponse {
 	conds := make([]metav1.Condition, 0, 1)
 
 	// Collect the non-resource properties.
+
+	// Collect the node count property.
 	properties := make(map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue)
 	properties[propertyprovider.NodeCountProperty] = clusterv1beta1.PropertyValue{
 		Value:           fmt.Sprintf("%d", p.nodeTracker.NodeCount()),
 		ObservationTime: metav1.Now(),
 	}
+
+	// Collect the cost properties (if enabled).
+	if p.isCostCollectionEnabled {
+		costConds := p.collectCosts(ctx, properties)
+		conds = append(conds, costConds...)
+	}
+
+	// Collect the resource properties.
+
+	// Collect the total and allocatable resource properties.
+	resources := clusterv1beta1.ResourceUsage{}
+	resources.Capacity = p.nodeTracker.TotalCapacity()
+	resources.Allocatable = p.nodeTracker.TotalAllocatable()
+
+	// Collect the available resource properties (if enabled).
+	if p.isAvailableResourcesCollectionEnabled {
+		p.collectAvailableResource(ctx, &resources)
+	}
+
+	// Return the collection response.
+	return propertyprovider.PropertyCollectionResponse{
+		Properties: properties,
+		Resources:  resources,
+		Conditions: conds,
+	}
+}
+
+// collectCosts collects the cost information.
+func (p *PropertyProvider) collectCosts(_ context.Context, properties map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue) []metav1.Condition {
+	conds := make([]metav1.Condition, 0, 1)
 
 	perCPUCost, perGBMemoryCost, warnings, err := p.nodeTracker.Costs()
 	switch {
@@ -307,15 +369,22 @@ func (p *PropertyProvider) Collect(_ context.Context) propertyprovider.PropertyC
 		})
 	}
 
-	// Collect the resource properties.
-	resources := clusterv1beta1.ResourceUsage{}
-	resources.Capacity = p.nodeTracker.TotalCapacity()
-	resources.Allocatable = p.nodeTracker.TotalAllocatable()
+	return conds
+}
+
+// collectAvailableResource collects the available resource information.
+func (p *PropertyProvider) collectAvailableResource(_ context.Context, usage *clusterv1beta1.ResourceUsage) {
+	if p.podTracker == nil {
+		// No pod tracker has been set; but the property provider has been configured to collect
+		// available resource information. Normally this should never occur.
+		_ = controller.NewUnexpectedBehaviorError(fmt.Errorf("no pod tracker has been set, but the property provider has been configured to collect available resource information"))
+	}
 
 	requested := p.podTracker.TotalRequested()
+	allocatable := usage.Allocatable
 	available := make(corev1.ResourceList)
-	for rn := range resources.Allocatable {
-		left := resources.Allocatable[rn].DeepCopy()
+	for rn := range allocatable {
+		left := allocatable[rn].DeepCopy()
 		// In some unlikely scenarios, it could happen that, due to unavoidable
 		// inconsistencies in the data collection process, the total value of a specific
 		// requested resource exceeds that of the allocatable resource, as observed by
@@ -331,14 +400,7 @@ func (p *PropertyProvider) Collect(_ context.Context) propertyprovider.PropertyC
 		}
 		available[rn] = left
 	}
-	resources.Available = available
-
-	// Return the collection response.
-	return propertyprovider.PropertyCollectionResponse{
-		Properties: properties,
-		Resources:  resources,
-		Conditions: conds,
-	}
+	usage.Available = available
 }
 
 // autoDiscoverRegionAndSetupTrackers auto-discovers the region of the AKS cluster.
@@ -394,9 +456,17 @@ func (p *PropertyProvider) autoDiscoverRegionAndSetupTrackers(ctx context.Contex
 // If the region is unspecified at the time when this function is called, the provider
 // will attempt to auto-discover the region of its host cluster when the Start method is
 // called.
-func New(region *string) propertyprovider.PropertyProvider {
+func New(
+	region *string,
+	isCostCollectionEnabled, isAvailableResourcesCollectionEnabled bool,
+) propertyprovider.PropertyProvider {
 	return &PropertyProvider{
 		region: region,
+		// Use the default names.
+		nodeControllerName:                    "azure-property-provider-node-watcher",
+		podControllerName:                     "azure-property-provider-pod-watcher",
+		isCostCollectionEnabled:               isCostCollectionEnabled,
+		isAvailableResourcesCollectionEnabled: isAvailableResourcesCollectionEnabled,
 	}
 }
 
@@ -405,8 +475,16 @@ func New(region *string) propertyprovider.PropertyProvider {
 //
 // This is mostly used for allow plugging in of alternate pricing providers (one that
 // does not use the Karpenter client), and for testing purposes.
-func NewWithPricingProvider(pp trackers.PricingProvider) propertyprovider.PropertyProvider {
+func NewWithPricingProvider(
+	pp trackers.PricingProvider,
+	nodeControllerName, podControllerName string,
+	isCostCollectionEnabled, isAvailableResourcesCollectionEnabled bool,
+) propertyprovider.PropertyProvider {
 	return &PropertyProvider{
-		nodeTracker: trackers.NewNodeTracker(pp),
+		nodeTracker:                           trackers.NewNodeTracker(pp),
+		nodeControllerName:                    nodeControllerName,
+		podControllerName:                     podControllerName,
+		isCostCollectionEnabled:               isCostCollectionEnabled,
+		isAvailableResourcesCollectionEnabled: isAvailableResourcesCollectionEnabled,
 	}
 }

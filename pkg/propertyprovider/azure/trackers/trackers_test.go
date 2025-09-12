@@ -388,6 +388,28 @@ func TestCalculateCosts(t *testing.T) {
 				fmt.Sprintf("the pricing data is stale (last updated at %v); the system might have issues connecting to the Azure Retail Prices API, or the current region is unsupported", currentTime.Add(-time.Hour*48)),
 			},
 		},
+		{
+			name: "no pricing provider",
+			nt: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("12"),
+					corev1.ResourceMemory: resource.MustParse("2Gi"),
+				},
+				totalAllocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("8"),
+					corev1.ResourceMemory: resource.MustParse("1Gi"),
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {
+						nodeName1: true,
+					},
+				},
+				costs: &costInfo{
+					err: fmt.Errorf("costs have not been calculated yet"),
+				},
+			},
+			wantCostErrStrPrefix: "no pricing provider is set up; cannot calculate costs",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -2093,6 +2115,99 @@ func TestNodeTrackerAllocatableCapacityFor(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tc.nt.TotalAllocatableFor(tc.rn); !got.Equal(tc.want) {
 				t.Fatalf("TotalAllocatable() = %s, want %s", got.String(), tc.want.String())
+			}
+		})
+	}
+}
+
+// TestNodeTrackerCosts tests the Costs method of the NodeTracker.
+func TestNodeTrackerCosts(t *testing.T) {
+	testCases := []struct {
+		name                 string
+		nt                   *NodeTracker
+		wantPerCPUCoreCost   float64
+		wantPerGBMemoryCost  float64
+		wantWarnings         []string
+		wantCostErrStrPrefix string
+	}{
+		{
+			name: "fresh cost data, no warnings/errors",
+			nt: &NodeTracker{
+				pricingProvider: &dummyPricingProvider{},
+				costs: &costInfo{
+					perCPUCoreHourlyCost:  1.0,
+					perGBMemoryHourlyCost: 1.0,
+					lastUpdated:           time.Now(),
+				},
+			},
+			wantPerCPUCoreCost:  1.0,
+			wantPerGBMemoryCost: 1.0,
+		},
+		{
+			name: "stale cost data, no warnings/errors",
+			nt: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("12"),
+					corev1.ResourceMemory: resource.MustParse("24Gi"),
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {nodeName1: true, nodeName2: true},
+					nodeSKU2: {nodeName3: true},
+				},
+				pricingProvider: &dummyPricingProvider{},
+				costs: &costInfo{
+					lastUpdated: currentTime.Add(-time.Hour * 48),
+				},
+			},
+			wantPerCPUCoreCost:  0.5833,
+			wantPerGBMemoryCost: 0.2917,
+		},
+		{
+			name: "no pricing provider",
+			nt: &NodeTracker{
+				totalCapacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("12"),
+					corev1.ResourceMemory: resource.MustParse("2Gi"),
+				},
+				nodeSetBySKU: map[string]NodeSet{
+					nodeSKU1: {nodeName1: true},
+				},
+				costs: &costInfo{
+					err: fmt.Errorf("costs have not been calculated yet"),
+				},
+			},
+			wantCostErrStrPrefix: "no pricing provider is set up; cannot calculate costs",
+		},
+		// TO-DO (chenyu1): add more test cases.
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			perCPUCoreCost, perGBMemoryCost, warnings, err := tc.nt.Costs()
+
+			if tc.wantCostErrStrPrefix != "" {
+				if err == nil {
+					t.Fatalf("Costs() = nil, want error with prefix %s", tc.wantCostErrStrPrefix)
+				}
+				if !strings.HasPrefix(err.Error(), tc.wantCostErrStrPrefix) {
+					t.Fatalf("Costs() error = %s, want prefix %s", err.Error(), tc.wantCostErrStrPrefix)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Costs() = %s, want no error", err)
+			}
+
+			if diff := cmp.Diff(warnings, tc.wantWarnings, cmpopts.EquateEmpty()); diff != "" {
+				t.Fatalf("Costs() warnings diff (-got, +want):\n%s", diff)
+			}
+
+			if !cmp.Equal(perCPUCoreCost, tc.wantPerCPUCoreCost, cmpopts.EquateApprox(0.0, 0.01)) {
+				t.Fatalf("Costs() perCPUCoreCost = %f, want %f", perCPUCoreCost, tc.wantPerCPUCoreCost)
+			}
+			if !cmp.Equal(perGBMemoryCost, tc.wantPerGBMemoryCost, cmpopts.EquateApprox(0.0, 0.01)) {
+				t.Fatalf("Costs() perGBMemoryCost = %f, want %f", perGBMemoryCost, tc.wantPerGBMemoryCost)
 			}
 		})
 	}
