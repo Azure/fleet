@@ -200,7 +200,7 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 				}
 				ns.Annotations = map[string]string{"test": "annotation"}
 				By("expecting denial of UPDATE operation on managed namespace")
-				updateErr = notMasterUser.Update(ctx, &ns)
+				updateErr = sysMastersClient.Update(ctx, &ns)
 				if k8sErrors.IsConflict(updateErr) {
 					return updateErr
 				}
@@ -209,7 +209,6 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 		})
 
 		Context("For other resources in scope", func() {
-
 			It("should deny creating managed resource quotas", func() {
 				rq := createManagedResourceQuota("default", "default")
 				err := notMasterUser.Create(ctx, rq)
@@ -276,5 +275,4 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 			}
 		})
 	})
-
 })
