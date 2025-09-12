@@ -194,6 +194,13 @@ func validatePolicyForPickFixedPlacementType(policy *placementv1beta1.PlacementP
 	}
 	uniqueClusterNames := make(map[string]bool)
 	for _, name := range policy.ClusterNames {
+		nameErr := validation.IsDNS1123Subdomain(name)
+		if nameErr != nil {
+			allErr = append(allErr, fmt.Errorf("PickFixed cluster name %s is not a valid member name: %s", name, strings.Join(nameErr, "; ")))
+		}
+		if len(name) > validation.DNS1035LabelMaxLength {
+			allErr = append(allErr, fmt.Errorf("PickFixed cluster name %s cannot have length exceeding %d", name, validation.DNS1035LabelMaxLength))
+		}
 		if _, ok := uniqueClusterNames[name]; ok {
 			allErr = append(allErr, fmt.Errorf("cluster names must be unique for policy type %s", placementv1beta1.PickFixedPlacementType))
 			break

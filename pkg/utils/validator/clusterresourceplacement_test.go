@@ -514,6 +514,22 @@ func TestValidateClusterResourcePlacement_PickFixedPlacementPolicy(t *testing.T)
 			wantErr:    true,
 			wantErrMsg: "cluster names must be unique for policy type PickFixed",
 		},
+		"invalid placement policy - PickFixed with invalid cluster names": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickFixedPlacementType,
+				ClusterNames:  []string{"test@,cluster1"},
+			},
+			wantErr:    true,
+			wantErrMsg: "PickFixed cluster name test@,cluster1 is not a valid member name: a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')",
+		},
+		"invalid placement policy - PickFixed with too long cluster name": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickFixedPlacementType,
+				ClusterNames:  []string{"this-is-a-very-long-cluster-name-that-exceeds-the-maximum-allowed-length-for-dns-labels"},
+			},
+			wantErr:    true,
+			wantErrMsg: "PickFixed cluster name this-is-a-very-long-cluster-name-that-exceeds-the-maximum-allowed-length-for-dns-labels cannot have length exceeding 63",
+		},
 		"invalid placement policy - PickFixed with non nil number of clusters": {
 			policy: &placementv1beta1.PlacementPolicy{
 				PlacementType:    placementv1beta1.PickFixedPlacementType,
