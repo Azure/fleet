@@ -95,6 +95,25 @@ func createManagedCRP(name string) *placementv1beta1.ClusterResourcePlacement {
 	}
 }
 
+func createManagedResourcePlacement(name string) *placementv1beta1.ResourcePlacement {
+	return &placementv1beta1.ResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: "default",
+			Labels:    managedByLabelMap,
+		},
+		Spec: placementv1beta1.PlacementSpec{
+			ResourceSelectors: []placementv1beta1.ResourceSelectorTerm{
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Pod",
+				},
+			},
+		},
+	}
+}
+
 func expectDeniedByVAP(err error) {
 	var statusErr *k8sErrors.StatusError
 	Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Expected StatusError, got error %s of type %s", err, reflect.TypeOf(err)))
@@ -238,6 +257,10 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 				err = sysMastersClient.Create(ctx, crp)
 				Expect(err).To(BeNil(), "system:masters user should create managed CRP")
 
+				work := createManagedResourcePlacement("test-work")
+				err = notMasterUser.Create(ctx, work)
+				expectDeniedByVAP(err)
+
 				var updateErr error
 				Eventually(func() error {
 					var urq corev1.ResourceQuota
@@ -245,7 +268,7 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 						return err
 					}
 					urq.Annotations = map[string]string{"test": "annotation"}
-					By("expecting denial of UPDATE operation on managed namespace")
+					By("expecting denial of UPDATE operation on managed resource quota")
 					updateErr = notMasterUser.Update(ctx, &urq)
 					if k8sErrors.IsConflict(updateErr) {
 						return updateErr
@@ -260,11 +283,11 @@ var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("manag
 				expectDeniedByVAP(err)
 
 				err = sysMastersClient.Delete(ctx, rq)
-				Expect(err).To(BeNil(), "system:masters user should create managed ResourceQuota")
+				Expect(err).To(BeNil(), "system:masters user should delete managed ResourceQuota")
 				err = sysMastersClient.Delete(ctx, np)
-				Expect(err).To(BeNil(), "system:masters user should create managed NetworkPolicy")
+				Expect(err).To(BeNil(), "system:masters user should delete managed NetworkPolicy")
 				err = sysMastersClient.Delete(ctx, crp)
-				Expect(err).To(BeNil(), "system:masters user should create managed CRP")
+				Expect(err).To(BeNil(), "system:masters user should delete managed CRP")
 			})
 		})
 
