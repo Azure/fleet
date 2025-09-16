@@ -1,6 +1,9 @@
 # Build the hubagent binary
 FROM mcr.microsoft.com/oss/go/microsoft/golang:1.24.6 AS builder
 
+ARG GOOS=linux
+ARG GOARCH=amd64
+
 WORKDIR /workspace
 # Copy the Go Modules manifests
 COPY go.mod go.mod
@@ -14,10 +17,9 @@ COPY cmd/hubagent/  cmd/hubagent/
 COPY apis/ apis/
 COPY pkg/ pkg/
 
-ARG TARGETARCH
-
 # Build with CGO enabled and GOEXPERIMENT=systemcrypto for internal usage
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=${TARGETARCH} GOEXPERIMENT=systemcrypto GO111MODULE=on go build -o hubagent  cmd/hubagent/main.go
+RUN echo "Building for GOOS=$GOOS GOARCH=$GOARCH"
+RUN CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH GOEXPERIMENT=systemcrypto GO111MODULE=on go build -o hubagent  cmd/hubagent/main.go
 
 # Use Azure Linux distroless base image to package the hubagent binary
 # Refer to https://mcr.microsoft.com/en-us/artifact/mar/azurelinux/distroless/base/about for more details

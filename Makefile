@@ -14,6 +14,12 @@ REFRESH_TOKEN_IMAGE_NAME ?= refresh-token
 CRD_INSTALLER_IMAGE_NAME ?= crd-installer
 ARC_MEMBER_AGENT_HELMCHART_NAME = arc-member-cluster-agents-helm-chart
 
+TARGET_OS ?= linux
+TARGET_ARCH ?= amd64
+# Note (chenyu1): switch to the `plain` progress type to see the full outputs in the docker build
+# progress.
+BUILDKIT_PROGRESS_TYPE ?= auto
+
 KUBECONFIG ?= $(HOME)/.kube/config
 HUB_SERVER_URL ?= https://172.19.0.2:6443
 
@@ -307,36 +313,48 @@ docker-build-hub-agent: docker-buildx-builder
 	docker buildx build \
 		--file docker/$(HUB_AGENT_IMAGE_NAME).Dockerfile \
 		--output=$(OUTPUT_TYPE) \
-		--platform="linux/amd64" \
+		--platform=$(TARGET_OS)/$(TARGET_ARCH) \
 		--pull \
-		--tag $(REGISTRY)/$(HUB_AGENT_IMAGE_NAME):$(HUB_AGENT_IMAGE_VERSION) .
+		--tag $(REGISTRY)/$(HUB_AGENT_IMAGE_NAME):$(HUB_AGENT_IMAGE_VERSION) \
+		--progress=$(BUILDKIT_PROGRESS_TYPE) \
+		--build-arg GOARCH=$(TARGET_ARCH) \
+		--build-arg GOOS=$(TARGET_OS) .
 
 .PHONY: docker-build-member-agent
 docker-build-member-agent: docker-buildx-builder
 	docker buildx build \
 		--file docker/$(MEMBER_AGENT_IMAGE_NAME).Dockerfile \
 		--output=$(OUTPUT_TYPE) \
-		--platform="linux/amd64" \
+		--platform=$(TARGET_OS)/$(TARGET_ARCH) \
 		--pull \
-		--tag $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION) .
+		--tag $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION) \
+		--progress=$(BUILDKIT_PROGRESS_TYPE) \
+		--build-arg GOARCH=$(TARGET_ARCH) \
+		--build-arg GOOS=$(TARGET_OS) .
 
 .PHONY: docker-build-refresh-token
 docker-build-refresh-token: docker-buildx-builder
 	docker buildx build \
 		--file docker/$(REFRESH_TOKEN_IMAGE_NAME).Dockerfile \
 		--output=$(OUTPUT_TYPE) \
-		--platform="linux/amd64" \
+		--platform=$(TARGET_OS)/$(TARGET_ARCH) \
 		--pull \
-		--tag $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) .
+		--tag $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) \
+		--progress=$(BUILDKIT_PROGRESS_TYPE) \
+		--build-arg GOARCH=$(TARGET_ARCH) \
+		--build-arg GOOS=${TARGET_OS} .
 
 .PHONY: docker-build-crd-installer
 docker-build-crd-installer: docker-buildx-builder
 	docker buildx build \
 		--file docker/crd-installer.Dockerfile \
 		--output=$(OUTPUT_TYPE) \
-		--platform="linux/amd64" \
+		--platform=$(TARGET_OS)/$(TARGET_ARCH) \
 		--pull \
-		--tag $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION) .
+		--tag $(REGISTRY)/$(CRD_INSTALLER_IMAGE_NAME):$(CRD_INSTALLER_IMAGE_VERSION) \
+		--progress=$(BUILDKIT_PROGRESS_TYPE) \
+		--build-arg GOARCH=$(TARGET_ARCH) \
+		--build-arg GOOS=${TARGET_OS} .
 
 # Fleet Agents and Networking Agents are packaged and pushed to MCR for Arc Extension.
 .PHONY: helm-package-arc-member-cluster-agents
