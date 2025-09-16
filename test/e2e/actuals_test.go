@@ -554,6 +554,45 @@ func rpAppliedFailedConditions(generation int64) []metav1.Condition {
 	}
 }
 
+func rpDiffReportingFailedConditions(generation int64, hasOverride bool) []metav1.Condition {
+	overrideConditionReason := condition.OverrideNotSpecifiedReason
+	if hasOverride {
+		overrideConditionReason = condition.OverriddenSucceededReason
+	}
+	return []metav1.Condition{
+		{
+			Type:               string(placementv1beta1.ResourcePlacementScheduledConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             scheduler.FullyScheduledReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourcePlacementRolloutStartedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.RolloutStartedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourcePlacementOverriddenConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             overrideConditionReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourcePlacementWorkSynchronizedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.WorkSynchronizedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourcePlacementDiffReportedConditionType),
+			Status:             metav1.ConditionFalse,
+			Reason:             condition.DiffReportedStatusFalseReason,
+			ObservedGeneration: generation,
+		},
+	}
+}
+
 func crpAppliedFailedConditions(generation int64) []metav1.Condition {
 	return []metav1.Condition{
 		{

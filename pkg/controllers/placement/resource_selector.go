@@ -41,44 +41,52 @@ import (
 )
 
 var (
-	// ApplyOrder is the order in which resources should be applied.
-	// Those occurring earlier in the list get applied before those occurring later in the list.
-	// Source: https://github.com/helm/helm/blob/31e22b9866af91e1a0ea2ad381798f6c5eec7f4f/pkg/release/util/kind_sorter.go#L31.
-	applyOrder = []string{
-		"PriorityClass",
-		"Namespace",
-		"NetworkPolicy",
-		"ResourceQuota",
-		"LimitRange",
-		"PodDisruptionBudget",
-		"ServiceAccount",
-		"Secret",
-		"ConfigMap",
-		"StorageClass",
-		"PersistentVolume",
-		"PersistentVolumeClaim",
-		"CustomResourceDefinition",
-		"ClusterRole",
-		"ClusterRoleBinding",
-		"Role",
-		"RoleBinding",
-		"Service",
-		"DaemonSet",
-		"Pod",
-		"ReplicationController",
-		"ReplicaSet",
-		"Deployment",
-		"HorizontalPodAutoscaler",
-		"StatefulSet",
-		"Job",
-		"CronJob",
-		"IngressClass",
-		"Ingress",
-		"APIService",
-		"MutatingWebhookConfiguration",
-		"ValidatingWebhookConfiguration",
+	// resourceSortOrder is the order in which resources are sorted when KubeFleet
+	// organizes the resources in a resource snapshot.
+	//
+	// Note (chenyu1): the sort order here does not affect the order in which resources
+	// are applied on a selected member cluster (the work applier will handle the resources
+	// in batch with its own grouping logic). KubeFleet sorts resources here solely
+	// for consistency (deterministic processing) reasons (i.e., if the set of the
+	// resources remain the same, no new snapshots are generated).
+	//
+	// Important (chenyu1): changing the sort order here may induce side effects in
+	// existing KubeFleet deployments, as a new snapshot might be prepared and rolled out.
+	// Do not update the sort order unless absolutely necessary.
+	resourceSortOrder = map[string]int{
+		"PriorityClass":                  0,
+		"Namespace":                      1,
+		"NetworkPolicy":                  2,
+		"ResourceQuota":                  3,
+		"LimitRange":                     4,
+		"PodDisruptionBudget":            5,
+		"ServiceAccount":                 6,
+		"Secret":                         7,
+		"ConfigMap":                      8,
+		"StorageClass":                   9,
+		"PersistentVolume":               10,
+		"PersistentVolumeClaim":          11,
+		"CustomResourceDefinition":       12,
+		"ClusterRole":                    13,
+		"ClusterRoleBinding":             14,
+		"Role":                           15,
+		"RoleBinding":                    16,
+		"Service":                        17,
+		"DaemonSet":                      18,
+		"Pod":                            19,
+		"ReplicationController":          20,
+		"ReplicaSet":                     21,
+		"Deployment":                     22,
+		"HorizontalPodAutoscaler":        23,
+		"StatefulSet":                    24,
+		"Job":                            25,
+		"CronJob":                        26,
+		"IngressClass":                   27,
+		"Ingress":                        28,
+		"APIService":                     29,
+		"MutatingWebhookConfiguration":   30,
+		"ValidatingWebhookConfiguration": 31,
 	}
-	applyOrderMap = buildApplyOrderMap()
 )
 
 // selectResources selects the resources according to the placement resourceSelectors.
@@ -185,8 +193,8 @@ func sortResources(resources []*unstructured.Unstructured) {
 		k1 := obj1.GetObjectKind().GroupVersionKind().Kind
 		k2 := obj2.GetObjectKind().GroupVersionKind().Kind
 
-		first, aok := applyOrderMap[k1]
-		second, bok := applyOrderMap[k2]
+		first, aok := resourceSortOrder[k1]
+		second, bok := resourceSortOrder[k2]
 		switch {
 		// if both kinds are unknown.
 		case !aok && !bok:
@@ -220,14 +228,6 @@ func lessByGVK(obj1, obj2 *unstructured.Unstructured, ignoreKind bool) bool {
 			fmt.Sprintf("%s/%s", obj2.GetNamespace(), obj2.GetName())) < 0
 	}
 	return comp < 0
-}
-
-func buildApplyOrderMap() map[string]int {
-	ordering := make(map[string]int, len(applyOrder))
-	for v, k := range applyOrder {
-		ordering[k] = v
-	}
-	return ordering
 }
 
 // fetchResources retrieves the objects based on the selector.
