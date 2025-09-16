@@ -147,6 +147,16 @@ func extractManifestsFromEnvelopeCR(envelopeReader fleetv1beta1.EnvelopeReader) 
 	}
 
 	// Do a stable sort of the extracted manifests to ensure consistent, deterministic ordering.
+	//
+	// Note (chenyu1): the sort order here does not affect the order in which resources
+	// are applied on a selected member cluster (the work applier will handle the resources
+	// in batch with its own grouping logic). KubeFleet sorts resources here solely
+	// for consistency (deterministic processing) reasons (i.e., if the set of the
+	// resources remain the same, work objects will not be updated).
+	//
+	// Important (chenyu1): changing the sort order here may induce side effects in
+	// existing KubeFleet deployments, as it might trigger update ops on work objects.
+	// Do not update the sort order unless absolutely necessary.
 	sort.Slice(manifests, func(i, j int) bool {
 		obj1 := manifests[i].Raw
 		obj2 := manifests[j].Raw

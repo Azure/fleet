@@ -705,11 +705,197 @@ func TestCollect(t *testing.T) {
 			}
 
 			p := &PropertyProvider{
-				nodeTracker: nodeTracker,
-				podTracker:  podTracker,
+				nodeTracker:                           nodeTracker,
+				podTracker:                            podTracker,
+				isCostCollectionEnabled:               true,
+				isAvailableResourcesCollectionEnabled: true,
 			}
 			res := p.Collect(ctx)
 			if diff := cmp.Diff(res, tc.wantMetricCollectionResponse, ignoreObservationTimeFieldInPropertyValue); diff != "" {
+				t.Fatalf("Collect() property collection response diff (-got, +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestCollectWithDisabledFeatures(t *testing.T) {
+	nodes := []corev1.Node{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName1,
+				Labels: map[string]string{
+					trackers.AKSClusterNodeSKULabelName: nodeSKU1,
+				},
+			},
+			Spec: corev1.NodeSpec{},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("4"),
+					corev1.ResourceMemory: resource.MustParse("16Gi"),
+				},
+				Allocatable: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("3.2"),
+					corev1.ResourceMemory: resource.MustParse("15.2Gi"),
+				},
+			},
+		},
+	}
+	pods := []corev1.Pod{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podName1,
+				Namespace: namespaceName1,
+			},
+			Spec: corev1.PodSpec{
+				NodeName: nodeName1,
+				Containers: []corev1.Container{
+					{
+						Name: containerName1,
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("1"),
+								corev1.ResourceMemory: resource.MustParse("2Gi"),
+							},
+						},
+					},
+					{
+						Name: containerName2,
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("1.5"),
+								corev1.ResourceMemory: resource.MustParse("4Gi"),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	testCases := []struct {
+		name                                  string
+		nodeTracker                           *trackers.NodeTracker
+		podTracker                            *trackers.PodTracker
+		isCostCollectionEnabled               bool
+		isAvailableResourcesCollectionEnabled bool
+		wantPropertyCollectionResponse        propertyprovider.PropertyCollectionResponse
+	}{
+		{
+			name:                                  "cost collection disabled",
+			nodeTracker:                           trackers.NewNodeTracker(nil),
+			podTracker:                            trackers.NewPodTracker(),
+			isCostCollectionEnabled:               false,
+			isAvailableResourcesCollectionEnabled: true,
+			wantPropertyCollectionResponse: propertyprovider.PropertyCollectionResponse{
+				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+					propertyprovider.NodeCountProperty: {
+						Value: "1",
+					},
+				},
+				Resources: clusterv1beta1.ResourceUsage{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("3.2"),
+						corev1.ResourceMemory: resource.MustParse("15.2Gi"),
+					},
+					Available: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("0.7"),
+						corev1.ResourceMemory: resource.MustParse("9.2Gi"),
+					},
+				},
+				Conditions: []metav1.Condition{},
+			},
+		},
+		{
+			name:                                  "available resources collection disabled",
+			nodeTracker:                           trackers.NewNodeTracker(&dummyPricingProvider{}),
+			isCostCollectionEnabled:               true,
+			isAvailableResourcesCollectionEnabled: false,
+			wantPropertyCollectionResponse: propertyprovider.PropertyCollectionResponse{
+				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+					propertyprovider.NodeCountProperty: {
+						Value: "1",
+					},
+					PerCPUCoreCostProperty: {
+						Value: "0.250",
+					},
+					PerGBMemoryCostProperty: {
+						Value: "0.062",
+					},
+				},
+				Resources: clusterv1beta1.ResourceUsage{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("3.2"),
+						corev1.ResourceMemory: resource.MustParse("15.2Gi"),
+					},
+				},
+				Conditions: []metav1.Condition{
+					{
+						Type:    CostPropertiesCollectionSucceededCondType,
+						Status:  metav1.ConditionTrue,
+						Reason:  CostPropertiesCollectionSucceededReason,
+						Message: CostPropertiesCollectionSucceededMsg,
+					},
+				},
+			},
+		},
+		{
+			name:                                  "both cost and available resources collection disabled",
+			nodeTracker:                           trackers.NewNodeTracker(nil),
+			isCostCollectionEnabled:               false,
+			isAvailableResourcesCollectionEnabled: false,
+			wantPropertyCollectionResponse: propertyprovider.PropertyCollectionResponse{
+				Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+					propertyprovider.NodeCountProperty: {
+						Value: "1",
+					},
+				},
+				Resources: clusterv1beta1.ResourceUsage{
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("4"),
+						corev1.ResourceMemory: resource.MustParse("16Gi"),
+					},
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("3.2"),
+						corev1.ResourceMemory: resource.MustParse("15.2Gi"),
+					},
+				},
+				Conditions: []metav1.Condition{},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			// Build the trackers manually for testing purposes.
+			nodeTracker := tc.nodeTracker
+			for idx := range nodes {
+				nodeTracker.AddOrUpdate(&nodes[idx])
+			}
+			podTracker := tc.podTracker
+			if podTracker != nil {
+				for idx := range pods {
+					podTracker.AddOrUpdate(&pods[idx])
+				}
+			}
+
+			p := &PropertyProvider{
+				nodeTracker:                           nodeTracker,
+				podTracker:                            podTracker,
+				isCostCollectionEnabled:               tc.isCostCollectionEnabled,
+				isAvailableResourcesCollectionEnabled: tc.isAvailableResourcesCollectionEnabled,
+			}
+			res := p.Collect(ctx)
+			if diff := cmp.Diff(res, tc.wantPropertyCollectionResponse, ignoreObservationTimeFieldInPropertyValue); diff != "" {
 				t.Fatalf("Collect() property collection response diff (-got, +want):\n%s", diff)
 			}
 		})

@@ -56,12 +56,14 @@ const (
 )
 
 var (
-	memberTestEnv *envtest.Environment
-	memberClient  client.Client
-	ctx           context.Context
-	cancel        context.CancelFunc
-	p             propertyprovider.PropertyProvider
-	pp            trackers.PricingProvider
+	memberTestEnv             *envtest.Environment
+	memberClient              client.Client
+	ctx                       context.Context
+	cancel                    context.CancelFunc
+	p                         propertyprovider.PropertyProvider
+	pp                        trackers.PricingProvider
+	pWithNoCosts              propertyprovider.PropertyProvider
+	pWithNoAvailableResources propertyprovider.PropertyProvider
 )
 
 // setUpResources help set up resources in the test environment.
@@ -109,10 +111,20 @@ var _ = BeforeSuite(func() {
 	// Set up resources.
 	setUpResources()
 
-	// Start the Azure property provider.
+	// Start an Azure property provider instance with all features on.
 	pp = trackers.NewAKSKarpenterPricingClient(ctx, region)
-	p = NewWithPricingProvider(pp)
+	p = NewWithPricingProvider(pp, "node watcher", "pod watcher", true, true)
 	Expect(p.Start(ctx, memberCfg)).To(Succeed())
+
+	// Start different property provider instances with different features disabled,
+	// to verify the behaviors of feature gates.
+	//
+	// All property providers share the same environment and the same pricing provider
+	// (even though in normal ops they will not).
+	pWithNoCosts = NewWithPricingProvider(nil, "node watcher with costs disabled", "pod watcher with costs disabled", false, true)
+	pWithNoAvailableResources = NewWithPricingProvider(pp, "node watcher with no available resources", "pod watcher with no available resources", true, false)
+	Expect(pWithNoCosts.Start(ctx, memberCfg)).To(Succeed())
+	Expect(pWithNoAvailableResources.Start(ctx, memberCfg)).To(Succeed())
 })
 
 var _ = AfterSuite(func() {
