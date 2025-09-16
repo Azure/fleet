@@ -41,7 +41,7 @@ func TestGetValidatingAdmissionPolicy(t *testing.T) {
 			RuleWithOperations: admv1.RuleWithOperations{
 				Rule: admv1.Rule{
 					APIGroups:   []string{"placement.kubernetes-fleet.io"},
-					Resources:   []string{"clusterresourceplacements"},
+					Resources:   []string{"*"},
 					APIVersions: []string{"*"},
 				},
 				Operations: []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete},
