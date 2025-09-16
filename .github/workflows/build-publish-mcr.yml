@@ -54,7 +54,7 @@ jobs:
           # NOTE: As exporting a variable from a secret is not possible, the shared variable registry obtained
           # from AZURE_REGISTRY secret is not exported from here.
 
-  publish-images:
+  publish-images-amd64:
     runs-on:
       labels: [self-hosted, "1ES.Pool=1es-aks-fleet-pool-ubuntu"]
     needs: prepare-variables
@@ -70,25 +70,25 @@ jobs:
         run: |
           make docker-build-hub-agent
         env:
-          HUB_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          HUB_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-amd64
           REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
       - name: Build and publish member-agent
         run: |
           make docker-build-member-agent
         env:
-          MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-amd64
           REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
       - name: Build and publish refresh-token
         run: |
           make docker-build-refresh-token
         env:
-          REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-amd64
           REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
       - name: Build and publish crd-installer
         run: |
           make docker-build-crd-installer
         env:
-          CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-amd64
           REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
       # Build Arc Extension for member clusters
       # Arc-connected clusters can join fleets as member clusters through an Arc Extension.
@@ -123,27 +123,27 @@ jobs:
         run: |
           make docker-build-hub-agent
         env:
-          HUB_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          HUB_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
           REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
           TARGET_ARCH: arm64
       - name: Build and publish member-agent
         run: |
           make docker-build-member-agent
         env:
-          MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
           REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
           TARGET_ARCH: linux/arm64
       - name: Build and publish refresh-token
         run: |
           make docker-build-refresh-token
         env:
-          REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
           REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
           TARGET_ARCH: arm64
       - name: Build and publish crd-installer
         run: |
           make docker-build-crd-installer
         env:
-          CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
           REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
           TARGET_ARCH: arm64
