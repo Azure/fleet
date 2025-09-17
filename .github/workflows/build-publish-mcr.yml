@@ -62,13 +62,20 @@ jobs:
         with:
           ref: ${{ needs.prepare-variables.outputs.release_tag }}
       - name: 'Install the Azure CLI'
+        # Note (chenyu1): the self-hosted 1ES ARM64 pool, for some reason, does not have Azure CLI installed by default;
+        # install it manually here.
         run:
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
       - name: 'Set up build essential meta package'
+        # Note (chenyu1): the self-hosted 1ES ARM64 pool, for some reason, does not have the common build
+        # tools (e.g., make) installed by default; install the build-essential meta package to set them up.
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential
       - name: 'Set up Docker'
+        # Note (chenyu1): the self-hosted 1ES ARM64 pool, for some reason, does not have Docker installed by default,
+        # and cannot have Docker installed via the docker/setup-docker-action Github Action, hence the manual setup
+        # steps here.
         run: |
           sudo apt-get update
           sudo apt-get -y install ca-certificates curl
@@ -85,10 +92,13 @@ jobs:
         run: |
           az login --identity 
       - name: 'Verify Docker CLI'
+        # Note (chenyu1): the Docker installation has to be invoked with root privileges by default; for
+        # simplicity reasons in this pipeline we will make no attempt to enable rootless Docker usage.
         run: |
           sudo docker version
           sudo docker info
       - name: Build and publish refresh-token
+        # Note (chenyu1): must preserve the environment here.
         run: |
           sudo -E make docker-build-refresh-token
         env:
