@@ -310,7 +310,7 @@ push:
 # by Docker Desktop as the default emulation option for AMD64 on ARM64 container compatibility).
 docker-buildx-builder:
 	@if ! docker buildx ls | grep $(BUILDX_BUILDER_NAME); then \
-		if [ "$(TARGET_ARCH)" = "amd64" ] ; then \
+		if [ "${TARGET_ARCH}" = "amd64" ] ; then \
 			echo "The target is an x86_64 platform; setting up emulation for other known architectures"; \
 			docker run --rm --privileged mcr.microsoft.com/mirror/docker/multiarch/qemu-user-static:$(QEMU_VERSION) --reset -p yes; \
 		else \
