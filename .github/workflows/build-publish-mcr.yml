@@ -59,7 +59,7 @@ jobs:
       labels: [self-hosted, "1ES.Pool=1es-aks-fleet-pool-ubuntu"]
     needs: prepare-variables
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ needs.prepare-variables.outputs.release_tag }}
       - name: 'Login the ACR'
