@@ -3,7 +3,10 @@
 
 name: Building and Pushing to MCR
 on:
-  push
+  pull_request:
+    branches:
+      - main
+      - release-*
 
 permissions:
   id-token: write
