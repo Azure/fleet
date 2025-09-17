@@ -69,3 +69,7 @@ jobs:
       - name: 'Login the ACR'
         run: |
           az login --identity 
+      - name: 'Verify Docker CLI'
+        run: |
+          docker version
+          docker info
