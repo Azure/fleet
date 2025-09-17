@@ -52,6 +52,7 @@ import (
 	mcv1beta1 "go.goms.io/fleet/pkg/controllers/membercluster/v1beta1"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/webhook"
+	"go.goms.io/fleet/pkg/webhook/managedresource"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -192,6 +193,11 @@ func main() {
 	ctx := ctrl.SetupSignalHandler()
 	if err := workload.SetupControllers(ctx, &wg, mgr, config, opts); err != nil {
 		klog.ErrorS(err, "unable to set up ready check")
+		exitWithErrorFunc()
+	}
+
+	if managedresource.EnsureVAP(ctx, mgr.GetClient(), true); err != nil {
+		klog.Errorf("unable to create managedResource validating admission policy: %s", err)
 		exitWithErrorFunc()
 	}
 
