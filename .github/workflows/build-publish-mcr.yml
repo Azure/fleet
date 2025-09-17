@@ -90,9 +90,7 @@ jobs:
           sudo docker info
       - name: Build and publish refresh-token
         run: |
-          export REFRESH_TOKEN_IMAGE_VERSION=$REFRESH_TOKEN_IMAGE_VERSION
-          export TARGET_ARCH=$TARGET_ARCH
-          sudo make docker-build-refresh-token
+          sudo -E make docker-build-refresh-token
         env:
           REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
           TARGET_ARCH: arm64
