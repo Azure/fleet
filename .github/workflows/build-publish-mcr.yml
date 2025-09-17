@@ -77,17 +77,16 @@ jobs:
             sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
           sudo apt-get update
           sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-      - name: 'Set up permissions to access Docker'
-        run: |
-          sudo groupadd docker || true
-          sudo usermod -aG docker $USER
-          newgrp docker
-          sudo systemctl restart docker
-          su - $USER
       - name: 'Login the ACR'
         run: |
           az login --identity 
       - name: 'Verify Docker CLI'
         run: |
-          docker version
-          docker info
+          sudo docker version
+          sudo docker info
+      - name: Build and publish refresh-token
+        run: |
+          sudo make docker-build-refresh-token
+        env:
+          REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
+          TARGET_ARCH: arm64
