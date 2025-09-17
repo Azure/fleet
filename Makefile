@@ -300,10 +300,24 @@ push:
 	$(MAKE) OUTPUT_TYPE="type=registry" docker-build-hub-agent docker-build-member-agent docker-build-refresh-token docker-build-crd-installer
 
 # By default, docker buildx create will pull image moby/buildkit:buildx-stable-1 and hit the too many requests error
+#
+# Note (chenyu1): the step below sets up emulation for building/running non-native binaries on the host. The original
+# setup assumes that the Makefile is always run on an x86_64 platform, and adds support for non-x86_64 hosts. Here
+# we keep the original setup if the build target is x86_64 platforms (default) for compatibility reasons, but will switch to
+# a more general setup for non-x86_64 hosts.
+#
+# On some systems the emulation setup might not work at all (e.g., macOS on Apple Silicon -> Rosetta 2 will be used 
+# by Docker Desktop as the default emulation option for AMD64 on ARM64 container compatibility).
 .PHONY: docker-buildx-builder
 docker-buildx-builder:
 	@if ! docker buildx ls | grep $(BUILDX_BUILDER_NAME); then \
-		docker run --rm --privileged mcr.microsoft.com/mirror/docker/multiarch/qemu-user-static:$(QEMU_VERSION) --reset -p yes; \
+		if [ "$(TARGET_ARCH)" = "amd64" ] ; then \
+			echo "The target is an x86_64 platform; setting up emulation for other known architectures"; \
+			docker run --rm --privileged mcr.microsoft.com/mirror/docker/multiarch/qemu-user-static:$(QEMU_VERSION) --reset -p yes; \
+		else \
+			echo "Setting up emulation for known architectures"; \
+			docker run --rm --privileged tonistiigi/binfmt --install all; \
+		fi ;\
 		docker buildx create --driver-opt image=mcr.microsoft.com/oss/v2/moby/buildkit:$(BUILDKIT_VERSION) --name $(BUILDX_BUILDER_NAME) --use; \
 		docker buildx inspect $(BUILDX_BUILDER_NAME) --bootstrap; \
 	fi
