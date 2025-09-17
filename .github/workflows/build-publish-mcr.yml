@@ -82,6 +82,8 @@ jobs:
           sudo groupadd docker || true
           sudo usermod -aG docker $USER
           newgrp docker
+          sudo systemctl restart docker
+          su - $USER
       - name: 'Login the ACR'
         run: |
           az login --identity 
