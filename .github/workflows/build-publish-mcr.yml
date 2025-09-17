@@ -77,6 +77,11 @@ jobs:
             sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
           sudo apt-get update
           sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+      - name: 'Set up permissions to access Docker'
+        run: |
+          sudo groupadd docker || true
+          sudo usermod -aG docker $USER
+          newgrp docker
       - name: 'Login the ACR'
         run: |
           az login --identity 
