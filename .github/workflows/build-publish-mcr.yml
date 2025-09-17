@@ -100,7 +100,7 @@ jobs:
       - name: Build and publish refresh-token
         # Note (chenyu1): must preserve the environment here.
         run: |
-          sudo -E make docker-build-refresh-token
+          sudo -E make docker-buildx-builder
         env:
           REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
           TARGET_ARCH: arm64
