@@ -44,6 +44,7 @@ import (
 	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/webhook/managedresource"
 )
 
 // propertyProviderConfig is a group of settings for configuring the the property provider.
@@ -213,6 +214,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	switch imc.Spec.State {
 	case clusterv1beta1.ClusterStateJoin:
+		if err := managedresource.EnsureVAP(ctx, r.memberClient, false); err != nil {
+			return ctrl.Result{}, err
+		}
 		if err := r.startAgents(ctx, &imc); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -242,6 +246,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{RequeueAfter: time.Millisecond *
 			(time.Duration(hbinterval) + time.Duration(utilrand.Int63nRange(0, jitterRange)-jitterRange/2))}, nil
 	case clusterv1beta1.ClusterStateLeave:
+		if err := managedresource.EnsureNoVAP(ctx, r.memberClient, false); err != nil {
+			return ctrl.Result{}, err
+		}
 		if err := r.stopAgents(ctx, &imc); err != nil {
 			return ctrl.Result{}, err
 		}
