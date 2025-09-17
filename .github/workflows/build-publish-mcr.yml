@@ -3,11 +3,7 @@
 
 name: Building and Pushing to MCR
 on:
-  workflow_dispatch:
-    inputs:
-      releaseTag:
-        description: 'Release tag to publish images, defaults to the latest one'
-        type: string
+  push
 
 permissions:
   id-token: write
@@ -54,59 +50,6 @@ jobs:
           # NOTE: As exporting a variable from a secret is not possible, the shared variable registry obtained
           # from AZURE_REGISTRY secret is not exported from here.
 
-  publish-images-amd64:
-    runs-on:
-      labels: [self-hosted, "1ES.Pool=1es-aks-fleet-pool-ubuntu"]
-    needs: prepare-variables
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare-variables.outputs.release_tag }}
-      - name: 'Login the ACR'
-        run: |
-          az login --identity 
-          az acr login -n ${{ secrets.AZURE_REGISTRY }}
-      - name: Build and publish hub-agent
-        run: |
-          make docker-build-hub-agent
-        env:
-          HUB_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-amd64
-          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
-      - name: Build and publish member-agent
-        run: |
-          make docker-build-member-agent
-        env:
-          MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-amd64
-          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
-      - name: Build and publish refresh-token
-        run: |
-          make docker-build-refresh-token
-        env:
-          REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-amd64
-          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
-      - name: Build and publish crd-installer
-        run: |
-          make docker-build-crd-installer
-        env:
-          CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-amd64
-          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
-      # Build Arc Extension for member clusters
-      # Arc-connected clusters can join fleets as member clusters through an Arc Extension.
-      # An Arc Extension is a packaged Helm chart that gets deployed to Arc clusters.
-      # This step packages both the fleet member agent and networking agents into a single
-      # Helm chart for Arc deployment, since Arc Extensions require all components to be bundled together.
-      - name: Build and publish ARC member cluster agents helm chart
-        run: |
-          make helm-package-arc-member-cluster-agents
-        env:
-          ARC_MEMBER_AGENT_HELMCHART_VERSION: ${{ needs.prepare-variables.outputs.arc_helmchart_version }}
-          MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
-          REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
-          CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
-          MCS_CONTROLLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.fleet_networking_version }}
-          MEMBER_NET_CONTROLLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.fleet_networking_version }}
-          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.ARC_REGISTRY_REPO}}
-  
   publish-images-arm64:
     runs-on:
       labels: [self-hosted, "1ES.Pool=1es-aks-fleet-pool-ubuntu-arm64"]
@@ -121,32 +64,3 @@ jobs:
       - name: 'Login the ACR'
         run: |
           az login --identity 
-          az acr login -n ${{ secrets.AZURE_REGISTRY }}
-      - name: Build and publish hub-agent
-        run: |
-          make docker-build-hub-agent
-        env:
-          HUB_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
-          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
-          TARGET_ARCH: arm64
-      - name: Build and publish member-agent
-        run: |
-          make docker-build-member-agent
-        env:
-          MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
-          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
-          TARGET_ARCH: linux/arm64
-      - name: Build and publish refresh-token
-        run: |
-          make docker-build-refresh-token
-        env:
-          REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
-          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
-          TARGET_ARCH: arm64
-      - name: Build and publish crd-installer
-        run: |
-          make docker-build-crd-installer
-        env:
-          CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
-          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
-          TARGET_ARCH: arm64
