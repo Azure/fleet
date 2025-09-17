@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 env:
-  # `public` indicates images to MCR wil be publicly available, and will be removed in the final MCR images
+  # `public` indicates images to MCR will be publicly available, and will be removed in the final MCR images
   REGISTRY_REPO: public/aks/fleet
   ARC_REGISTRY_REPO: public/microsoft.fleetmember
 
@@ -167,7 +167,7 @@ jobs:
         env:
           MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
           REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
-          TARGET_ARCH: linux/arm64
+          TARGET_ARCH: arm64
       - name: Build and publish refresh-token
         # Note (chenyu1): must preserve the environment here.
         run: |
