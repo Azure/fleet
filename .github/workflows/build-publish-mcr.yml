@@ -2,12 +2,7 @@
 # automatically pushed to the trusted registry, Microsoft Container Registry(MCR).
 
 name: Building and Pushing to MCR
-on:
-  workflow_dispatch:
-    inputs:
-      releaseTag:
-        description: 'Release tag to publish images, defaults to the latest one'
-        type: string
+on: pull_request
 
 permissions:
   id-token: write
@@ -118,6 +113,8 @@ jobs:
       - name: 'Install the Azure CLI'
         run:
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+      - name: 'Set up Docker'
+        uses: docker/setup-docker-action@v4
       - name: 'Login the ACR'
         run: |
           az login --identity 
