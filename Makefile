@@ -348,7 +348,6 @@ docker-build-member-agent: docker-buildx-builder
 
 .PHONY: docker-build-refresh-token
 docker-build-refresh-token: docker-buildx-builder
-	echo "Building refresh-token image for $(TARGET_OS)/$(TARGET_ARCH)"
 	docker buildx build \
 		--file docker/$(REFRESH_TOKEN_IMAGE_NAME).Dockerfile \
 		--output=$(OUTPUT_TYPE) \
