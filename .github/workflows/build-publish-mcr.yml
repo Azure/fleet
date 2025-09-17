@@ -145,7 +145,7 @@ jobs:
       - name: 'Login the ACR'
         run: |
           az login --identity
-          az acr login -n ${{ secrets.AZURE_REGISTRY }}
+          sudo az acr login -n ${{ secrets.AZURE_REGISTRY }}
       - name: 'Verify Docker CLI'
         # Note (chenyu1): the Docker installation has to be invoked with root privileges by default; for
         # simplicity reasons in this pipeline we will make no attempt to enable rootless Docker usage.
