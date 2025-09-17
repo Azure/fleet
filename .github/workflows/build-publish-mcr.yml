@@ -64,6 +64,10 @@ jobs:
       - name: 'Install the Azure CLI'
         run:
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+      - name: 'Set up build essential meta package'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
       - name: 'Set up Docker'
         run: |
           sudo apt-get update
