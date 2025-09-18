@@ -33,12 +33,14 @@ func EnsureNoVAP(ctx context.Context, c client.Client, isHub bool) error {
 func EnsureVAP(ctx context.Context, c client.Client, isHub bool) error {
 	objs := []client.Object{GetValidatingAdmissionPolicy(isHub), GetValidatingAdmissionPolicyBinding()}
 	for _, obj := range objs {
-		opResult, err := controllerutil.CreateOrUpdate(ctx, c, obj, nil)
+		opResult, err := controllerutil.CreateOrUpdate(ctx, c, obj, func() error {
+			return nil
+		})
 		if err != nil {
 			if meta.IsNoMatchError(err) {
 				klog.Infof("ValidatingAdmissionPolicy is not supported in this cluster, skipping creation")
 			}
-			klog.Errorf("ValidatingAdmissionPolicy CreateOrUpdate (operation: %) failed: %s", opResult, err)
+			klog.Errorf("ValidatingAdmissionPolicy CreateOrUpdate (operation: %s) failed: %s", opResult, err)
 			return err
 		}
 	}

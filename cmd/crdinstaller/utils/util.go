@@ -15,15 +15,12 @@ import (
 	"strings"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
-	"go.goms.io/fleet/pkg/webhook/managedresource"
 )
 
 const (
@@ -173,20 +170,4 @@ func GetCRDFromPath(crdPath string, scheme *runtime.Scheme) (*apiextensionsv1.Cu
 	}
 
 	return crd, nil
-}
-
-func InstallManagedResourceVAP(ctx context.Context, c client.Client, mode string) error {
-	vap := managedresource.GetValidatingAdmissionPolicy(mode == "hub")
-	vapBinding := managedresource.GetValidatingAdmissionPolicyBinding()
-	for _, ob := range []client.Object{vap, vapBinding} {
-		if err := install(ctx, c, ob, nil); err != nil {
-			if meta.IsNoMatchError(err) {
-				klog.Infof("Cluster does not support %s resource, skipping installation", ob.GetObjectKind().GroupVersionKind().Kind)
-				return nil
-			}
-			return err
-		}
-	}
-	klog.Infof("Successfully installed managed resource ValidatingAdmissionPolicy")
-	return nil
 }

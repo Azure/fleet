@@ -196,8 +196,8 @@ func main() {
 		exitWithErrorFunc()
 	}
 
-	if managedresource.EnsureVAP(ctx, mgr.GetClient(), true); err != nil {
-		klog.Errorf("unable to create managedResource validating admission policy: %s", err)
+	if err := managedresource.EnsureVAP(ctx, mgr.GetClient(), true); err != nil {
+		klog.Errorf("unable to create managed resource validating admission policy: %s", err)
 		exitWithErrorFunc()
 	}
 
