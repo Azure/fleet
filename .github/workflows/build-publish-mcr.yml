@@ -143,8 +143,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
       - name: 'Login the ACR'
+        # Note (chenyu1): must login with root privileges to have Docker access.
         run: |
-          az login --identity
+          sudo az login --identity
           sudo az acr login -n ${{ secrets.AZURE_REGISTRY }}
       - name: 'Verify Docker CLI'
         # Note (chenyu1): the Docker installation has to be invoked with root privileges by default; for
