@@ -92,7 +92,10 @@ jobs:
           sudo groupadd docker || true
           echo "Adding $USER to the docker group"
           sudo usermod -aG docker $USER
+          groups $USER
+          whoami
           newgrp docker
+          sudo setfacl --modify user:$USER:rw /var/run/docker.sock
       - name: 'Login the ACR'
         # Note (chenyu1): must login with root privileges to have Docker access.
         run: |
