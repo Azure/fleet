@@ -107,3 +107,10 @@ jobs:
         run: |
           docker version
           docker info
+      - name: Build and publish refresh-token
+        run: |
+          make docker-build-refresh-token
+        env:
+          REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
+          REGISTRY: aksmcrimagescommon.azurecr.io/public/aks/fleet
+          TARGET_ARCH: arm64
