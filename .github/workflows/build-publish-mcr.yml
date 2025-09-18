@@ -120,12 +120,12 @@ jobs:
         # install it manually here.
         run:
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-      - name: 'Set up build essential meta package'
+      - name: 'Set up build dependencies'
         # Note (chenyu1): the self-hosted 1ES ARM64 pool, for some reason, does not have the common build
-        # tools (e.g., make) installed by default; install the build-essential meta package to set them up.
+        # tools (e.g., make) installed by default; install them manually.
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential
+          sudo apt-get install -y build-essential acl
       - name: 'Set up Docker'
         # Note (chenyu1): the self-hosted 1ES ARM64 pool, for some reason, does not have Docker installed by default,
         # and cannot have Docker installed via the docker/setup-docker-action Github Action, hence the manual setup
@@ -142,8 +142,18 @@ jobs:
             sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
           sudo apt-get update
           sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+      - name: 'Enable Docker access'
+        # Note (chenyu1): there are situations where the newgrp command will not take effect; set access
+        # to the docker daemon directly just in case.
+        run: |
+          sudo groupadd docker || true
+          echo "Adding $USER to the docker group"
+          sudo usermod -aG docker $USER
+          newgrp docker
+          sudo setfacl --modify user:$USER:rw /var/run/docker.sock
       - name: 'Login the ACR'
-        # Note (chenyu1): must login with root privileges to have Docker access.
+        # Note (chenyu1): must not use root privileges; the system seems to have some trouble
+        # retrieving credentials when sudo is used.
         run: |
           sudo az login --identity
           sudo az acr login -n ${{ secrets.AZURE_REGISTRY }}
