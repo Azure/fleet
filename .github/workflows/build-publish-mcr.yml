@@ -70,7 +70,7 @@ jobs:
     - name: 'Pull the refresh token images from MCR'
       run: |
         docker pull aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-amd64
-        docker pull aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+        docker pull --platform linux/arm64 aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-arm64
     - name: 'Create and push multi-arch image manifests for the refresh token image'
       run: |
         docker manifest create aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }} \
