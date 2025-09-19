@@ -196,11 +196,6 @@ func main() {
 		exitWithErrorFunc()
 	}
 
-	if err := managedresource.EnsureVAP(ctx, mgr.GetClient(), true); err != nil {
-		klog.Errorf("unable to create managed resource validating admission policy: %s", err)
-		exitWithErrorFunc()
-	}
-
 	// +kubebuilder:scaffold:builder
 
 	wg.Add(1)
@@ -215,6 +210,18 @@ func main() {
 
 		klog.InfoS("The controller manager has exited")
 	}()
+
+	// Wait for the cache to sync before creating managed resources
+	if !mgr.GetCache().WaitForCacheSync(ctx) {
+		klog.Error("failed to wait for cache sync")
+		exitWithErrorFunc()
+	}
+
+	if err := managedresource.EnsureVAP(ctx, mgr.GetClient(), true); err != nil {
+		klog.Errorf("unable to create managed resource validating admission policy: %s", err)
+		exitWithErrorFunc()
+	}
+	klog.Info("managed resource validating admission policy is successfully setup")
 
 	// Wait for the controller manager and the scheduler to exit.
 	wg.Wait()

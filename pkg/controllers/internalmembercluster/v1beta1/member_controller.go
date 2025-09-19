@@ -217,6 +217,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		if err := managedresource.EnsureVAP(ctx, r.memberClient, false); err != nil {
 			return ctrl.Result{}, err
 		}
+		klog.V(2).InfoS("Successfully installed managed resource validating admission policy")
 		if err := r.startAgents(ctx, &imc); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -249,6 +250,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		if err := managedresource.EnsureNoVAP(ctx, r.memberClient, false); err != nil {
 			return ctrl.Result{}, err
 		}
+		klog.V(2).InfoS("Successfully uninstalled managed resource validating admission policy")
 		if err := r.stopAgents(ctx, &imc); err != nil {
 			return ctrl.Result{}, err
 		}

@@ -29,6 +29,7 @@ import (
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
@@ -126,14 +127,43 @@ func expectDeniedByVAP(err error) {
 	), "Error should indicate policy violation")
 }
 
-var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("managedresource"), Ordered, func() {
-	It("The VAP and its binding should exist", func() {
-		var vap admissionregistrationv1.ValidatingAdmissionPolicy
-		Expect(sysMastersClient.Get(ctx, types.NamespacedName{Name: vapName}, &vap)).Should(Succeed(), "ValidatingAdmissionPolicy should be installed")
+func checkVAPAndBindingExistence(client client.Client) {
+	By(fmt.Sprintf("Checking existence of ValidatingAdmissionPolicy: %s", vapName))
+	var vap admissionregistrationv1.ValidatingAdmissionPolicy
+	Expect(client.Get(ctx, types.NamespacedName{Name: vapName}, &vap)).To(Succeed(),
+		fmt.Sprintf("ValidatingAdmissionPolicy %s should exist", vapName))
 
-		var vapBinding admissionregistrationv1.ValidatingAdmissionPolicyBinding
-		Expect(sysMastersClient.Get(ctx, types.NamespacedName{Name: vapName}, &vapBinding)).Should(Succeed(), "ValidatingAdmissionPolicyBinding should be installed")
-	})
+	By(fmt.Sprintf("Checking existence of ValidatingAdmissionPolicyBinding: %s", vapName))
+	var vapBinding admissionregistrationv1.ValidatingAdmissionPolicyBinding
+	Expect(client.Get(ctx, types.NamespacedName{Name: vapName}, &vapBinding)).To(Succeed(),
+		fmt.Sprintf("ValidatingAdmissionPolicyBinding %s should exist", vapName))
+
+	By("Verifying VAP has validations configured")
+	Expect(vap.Spec.Validations).ToNot(BeEmpty(), "VAP should have validation rules")
+
+	By("Verifying VAP binding references the correct policy")
+	Expect(vapBinding.Spec.PolicyName).To(Equal(vapName),
+		fmt.Sprintf("VAP binding should reference policy %s", vapName))
+
+	By("Verifying VAP binding has validation actions configured")
+	Expect(vapBinding.Spec.ValidationActions).ToNot(BeEmpty(), "VAP binding should have validation actions")
+}
+
+func checkVAPAndBindingAbsence(client client.Client) {
+	By(fmt.Sprintf("Checking absence of ValidatingAdmissionPolicy: %s", vapName))
+	var vap admissionregistrationv1.ValidatingAdmissionPolicy
+	err := client.Get(ctx, types.NamespacedName{Name: vapName}, &vap)
+	Expect(k8sErrors.IsNotFound(err)).To(BeTrue(),
+		fmt.Sprintf("ValidatingAdmissionPolicy %s should not exist", vapName))
+
+	By(fmt.Sprintf("Checking absence of ValidatingAdmissionPolicyBinding: %s", vapName))
+	var vapBinding admissionregistrationv1.ValidatingAdmissionPolicyBinding
+	err = client.Get(ctx, types.NamespacedName{Name: vapName}, &vapBinding)
+	Expect(k8sErrors.IsNotFound(err)).To(BeTrue(),
+		fmt.Sprintf("ValidatingAdmissionPolicyBinding %s should not exist", vapName))
+}
+
+var _ = Describe("ValidatingAdmissionPolicy for Managed Resources", Label("managedresource"), Ordered, func() {
 
 	It("should allow operations on unmanaged namespace for non-system:masters user", func() {
 		unmanagedNS := createUnmanagedNamespace("test-unmanaged-ns")
