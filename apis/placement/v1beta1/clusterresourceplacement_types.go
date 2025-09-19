@@ -1287,6 +1287,17 @@ const (
 	//   clusters, or an error has occurred.
 	// * Unknown: Fleet has not finished processing the diff reporting yet.
 	ClusterResourcePlacementDiffReportedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementDiffReported"
+
+	// ClusterResourcePlacementStatusSyncedConditionType indicates whether Fleet has successfully
+	// created or updated the ClusterResourcePlacementStatus object in the target namespace when
+	// StatusReportingScope is NamespaceAccessible.
+	//
+	// It can have the following condition statuses:
+	// * True: Fleet has successfully created or updated the ClusterResourcePlacementStatus object
+	//   in the target namespace.
+	// * False: Fleet has failed to create or update the ClusterResourcePlacementStatus object
+	//   in the target namespace.
+	ClusterResourcePlacementStatusSyncedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementStatusSynced"
 )
 
 // ResourcePlacementConditionType defines a specific condition of a resource placement object.

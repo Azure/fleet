@@ -39,7 +39,7 @@ import (
 	"github.com/kubefleet-dev/kubefleet/pkg/utils"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/condition"
 	"github.com/kubefleet-dev/kubefleet/pkg/utils/resource"
-	statussyncutils "github.com/kubefleet-dev/kubefleet/test/utils/crpstatussync"
+	"github.com/kubefleet-dev/kubefleet/test/utils/crpstatussync"
 	metricsUtils "github.com/kubefleet-dev/kubefleet/test/utils/metrics"
 )
 
@@ -2189,26 +2189,31 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 		})
 
 		It("Should handle missing target namespace", func() {
-			By("Validate CRP keeps retrying due to missing namespace (status remain nil)")
+			By("Validate CRP status includes StatusSynced condition")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       testCRPName,
 					Finalizers: []string{placementv1beta1.PlacementCleanupFinalizer},
 				},
 				Spec: crp.Spec,
+				Status: placementv1beta1.PlacementStatus{
+					ObservedResourceIndex: "0",
+					Conditions: []metav1.Condition{
+						{
+							Status: metav1.ConditionUnknown,
+							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+							Reason: condition.SchedulingUnknownReason,
+						},
+						{
+							Status: metav1.ConditionFalse,
+							Type:   string(placementv1beta1.ClusterResourcePlacementStatusSyncedConditionType),
+							Reason: condition.StatusSyncFailedReason,
+						},
+					},
+				},
 			}
-			retrieveAndValidateClusterResourcePlacement(testCRPName, wantCRP)
-			// Ensure that CRP status remains nil as the controller keeps retrying.
-			Consistently(func() error {
-				gotCRP := &placementv1beta1.ClusterResourcePlacement{}
-				if err := k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName}, gotCRP); err != nil {
-					return err
-				}
-				if diff := cmp.Diff(wantCRP, gotCRP, cmpCRPOptions); diff != "" {
-					return fmt.Errorf("clusterResourcePlacement mismatch (-want, +got) :\n%s", diff)
-				}
-				return nil
-			}, consistentlyTimeout, interval).Should(Succeed(), "ClusterResourcePlacement status must be nil")
+			retrieveAndValidateClusterResourcePlacement(crp.Name, wantCRP)
+
 			// Namespace doesn't exist, so no CRPS should be created - sanity check.
 			By("Ensure no ClusterResourcePlacementStatus is created in the nonexistent namespace")
 			Consistently(func() bool {
@@ -2250,7 +2255,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Group:   corev1.GroupName,
 							Version: "v1",
-							Kind:    "InvalidKind", // Invalid kind to trigger user error
+							Kind:    "InvalidKind", // Invalid kind to trigger user error.
 							Name:    "invalid-resource",
 						},
 					},
@@ -2268,7 +2273,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 			}
 			Expect(k8sClient.Delete(ctx, crp)).Should(Succeed())
-			retrieveAndValidateCRPDeletion(gotCRP)
+			retrieveAndValidateCRPDeletion(crp)
 
 			// Need to manually clean up CRPS in test environment https://book.kubebuilder.io/reference/envtest#testing-considerations.
 			By("Deleting crps")
@@ -2293,8 +2298,8 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			Expect(k8sClient.Delete(ctx, namespace)).Should(Succeed())
 		})
 
-		It("Should handle invalid resource selector", func() {
-			By("Validate CRP status")
+		It("Should handle invalid resource selector and create CRPS", func() {
+			By("Validate CRP status includes both Scheduled and StatusSynced conditions")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       testCRPName,
@@ -2303,20 +2308,25 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				Spec: crp.Spec,
 				Status: placementv1beta1.PlacementStatus{
 					Conditions: []metav1.Condition{
+						// ObservedResourceIndex is not set because resource selector is invalid.
 						{
 							Status: metav1.ConditionFalse,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 							Reason: condition.InvalidResourceSelectorsReason,
 						},
+						{
+							Status: metav1.ConditionTrue,
+							Type:   string(placementv1beta1.ClusterResourcePlacementStatusSyncedConditionType),
+							Reason: condition.StatusSyncSucceededReason,
+						},
 					},
 				},
 			}
-			gotCRP = retrieveAndValidateClusterResourcePlacement(crp.Name, wantCRP)
+			retrieveAndValidateClusterResourcePlacement(crp.Name, wantCRP)
 
-			By("Validate CRPS status", func() {
-				crpsMatchesActual := statussyncutils.CRPSStatusMatchesCRPActual(ctx, k8sClient, testCRPName, namespaceName)
-				Eventually(crpsMatchesActual, eventuallyTimeout, interval).Should(Succeed(), "ClusterResourcePlacementStatus should match expected structure and CRP status")
-			})
+			By("Validate CRPS is created and matches CRP status")
+			crpsMatchesActual := crpstatussync.CRPSStatusMatchesCRPActual(ctx, k8sClient, testCRPName, namespaceName)
+			Eventually(crpsMatchesActual, eventuallyTimeout, interval).Should(Succeed(), "ClusterResourcePlacementStatus should be created and match expected structure")
 		})
 	})
 })
