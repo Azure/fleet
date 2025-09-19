@@ -155,42 +155,36 @@ jobs:
         # Note (chenyu1): must not use root privileges; the system seems to have some trouble
         # retrieving credentials when sudo is used.
         run: |
-          sudo az login --identity
-          sudo az acr login -n ${{ secrets.AZURE_REGISTRY }}
+          az login --identity
+          az acr login -n ${{ secrets.AZURE_REGISTRY }}
       - name: 'Verify Docker CLI'
-        # Note (chenyu1): the Docker installation has to be invoked with root privileges by default; for
-        # simplicity reasons in this pipeline we will make no attempt to enable rootless Docker usage.
         run: |
-          sudo docker version
-          sudo docker info
+          docker version
+          docker info
       - name: Build and publish hub-agent
-        # Note (chenyu1): must preserve the environment here.
         run: |
-          sudo -E make docker-build-hub-agent
+          make docker-build-hub-agent
         env:
           HUB_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
           REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
           TARGET_ARCH: arm64
       - name: Build and publish member-agent
-        # Note (chenyu1): must preserve the environment here.
         run: |
-          sudo -E make docker-build-member-agent
+          make docker-build-member-agent
         env:
           MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
           REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
           TARGET_ARCH: arm64
       - name: Build and publish refresh-token
-        # Note (chenyu1): must preserve the environment here.
         run: |
-          sudo -E make docker-build-refresh-token
+          make docker-build-refresh-token
         env:
           REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
           REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
           TARGET_ARCH: arm64
       - name: Build and publish crd-installer
-        # Note (chenyu1): must preserve the environment here.
         run: |
-          sudo -E make docker-build-crd-installer
+          make docker-build-crd-installer
         env:
           CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
           REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
