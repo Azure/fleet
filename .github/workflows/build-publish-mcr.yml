@@ -56,6 +56,7 @@ jobs:
     runs-on:
       # Use the x86_64 1ES pool to run this job; in theory it can be run on the ARM64 1ES pool as well.
       labels: [self-hosted, "1ES.Pool=1es-aks-fleet-pool-ubuntu"]
+    needs: prepare-variables
     #needs: [publish-images-amd64, publish-images-arm64]
     steps:
     - name: 'Wait until images are processed'
