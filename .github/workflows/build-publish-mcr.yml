@@ -68,41 +68,41 @@ jobs:
         az acr login -n aksmcrimagescommon
     - name: 'Pull the hub agent images from MCR'
       run: |
-        docker pull ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-amd64
-        docker pull ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+        docker pull mcr.microsoft.com/aks/fleet/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-amd64
+        docker pull mcr.microsoft.com/aks/fleet/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-arm64
     - name: 'Create and push multi-arch image manifests'
       run: |
-        docker manifest create ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }} \
-          --amend ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-amd64 \
-          --amend ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-arm64
-        docker manifest push ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}
+        docker manifest create mcr.microsoft.com/aks/fleet/hub-agent:${{ needs.prepare-variables.outputs.release_tag }} \
+          --amend mcr.microsoft.com/aks/fleet/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-amd64 \
+          --amend mcr.microsoft.com/aks/fleet/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+        docker manifest push mcr.microsoft.com/aks/fleet/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}
     - name: 'Pull the member agent images from MCR'
       run: |
-        docker pull ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-amd64
-        docker pull ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+        docker pull mcr.microsoft.com/aks/fleet/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-amd64
+        docker pull mcr.microsoft.com/aks/fleet/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-arm64
     - name: 'Create and push multi-arch image manifests'
       run: |
-        docker manifest create ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }} \
-          --amend ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-amd64 \
-          --amend ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-arm64
-        docker manifest push ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }}
+        docker manifest create mcr.microsoft.com/aks/fleet/member-agent:${{ needs.prepare-variables.outputs.release_tag }} \
+          --amend mcr.microsoft.com/aks/fleet/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-amd64 \
+          --amend mcr.microsoft.com/aks/fleet/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+        docker manifest push mcr.microsoft.com/aks/fleet/member-agent:${{ needs.prepare-variables.outputs.release_tag }}
     - name: 'Pull the refresh token images from MCR'
       run: |
-        docker pull ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-amd64
-        docker pull ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+        docker pull mcr.microsoft.com/aks/fleet/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-amd64
+        docker pull mcr.microsoft.com/aks/fleet/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-arm64
     - name: 'Create and push multi-arch image manifests'
       run: |
-        docker manifest create ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }} \
-          --amend ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-amd64 \
-          --amend ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-arm64
-        docker manifest push ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}
+        docker manifest create mcr.microsoft.com/aks/fleet/refresh-token:${{ needs.prepare-variables.outputs.release_tag }} \
+          --amend mcr.microsoft.com/aks/fleet/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-amd64 \
+          --amend mcr.microsoft.com/aks/fleet/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+        docker manifest push mcr.microsoft.com/aks/fleet/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}
     - name: 'Pull the crd installer images from MCR'
       run: |
-        docker pull ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-amd64
-        docker pull ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+        docker pull mcr.microsoft.com/aks/fleet/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-amd64
+        docker pull mcr.microsoft.com/aks/fleet/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-arm64
     - name: 'Create and push multi-arch image manifests'
       run: |
-        docker manifest create ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }} \
-          --amend ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-amd64 \
-          --amend ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-arm64
-        docker manifest push ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}
+        docker manifest create mcr.microsoft.com/aks/fleet/crd-installer:${{ needs.prepare-variables.outputs.release_tag }} \
+          --amend mcr.microsoft.com/aks/fleet/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-amd64 \
+          --amend mcr.microsoft.com/aks/fleet/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+        docker manifest push mcr.microsoft.com/aks/fleet/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}
