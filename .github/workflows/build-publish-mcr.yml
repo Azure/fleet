@@ -1,11 +1,15 @@
-# This Github Action will build and publish images to Azure Container Registry(ACR), from where the published images will be
-# automatically pushed to the trusted registry, Microsoft Container Registry(MCR).
+# This Github Action will build and publish images to Azure Container Registry (ACR), from where the published images will be
+# automatically pushed to the trusted registry, Microsoft Container Registry (MCR).
+
+# TO-DO (chenyu1): evaluate if we need to hide arch-specific images in ACR.
 
 name: Building and Pushing to MCR
 on:
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      releaseTag:
+        description: 'Release tag to publish images, defaults to the latest one'
+        type: string
 
 permissions:
   id-token: write
@@ -52,66 +56,203 @@ jobs:
           # NOTE: As exporting a variable from a secret is not possible, the shared variable registry obtained
           # from AZURE_REGISTRY secret is not exported from here.
 
+  publish-images-amd64:
+    runs-on:
+      labels: [self-hosted, "1ES.Pool=1es-aks-fleet-pool-ubuntu"]
+    needs: prepare-variables
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare-variables.outputs.release_tag }}
+      - name: 'Login the ACR'
+        run: |
+          az login --identity 
+          az acr login -n ${{ secrets.AZURE_REGISTRY }}
+      - name: Build and publish hub-agent
+        run: |
+          make docker-build-hub-agent
+        env:
+          HUB_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-amd64
+          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
+      - name: Build and publish member-agent
+        run: |
+          make docker-build-member-agent
+        env:
+          MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-amd64
+          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
+      - name: Build and publish refresh-token
+        run: |
+          make docker-build-refresh-token
+        env:
+          REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-amd64
+          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
+      - name: Build and publish crd-installer
+        run: |
+          make docker-build-crd-installer
+        env:
+          CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-amd64
+          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
+      # Build Arc Extension for member clusters
+      # Arc-connected clusters can join fleets as member clusters through an Arc Extension.
+      # An Arc Extension is a packaged Helm chart that gets deployed to Arc clusters.
+      # This step packages both the fleet member agent and networking agents into a single
+      # Helm chart for Arc deployment, since Arc Extensions require all components to be bundled together.
+      - name: Build and publish ARC member cluster agents helm chart
+        run: |
+          make helm-package-arc-member-cluster-agents
+        env:
+          ARC_MEMBER_AGENT_HELMCHART_VERSION: ${{ needs.prepare-variables.outputs.arc_helmchart_version }}
+          MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
+          MCS_CONTROLLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.fleet_networking_version }}
+          MEMBER_NET_CONTROLLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.fleet_networking_version }}
+          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.ARC_REGISTRY_REPO}}
+
+  publish-images-arm64:
+    runs-on:
+      labels: [self-hosted, "1ES.Pool=1es-aks-fleet-pool-ubuntu-arm64"]
+    needs: prepare-variables
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare-variables.outputs.release_tag }}
+      - name: 'Install the Azure CLI'
+        # Note (chenyu1): the self-hosted 1ES ARM64 pool, for some reason, does not have Azure CLI installed by default;
+        # install it manually here.
+        run:
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+      - name: 'Set up build dependencies'
+        # Note (chenyu1): the self-hosted 1ES ARM64 pool, for some reason, does not have the common build
+        # tools (e.g., make) installed by default; install them manually.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential acl
+      - name: 'Set up Docker'
+        # Note (chenyu1): the self-hosted 1ES ARM64 pool, for some reason, does not have Docker installed by default,
+        # and cannot have Docker installed via the docker/setup-docker-action Github Action, hence the manual setup
+        # steps here.
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install ca-certificates curl
+          sudo install -m 0755 -d /etc/apt/keyrings
+          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          sudo chmod a+r /etc/apt/keyrings/docker.asc
+          echo \
+            "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+            $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+            sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+      - name: 'Enable Docker access'
+        # Note (chenyu1): there are situations where the newgrp command will not take effect; set access
+        # to the docker daemon directly just in case.
+        run: |
+          sudo groupadd docker || true
+          echo "Adding $USER to the docker group"
+          sudo usermod -aG docker $USER
+          newgrp docker
+          sudo setfacl --modify user:$USER:rw /var/run/docker.sock
+      - name: 'Login the ACR'
+        # Note (chenyu1): must not use root privileges; the system seems to have some trouble
+        # retrieving credentials when sudo is used.
+        run: |
+          az login --identity
+          az acr login -n ${{ secrets.AZURE_REGISTRY }}
+      - name: 'Verify Docker CLI'
+        run: |
+          docker version
+          docker info
+      - name: Build and publish hub-agent
+        run: |
+          make docker-build-hub-agent
+        env:
+          HUB_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
+          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
+          TARGET_ARCH: arm64
+      - name: Build and publish member-agent
+        run: |
+          make docker-build-member-agent
+        env:
+          MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
+          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
+          TARGET_ARCH: arm64
+      - name: Build and publish refresh-token
+        run: |
+          make docker-build-refresh-token
+        env:
+          REFRESH_TOKEN_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
+          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
+          TARGET_ARCH: arm64
+      - name: Build and publish crd-installer
+        run: |
+          make docker-build-crd-installer
+        env:
+          CRD_INSTALLER_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}-arm64
+          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
+          TARGET_ARCH: arm64
+
   create-image-manifest-bundle:
     runs-on:
       # Use the x86_64 1ES pool to run this job; in theory it can be run on the ARM64 1ES pool as well.
       labels: [self-hosted, "1ES.Pool=1es-aks-fleet-pool-ubuntu"]
-    needs: prepare-variables
-    #needs: [publish-images-amd64, publish-images-arm64]
+    needs: [prepare-variables, publish-images-amd64, publish-images-arm64]
     steps:
     - name: 'Wait until images are processed'
+      # Note (chenyu1): as we are pulling from ACR rather than MCR, the images should be available almost
+      # immediately after the push is done; the delay is added here as a precaution.
       run: |
-        echo "Waiting for 10 minutes to ensure that images are fully processed in MCR"
-        sleep 10
+        echo "Waiting for 3 minutes to ensure that images are fully processed"
+        sleep 180
     - name: 'Login the ACR'
       run: |
         az login --identity 
-        az acr login -n aksmcrimagescommon
+        az acr login -n ${{ secrets.AZURE_REGISTRY }}
     - name: 'Pull the hub agent images from ACR'
       # Note (chenyu1): must set the target platform explictly.
       run: |
-        docker pull --platform linux/amd64 aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-amd64
-        docker pull --platform linux/arm64 aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+        docker pull --platform linux/amd64 ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-amd64
+        docker pull --platform linux/arm64 ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-arm64
     - name: 'Create and push multi-arch image manifests for the hub agent image'
       # Note (chenyu1): use `docker buildx imagetools create`, otherwise attestations cannot be perserved.
       run: |
         docker buildx imagetools create \
-          -t aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }} \
-          aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-amd64 \
-          aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+          -t ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }} \
+          ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-amd64 \
+          ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-arm64
     - name: 'Pull the member agent images from ACR'
       # Note (chenyu1): must set the target platform explictly.
       run: |
-        docker pull --platform linux/amd64 aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-amd64
-        docker pull --platform linux/arm64 aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+        docker pull --platform linux/amd64 ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-amd64
+        docker pull --platform linux/arm64 ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-arm64
     - name: 'Create and push multi-arch image manifests for the member agent image'
       # Note (chenyu1): use `docker buildx imagetools create`, otherwise attestations cannot be perserved.
       run: |
         docker buildx imagetools create \
-          -t aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }} \
-          aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-amd64 \
-          aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+          -t ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }} \
+          ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-amd64 \
+          ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/member-agent:${{ needs.prepare-variables.outputs.release_tag }}-arm64
     - name: 'Pull the refresh token images from ACR'
       # Note (chenyu1): must set the target platform explictly.
       run: |
-        docker pull --platform linux/amd64 aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-amd64
-        docker pull --platform linux/arm64 aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+        docker pull --platform linux/amd64 ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-amd64
+        docker pull --platform linux/arm64 ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-arm64
     - name: 'Create and push multi-arch image manifests for the refresh token image'
       # Note (chenyu1): use `docker buildx imagetools create`, otherwise attestations cannot be perserved.
       run: |
         docker buildx imagetools create \
-          -t aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }} \
-          aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-amd64 \
-          aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+          -t ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }} \
+          ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-amd64 \
+          ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/refresh-token:${{ needs.prepare-variables.outputs.release_tag }}-arm64
     - name: 'Pull the crd installer images from ACR'
       # Note (chenyu1): must set the target platform explictly.
       run: |
-        docker pull --platform linux/amd64 aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-amd64
-        docker pull --platform linux/arm64 aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+        docker pull --platform linux/amd64 ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-amd64
+        docker pull --platform linux/arm64 ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-arm64
     - name: 'Create and push multi-arch image manifests for the crd installer image'
       # Note (chenyu1): use `docker buildx imagetools create`, otherwise attestations cannot be perserved.
       run: |
         docker buildx imagetools create \
-          -t aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }} \
-          aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-amd64 \
-          aksmcrimagescommon.azurecr.io/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-arm64
+          -t ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }} \
+          ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-amd64 \
+          ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/crd-installer:${{ needs.prepare-variables.outputs.release_tag }}-arm64
