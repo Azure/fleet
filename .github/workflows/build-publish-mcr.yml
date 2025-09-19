@@ -65,7 +65,7 @@ jobs:
     - name: 'Login the ACR'
       run: |
         az login --identity 
-        az acr login -n ${{ secrets.AZURE_REGISTRY }}
+        az acr login -n aksmcrimagescommon
     - name: 'Pull the hub agent images from MCR'
       run: |
         docker pull ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}/hub-agent:${{ needs.prepare-variables.outputs.release_tag }}-amd64
