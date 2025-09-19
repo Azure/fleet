@@ -380,6 +380,9 @@ func beforeSuiteForAllProcesses() {
 		_, err := os.Stat(fleetBinaryPath)
 		Expect(os.IsNotExist(err)).To(BeFalse(), fmt.Sprintf("kubectl-fleet binary not found at %s", fleetBinaryPath))
 	})
+
+	// Expect that the managedResource VAP and its binding to exist when hub starts
+	checkVAPAndBindingExistence(hubClient)
 }
 
 func maxDuration(a, b time.Duration) time.Duration {
@@ -394,6 +397,10 @@ func beforeSuiteForProcess1() {
 
 	setAllMemberClustersToJoin()
 	checkIfAllMemberClustersHaveJoined()
+	for _, c := range allMemberClusters {
+		checkVAPAndBindingExistence(c.KubeClient)
+	}
+
 	checkIfAzurePropertyProviderIsWorking()
 
 	// Simulate that member cluster 4 become unhealthy, and member cluster 5 has left the fleet.
@@ -411,5 +418,8 @@ var _ = SynchronizedAfterSuite(func() {}, func() {
 	deleteTestResourceCRD()
 	setAllMemberClustersToLeave()
 	checkIfAllMemberClustersHaveLeft()
+	for _, c := range allMemberClusters {
+		checkVAPAndBindingAbsence(c.KubeClient)
+	}
 	cleanupInvalidClusters()
 })
