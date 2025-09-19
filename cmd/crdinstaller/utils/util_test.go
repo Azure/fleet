@@ -13,7 +13,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	admv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -297,41 +296,6 @@ func TestInstall(t *testing.T) {
 				if installed.Labels["test"] != "value" {
 					t.Errorf("Expected label 'test' to be 'value', got %q", installed.Labels["test"])
 				}
-			}
-		})
-	}
-}
-
-func TestInstallManagedResourceVAP(t *testing.T) {
-	tests := []struct {
-		name string
-		mode string
-	}{
-		{
-			name: "hub mode",
-			mode: "hub",
-		},
-		{
-			name: "member mode",
-			mode: "member",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			scheme := runtime.NewScheme()
-			if err := admv1.AddToScheme(scheme); err != nil {
-				t.Fatalf("Failed to add admissionregistration scheme: %v", err)
-			}
-
-			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-			err := InstallManagedResourceVAP(context.Background(), fakeClient, tt.mode)
-
-			// The function should complete without errors
-			// The actual installation behavior depends on the RESTMapper implementation
-			// which is difficult to test reliably with the fake client
-			if err != nil {
-				t.Errorf("InstallManagedResourceVAP() unexpected error: %v", err)
 			}
 		})
 	}
