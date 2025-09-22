@@ -1013,7 +1013,7 @@ func TestTrackInMemberClusterObjAvailabilityByGVR(t *testing.T) {
 // TestTrackInMemberClusterObjAvailability tests the trackInMemberClusterObjAvailability method.
 func TestTrackInMemberClusterObjAvailability(t *testing.T) {
 	ctx := context.Background()
-	workRef := klog.KRef(memberReservedNSName, workName)
+	workRef := klog.KRef(memberReservedNSName1, workName)
 
 	availableDeploy := deploy.DeepCopy()
 	availableDeploy.Status = appsv1.DeploymentStatus{

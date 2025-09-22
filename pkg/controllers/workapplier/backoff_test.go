@@ -33,7 +33,7 @@ import (
 func TestWhenWithFullNormalSequence(t *testing.T) {
 	work := &fleetv1beta1.Work{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: memberReservedNSName,
+			Namespace: memberReservedNSName1,
 			Name:      workName,
 		},
 	}
@@ -150,7 +150,7 @@ func TestWhenWithFullNormalSequence(t *testing.T) {
 func TestWhenWithFullNoSlowBackoffSequence(t *testing.T) {
 	work := &fleetv1beta1.Work{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: memberReservedNSName,
+			Namespace: memberReservedNSName1,
 			Name:      workName,
 		},
 	}
@@ -211,7 +211,7 @@ func TestWhenWithFullNoSlowBackoffSequence(t *testing.T) {
 func TestWhenWithFullNoFastBackoffSequeuce(t *testing.T) {
 	work := &fleetv1beta1.Work{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: memberReservedNSName,
+			Namespace: memberReservedNSName1,
 			Name:      workName,
 		},
 	}
@@ -276,7 +276,7 @@ func TestWhenWithFullNoFastBackoffSequeuce(t *testing.T) {
 func TestWhenWithNoBackoffSequence(t *testing.T) {
 	work := &fleetv1beta1.Work{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: memberReservedNSName,
+			Namespace: memberReservedNSName1,
 			Name:      workName,
 		},
 	}
@@ -768,7 +768,7 @@ func TestWhenWithGenerationAndProcessingResultChange(t *testing.T) {
 			name: "first requeue",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: memberReservedNSName,
+					Namespace: memberReservedNSName1,
 					Name:      workName,
 				},
 			},
@@ -779,7 +779,7 @@ func TestWhenWithGenerationAndProcessingResultChange(t *testing.T) {
 			name: "second requeue",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: memberReservedNSName,
+					Namespace: memberReservedNSName1,
 					Name:      workName,
 				},
 			},
@@ -790,7 +790,7 @@ func TestWhenWithGenerationAndProcessingResultChange(t *testing.T) {
 			name: "requeue (#3) w/ gen change",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  memberReservedNSName,
+					Namespace:  memberReservedNSName1,
 					Name:       workName,
 					Generation: 2,
 				},
@@ -802,7 +802,7 @@ func TestWhenWithGenerationAndProcessingResultChange(t *testing.T) {
 			name: "requeue #4",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  memberReservedNSName,
+					Namespace:  memberReservedNSName1,
 					Name:       workName,
 					Generation: 2,
 				},
@@ -815,7 +815,7 @@ func TestWhenWithGenerationAndProcessingResultChange(t *testing.T) {
 			name: "requeue #5",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  memberReservedNSName,
+					Namespace:  memberReservedNSName1,
 					Name:       workName,
 					Generation: 2,
 				},
@@ -827,7 +827,7 @@ func TestWhenWithGenerationAndProcessingResultChange(t *testing.T) {
 			name: "requeue #6",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  memberReservedNSName,
+					Namespace:  memberReservedNSName1,
 					Name:       workName,
 					Generation: 2,
 				},
@@ -839,7 +839,7 @@ func TestWhenWithGenerationAndProcessingResultChange(t *testing.T) {
 			name: "requeue #7 w/ processing result change",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  memberReservedNSName,
+					Namespace:  memberReservedNSName1,
 					Name:       workName,
 					Generation: 2,
 				},
@@ -855,7 +855,7 @@ func TestWhenWithGenerationAndProcessingResultChange(t *testing.T) {
 			name: "requeue #8",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  memberReservedNSName,
+					Namespace:  memberReservedNSName1,
 					Name:       workName,
 					Generation: 2,
 				},
@@ -871,7 +871,7 @@ func TestWhenWithGenerationAndProcessingResultChange(t *testing.T) {
 			name: "requeue #9",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  memberReservedNSName,
+					Namespace:  memberReservedNSName1,
 					Name:       workName,
 					Generation: 2,
 				},
@@ -887,7 +887,7 @@ func TestWhenWithGenerationAndProcessingResultChange(t *testing.T) {
 			name: "requeue #10",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  memberReservedNSName,
+					Namespace:  memberReservedNSName1,
 					Name:       workName,
 					Generation: 2,
 				},
@@ -903,7 +903,7 @@ func TestWhenWithGenerationAndProcessingResultChange(t *testing.T) {
 			name: "requeue #11",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  memberReservedNSName,
+					Namespace:  memberReservedNSName1,
 					Name:       workName,
 					Generation: 2,
 				},
@@ -919,7 +919,7 @@ func TestWhenWithGenerationAndProcessingResultChange(t *testing.T) {
 			name: "requeue #12 w/ both gen and processing result change",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  memberReservedNSName,
+					Namespace:  memberReservedNSName1,
 					Name:       workName,
 					Generation: 3,
 				},
@@ -970,7 +970,7 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 			name: "first requeue",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: memberReservedNSName,
+					Namespace: memberReservedNSName1,
 					Name:      workName,
 				},
 			},
@@ -986,7 +986,7 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 			name: "requeue #2, work becomes available",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: memberReservedNSName,
+					Namespace: memberReservedNSName1,
 					Name:      workName,
 				},
 				Status: fleetv1beta1.WorkStatus{
@@ -1010,7 +1010,7 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 			name: "requeue #3, work stays available",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: memberReservedNSName,
+					Namespace: memberReservedNSName1,
 					Name:      workName,
 				},
 				Status: fleetv1beta1.WorkStatus{
@@ -1034,7 +1034,7 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 			name: "requeue #4, work stays available",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: memberReservedNSName,
+					Namespace: memberReservedNSName1,
 					Name:      workName,
 				},
 				Status: fleetv1beta1.WorkStatus{
@@ -1058,7 +1058,7 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 			name: "requeue #5, work stays available",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: memberReservedNSName,
+					Namespace: memberReservedNSName1,
 					Name:      workName,
 				},
 				Status: fleetv1beta1.WorkStatus{
@@ -1082,7 +1082,7 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 			name: "requeue #6, work changed to ReportDiff mode",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  memberReservedNSName,
+					Namespace:  memberReservedNSName1,
 					Name:       workName,
 					Generation: 2,
 				},
@@ -1107,7 +1107,7 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 			name: "requeue #7, no diff found",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  memberReservedNSName,
+					Namespace:  memberReservedNSName1,
 					Name:       workName,
 					Generation: 2,
 				},
@@ -1132,7 +1132,7 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 			name: "requeue #8, no diff found",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  memberReservedNSName,
+					Namespace:  memberReservedNSName1,
 					Name:       workName,
 					Generation: 2,
 				},
@@ -1157,7 +1157,7 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 			name: "requeue #9, no diff found",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  memberReservedNSName,
+					Namespace:  memberReservedNSName1,
 					Name:       workName,
 					Generation: 2,
 				},
@@ -1182,7 +1182,7 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 			name: "requeue #9, diff found",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  memberReservedNSName,
+					Namespace:  memberReservedNSName1,
 					Name:       workName,
 					Generation: 2,
 				},
@@ -1207,7 +1207,7 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 			name: "requeue #10, diff found",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  memberReservedNSName,
+					Namespace:  memberReservedNSName1,
 					Name:       workName,
 					Generation: 2,
 				},
@@ -1232,7 +1232,7 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 			name: "requeue #11, diff found",
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  memberReservedNSName,
+					Namespace:  memberReservedNSName1,
 					Name:       workName,
 					Generation: 2,
 				},
@@ -1272,15 +1272,15 @@ func TestWhenWithSkipToFastBackoff(t *testing.T) {
 // TestForget tests the Forget method.
 func TestForget(t *testing.T) {
 	workNamespacedName1 := types.NamespacedName{
-		Namespace: memberReservedNSName,
+		Namespace: memberReservedNSName1,
 		Name:      fmt.Sprintf(workNameTemplate, "1"),
 	}
 	workNamespacedName2 := types.NamespacedName{
-		Namespace: memberReservedNSName,
+		Namespace: memberReservedNSName1,
 		Name:      fmt.Sprintf(workNameTemplate, "2"),
 	}
 	workNamespacedName3 := types.NamespacedName{
-		Namespace: memberReservedNSName,
+		Namespace: memberReservedNSName1,
 		Name:      fmt.Sprintf(workNameTemplate, "3"),
 	}
 
@@ -1333,7 +1333,7 @@ func TestForget(t *testing.T) {
 			},
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: memberReservedNSName,
+					Namespace: memberReservedNSName1,
 					Name:      workNamespacedName2.Name,
 				},
 			},
@@ -1392,7 +1392,7 @@ func TestForget(t *testing.T) {
 			},
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: memberReservedNSName,
+					Namespace: memberReservedNSName1,
 					Name:      workNamespacedName3.Name,
 				},
 			},
@@ -1452,7 +1452,7 @@ func TestForget(t *testing.T) {
 func TestComputeProcessingResultHash(t *testing.T) {
 	work := &fleetv1beta1.Work{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: memberReservedNSName,
+			Namespace: memberReservedNSName1,
 			Name:      workName,
 		},
 	}
